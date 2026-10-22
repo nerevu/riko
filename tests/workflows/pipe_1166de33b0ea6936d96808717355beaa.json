@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-554",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-637",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-569",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-637",
                 "port": "in:2"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-637",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-656",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-656",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-688",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-688",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-730",
                 "port": "in:2"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-674",
                 "port": "out"
@@ -63,8 +64,7 @@
             "target": {
                 "node": "sw-730",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -83,9 +83,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-554",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-569": {
             "conf": {
@@ -122,14 +122,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-569",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-637": {
+            "family": "module",
             "id": "sw-637",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-656": {
             "conf": {
@@ -156,14 +156,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-656",
             "name": "itembuilder",
             "options": {
                 "assign": "loop:itembuilder",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-674": {
             "conf": {
@@ -220,9 +220,9 @@
                     "value": "a"
                 }
             },
+            "family": "module",
             "id": "sw-674",
-            "name": "rssitembuilder",
-            "type": "module"
+            "name": "rssitembuilder"
         },
         "sw-688": {
             "embed": {
@@ -252,19 +252,19 @@
                 },
                 "name": "itembuilder"
             },
+            "family": "module",
             "id": "sw-688",
             "name": "loop",
             "options": {
                 "assign": "loop:itembuilder",
                 "count": "all",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-730": {
+            "family": "module",
             "id": "sw-730",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         }
     },
     "outputs": {

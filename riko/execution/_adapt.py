@@ -2,8 +2,8 @@
 """
 Adapts streams and callables across the synchronous/asynchronous boundary.
 
-Both the sync and the async execution share these helpers to type a node's raw
-output as the item stream the execution plan guarantees it to be and to
+Both the sync and the async execution share these helpers to type a pipe callable's raw
+return value as the item stream the execution plan guarantees it to be and to
 re-expose one side's stream to the other without materializing it. They are
 private to the runtime and belong to no supported surface.
 """
@@ -11,28 +11,32 @@ private to the runtime and belong to no supported surface.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
-from itertools import chain
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, cast
 
-from riko.types._guards import is_listlike, require_single_output
+from riko.bado._util import maybe_aclosing
+from riko.types._guards import is_listlike
 from riko.types._sentinels import MISSING
+from riko.types._wrappers import require_single_output, stamp_wrapper_meta
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from riko.types._streams import Item, Items
     from riko.types._wrappers import (
+        AnyModuleWrapper,
         AsyncModuleWrapper,
         AsyncModuleWrapperOutput,
         ModuleWrapper,
         SyncModuleWrapper,
     )
 
+    from ._prepared import ResolvedModule
+
 type LoopCall = Callable[[Callable[[], Any]], Any]
 type WorkerCall = Callable[..., Awaitable[Any]]
 type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
 
-_WRAPPER_META = ("name", "type", "subtype", "subtypes", "pollable", "loopable")
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
@@ -40,7 +44,7 @@ def require_stream[T](
     value: Iterator[T] | Iterator[Iterator[T]], pipe: ModuleWrapper
 ) -> Iterator[T]:
     """
-    Narrows a synchronous pipe's raw output to the item stream it produces.
+    Narrows a synchronous pipe's raw return value to its item stream.
 
     A pipe's call signature admits a stream of streams, so the narrowing is
     earned by checking the pipe's declared module type rather than by reading
@@ -48,7 +52,7 @@ def require_stream[T](
 
     Args:
 
-        value: The raw output of ``pipe``.
+        value: The raw return value of ``pipe``.
         pipe: The wrapper that produced ``value``.
 
     Returns:
@@ -68,14 +72,14 @@ def require_async_stream[T](
     value: AsyncModuleWrapperOutput[T], pipe: ModuleWrapper
 ) -> AsyncIterator[T]:
     """
-    Narrows an asynchronous pipe's raw output to the async item stream it produces.
+    Narrows an asynchronous pipe's raw return value to its async item stream.
 
     The async counterpart of ``require_stream``: the pipe's declared module type
     earns the narrowing, and nothing is consumed here.
 
     Args:
 
-        value: The raw output of ``pipe``.
+        value: The raw return value of ``pipe``.
         pipe: The wrapper that produced ``value``.
 
     Returns:
@@ -124,7 +128,7 @@ def _close_generator(value: object) -> None:
         value.close()
 
 
-def drain_async[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
+def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
@@ -151,40 +155,54 @@ def drain_async[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
 
 
 async def pull_stream[T](
-    iterator: Iterator[T], closeable: object, pull: WorkerCall, close: WorkerCall
+    closeable: object,
+    iterator: Iterator[T],
+    *upstreams: AsyncIterator[Any],
+    pull: WorkerCall,
+    close: WorkerCall,
 ) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
     Args:
 
+        closeable: The pipe's return value whose closure releases what the stream holds.
+
         iterator: The synchronous item stream to read.
-        closeable: The pipe output whose closure releases what the stream holds.
+
+        upstreams: The async streams ``iterator`` reads. Closed once ``closeable`` is
+            closed (even when closing it fails).
+
         pull: Runs a blocking callable off the event loop.
-        close: Runs the final closure off the event loop, including while the
-            execution is shutting down.
+
+        close: Runs the final closure off the event loop (even while the execution is
+            shutting down).
 
     Yields:
 
         Each item ``iterator`` produces, in order.
 
     """
-    try:
-        while (item := await pull(next, iterator, MISSING)) is not MISSING:
-            yield item
-    finally:
-        await close(_close_generator, closeable)
+    async with AsyncExitStack() as stack:
+        for upstream in upstreams:
+            await stack.enter_async_context(maybe_aclosing(upstream))
+
+        try:
+            while (item := await pull(next, iterator, MISSING)) is not MISSING:
+                yield item
+        finally:
+            await close(_close_generator, closeable)
 
 
 def _copy_wrapper_meta(
-    target: Callable[..., object], source: object, *, isasync: bool
+    target: Callable[..., object], source: ModuleWrapper, *, isasync: bool
 ) -> None:
     """
-    Stamps ``source``'s discovery metadata onto ``target`` in the given mode.
+    Stamps ``source``'s discovery metadata onto ``target`` as sync or async.
 
-    Attributes ``source`` does not carry are skipped, and ``__wrapped__`` is left
-    unset so an ``unwrap``-based guard cannot see past the adapter to a callable
-    of the other mode.
+    ``target`` also takes whichever of ``source``'s name, qualified name, and
+    docstring it carries. ``__wrapped__`` is left unset so an ``unwrap``-based guard
+    cannot see past the adapter to a callable of the other kind (sync or async).
 
     Args:
 
@@ -193,11 +211,21 @@ def _copy_wrapper_meta(
         isasync: Whether the adapter presents the asynchronous interface.
 
     """
-    for attr in chain(_WRAPPER_META, _FUNC_META):
+    stamp_wrapper_meta(
+        target,
+        name=source.name,
+        module_type=source.type,
+        subtype=source.subtype,
+        subtypes=source.subtypes,
+        pollable=source.pollable,
+        loopable=source.loopable,
+        isasync=isasync,
+        sequential_inputs=source.sequential_inputs,
+    )
+
+    for attr in _FUNC_META:
         if hasattr(source, attr):
             setattr(target, attr, getattr(source, attr))
-
-    setattr(target, "isasync", isasync)  # noqa: B010
 
 
 def _materialize(
@@ -207,9 +235,7 @@ def _materialize(
     return list(require_stream(embed(item, **kwargs), embed))
 
 
-def adapt_embed_for_sync[T](
-    embed: AsyncModuleWrapper, drain: Drain[T]
-) -> SyncModuleWrapper:
+def adapt_embed[T](embed: AsyncModuleWrapper, drain: Drain[T]) -> SyncModuleWrapper:
     """
     Wraps an async-only loop embed as a synchronous one.
 
@@ -237,7 +263,7 @@ def adapt_embed_for_sync[T](
     return cast("SyncModuleWrapper", wrapper)
 
 
-def adapt_embed_for_async(
+def async_adapt_embed(
     embed: SyncModuleWrapper, run_sync: WorkerCall
 ) -> AsyncModuleWrapper:
     """
@@ -267,12 +293,50 @@ def adapt_embed_for_async(
     return cast("AsyncModuleWrapper", wrapper)
 
 
+def select_embed[T](
+    embed: ResolvedModule, *, host_isasync: bool, run_sync: WorkerCall, drain: Drain[T]
+) -> AnyModuleWrapper:
+    """
+    Chooses a loop embed's callable to match whether its host pipe runs sync or async.
+
+    Args:
+
+        embed: The embed module resolved alongside the loop node.
+        host_isasync: Whether the loop pipe runs asynchronously.
+        run_sync: Runs a sync-only embed off the event loop under an async host.
+        drain: Pulls an async-only embed's output stream under a sync host.
+
+    Returns:
+
+        The embed's native callable for the host (sync or async), or a wrapper
+        adapting its callable from the sync or async counterpart.
+
+    """
+    if host_isasync:
+        pipe = embed.select_async()
+
+        if embed.is_async_pipe(pipe):
+            result = pipe
+        else:
+            result = async_adapt_embed(pipe, run_sync)
+    else:
+        sync_pipe = embed.select_sync()
+
+        if embed.is_async_pipe(sync_pipe):
+            result = adapt_embed(sync_pipe, drain)
+        else:
+            result = sync_pipe
+
+    return result
+
+
 __all__ = [
-    "adapt_embed_for_async",
-    "adapt_embed_for_sync",
-    "drain_async",
+    "adapt_embed",
+    "async_adapt_embed",
+    "async_drain",
     "normalize_items",
     "pull_stream",
     "require_async_stream",
     "require_stream",
+    "select_embed",
 ]

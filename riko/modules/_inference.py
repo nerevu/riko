@@ -9,22 +9,13 @@ import textwrap
 from ast import AsyncFunctionDef, FunctionDef
 from collections.abc import Awaitable, Callable, Coroutine, Iterator
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
-from types import UnionType
-from typing import (
-    Annotated,
-    Any,
-    NamedTuple,
-    TypeAliasType,
-    Union,
-    get_args,
-    get_origin,
-)
+from typing import TYPE_CHECKING, Any, NamedTuple, get_args, get_origin
 
-import pygogo as gogo
 from typing_extensions import TypeIs
 
 import riko.types._streams as _streams_module
-from riko.base._typing import resolve_type_hints
+from riko.base._logging import get_logger
+from riko.base._typing import gen_union_members, resolve_type_hints
 from riko.types.modules import (
     Inference,
     InferenceSource,
@@ -32,7 +23,10 @@ from riko.types.modules import (
     ReturnInference,
 )
 
-logger = gogo.Gogo(__name__, monolog=True).logger
+if TYPE_CHECKING:
+    from logging import Logger
+
+logger: Logger = get_logger(__name__)
 
 _STREAM_CALLS = {"aiter", "enumerate", "filter", "iter", "map", "reversed", "zip"}
 
@@ -97,29 +91,6 @@ class AnnotationMember(NamedTuple):
     candidate: object
 
 
-def _unwrap_alias(annotation: object) -> object:
-    """
-    Resolves a ``TypeAliasType`` to its value.
-
-    Since an alias may expand to another alias (``type A = B``;
-    ``type B = Iterator[Item]``), this loops until it reaches a terminal value.
-
-    Args:
-
-        annotation: The annotation to unwrap; a non-alias passes through.
-
-    Returns:
-
-        The alias's underlying value, or the annotation itself when it is not a
-        ``TypeAliasType``.
-
-    """
-    while isinstance(annotation, TypeAliasType):
-        annotation = annotation.__value__
-
-    return annotation
-
-
 def _gen_members(annotation: object) -> Iterator[AnnotationMember]:
     """
     Flattens an annotation into the arms that decide its return kind.
@@ -141,20 +112,15 @@ def _gen_members(annotation: object) -> Iterator[AnnotationMember]:
         ``Awaitable``/``Coroutine`` with no type argument.
 
     """
-    annotation = _unwrap_alias(annotation)
-    args = get_args(annotation)
-    origin = get_origin(annotation)
+    for arm in gen_union_members(annotation):
+        args = get_args(arm)
+        origin = get_origin(arm)
 
-    if origin in {Union, UnionType}:
-        for arg in args:
-            yield from _gen_members(arg)
-    elif origin is Annotated:
-        yield from _gen_members(args[0])
-    elif origin in {Awaitable, Coroutine}:
-        if args:
-            yield from _gen_members(args[-1])
-    else:
-        yield AnnotationMember(annotation, origin or annotation)
+        if origin in {Awaitable, Coroutine}:
+            if args:
+                yield from _gen_members(args[-1])
+        else:
+            yield AnnotationMember(arm, origin or arm)
 
 
 def _matches_abc(candidate: object, abc: type) -> bool:
@@ -429,9 +395,8 @@ def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
     """
     Reduces the full inferences to their bare return kinds.
 
-    The projection ``_get_operator_subtypes`` (in ``riko.modules._derive``)
-    consumes: it needs only the kinds to classify an operator as
-    ``aggregator``/``composer``, not where each kind came from.
+    Use ``gen_return_inferences`` instead when the source or the reason behind an
+    unclassifiable kind matters.
 
     Args:
 

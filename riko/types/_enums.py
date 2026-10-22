@@ -12,6 +12,9 @@ Examples:
 
 from collections.abc import Iterable
 from enum import StrEnum
+from typing import Literal, overload
+
+from riko.base.exceptions import InvalidPipelineError
 
 
 class ModuleName(StrEnum):
@@ -30,7 +33,7 @@ class ModuleName(StrEnum):
 
 class Formats(StrEnum):
     """
-    How a write serializes records to a destination.
+    How a write serializes items to a destination.
 
     Examples:
 
@@ -123,10 +126,12 @@ class SortableCastType(StrEnum):
 
 class CastType(StrEnum):
     """
-    Every destination type ``cast_value`` can dispatch to.
+    Every cast type ``cast_value`` can dispatch to.
 
     Examples:
 
+        >>> from riko import CastType
+        >>>
         >>> CastType.LOCATION.value
         'location'
 
@@ -147,7 +152,9 @@ class CastType(StrEnum):
 
 class ExecutionMode(StrEnum):
     """
-    Whether a run executes the pipeline or only describes it.
+    Whether a workflow module's pipe runs its workflow or only describes it.
+
+    A ``Pipeline`` ignores the describe modes and always runs.
 
     Examples:
 
@@ -169,11 +176,11 @@ class Executor(StrEnum):
     Where a run executes per-item work.
 
     ``AUTO`` lets the run pick: items run sequentially inline unless a
-    concurrency limit above one is set, in which case synchronous iteration
-    uses a thread pool. Under asynchronous iteration, native async work runs
-    inline and synchronous work runs on worker threads. ``INLINE`` never uses
-    workers, while ``THREAD`` and ``PROCESS`` use a pool of threads or worker
-    processes.
+    concurrency limit above one (or ``"auto"``) is set, in which case
+    synchronous iteration uses a thread pool. Under asynchronous iteration,
+    native async work runs inline and synchronous work runs on worker threads.
+    ``INLINE`` never uses workers, while ``THREAD`` and ``PROCESS`` use a pool of
+    threads or worker processes.
 
     Examples:
 
@@ -190,8 +197,125 @@ class Executor(StrEnum):
     PROCESS = "process"
 
 
+class DocumentShape(StrEnum):
+    """
+    The three JSON shapes a workflow input may take.
+
+    ``DAG`` is a bare-bones DAG (``PipeDag``), ``V1`` a serialized pipe definition
+    (``PipeDef``), and ``V2`` a workflow document (``WorkflowDocument``, a serialized
+    ``Workflow``).
+
+    Examples:
+
+        >>> from riko import DocumentShape
+        >>>
+        >>> DocumentShape.DAG.value
+        'dag'
+
+    """
+
+    DAG = "dag"
+    V1 = "v1"
+    V2 = "v2"
+
+
+@overload
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[True] = ...,
+    error: type[Exception] = ...,
+) -> E: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: Literal[False],
+    error: type[Exception] = ...,
+) -> E | None: ...
+@overload  # noqa: E302
+def resolve_enum[E: StrEnum](  # noqa: E704
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = ...,
+    *,
+    default: E | None = ...,
+    strict: bool,
+    error: type[Exception] = ...,
+) -> E | None: ...
+def resolve_enum[E: StrEnum](  # noqa: E302
+    enum: type[E],
+    value: E | str | None,
+    what: str | None = None,
+    *,
+    default: E | None = None,
+    strict: bool = True,
+    error: type[Exception] = InvalidPipelineError,
+) -> E | None:
+    """
+    Resolves a member or member value into the given string enum.
+
+    A missing ``value`` resolves to ``default``; with no default, it is an error
+    unless ``strict`` is off, in which case it resolves to ``None``.
+
+    Args:
+
+        enum: The string enum to resolve into.
+        value: A member or member value, or ``None`` when absent.
+        what: How error messages name the value; defaults to the enum's name.
+        default: The member a missing ``value`` resolves to.
+        strict: Whether a missing ``value`` with no ``default`` raises.
+        error: The exception class raised for a missing or invalid ``value``.
+
+    Returns:
+
+        The resolved member, or ``None`` when ``value`` is missing, there is no
+        ``default``, and ``strict`` is off.
+
+    Raises:
+
+        error: ``value`` is not one of the enum's values, or is missing while
+            required. The invalid-value message lists every accepted value.
+
+    Examples:
+
+        >>> from riko import Executor
+        >>> from riko.types._enums import resolve_enum
+        >>>
+        >>> resolve_enum(Executor, "thread")
+        <Executor.THREAD: 'thread'>
+        >>> resolve_enum(Executor, "bogus", error=ValueError)
+        Traceback (most recent call last):
+        ...
+        ValueError: Invalid Executor: 'bogus'. Expected one of auto, inline, thread, ...
+
+    """
+    what = enum.__name__ if what is None else what
+
+    if value is None and default is None and strict:
+        raise error(f"missing required {what}")
+    elif value is None:
+        result = default
+    else:
+        try:
+            result = value if isinstance(value, enum) else enum(value)
+        except ValueError as e:
+            accepted = ", ".join(member.value for member in enum)
+            raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}") from e
+
+    return result
+
+
 type ModuleNameLike = str | ModuleName
 type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
 type ExecutorLike = Executor | str
+type DocumentShapeLike = DocumentShape | str
+type ConcurrencyLike = int | Literal["auto"]

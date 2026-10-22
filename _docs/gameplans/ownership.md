@@ -27,7 +27,7 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 |---|---|---|
 | immutable `Pipeline`, private sync/async execution, immutable `Context` | `execution-semantics.md` | domain-specific construction/execution examples |
 | resource ownership/lifecycle/dependencies/bindings | `execution-semantics.md` | resource implementations and required local names |
-| execution modes, boundedness, cancellation, ordering | `execution-semantics.md` | domain-specific constraints |
+| sync/async execution, boundedness, cancellation, ordering | `execution-semantics.md` | domain-specific constraints |
 | generic `RetryPolicy`, timeout, error/disposition policy | `execution-semantics.md` | retryable-error classification/provider delay hints |
 | `FeedResult`, `Metadata`, private per-item provenance/identity | `execution-semantics.md` | source/operator-specific metadata meaning |
 | canonical identity/fingerprints/generation/idempotency | `execution-semantics.md` | domain-specific semantic identity hints |

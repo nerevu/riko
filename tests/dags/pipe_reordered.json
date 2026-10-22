@@ -2,7 +2,7 @@
     "modules": [
         {
             "id": "trunc",
-            "type": "truncate",
+            "name": "truncate",
             "conf": {
                 "count": {
                     "type": "int",
@@ -12,7 +12,7 @@
         },
         {
             "id": "gen",
-            "type": "forever",
+            "name": "forever",
             "conf": {}
         }
     ],

@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -28,9 +28,8 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
-from riko.types._options import Defaults, Opts
+from riko.base._logging import get_logger
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
 
@@ -41,9 +40,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"uniq_key": "content", "limit": 1024}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -54,12 +53,12 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing `uniq_key` and `limit`.
+        objconf: The module configuration, containing `uniq_key` and `limit`.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -100,16 +99,16 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             uniq_key (str): Field which should be unique (default: "content").
 
             limit (int): Number of recently seen values to remember. A duplicate
                 that falls outside this window is yielded again (default: 1024).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -149,16 +148,16 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             uniq_key (str): Field which should be unique (default: "content").
 
             limit (int): Number of recently seen values to remember. A duplicate
                 that falls outside this window is yielded again (default: 1024).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

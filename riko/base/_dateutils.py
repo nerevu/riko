@@ -164,7 +164,7 @@ def get_tzname(
     return tzname
 
 
-def tzinfo_from_tt(
+def resolve_tt_tzinfo(
     tt: AwareST | NaiveST, def_tzinfo: tzinfo | None = None
 ) -> ZoneInfo | tzinfo | timezone | None:
     """
@@ -188,7 +188,7 @@ def tzinfo_from_tt(
         >>> from time import struct_time
         >>>
         >>> tt = struct_time((1970, 1, 1, 0, 0, 0, 3, 1, 0))
-        >>> tzinfo_from_tt(tt, UTC) is UTC
+        >>> resolve_tt_tzinfo(tt, UTC) is UTC
         True
 
     """
@@ -202,7 +202,7 @@ def tzinfo_from_tt(
     return _tzinfo
 
 
-def get_tzinfo(
+def resolve_tzinfo(
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date,
     def_tzinfo: tzinfo | None = None,
 ) -> tzinfo | None:
@@ -222,16 +222,16 @@ def get_tzinfo(
 
         >>> from datetime import UTC, datetime
         >>>
-        >>> get_tzinfo(datetime(2020, 1, 1, tzinfo=UTC)) is UTC
+        >>> resolve_tzinfo(datetime(2020, 1, 1, tzinfo=UTC)) is UTC
         True
-        >>> get_tzinfo(datetime(2020, 1, 1), UTC) is UTC
+        >>> resolve_tzinfo(datetime(2020, 1, 1), UTC) is UTC
         True
 
     """
     _tzinfo = None
 
     if isinstance(_date, struct_time):
-        _tzinfo = tzinfo_from_tt(_date, def_tzinfo=def_tzinfo)
+        _tzinfo = resolve_tt_tzinfo(_date, def_tzinfo=def_tzinfo)
     elif isinstance(_date, dt):
         _tzinfo = _date.tzinfo or def_tzinfo
 

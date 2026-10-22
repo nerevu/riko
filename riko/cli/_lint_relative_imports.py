@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ._import_graph import _get_modules, _module_package, collect_imports
+from ._import_graph import _load_modules, _module_package, collect_imports
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,7 +44,7 @@ def _suggestion(
 def _iter_issues(root: Path) -> tuple[_RelativeIssue, ...]:
     issues: list[_RelativeIssue] = []
 
-    for module in _get_modules(root):
+    for module in _load_modules(root):
         package = _module_package(module)
 
         for ref in collect_imports(module):
@@ -79,7 +79,7 @@ def _iter_issues(root: Path) -> tuple[_RelativeIssue, ...]:
     return tuple(issues)
 
 
-def check_relative_imports(root: Path) -> int:
+def lint_relative_imports(root: Path) -> int:
     issues = _iter_issues(root)
 
     for issue in issues:

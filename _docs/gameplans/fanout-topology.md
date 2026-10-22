@@ -169,7 +169,14 @@ Calling:
 list(events)
 ```
 
-independently creates a fresh execution. A subscription definition is not a replay buffer.
+independently creates a fresh execution. A subscription definition is not a replay buffer: items
+published in one execution are observed through the subscription's `func=` or an explicit effect
+inside the attached branch, never by draining the subscription afterwards (decided 2026-10-10; the
+`TestSubscriptions` tripwires and the Cookbook fan-out examples are written against this form).
+
+A possible future extension is an explicit, opt-in *retaining* subscription mode that buffers
+published items for a later drain. It is not the default, is not part of R7, and would need its own
+bounded-retention, ownership, and close semantics before it could ship.
 
 ### 4.2 External subscriptions and publishers
 
@@ -427,12 +434,12 @@ modules normalize to `out`; split/branch/route produce their declared ports).
 Because branch delivery must carry the final `_FeedItem` provenance envelope, the
 port-keyed production mechanism lands here (after R5A), not as an R4B interim. The
 current fail-closed guard is pinned by
-`tests/internal/test_prepare_execution.py::test_run_rejects_nondefault_source_output_port`,
+`tests/internal/test_execution_plan.py::TestPlanRun::test_run_rejects_nondefault_source_output_port`,
 which R7 must replace when distinct ports begin resolving to distinct streams.
 
 For the same reason the R4B plan build also refuses one source port feeding more than
-one stream edge (`Workflow.require_executable()` in `riko/definitions/_workflow.py`, called from
-`build_execution_plan` and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`):
+one stream edge (`Workflow.require_executable()` in `riko/definitions/_workflow_definition.py`, called from
+`ExecutionPlan.from_workflow` and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`):
 with node-keyed streams both consumers would share a single one-shot iterator. Multiple
 outgoing edges per source port remain valid canonical topology (§2), so
 `Workflow.validate()` does not reject them; this phase's bounded branch delivery removes

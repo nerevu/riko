@@ -1,22 +1,32 @@
 """Shared pytest fixtures and collection hooks for the Riko test suite."""
 
+import doctest
 import importlib.util
+import re
+from logging import getLogger
 
 import pytest
 
 from riko.bado._backend import issync
-from riko.base._paths import ROOT_DIR
+from riko.base._logging import LOGGER_NAME
+from riko.base._paths import TESTS_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
-from riko.runtime._workflows import register_workflow_store, reset_workflow_resolver
+from riko.runtime._workflow_resolver import (
+    register_workflow_store,
+    reset_workflow_resolver,
+)
 
-WORKFLOW_DIR = ROOT_DIR / "tests" / "workflows"
+pytest_plugins = ["pytester", "tests._timeouts"]
+
+WORKFLOW_DIR = TESTS_DIR / "workflows"
+RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)
 
 
 @pytest.fixture(autouse=True)
 def workflow_store():
-    # Core ships no named-workflow locations; the suite supplies its own package of
-    # workflow modules plus the directory of workflow documents.
+    # Core ships no workflow stores; the suite registers its own package of stored
+    # workflows plus the directory of workflow documents.
     reset_workflow_resolver()
     register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
     yield
@@ -32,6 +42,21 @@ def reset_pubsub_state():
     reset_pubsub()
     yield
     reset_pubsub()
+
+
+@pytest.fixture
+def riko_level():
+    level = getLogger(LOGGER_NAME).level
+    yield
+    getLogger(LOGGER_NAME).setLevel(level)
+
+
+def _skip_coroutine_runs(item) -> None:
+    # Without the async backend `run` is a no-op that prints nothing, so skip just
+    # those examples and keep the rest of the doctest (often a whole .rst file).
+    for example in item.dtest.examples:
+        if RUN_CALL.search(example.source):
+            example.options[doctest.SKIP] = True
 
 
 def pytest_collection_modifyitems(items):
@@ -63,3 +88,5 @@ def pytest_collection_modifyitems(items):
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
+        elif issync:
+            _skip_coroutine_runs(item)

@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Pushes source items to one or more named receivers.
+Pushes input items to one or more named receivers.
 
-Each source item also passes through unchanged, so the module can be used in the
+Each input item also passes through unchanged, so the module can be used in the
 middle of a pipeline.
 
 Examples:
@@ -25,7 +25,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -34,25 +34,24 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import as_async
+from riko.base._logging import get_logger
 from riko.runtime._pubsub import async_hub, sync_hub
 
 from ._decorators import operator
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SendObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Feed, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"pollable": True, "emit": True}
+OPTS: DecorationOptions = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(
@@ -72,10 +71,10 @@ async def async_parser(
 
     Args:
 
-        stream: The source, sync or async. Note: this shares the `tuples`
+        stream: The input stream, sync or async. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing `max_wait`.
+        objconf: The module configuration, containing `max_wait`.
 
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
@@ -84,7 +83,7 @@ async def async_parser(
 
     Returns:
 
-        A sync iterator over each source item, unchanged. Awaiting publishes the
+        A sync iterator over each input item, unchanged. Awaiting publishes the
         whole source, so an unbounded one never returns and a finite one is held
         in memory.
 
@@ -122,10 +121,10 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so
+        stream: The input stream. Note: this shares the `tuples` iterator, so
             consuming it will consume `tuples` as well.
 
-        objconf: The pipe configuration. Unused on this path.
+        objconf: The module configuration. Unused on this path.
 
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
@@ -136,7 +135,7 @@ def parser(
 
     Yields:
 
-        Each source item, unchanged.
+        Each input item, unchanged.
 
     Raises:
 
@@ -185,14 +184,14 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Feed): The source stream, sync or async.
+        items (Feed): The input stream, sync or async.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             max_wait (int | float): Seconds to wait for a target to subscribe
                 before raising (default: 5).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -220,9 +219,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused on this path.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused on this path.
+        context (Context): the run environment
 
     Kwargs:
 

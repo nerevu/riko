@@ -80,6 +80,22 @@ casting
 dynamic configuration
 configuration-specific sentinels
 
+Naming: the helpers that move here (`resolve_sentinel`, `is_sentinel`, the `Sentinel` TypedDict and
+`SentinelValue` key) implement *terminal references*, not sentinels; name them `resolve_terminal`,
+`is_terminal_ref`, and `TerminalRef` when they move, leaving "sentinel" to true sentinels such as `MISSING`.
+
+Measured 2026-10-15 (no owner before this phase): `gen_dict` resolves a nested mapping through
+`resolve_sentinel(v, v)` (`riko/parsing/_dotdict.py`), which returns a plain `dict`, so every nesting level
+is re-wrapped in a fresh `DotDict` on the way back out: `asdict()` on a 20-key item builds 71 `DotDict`s
+(down from 110 before `DotDict.__contains__` answered from the store). Fold the wrap into one pass when
+`resolve_sentinel` moves here; a strict xfail cannot probe a construction count, so there is no tripwire.
+
+Measured 2026-10-20 (triage of the conf-parse memoization removal): the same churn makes `resolve_conf`
+(`riko/parsing/config.py`) cost 72 µs for a three-field typed rule conf, with 164 `is_mapping` checks per
+parse (`dictize` → `asdict` → `gen_dict` at every level). A dynamic conf pays it per item (198 µs per item
+through `regex`), and it is the larger share of a per-call direct `pipe()` (R4E note in
+implementation-sequence). Folding the wrap into one pass is the lever for every path at once.
+
 Conceptually:
 
 raw = DotDict(conf).get_raw("URL")
@@ -180,3 +196,14 @@ The same boundary applies to promoted source and protocol adapters:
 
 This requirement is especially important for JSON, CKAN, Prometheus, OpenAPI, and mail
 payloads, where arbitrary arrays are normal data.
+
+## Known instance: typed-value-shaped business data on module output
+
+Triaged 2026-10-14. Feed entries carry fields shaped like a typed value, e.g. feedparser's
+`summary_detail = {"type": "text/html", "value": "<b>hi</b>"}`. Today `DotDict` read paths
+(`[]`, `get`, `asdict`) treat that as configuration and collapse it to `"<b>hi</b>"`, so any
+processor run over the entry rewrites the field on output, whether or not it touches it. The
+"literal DotDict access" boundary above fixes this; until it lands, the strict-xfail tripwire
+`TestDotDict::test_typed_value_shaped_business_data_reads_literally` in
+`tests/internal/test_values.py` pins the collapse. (A nested `DotDict` write does not re-read
+sibling fields, so a write is not a second trigger.)

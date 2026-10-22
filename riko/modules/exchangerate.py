@@ -22,7 +22,7 @@ Attributes:
 
     EXCHANGE_API: Default rates endpoint.
     PARAMS: Query parameters carrying the ``OPEN_EXCHANGE_RATES_ID`` app id.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -34,11 +34,10 @@ from json import load, loads
 from os import getenv
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-import pygogo as gogo
-
 from riko.bado._util import async_get, async_json
 from riko.base._config import settings
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
@@ -50,12 +49,12 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import ExchangeRateObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
 EXCHANGE_API = settings.exchange_api
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 
-OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {
     "currency": "USD",
     "memoize": True,
@@ -65,14 +64,14 @@ DEFAULTS: Defaults = {
     "encoding": ENCODING,
 }
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 class RatesJson(TypedDict):
     rates: Mapping[str, str]
 
 
-def normalize_rates(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
+def build_rates(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
     if rates:
         resp = {k: Decimal(v) for k, v in rates.items() if v}
     else:
@@ -92,7 +91,7 @@ def get_rate(currency: str, **rates: Decimal) -> Decimal:
     return rate
 
 
-def calc_rate(
+def get_cross_rate(
     from_cur: str, to_cur: str, places: Decimal = Decimal("0.0001"), **rates: Decimal
 ) -> Decimal:
     if from_cur == to_cur:
@@ -117,7 +116,7 @@ async def async_parser(
 
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `param`, `currency`
+        objconf: The module configuration, containing `url`, `param`, `currency`
             and `precision`.
 
     Returns:
@@ -158,8 +157,8 @@ async def async_parser(
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision
-        rates = normalize_rates(rates)
-        rate = calc_rate(base, objconf.currency, places=places, **rates)
+        rates = build_rates(rates)
+        rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
 
@@ -174,7 +173,7 @@ def parser(
 
         base: The currency being exchanged from.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `param`, `currency`
+        objconf: The module configuration, containing `url`, `param`, `currency`
             and `precision`.
 
     Returns:
@@ -207,8 +206,8 @@ def parser(
 
             if rates := json.get("rates", {}):
                 places = Decimal(10) ** -objconf.precision
-                rates = normalize_rates(rates)
-                rate = calc_rate(base, objconf.currency, places=places, **rates)
+                rates = build_rates(rates)
+                rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
 
@@ -222,7 +221,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The rates endpoint, or a local json file
                 (default: the Open Exchange Rates latest.json endpoint).
@@ -237,11 +236,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the ISO code of the currency being
+        field (str): Item field holding the ISO code of the currency being
             exchanged *from* (default: "content").
 
         assign (str): Field the rate is assigned to. Ignored when ``emit`` is
@@ -287,7 +286,7 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The rates endpoint, or a local json file
                 (default: the Open Exchange Rates latest.json endpoint).
@@ -302,11 +301,11 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the ISO code of the currency being
+        field (str): Item field holding the ISO code of the currency being
             exchanged *from* (default: "content").
 
         assign (str): Field the rate is assigned to. Ignored when ``emit`` is

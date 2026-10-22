@@ -8,7 +8,8 @@ from time import struct_time
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from meza.fntools import Objectify as _Objectify
-from requests.structures import CaseInsensitiveDict
+
+from riko.types._guards import is_mapping
 
 _VT = TypeVar("_VT")
 
@@ -69,6 +70,21 @@ else:
         def __len__(self):
             return len(self.data)
 
+        def __contains__(self, key):
+            """
+            Reports whether ``key`` is one of the stored keys.
+
+            Membership matches the lowercased keys that ``keys()`` lists, so a
+            missing key is absent even though reading it returns ``None``.
+
+            Examples:
+                >>> kw = Objectify({"URL": "x"})
+                >>> ("url" in kw, "zzz" in kw)
+                (True, False)
+
+            """
+            return key in self.data
+
 
 @overload
 def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
@@ -104,7 +120,7 @@ def objectify[T](  # noqa: E302
         for any other value, or ``data`` unchanged when no ``func`` is given.
 
     """
-    if isinstance(data, (dict, CaseInsensitiveDict, Mapping)):
+    if is_mapping(data):
         objectified = Objectify(data, func=func, **defaults)
     elif func:
         if isinstance(data, (str, struct_time)):

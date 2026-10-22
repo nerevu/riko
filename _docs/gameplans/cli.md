@@ -527,7 +527,10 @@ compatibility.
 # 22. Logging and diagnostics
 
 Logs go to stderr. `-v` / `-vv` raise verbosity; `--trace` includes traceback diagnostics.
-JSON logging remains machine-readable.
+JSON logging remains machine-readable. The library side shipped 2026-10-16: one `Gogo("riko")`
+configuration in `riko/base/_logging.py` (both handlers on stderr), `get_logger(__name__)`, and
+`set_log_level`; the user CLI maps `-v`/`-vv`/`-q` onto `set_log_level` the way `manage` does
+through `resolve_log_level` (`riko/cli/_logging.py`). `--trace` and `--log-format` remain here.
 
 `riko doctor` inspects Python/Riko versions, command plugins/API compatibility, optional
 dependencies, configuration/project paths, writable data/cache paths, and integration

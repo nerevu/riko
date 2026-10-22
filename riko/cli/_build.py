@@ -48,7 +48,7 @@ def _publish(dry_run: bool = False) -> None:
         raise RuntimeError("uv not found")
 
 
-def _twine_check() -> int:
+def twine_check() -> int:
     """Validate that built distributions render on PyPI."""
     dists = sorted(glob(str(ROOT_DIR / "dist" / "*")))
     inputs = [ROOT_DIR / "README.rst", ROOT_DIR / "pyproject.toml"]
@@ -111,7 +111,7 @@ def _release_command(dry_run: bool = False) -> None:
         _clean()
         _build()
 
-        if return_code := _twine_check():
+        if return_code := twine_check():
             exit(return_code)
 
         _publish(dry_run)

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-492",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-481",
                 "port": "in:_1_URL"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-552",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-492",
                 "port": "in:PARAM_5_value"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -35,9 +35,9 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-481",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-492": {
             "conf": {
@@ -96,9 +96,9 @@
                     "value": ""
                 }
             },
+            "family": "module",
             "id": "sw-492",
-            "name": "urlbuilder",
-            "type": "module"
+            "name": "urlbuilder"
         },
         "sw-552": {
             "conf": {
@@ -123,9 +123,9 @@
                     "value": "Search term:"
                 }
             },
+            "family": "module",
             "id": "sw-552",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         }
     },
     "outputs": {

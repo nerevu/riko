@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-340",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-375",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-371",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-375",
                 "port": "in:RULE_1_value"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-375",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-385",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-385",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-400",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-400",
                 "port": "out"
@@ -52,8 +53,7 @@
             "target": {
                 "node": "sw-573",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -190,9 +190,9 @@
                     "value": "file://riko/data/spreadsheets.google.com_pub_key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv"
                 }
             },
+            "family": "module",
             "id": "sw-340",
-            "name": "csv",
-            "type": "module"
+            "name": "csv"
         },
         "sw-371": {
             "conf": {
@@ -217,9 +217,9 @@
                     "value": "Name"
                 }
             },
+            "family": "module",
             "id": "sw-371",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-375": {
             "conf": {
@@ -248,9 +248,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-375",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-385": {
             "conf": {
@@ -271,13 +271,13 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-385",
             "name": "rename",
             "options": {
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-400": {
             "embed": {
@@ -367,14 +367,14 @@
                 },
                 "name": "strconcat"
             },
+            "family": "module",
             "id": "sw-400",
             "name": "loop",
             "options": {
                 "assign": "description",
                 "count": "all",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-573": {
             "embed": {
@@ -396,14 +396,14 @@
                 },
                 "name": "strconcat"
             },
+            "family": "module",
             "id": "sw-573",
             "name": "loop",
             "options": {
                 "assign": "title",
                 "count": "all",
                 "emit": false
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

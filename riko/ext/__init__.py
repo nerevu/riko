@@ -3,12 +3,17 @@
 Stable, SemVer-guaranteed API for riko extension authors.
 
 This namespace contains pipe decorators, configuration helpers, module
-metadata and naming types, wrapper protocols, and registry interfaces.
+metadata and naming types; wrapper protocols, target and workflow authoring
+contracts; and registry interfaces.
+
+The names are grouped by extension point in the ``modules``, ``targets``, and
+``workflows`` submodules and re-exported here. ``codegen`` generates typed
+discovery names for an extension package.
 """
 
 from riko.coercion._dynamic_conf import DynamicConf
-from riko.definitions._targets import FileTarget
-from riko.definitions._workflow import (
+from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
+from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
     ModuleNode,
@@ -18,30 +23,46 @@ from riko.definitions._workflow import (
     SubscribeNode,
     WriteNode,
 )
+from riko.definitions._targets import FileTarget
+from riko.definitions._workflow_definition import migrate_v1_to_v2, normalize_workflow
 from riko.definitions._write import WriteCapabilities
-from riko.definitions.modules import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
-from riko.runtime._migrate import migrate_v1_to_v2
-from riko.runtime._module_registry import ModuleRegistry, register_module
-from riko.runtime._normalize import normalize_workflow
-from riko.runtime._serialize import parse_document, serialize_workflow
-from riko.runtime._target_registry import TargetRegistry, register_target
-from riko.runtime._workflows import register_workflow_store
+from riko.modules._metadata import get_module_category
+from riko.runtime._module_registry import (
+    ModuleRegistry,
+    register_module,
+    reset_module_registry,
+)
+from riko.runtime._target_registry import (
+    TargetRegistry,
+    register_target,
+    reset_target_registry,
+)
+from riko.runtime._workflow_resolver import (
+    register_workflow_store,
+    reset_workflow_resolver,
+)
 from riko.types._enums import ModuleName, ModuleNameLike
-from riko.types._targets import SupportsActions, SupportsRead, SupportsWrite, Target
+from riko.types._target_protocols import (
+    SupportsActions,
+    SupportsRead,
+    SupportsWrite,
+    Target,
+)
 from riko.types._wrappers import (
     AsyncOperatorWrapper,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
+    Dispatcher,
     ModuleWrapper,
+    PreparedCall,
     SyncOperatorWrapper,
     SyncProcessorWrapper,
     SyncSplitterWrapper,
 )
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
-from ._names import get_module_category
-from .config import get_conf_type
+from .modules import get_conf_type
 
 __all__ = [
     "ActionNode",
@@ -49,6 +70,7 @@ __all__ = [
     "AsyncProcessorWrapper",
     "AsyncSplitterWrapper",
     "CacheNode",
+    "Dispatcher",
     "DynamicConf",
     "FileTarget",
     "ModuleDefinition",
@@ -60,6 +82,7 @@ __all__ = [
     "ModuleSubtype",
     "ModuleType",
     "ModuleWrapper",
+    "PreparedCall",
     "PublishEdge",
     "ReadNode",
     "StreamEdge",
@@ -80,11 +103,12 @@ __all__ = [
     "normalize_module_name",
     "normalize_workflow",
     "operator",
-    "parse_document",
     "processor",
     "register_module",
     "register_target",
     "register_workflow_store",
-    "serialize_workflow",
+    "reset_module_registry",
+    "reset_target_registry",
+    "reset_workflow_resolver",
     "splitter",
 ]

@@ -12,6 +12,7 @@ from decimal import Context, Decimal, localcontext
 from enum import Enum, StrEnum
 from functools import partial, wraps
 from hashlib import blake2b
+from itertools import chain
 from math import isinf, isnan
 from pathlib import PurePath, PureWindowsPath
 from time import struct_time
@@ -22,9 +23,11 @@ import attrs
 
 from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 
-from ._dates import normalize_tzinfo, tt_to_datetime
+from ._dates import resolve_aware_datetime, tt_to_datetime
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable, Iterable
+
     from _typeshed import DataclassInstance
     from attrs import AttrsInstance
 
@@ -89,12 +92,12 @@ def _canon_decimal(value: Decimal) -> str:
 
 
 def _canon_datetime(value: datetime) -> str:
-    aware = value if value.tzinfo else normalize_tzinfo(value, try_local_tz=False)
+    aware = value if value.tzinfo else resolve_aware_datetime(value, try_local_tz=False)
     return aware.astimezone(UTC).isoformat()
 
 
 def _canon_struct_time(value: struct_time) -> str:
-    moment = tt_to_datetime(normalize_tzinfo(value, try_local_tz=False))
+    moment = tt_to_datetime(resolve_aware_datetime(value, try_local_tz=False))
     return moment.astimezone(UTC).isoformat()
 
 
@@ -106,6 +109,10 @@ def canonical_json(canon: CanonicalValue) -> bytes:
 
         Byte-stable JSON with no insignificant whitespace.
 
+    Raises:
+
+        IdentityEncodingError: If a string has no UTF-8 encoding.
+
     Examples:
 
         >>> canonical_json(canonicalize(1))
@@ -115,7 +122,13 @@ def canonical_json(canon: CanonicalValue) -> bytes:
     dumped = json.dumps(
         canon, ensure_ascii=False, separators=(",", ":"), allow_nan=False
     )
-    return dumped.encode("utf-8")
+
+    try:
+        encoded = dumped.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise IdentityEncodingError(str) from e
+
+    return encoded
 
 
 def _sort_key(canon: CanonicalValue) -> bytes:
@@ -140,20 +153,21 @@ def _canon_map(value: object, seen: set[int]) -> CanonicalValue:
     return ["map", [[k, v] for k, v in ordered]]
 
 
+def _canon_record(
+    value: object, names: Iterable[str], seen: set[int]
+) -> CanonicalValue:
+    inner = sorted((name, _canon(getattr(value, name), seen)) for name in names)
+    return ["record", _type_id(type(value)), [[name, canon] for name, canon in inner]]
+
+
 def _canon_dataclass(value: object, seen: set[int]) -> CanonicalValue:
     instance = cast("DataclassInstance", value)
-    _fields = fields(instance)
-    inner = sorted((f.name, _canon(getattr(instance, f.name), seen)) for f in _fields)
-    return ["record", _type_id(type(value)), [[name, value] for name, value in inner]]
+    return _canon_record(value, (f.name for f in fields(instance)), seen)
 
 
 def _canon_attrs(value: object, seen: set[int]) -> CanonicalValue:
     attributes = attrs.fields(cast("type[AttrsInstance]", type(value)))
-    inner = sorted(
-        (attribute.name, _canon(getattr(value, attribute.name), seen))
-        for attribute in attributes
-    )
-    return ["record", _type_id(type(value)), [[name, value] for name, value in inner]]
+    return _canon_record(value, (a.name for a in attributes), seen)
 
 
 def _guard(
@@ -282,11 +296,37 @@ def digest(value: object, domain: IdentityDomain) -> str:
     return blake2b(header + b"\x00" + _bytes, digest_size=16).hexdigest()
 
 
-def _cache_key(args: tuple[object, ...], kwargs: Mapping[str, object]) -> bytes | None:
-    try:
-        key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
-    except (IdentityEncodingError, CyclicIdentityError):
+_NATIVE_KEY_TYPES: frozenset[type] = frozenset(
+    {str, bytes, int, float, bool, type(None)}
+)
+
+
+def _is_native_val(value: object) -> bool:
+    """Reports whether a value's own hash and equality match its canonical identity."""
+    is_native = type(value) in _NATIVE_KEY_TYPES
+
+    if is_native and isinstance(value, float):
+        is_native = not isnan(value)
+
+    return is_native
+
+
+def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
+    if all(map(_is_native_val, chain(args, kwargs.values()))):
+        tagged = tuple((type(a), a) for a in args)
+        key = (tagged, tuple(sorted((k, type(v), v) for k, v in kwargs.items())))
+    else:
         key = None
+
+    return key
+
+
+def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
+    if (key := _native_key(*args, **kwargs)) is None:
+        try:
+            key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
+        except (IdentityEncodingError, CyclicIdentityError):
+            key = None
 
     return key
 
@@ -295,8 +335,9 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
     """
     Memoize a callable by the canonical encoding of its arguments.
 
-    Arguments that cannot be canonically encoded bypass the cache so distinct
-    instances never collide on a shared key.
+    A call whose arguments are all plain scalars is keyed without the encoding step, so
+    hits on such calls stay cheap. Arguments that cannot be canonically encoded bypass
+    the cache so distinct instances never collide on a shared key.
 
     Returns:
 
@@ -317,12 +358,12 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
         3
 
     """
-    store: dict[bytes, R] = {}
+    store: dict[Hashable, R] = {}
     stats = {"hits": 0, "misses": 0}
 
     @wraps(fn)
     def wrapper(*args: VT, **kwargs: VT) -> R:
-        key = _cache_key(args, kwargs)
+        key = _cache_key(*args, **kwargs)
 
         if key is None:
             stats["misses"] += 1

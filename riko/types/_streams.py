@@ -13,14 +13,14 @@ from collections.abc import (
 )
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from riko.base._locations import AnyLocation
+from ._geo import AnyLocation
 
 if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
-    from ._collections import RikoDict, RikoValue, StringyDict
     from ._rss import RSSEntry
     from ._sentinels import StreamState
+    from ._values import RikoDict, RikoValue, StringyDict
 
 
 # Item/value
@@ -70,6 +70,7 @@ type AsyncItemGenerator = AsyncGenerator[Item, None]
 type StreamGenerator = Generator[Any, None, Stream]
 
 # Both
-type Feed = Items | AsyncItems
+type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
+type Feed = AnyIterable[Item]
 type SourceLike = Item | Feed | Awaitable[Item | Feed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams

@@ -115,8 +115,8 @@ Three of `geolocate`'s four `type` values return **fixed placeholder data**, whi
 `riko/cast.py` makes plain:
 
 ```python
-def lookup_street_address(_: str) -> Location:   # argument ignored
-def lookup_ip_address(_: str) -> IPAddress:      # argument ignored
+def build_street_address(_: str) -> Location:   # argument ignored
+def build_ip_address(_: str) -> IPAddress:      # argument ignored
 ```
 
 Measured across varied inputs:
@@ -161,8 +161,16 @@ delegates to it rather than carrying a second, weaker copy.
 What remains is that `cast_datetime` timezone should be settable (per call via `conf`,
 or per pipeline via `Context`) with UTC as the default.
 
+One zone must govern every form. Today the opt-in `try_local_tz=True` resolves named days
+(`now`/`today`/`tomorrow`/`yesterday`) in the host zone, but counted offsets and
+`next`/`last` forms (`get_relative_date`) always offset from `dt.now(UTC)`, so under a
+non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
+`try_local_tz=False` is consistent: everything is UTC). The settable zone replaces both
+`now` computations with one. Tripwire (2026-10-10 naming triage):
+`tests/internal/test_values.py::TestTryLocalTz::test_relative_offsets_share_the_named_day_zone`.
+
 The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
-and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_examples.py`).
+and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_script.py`).
 
 Related backlog: `riko/base/_dateutils.py` builds its abbreviation table from `pytz`
 (`pytz>=2019.3` in `pyproject.toml`); replace that with `zoneinfo`/`tzdata` and drop the
@@ -173,7 +181,7 @@ This is additive, so it is not SemVer-gated.
 **Resolved:** the epoch-default half of this section. `CAST_SWITCH["date"]` and
 `["datetime"]` now default to `None`, so a miss is detectable, and the two roles
 `default` was serving are separated — `def_itemgetter` converts date sort keys to
-epoch floats and degrades an uncastable value to `_iterutils.SORT_FILLER` (`-inf`),
+epoch floats and degrades an uncastable value to `_sortutils.SORT_FILLER` (`-inf`),
 which cannot collide with a real date the way the epoch did. A missing field is not
 compared at all: `build_sort_key` leads the key with a presence flag, and a rule
 `default` opts back into sorting it as a value. `dateformat` guards on `None` and

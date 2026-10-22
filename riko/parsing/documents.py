@@ -7,13 +7,10 @@ Attributes:
     XML_PARSER: Hardened lxml parser (entity, DTD, and network access
         disabled), or ``None`` when lxml is unavailable.
 
-    ESCAPE: XML/HTML special-character to entity-reference map.
-
 """
 
 from __future__ import annotations
 
-from html.entities import name2codepoint
 from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
@@ -21,9 +18,9 @@ from json import JSONDecodeError, load, loads
 from typing import TYPE_CHECKING, Any, cast
 
 import feedparser
-import pygogo as gogo
 
 from riko.base._constants import STREAMING_THRESHOLD
+from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
 from riko.types._guards import is_mapping
 
@@ -34,9 +31,9 @@ if TYPE_CHECKING:
     from logging import Logger
     from types import ModuleType
 
-    from riko.types._collections import RikoDict, Stringy, StringyDict
-    from riko.types._io import FileLike
+    from riko.io._filelike import FileLike
     from riko.types._streams import Item, Stream
+    from riko.types._values import RikoDict, Stringy, StringyDict
 
 try:
     from lxml import etree, html
@@ -94,11 +91,9 @@ type AnyElementTree = (
 )
 type AnyElement = nativeElement | lxmlElement
 
-logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
-
-ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
 
 
 class LinkParser(HTMLParser):
@@ -208,7 +203,7 @@ def get_namespace(tree: AnyElementTree | AnyElement) -> str | None:
     return namespace
 
 
-def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
+def get_xpath_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
     """
     Adjusts *pos* when *tree* IS the element at ``tags[pos]``.
 
@@ -234,15 +229,15 @@ def verify_pos(tree: AnyElementTree | AnyElement, pos: int, *tags: str) -> int:
         >>> from xml.etree.ElementTree import fromstring
         >>>
         >>> rss = fromstring('<rss/>')
-        >>> verify_pos(rss, 0, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(rss, 0, 'rss', 'channel', 'item')
         1
-        >>> verify_pos(rss, 1, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(rss, 1, 'rss', 'channel', 'item')
         1
         >>> channel = fromstring('<channel/>')
-        >>> verify_pos(channel, 1, 'rss', 'channel', 'item')
+        >>> get_xpath_pos(channel, 1, 'rss', 'channel', 'item')
         2
         >>> ns_rss = fromstring('<rss xmlns="http://purl.org/rss/1.0/"/>')
-        >>> verify_pos(ns_rss, 0, 'rss', 'channel')
+        >>> get_xpath_pos(ns_rss, 0, 'rss', 'channel')
         1
 
     """
@@ -275,7 +270,7 @@ def xpath(
     2. **ElementTree** — ``tree.findall(".//...")`` (stdlib fallback).
 
     When *pos* is ``None`` (the default) the function calls
-    :func:`verify_pos` to detect whether *tree* is already the element at
+    :func:`get_xpath_pos` to detect whether *tree* is already the element at
     the first level of *path*, incrementing *pos* automatically so
     descendant searches start at the correct level.
 
@@ -287,7 +282,7 @@ def xpath(
             path (sets initial *pos* to 1).
 
         pos: Starting index into the tag list. ``None`` triggers automatic
-            detection via :func:`verify_pos`.
+            detection via :func:`get_xpath_pos`.
 
         namespace: Namespace URI for prefixed searches. Auto-detected from
             *tree* when ``None``.
@@ -305,24 +300,20 @@ def xpath(
         >>> xml = '<rss><channel><item>a</item><item>b</item></channel></rss>'
         >>> tree = fromstring(xml)
 
-        Absolute path from the rss root:
-
+        >>> # Absolute path from the rss root
         >>> [el.text for el in xpath(tree, '/rss/channel/item')]
         ['a', 'b']
 
-        Relative path when tree is the channel element:
-
+        >>> # Relative path when tree is the channel element
         >>> channel = tree.find('channel')
         >>> [el.text for el in xpath(channel, 'item')]
         ['a', 'b']
 
-        Relative path when tree IS the top-level tag in the path:
-
+        >>> # Relative path when tree is the top-level tag in the path
         >>> [el.text for el in xpath(tree, 'rss/channel/item')]
         ['a', 'b']
 
-        With a namespace:
-
+        >>> # With a namespace
         >>> NS = 'http://purl.org/rss/1.0/'
         >>> xml_ns = f'<rss xmlns="{NS}"><channel><item>x</item></channel></rss>'
         >>> tree_ns = fromstring(xml_ns)
@@ -340,7 +331,7 @@ def xpath(
     tags = stripped.split("/") if stripped else []
 
     if auto_pos:
-        pos = verify_pos(tree, pos, *tags)
+        pos = get_xpath_pos(tree, pos, *tags)
 
     namespaces = {ns_prefix: namespace}
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
@@ -523,27 +514,3 @@ def any2dict(
     else:
         print(f"{content=}, {ext=}, {html5=}, {path=}")
         raise TypeError("No file type provided!")
-
-
-def text2entity(text: str) -> str:
-    """Converts HTML/XML special chars to entity references."""
-    return ESCAPE.get(text, text)
-
-
-def entity2text(entitydef: str) -> str:
-    """
-    Converts an HTML entity reference into unicode.
-
-    http://stackoverflow.com/a/58125/408556
-    """
-    if entitydef.startswith("&#x"):
-        cp = int(entitydef[3:-1], 16)
-    elif entitydef.startswith("&#"):
-        cp = int(entitydef[2:-1])
-    elif entitydef.startswith("&"):
-        cp = name2codepoint[entitydef[1:-1]]
-    else:
-        logger.debug(entitydef)
-        cp = None
-
-    return chr(cp) if cp else entitydef

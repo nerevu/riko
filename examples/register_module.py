@@ -2,9 +2,9 @@
 """
 Registers a module with **explicit** interface callables.
 
-Assign ``ModuleDefinition``'s ``pipe`` / ``async_pipe`` kwargs to a
-``SyncOperatorWrapper`` / ``AsyncOperatorWrapper``. For the packaged entry-point plugin
-path, see ``riko-example-ext/``. For the ``module=`` convention, see
+Assign ``ModuleDefinition``'s ``sync_pipe`` / ``async_pipe`` keyword arguments to
+a ``SyncOperatorWrapper`` / ``AsyncOperatorWrapper``. For the installable extension
+package, see ``riko-example-ext/``. For ``ModuleDefinition.from_module``, see
 ``register_alias.py``.
 
 Examples:
@@ -23,7 +23,7 @@ from riko import Pipeline, issync, run
 from riko.ext import ModuleDefinition, operator, register_module
 
 if TYPE_CHECKING:
-    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.ext import DynamicConf
     from riko.types import Item, PipeTuples, Stream
 
 

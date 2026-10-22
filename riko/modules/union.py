@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -28,10 +28,9 @@ from __future__ import annotations
 from itertools import chain
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
 
@@ -42,9 +41,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream, Streams
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -55,12 +54,12 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -91,15 +90,15 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously merges multiple source streams together.
+    Asynchronously merges multiple input streams together.
 
     Lazy: streams are chained, not materialized.
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
@@ -137,15 +136,15 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Merges multiple source streams together.
+    Merges multiple input streams together.
 
     Lazy: streams are chained, not materialized.
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 

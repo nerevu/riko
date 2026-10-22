@@ -21,7 +21,7 @@ Examples:
 Attributes:
 
     ATTRS: The ``str`` methods ``transform`` may name.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -31,9 +31,8 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import coop_reduce
+from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
 from riko.types._enums import BasicCastType
 
@@ -44,17 +43,17 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import StrTransformObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import StrTransformConfRule
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "listize": True,
     "ftype": BasicCastType.TEXT,
     "field": "content",
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 ATTRS = {
     "capitalize",
@@ -100,7 +99,7 @@ async def async_parser(
 
         word: The string to transform.
         rules: The parsed transform rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -139,7 +138,7 @@ def parser(
 
         word: The string to transform.
         rules: The parsed transform rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -173,7 +172,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The transform criteria. Required.
 
@@ -185,11 +184,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
                     pass a scalar for one argument (``20`` for ``zfill``) or a
                     list for several (``["o", "0", 1]``) (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to transform (default: "content").
+        field (str): Item field to transform (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strtransform").
@@ -242,7 +241,7 @@ def pipe(*args: Any, **kwargs: object) -> str | int:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The transform criteria. Required.
 
@@ -255,11 +254,11 @@ def pipe(*args: Any, **kwargs: object) -> str | int:
                     pass a scalar for one argument (``20`` for ``zfill``) or a
                     list for several (``["o", "0", 1]``) (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to transform (default: "content").
+        field (str): Item field to transform (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "strtransform").

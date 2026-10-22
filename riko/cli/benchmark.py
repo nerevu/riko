@@ -9,22 +9,23 @@ from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 from time import sleep, time
 from timeit import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
-from riko.bado.itertools import async_map
+from riko.bado.itertools import alist, async_map
+from riko.base._config import get_worker_cnt
 from riko.base._paths import get_path
-from riko.definitions._workflow import Pipeline
-from riko.execution._pools import get_chunksize, get_worker_cnt
+from riko.definitions._workflow_definition import normalize_workflow
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
-from riko.runtime._normalize import normalize_workflow
+from riko.modules.regex import pipe as regex
+from riko.runtime._pipeline import Pipeline
 from riko.types._rss import RSSEntry
-from riko.types.modules import FetchConf
+from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
-    from riko.definitions._workflow import Workflow
+    from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import Item, Items
     from riko.types._workflow import RawEdge, RawNode, RawWorkflow
     from riko.types._wrappers import (
@@ -59,6 +60,15 @@ confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
 
+REGEX_RULE = RegexRawRule(
+    {
+        "field": {"type": "text", "value": "title"},
+        "match": {"type": "text", "value": "a"},
+        "replace": {"type": "text", "value": "b"},
+    }
+)
+REGEX_CONF = RegexRawConf({"rule": [REGEX_RULE]})
+items: list[Item] = [{"title": f"a{i}"} for i in range(200)]
 type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
 type AsyncTest = Callable[[], Awaitable[object]]
 
@@ -77,15 +87,37 @@ def build_fanin() -> Workflow:
         for pos in range(length)
     ]
     nodes.append({"id": UNION_ID, "name": "union"})
-    workflow: RawWorkflow = {
+    raw: RawWorkflow = {
         "nodes": nodes,
         "edges": edges,
         "outputs": {"default": {"node": UNION_ID, "port": "out"}},
     }
-    return normalize_workflow(workflow)
+    return normalize_workflow(raw)
 
 
 fanin: Workflow = build_fanin()
+
+
+def get_chunksize(length: int, workers: int) -> int:
+    """
+    Computes items per worker task, targeting four batches per worker.
+
+    Args:
+
+        length: The number of items to spread across the pool.
+        workers: The pool size.
+
+    Returns:
+
+        The batch size, never less than one.
+
+    Examples:
+
+        >>> get_chunksize(80, 4), get_chunksize(3, 4)
+        (5, 1)
+
+    """
+    return (length // (workers * 4)) or 1
 
 
 def baseline_sync() -> list[None]:
@@ -100,18 +132,31 @@ def baseline_threads() -> list[None]:
 
 
 def baseline_procs() -> list[None]:
-    workers = get_worker_cnt(length, False)
+    workers = get_worker_cnt(length, threads=False)
     chunksize = get_chunksize(length, workers)
     pool = Pool(workers)
     return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
 
 
-def sync_pipeline() -> ParserMaterializedOutput:
+def sync_module() -> ParserMaterializedOutput:
     pipes = (fetch(conf=conf) for conf in confs)
     return list(chain.from_iterable(pipes))
 
 
-def sync_pipe() -> Items:
+def sync_module_per_item() -> Items:
+    """Calls a cheap module once per item, so every call prepares afresh."""
+    pipes = (regex([item], conf=REGEX_CONF) for item in items)
+    return list(chain.from_iterable(pipes))
+
+
+def sync_prepared_per_item() -> Items:
+    """Prepares the same module once, then calls the bound result once per item."""
+    call = regex.prepare(conf=REGEX_CONF)
+    outputs = (cast("SyncProcessorWrapperOutput", call([item])) for item in items)
+    return list(chain.from_iterable(outputs))
+
+
+def sync_pipeline() -> Items:
     results: list[Item] = []
 
     for conf in confs:
@@ -133,22 +178,22 @@ async def delayed_fetch(conf: FetchConf) -> SyncProcessorWrapperOutput:
     return await async_fetch({}, conf)
 
 
-async def async_pipeline() -> list[SyncProcessorWrapperOutput]:
+async def async_module() -> list[SyncProcessorWrapperOutput]:
     return await async_map(delayed_fetch, confs)
 
 
-async def async_pipe() -> Items:
+async def async_pipeline() -> Items:
     results: list[Item] = []
 
     for conf in confs:
         pipeline = Pipeline.from_module("fetch", conf=conf)
-        results.extend([item async for item in pipeline])
+        results.extend(await alist(pipeline))
 
     return results
 
 
 async def async_workflow() -> Items:
-    return [item async for item in Pipeline(fanin)]
+    return await alist(Pipeline(fanin))
 
 
 def summarize_results(results: Sequence[float]) -> tuple[float, str]:
@@ -193,13 +238,15 @@ def main() -> None:
         "baseline_sync",
         "baseline_threads",
         "baseline_procs",
+        "sync_module",
+        "sync_module_per_item",
+        "sync_prepared_per_item",
         "sync_pipeline",
-        "sync_pipe",
         "sync_workflow",
     ]
 
     if isasync:
-        async_tests = [baseline_async, async_pipeline, async_pipe, async_workflow]
+        async_tests = [baseline_async, async_module, async_pipeline, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
         async_tests = []

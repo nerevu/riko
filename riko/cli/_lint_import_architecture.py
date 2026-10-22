@@ -11,19 +11,20 @@ from typing import TYPE_CHECKING
 from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
 from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
 from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
-from riko.base.exceptions import InvalidArchitectureError
-from riko.coercion._graph import (
+from riko.base._graph import (
     AnyGraph,
     FrozenGraph,
     SetGraph,
+    cyclic_nodes,
     descendants,
     freeze_graph,
-    topological_sort,
+    gen_redundant_edges,
 )
+from riko.base.exceptions import InvalidArchitectureError
 
 from ._import_graph import (
     ModuleInfo,
-    _get_modules,
+    _load_modules,
     collect_imports,
     resolve_import_targets,
 )
@@ -178,15 +179,13 @@ def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
         names = ", ".join(sorted(dangling))
         raise InvalidArchitectureError(f"undeclared layers: {names}")
 
-    topological_sort(graph, strict=True, name=name)
+    if cyclic := cyclic_nodes(graph):
+        msg = f"cyclic layer graph '{name}' through: {', '.join(sorted(cyclic))}"
+        raise InvalidArchitectureError(msg)
 
-    for source, targets in graph.items():
-        for target in targets:
-            others = set(targets) - {target}
-
-            if any(target in descendants(other, graph) for other in others):
-                msg = f"redundant dependency: {source} -> {target}"
-                raise InvalidArchitectureError(msg)
+    if redundant := next(gen_redundant_edges(graph), None):
+        source, target = redundant
+        raise InvalidArchitectureError(f"redundant dependency: {source} -> {target}")
 
 
 def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
@@ -211,7 +210,7 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
         yield " < ".join(filter(None, parts))
 
 
-def generate_report(
+def load_architecture_report(
     root: Path, dependencies: FrozenGraph[str] | None = None
 ) -> ArchitectureReport:
 
@@ -221,7 +220,7 @@ def generate_report(
         name = "custom"
 
     _validate_graph(name, dependencies)
-    modules = _get_modules(root)
+    modules = _load_modules(root)
     module_names = {module.name for module in modules}
     unclassified = tuple(
         UnclassifiedModule(module.name, module.path)
@@ -265,16 +264,12 @@ def generate_report(
                     nodes = type_only[source_layer]
                     remaining = _gen_remaining(source_layer, nodes, dependencies)
                     type_only[source_layer] = set(remaining)
-                elif ref.kind == "local":
-                    local_only[source_layer].add(target_layer)
-                    nodes = local_only[source_layer]
-                    remaining = _gen_remaining(source_layer, nodes, dependencies)
-                    local_only[source_layer] = set(remaining)
                 else:
-                    observed[source_layer].add(target_layer)
-                    nodes = observed[source_layer]
+                    graph = local_only if ref.kind == "local" else observed
+                    graph[source_layer].add(target_layer)
+                    nodes = graph[source_layer]
                     remaining = _gen_remaining(source_layer, nodes, dependencies)
-                    observed[source_layer] = set(remaining)
+                    graph[source_layer] = set(remaining)
                     reachable = descendants(source_layer, dependencies)
 
                     if target_layer not in reachable:
@@ -291,13 +286,13 @@ def generate_report(
     )
 
 
-def validate_architecture(report: ArchitectureReport) -> int:
+def lint_architecture(report: ArchitectureReport) -> int:
     _validate_graph("declared", report.declared)
     _validate_graph("observed", report.observed)
     return 1 if report.violations or report.unclassified else 0
 
 
-def func(msg, **nodes: frozenset[str]) -> Iterator[str]:
+def _gen_dependency_lines(msg: str, **nodes: frozenset[str]) -> Iterator[str]:
     yield ""
     yield msg
 
@@ -310,9 +305,11 @@ def render_architecture(report: ArchitectureReport) -> str:
     layers = _gen_layers("declared", report.declared)
     lines = [f"layers: {'\n        '.join(layers)}"]
 
-    lines.extend(func("observed dependency frontier:", **report.observed))
-    lines.extend(func("typing-only dependencies:", **report.type_only))
-    lines.extend(func("local-only dependencies:", **report.local_only))
+    lines.extend(
+        _gen_dependency_lines("observed dependency frontier:", **report.observed)
+    )
+    lines.extend(_gen_dependency_lines("typing-only dependencies:", **report.type_only))
+    lines.extend(_gen_dependency_lines("local-only dependencies:", **report.local_only))
 
     if report.unclassified:
         lines.extend(["", "unclassified modules:"])

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-565",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:pubdate"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-572",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:description"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-576",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:guid"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-580",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:author"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-584",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:title"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-588",
                 "port": "out"
@@ -63,8 +64,7 @@
             "target": {
                 "node": "sw-592",
                 "port": "in:link"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -95,9 +95,9 @@
                     "value": "date"
                 }
             },
+            "family": "module",
             "id": "sw-565",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-572": {
             "conf": {
@@ -126,9 +126,9 @@
                     "value": "location"
                 }
             },
+            "family": "module",
             "id": "sw-572",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-576": {
             "conf": {
@@ -157,9 +157,9 @@
                     "value": "int"
                 }
             },
+            "family": "module",
             "id": "sw-576",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-580": {
             "conf": {
@@ -188,9 +188,9 @@
                     "value": "privateinput1"
                 }
             },
+            "family": "module",
             "id": "sw-580",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-584": {
             "conf": {
@@ -215,9 +215,9 @@
                     "value": "textinput1"
                 }
             },
+            "family": "module",
             "id": "sw-584",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-588": {
             "conf": {
@@ -246,9 +246,9 @@
                     "value": "url"
                 }
             },
+            "family": "module",
             "id": "sw-588",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-592": {
             "conf": {
@@ -308,9 +308,9 @@
                     "type": "text"
                 }
             },
+            "family": "module",
             "id": "sw-592",
-            "name": "rssitembuilder",
-            "type": "module"
+            "name": "rssitembuilder"
         }
     },
     "outputs": {

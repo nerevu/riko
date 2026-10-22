@@ -10,19 +10,22 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rssitembuilder import pipe as rssitembuilder
 from riko.modules.union import pipe as union
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
+from riko.types._enums import ExecutionMode
 from riko.types.modules import ItemBuilderRawConf, RssItemBuilderRawConf
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
-def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["itembuilder", "loop", "rssitembuilder", "union"]
-    else:
+INPUTS = []
+DEPENDENCIES = ["itembuilder", "loop", "rssitembuilder", "union"]
+
+
+@workflow(subtype="source")
+def pipe(item: Item | None = None, context: Context | None = None, **_):
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_569 = itembuilder(
             item,
             conf=ItemBuilderRawConf(
@@ -132,11 +135,14 @@ def pipe(item=None, context: Context | None = None, **_):
         )
         sw_730 = union(sw_674, conf={}, context=context, others=[sw_688])
         _OUTPUT = sw_730
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

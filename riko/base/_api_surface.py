@@ -3,6 +3,7 @@
 
 BADO = frozenset(
     {
+        "alist",
         "as_async",
         "async_chain",
         "async_map",
@@ -19,9 +20,9 @@ BADO = frozenset(
 
 IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
 
-COLLECTIONS = frozenset({"Formats", "export", "list_formats"})
+EXPORT = frozenset({"Formats", "export", "list_formats"})
 
-COMPILE = frozenset({"compile_workflow", "parse_dag"})
+COMPILE = frozenset({"compile_workflow"})
 
 MODULES = frozenset(
     {
@@ -37,13 +38,18 @@ MODULES = frozenset(
 OTHER = frozenset(
     {
         "Backends",
+        "CastType",
         "Context",
+        "DocumentShape",
         "Edge",
         "Endpoint",
         "ExecutionMode",
         "Executor",
         "Node",
+        "OneShotResource",
         "Pipeline",
+        "Resource",
+        "ReusableResource",
         "Workflow",
         "WorkflowLike",
         "WorkflowDocument",
@@ -62,76 +68,111 @@ ROOT_EXCEPTIONS = frozenset(
         "PipelineStateError",
         "RikoError",
         "UnsupportedModuleError",
-        "UnsupportedPipelineError",
+        "UnsupportedWorkflowError",
     }
 )
 
-STABLE = BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
+STABLE = BADO | IO_ | EXPORT | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 
 PRIVATE_RESOLUTION = frozenset(
     {
         "CompositeStore",
         "DirectoryStore",
+        "DocumentStore",
         "MappingStore",
         "ModuleStore",
         "PackageStore",
-        "PipeResolver",
+        "ResolverDispatcher",
         "WorkflowResolver",
-        "pipe_resolver",
+        "WorkflowStore",
+        "dispatcher",
         "workflow_resolver",
     }
 )
 
-EXTENSION = frozenset(
+EXT_MODULES = frozenset(
     {
-        "ActionNode",
         "AsyncOperatorWrapper",
         "AsyncProcessorWrapper",
         "AsyncSplitterWrapper",
-        "CacheNode",
         "DynamicConf",
-        "FileTarget",
         "ModuleDefinition",
         "ModuleMetadata",
         "ModuleName",
         "ModuleNameLike",
-        "ModuleNode",
         "ModuleRegistry",
         "ModuleSubtype",
         "ModuleType",
         "ModuleWrapper",
-        "PublishEdge",
-        "ReadNode",
-        "StreamEdge",
-        "SubscribeNode",
-        "SupportsActions",
-        "SupportsRead",
-        "SupportsWrite",
+        "PreparedCall",
         "SyncOperatorWrapper",
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
-        "Target",
-        "TargetRegistry",
-        "WriteCapabilities",
-        "WriteNode",
-        "get_module_category",
         "get_conf_type",
-        "migrate_v1_to_v2",
+        "get_module_category",
         "normalize_module_name",
-        "normalize_workflow",
         "operator",
-        "parse_document",
         "processor",
         "register_module",
-        "register_workflow_store",
-        "register_target",
-        "serialize_workflow",
+        "reset_module_registry",
         "splitter",
     }
 )
 
+EXT_TARGETS = frozenset(
+    {
+        "FileTarget",
+        "SupportsActions",
+        "SupportsRead",
+        "SupportsWrite",
+        "Target",
+        "TargetRegistry",
+        "WriteCapabilities",
+        "register_target",
+        "reset_target_registry",
+    }
+)
+
+EXT_WORKFLOWS = frozenset(
+    {
+        "ActionNode",
+        "CacheNode",
+        "Dispatcher",
+        "ModuleNode",
+        "PublishEdge",
+        "ReadNode",
+        "StreamEdge",
+        "SubscribeNode",
+        "WriteNode",
+        "migrate_v1_to_v2",
+        "normalize_workflow",
+        "register_workflow_store",
+        "reset_workflow_resolver",
+    }
+)
+
+EXT_CODEGEN = frozenset(
+    {
+        "NameEntry",
+        "enum_member_name",
+        "gen_catalog_entries",
+        "generate_module_ids",
+        "generate_module_names",
+    }
+)
+
+EXTENSION = EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
+
 TYPES = frozenset(
     {
+        "AsyncLifecyclePlan",
+        "ExternalPlan",
+        "LifecyclePlan",
+        "OwnedPlan",
+        "ResourcePlan",
+        "ResourceStrategy",
+        "SyncLifecyclePlan",
+        "ValueFactoryPlan",
         "AsyncStream",
         "AsyncItems",
         "AsyncPipeTuples",

@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -26,25 +26,24 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
-from riko.bado._util import maybe_deferred
+from riko.bado._util import maybe_async
+from riko.base._logging import get_logger
 
 from ._decorators import processor
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from logging import Logger
 
     from riko.coercion._configs import UdfObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
-OPTS: Opts = {"listize": True, "emit": True}
+OPTS: DecorationOptions = {"listize": True, "emit": True}
 DEFAULTS: Defaults = {}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(
@@ -62,7 +61,7 @@ async def async_parser(
 
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
         func: The function to apply to the item. Awaited when it is an async
             function. Required.
 
@@ -88,7 +87,7 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "udf", strict=True)
-    return await maybe_deferred(func, item)
+    return await maybe_async(func, item)
 
 
 def parser(
@@ -106,7 +105,7 @@ def parser(
 
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
         func: The function to apply to the item. Required.
 
     Returns:
@@ -141,8 +140,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
@@ -197,8 +196,8 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 

@@ -12,7 +12,8 @@ from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FetchDataRawConf,
     InputRawConf,
@@ -23,14 +24,16 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
-def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = [("", "textinput1", "Enter Text", "text", "defunkt")]
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetchdata", "input", "itembuilder", "loop", "rename"]
-    else:
+INPUTS = [("", "textinput1", "Enter Text", "text", "defunkt")]
+DEPENDENCIES = ["fetchdata", "input", "itembuilder", "loop", "rename"]
+
+
+@workflow(subtype="transformer")
+def pipe(item: Item | None = None, context: Context | None = None, **_):
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_479 = _input(
             item,
             conf=InputRawConf(
@@ -108,11 +111,14 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_351
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":

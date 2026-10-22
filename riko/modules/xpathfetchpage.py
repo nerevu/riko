@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -28,9 +28,8 @@ from __future__ import annotations
 from os.path import splitext
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
@@ -38,18 +37,18 @@ from riko.parsing.documents import any2dict
 from riko.types._options import Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import XpathFetchPageObjconf
-    from riko.types._io import FileLike
+    from riko.io._filelike import FileLike
     from riko.types._streams import Item, Stream
 
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(
@@ -62,7 +61,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
 
@@ -103,7 +102,7 @@ async def async_parser(
         Help Page -- ScienceDaily
 
     """
-    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
     if url.startswith("http") and not ext:
@@ -125,7 +124,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration, containing `url`, `xpath` and `html5`.
 
     Returns:
 
@@ -152,7 +151,7 @@ def parser(
         'Help Page -- ScienceDaily'
 
     """
-    url: str = require_conf(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
     if url.startswith("http") and not ext:
@@ -172,10 +171,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Its extension selects
-                the parser, defaulting to ``html`` for an extension-less http
+                the document format, defaulting to ``html`` for an extension-less http
                 url. Required.
 
             xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
@@ -186,7 +185,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -245,10 +244,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Its extension selects
-                the parser, defaulting to ``html`` for an extension-less http
+                the document format, defaulting to ``html`` for an extension-less http
                 url. Required.
 
             xpath (str): The XPath to extract, e.g. ``"/rss/channel/item"``. The
@@ -259,7 +258,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

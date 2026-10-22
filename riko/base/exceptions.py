@@ -1,5 +1,18 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides riko specific exceptions."""
+"""Provides riko specific exceptions and warnings."""
+
+from __future__ import annotations
+
+from difflib import get_close_matches
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+def _get_detail(*parts: str | None) -> str:
+    joined = "; ".join(filter(None, parts))
+    return f" ({joined})" if joined else ""
 
 
 class RikoError(Exception):
@@ -11,9 +24,44 @@ class ModuleError(RikoError):
 
 
 class UnsupportedModuleError(ModuleError):
-    def __init__(self, module_name: str):
-        super().__init__(f"Unsupported riko module: {module_name}")
+    """
+    Reports an unusable module name with hints for close matches.
+
+    Args:
+
+        module_name: The unresolved module name.
+        reason: Why the module is unusable (if it exists but lacks something).
+        candidates: Known module names to suggest from.
+
+    Attributes:
+
+        module_name: The unresolved module name.
+        reason: Why the module is unusable, or None.
+        matches: The candidates that closely match ``module_name``, closest first.
+
+    Examples:
+
+        >>> str(UnsupportedModuleError("trunkate", candidates=["truncate", "split"]))
+        "Unsupported riko module: trunkate (did you mean 'truncate'?)"
+
+    """
+
+    def __init__(
+        self,
+        module_name: str,
+        reason: str | None = None,
+        *,
+        candidates: Iterable[str] = (),
+    ):
+        matches = tuple(get_close_matches(module_name, tuple(candidates), n=3))
+        joined = ", ".join(map(repr, matches))
+        hint = f"did you mean {joined}?" if joined else None
+        detail = _get_detail(reason, hint)
+
+        super().__init__(f"Unsupported riko module: {module_name}{detail}")
         self.module_name = module_name
+        self.reason = reason
+        self.matches: tuple[str, ...] = matches
 
 
 class TargetError(RikoError):
@@ -30,17 +78,20 @@ class PipelineError(RikoError):
     """Base class for pipeline-related errors."""
 
 
-class UnsupportedPipelineError(PipelineError):
-    def __init__(self, pipe_id: str):
-        super().__init__(f"Unsupported riko subpipeline: {pipe_id}")
+class UnsupportedWorkflowError(PipelineError):
+    def __init__(self, pipe_id: str, reason: str | None = None):
+        detail = _get_detail(reason)
+        super().__init__(f"Unsupported riko stored workflow: {pipe_id}{detail}")
         self.pipe_id = pipe_id
+        self.reason = reason
 
 
 class PipelineStateError(PipelineError):
-    def __init__(self, state: str, action: str):
-        super().__init__(f"cannot {action} a pipe in state {state!r}")
+    def __init__(self, state: str, action: str, *, subject: str):
+        super().__init__(f"cannot {action} the {subject} in state {state!r}")
         self.state = state
         self.action = action
+        self.subject = subject
 
 
 class InvalidPipelineError(PipelineError):
@@ -100,6 +151,14 @@ class ImportAnalysisError(ImportLintError): ...  # noqa: E701
 class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
 
 
+class RikoWarning(UserWarning):
+    """Base class for Riko-specific warnings."""
+
+
+class ResourceInterpretationWarning(RikoWarning):
+    """Warns that a resource definition may be interpreted unexpectedly."""
+
+
 __all__ = [
     "CyclicIdentityError",
     "DuplicateReceiverError",
@@ -115,9 +174,11 @@ __all__ = [
     "PipelineStateError",
     "PubSubError",
     "ReceiverUnavailableError",
+    "ResourceInterpretationWarning",
     "RikoError",
+    "RikoWarning",
     "TargetError",
     "UnsupportedModuleError",
-    "UnsupportedPipelineError",
     "UnsupportedTargetError",
+    "UnsupportedWorkflowError",
 ]

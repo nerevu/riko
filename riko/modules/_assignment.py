@@ -1,23 +1,22 @@
 # vim: sw=4:ts=4:expandtab
-"""Handles sub-pipe binding and item assignment."""
+"""Handles loop embed binding and item assignment."""
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from functools import partial
 from itertools import chain, islice
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
+from riko.types._wrappers import build_call
 
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.execution.context import Context
-    from riko.types._collections import RikoValue
-    from riko.types._compiler import CountValues, EmbedKwargs
+    from riko.definitions._context import Context
+    from riko.types._pipedef import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
         Item,
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
         StreamOrValueStream,
         ValueStream,
     )
+    from riko.types._values import RikoValue
     from riko.types._wrappers import (
         AsyncProcessorWrapper,
         AsyncSubPipe,
@@ -37,8 +37,14 @@ if TYPE_CHECKING:
         SyncProcessorWrapperOutput,
         SyncSubPipe,
     )
+    from riko.types.modules import RawCallOptions
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
+
+type Embedder = Callable[
+    [ProcessorWrapperInput],
+    SyncProcessorWrapperOutput | Awaitable[SyncProcessorWrapperOutput],
+]
 
 
 @overload
@@ -60,10 +66,7 @@ def bind_subpipe(  # noqa: E302
     context: Context,
     embedded_kwargs: EmbedKwargs | None = None,
     field: str | None = None,
-) -> Callable[
-    [ProcessorWrapperInput],
-    SyncProcessorWrapperOutput | Awaitable[SyncProcessorWrapperOutput],
-]:
+) -> Embedder:
     if embedded_kwargs and "field" in embedded_kwargs:
         embed_field = embedded_kwargs["field"]
 
@@ -71,7 +74,7 @@ def bind_subpipe(  # noqa: E302
             logger.warning(f"Loop {field=} overrides {embed_field=}.")
             embedded_kwargs["field"] = field
 
-        kwargs = {**embedded_kwargs}
+        kwargs: EmbedKwargs = {**embedded_kwargs}
     elif embedded_kwargs and field is not None:
         kwargs = {**embedded_kwargs, "field": field}
     elif embedded_kwargs:
@@ -81,8 +84,16 @@ def bind_subpipe(  # noqa: E302
     else:
         kwargs = {}
 
-    embed_context = context.augment(submodule=True)
-    return partial(embed, **kwargs, context=embed_context)
+    options: RawCallOptions = {}
+
+    if "field" in kwargs:
+        options["field"] = kwargs["field"]
+
+    if "emit" in kwargs:
+        options["emit"] = kwargs["emit"]
+
+    call = build_call(embed, conf=kwargs.get("conf"), **options)
+    return cast("Embedder", partial(call, context=context))
 
 
 @overload

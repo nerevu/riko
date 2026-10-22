@@ -26,14 +26,14 @@ except ImportError:
     fcntl = None
 
 import mezmorize
-import pygogo as gogo
 import requests
 from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
 from riko.base._constants import ENCODING, STREAMING_THRESHOLD
+from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
-from riko.base._strutils import truncate_content
+from riko.coercion._sequences import truncate_content
 
 from ._reencode import reencode
 
@@ -44,13 +44,14 @@ if TYPE_CHECKING:
     from logging import Logger
     from urllib.response import addinfourl
 
-    from riko.types._collections import BasicArg
-    from riko.types._io import BinaryFileLike, FileLike, Opener, StringFileLike
     from riko.types._scalars import AnyStr
+    from riko.types._values import BasicArg
+
+    from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
-logger: Logger = gogo.Gogo(__name__, verbose=False, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:
@@ -88,7 +89,7 @@ def ext_from_content_type(content_type: str | None) -> str | None:
     return ext
 
 
-def make_blocking(f: RawIOBase | TextIOBase) -> None:
+def set_blocking(f: RawIOBase | TextIOBase) -> None:
     """
     Clears the ``O_NONBLOCK`` flag on ``f`` so its reads block.
 
@@ -487,7 +488,7 @@ def opener(  # noqa: E302
 
 
 @repr_cache
-def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
+def build_opener(memoize: bool = False, **kwargs: object) -> Opener:
     """
     Builds a URL opener cached by call arguments.
 
@@ -501,18 +502,18 @@ def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
 
     Examples:
 
-        >>> get_opener.cache_clear()
-        >>> o1 = get_opener()
-        >>> o1 is get_opener()
+        >>> build_opener.cache_clear()
+        >>> o1 = build_opener()
+        >>> o1 is build_opener()
         True
-        >>> o1 is get_opener(encoding="utf-8")
+        >>> o1 is build_opener(encoding="utf-8")
         False
-        >>> get_opener.cache_info().hits
+        >>> build_opener.cache_info().hits
         1
-        >>> o2 = get_opener(memoize=True)
-        >>> o2 is get_opener(memoize=True)
+        >>> o2 = build_opener(memoize=True)
+        >>> o2 is build_opener(memoize=True)
         True
-        >>> get_opener.cache_info().hits
+        >>> build_opener.cache_info().hits
         2
 
     """
@@ -521,7 +522,7 @@ def get_opener(memoize: bool = False, **kwargs: object) -> Opener:
 
     if memoize:
         kwargs.setdefault("cache_type", get_cache_type(spread=False))
-        return mezmorize.memoize(**kwargs)(current_opener)
+        current_opener = mezmorize.memoize(**kwargs)(current_opener)
 
     return current_opener
 
@@ -574,7 +575,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
         self.file = None
-        opener = get_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
+        opener = build_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
 
         try:
             self.file, self.content_type = opener(url)

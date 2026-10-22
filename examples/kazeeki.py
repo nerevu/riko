@@ -22,12 +22,12 @@ from typing import TYPE_CHECKING
 
 from riko import Pipeline, async_chain, get_path
 from riko.types.modules import (
+    CallOptions,
     CurrencyFormatConf,
     CurrencyFormatRawConf,
     ExchangeRateConf,
     FetchDataConf,
     FindConfRule,
-    ModuleOptions,
     RenameConf,
     RenameConfRule,
     SimpleMathRawConf,
@@ -64,9 +64,7 @@ def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
 
 def add_source(source: Pipeline) -> Pipeline:
     subelement_conf = SubelementConf({"path": "k:source.content.1", "token_key": None})
-    urlparse_options = ModuleOptions(
-        {"field": "link", "emit": False, "assign": "k:source"}
-    )
+    urlparse_options = CallOptions(field="link", emit=False, assign="k:source")
 
     return source.urlparse(options=urlparse_options).subelement(
         conf=subelement_conf, options={"emit": False, "assign": "k:source"}
@@ -112,7 +110,7 @@ def add_tags(
 
     transform_conf = StrTransformConf({"rule": StrTransformConfRule(transform="lower")})
 
-    in_place = ModuleOptions({"field": assign, "assign": assign})
+    in_place = CallOptions(field=assign, assign=assign)
 
     return (
         source.strfind(conf={"rule": rule}, options={"field": field, "assign": assign})
@@ -178,7 +176,7 @@ def add_budget(
     def_currencyformat_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
     ave_budget_conf = make_simplemath("k:budget_raw2_num", "mean")
     convert_budget_conf = make_simplemath("k:rate", "multiply")
-    raw_budget = ModuleOptions({"field": "k:budget_raw", "assign": "k:budget_raw"})
+    raw_budget = CallOptions(field="k:budget_raw", assign="k:budget_raw")
 
     if fixed_text:
         result = source.strconcat(
@@ -265,10 +263,8 @@ def add_budget(
 
 def clean_locations(source: Pipeline) -> Pipeline:
     rule = StrReplaceConfRule(find=", ", replace="")
-    client = ModuleOptions(
-        {"field": "k:client_location", "assign": "k:client_location"}
-    )
-    work = ModuleOptions({"field": "k:work_location", "assign": "k:work_location"})
+    client = CallOptions(field="k:client_location", assign="k:client_location")
+    work = CallOptions(field="k:work_location", assign="k:work_location")
 
     return source.strreplace(conf={"rule": rule}, options=client).strreplace(
         conf={"rule": rule}, options=work
@@ -577,7 +573,8 @@ def pipe(
     if parallel:
         executor = "thread" if threads else "process"
         pipelines = [
-            pipeline.with_execution(executor=executor) for pipeline in pipelines
+            pipeline.with_execution(executor=executor, concurrency="auto")
+            for pipeline in pipelines
         ]
 
     return list(chain.from_iterable(pipelines))

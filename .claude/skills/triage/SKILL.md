@@ -37,8 +37,10 @@ are often stated in a phase you wouldn't guess from the file that misbehaves.
 ## 3. Decide the disposition
 
 - **Local repair** — no phase owns the behavior, or the owning phase has
-  already landed: fix now at the root cause, add a regression test, add a
-  `docs/CHANGES.rst` line if user-observable. No prose journaling.
+  already landed: fix now at the root cause, add a regression test (a row in
+  the subject's existing table when one has the same shape; see
+  `tests/__init__.py`), add a `docs/CHANGES.rst` line if user-observable. No
+  prose journaling.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.
@@ -52,11 +54,17 @@ handle each part under its own rule.
 
 ### Present the dispositions before producing anything
 
-Before writing any fix, test, or tripwire, lay out the proposed disposition
-for every finding in one short table or list: the finding, the disposition,
-the gameplan line that decides it, and the artifact you intend to produce.
+Before writing any fix, test, or tripwire, write the proposed disposition
+for every finding as a list (not a table), one line per finding: finding →
+disposition → the gameplan line that decides it → the artifact you intend to
+produce. Write it as visible text in the same message as the question; a
+paraphrase or summary sentence does not count.
+
 Then ask the user to confirm with AskUserQuestion — "Proceed as dispositioned
 (Recommended)", "Revise", or "Stop here" — and do nothing until they choose.
+The question must stand on its own, because the dialog can hide earlier
+output: put the same per-finding list in the "Proceed" option's `preview`,
+and never word the question as "above" or "as laid out".
 
 Some findings need more than a confirmation. Ask a dedicated question, with
 options that state what each buys, costs, and forecloses and a recommendation
@@ -82,13 +90,17 @@ phase cannot land without tripping it:
 
 ```python
 @pytest.mark.xfail(
-    strict=True, reason="owned by <phase>: <exact probed failure mode>"
+    strict=True, reason="<the pending capability, in plain English> is not yet implemented"
 )
 ```
 
 - Probe the *specific* wrong behavior observed (wrong value, wrong exception,
   wrong ordering) — not a vague "this area is broken".
-- Name the owning phase in the reason so a future session finds the contract.
+- Word the reason as "<the pending capability> is not yet implemented" (e.g.,
+  "lazy async fan-out is not yet implemented"); never a phase code like `R5C` or a
+  gameplan path, which are banned from shipped text (`manage lint --terms` flags
+  them). The phase code goes in the gameplan note, which names the tripwire's test
+  id so a future session finds the contract.
 - Place it in the existing test module for that area; follow the placements
   already used for tripwires in `tests/internal/`.
 - `strict=True` is the point: when the phase lands and behavior corrects, the

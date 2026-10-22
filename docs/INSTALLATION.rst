@@ -68,10 +68,10 @@ OFX/QIF export            csv2ofx             ``python -m pip install "riko[fina
 
 - ``async`` enables asynchronous iteration of a ``Pipeline`` (``async for``) and the
   async I/O helpers.
-- ``perf`` enables accelerated / streaming parser paths; without ``lxml``, ``riko``
+- ``perf`` enables accelerated / streaming XML and feed parsing; without ``lxml``, ``riko``
   falls back to the built-in Python XML parser; without ``fastfeedparser`` it falls back
   to `feedparser`_.
-- ``finance`` enables the ``ofx`` and ``qif`` export targets; without it
+- ``finance`` enables the ``ofx`` and ``qif`` export formats; without it
   ``list_formats()`` won't include them.
 
 Install several groups together:
@@ -114,7 +114,7 @@ chaining work:
     >>> from riko import Pipeline
     >>>
     >>> conf = {'attrs': {'key': 'content', 'value': 'a'}}
-    >>> next(iter(Pipeline.from_module('itembuilder', conf=conf).count()))
+    >>> Pipeline.from_module('itembuilder', conf=conf).count().first()
     {'count': 1}
 
 For the asynchronous API, first install the ``async`` extra, then iterate the same

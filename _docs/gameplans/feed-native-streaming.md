@@ -283,10 +283,16 @@ S8  Pipeline batch representation optimization under R8
 
 R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempted.
 
-Tripwire for S1/S7: `tests/internal/test_decorators.py::test_async_truncate_stays_lazy_over_an_endless_source`
+Tripwire for S1/S7: `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_stays_lazy_over_a_long_source`
 (strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator without an
-`async def` parser materializes its whole async input; today `forever → truncate` under the async
-execution never yields, while the sync run is lazy. It flips when `truncate` migrates or the seam goes.
+`async def` parser materializes its whole async input; today async `truncate` pulls its whole (finite,
+counted) source before yielding its first item, while the sync run is lazy. It flips when `truncate`
+migrates or the seam goes.
+
+The same seam drains async secondary inputs: async `union` drains its `others` streams (as are async
+terminal sub-sources passed as the `format`/`formatted` keywords) before the operator yields
+its first item, while the sync run chains them lazily. A strict xfail in
+`tests/internal/test_modules.py` marks it for S1/S7.
 
 ## 12. Definition of done
 

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-565",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-626",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-592",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-636",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-626",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-592",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -42,9 +42,9 @@
                     "value": "file://riko/data/urlbuilder_feed.xml"
                 }
             },
+            "family": "module",
             "id": "sw-565",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-592": {
             "conf": {
@@ -65,14 +65,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-592",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-626": {
             "embed": {
@@ -120,14 +120,14 @@
                 },
                 "name": "urlbuilder"
             },
+            "family": "module",
             "id": "sw-626",
             "name": "loop",
             "options": {
                 "assign": "media:content.url",
                 "count": "all",
                 "emit": false
-            },
-            "type": "module"
+            }
         },
         "sw-636": {
             "conf": {
@@ -148,14 +148,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-636",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

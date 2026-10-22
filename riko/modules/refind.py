@@ -24,7 +24,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -34,30 +34,29 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import coop_reduce
-from riko.base._strutils import reduce_find
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
+from ._textops import reduce_find
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from logging import Logger
 
     from riko.coercion._configs import RefindObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import FindConfRule
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "listize": True,
     "field": "content",
     "extract": "rule",
 }
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def reducer(word: str, rule: FindConfRule) -> str:
@@ -76,7 +75,7 @@ async def async_parser(
 
         word: The string to search.
         rules: The parsed find rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -113,7 +112,7 @@ def parser(
 
         word: The string to search.
         rules: The parsed find rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -144,7 +143,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The find criteria. Required.
 
@@ -156,11 +155,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
                 param (str): Which match to measure from, either "first" or
                     "last" (default: "first").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to search (default: "content").
+        field (str): Item field to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "refind").
@@ -211,7 +210,7 @@ def pipe(*args: Any, **kwargs: object) -> str:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The find criteria. Required.
 
@@ -223,11 +222,11 @@ def pipe(*args: Any, **kwargs: object) -> str:
                 param (str): Which match to measure from, either "first" or
                     "last" (default: "first").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to search (default: "content").
+        field (str): Item field to search (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
             True (default: "refind").

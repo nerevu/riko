@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, cast
 from riko.base.exceptions import UnsupportedTargetError
 from riko.definitions._targets import FileTarget
 from riko.types._enums import BackendLike, Backends
-from riko.types._targets import Target
+from riko.types._target_protocols import Target
 
 from ._registry import Registry
 
@@ -93,8 +93,8 @@ class TargetRegistry(Registry[type[Target]]):
 
         Examples:
 
-            >>> from riko.definitions._targets import FileTarget
-            >>> from riko.types._enums import Backends
+            >>> from riko import Backends
+            >>> from riko.ext import FileTarget
             >>>
             >>> TargetRegistry().resolve(Backends.FILE) is FileTarget
             True
@@ -111,7 +111,7 @@ class TargetRegistry(Registry[type[Target]]):
 target_registry: TargetRegistry = TargetRegistry()
 
 
-def register_target(target: type[Target], *, replace: bool = False) -> None:
+def register_target[T: Target](target: type[T], *, replace: bool = False) -> type[T]:
     """
     Registers a target class on the process-global registry.
 
@@ -121,13 +121,31 @@ def register_target(target: type[Target], *, replace: bool = False) -> None:
         replace: Whether an existing runtime target for the same backend may be
             replaced.
 
+    Returns:
+
+        The registered class, so the function works as a class decorator.
+
     Raises:
 
         ValueError: If a target for the same backend is already registered and
             ``replace`` is False.
 
+    Examples:
+
+        >>> from riko import Backends
+        >>> from riko.ext import register_target, reset_target_registry
+        >>>
+        >>> @register_target
+        ... class S3Target:
+        ...     backend = Backends.S3
+        >>>
+        >>> target_registry.resolve(Backends.S3) is S3Target
+        True
+        >>> reset_target_registry()
+
     """
     target_registry.register(target, replace=replace)
+    return target
 
 
 def reset_target_registry() -> None:

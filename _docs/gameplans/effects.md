@@ -37,16 +37,16 @@ iteration naturally makes it terminal; if more nodes follow, chaining continues.
 
 There is no *permanent* separate public `sink()` terminal. A second permanent verb would encode
 terminality and reconciliation as a separate surface even though both are properties of the write
-operation/graph position. An interim fluent `sink()` does ship today — it drains the stream and
-returns a `WriteResult`, sharing `write()`'s session mechanism and identical write semantics (both
-default to `replace`) — as a bridge kept only until a `write()` at a graph leaf provides the same
-terminal consumption.
+operation/graph position. The interim fluent `sink()` that once shipped as a bridge (drain the
+stream, return a `WriteResult`) was deleted with the v1 pipe classes at the v1 cutover; a `write()`
+at a graph leaf provides terminal consumption.
 
 Compatibility is intentionally asymmetric:
 
-- the interim fluent `sink()` verb and any sink-specific public/discovery surface are removed at the
-  R5C clean-break, not deprecated; there is no alias, deprecation period, or loader compatibility, and
-  it carries no persisted-workflow obligation because no serialized `SinkNode` ever existed;
+- the interim fluent `sink()` verb is already gone, and any remaining sink-specific discovery
+  surface is removed at the R5C clean-break, not deprecated; there is no alias, deprecation period, or
+  loader compatibility, and no persisted-workflow obligation because no serialized `SinkNode` ever
+  existed;
 - the shipped `riko.modules.write` Python module remains only until R5C replaces it with
   `Pipeline.write()` / `WriteNode`, then is removed with no deprecated wrapper or discovery entry;
 - serialized `PipeDef`s (pipe definitions) that contain the legacy `write` module are migrated at the v1
@@ -143,11 +143,11 @@ input record
 A write may buffer internally when the destination format requires framing/atomic publication, but
 that buffering must not change the Pipeline-level pass-through contract.
 
-`WriteNode` executes through the shared write-session mechanism (`build_write` → `WriteSession`)
-that the fluent `write()` and `sink()` verbs already use; there is no separate effect-specific writer.
-Terminality (the interim `sink()`, returns a `WriteResult`) versus passthrough (`write`, keeps the
-stream flowing) is a consumption difference, not a distinct node family — R5C adds the canonical
-caller and retires the interim `sink()` verb, not a second implementation.
+`WriteNode` executes through the existing private write-session mechanism (`build_write` →
+`WriteSession`); there is no separate effect-specific writer. The fluent verbs that first drove the
+sessions were deleted at the v1 cutover, so `WriteNode` is their next caller. Terminality (a `write`
+at a graph leaf) versus passthrough (more nodes follow) is a consumption difference, not a distinct
+node family — R5C adds the canonical caller, not a second implementation.
 
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
 session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
@@ -278,6 +278,12 @@ write may stage internally
 successful publication -> WriteResult
 failed/cancelled publication -> no successful result; clean partial artifact best-effort
 ```
+
+Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace` destinations
+for writing when the session is acquired, truncating the file before any record arrives, so an
+aborted replace write destroys the prior file instead of leaving it intact. A strict xfail in
+`tests/internal/test_definitions.py` marks it; the fix stages the replacement and publishes it only on
+`finalize`.
 
 Detailed codecs remain owned by `artifact-conversion.md`; concrete FILE adapter mechanics belong to
 `connectors.md`.

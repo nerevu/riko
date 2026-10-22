@@ -1,8 +1,8 @@
 # vim: sw=4:ts=4:expandtab
 """
-Runs an embedded module once per source item.
+Runs an embedded module once per input item.
 
-The embedded result can replace the source item or be assigned back onto it.
+The embedded result can replace the input item or be assigned back onto it.
 
 Examples:
 
@@ -34,7 +34,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -43,9 +43,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
-from riko.types._options import Defaults, Opts
+from riko.base._logging import get_logger
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
 
@@ -56,9 +55,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"listize": False, "parse": False}
+OPTS: DecorationOptions = {"listize": False, "parse": False}
 DEFAULTS: Defaults = Defaults({})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -72,10 +71,10 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so
+        stream: The input stream. Note: this shares the `tuples` iterator, so
             consuming it will consume `tuples` as well.
 
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
         tuples: Iterable of (item, objconf). `item` is an element in the source
             stream. Note: this shares the `stream` iterator, so consuming it
@@ -83,7 +82,7 @@ def parser(
 
     Yields:
 
-        Each source item, untouched.
+        Each input item, untouched.
 
     """
     yield from stream
@@ -92,52 +91,51 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously creates submodules from existing pipes.
+    Asynchronously runs an embedded module once per input item.
 
-    Runs the submodule once per parent lazily and sequentially — parent order
-    is preserved, the source advances only as the consumer pulls, and
-    ``count="first"`` stops after the first result.
+    Runs it once per parent lazily and sequentially while preserving parent order. The
+    input stream advances only as the consumer pulls, and ``count="first"`` stops after
+    the first result.
 
     Args:
 
-        items (Items): The source stream.
-        context (Context): the execution context
+        items (Items): The input stream.
+        context (Context): the run environment
 
     Kwargs:
 
-        embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a named workflow.
-            Required.
+        embed (callable): The pipe to run once per item. Any loopable processor
+            (everything except ``*input``) or a stored workflow's pipe, looked up by
+            its ``pipe_<id>`` name.
 
-        conf (dict): The **submodule's** configuration, not this pipe's.
+        conf (dict): The **embedded module's** configuration, not loop's.
 
-        field (str): Source field fed to the submodule (default: None).
+        field (str): Field fed to the embedded module (default: None).
 
-        count (str): How many submodule results to keep per source item, either
+        count (str): How many embedded-module results to keep per input item, either
             "all" or "first" (default: "all").
 
-        assign (str): Subkey each kept result folds into. Ignored when ``emit``
-            is True (default: "loop").
+        assign (str): Field each kept result folds into. Ignored when ``emit`` is True
+            (default: "loop").
 
-        emit (bool): Whether to replace each source item with the submodule
-            output rather than fold it under ``assign`` (default: True for a
-            normal item stream).
+        emit (bool): Whether to replace each input item with the embedded module's
+            results rather than fold them under ``assign`` (default: True for a normal
+            item stream).
 
     Yields:
 
-        - the submodule output per item when ``emit`` is True (default)
-        - merged ``{Item, <assign>: <result>}`` once per kept result when
-          ``emit`` is False
+        - the embedded module's results per item when ``emit`` is True (default)
+        - merged ``{Item, <assign>: <result>}`` once per kept result when ``emit`` is
+          False
 
     Notes:
 
-        A submodule that yields one value per item (``rename``, ``strconcat``,
-        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
-        and makes ``count`` irrelevant. One that yields many (``tokenizer``,
-        ``fetchdata``) suits ``emit=False`` with ``assign``.
+        An embedded module that yields one value per item (``rename``, ``strconcat``,
+        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item and
+        makes ``count`` irrelevant. One that yields many (``tokenizer``, ``fetchdata``)
+        suits ``emit=False`` with ``assign``.
 
-        A missing ``embed`` logs a warning and passes the source through
-        unchanged.
+        Without an ``embed``, the input stream passes through unchanged.
 
     """
     return parser(*args, **kwargs)
@@ -146,51 +144,49 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Creates submodules from existing pipes.
+    Runs an embedded module once per input item.
 
-    Runs the submodule once per source item and folds its output back into the
-    stream.
+    Its results replace each item or are folded back into it.
 
     Args:
 
-        items (Items): The source stream.
-        context (Context): the execution context
+        items (Items): The input stream.
+        context (Context): the run environment
 
     Kwargs:
 
-        embed (callable): The submodule to run once per item. Any loopable
-            processor (everything except ``*input``) or a named workflow.
-            Required.
+        embed (callable): The pipe to run once per item. Any loopable processor
+            (everything except ``*input``) or a stored workflow's pipe, looked up by
+            its ``pipe_<id>`` name.
 
-        conf (dict): The **submodule's** configuration, not this pipe's.
+        conf (dict): The **embedded module's** configuration, not loop's.
 
-        field (str): Source field fed to the submodule (default: None).
+        field (str): Field fed to the embedded module (default: None).
 
-        count (str): How many submodule results to keep per source item, either
+        count (str): How many embedded-module results to keep per input item, either
             "all" or "first" (default: "all").
 
-        assign (str): Subkey each kept result folds into. Ignored when ``emit``
-            is True (default: "loop").
+        assign (str): Field each kept result folds into. Ignored when ``emit`` is True
+            (default: "loop").
 
-        emit (bool): Whether to replace each source item with the submodule
-            output rather than fold it under ``assign`` (default: True for a
-            normal item stream).
+        emit (bool): Whether to replace each input item with the embedded module's
+            results rather than fold them under ``assign`` (default: True for a normal
+            item stream).
 
     Yields:
 
-        - the submodule output per item when ``emit`` is True (default)
-        - merged ``{Item, <assign>: <result>}`` once per kept result when
-          ``emit`` is False
+        - the embedded module's results per item when ``emit`` is True (default)
+        - merged ``{Item, <assign>: <result>}`` once per kept result when ``emit`` is
+          False
 
     Notes:
 
-        A submodule that yields one value per item (``rename``, ``strconcat``,
-        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item
-        and makes ``count`` irrelevant. One that yields many (``tokenizer``,
-        ``fetchdata``) suits ``emit=False`` with ``assign``.
+        An embedded module that yields one value per item (``rename``, ``strconcat``,
+        ``urlbuilder``, ``regex``) suits ``emit=True``, which replaces the item and
+        makes ``count`` irrelevant. One that yields many (``tokenizer``, ``fetchdata``)
+        suits ``emit=False`` with ``assign``.
 
-        A missing ``embed`` logs a warning and passes the source through
-        unchanged.
+        Without an ``embed``, the input stream passes through unchanged.
 
     """
     return parser(*args, **kwargs)

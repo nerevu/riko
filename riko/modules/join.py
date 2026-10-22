@@ -2,7 +2,7 @@
 """
 Performs SQL like joins on separate sources.
 
-The ``other`` stream is retained so it can be matched against every source item,
+The ``other`` stream is retained so it can be matched against every input item,
 so it cannot be unbounded. The source itself is consumed lazily and may be
 unbounded. With a join key the comparison is a cartesian product, so cost grows
 as ``len(items) * len(other)``.
@@ -23,7 +23,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -33,15 +33,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza.process import merge
 
+from riko.base._logging import get_logger
 from riko.types._guards import is_mapping
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 from riko.types._sentinels import MISSING
 
 from ._decorators import operator
-from ._prepare import require_arg
+from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -50,9 +50,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, Items, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -70,13 +70,13 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming it
-            will consume `tuples` as well.
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
+            it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing `join_key`, `other_join_key`
+        objconf: The module configuration, containing `join_key`, `other_join_key`
             and `lower`.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -155,16 +155,16 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously joins a source stream against another stream.
+    Asynchronously joins an input stream against another stream.
 
-    ``other`` is retained and replayed against every source item, so it cannot be
-    unbounded. The source stream is consumed lazily.
+    ``other`` is retained and replayed against every input item, so it cannot be
+    unbounded. The input stream is consumed lazily.
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             join_key (str): Field to join ``items`` on (default: the value of
                 ``other_join_key``).
@@ -175,7 +175,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             lower (bool): Whether to compare string values case-insensitively
                 (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -221,16 +221,16 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Joins a source stream against another stream.
+    Joins an input stream against another stream.
 
-    ``other`` is retained and replayed against every source item, so it cannot be
-    unbounded. The source stream is consumed lazily.
+    ``other`` is retained and replayed against every input item, so it cannot be
+    unbounded. The input stream is consumed lazily.
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             join_key (str): Field to join ``items`` on (default: the value of
                 ``other_join_key``).
@@ -241,7 +241,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             lower (bool): Whether to compare string values case-insensitively
                 (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

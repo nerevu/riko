@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides functions for deriving module subtypes and loop behavior."""
+"""Derives module subtypes, loop behavior, and sequential input-stream reading."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from riko.types.modules import (
     OperatorReturnKind,
 )
 
-from ._inference import gen_operator_return_kinds
+from ._inference import gen_return_inferences
 
 if TYPE_CHECKING:
     from riko.types._wrappers import ModuleParser
@@ -21,13 +21,17 @@ if TYPE_CHECKING:
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still
 # initializing.
-def _get_operator_subtypes(
-    pipe: ModuleParser,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
-    subtypes: ModuleSubtypes = set()
+    subtypes: set[ModuleSubtype] = set()
+    reasons: list[str] = []
 
-    for kind in gen_operator_return_kinds(pipe):
+    for inference in gen_return_inferences(pipe):
+        kind = inference.kind
+
+        if inference.reason:
+            reasons.append(inference.reason)
+
         if kind == OperatorReturnKind.NONSTREAM:
             subtype = subtype or "aggregator"
             subtypes.add(subtype)
@@ -39,16 +43,28 @@ def _get_operator_subtypes(
         if subtype and subtypes == {"aggregator", "composer"}:
             break
 
-    if not subtypes:
-        qualified_name = f"{pipe.__module__}.{pipe.__name__}"
+    if subtype is None:
+        name = getattr(pipe, "__name__", type(pipe).__name__)
+        qualified_name = f"{pipe.__module__}.{name}"
         msg = f"{qualified_name} no supported subtypes found"
+
+        if reasons:
+            msg += f": {'; '.join(reasons)}"
+
         raise TypeError(msg)
 
-    return subtype, subtypes
+    return subtype, frozenset(subtypes)
+
+
+SEQUENTIAL_READERS = frozenset({"join", "union"})
 
 
 def is_loopable(name: str, module_type: ModuleType | str) -> bool:
     return module_type == "processor" and name != "input"
+
+
+def has_sequential_inputs(name: str) -> bool:
+    return name in SEQUENTIAL_READERS
 
 
 def get_module_subtypes(
@@ -56,13 +72,13 @@ def get_module_subtypes(
     module_type: ModuleType | str,
     ftype: BasicCastType | None = None,
     **kwargs: object,
-) -> tuple[ModuleSubtype | None, ModuleSubtypes]:
+) -> tuple[ModuleSubtype, ModuleSubtypes]:
     if module_type == "processor":
         none_ftype = ftype == BasicCastType.NONE
         subtype = "source" if none_ftype else "transformer"
-        result: tuple[ModuleSubtype | None, ModuleSubtypes] = subtype, {subtype}
+        result: tuple[ModuleSubtype, ModuleSubtypes] = subtype, frozenset({subtype})
     elif module_type == "splitter":
-        result = "splitter", {"splitter"}
+        result = "splitter", frozenset({"splitter"})
     else:
         result = _get_operator_subtypes(pipe)
 

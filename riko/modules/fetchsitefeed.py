@@ -14,7 +14,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -23,29 +23,27 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
-from riko.rss.discovery import async_get_rss, get_rss
-from riko.rss.entries import augment_entries
-from riko.rss.parsing import parse_rss
+from riko.rss.discovery import aload_rss_links, load_rss_links
+from riko.rss.feeds import augment_entries, parse_rss
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from logging import Logger
 
     from riko.coercion._configs import FetchSiteFeedObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._rss import RSSEntry
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 async def async_parser(
@@ -58,7 +56,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -82,8 +80,8 @@ async def async_parser(
         EU sets out 'phased' Brexit strategy
 
     """
-    url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = await async_get_rss(url)
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
+    rss = await aload_rss_links(url)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
@@ -105,7 +103,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -126,8 +124,8 @@ def parser(
         "EU sets out 'phased' Brexit strategy"
 
     """
-    url: str = require_conf(objconf, "url", "fetchsitefeed")
-    rss = get_rss(url)
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
+    rss = load_rss_links(url)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
@@ -147,11 +145,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -200,11 +198,11 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

@@ -1,23 +1,36 @@
-"""Static config contracts for the built-in pipe modules."""
+"""Static config contracts for the built-in modules."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
 
-from ._compiler import EmbedRef, PipeModule
+import attrs
+from attrs import define
+
+from riko.base._config import BUILTIN_PROVIDER
+
+from ._collections import (
+    FrozenConf,
+    require_from_form,
+    require_from_typed_dict,
+    require_instance,
+    serialize_attrs,
+    validator_from_require,
+)
+from ._pipedef import CountValues, Embed
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from re import Pattern, RegexFlag
 
-    from _typeshed import DataclassInstance
-
-    from ._compiler import CountValues
-    from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._collections import TypeRequire
+    from ._enums import CastType, ExecutionMode, FmtLike, LocationType, SortableCastType
     from ._io import PathLike
     from ._scalars import BasicValue
+    from ._values import Inputs
 
 
 # Shared
@@ -29,7 +42,7 @@ type ModuleSubtype = Literal[
     "aggregator", "composer", "source", "transformer", "splitter"
 ]
 
-type ModuleSubtypes = set[ModuleSubtype]
+type ModuleSubtypes = frozenset[ModuleSubtype]
 
 
 class OperatorReturnKind(StrEnum):
@@ -54,6 +67,33 @@ class ReturnInference:
     reason: str = ""
 
 
+def get_module_provider(name: str) -> str:
+    """
+    Gets the provider/namespace a module name belongs to.
+
+    Args:
+
+        name: The module name.
+
+    Returns:
+
+        The first dotted segment of a qualified name, or ``"riko"`` (the built-in
+        provider) for an unqualified name.
+
+    Examples:
+
+        >>> get_module_provider("fetch")
+        'riko'
+        >>> get_module_provider("example.lookup")
+        'example'
+        >>> get_module_provider("microsoft.autopilot.ensure")
+        'microsoft'
+
+    """
+    prefix, dot, _ = name.partition(".")
+    return prefix if dot else BUILTIN_PROVIDER
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleMetadata:
     name: str
@@ -64,6 +104,16 @@ class ModuleMetadata:
     loopable: bool
     has_sync: bool
     has_async: bool
+
+    @property
+    def provider(self) -> str:
+        """
+        The module's namespace.
+
+        The first dotted segment of its name, or the built-in provider for an
+        unqualified name.
+        """
+        return get_module_provider(self.name)
 
     def supports(self, subtype: ModuleSubtype) -> bool:
         return subtype in self.subtypes
@@ -368,10 +418,6 @@ class SubelementRawConf(TypedDict):
     token_key: NotRequired[Value]
 
 
-class SubModuleRawConf(TypedDict):
-    gid: Value
-
-
 class SubstrRawConf(TypedDict, total=False):
     start: Value
     length: Value
@@ -463,7 +509,6 @@ type AnyModuleRawConf = (
     | StrReplaceRawConf
     | StrTransformRawConf
     | SubelementRawConf
-    | SubModuleRawConf
     | SubstrRawConf
     | SumRawConf
     | TailRawConf
@@ -477,21 +522,6 @@ type AnyModuleRawConf = (
     | UrlParseRawConf
     | XpathFetchPageRawConf
 )
-
-
-class EmbeddedModule(EmbedRef, total=False):
-    """
-    Describe a loop's embedded submodule for code generation.
-
-    The descriptor is ``{id, type, conf}`` and comes from
-    ``compile.gen_modules(embedded=True)`` using the loop's top-level ``embed`` and
-    ``conf``.
-    """
-
-    conf: Required[AnyModuleRawConf]
-    emit: ConfArg
-    assign: ConfArg
-    field: ConfArg
 
 
 # Parsed
@@ -828,7 +858,7 @@ class UrlParseConf(TypedDict, total=False):
 
 
 class WriteConf(TypedDict, total=False):
-    dest: Required[PathLike]
+    dest: PathLike
     fmt: FmtLike | None
     mode: str
 
@@ -841,20 +871,19 @@ class XpathFetchPageConf(TypedDict, total=False):
 
 
 # General
-type ConfDictValues = PipeModule | ParsedParam
-type RawConfValues = dict[str, str | int | bool]
 type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
-    | ConfDictValues
+    | ParsedParam
     | bool
-    | DataclassInstance
+    | float
     | int
     | Literal["and", "or"]
     | list[ParsedParam]
     | list[str]
     | str
+    | None
 )
 
 type AnyConfRule = (
@@ -917,23 +946,16 @@ type AnyModuleConf = (
 )
 
 type Conf = AnyModuleConf | AnyModuleRawConf
+type MaybeFrozenConf = Conf | FrozenConf
+
+require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(
+    AnyModuleConf
+)
+require_conf: TypeRequire[object, Conf] = require_from_form(Conf)
 
 
-class Embed(TypedDict):
-    """
-    A loop's embedded module: the registered name run once per parent item.
-
-    ``conf`` is the configuration that module parses.
-
-    """
-
-    id: NotRequired[str]
-    conf: Conf
-    name: str
-
-
-class ModuleOptions(TypedDict, total=False):
-    """Call options forwarded to a module callable alongside its configuration."""
+class RawCallOptions(TypedDict, total=False):
+    """Call options forwarded to a module callable, as keyword arguments."""
 
     emit: bool
     assign: str
@@ -941,10 +963,104 @@ class ModuleOptions(TypedDict, total=False):
     count: CountValues
 
 
+type CallOptionsLike = CallOptions | RawCallOptions | Mapping[str, OptionValues]
+
+_is_optional_bool = validator_from_require(require_instance, bool, optional=True)
+_is_optional_str = validator_from_require(require_instance, str, optional=True)
+_require_count = require_from_form(CountValues)
+_is_optional_count = validator_from_require(_require_count, optional=True)
+_item, _what = RawCallOptions, "call options"
+build_require_raw_call_options: Callable[
+    ..., TypeRequire[Mapping[str, object], RawCallOptions]
+] = partial(require_from_typed_dict, _item, _what)
+_require_raw_call_options = build_require_raw_call_options()
+
+
+@define(frozen=True, slots=True, kw_only=True, repr=False)
+class CallOptions:
+    """
+    Call options forwarded to a module callable alongside its configuration.
+
+    Attributes:
+
+        emit: Whether to yield the result as a new item rather than assign it.
+        assign: The item field the result is assigned to.
+        field: The item field whose value the module receives.
+        count: Whether to keep the first result or all of them.
+
+    Examples:
+
+        >>> options = CallOptions.from_raw({"field": "title", "emit": True})
+        >>> options
+        CallOptions(emit=True, field='title')
+        >>> options.field, options.assign
+        ('title', None)
+        >>> options.kwargs
+        {'emit': True, 'field': 'title'}
+
+    """
+
+    emit: bool | None = attrs.field(default=None, validator=_is_optional_bool)
+    assign: str | None = attrs.field(default=None, validator=_is_optional_str)
+    field: str | None = attrs.field(default=None, validator=_is_optional_str)
+    count: CountValues | None = attrs.field(default=None, validator=_is_optional_count)
+
+    @classmethod
+    def from_raw(
+        cls, raw: CallOptionsLike | None = None, what: str | None = None
+    ) -> CallOptions:
+        """
+        Builds call options from keyword-argument form.
+
+        Args:
+
+            raw: The options to convert or return as is. ``None`` means no options.
+            what: The name used in error messages (default: "call options").
+
+        Returns:
+
+            The call options.
+
+        Raises:
+
+            InvalidPipelineError: If ``raw`` has a key that is not a call option, or
+                an option value of the wrong type.
+
+        """
+        if raw is None:
+            options = cls()
+        elif isinstance(raw, CallOptions):
+            options = raw
+        else:
+            options = cls(**_require_raw_call_options(raw, what))
+
+        return options
+
+    @property
+    def kwargs(self) -> RawCallOptions:
+        """The set options as fresh keyword arguments."""
+        return _require_raw_call_options(serialize_attrs(self))
+
+    def __repr__(self) -> str:
+        pairs = ", ".join(f"{key}={value!r}" for key, value in self.kwargs.items())
+        return f"CallOptions({pairs})"
+
+
+class ContextOverrides(TypedDict, total=False):
+    """The per-call overrides a pipe call applies to its ``Context``."""
+
+    mode: ExecutionMode
+    inputs: Inputs
+    test: bool
+
+
 __all__ = [
     "AggregateConf",
     "AnyConfRule",
     "AnyModuleConf",
+    "CallOptions",
+    "CallOptionsLike",
+    "ContextOverrides",
     "CountConf",
     "CsvConf",
     "CurrencyFormatConf",
@@ -965,14 +1081,15 @@ __all__ = [
     "InputConf",
     "ItemBuilderConf",
     "JoinConf",
+    "MaybeFrozenConf",
     "ModuleCategory",
     "ModuleClass",
     "ModuleMetadata",
-    "ModuleOptions",
     "ModuleSubtype",
     "ModuleSubtypes",
     "ModuleType",
     "ParsedParam",
+    "RawCallOptions",
     "ReceiveConf",
     "RefindConf",
     "RegexConf",
@@ -1008,4 +1125,5 @@ __all__ = [
     "UrlParseConf",
     "WriteConf",
     "XpathFetchPageConf",
+    "get_module_provider",
 ]

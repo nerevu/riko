@@ -7,9 +7,10 @@ Names in ``__all__`` are also available from the top-level ``riko`` namespace.
 
 from ._backend import async_chain, async_sleep, backend, isasync, issync, run
 from ._util import async_read, async_return
-from .itertools import as_async, async_map, async_map_stream
+from .itertools import alist, as_async, async_map, async_map_stream
 
 __all__ = [
+    "alist",
     "as_async",
     "async_chain",
     "async_map",

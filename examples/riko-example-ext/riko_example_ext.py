@@ -12,7 +12,7 @@ For auto registration, point an entry point at the module itself (E.g., in
 callables and summary line from the module.
 
 For explicit interface callables + runtime ``register``, see ``register_module.py``.
-For aliasing a built-in via ``module=``, see ``register_alias.py``.
+For aliasing a built-in via ``ModuleDefinition.from_module``, see ``register_alias.py``.
 
 Examples:
     Install alongside riko and resolve ``example.shout`` by name::
@@ -22,7 +22,7 @@ Examples:
         from riko import Pipeline
 
         source = [{'content': 'hi'}]
-        print(next(iter(Pipeline(source=source).pipe('example.shout'))))
+        print(Pipeline(source=source).pipe('example.shout').first())
         EOF
 
 """
@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, cast
 from riko.ext import operator
 
 if TYPE_CHECKING:
-    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.ext import DynamicConf
     from riko.types import Item, PipeTuples, Stream
 
 

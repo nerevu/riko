@@ -16,7 +16,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -26,8 +26,7 @@ from __future__ import annotations
 import ctypes
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -36,15 +35,15 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {
+OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "ptype": BasicCastType.NONE,
     "field": "content",
 }
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -57,7 +56,7 @@ def parser(
 
         content: The value to hash.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -87,12 +86,12 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to hash. Its value is cast to text first,
+        field (str): Item field to hash. Its value is cast to text first,
             so a missing field hashes ``""`` (default: "content").
 
         assign (str): Field the hash is assigned to. Ignored when ``emit`` is
@@ -134,12 +133,12 @@ def pipe(*args: Any, **kwargs: object) -> int:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to hash. Its value is cast to text first,
+        field (str): Item field to hash. Its value is cast to text first,
             so a missing field hashes ``""`` (default: "content").
 
         assign (str): Field the hash is assigned to. Ignored when ``emit`` is

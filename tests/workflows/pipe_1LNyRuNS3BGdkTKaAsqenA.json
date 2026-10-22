@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-1",
                 "port": "out"
@@ -8,8 +9,7 @@
             "target": {
                 "node": "sw-2",
                 "port": "in:symbol_in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -40,9 +40,9 @@
                     "value": "text"
                 }
             },
+            "family": "module",
             "id": "sw-1",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-2": {
             "conf": {
@@ -59,9 +59,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-2",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         }
     },
     "outputs": {

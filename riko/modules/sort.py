@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -31,27 +31,26 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.bado.itertools import async_reduce
+from riko.base._logging import get_logger
 from riko.types._enums import SortableCastType
 from riko.types.modules import SortConfRule
 
 from ._decorators import operator
-from ._iterutils import build_sort_key
+from ._sortutils import build_sort_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from logging import Logger
 
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"listize": True, "extract": "rule"}
+OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
 sort_type = SortableCastType.TEXT
 DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content", type=sort_type)}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
@@ -70,13 +69,13 @@ async def async_parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         rules: The item independent sort rules.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
@@ -114,13 +113,13 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         rules: The item independent sort rules.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
@@ -146,22 +145,22 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously sorts a stream according to a specified key.
+    Asynchronously sorts a stream according to specified fields.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
     Listing several rules sorts by the first, breaking ties with the rest.
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The sort criteria.
 
                 (default: {"field": "content", "dir": "asc", "type": "text"}).
 
-                field (str): Item attribute to sort on (default: "content").
+                field (str): Item field to sort on (default: "content").
 
                 dir (str): The sort direction, either "asc" or "desc"
                     (default: "asc").
@@ -175,7 +174,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
                     like any other value. When unset such items group first
                     ascending and last descending (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -209,22 +208,22 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Sorts a stream according to a specified key.
+    Sorts a stream according to specified fields.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
     Listing several rules sorts by the first, breaking ties with the rest.
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The sort criteria.
 
                 (default: {"field": "content", "dir": "asc", "type": "text"}).
 
-                field (str): Item attribute to sort on (default: "content").
+                field (str): Item field to sort on (default: "content").
 
                 dir (str): The sort direction, either "asc" or "desc"
                     (default: "asc").
@@ -238,7 +237,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                     like any other value. When unset such items group first
                     ascending and last descending (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

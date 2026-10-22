@@ -1,14 +1,27 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.16.6
+  # Pre-commit installs the locked ruff in its own environment, so the hooks match
+  # `manage lint` and CI from any Git client. `manage upgrade` rewrites the pin and
+  # `manage lint --deps` fails when it drifts from uv.lock.
+  - repo: local
     hooks:
+      - id: ruff-check-imports
+        name: ruff (sort imports)
+        entry: ruff check --select I --fix --show-fixes --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
+        types_or: [python, pyi]
       - id: ruff-check
-        args: [--select, I, --fix, --config, pyproject.toml]
-      - id: ruff-check
-        args: [--fix, --config, pyproject.toml]
+        name: ruff (check)
+        entry: ruff check --fix --show-fixes --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
+        types_or: [python, pyi]
       - id: ruff-format
-        args: [--config, pyproject.toml]
+        name: ruff (format)
+        entry: ruff format --config pyproject.toml
+        language: python
+        additional_dependencies: [ruff==0.16.10]
+        types_or: [python, pyi]
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

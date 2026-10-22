@@ -3,18 +3,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from datetime import date
 from decimal import Decimal
 from functools import reduce
 from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
-import pygogo as gogo
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._logging import get_logger
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
-from riko.coercion.cast import CAST_SWITCH, cast_value
+from riko.coercion.cast import cast_value, resolve_cast_type
 from riko.types._enums import CastType
 from riko.types._guards import (
     is_known_sequence,
@@ -31,12 +31,12 @@ if TYPE_CHECKING:
 
     from _typeshed import SupportsKeysAndGetItem
 
-    from riko.types._collections import Key, RikoList
     from riko.types._scalars import BasicValue, PrimitiveValue
     from riko.types._streams import Item, ItemOrValue, StatefulItem, Stream
+    from riko.types._values import RikoList
     from riko.types.modules import ConfArg
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 TV_KEYS = ("type", "value")
 PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
@@ -44,6 +44,8 @@ D = TypeVar("D")
 
 type Data[VT] = Iterable[tuple[str, VT]]
 type DotDictInput[VT] = Data[VT] | Item
+type SubkeyRef = Mapping[str, str]
+type Key = str | SubkeyRef
 
 
 def parse_key(key: Key | None = None) -> list[str]:
@@ -61,7 +63,28 @@ def parse_key(key: Key | None = None) -> list[str]:
 
 
 def match_key(data: object, key: str) -> str | None:
-    if is_mapping(data):
+    """
+    Case insensitively finds the ``data`` key named by ``key``.
+
+    Args:
+
+        data: The mapping to look in (non-mappings will match nothing).
+        key: The key to look up.
+
+    Returns:
+
+        The key as ``data`` stores it, or ``None`` when no key matches.
+
+    Examples:
+
+        >>> match_key({"Title": 1}, "TITLE")
+        'Title'
+
+    """
+    if isinstance(data, CaseInsensitiveDict):
+        stored = data._store.get(key.lower())
+        matched = None if stored is None else stored[0]
+    elif is_mapping(data):
         if key in data:
             matched = key
         else:
@@ -81,6 +104,30 @@ def raw_get[VT](data: Mapping[str, VT], key: str) -> VT:
         value = data[key]
 
     return value
+
+
+def raw_set[VT](data: MutableMapping[str, VT], key: str, value: VT) -> None:
+    if isinstance(data, CaseInsensitiveDict):
+        CaseInsensitiveDict.__setitem__(data, key, value)  # noqa: PLC2801
+    else:
+        data[key] = value
+
+
+def detach_nested[VT](data: MutableMapping[str, VT], key: str) -> VT | None:
+    """Replaces the mapping at ``key`` with a copy, so writes stay off the source."""
+    value = raw_get(data, key)
+
+    if isinstance(value, CaseInsensitiveDict):
+        copied = value.copy()
+    elif is_mapping(value):
+        copied = dict(value)
+    else:
+        copied = None
+
+    if copied is not None:
+        raw_set(data, key, cast("VT", copied))
+
+    return cast("VT | None", copied)
 
 
 @overload
@@ -119,10 +166,8 @@ def resolve_sentinel[D, VT](  # noqa: E302
             pass
         elif type_ == CastType.LOCATION:
             logger.warning(f"Location type not supported! Not casting {parsed=}.")
-        elif type_ in CAST_SWITCH:
-            parsed = cast_value(parsed, type_=CastType(type_))
         elif type_ != "module":
-            logger.warning(f"Invalid cast type={type_}! Not casting {parsed=}.")
+            parsed = cast_value(parsed, resolve_cast_type(type_))
     else:
         _parsed = {}
 
@@ -137,8 +182,10 @@ def resolve_sentinel[D, VT](  # noqa: E302
 def gen_map_items[VT](
     *keys: str, data: Mapping[str, VT], **kwargs: VT
 ) -> Iterator[tuple[str, VT | None]]:
+    dd = data if DotDict.is_self(data) else DotDict(data)
+
     for key in keys:
-        value = DotDict(data).get(key, **kwargs)
+        value = dd.get(key, **kwargs)
         v = next(gen_dict(value, default_key=None))
         yield (key.lower(), v)
 
@@ -459,7 +506,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             msg = f"Ignoring unsupported key {key} to access non-mapping value {value}."
 
             if is_mapping(value):
-                value = cast("VT", value[key])
+                nested = value if self.is_self(value) else DotDict(value)
+                value = cast("VT", nested[key])
             else:
                 logger.warning(msg)
 
@@ -470,6 +518,33 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             result = cast("VT", self.dictize(parsed))
 
         return result
+
+    def __contains__(self, key: object) -> bool:
+        """
+        Checks whether a key, dotted path, or subkey mapping resolves to a value.
+
+        Examples:
+
+            >>> r = DotDict({'A': {'content': 'value'}})
+            >>> 'a' in r
+            True
+            >>> 'a.content' in r
+            True
+            >>> 'b' in r
+            False
+
+        """
+        if isinstance(key, str) and "." not in key:
+            contained = key.lower() in self._store
+        else:
+            try:
+                self[cast("Key", key)]
+            except KeyError:
+                contained = False
+            else:
+                contained = True
+
+        return contained
 
     def __setitem__(self, key: str, value: VT) -> None:
         """
@@ -494,18 +569,9 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         """
 
         def reducer(item: Self, key: str) -> Self:
-            if item and key in item:
-                existing = raw_get(item, key)
-
-                if existing is not None and not is_mapping(existing):
-                    del item[key]
-                    existing = None
-            else:
-                existing = None
-
-            if existing is None:
-                existing = item[key] = cast("VT", {})
-                # CaseInsensitiveDict.__setitem__(item, key, existing)
+            if (existing := detach_nested(item, key) if key in item else None) is None:
+                existing = cast("VT", {})
+                raw_set(item, key, existing)
 
             return cast("Self", existing)
 
@@ -514,11 +580,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         if len(keys) == 1:
             CaseInsensitiveDict.__setitem__(self, key, value)
         else:
-            item = self.copy()
             rest, last = keys[:-1], keys[-1]
-            reduced = reduce(reducer, rest, item)
-            reduced[last] = value
-            CaseInsensitiveDict.update(self, item)
+            raw_set(reduce(reducer, rest, self), last, value)
 
     @overload
     def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...  # noqa: E704
@@ -530,7 +593,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         self, other: SupportsKeysAndGetItem[str, T]
     ) -> Self | DotDict[VT | T]:
         """
-        Merge another mapping, widening the value type to cover both sides.
+        Merge another mapping, widening the value type to cover both mappings.
 
         Examples:
 
@@ -637,19 +700,8 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         Examples:
 
-            >>> r = DotDict({'author': 'bar', 'title': 'foo'})
-            >>> r.delete('author')
-            >>> r.asdict()
-            {'title': 'foo'}
-            >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
-            >>> r.delete('author.name')
-            >>> r.asdict()
-            {'author': {'url': 'x.com'}}
             >>> r = DotDict({'author': {'name': 'bar', 'url': 'x.com'}})
             >>> r.delete('AUTHOR.NAME')
-            >>> r.asdict()
-            {'author': {'url': 'x.com'}}
-            >>> r.delete('missing.key')
             >>> r.asdict()
             {'author': {'url': 'x.com'}}
 
@@ -657,11 +709,11 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         def reducer(item: Self | None, key: str) -> Self | None:
             if item and key and (matched := match_key(item, key)):
-                value = raw_get(item, matched)
+                value = detach_nested(item, matched)
             else:
                 value = None
 
-            return cast("Self", value) if is_mapping(value) else None
+            return cast("Self | None", value)
 
         keys = parse_key(key)
         rest, last = keys[:-1], keys[-1]

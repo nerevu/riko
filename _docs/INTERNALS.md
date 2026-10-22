@@ -21,6 +21,7 @@ config types; selectors are additive, and `--all` runs every generator:
 manage codegen
 manage codegen --config
 manage codegen --names --api
+manage codegen --tests
 manage codegen --all
 ```
 
@@ -37,12 +38,15 @@ at call sites.
   the generated objconf file.
 - **Names** — `riko/cli/_gen_names.py` derives both
   `riko/modules/_names.py` (`Modules`/`Sources`/`Transforms`/`Sinks`) and
-  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`) from the runtime
+  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`/`BUILTIN_MODULE_IDS`) from the runtime
   module catalog. Both artifacts are deterministic and generated; never hand-edit
   them.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
+- **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) rewrites the
+  `Index (file, ...)` block ending each `tests/<tier>/__init__.py` docstring from the
+  tier files' `Test<Subject>` classes.
 
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.
@@ -50,9 +54,9 @@ generated artifacts cannot drift silently.
 ## Pipeline fixtures
 
 `tests/workflows/*.json` and `examples/workflows/*.json` are workflow documents
-(`WorkflowDocument`s) — exactly what `serialize_workflow` emits by default: indented, with sorted
+(`WorkflowDocument`s) — exactly what `Workflow.serialize` emits by default: indented, with sorted
 keys and a trailing newline — and the v2 runtime executes them directly. They are hand-maintained
-sources, not generated output. `tests/internal/test_workflow_fixtures.py` reparses
+sources, not generated output. `tests/internal/test_codegen.py` reparses
 and reserializes each file, so a committed fixture that drifts from canonical form
 fails there.
 
@@ -63,19 +67,21 @@ surfaces a config-contract error; the same test asserts each probe yields the it
 its JSON sibling does. There is no generator behind them — edit them by hand, and add
 one only for a config shape the surviving probes do not already reach.
 
-The compiler implementation lives under `riko/runtime/`:
+The compiler implementation lives under `riko/runtime/`; workflow loading lives under
+`riko/definitions/`:
 
-- `riko/runtime/_codegen.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/runtime/_migrate.py` — `parse_dag` (`PipeDag`) and `migrate_v1_to_v2` (`PipeDef`, a pipe definition).
-- `riko/runtime/_graph_index.py` — builds the `GraphIndex` execution planning reads.
+- `riko/runtime/_compile.py` — the Workflow v2 generator behind `compile_workflow`.
+- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`.
+- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges, and outputs; `Workflow.index` builds it, and validation and execution planning both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
-- `riko/types/_compiler.py` — graph-index, `PipeDef`/`PipeDefLike`, and `PipeDag`
-  type contracts; the last three are exported on `riko.types`.
+- `riko/types/_pipedef.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
+  all three are exported on `riko.types`.
 
-The console scripts are v2-native. `riko/cli/_workflow.py` is their one document front
-door: it detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or
-a `WorkflowDocument`, and hands it to `parse_dag`, `migrate_v1_to_v2`, or
-`normalize_workflow`. `build-workflow` is the only lenient reader — it accepts all three
+The console scripts are v2-native. `riko/cli/_document.py` is their one document front
+door (`read_document`, `require_workflow`). `build-workflow` reads through `Workflow.parse`,
+which detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or a
+`WorkflowDocument` (`get_document_shape`) unless `--format` pins the `DocumentShape`.
+`build-workflow` is the only lenient reader — it accepts all three
 and always emits a `WorkflowDocument`; `compile-workflow` and `run-pipe` go through
 `require_workflow`, which refuses anything older. The v1 compiler was deleted at
 cutover step 5 (2026-10-03).
@@ -88,18 +94,19 @@ cutover step 5 (2026-10-03).
 - **Discovery enums are generated.** `riko/modules/_names.py` owns the flat
   `Modules` namespace and the `Sources`/`Transforms`/`Sinks` buckets. The stable
   `riko` facade re-exports them; do not hand-maintain parallel lists.
-- **Name normalization lives in `riko/ext/_names.py`.** Public name-accepting
-  discovery APIs normalize a string or discovery member to the canonical module id
-  before constructing metadata.
+- **Name normalization lives in `riko/definitions/_module_definition.py`; discovery in
+  `riko/modules/_metadata.py`.** Public name-accepting discovery APIs
+  (`get_module_metadata`, `describe_module`) normalize a string or
+  discovery member to the canonical module id before constructing metadata.
 - **Formats are not sinks.** `Formats` is the serialization/export enum used by
-  `riko/runtime/collections.py` and the write stack. `Sinks` is a generated bucket
-  of pipe modules. These are separate axes even when a sink pipe ultimately writes
+  `riko/runtime/_export.py` and the write stack. `Sinks` is a generated bucket
+  of pipe modules. These are separate axes even when a write module ultimately writes
   a serialized format.
 - **Write contracts live below execution.** Declarative write intent and protocols
   are in `riko/definitions/_write.py`; target validation is in
   `riko/definitions/_targets.py`; live session state is in
-  `riko/runtime/_write_session.py`; collection verbs are in
-  `riko/runtime/collections.py`.
+  `riko/runtime/_write_session.py`; export helpers are in
+  `riko/runtime/_export.py`.
 - **Async I/O moved out of Bado.** Backend/iterator helpers remain under
   `riko/bado/`, while `async_url_open`, `async_write`, and async temp-file support
   live under `riko/io/` and are promoted through the stable `riko` surface.
@@ -140,13 +147,61 @@ sync when source is moved between package groups.
 ## Tooling & environment notes
 
 - **`manage` is a thin composer.** `riko/cli/manage.py` registers commands; private
-  `_build`, `_lint`, `_docs`, `_test`, `_codegen`, `_release`, and import-lint
-  modules own implementation by reason to change.
+  `_build`, `_lint`, `_docs`, `_test`, `_upgrade`, `_codegen`, `_release`, and
+  import-lint modules own implementation by reason to change.
 - **`manage` console-script collision.** `mezmorize` also declares a `manage`
   script. If install order selects the wrong executable, invoke
   `python -m riko.cli.manage`. Tox uses the module form to avoid that ambiguity.
 - **`uv`.** Use `uv run --active ...` when the current shell environment should win
   over the default `.venv`.
+- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked`
+  and runs ruff through `uv run --no-sync`; tox uses the lock runner. The pre-commit
+  ruff hooks are `language: python` local hooks pinning `ruff==<locked>` in pre-commit's
+  own environment, so they need neither `uv` on the Git client's `PATH` nor an active
+  venv (`uv run --active` without `VIRTUAL_ENV` silently falls back to a stale
+  `.venv`). That pin is the one copy of a locked version outside `uv.lock`:
+  `manage upgrade` rewrites it and `manage lint --deps` fails when it drifts. Upgrades
+  happen locally: `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package`
+  per `--package`) and syncs the active environment with every group and extra. Both hold
+  to `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
+  security fix included, so an urgent one needs uv's `exclude-newer-package` override
+  for that package. `--daily` skips when
+  `.cache/last-upgrade` holds today's date, which only a successful full upgrade and
+  sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never reaches tox (not in `pass_env`)
+  and must not be added; `[tool.pyright] pythonPlatform = "Linux"` keeps local type
+  checks on CI's platform.
+- **Test layout lint.** Each tier index in `tests/<tier>/__init__.py` is generated by
+  `manage codegen --tests` (`riko/cli/_gen_tier_index.py`) from the files' `Test<Subject>`
+  classes and runs from its `Index (file, ...)` header to the docstring's end, so it stays
+  last. `manage lint --tests` fails when it is stale. An `Async<Subject>` class is left out
+  when its `<Subject>` or `Sync<Subject>` is in the same file, so a twin pair takes one
+  index entry. A bare section keyword (`Examples`, `Returns`) on its
+  own index line reads as a docstring section to pydocstyle, so name such subjects longer.
+- **Basename lint.** `manage lint --basenames` fails when two modules under `riko/`
+  (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
+  `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer
+  shared also fails, so the allowlist is pruned when a pair is renamed away.
+- **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
+  imports a public name through a private `riko` module path, and a module example in an
+  underscore-prefixed module that defines no public name. Both read the public names
+  from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION` to `riko.ext`,
+  `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`, first match winning
+  (`resolve_public_path` in `riko/cli/_docstyle.py`).
+- **Stale citation lint.** `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py`
+  citation (in the tracked `_docs/` root docs, gameplans, `CONTRIBUTING.rst`, `CLAUDE.md`, or
+  `docs/*.rst`) or `riko/*.py` citation (in the tracked `_docs/` root docs, `CLAUDE.md`,
+  `README.rst`, or `CONTRIBUTING.rst`; gameplans, `MILESTONES.md`, and `docs/` keep history) that names no
+  current file. A line saying the file was deleted, retired, removed, dropped, merged, or
+  superseded is exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
+- **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
+  written to a fresh temp folder. That folder also holds the run's coverage data
+  (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.
+  Coverage runs on the `sysmon` core (Python 3.12 `sys.monitoring`; about the cost of a
+  no-coverage run) and measures the console scripts
+  through `patch = ["subprocess"]`. Dev-only `manage` modules are listed in
+  `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
+  ceiling is specific to the full dev environment on Python 3.12; other environments run
+  `--no-cov`.
 - **Python 3.12+.** Prefer PEP 695 type parameters and modern union syntax.
 - **Doctests are tests.** Source/docs examples under the configured pytest testpaths
   are collected; avoid copying the same happy-path example into multiple files.
@@ -154,7 +209,13 @@ sync when source is moved between package groups.
   that context-local hub state between cases.
 - **`DotDict`.** The implementation lives in `riko/parsing/_dotdict.py`; fast paths
   for simple keys should remain simple rather than routing everything through
-  dotted-path parsing.
+  dotted-path parsing. A nested write (`d["a.b"] = v`, a dotted `update`, `delete`)
+  walks the item in place and copies only the mappings on the key's path
+  (`detach_nested`), so it never edits the caller's nested dicts or re-reads sibling
+  fields, and its cost grows with the sizes of the mappings on that path rather than
+  with the item's top-level keys. The single-key set and the plain-dict `update`
+  loop call `CaseInsensitiveDict.__setitem__` directly: routing them through
+  `raw_set` doubles their cost.
 - **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
   the lower-level conversion semantics referenced by the runtime contract.
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
@@ -169,6 +230,23 @@ sync when source is moved between package groups.
   raises `NotImplementedError` is not user-observable behavior and is not mentioned at
   all; the bullet is written against the capability that will actually ship. Deltas
   are written only against names that appear in a released version.
+- **Changelog order.** A release's sections run **New**, **Changes**, **Removed**,
+  **Fixes**, **Dev**, so everything that breaks an upgrade sits together. Every section
+  follows one subject order: core model (`Pipeline`, `Workflow`, `Context`); workflow
+  formats and CLI; module authoring (decorators, `ModuleDefinition`, registry,
+  `riko.ext`); types (`riko.types`); I/O and async (`riko.io`, `riko.bado`); individual
+  modules' behavior; settings. Within a subject the most user-impacting bullet leads,
+  and a bullet that depends on another comes after it.
+- **Define once, in reading order.** A term the release introduces gets its gloss (and
+  its `riko.` prefix) at its first mention anywhere in the release section, and the bare
+  ``name`` after that. The leading bullet is written so it needs no term defined later.
+- **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
+  maps old to new names. Other bullets, **New** included, use the new name bare, with no
+  "(formerly …)", so **New** preceding **Changes** needs no forward reference.
+- **No cross-section pointers.** Never write "see above/below". A bullet that only makes
+  sense alongside a rename or removal folds into that bullet instead (e.g., an attribute
+  added to a renamed exception, or the new behavior of a removed argument's
+  replacement).
 
 The source hierarchy itself is not a compatibility promise for private modules.
 It is an internal architecture promise: code belongs in the lowest package layer

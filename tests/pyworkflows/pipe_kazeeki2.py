@@ -2,9 +2,8 @@
 """Hand-written sync Kazeeki workflow module (variant 2)."""
 
 from riko import Pipeline
-from riko.execution._execution import SyncExecution
-from riko.execution.context import Context
-from riko.runtime._execution_plan import build_execution_plan
+from riko.definitions._context import Context
+from riko.types._enums import ExecutionMode
 from tests.pyworkflows._pipe_kazeeki import itembuilder_conf, regex_conf, rename_conf
 
 
@@ -14,23 +13,26 @@ def build() -> Pipeline:
     return source.rename(conf=rename_conf).regex(conf=regex_conf)
 
 
+INPUTS: list = []
+DEPENDENCIES = ["itembuilder", "rename", "regex"]
+
+
 def pipe(context: Context | None = None, **_):
-    output: list = []
-
-    if context and context.describe_dependencies:
-        output = ["itembuilder", "rename", "regex"]
-    elif not (context and context.describe_input):
-        pipeline = build()
-        plan = build_execution_plan(pipeline.workflow)
-
-        with SyncExecution(context=context or Context()) as execution:
-            output = list(execution.run(plan, source=pipeline.source))
+    if context is None or context.mode is ExecutionMode.RUN:
+        context = Context() if context is None else context
+        output: list | dict = list(build().with_context(context))
+    elif context.mode is ExecutionMode.DESCRIBE:
+        output = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        output = INPUTS
+    else:
+        output = DEPENDENCIES
 
     return output
 
 
 if __name__ == "__main__":
-    pipeline = pipe(context=Context())
+    items = pipe(context=Context())
 
-    for i in pipeline:
+    for i in items:
         print(i)

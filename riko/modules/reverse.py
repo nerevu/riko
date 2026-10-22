@@ -16,7 +16,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -25,9 +25,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
-from riko.types._options import Defaults, Opts
+from riko.base._logging import get_logger
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
 
@@ -38,9 +37,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = Defaults({})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -51,18 +50,18 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
     Returns:
 
-        The source items in reverse order.
+        The input items in reverse order.
 
     Examples:
 
@@ -80,15 +79,15 @@ def parser(
 @operator(DEFAULTS, isasync=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Asynchronously reverses the order of source items in a stream.
+    Asynchronously reverses the order of input items in a stream.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 
@@ -122,15 +121,15 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 @operator(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Stream:
     """
-    Reverses the order of source items in a stream.
+    Reverses the order of input items in a stream.
 
     Not lazy: materializes the source and cannot be used on an unbounded stream.
 
     Args:
 
-        items (Items): The source stream.
-        conf (dict): The pipe configuration. Unused.
-        context (Context): the execution context
+        items (Items): The input stream.
+        conf (dict): The module configuration. Unused.
+        context (Context): the run environment
 
     Kwargs:
 

@@ -72,7 +72,7 @@ It owns:
 * publication/review state;
 * approval stores;
 * site-related named Riko modules;
-* site export target;
+* site export format;
 * renderer registry;
 * Mithril compatibility renderer;
 * htpy renderer;
@@ -147,7 +147,7 @@ union
 
 for ordinary normalization.
 
-## 3.2 Static-site rendering is an export target
+## 3.2 Static-site rendering is an export format
 
 Canonical public API:
 
@@ -170,12 +170,12 @@ result = artifacts.export(
 )
 ```
 
-The site export target may accept either:
+The site export format may accept either:
 
 * a stream of `SiteArtifact` records; or
 * a single assembled `SiteSpec`.
 
-This plan owns the site-specific export target and renderer contracts. It does not redefine the
+This plan owns the site-specific export format and renderer contracts. It does not redefine the
 core Pipeline execution API; final placement of export convenience on the Pipeline surface follows
 the core export/artifact API when that surface is finalized.
 
@@ -690,7 +690,7 @@ second Pipeline execution/terminal contract; final Pipeline/export placement rem
 ### Core API
 
 ```python
-class ExportTarget(Protocol):
+class ExportFormat(Protocol):
     name: str
 
     def export(self, items: Iterable[Item], **kwargs: object) -> object: ...
@@ -698,9 +698,9 @@ class ExportTarget(Protocol):
 
 ```python
 class ExportRegistry:
-    def register(self, target: ExportTarget, *, replace: bool = False) -> None: ...
+    def register(self, fmt: ExportFormat, *, replace: bool = False) -> None: ...
 
-    def resolve(self, name: str) -> ExportTarget: ...
+    def resolve(self, name: str) -> ExportFormat: ...
 
     def names(self) -> tuple[str, ...]: ...
 ```
@@ -708,7 +708,7 @@ class ExportRegistry:
 ### Tasks
 
 1. Introduce `ExportRegistry`.
-2. Wrap existing conversion functions in a `FunctionExportTarget`.
+2. Wrap existing conversion functions in a `FunctionExportFormat`.
 3. Preserve all current public `export()` signatures and behavior during this registry refactor.
 4. Add entry-point discovery:
 
@@ -1645,7 +1645,7 @@ Do not require full benchmark infrastructure in the first pull request.
 
 ## Riko
 
-* Existing export targets must behave identically during the compatibility registry refactor.
+* Existing export formats must behave identically during the compatibility registry refactor.
 * Existing dynamic module chaining must continue working while it remains part of the shipped API.
 * Do not implement or fork core Pipeline lifecycle semantics in these PRs; consume the target
   contract from `execution-semantics.md` as it lands.
@@ -1792,7 +1792,7 @@ Do not add any site-specific types or renderers yet.
 Requirements:
 1. Inspect the existing export implementation and current tests.
 2. Run the existing test and type-check commands before making changes.
-3. Introduce a generic ExportTarget protocol and ExportRegistry.
+3. Introduce a generic ExportFormat protocol and ExportRegistry.
 4. Adapt all existing conversion functions through compatibility wrappers.
 5. Preserve every current export signature, return type, and file-writing behavior during this registry refactor.
 6. Add lazy entry-point discovery for the `riko.export_targets` group.

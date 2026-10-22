@@ -4,7 +4,7 @@ Fetches a web page as a string.
 
 Slices the page between ``start`` and ``end``, optionally strips its html tags,
 and optionally splits it on a ``token``. Yields bare strings rather than
-records, so the result is usually assigned to a field or fed to the regex
+items, so the result is usually assigned to a field or fed to the regex
 module.
 
 Examples:
@@ -21,7 +21,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -30,18 +30,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
 from riko.base._iterutils import betwix
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.parsing.documents import get_text
-from riko.types._options import Defaults, Opts
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -50,9 +49,9 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchPageObjconf
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def get_string(content: str, start: str, end: str) -> str:
@@ -72,7 +71,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
+        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
@@ -101,7 +100,7 @@ async def async_parser(
         CNN.com International - Breaking
 
     """
-    url: str = require_conf(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage")
     content = await async_url_read(url)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
@@ -119,7 +118,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`, `start`, `end`, `token` and
+        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
             `detag`.
 
     Returns:
@@ -145,7 +144,7 @@ def parser(
         'CNN.com International'
 
     """
-    url: str = require_conf(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage")
     with Fetch(url, encoding=objconf.encoding) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)
@@ -165,7 +164,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Required.
 
@@ -183,7 +182,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -230,7 +229,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The page to fetch, local or remote. Required.
 
@@ -248,7 +247,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
             encoding (str): Page encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

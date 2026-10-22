@@ -95,6 +95,31 @@ schema/metadata behavior
 optional dependencies
 ```
 
+**Nested values in flat codecs.** A flat codec such as CSV must declare how it writes a cell
+whose value is a container (mapping, list, set). The rule:
+
+- default: flatten nested mappings into dotted columns that follow `DotDict` paths
+  (`{"a": {"b": 1}}` → column `a.b`), so headers are the union of the flattened keys in a
+  stable order;
+- option: a codec setting writes each container cell as compact JSON instead (sets sorted,
+  matching the `json`/`jsonl` writer), keeping one column per top-level key.
+
+Open sub-decisions for the default:
+
+- **Lists and sets.** They have no natural dotted column, so the rule must say whether they
+  become JSON cells (one column, readable back, but mixed encodings within a row) or indexed
+  columns (`tags.0`, `tags.1`: purely tabular, but the column count follows the longest list
+  and a set must be sorted first).
+- **Headers versus streaming.** CSV writes its header row first, and incremental encoding is
+  allowed (`effects.md` §12), so a union of flattened keys across records would force
+  materialization when records differ in shape. The rule must pick first-record headers (a
+  later new key is dropped or raises), caller-declared columns, or materialization.
+- **Key collisions.** A literal `"a.b"` key and a nested `{"a": {"b": ...}}` flatten to the
+  same column; the rule must raise or name which one wins.
+Current gap: meza's `records2csv` writes every container cell with `str()`, so CSV output
+holds a Python repr that cannot be read back (`"{'b': [1, 2]}"`), and set cells follow
+hash order. The `json`/`jsonl` writer already encodes nested mappings and sorted sets.
+
 Arrow is an in-memory interchange type rather than an artifact format contract here;
 Arrow frame/table conversion is specified in `tabular-interop.md`. Arrow IPC/Feather, if
 added as serialized codecs, belong in this registry like Parquet.

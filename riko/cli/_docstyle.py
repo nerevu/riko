@@ -1,35 +1,64 @@
 # vim: sw=4:ts=4:expandtab
-"""Checks docstring summaries against the Riko documentation rules."""
+"""Checks docstring summaries and examples against the Riko documentation rules."""
 
 from __future__ import annotations
 
-from ast import AsyncFunctionDef, FunctionDef, get_docstring, parse, walk
+from ast import (
+    AnnAssign,
+    Assign,
+    AsyncFunctionDef,
+    ClassDef,
+    FunctionDef,
+    ImportFrom,
+    Module,
+    Name,
+    TypeAlias,
+    get_docstring,
+    parse,
+    walk,
+)
+from doctest import DocTestParser
 from typing import TYPE_CHECKING, NamedTuple
+
+from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
 BANNED_LEADS: tuple[str, ...] = ("Return", "Yield")
+_PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
+_PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("riko", STABLE),
+    ("riko.ext", EXTENSION),
+    ("riko.ext.codegen", EXT_CODEGEN),
+    ("riko.types", TYPES),
+)
 
 
-class SummaryIssue(NamedTuple):
+class DocstringIssue(NamedTuple):
     """
-    A function whose docstring summary leads with the output, not the action.
+    A docstring that breaks a documentation rule.
 
     Attributes:
 
-        path: The file containing the offending function.
-        lineno: The line the function is defined on.
-        name: The function's name.
-        summary: The offending first line of its docstring.
+        path: The file containing the docstring.
+        lineno: The line its module, class, or function is defined on.
+        name: The function or class name, or ``"<module>"``.
+        problem: The rule it breaks.
+        text: The offending docstring line.
 
     """
 
     path: Path
     lineno: int
     name: str
-    summary: str
+    problem: str
+    text: str
+
+    def __str__(self) -> str:
+        """Renders the issue as a ``path:line name() problem: 'text'`` line."""
+        return f"{self.path}:{self.lineno} {self.name}() {self.problem}: {self.text!r}"
 
 
 def summary_leads_with_output(summary: str) -> bool:
@@ -49,15 +78,162 @@ def summary_leads_with_output(summary: str) -> bool:
     return any(first.startswith(lead) for lead in BANNED_LEADS)
 
 
+def gen_example_prose(doc: str) -> Iterator[str]:
+    """
+    Finds prose paragraphs that narrate between doctest examples.
+
+    A paragraph that follows an example and introduces the next one belongs in a
+    ``>>> #`` comment instead. A paragraph ending in ``::`` labels a new example
+    group and is allowed.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        The first line of each narrating paragraph.
+
+    Examples:
+
+        >>> doc = ">>> f(1)\\n1\\n\\nWith two:\\n\\n>>> f(2)\\n2"
+        >>> list(gen_example_prose(doc))
+        ['With two:']
+        >>> list(gen_example_prose(">>> f(1)\\n1\\n\\n>>> # With two\\n>>> f(2)\\n2"))
+        []
+
+    """
+    lines = [line.strip() for line in doc.splitlines()]
+    started = False
+
+    for i, line in enumerate(lines):
+        starts_paragraph = started and line and (i == 0 or not lines[i - 1])
+        started = started or line.startswith(">>>")
+
+        if starts_paragraph and not line.startswith((">>>", "...")):
+            end = next((j for j in range(i, len(lines)) if not lines[j]), len(lines))
+            following = next((rest for rest in lines[end:] if rest), "")
+
+            if following.startswith(">>>") and not lines[end - 1].endswith("::"):
+                yield line
+
+
+def resolve_public_path(name: str) -> str | None:
+    """
+    Finds the supported import path of a public name.
+
+    Args:
+
+        name: An importable name.
+
+    Returns:
+
+        The first of ``riko``, ``riko.ext``, ``riko.ext.codegen``, or ``riko.types``
+        that exports ``name``, or ``None`` when no supported path does.
+
+    Examples:
+
+        >>> resolve_public_path("Pipeline")
+        'riko'
+        >>> resolve_public_path("processor")
+        'riko.ext'
+        >>> resolve_public_path("summary_leads_with_output") is None
+        True
+
+    """
+    return next((path for path, names in _PUBLIC_PATHS if name in names), None)
+
+
+def _is_private_path(module: str) -> bool:
+    """Detects a ``riko`` module path with an underscore-prefixed segment."""
+    segments = module.split(".")
+    return segments[0] == "riko" and any(seg.startswith("_") for seg in segments[1:])
+
+
+def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
+    """
+    Finds doctest imports of public names through private module paths.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        The offending import line, the imported name, and its public path.
+
+    Examples:
+
+        >>> doc = ">>> from riko.runtime._pipeline import Pipeline"
+        >>> list(gen_private_imports(doc))
+        [('from riko.runtime._pipeline import Pipeline', 'Pipeline', 'riko')]
+        >>> list(gen_private_imports(">>> from riko import Pipeline"))
+        []
+
+    """
+    for example in DocTestParser().get_examples(doc):
+        try:
+            tree = parse(example.source)
+        except SyntaxError:
+            tree = Module(body=[], type_ignores=[])
+
+        lines = example.source.splitlines()
+        imports = (
+            node
+            for node in walk(tree)
+            if isinstance(node, ImportFrom)
+            and node.module is not None
+            and _is_private_path(node.module)
+        )
+
+        for node in imports:
+            for alias in node.names:
+                public = resolve_public_path(alias.name)
+
+                if public is not None:
+                    yield lines[node.lineno - 1].strip(), alias.name, public
+
+
+def _gen_defined_names(tree: Module) -> Iterator[str]:
+    """Lists the names a module's top-level statements define."""
+    for node in tree.body:
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            yield node.name
+        elif isinstance(node, Assign):
+            for target in node.targets:
+                yield from (name.id for name in walk(target) if isinstance(name, Name))
+        elif isinstance(node, (AnnAssign, TypeAlias)):
+            target = node.target if isinstance(node, AnnAssign) else node.name
+
+            if isinstance(target, Name):
+                yield target.id
+
+
+def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIssue]:
+    """Flags a module example in a private module that defines no public name."""
+    doc = get_docstring(tree) or ""
+    private = path.name.startswith("_") and path.name != "__init__.py"
+    exported = not _PUBLIC_NAMES.isdisjoint(_gen_defined_names(tree))
+
+    if private and not exported and DocTestParser().get_examples(doc):
+        problem = "private module without a public API carries a module example"
+        first = next(line.strip() for line in doc.splitlines() if ">>>" in line)
+        yield DocstringIssue(path, 1, "<module>", problem, first)
+
+
 def _iter_python_files(root: Path) -> Iterator[Path]:
     """Expands a root into the Python files under it (or itself, for a file)."""
     files = sorted(root.rglob("*.py")) if root.is_dir() else [root]
     yield from files
 
 
-def iter_summary_issues(*roots: Path) -> Iterator[SummaryIssue]:
+def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     """
-    Walks ``roots`` for function docstrings whose summary leads with the output.
+    Walks ``roots`` for docstrings that break the summary or example rules.
+
+    Function summaries must not lead with the output; no docstring may narrate
+    between its doctest examples or import a public name through a private module;
+    and a private module without a public API carries no module example.
 
     Args:
 
@@ -65,33 +241,49 @@ def iter_summary_issues(*roots: Path) -> Iterator[SummaryIssue]:
 
     Yields:
 
-        One :class:`SummaryIssue` per offending function, in path then line order.
+        One :class:`DocstringIssue` per offending line, in path then line order.
 
     """
     for root in roots:
         for path in _iter_python_files(root):
             tree = parse(path.read_text(encoding="utf-8"))
+            nodes = (
+                node
+                for node in walk(tree)
+                if isinstance(node, (Module, ClassDef, FunctionDef, AsyncFunctionDef))
+            )
 
-            for node in walk(tree):
-                if not isinstance(node, (FunctionDef, AsyncFunctionDef)):
-                    continue
+            for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
+                doc = get_docstring(node) or ""
+                summary = doc.strip().split("\n", 1)[0].strip()
+                lineno = getattr(node, "lineno", 1)
+                name = getattr(node, "name", "<module>")
+                is_function = isinstance(node, (FunctionDef, AsyncFunctionDef))
 
-                doc = get_docstring(node)
-                summary = doc.strip().split("\n", 1)[0].strip() if doc else ""
+                if is_function and summary and summary_leads_with_output(summary):
+                    problem = "summary leads with the output"
+                    yield DocstringIssue(path, lineno, name, problem, summary)
 
-                if summary and summary_leads_with_output(summary):
-                    yield SummaryIssue(path, node.lineno, node.name, summary)
+                for prose in gen_example_prose(doc):
+                    problem = "narrates between examples (use a >>> # comment)"
+                    yield DocstringIssue(path, lineno, name, problem, prose)
 
+                for line, imported, public in gen_private_imports(doc):
+                    problem = (
+                        f"imports {imported} privately "
+                        f'(use "from {public} import {imported}")'
+                    )
+                    yield DocstringIssue(path, lineno, name, problem, line)
 
-def format_issue(issue: SummaryIssue) -> str:
-    """Renders one issue as a ``path:line name() -> 'summary'`` line."""
-    return f"{issue.path}:{issue.lineno} {issue.name}() -> {issue.summary!r}"
+            yield from _gen_module_example_issues(path, tree)
 
 
 __all__ = [
     "BANNED_LEADS",
-    "SummaryIssue",
-    "format_issue",
-    "iter_summary_issues",
+    "DocstringIssue",
+    "gen_docstring_issues",
+    "gen_example_prose",
+    "gen_private_imports",
+    "resolve_public_path",
     "summary_leads_with_output",
 ]

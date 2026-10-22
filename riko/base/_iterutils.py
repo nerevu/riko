@@ -1,25 +1,26 @@
-"""General iterable composition, fan-out, selection, and deduplication helpers."""
+"""General iterable composition, fan-out, interleaving, and deduplication helpers."""
 
 from __future__ import annotations
 
-from itertools import chain, dropwhile, takewhile
+from functools import partial
+from itertools import cycle, dropwhile, islice, takewhile
 from typing import TYPE_CHECKING, overload
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 
-def noop[T](item: T) -> T:
+def noop[T](value: T) -> T:
     """
-    Passes an item through unchanged.
+    Passes a value through unchanged.
 
     Args:
 
-        item: Value to pass through.
+        value: Value to pass through.
 
     Returns:
 
-        The original ``item``.
+        The original ``value``.
 
     Examples:
 
@@ -27,7 +28,7 @@ def noop[T](item: T) -> T:
         {'value': 1}
 
     """
-    return item
+    return value
 
 
 def multi_try[T, S](
@@ -79,16 +80,16 @@ def multi_try[T, S](
 def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
 @overload  # noqa: E302
 def unique_everseen[T](  # noqa: E704
-    content: Iterable[T], keyfunc: Callable
-) -> Iterator[str]: ...
+    content: Iterable[T], keyfunc: Callable[[T], object]
+) -> Iterator[T]: ...
 def unique_everseen[T](  # noqa: E302
-    content: Iterable[T], keyfunc: Callable | None = None
-) -> Iterator[str | T]:
+    content: Iterable[T], keyfunc: Callable[[T], object] | None = None
+) -> Iterator[T]:
     """
     Deduplicates elements while preserving first-seen order.
 
-    With ``keyfunc``, uniqueness is by the stringified key and the key is yielded;
-    without it, elements are yielded.
+    With ``keyfunc``, two elements are duplicates when their stringified keys match;
+    without it, when the elements themselves match.
 
     Args:
 
@@ -97,24 +98,24 @@ def unique_everseen[T](  # noqa: E302
 
     Yields:
 
-        Each element (or its key) the first time it is seen.
+        Each element the first time its key is seen.
 
     Examples:
 
         >>> list(unique_everseen("ABBcCaD", str.lower))
-        ['a', 'b', 'c', 'd']
+        ['A', 'B', 'c', 'D']
         >>> list(unique_everseen([1, 1, 2, 3, 2]))
         [1, 2, 3]
 
     """
-    seen = set()
+    seen: set[object] = set()
 
     for element in content:
-        k = str(keyfunc(element)) if keyfunc else element
+        key = element if keyfunc is None else str(keyfunc(element))
 
-        if k not in seen:
-            seen.add(k)
-            yield k
+        if key not in seen:
+            seen.add(key)
+            yield element
 
 
 def betwix[T](
@@ -212,6 +213,92 @@ def partition[T](
         (matching if test(item) else non_matching).append(item)
 
     return matching, non_matching
+
+
+def sort_stably[T](items: Iterable[T]) -> list[T]:
+    """
+    Sorts items in an order that does not depend on hash randomization.
+
+    Items that cannot be compared with each other, such as a mix of types, are
+    sorted by their ``repr`` instead.
+
+    Args:
+
+        items: The items to sort, such as a set.
+
+    Returns:
+
+        The items in a stable order.
+
+    Examples:
+
+        >>> sort_stably({"b", "a"})
+        ['a', 'b']
+        >>> sort_stably({1, "a"})
+        ['a', 1]
+
+    """
+    listed = list(items)
+
+    try:
+        result = sorted(listed)  # pyright: ignore[reportArgumentType]
+    except TypeError:
+        result = sorted(listed, key=repr)
+
+    return result
+
+
+def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:
+    """
+    Splits pairs into a list of first elements and a list of second elements.
+
+    Args:
+
+        pairs: The pairs to split.
+
+    Returns:
+
+        The first elements and the second elements, each in input order.
+
+    Examples:
+
+        >>> unzip([("a", 1), ("b", 2)])
+        (['a', 'b'], [1, 2])
+        >>> unzip([])
+        ([], [])
+
+    """
+    left: list[T] = []
+    right: list[U] = []
+
+    for a, b in pairs:
+        left.append(a)
+        right.append(b)
+
+    return left, right
+
+
+def map_values[K, V, R](func: Callable[[V], R], items: Mapping[K, V]) -> dict[K, R]:
+    """
+    Applies a function to each value of a mapping.
+
+    Args:
+
+        func: The transform applied to each value.
+        items: The source mapping.
+
+    Returns:
+
+        A new dict with the same keys, in the same order, holding the
+        transformed values.
+
+    Examples:
+
+        >>> map_values(len, {"a": "xy", "b": ""})
+        {'a': 2, 'b': 0}
+
+    """
+    return {key: func(value) for key, value in items.items()}
 
 
 @overload
@@ -321,55 +408,33 @@ def broadcast(  # noqa: E302
     return tuple(func(item, **kwargs) for func in funcs)
 
 
-def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterable[T]:
+def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
     """
-    Combines multiple iterables into a single stream.
+    Interleaves multiple iterables into a single stream, round-robin.
 
     Args:
 
-        sources: The iterables to chain together.
+        sources: The iterables to interleave.
 
-    Returns:
+    Yields:
 
-        A single iterator over every element, source by source.
-
-    Examples:
-
-        >>> list(multiplex([[1, 2], [3, 4]]))
-        [1, 2, 3, 4]
-
-    """
-    return chain.from_iterable(sources)
-
-
-def select_by_id[T](
-    content: Iterable[Mapping[str, T]], id_: T, id_field: str
-) -> Mapping[str, T]:
-    """
-    Finds the first mapping whose id field equals a target id.
-
-    Args:
-
-        content: The mappings to search.
-        id_: The id value to match.
-        id_field: The field holding each mapping's id.
-
-    Returns:
-
-        The first matching mapping, or an empty dict when none match.
+        One element from each iterable in turn, skipping each iterable once it is
+        exhausted, until all are exhausted.
 
     Examples:
 
-        >>> rows = [{"id": 1, "v": "a"}, {"id": 2, "v": "b"}]
-        >>> select_by_id(rows, 2, "id")
-        {'id': 2, 'v': 'b'}
-        >>> select_by_id(rows, 9, "id")
-        {}
+        >>> list(multiplex([[1, 2, 3], "ab"]))
+        [1, 'a', 2, 'b', 3]
 
     """
-    try:
-        result = next(r for r in content if id_ == r[id_field])
-    except StopIteration:
-        result = {}
+    iterators = [iter(source) for source in sources]
+    active = len(iterators)
+    nexts = cycle(partial(next, iterator) for iterator in iterators)
 
-    return result
+    while active:
+        try:
+            for get_next in nexts:
+                yield get_next()
+        except StopIteration:
+            active -= 1
+            nexts = cycle(islice(nexts, active))

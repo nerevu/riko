@@ -4,14 +4,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from riko.types._enums import FmtLike, Formats
+from attrs import define, field
+
+from riko.types._collections import normalize_strs
+from riko.types._enums import FmtLike, Formats, resolve_enum
 from riko.types._io import PathLike
-from riko.types._targets import SupportsWrite
+from riko.types._target_protocols import SupportsWrite
 
 if TYPE_CHECKING:
     from riko.types._streams import Feed, Item, Items
+
+type ExportType = FmtLike | Literal["list", "tuple"]
+
+_keys_converter = partial(
+    normalize_strs,
+    what="WriteOperation 'keys'",
+    type_error=TypeError,
+    value_error=ValueError,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,9 +54,6 @@ class WriteMode(StrEnum):
     MERGE = "merge"
     REPLACE = "replace"
     DELETE = "delete"
-
-
-type ExportType = FmtLike | Literal["list", "tuple"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +95,7 @@ class WriteCapabilities:
 
     @property
     def serializes(self) -> bool:
-        """Whether the target encodes records with a format, derived from ``fmt``."""
+        """Whether the target encodes items with a format, derived from ``fmt``."""
         return self.fmt is not None
 
     def __post_init__(self) -> None:
@@ -100,7 +110,7 @@ class WriteCapabilities:
             raise ValueError(msg)
 
 
-@dataclass(frozen=True, slots=True)
+@define(frozen=True, slots=True)
 class WriteOperation:
     """
     Normalized write intent, independent of any target.
@@ -111,14 +121,16 @@ class WriteOperation:
 
     Attributes:
 
-        mode: How incoming records reconcile with the destination.
+        mode: How incoming items reconcile with the destination.
         keys: The keys for a keyed mode (record-match or idempotency identity,
             per the target's capabilities); empty otherwise.
 
     """
 
-    mode: WriteMode
-    keys: tuple[str, ...] = ()
+    mode: WriteMode = field(
+        converter=partial(resolve_enum, WriteMode, error=ValueError)
+    )
+    keys: tuple[str, ...] = field(factory=tuple, converter=_keys_converter)
 
 
 type Destination = PathLike | SupportsWrite
@@ -160,13 +172,11 @@ class SyncWriteSession(Protocol):
 
     A session is never constructed by the caller: the execution host acquires it,
     drives ``write``, then chooses ``finalize`` or ``abort`` before ``teardown``.
-    Both the passthrough ``write`` verb and the terminal ``sink`` verb consume the
-    same session; terminality is a property of how the pipeline is consumed, not a
-    second session type.
+    One session type serves every write, whatever consumes the pipeline.
     """
 
     def write(self, value: Item | Items) -> None:  # noqa: E301
-        """Delivers a record or the whole record stream through this session."""
+        """Delivers an item or the whole stream through this session."""
         ...
 
     def acquire(self) -> None:
@@ -189,7 +199,7 @@ class SyncWriteSession(Protocol):
 class AsyncWriteSession(Protocol):
     """A live, execution-owned asynchronous write session."""
 
-    async def write(self, value: Item | Feed) -> None: ...  # noqa: E704
+    async def awrite(self, value: Item | Feed) -> None: ...  # noqa: E704
     async def aacquire(self) -> None: ...  # noqa: E704
     async def afinalize(self) -> WriteResult: ...  # noqa: E704
     def abort(self) -> None: ...  # noqa: E704

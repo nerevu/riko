@@ -19,7 +19,7 @@ Stable application API: ``riko``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The top-level application-facing facade is everything listed in ``riko.__all__``.
-It includes the pipe/collection API, compiler API, module-discovery API, public
+It includes the ``Pipeline``/collection API, compiler API, module-discovery API, public
 exceptions and context types, path/temp-file helpers, and the promoted async
 runtime helpers. Breaking changes to these names require the corresponding SemVer
 treatment. The current export list is intentionally not duplicated here.
@@ -37,20 +37,19 @@ Extension API: ``riko.ext``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``riko.ext`` is the supported API for module and integration authors. Its current
-membership is defined by ``riko.ext.__all__`` and includes decorators, module
-metadata and naming types, parsed configuration types, parser/wrapper protocols,
-and registry interfaces. Non-underscored submodules beneath ``riko.ext`` are part
-of the extension surface; underscore-prefixed modules are private. The export list
-is intentionally not duplicated here.
+membership is defined by ``riko.ext.__all__``, the union of the extension-point
+submodules ``riko.ext.modules``, ``riko.ext.targets``, and ``riko.ext.workflows``.
+``riko.ext.codegen`` generates discovery names for extension packages. Non-underscored
+submodules beneath ``riko.ext`` are part of the extension surface. Underscore-prefixed
+modules are private. The export list is intentionally not duplicated here.
 
 Module catalog API: ``riko.modules``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``riko.modules`` is a supported secondary namespace for built-in module discovery,
-metadata, and the module decorators it re-exports. Its ``__all__`` is protected by
-SemVer; extension authors should prefer ``riko.ext`` for authoring contracts.
-Individual implementation modules beneath ``riko.modules`` are not made stable by
-this guarantee unless they are documented separately.
+``riko.modules`` is a supported secondary namespace for built-in module discovery
+and metadata. Its ``__all__`` is protected by SemVer. Extension authors should prefer
+``riko.ext`` for authoring contracts. Individual implementation modules beneath
+``riko.modules`` are not made stable by this guarantee unless documented separately.
 
 Async runtime API: ``riko.bado``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -62,11 +61,10 @@ top-level ``riko``. The export list is intentionally not duplicated here.
 Private and unspecified modules
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Any import path containing an underscore-prefixed module or name is an
-implementation detail unless that name is explicitly re-exported through a
-supported namespace. Other non-underscored modules may remain importable for
-compatibility, but they carry no SemVer guarantee unless listed above or
-explicitly documented as public.
+Any import path containing an underscore-prefixed module or name is an implementation
+detail unless that name is explicitly re-exported through a supported namespace. Other
+non-underscored modules may remain importable for compatibility, but they carry no
+SemVer guarantee unless listed above or explicitly documented as public.
 
 Marker
 ^^^^^^

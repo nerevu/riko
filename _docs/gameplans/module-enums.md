@@ -30,9 +30,15 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   `Sources`/`Transforms`/`Sinks` from existing metadata. The final target keeps only module
   `Sources` and `Transforms`; `Sinks`, `ModuleCategory = "sink"`, and `SINK_NAMES` disappear when
   `output`/`write` leave module space. Endpoint/provider and data-format discovery are separate
-  typed surfaces, `Targets` and `Formats`, backed by their own contracts/registries rather than
+  typed surfaces, `Backends` and `Formats`, backed by their own contracts/registries rather than
   pretending destinations are modules. The runtime execution-role `type`
   (`operator`/`processor`/`splitter`) remains a separate axis.
+- **Provider grouping derives from the name prefix.** `ModuleMetadata.provider` is a module
+  name's first dotted segment (`"riko"` when unqualified). A provider's modules form one class
+  per provider whose members drop the prefix (`Example.LOOKUP`); the flat `Modules` alias keeps
+  the full name (`Modules.EXAMPLE_LOOKUP`), and `list_modules(provider=)` filters by it. Provider
+  classes ship from the extension package's own `riko.ext.codegen` run, not riko's `_names.py`
+  (built-ins only).
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
   chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:
   (a) **extend the existing `.pipe()`** to accept a positional `ModuleNameLike`
@@ -59,7 +65,7 @@ the `C6` "weaker duplicate" shape).
   formatting (`ruff_format`) — handling non-alphanumerics, leading digits, **`keyword.iskeyword`**,
   and collisions (suffix, deterministically); `enum_member_name` becomes the upper-case
   caller, `pythonise` the identifier caller.
-- `compile_workflow` (`riko/runtime/_codegen.py`) emits the sanitized id as the variable while the
+- `compile_workflow` (`riko/runtime/_compile.py`) emits the sanitized id as the variable while the
   workflow document (`WorkflowDocument`) keeps the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
 - Round-trip test over the pathological ids above, plus the existing
   `test_codegen_matches_expected_file` byte guard to prove no `tests/pyworkflows/*.py`
@@ -75,7 +81,7 @@ touched.
   env-stable);
 - align generated discovery with the final module set: `Sources` + `Transforms` only; do not carry
   `Sinks`, `write`, or fake `output` forward solely for compatibility;
-- expose `Targets` and `Formats` through their dedicated target/format discovery contracts rather
+- expose `Backends` and `Formats` through their dedicated target/format discovery contracts rather
   than module taxonomy;
 - `.pyi` fluent stubs;
 - Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `list_modules` filtering

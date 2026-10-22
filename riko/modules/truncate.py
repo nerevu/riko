@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -27,8 +27,7 @@ from __future__ import annotations
 from itertools import islice
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import operator
@@ -37,14 +36,14 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import TruncateObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"ptype": BasicCastType.INT}
+OPTS: DecorationOptions = {"ptype": BasicCastType.INT}
 DEFAULTS: Defaults = {"start": 0, "count": 0}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -55,13 +54,13 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The pipe configuration, containing `start` and `count`.
+        objconf: The module configuration, containing `start` and `count`.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Returns:
@@ -95,9 +94,9 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             start (int): The number of leading items to skip (default: 0).
 
@@ -105,7 +104,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
                 numeric string is accepted. The stream is empty when it is 0
                 (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -145,9 +144,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             start (int): The number of leading items to skip (default: 0).
 
@@ -155,7 +154,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                 numeric string is accepted. The stream is empty when it is 0
                 (default: 0).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

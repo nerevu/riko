@@ -20,7 +20,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from typing import Literal, overload
 
-    from riko.types._io import FileLike, SyncCloseable
+    from riko.types._io import SyncCloseable
+
+    from ._filelike import FileLike
 
 LINE_BREAKS = re.compile(r"\r\n|\r|\n")
 

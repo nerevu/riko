@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-417",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-424",
                 "port": "in:attrs_1_value"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-424",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-436",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-436",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-447",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-447",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-470",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-470",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-490",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-490",
                 "port": "out"
@@ -63,8 +64,7 @@
             "target": {
                 "node": "sw-501",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -91,9 +91,9 @@
                     "value": "Status update"
                 }
             },
+            "family": "module",
             "id": "sw-417",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-424": {
             "conf": {
@@ -110,9 +110,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-424",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-436": {
             "conf": {
@@ -141,9 +141,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-436",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-447": {
             "conf": {
@@ -178,14 +178,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-447",
             "name": "regex",
             "options": {
                 "assign": "loop:regex",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-470": {
             "conf": {
@@ -194,6 +194,7 @@
                     "value": " "
                 }
             },
+            "family": "module",
             "id": "sw-470",
             "name": "tokenizer",
             "options": {
@@ -201,8 +202,7 @@
                 "count": "all",
                 "emit": true,
                 "field": "title"
-            },
-            "type": "module"
+            }
         },
         "sw-490": {
             "conf": {
@@ -231,9 +231,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-490",
-            "name": "filter",
-            "type": "module"
+            "name": "filter"
         },
         "sw-501": {
             "conf": {
@@ -254,14 +254,14 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-501",
             "name": "rename",
             "options": {
                 "assign": "loop:rename",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         }
     },
     "outputs": {

@@ -98,7 +98,7 @@ async def as_awaitable[T](value: T | Awaitable[T]) -> T:
     return cast("T", (await value)) if isawaitable(value) else value
 
 
-async def maybe_deferred[T](
+async def maybe_async[T](
     func: Callable[..., T | Awaitable[T]], *args: Any, **kwargs: object
 ) -> T:
     """Calls ``func`` and awaits its result only when it is awaitable."""
@@ -148,5 +148,5 @@ async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
 
 
 def async_partial(f, **kwargs):
-    """Binds ``kwargs`` to ``f`` for later awaiting via :func:`maybe_deferred`."""
-    return partial(maybe_deferred, f, **kwargs)
+    """Binds ``kwargs`` to ``f`` for later awaiting via :func:`maybe_async`."""
+    return partial(maybe_async, f, **kwargs)

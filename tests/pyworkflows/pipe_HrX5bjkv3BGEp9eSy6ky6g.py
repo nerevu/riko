@@ -10,7 +10,8 @@ from riko.modules.feedautodiscovery import pipe as feedautodiscovery
 from riko.modules.fetch import pipe as fetch
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FeedAutoDiscoveryRawConf,
     FetchRawConf,
@@ -20,14 +21,16 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
-def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["feedautodiscovery", "fetch", "sort", "truncate"]
-    else:
+INPUTS = []
+DEPENDENCIES = ["feedautodiscovery", "fetch", "sort", "truncate"]
+
+
+@workflow(subtype="source")
+def pipe(item: Item | None = None, context: Context | None = None, **_):
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_149 = feedautodiscovery(
             item,
             conf=FeedAutoDiscoveryRawConf(
@@ -64,11 +67,14 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_191
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

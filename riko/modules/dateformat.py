@@ -14,7 +14,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -23,8 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -34,11 +33,11 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import DateFormatObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {"field": "date", "ftype": BasicCastType.DATETIME}
+OPTS: DecorationOptions = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -54,7 +53,7 @@ def parser(
 
         date: The date to format, or None when there is none.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `format`.
+        objconf: The module configuration, containing `format`.
 
     Returns:
 
@@ -90,16 +89,16 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             format (str): ``strftime`` format string (default:
                 "%m/%d/%Y %H:%M:%S", i.e. "02/12/2008 20:45:00").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to format (default: "date").
+        field (str): Item field to format (default: "date").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
             True (default: "dateformat").
@@ -150,16 +149,16 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             format (str): ``strftime`` format string (default:
                 "%m/%d/%Y %H:%M:%S", i.e. "02/12/2008 20:45:00").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to format (default: "date").
+        field (str): Item field to format (default: "date").
 
         assign (str): Field the text is assigned to. Ignored when ``emit`` is
             True (default: "dateformat").

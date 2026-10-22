@@ -14,7 +14,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
 
 """
@@ -24,12 +24,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
-from riko.types._options import Defaults, Opts
+from riko.base._logging import get_logger
+from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import operator
-from ._iterutils import group_by
+from ._sortutils import group_by
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -39,9 +38,9 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = Opts()
+OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"sum_key": "content", "group_key": None}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -52,12 +51,12 @@ def parser(
 
     Args:
 
-        stream: The source. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         objconf: the item independent configuration.
 
-        tuples: Iterable of (item, objconf). `item` is an element in the source stream.
+        tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
@@ -117,21 +116,22 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             sum_key (str): Field to sum (default: "content").
 
             group_key (str): Field to sum by. Groups items in the stream by
-                the given key and reports a sum for each group (default: None).
+                that field's value and reports a sum for each group (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
         assign (str): Field the sum is assigned to. Ignored when ``group_key`` is set
-            (the group keys are used instead) or ``emit`` is True (default: "sum").
+            (each group's value names its sum instead) or ``emit`` is True
+            (default: "sum").
 
         emit (bool): Whether to emit the sum directly rather than assign it. Ignored
             when ``group_key`` is set. Overrides ``assign`` (default: False).
@@ -169,21 +169,22 @@ def pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             sum_key (str): Field to sum (default: "content").
 
             group_key (str): Field to sum by. Groups items in the stream by
-                the given key and reports a sum for each group (default: None).
+                that field's value and reports a sum for each group (default: None).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
         assign (str): Field the sum is assigned to. Ignored when ``group_key`` is set
-            (the group keys are used instead) or ``emit`` is True (default: "sum").
+            (each group's value names its sum instead) or ``emit`` is True
+            (default: "sum").
 
         emit (bool): Whether to emit the sum directly rather than assign it. Ignored
             when ``group_key`` is set. Overrides ``assign`` (default: False).

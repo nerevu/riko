@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-266",
                 "port": "out"
@@ -8,8 +9,7 @@
             "target": {
                 "node": "sw-287",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -32,9 +32,9 @@
                     "value": "file://riko/data/www.caltrain.com_Fares_farechart.html"
                 }
             },
+            "family": "module",
             "id": "sw-266",
-            "name": "fetchpage",
-            "type": "module"
+            "name": "fetchpage"
         },
         "sw-287": {
             "conf": {
@@ -43,9 +43,9 @@
                     "value": "100"
                 }
             },
+            "family": "module",
             "id": "sw-287",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

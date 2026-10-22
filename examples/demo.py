@@ -41,7 +41,7 @@ def pipe(test: bool = False) -> list[Item]:
         .count()
     )
 
-    return [next(iter(s1)), next(iter(s2))]
+    return [s1.first(), s2.first()]
 
 
 async def async_pipe(test: bool = False) -> AsyncStream:

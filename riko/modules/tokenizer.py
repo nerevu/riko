@@ -2,7 +2,7 @@
 """
 Splits a string into tokens.
 
-Each token is whitespace-stripped and emitted on its own.
+Each token is whitespace-stripped and yielded on its own.
 
 Examples:
 
@@ -16,7 +16,7 @@ Examples:
 Attributes:
 
     TOKEN_KEY: The field each token is assigned to when ``conf`` supplies none.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -25,8 +25,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -36,11 +35,11 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import TokenizerObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
 TOKEN_KEY = "content"  # noqa: S105
 
-OPTS: Opts = {"ftype": BasicCastType.TEXT, "field": "content"}
+OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "dedupe": False,
@@ -48,7 +47,7 @@ DEFAULTS: Defaults = {
     "token_key": TOKEN_KEY,
 }
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -63,7 +62,7 @@ def parser(
 
         extraction: The extracted conf value. Unused.
 
-        objconf: The pipe configuration, containing `delimiter`, `dedupe`, `sort` and
+        objconf: The module configuration, containing `delimiter`, `dedupe`, `sort` and
             `token_key`.
 
     Returns:
@@ -98,7 +97,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             delimiter (str): Where to split the string (default: ",").
 
@@ -110,11 +109,11 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             token_key (str): Field each token is assigned to
                 (default: "content").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to split (default: "content").
+        field (str): Item field to split (default: "content").
 
         assign (str): Field the tokens are nested under. Ignored when ``emit``
             is True (default: "tokenizer").
@@ -161,7 +160,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             delimiter (str): Where to split the string (default: ",").
 
@@ -173,11 +172,11 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
             token_key (str): Field each token is assigned to
                 (default: "content").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to split (default: "content").
+        field (str): Item field to split (default: "content").
 
         assign (str): Field the tokens are nested under. Ignored when ``emit``
             is True (default: "tokenizer").

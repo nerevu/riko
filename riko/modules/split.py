@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Splitter wrapper options.
+    OPTS: Splitter decoration options.
     DEFAULTS: Default splitter configuration.
 
 """
@@ -27,8 +27,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
 from ._decorators import splitter
@@ -36,13 +35,17 @@ from ._decorators import splitter
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Cascade, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: Opts = {"extract": "splits", "ptype": BasicCastType.INT, "objectify": False}
+OPTS: DecorationOptions = {
+    "extract": "splits",
+    "ptype": BasicCastType.INT,
+    "objectify": False,
+}
 DEFAULTS: Defaults = {"splits": 2}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -53,7 +56,7 @@ def parser(
 
     Args:
 
-        stream: The source stream. Note: this shares the `tuples` iterator, so consuming
+        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
         splits: The number of copies to create.
@@ -64,7 +67,7 @@ def parser(
 
     Yields:
 
-        One stream per split. Each stream replays a deep copy of every source item.
+        One stream per split. Each stream replays a deep copy of every input item.
 
     Examples:
 
@@ -94,18 +97,18 @@ def async_pipe(*args: Any, **kwargs: object) -> Cascade:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             splits (int): The number of copies to create. Cast to an int, so a
                 numeric string is accepted (default: 2).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Yields:
 
-        One stream per split. Each stream yields a deep copy of every source item, so
+        One stream per split. Each stream yields a deep copy of every input item, so
         the branches can be consumed independently and in any order.
 
     Examples:
@@ -132,18 +135,18 @@ def pipe(*args: Any, **kwargs: object) -> Cascade:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             splits (int): The number of copies to create. Cast to an int, so a
                 numeric string is accepted (default: 2).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Yields:
 
-        One stream per split. Each stream yields a deep copy of every source item, so
+        One stream per split. Each stream yields a deep copy of every input item, so
         the branches can be consumed independently and in any order.
 
     Examples:

@@ -18,7 +18,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Operator wrapper options.
+    OPTS: Operator decoration options.
     DEFAULTS: Default operator configuration.
     ALLOW_INF: Whether to allow ``inf``/``-inf`` to compare numerically.
 
@@ -31,10 +31,9 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
 from dateutil.parser import ParserError
 
-from riko.coercion._canonical import repr_cache
+from riko.base._logging import get_logger
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict
@@ -48,12 +47,12 @@ if TYPE_CHECKING:
     from datetime import date
     from logging import Logger
 
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
     from riko.types._wrappers import SyncPipeTuples
     from riko.types.modules import FilterConfRule
 
-OPTS: Opts = {"listize": True, "extract": "rule"}
+OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
 COMBINE_BOOLEAN = {"and": all, "or": any}
 ALLOW_INF = False
@@ -112,10 +111,10 @@ DATE_OPS = {"after", "before"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
-def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:
+def cast_arg[VT](arg: VT, op: str) -> str | date | VT | None:
     if op in STRING_OPS:
         value = str(arg)
     elif op in DATE_OPS:
@@ -127,16 +126,6 @@ def _parse_arg_uncached[VT](arg: VT, op: str) -> str | date | VT | None:
         value = arg
 
     return value
-
-
-@repr_cache
-def _parse_arg_cached[VT](arg: VT, op: str) -> str | date | VT | None:
-    return _parse_arg_uncached(arg, op)
-
-
-def parse_arg[VT](arg: VT, op: str, memoize: bool = False) -> str | date | VT | None:
-    func = _parse_arg_cached if memoize else _parse_arg_uncached
-    return func(arg, op)
 
 
 def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
@@ -172,8 +161,8 @@ def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
 
     if has_value and not truthiness:
         try:
-            x = parse_arg(_x, rule.op)
-            y = parse_arg(_y, rule.op, memoize=True)
+            x = cast_arg(_x, rule.op)
+            y = cast_arg(_y, rule.op)
         except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
             x = y = None
     else:
@@ -214,7 +203,7 @@ def parser(
         extract: The item independent rules.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
-            source stream and `objconf` is the item configuration. Note: this shares
+            input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
     Yields:
@@ -253,12 +242,6 @@ def parser(
         if rule.op not in SWITCH:
             raise ValueError(f"Unsupported filter operation: {rule.op!r}.")
 
-        truthiness = rule.op in TRUTHINESS_OPS
-        has_value = rule.value is not None
-
-        if has_value and not truthiness:
-            parse_arg(rule.value, rule.op, memoize=True)
-
     for item, objconf in tuples:
         try:
             func = COMBINE_BOOLEAN[objconf.combine]
@@ -283,9 +266,9 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The filter criteria. Required.
 
@@ -306,7 +289,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
             stop (bool): Whether to stop at the first item that fails. Later
                 items are dropped even if they would match (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -352,9 +335,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The source stream.
+        items (Items): The input stream.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The filter criteria. Required.
 
@@ -375,7 +358,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             stop (bool): Whether to stop at the first item that fails. Later
                 items are dropped even if they would match (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

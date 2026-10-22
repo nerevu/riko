@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-579",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-610",
                 "port": "in:URL"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-606",
                 "port": "out"
@@ -19,8 +20,7 @@
             "target": {
                 "node": "sw-579",
                 "port": "in:_1_PATH"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -53,9 +53,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-579",
-            "name": "urlbuilder",
-            "type": "module"
+            "name": "urlbuilder"
         },
         "sw-606": {
             "conf": {
@@ -80,9 +80,9 @@
                     "value": "MP Guardian ID"
                 }
             },
+            "family": "module",
             "id": "sw-606",
-            "name": "input",
-            "type": "module"
+            "name": "input"
         },
         "sw-610": {
             "conf": {
@@ -95,9 +95,9 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-610",
-            "name": "fetchdata",
-            "type": "module"
+            "name": "fetchdata"
         }
     },
     "outputs": {

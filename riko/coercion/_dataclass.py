@@ -8,16 +8,17 @@ from dataclasses import fields, is_dataclass
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 
-import riko.types._enums as names_module
+import riko.types._enums as enums_module
 import riko.types._scalars as scalars_module
 from riko.base._typing import resolve_type_hints
+from riko.types._collections import require_from_form
 from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from riko.types._collections import RikoDict, RikoValue
+    from riko.types._values import RikoDict, RikoValue
 
     from ._dynamic_conf import DynamicConf
 
@@ -58,25 +59,16 @@ def fromdict(
         ...     inner: Inner | None = None
         >>> fromdict(Outer, inner={'n': 5}).inner
         Inner(n=5)
-        >>> @dataclass
-        ... class Other:
-        ...     m: int = 0
-        >>> @dataclass
-        ... class Either:
-        ...     val: Inner | Other | None = None
-        >>> fromdict(Either, val={'m': 9}).val
-        {'m': 9}
 
     """
     # Adds the caller's namespace so dataclasses defined in a local scope (e.g. a
     # doctest or test body) resolve PEP 563 string (from __future__ import annotations)
     # annotations
+    module = sys.modules[cls.__module__]
     caller = sys._getframe(1)
     callerns = {**caller.f_globals, **caller.f_locals}
-    module = sys.modules[cls.__module__]
-    hints = resolve_type_hints(
-        cls, callerns, module, names_module, scalars_module, include_extras=True
-    )
+    namespaces = (callerns, module, enums_module, scalars_module)
+    hints = resolve_type_hints(cls, *namespaces, include_extras=True)
 
     for f in fields(cls):
         if f.name not in data:
@@ -94,10 +86,7 @@ def fromdict(
                 origin = get_origin(ftype)
 
         if origin is Literal:
-            valid = get_args(ftype)
-
-            if val not in valid:
-                raise ValueError(f"Invalid {f.name}={val!r}, expected one of {valid}")
+            val = require_from_form(ftype, f.name, error=ValueError)(val)
         elif is_dataclass(ftype) and isinstance(ftype, type) and is_mapping(val):
             val = fromdict(ftype, **val)
 

@@ -1,5 +1,5 @@
 """
-Wires one pipe's output into another's terminal.
+Wires one node's output stream into another node's terminal reference.
 
 A format ``input`` feeds a ``dateformat`` whose result is built into an item with
 ``itembuilder``.
@@ -17,7 +17,7 @@ from __future__ import annotations
 from pprint import pprint
 from typing import TYPE_CHECKING
 
-from riko import Pipeline, parse_dag
+from riko import Pipeline, Workflow
 from riko.types.modules import (
     ConfArg,
     DateFormatRawConf,
@@ -82,11 +82,11 @@ dag: PipeDag = {
 
 
 def pipe(test: bool = False) -> list[Item]:
-    return list(Pipeline(parse_dag(dag)))
+    return list(Pipeline(Workflow.parse(dag)))
 
 
 def async_pipe(test: bool = False) -> Pipeline:
-    return Pipeline(parse_dag(dag))
+    return Pipeline(Workflow.parse(dag))
 
 
 def print_results(result: Items) -> None:

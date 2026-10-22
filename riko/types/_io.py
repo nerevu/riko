@@ -1,33 +1,14 @@
-"""File, path, opener, and closeable I/O typing contracts."""
+"""Path and closeable I/O typing contracts and their guards."""
 
 from __future__ import annotations
 
-from codecs import StreamReader
-from collections.abc import Callable
-from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from pathlib import Path
-from tempfile import SpooledTemporaryFile
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from riko.io._async import NamedTextIOWrapper
-    from riko.io._sync import Fetch
+from typing_extensions import TypeIs
 
+from ._guards import isinstance_strict
 
-type IOFileLike = BytesIO | StringIO
-type BinaryFileLike = (
-    BytesIO | RawIOBase | Fetch[Literal[True]] | SpooledTemporaryFile[bytes]
-)
-type StringFileLike = (
-    Fetch[Literal[False]]
-    | NamedTextIOWrapper
-    | SpooledTemporaryFile[str]
-    | StreamReader
-    | StringIO
-    | TextIOBase
-)
-type FileLike = BinaryFileLike | StringFileLike
-type Opener = Callable[[str], tuple[FileLike, str | None]]
 type PathLike = str | Path
 
 
@@ -43,6 +24,17 @@ class AsyncCloseable(Protocol):
 
 type Closeable = SyncCloseable | AsyncCloseable
 
-IOFileLikeType: tuple[type[BytesIO], type[StringIO]] = (BytesIO, StringIO)
 CloseableType = (SyncCloseable, AsyncCloseable)
 PathLikeType: tuple[type[str], type[Path]] = (str, Path)
+
+
+def is_sync_closeable(val: object) -> TypeIs[SyncCloseable]:
+    return isinstance_strict(val, SyncCloseable)
+
+
+def is_async_closeable(val: object) -> TypeIs[AsyncCloseable]:
+    return isinstance_strict(val, AsyncCloseable)
+
+
+def is_closeable(val: object) -> TypeIs[Closeable]:
+    return is_sync_closeable(val) or is_async_closeable(val)

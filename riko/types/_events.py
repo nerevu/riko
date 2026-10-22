@@ -2,7 +2,7 @@
 """
 The event-sink contract a running execution reports to.
 
-A sink receives opaque event values while a pipeline runs; it decides what to
+An event sink receives opaque event values while a pipeline runs; it decides what to
 record, forward, or discard.
 
 Examples:

@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-551",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-613",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-605",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-551",
                 "port": "in:attrs_3_value"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-632",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-613",
                 "port": "in:1"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -80,9 +80,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-551",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         },
         "sw-605": {
             "conf": {
@@ -91,17 +91,17 @@
                     "value": "extVal"
                 }
             },
+            "family": "module",
             "id": "sw-605",
             "name": "strconcat",
             "options": {
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-613": {
+            "family": "module",
             "id": "sw-613",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-632": {
             "conf": {
@@ -128,9 +128,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-632",
-            "name": "itembuilder",
-            "type": "module"
+            "name": "itembuilder"
         }
     },
     "outputs": {

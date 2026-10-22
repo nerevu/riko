@@ -8,7 +8,7 @@ Application code imports from this namespace; extension authors use ``riko.ext``
 
 from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
-from riko.bado.itertools import as_async, async_map, async_map_stream
+from riko.bado.itertools import alist, as_async, async_map, async_map_stream
 from riko.base._paths import get_path, get_temp_file
 from riko.base.exceptions import (
     EmptyPipelineError,
@@ -17,18 +17,30 @@ from riko.base.exceptions import (
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
-    UnsupportedPipelineError,
+    UnsupportedWorkflowError,
 )
-from riko.definitions._workflow import Node, Pipeline, Workflow, WorkflowLike
-from riko.execution.context import Context
-from riko.ext.codegen import list_modules
+from riko.definitions._context import Context
+from riko.definitions._nodes import Node
+from riko.definitions._resource_definition import (
+    OneShotResource,
+    Resource,
+    ReusableResource,
+)
+from riko.definitions._workflow_definition import Workflow, WorkflowLike
 from riko.io._async import async_get_temp_file, async_url_open, async_write
-from riko.modules._metadata import describe_module, get_module_metadata
+from riko.modules._metadata import describe_module, get_module_metadata, list_modules
 from riko.modules._names import Modules, Sinks, Sources, Transforms
-from riko.runtime._codegen import compile_workflow
-from riko.runtime._migrate import parse_dag
-from riko.runtime.collections import export, list_formats
-from riko.types._enums import Backends, ExecutionMode, Executor, Formats
+from riko.runtime._compile import compile_workflow
+from riko.runtime._export import export, list_formats
+from riko.runtime._pipeline import Pipeline
+from riko.types._enums import (
+    Backends,
+    CastType,
+    DocumentShape,
+    ExecutionMode,
+    Executor,
+    Formats,
+)
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
@@ -46,7 +58,9 @@ __copyright__ = "Copyright 2015 Reuben Cummings"
 
 __all__ = [
     "Backends",
+    "CastType",
     "Context",
+    "DocumentShape",
     "Edge",
     "EmptyPipelineError",
     "Endpoint",
@@ -56,19 +70,23 @@ __all__ = [
     "InvalidPipelineError",
     "Modules",
     "Node",
+    "OneShotResource",
     "Pipeline",
     "PipelineError",
     "PipelineStateError",
+    "Resource",
+    "ReusableResource",
     "RikoError",
     "Sinks",
     "Sources",
     "Transforms",
     "UnsupportedModuleError",
-    "UnsupportedPipelineError",
+    "UnsupportedWorkflowError",
     "Workflow",
     "WorkflowDocument",
     "WorkflowLike",
     "WorkflowModule",
+    "alist",
     "as_async",
     "async_chain",
     "async_get_temp_file",
@@ -90,6 +108,5 @@ __all__ = [
     "issync",
     "list_formats",
     "list_modules",
-    "parse_dag",
     "run",
 ]

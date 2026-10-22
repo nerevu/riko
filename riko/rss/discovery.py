@@ -5,9 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-import pygogo as gogo
-
 from riko.base._config import settings
+from riko.base._logging import get_logger
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close
 from riko.parsing.documents import LinkParser
@@ -17,11 +16,11 @@ if TYPE_CHECKING:
     from logging import Logger
     from xml.dom.minidom import Node
 
-    from riko.types._io import StringFileLike
+    from riko.io._filelike import StringFileLike
     from riko.types._streams import Stream
 
 TIMEOUT = settings.discovery_timeout
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 class RSSLinkParser(LinkParser):
@@ -58,7 +57,7 @@ def doc2entries(document: Node) -> Iterator[object]:
             yield entry
 
 
-async def async_get_rss(
+async def aload_rss_links(
     url: str,
     *,
     link_type: str | Iterable[str] | None = None,
@@ -86,7 +85,7 @@ async def async_get_rss(
     return entries
 
 
-def get_rss(
+def load_rss_links(
     url: str,
     *,
     link_type: str | Iterable[str] | None = None,

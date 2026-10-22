@@ -22,7 +22,6 @@ from __future__ import annotations
 from io import BytesIO, StringIO, TextIOWrapper
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
-import pygogo as gogo
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
 
@@ -30,6 +29,7 @@ from riko.bado import _backend
 from riko.bado._backend import async_open
 from riko.bado._util import async_get, async_read
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
 
 from ._sync import ext_from_content_type
@@ -41,10 +41,12 @@ if TYPE_CHECKING:
     from _typeshed import OpenBinaryMode, OpenTextMode
 
     from riko.bado._backend import NamedTemporaryFile
-    from riko.types._io import IOFileLike, PathLike
+    from riko.types._io import PathLike
     from riko.types._scalars import AnyStr
 
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+    from ._filelike import IOFileLike
+
+logger: Logger = get_logger(__name__)
 
 type TextChunk = str | list[str]
 type BinaryChunk = bytes | list[int]

@@ -213,17 +213,17 @@ Same principle for optional parser/frame/finance/connector dependencies.
 - **Shrink `riko.modules.__all__`** to module-author contracts only; keep implementation details
   private.
 - **Final discovery matches the target model.** Module discovery exposes `Sources` and `Transforms`;
-  endpoint/provider and serialization discovery use `Targets` and `Formats`. The legacy `Sinks` /
+  endpoint/provider and serialization discovery use `Backends` and `Formats`. The legacy `Sinks` /
   `"sink"` module category does not survive once `output` and `write` leave module space.
 - **Resolve doc/spec drift** — one authoritative shipped-behavior document, one roadmap/router,
   gameplan owners for planned contracts, and generated API documentation.
 - **Docs teach only public imports.** User-facing examples should teach `Pipeline`, `Context`,
-  `Resource`, `Publisher`/`Subscription`, `Targets`/`Formats`, and normal iteration rather than
+  `Resource`, `Publisher`/`Subscription`, `Backends`/`Formats`, and normal iteration rather than
   private runtime helpers or removed compatibility APIs.
 
 ## 9. Pre-public-release triage (the gate)
 
-**Must land:** remaining P9 discoverability/stubs aligned to `Sources`/`Transforms`/`Targets`/`Formats`;
+**Must land:** remaining P9 discoverability/stubs aligned to `Sources`/`Transforms`/`Backends`/`Formats`;
 strict configuration validation; the Pipeline/private-execution split and `with_execution(...)`;
 P12/stable state+identity errors; unified CLI; wheel/dependency smoke tests; the pub/sub release
 contract; and removal of superseded Python surfaces according to §1.1.

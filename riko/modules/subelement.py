@@ -26,7 +26,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -35,25 +35,24 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion._sequences import gen_items
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from logging import Logger
 
     from riko.coercion._configs import SubelementObjconf
-    from riko.types._collections import RikoValue
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
+    from riko.types._values import RikoValue
 
-OPTS: Opts = {"emit": True}
+OPTS: DecorationOptions = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -66,7 +65,7 @@ def parser(
 
         item: The entry to process.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `path` and `token_key`.
+        objconf: The module configuration, containing `path` and `token_key`.
 
     Returns:
 
@@ -94,7 +93,7 @@ def parser(
         {'content': 'verse1'}
 
     """
-    raw: str | Sequence[str] = require_conf(objconf, "path", "subelement")
+    raw: str | Sequence[str] = require_conf_key(objconf, "path", "subelement")
     path = raw if isinstance(raw, str) else ".".join(raw)
     element = cast("RikoValue", item.get(path, **kwargs))
     return gen_items(element, objconf.token_key or "")
@@ -112,15 +111,15 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
-            path (str | list[str]): Dotted path to the element to extract. A list is
-                joined with dots. Required.
+            path (str | list[str]): Dotted path into the item to the element to extract.
+                A list is joined with dots. Required.
 
-            token_key (str): Field each token is assigned to, or None to yield
-                the raw text instead of a dict (default: "content").
+            token_key (str): Field each token is assigned to, or None to yield the raw
+                text instead of a dict (default: "content").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -134,8 +133,8 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
-        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
-          and item is given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
 
@@ -174,15 +173,15 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
-            path (str | list[str]): Dotted path to the element to extract. A list is
-                joined with dots. Required.
+            path (str | list[str]): Dotted path into the item to the element to extract.
+                A list is joined with dots. Required.
 
-            token_key (str): Field each token is assigned to, or None to yield
-                the raw text instead of a dict (default: "content").
+            token_key (str): Field each token is assigned to, or None to yield the raw
+                text instead of a dict (default: "content").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -196,8 +195,8 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
         - ``<token>`` when ``emit`` is True (default)
         - ``{<assign>: <token>}`` when ``emit`` is False and no item given
-        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False
-          and item is given
+        - one merged ``{Item, <assign>: [<token>, ...]}`` when ``emit`` is False and
+          item is given
 
     Raises:
 

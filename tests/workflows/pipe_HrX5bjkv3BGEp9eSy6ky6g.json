@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-149",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-157",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-157",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-174",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-174",
                 "port": "out"
@@ -30,8 +31,7 @@
             "target": {
                 "node": "sw-191",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -42,9 +42,9 @@
                     "value": "file://riko/data/edition.cnn.html"
                 }
             },
+            "family": "module",
             "id": "sw-149",
-            "name": "feedautodiscovery",
-            "type": "module"
+            "name": "feedautodiscovery"
         },
         "sw-157": {
             "conf": {
@@ -53,14 +53,14 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-157",
             "name": "fetch",
             "options": {
                 "assign": "loop:fetch",
                 "count": "all",
                 "emit": true
-            },
-            "type": "module"
+            }
         },
         "sw-174": {
             "conf": {
@@ -78,9 +78,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-174",
-            "name": "sort",
-            "type": "module"
+            "name": "sort"
         },
         "sw-191": {
             "conf": {
@@ -89,9 +89,9 @@
                     "value": "25"
                 }
             },
+            "family": "module",
             "id": "sw-191",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         }
     },
     "outputs": {

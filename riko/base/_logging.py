@@ -1,23 +1,24 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides logging, verbosity, and CLI exception helpers."""
+"""Provides riko's shared logger configuration and the per-module logger factory."""
 
 from __future__ import annotations
 
-import pdb  # noqa: T100
-import sys
-from json.decoder import JSONDecodeError
-from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING, Formatter, Logger, LogRecord
-from traceback import format_exception
-from typing import TYPE_CHECKING
+from logging import (
+    CRITICAL,
+    DEBUG,
+    ERROR,
+    INFO,
+    NOTSET,
+    WARNING,
+    Formatter,
+    Logger,
+    LogRecord,
+    getLogger,
+)
 
 import pygogo as gogo
 from pygogo.formatters import DATEFMT
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from types import TracebackType
-
-    import requests
+from pygogo.handlers import stderr_hdlr
 
 # https://stackoverflow.com/a/56944256/408556
 GREY = "\x1b[38;21m"
@@ -25,6 +26,7 @@ YELLOW = "\x1b[33;21m"
 RED = "\x1b[31;21m"
 BOLD_RED = "\x1b[31;1m"
 RESET = "\x1b[0m"
+LOGGER_NAME = "riko"
 
 
 # https://flask.palletsprojects.com/en/1.1.x/logging/#injecting-request-information
@@ -39,70 +41,61 @@ class DefaultFormatter(Formatter):
         }
 
         log_fmt = formats.get(record.levelno)
-        return Formatter(log_fmt).format(record)
+        return Formatter(log_fmt, datefmt=self.datefmt).format(record)
 
 
 def_format: str = "[%(levelname)s %(asctime)s] in %(module)s:%(lineno)s: %(message)s"
 def_formatter: DefaultFormatter = DefaultFormatter(def_format, datefmt=DATEFMT)
 
-logger: Logger = gogo.Gogo(
-    __name__, low_formatter=def_formatter, high_formatter=def_formatter, monolog=True
-).logger
-logger.propagate = False
+going: gogo.Gogo = gogo.Gogo(
+    LOGGER_NAME,
+    low_hdlr=stderr_hdlr(),
+    high_hdlr=stderr_hdlr(),
+    low_level="debug",
+    high_level="warning",
+    low_formatter=def_formatter,
+    high_formatter=def_formatter,
+    monolog=True,
+)
 
 
-def log(
-    message: str | None = None,
-    ok: bool = True,
-    r: requests.Response | None = None,
-    exit_on_completion: bool = False,
-    **_: object,
-) -> bool | None:
-    if r is not None:
-        ok = r.ok
+def set_log_level(level: int) -> None:
+    """
+    Sets the level every riko logger inherits.
 
-        try:
-            message = r.json().get("message")
-        except JSONDecodeError:
-            message = r.text
+    Args:
 
-    if message and ok:
-        logger.info(message)
-    elif message:
-        logger.error(message)
+        level: The minimum level riko logs, e.g. ``logging.INFO``.
 
-    if exit_on_completion:
-        sys.exit(0 if ok else 1)
-    else:
-        return ok
+    Examples:
+
+        >>> set_log_level(WARNING)
+
+    """
+    getLogger(LOGGER_NAME).setLevel(level)
 
 
-def get_verbosity(
-    verbosity: str = "", debug: bool = False, max_verbosity: int = 3, **_: object
-) -> int:
-    def_verbosity = "3" if debug else "1"
-    return min(int(verbosity or def_verbosity), max_verbosity)
+def get_logger(name: str) -> Logger:
+    """
+    Gets the riko logger for a module name.
+
+    Args:
+
+        name: The module's ``__name__``.
+
+    Returns:
+
+        The module's logger, which follows ``set_log_level``.
+
+    Examples:
+
+        >>> get_logger("riko.modules.fetch").name
+        'riko.modules.fetch'
+
+    """
+    logger: Logger = going.get_logger(name.removeprefix(f"{LOGGER_NAME}."))
+    logger.setLevel(NOTSET)
+    return logger
 
 
-def exception_hook(
-    etype: type[BaseException],
-    value: BaseException | None = None,
-    tb: TracebackType | None = None,
-    debug: bool = False,
-    callback: Callable[..., None] | None = None,
-    **_: object,
-) -> None:
-    exception = format_exception(etype, value, tb)
-
-    try:
-        info, error = exception[-2:]
-    except ValueError:
-        info, error = "", exception[0]
-
-    message = f"Exception in:\n{info}\n{error}"
-    log(message, ok=False)
-
-    if debug:
-        pdb.post_mortem(tb)
-
-    callback() if callback else None
+set_log_level(WARNING)

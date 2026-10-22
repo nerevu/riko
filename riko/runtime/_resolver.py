@@ -1,13 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-Provides pipe resolution for modules and named workflows.
+Provides pipe resolution for modules and stored workflows.
 
-Names prefixed with ``pipe_`` or ``pipe:`` resolve as named workflows, everything else
-as a module.
+Names prefixed with ``pipe_`` or ``pipe:`` resolve as stored workflows
+(``WorkflowStore`` entries looked up by their ``pipe_<id>`` name) through
+``WorkflowResolver``. Everything else resolves as a module, such as ``fetch``, through
+``ModuleRegistry``.
 
 Attributes:
 
-    dispatcher: Process-global façade over the two default resolvers.
+    dispatcher: Finds each node's pipe by name, whether a module such as ``fetch``
+        or a stored workflow's ``pipe_<id>``.
 
 """
 
@@ -15,10 +18,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, overload
 
-from riko.base.exceptions import UnsupportedModuleError
+from riko.base.exceptions import UnsupportedModuleError, UnsupportedWorkflowError
 
 from ._module_registry import module_registry
-from ._workflows import workflow_resolver
+from ._workflow_resolver import WorkflowResolver, workflow_resolver
 
 if TYPE_CHECKING:
     from riko.types._wrappers import (
@@ -32,12 +35,15 @@ if TYPE_CHECKING:
 
 class ResolverDispatcher:
     """
-    Dispatches a pipe name to the first compatible resolver.
+    Dispatches a module name or ``pipe_<id>`` name to the first resolver accepting it.
+
+    ``WorkflowResolver`` accepts names prefixed with ``pipe_`` or ``pipe:``.
+    ``ModuleRegistry`` accepts every other name, such as ``fetch``.
 
     Examples:
 
-        >>> pipe = dispatcher.resolve("count")
-        >>> list(pipe([{"x": 1}, {"x": 2}]))
+        >>> count = dispatcher.resolve("count")
+        >>> list(count([{"x": 1}, {"x": 2}]))
         [{'count': 2}]
 
     """
@@ -45,23 +51,23 @@ class ResolverDispatcher:
     def __init__(self, *resolvers: Resolver) -> None:
         self.resolvers = resolvers
 
-    def resolver_for(self, name: str) -> Resolver:
+    def require_resolver(self, name: str) -> Resolver:
         """
-        Selects the first compatible resolver for ``name``.
+        Selects the first resolver that accepts ``name``.
 
         Returns:
 
-            The first registered resolver whose ``is_compatible`` accepts ``name``.
+            The first resolver whose ``is_compatible`` accepts ``name``.
 
         Raises:
 
-            UnsupportedModuleError: If a module or ``pipe_*`` name is unresolved.
+            UnsupportedModuleError: If no resolver accepts ``name``.
 
         """
         resolver = next((r for r in self.resolvers if r.is_compatible(name)), None)
 
         if resolver is None:
-            raise UnsupportedModuleError(f"{name} is not compatible with any resolver")
+            raise UnsupportedModuleError(name, "no resolver accepts it")
 
         return resolver
 
@@ -75,23 +81,27 @@ class ResolverDispatcher:
     ) -> AsyncModuleWrapper: ...
     def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
         """
-        Resolves ``name``'s callable for ``interface``.
+        Resolves ``name`` to its ``pipe``, or its ``async_pipe`` when ``is_async``.
 
         Raises:
 
-            UnsupportedModuleError: If a module name is unresolved.
-            UnsupportedPipelineError: If a ``pipe_*`` name is unresolved.
+            UnsupportedModuleError: If no module has that name, or the module lacks
+                ``pipe`` (or ``async_pipe`` when ``is_async``).
+
+            UnsupportedWorkflowError: If no stored workflow has that ``pipe_<id>`` name,
+                or its ``ResolvedWorkflow`` lacks ``pipe`` (or ``async_pipe`` when
+                ``is_async``).
 
         """
-        return self.resolver_for(name).require(name, is_async)
+        return self.require_resolver(name).require(name, is_async)
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Reports which of a pipe name's sync and async interfaces are defined.
+        Reports which sync and async interfaces a module or stored workflow defines.
 
         Args:
 
-            name: Module or ``pipe_*`` named-workflow name to inspect.
+            name: Module name or ``pipe_<id>`` name to inspect.
 
         Returns:
 
@@ -103,19 +113,43 @@ class ResolverDispatcher:
             True
 
         """
-        return self.resolver_for(name).require_interfaces(name)
+        return self.require_resolver(name).require_interfaces(name)
 
     def validate(self, name: str) -> None:
-        if not self.require_interfaces(name):
-            raise UnsupportedModuleError(f"{name!r} has no interfaces")
-
-    def is_capable(self, name: str, is_async: bool = False) -> bool:
         """
-        Reports whether ``name`` exposes ``interface``.
+        Requires that ``name`` exposes ``pipe`` and/or ``async_pipe``.
 
         Args:
 
-            name: Module or ``pipe_*`` named-workflow name to inspect.
+            name: Module name or ``pipe_<id>`` name to check.
+
+        Raises:
+
+            UnsupportedModuleError: If no module has that name, or the module exposes
+                neither interface.
+
+            UnsupportedWorkflowError: If no stored workflow has that ``pipe_<id>``
+                name, or its ``ResolvedWorkflow`` exposes neither interface.
+
+        Examples:
+
+            >>> dispatcher.validate("count")
+
+        """
+        resolver = self.require_resolver(name)
+
+        if not resolver.require_interfaces(name):
+            is_workflow = isinstance(resolver, WorkflowResolver)
+            error = UnsupportedWorkflowError if is_workflow else UnsupportedModuleError
+            raise error(name, "it has no interfaces")
+
+    def is_capable(self, name: str, is_async: bool = False) -> bool:
+        """
+        Reports whether ``name`` exposes ``pipe``, or ``async_pipe`` when ``is_async``.
+
+        Args:
+
+            name: Module name or ``pipe_<id>`` name to inspect.
             is_async: Whether to check the async interface.
 
         Returns:
@@ -131,7 +165,7 @@ class ResolverDispatcher:
 
         """
         interface = "async_pipe" if is_async else "pipe"
-        return interface in self.resolver_for(name).require_interfaces(name)
+        return interface in self.require_resolver(name).require_interfaces(name)
 
     @overload
     def resolve(  # noqa: E704
@@ -145,16 +179,22 @@ class ResolverDispatcher:
         self, name: str, is_async: bool = False
     ) -> ModuleWrapper | None:
         """
-        Resolves ``name`` if it exposes ``interface``, else returns ``None``.
+        Resolves ``name`` to its ``pipe`` (or ``async_pipe`` when ``is_async``).
 
         Args:
 
-            name: Module or ``pipe_*`` named-workflow name to inspect.
+            name: Module name or ``pipe_<id>`` name to inspect.
             is_async: Whether to check the async interface.
 
+        Returns:
+
+            The resolved ``pipe``/``async_pipe``, or ``None`` when ``name`` doesn't
+            expose it.
+
         """
-        if self.is_capable(name, is_async=is_async):
-            return self.require(name, is_async=is_async)
+        capable = self.is_capable(name, is_async=is_async)
+        return self.require(name, is_async=is_async) if capable else None
 
 
 dispatcher: ResolverDispatcher = ResolverDispatcher(module_registry, workflow_resolver)
+workflow_resolver.register_dispatcher(dispatcher)

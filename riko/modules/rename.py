@@ -2,10 +2,9 @@
 """
 Renames, copies, or deletes item fields.
 
-Each rule maps an existing ``field`` onto a ``newval``. Omit ``newval`` to
-delete the field instead, or set ``copy`` to keep the original alongside the
-new one. Useful when input data is not in RSS form and you want to emit it as
-RSS.
+Each rule maps an existing ``field`` onto a ``newval``. Omit ``newval`` to delete the
+field instead, or set ``copy`` to keep the original alongside the new one. Useful when
+input data is not in RSS form and you want to reshape it into RSS.
 
 Examples:
 
@@ -20,7 +19,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -30,10 +29,10 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any, cast
 
-import pygogo as gogo
 from meza.fntools import remove_keys
 
 from riko.bado.itertools import coop_reduce
+from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
 from riko.types._sentinels import MISSING
 
@@ -44,13 +43,13 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import RenameObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
     from riko.types.modules import RenameConfRule
 
-OPTS: Opts = {"extract": "rule", "listize": True, "emit": True}
+OPTS: DecorationOptions = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def reducer(item: Item, rule: RenameConfRule) -> Item:
@@ -76,7 +75,7 @@ async def async_parser(
 
         item: The entry to process.
         rules: The parsed rename rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -113,7 +112,7 @@ def parser(
 
         item: The entry to process.
         rules: The parsed rename rules.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -145,20 +144,20 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The rename criteria. Required.
 
-                field (str): Item attribute to rename, copy, or delete.
+                field (str): Item field to rename, copy, or delete.
 
-                newval (str): New attribute name. A dotted name nests, so
+                newval (str): New field name. A dotted path nests, so
                     ``"a.b"`` yields ``{"a": {"b": <value>}}``. Omit it to
                     delete ``field`` instead (default: None).
 
                 copy (bool): Whether to keep ``field`` as well as adding
                     ``newval`` (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -210,20 +209,20 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             rule (dict | list[dict]): The rename criteria. Required.
 
-                field (str): Item attribute to rename, copy, or delete.
+                field (str): Item field to rename, copy, or delete.
 
-                newval (str): New attribute name. A dotted name nests, so
+                newval (str): New field name. A dotted path nests, so
                     ``"a.b"`` yields ``{"a": {"b": <value>}}``. Omit it to
                     delete ``field`` instead (default: None).
 
                 copy (bool): Whether to keep ``field`` as well as adding
                     ``newval`` (default: False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

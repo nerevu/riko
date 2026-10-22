@@ -19,7 +19,7 @@ Examples:
 Attributes:
 
     OPS: Supported operations, keyed by ``op`` name.
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -29,13 +29,12 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import cast_value
 from riko.types._enums import BasicCastType, CastType
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,12 +42,12 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import SimpleMathObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import NumLike
 
-OPTS: Opts = {"ftype": BasicCastType.DECIMAL, "field": "content"}
+OPTS: DecorationOptions = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def mean(*nums: NumLike) -> float:
@@ -80,7 +79,7 @@ def parser(
 
         num: The first operand, already cast to ``Decimal``.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `op` and `other`.
+        objconf: The module configuration, containing `op` and `other`.
 
     Returns:
 
@@ -101,11 +100,11 @@ def parser(
         Decimal('2.5')
 
     """
-    op: str = require_conf(objconf, "op", "simplemath")
-    raw: object = require_conf(objconf, "other", "simplemath")
+    op: str = require_conf_key(objconf, "op", "simplemath")
+    raw: object = require_conf_key(objconf, "other", "simplemath")
 
     if op not in OPS:
-        raise TypeError(f"the 'simplemath' pipe got an unsupported op {op!r}")
+        raise TypeError(f"the 'simplemath' module got an unsupported op {op!r}")
 
     operation = OPS[op]
     other = cast_value(raw, type_=CastType.DECIMAL)
@@ -124,17 +123,17 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             op (str): The operation, one of "add", "subtract", "multiply",
                 "divide", "floor", "modulo", "power", "mean". Required.
             other (number): The second operand, cast to ``Decimal``. Required.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the first operand, cast to
+        field (str): Item field holding the first operand, cast to
             ``Decimal`` (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is
@@ -183,17 +182,17 @@ def pipe(*args: Any, **kwargs: object) -> NumLike:
 
         item (Item | Items): The entry, or stream of entries, to process.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             op (str): The operation, one of "add", "subtract", "multiply",
                 "divide", "floor", "modulo", "power", "mean". Required.
             other (number): The second operand, cast to ``Decimal``. Required.
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute holding the first operand, cast to
+        field (str): Item field holding the first operand, cast to
             ``Decimal`` (default: "content").
 
         assign (str): Field the result is assigned to. Ignored when ``emit`` is

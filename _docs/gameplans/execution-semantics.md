@@ -18,7 +18,7 @@ pipeline = (
 
 > **Shipped (2026-09-27):** module-name fluent chaining — the canonical `Pipeline(workflow,
 > source=...)` constructor plus the `Pipeline.from_module(name, conf=...)` classmethod for
-> module seeding, `.pipe(name, conf=...)`, attribute chaining, `|` (name, `(name, conf)` pair,
+> starting from a module, `.pipe(name, conf=...)`, attribute chaining, `|` (name, `(name, conf)` pair,
 > or one-module template), and `items | Pipeline(...)` source seeding — each deriving a new
 > definition that shares prior structure. Callable `.map`/`.flat_map` in the example above remain target API owned by
 > [callable-pipes.md](callable-pipes.md); a strict-xfail tripwire guards the deferral.
@@ -32,7 +32,7 @@ aiter(pipeline)  # fresh private AsyncExecution
 
 `iter(pipeline)` creates a new one-shot private `SyncExecution`; `aiter(pipeline)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
 
-The same `Pipeline` definition may run in either mode. Native implementations win and the runtime adapts only where the matching implementation is absent.
+The same `Pipeline` definition may run sync or async. Native implementations win and the runtime adapts only where the matching implementation is absent.
 
 | Module implements | Sync execution | Async execution |
 |---|---|---|
@@ -52,9 +52,47 @@ Execution-wide settings use a separate immutable definition operation:
 pipeline = pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(iter(pipeline))` and an `aclosing`-wrapped `anext(aiter(pipeline))`: each starts a fresh execution, reads one item, and closes the run. They add no execution mode. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects the engine exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no execution mode and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
+There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(iter(pipeline))` and an `aclosing`-wrapped `anext(aiter(pipeline))`: each starts a fresh execution, reads one item, and closes the run. They add no new way to run. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects sync or async exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no new way to run and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
 
-Pipeline immutability does not imply source replayability. One-shot iterators, lazy generators, subscriptions, and other one-shot sources preserve their native semantics; a second execution may therefore observe an already-consumed external source unless the source itself is replayable.
+**Seeds are run arguments, not definition state (direction adopted 2026-10-10; replaces the earlier
+"immutability does not imply source replayability" ruling).** A definition stores no items. Today a
+seeded `Pipeline` keeps its seed on the definition (`PipelineDefinition.source`), so a one-shot
+generator is consumed by the first `iter(pipeline)` and the second run silently yields nothing —
+execution-owned state carried on an immutable definition. In the target, a pipeline whose first node
+is a `Sources` module stays directly iterable (`list(pipeline)`, `pipeline.open()`); an *open*
+pipeline (its first node has an open input) takes its seed per run: `pipeline(items)` (positional, so
+no public parameter needs a name), `items | pipeline` as its operator spelling, and
+`pipeline.open(items)` / `pipeline.first(items)`. Each run is single-use and cannot be composed
+further (the call and `open` forms are distinguished below); composition by name/template is
+unchanged, and `SourceLike` becomes the run argument's type (`InputLike`). One-shot seeds
+(iterators, generators, subscriptions) keep their native semantics *within* a run; re-running means
+passing a fresh seed, so the definition itself is always re-runnable.
+
+Decided 2026-10-10 (lands with R4C's `Pipeline.open()`, whose signature this fixes):
+(1) iterating, opening, or calling `first` on an open pipeline with no seed **raises**
+`InvalidPipelineError` ("requires a seed") as a missing required argument (the `require_arg` rule).
+Today it does not yield `[]`: a node with no input receives the internal one-item placeholder seed
+`[{"forever": True}]`, which lets a `Sources` module fire once but leaks into the output of any other
+first module (`Pipeline.from_module("reverse")` yields `[{'forever': True}]`); the placeholder stays
+internal to source-first pipelines (strict-xfail tripwire in
+`tests/public/test_pipeline.py`). (3) `Pipeline(source=…)` is removed outright
+(`Pipeline` is unreleased, so no deprecation): R4C's DELETE of `PipelineDefinition.source` leaves no
+stored seed for it to set. (2) Call and `open` get distinct roles, mirroring `iter(f)` vs
+`with open(f)` ("call to iterate, `open` to scope"): `pipeline(items)` / `items | pipeline` is the
+seeded `iter`/`aiter` and returns a stream (sync- and async-iterable, **not** a context manager);
+`pipeline.open(items)` / `pipeline.open()` is the only scoped form and returns a `PipelineRun` context
+manager that closes the run in the opening task. Both classes are private behind public typing
+protocols in `riko.types`. Neither carries `first`/`afirst`: `pipeline.first(items)` /
+`pipeline.afirst(items)` is the one spelling (on a partly consumed run "first" would mean "next";
+inside a block, `next(stream, None)` / `await anext(stream, None)` is the documented idiom). Every
+run entry point takes the seed as its first positional argument. Mitigations: the stream's
+`__enter__`/`__aenter__` raise a `TypeError` pointing at `open()` and are marked `@deprecated`
+(typing_extensions) so pyright flags `with pipeline(items)`; a run garbage-collected unclosed emits
+a `ResourceWarning`, like an unclosed file; the README glossary, `open()` docstring, FAQ early-exit
+entry, and the COOKBOOK's async early-exit examples state the rule and use `open()`.
+Until it lands, `source=` keeps its name and shipped prose calls the value the "seed" (Reserved terms
+in `_docs/DOCUMENTATION_STANDARD.md`); gameplan examples written as `Pipeline(source=subscription)`
+(agents.md, highergov-feed.md, callable-pipes.md, § Fan-out) migrate with it.
 
 ## Execution lifetime primitives
 
@@ -64,9 +102,9 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 |---|---|---|
 | exit stack (`ExitStack` / `AsyncExitStack`) | entry/exit order of every context-managed component | resources, state-store adapters, provider/MCP sessions, write sessions, channel ends |
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
-| bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution modes | async-only components under sync execution (one persistent portal, pulled item by item), blocking sync work under async execution (a worker thread whose output is pulled on demand) |
+| bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution | async-only components under sync execution (one persistent portal, pulled item by item), blocking sync work under async execution (a worker thread whose output is pulled on demand) |
 
-The write-session lifecycle behind `write()`/`sink()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
+The write-session lifecycle behind `write()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
 
 A write session exposes three **distinct** operations, and neither R4B execution nor R5C `WriteNode` may collapse them:
 
@@ -93,6 +131,11 @@ potentially blocking sync acquisition or cleanup
     -> worker adaptation, then registered on the stack
 ```
 
+Worker adaptation must enter and exit a sync lifecycle resource on the same thread, so thread-affine
+clients such as `sqlite3` connections work under async execution. Today entry and exit may land on
+different worker threads; R11 (provider sessions) owns the fix, and a strict xfail in
+`tests/internal/test_execution_plan.py` marks it.
+
 The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *teardown* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async teardown.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
@@ -106,11 +149,11 @@ ctx2 = ctx.with_module(...)
 ctx3 = ctx2.with_resource(...)
 ```
 
-A `Pipeline` binds its environment with `pipeline.with_context(ctx)`, which stores the Context on the immutable definition (`pipeline.context`) for every run. `pipeline.with_resource(name, definition, *, credential=, lazy=)` is sugar that delegates to `Context.with_resource` on the pipeline's Context (or a default one) and derives a new pipeline, so `Context` stays the single resource binder; both carry through every chaining step, as do the `with_execution` settings.
+A `Pipeline` binds its environment with `pipeline.with_context(ctx)`, which stores the Context on the immutable definition (`pipeline.context`) for every run. `pipeline.with_resource(name, definition, *, credential=, lazy=)` is sugar that delegates to `Context.with_resource` on the pipeline's Context (or a default one) and derives a new pipeline, so `Context` stays the single resource provider; both carry through every chaining step, as do the `with_execution` settings.
 
-`with_module()` and `with_resource()` derive a child Context. A child may shadow an inherited module/resource binding; duplicate declarations within one normalization scope remain invalid. Built-ins remain static/global defaults, while Context-local module definitions may shadow them. Resource dependency names are late-bound against the effective Context during preparation, so a child resource override propagates through dependents without rebuilding those definitions.
+`with_module()` and `with_resource()` derive a child Context. A child may shadow an inherited module definition or provided resource; duplicate declarations within one normalization scope remain invalid. Built-ins remain static/global defaults, while Context-local module definitions may shadow them. Resource dependency names are late-bound against the effective Context during preparation, so a child resource override propagates through dependents without rebuilding those definitions.
 
-**Immutability is a whole-definition invariant, and current enforcement is shallow.** "Immutable" here means: derive a new Context/resource rather than mutating an existing one, so a definition already shared across executions or child Contexts never changes underfoot. That invariant is not yet fully enforced at runtime — today `context.mode`, `context.verbose`, and the `context.inputs` dict are writable in place (only `context.resources` is a read-only `mappingproxy`), and `Resource` fields (`factory`/`lazy`/`credential`/`cleanup`) can still be reassigned after the resource is stored in multiple derived Contexts. Treat any such mutation as a defect regardless of enforcement; hardening (freeze-after-construction / read-only field access) is a tracked follow-up, and no code should rely on post-construction mutation of a Context or `Resource` that has escaped its constructor. The internal derive/clone path is the sole sanctioned writer, and only before the new definition is handed out.
+**Immutability is a whole-definition invariant.** "Immutable" here means: derive a new Context/resource rather than mutating an existing one, so a definition already shared across executions or child Contexts never changes underfoot. `Context` and `Resource` reject attribute assignment (private slots included), and their built-in containers are frozen recursively at construction (`freeze` in `riko/types/_collections.py`): `inputs` and factory `args`/`kwargs` read back as tuples, `FrozenDict`s, and frozensets, while opaque leaf values such as caller-owned clients are kept by identity and are not frozen. A factory still receives plain mutable copies (`thaw`) on each call. The internal derive/clone path is the sole sanctioned writer, and only before the new definition is handed out.
 
 ### Resource definition taxonomy
 
@@ -130,11 +173,11 @@ Conceptually:
 
 ```text
 Resource[T]                   # variant carried as data, not a subclass:
-├── OneShotResource[T]        #   external (bool) / factory + kind mark the variant
+├── OneShotResource[T]        #   the `plan` record marks the variant
 └── ReusableResource[T]       # Context-storable definition
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is data on `Resource` — the `external` flag plus the `factory`/`kind`/`cleanup` fields — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type; `external` is a field. The execution layer classifies these fields once into an executable lifecycle plan (strategy `EXTERNAL`/`OWNED`/`VALUE_FACTORY`/`LIFECYCLE`) and consumes the plan, never re-inspecting the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is the record `Resource.plan` holds — `ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`, classified once by the constructor — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type, and the markers are declaration types only: calling one, or a `from_*` constructor through one, raises `TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review); `external`, `strategy`, and `async_native` derive from the plan. The execution layer consumes the plan and never re-inspects the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|
@@ -227,7 +270,7 @@ otherwise
     -> ResourceError
 ```
 
-When a value supports both context-manager and close/aclose protocols, context-manager semantics win because they can encode setup, exception-aware teardown, transactions, and suppression. If both sync and async context-manager protocols exist, the protocol matching the execution mode wins; bridging is used only when the matching native protocol is unavailable. The same native-mode preference applies to close/aclose capability fallback.
+When a value supports both context-manager and close/aclose protocols, context-manager semantics win because they can encode setup, exception-aware teardown, transactions, and suppression. If both sync and async context-manager protocols exist, the protocol matching sync or async execution wins; bridging is used only when the matching native protocol is unavailable. The same native-mode preference applies to close/aclose capability fallback.
 
 Closeability is a runtime capability, not a bound on `T`. Internal structural protocols may be modeled permissively because Riko ignores their return values:
 
@@ -311,10 +354,10 @@ Missing resource bindings fail compilation/preparation before resources are open
 
 ## Feed results, metadata, and per-item provenance
 
-The existing async stream type remains:
+The existing sync-or-async item type remains:
 
 ```python
-type Feed = AsyncIterable[Item]
+type Feed = Items | AsyncItems
 ```
 
 Rich parser/source results use one immutable envelope:
@@ -781,7 +824,7 @@ An explicit loop `id=` stabilizes the stateful owner's logical identity when str
 
 ## 5. Execution characteristics
 
-> **Current gap:** the present `Opts` surface does not yet contain the complete planned execution metadata below. These declarations describe semantic planning characteristics; they do not replace the concrete execution settings configured with `with_execution()`.
+> **Current gap:** the present `DecorationOptions` surface does not yet contain the complete planned execution metadata below. These declarations describe semantic planning characteristics; they do not replace the concrete execution settings configured with `with_execution()`.
 
 ### 5.1 Boundedness
 
@@ -841,6 +884,8 @@ Bound concurrency rather than spawning work proportional to source size. Backpre
 
 `with_execution(concurrency=N)` is a per-execution ceiling, not a per-node allowance: the eligible nodes of one execution share at most `N` concurrent workers, so total parallelism never scales with graph size. A permit is held only while a callable runs and is released before any channel send or reorder-buffer wait, so a blocked producer can never starve the consumer that would unblock it. How the ceiling is apportioned across stages is a planner decision that defaults to one shared pool; per-stage allocation may arrive with the planner but never as a node-level concurrency knob. The per-call budget in the current async primitives is an implementation detail the execution layer wraps, not the contract.
 
+Open decision (triaged 2026-10-16): plan reuse across runs. `riko/runtime/_run.py` builds a fresh `ExecutionPlan` (`from_workflow`) on every `iter`/`aiter`, so module resolution and each node's prepared call are redone per run; on a two-module pipeline that is about 98% of a small run's fixed cost. Caching the plan per `Pipeline` removes it, but a registry `register`/`reset` must then invalidate the cached plan (a generation counter on the dispatcher is the likely shape). Decide alongside the per-run seed and `Pipeline.open()` work, which reshapes the same entry points.
+
 ### 6.2 Ordering
 
 ```python
@@ -861,6 +906,8 @@ The current `async_map()` documentation/implementation discrepancy must be corre
 
 Ordered concurrent execution uses a bounded reorder buffer. When the buffer fills, producers/workers pause until missing earlier positions permit progress. Ordering is never silently relaxed.
 
+**Open gap (R7, 2026-10-20).** The sync pool (`_map_ordered` in `riko/execution/_pools.py`) already slides its window, but async `async_map_ordered_stream` still maps fixed `limit + buffer` batches: one slow item holds back every result in its batch and stops new work from starting. A sliding window needs worker tasks alive across a `yield`. On the default async processor path (`_aprocess_stream`) those tasks would sit in the consumer's task, which the abandoned-iteration constraint in §6.5 forbids. An attempt over `_pool_stream` broke a bare `break`, `afirst`, and plain-exception propagation. So the port waits for R7's dedicated-task hosting. Tripwire: `tests/internal/test_io.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
+
 ### 6.4 Cancellation
 
 Final async execution uses structured concurrency:
@@ -877,7 +924,7 @@ A future explicit cancellation policy may distinguish draining from cancelling p
 
 When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
 
-**Open: abandoned async iteration (2026-10-04).** Consumer abandonment is only safe when the consumer closes the iterator (`contextlib.aclosing`, `aclose()`) or exhausts it. A bare `break` out of `async for item in pipeline` leaves `Pipeline.__aiter__`'s async generator suspended inside the run's task group, which was entered in the consumer's task. Garbage collection later closes the generator from a different task: shutdown cancels the task group's scope, the consumer task receives that cancellation, and its next cancel-scope exit raises `RuntimeError` (the PEP 789 async-generator/structured-concurrency conflict). No diagnostic can repair this, because the scope stays entered in the caller's task across every `yield`. The only structural fix — hosting each async run in a dedicated task — conflicts with the R4B ruling against new task groups/background producers (implementation-sequence § 5; § 1128 here), so the shipped contract (FAQ, README) requires closing an abandoned async iterator. `afirst()` closes its run before returning. The supported early-exit spelling is `async with pipeline.open() as stream` (see "Canonical definition and execution model" above; until it lands, `contextlib.aclosing(aiter(pipeline))`); it makes early exit safe for consumers who use it but cannot make a bare `async for … break` safe. Strict-xfail tripwire: `tests/public/test_async_pipe_lifecycle.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. Owner undecided; revisit if a run-hosting design that respects the task-group ruling emerges.
+**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C; until then `contextlib.aclosing(aiter(pipeline))`) remains the prompt-release spelling. Regression: `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
 
 Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
 
@@ -1129,12 +1176,12 @@ Structured concurrency is the final contract, not a preference: every branch, su
 
 Sync execution uses one persistent portal when bridging async-only components: the async stream is pulled one `__anext__` at a time on the portal loop and re-exposed as a lazy sync iterator. Async execution runs unknown sync extension work on workers unless explicitly inline-safe: the sync component runs on a worker thread, reads its async inputs lazily from there, and its output is pulled one item per `__anext__` as the consumer asks for it. Both directions are demand-driven — no background producer task, no channel, and no unbounded queue — so an error surfaces only after every item already produced has been delivered, and abandoning the stream closes the producer. The runtime must never spin up an async runtime per item.
 
-A cross-mode loop `embed` is adapted at execution time, against the host pipe's actual mode, into a host-mode wrapper that preserves the embed's discovery metadata (`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and subpipe detection treat the adapter as a native embed rather than seeing through it.
+A loop `embed` that exists only on the other side (sync or async) is adapted at execution time, to match whether the host pipe actually runs sync or async, into a wrapper that preserves the embed's discovery metadata (`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and subpipe detection treat the adapter as a native embed rather than seeing through it.
 
 ### Non-goals
 
 - Do not expose AnyIO/Asyncer types publicly.
-- Do not force the cheap native sync path through an async engine.
+- Do not force the cheap native sync path through async execution.
 - Do not infer blocking behavior from arbitrary source inspection.
 - Do not use unbounded queues to mask backpressure.
 - Do not treat shared DAG ancestry as implicit fan-out.

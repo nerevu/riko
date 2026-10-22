@@ -11,7 +11,7 @@ implementation-accessible but carry no compatibility guarantee.
 
 The examples in this document mirror the declarations in
 `riko.base._api_surface`. They are illustrative; the enforced public-boundary
-coverage lives in `tests/public/test_imports.py`.
+coverage lives in `tests/public/test_modules.py`.
 
 ## Contract declarations
 
@@ -29,23 +29,23 @@ Application code should import stable APIs from `riko`.
 
 Breaking changes to this surface follow riko's normal SemVer policy.
 
-**Collections** — pipe/collection runtime and export helpers
-(`riko.runtime.collections`):
+**Export** — serialization formats and export helpers
+(`riko.runtime._export`):
 
-<!-- api-surface:collections -->
+<!-- api-surface:export -->
 ```python
->>> sorted(COLLECTIONS)
+>>> sorted(EXPORT)
 ['Formats', 'export', 'list_formats']
 ```
-<!-- /api-surface:collections -->
+<!-- /api-surface:export -->
 
 **Compilation** — `PipeDag`/`Workflow` compilation entry points implemented in
-`riko.runtime._codegen` (`compile_workflow`) and `riko.runtime._migrate` (`parse_dag`):
+`riko.runtime._compile` (`compile_workflow`):
 
 <!-- api-surface:compile -->
 ```python
 >>> sorted(COMPILE)
-['compile_workflow', 'parse_dag']
+['compile_workflow']
 ```
 <!-- /api-surface:compile -->
 
@@ -55,7 +55,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:bado -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 ```
 <!-- /api-surface:bado -->
 
@@ -78,16 +78,16 @@ the `IO_` contract group.
 <!-- api-surface:root-exceptions -->
 ```python
 >>> sorted(ROOT_EXCEPTIONS)
-['EmptyPipelineError', 'InvalidPipelineError', 'PipelineError', 'PipelineStateError', 'RikoError', 'UnsupportedModuleError', 'UnsupportedPipelineError']
+['EmptyPipelineError', 'InvalidPipelineError', 'PipelineError', 'PipelineStateError', 'RikoError', 'UnsupportedModuleError', 'UnsupportedWorkflowError']
 ```
 <!-- /api-surface:root-exceptions -->
 
-**Other** — execution context and filesystem-path helpers:
+**Other** — `Context`, workflow, pipeline, and filesystem-path helpers:
 
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Backends', 'Context', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'Pipeline', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'OneShotResource', 'Pipeline', 'Resource', 'ReusableResource', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -95,7 +95,7 @@ The complete stable surface is the union of these groups:
 
 <!-- api-surface:stable-union -->
 ```python
->>> STABLE == BADO | IO_ | COLLECTIONS | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
+>>> STABLE == BADO | IO_ | EXPORT | COMPILE | MODULES | OTHER | ROOT_EXCEPTIONS
 True
 ```
 <!-- /api-surface:stable-union -->
@@ -110,7 +110,7 @@ helpers. File/URL transport helpers live in the separate `riko.io` package.
 <!-- api-surface:bado-namespace -->
 ```python
 >>> sorted(BADO)
-['as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```
@@ -135,7 +135,7 @@ and extension authors.
 <!-- api-surface:types -->
 ```python
 >>> sorted(TYPES)
-['AsyncItems', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'Feed', 'Item', 'Items', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'Stream', 'SyncPipeTuples']
+['AsyncItems', 'AsyncLifecyclePlan', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'ExternalPlan', 'Feed', 'Item', 'Items', 'LifecyclePlan', 'OwnedPlan', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'ResourcePlan', 'ResourceStrategy', 'Stream', 'SyncLifecyclePlan', 'SyncPipeTuples', 'ValueFactoryPlan']
 ```
 <!-- /api-surface:types -->
 
@@ -149,9 +149,60 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'parse_document', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'serialize_workflow', 'splitter']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'Dispatcher', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'reset_module_registry', 'reset_target_registry', 'reset_workflow_resolver', 'splitter']
 ```
 <!-- /api-surface:extension -->
+
+The names are grouped by extension point. Each submodule's `__all__` is one set,
+and `riko.ext` re-exports all three.
+
+`riko.ext.modules` covers module authoring: decorators, definitions, registration,
+metadata, naming, and configuration helpers.
+
+<!-- api-surface:ext-modules -->
+```python
+>>> sorted(EXT_MODULES)
+['AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'DynamicConf', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'get_conf_type', 'get_module_category', 'normalize_module_name', 'operator', 'processor', 'register_module', 'reset_module_registry', 'splitter']
+```
+<!-- /api-surface:ext-modules -->
+
+`riko.ext.targets` covers write targets: target protocols, the built-in file
+target, write capabilities, and target registration.
+
+<!-- api-surface:ext-targets -->
+```python
+>>> sorted(EXT_TARGETS)
+['FileTarget', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'Target', 'TargetRegistry', 'WriteCapabilities', 'register_target', 'reset_target_registry']
+```
+<!-- /api-surface:ext-targets -->
+
+`riko.ext.workflows` covers workflow graphs and stored workflows: node and edge
+classes, normalization and migration, stored-workflow registration, and the
+dispatcher protocol.
+
+<!-- api-surface:ext-workflows -->
+```python
+>>> sorted(EXT_WORKFLOWS)
+['ActionNode', 'CacheNode', 'Dispatcher', 'ModuleNode', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'WriteNode', 'migrate_v1_to_v2', 'normalize_workflow', 'register_workflow_store', 'reset_workflow_resolver']
+```
+<!-- /api-surface:ext-workflows -->
+
+<!-- api-surface:extension-union -->
+```python
+>>> EXTENSION == EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
+True
+```
+<!-- /api-surface:extension-union -->
+
+`riko.ext.codegen` generates typed discovery names for an extension package. It is
+part of the extension contract but is not re-exported from `riko.ext`.
+
+<!-- api-surface:ext-codegen -->
+```python
+>>> sorted(EXT_CODEGEN)
+['NameEntry', 'enum_member_name', 'gen_catalog_entries', 'generate_module_ids', 'generate_module_names']
+```
+<!-- /api-surface:ext-codegen -->
 
 The stable application and extension surfaces are separate contracts:
 
@@ -169,7 +220,7 @@ re-exported through one of the supported namespaces above.
 
 Private implementation paths carry no independent compatibility guarantee. For
 example, compiler/resolution implementations live under private paths such as
-`riko.runtime._codegen` and `riko.runtime._resolver`; callers should use the stable
+`riko.runtime._compile` and `riko.runtime._resolver`; callers should use the stable
 or extension facade appropriate to the operation rather than treating those paths
 as new APIs.
 
@@ -181,7 +232,7 @@ them. These are re-exports of the same objects, not separate implementations.
 For example:
 
 ```python
->>> riko.Context is riko.execution.context.Context
+>>> riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
 True
 ```
 
@@ -191,7 +242,7 @@ True
 `__all__` describes what the implementation exports.
 
 This document illustrates the key relationships between those declarations.
-`tests/public/test_imports.py` provides the complete black-box coverage for
+`tests/public/test_modules.py` provides the complete black-box coverage for
 importability, private-name leakage, duplicate exports, compatibility aliases, and
 other public-boundary invariants. `manage lint imports --canonical` independently
 checks internal code for imports through re-export facades rather than canonical

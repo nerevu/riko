@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
 
 """
@@ -26,8 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
+from riko.base._logging import get_logger
 from riko.coercion.cast import cast_datetime
 from riko.types._enums import BasicCastType
 from riko.types._scalars import DateLikeType
@@ -39,11 +38,11 @@ if TYPE_CHECKING:
     from time import struct_time
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
 
-OPTS: Opts = {"ptype": BasicCastType.NONE, "field": "content"}
+OPTS: DecorationOptions = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 
 
 def parser(
@@ -56,7 +55,7 @@ def parser(
 
         text: The text to convert.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration. Unused.
+        objconf: The module configuration. Unused.
 
     Returns:
 
@@ -64,7 +63,7 @@ def parser(
 
     Raises:
 
-        ValueError: If ``text`` names no date the pipe recognizes.
+        ValueError: If ``text`` names no date the module recognizes.
 
     Examples:
 
@@ -79,7 +78,7 @@ def parser(
         new_date = None
 
     if new_date is None:
-        raise ValueError(f"the 'datebuilder' pipe got an unrecognized date {text!r}")
+        raise ValueError(f"the 'datebuilder' module got an unrecognized date {text!r}")
 
     return new_date.timetuple()
 
@@ -95,11 +94,11 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to convert (default: "content").
+        field (str): Item field to convert (default: "content").
 
         assign (str): Field the date is assigned to. Ignored when ``emit`` is
             True (default: "datebuilder").
@@ -116,7 +115,7 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
 
     Raises:
 
-        ValueError: If the field names no date the pipe recognizes.
+        ValueError: If the field names no date the module recognizes.
 
     Notes:
 
@@ -154,11 +153,11 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
     Args:
 
         item (Item | Items): The entry, or stream of entries, to process.
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
-        field (str): Item attribute to convert (default: "content").
+        field (str): Item field to convert (default: "content").
 
         assign (str): Field the date is assigned to. Ignored when ``emit`` is
             True (default: "datebuilder").
@@ -175,7 +174,7 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
 
     Raises:
 
-        ValueError: If the field names no date the pipe recognizes.
+        ValueError: If the field names no date the module recognizes.
 
     Notes:
 
@@ -201,7 +200,7 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
         >>> next(pipe({"content": "bogus"}))
         Traceback (most recent call last):
             ...
-        ValueError: the 'datebuilder' pipe got an unrecognized date 'bogus'
+        ValueError: the 'datebuilder' module got an unrecognized date 'bogus'
 
     """
     return parser(*args, **kwargs)

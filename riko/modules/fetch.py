@@ -17,7 +17,7 @@ Examples:
 
 Attributes:
 
-    OPTS: Processor wrapper options.
+    OPTS: Processor decoration options.
     DEFAULTS: Default processor configuration.
     keys: Entry fields every parsed feed provides.
 
@@ -27,29 +27,27 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pygogo as gogo
-
 from riko.base._constants import ENCODING
+from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
-from riko.rss.entries import augment_entries
-from riko.rss.parsing import parse_rss
+from riko.rss.feeds import augment_entries, parse_rss
 
 from ._decorators import processor
-from ._prepare import require_conf
+from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from logging import Logger
 
     from riko.coercion._configs import FetchObjconf
-    from riko.types._options import Defaults, Opts
+    from riko.types._options import DecorationOptions, Defaults
     from riko.types._rss import RSSEntry
     from riko.types._streams import Item
 
-OPTS: Opts = SourceOpts
+OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger: Logger = gogo.Gogo(__name__, monolog=True).logger
+logger: Logger = get_logger(__name__)
 keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "title"}
 
 
@@ -65,7 +63,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -89,7 +87,7 @@ async def async_parser(
         Donations
 
     """
-    url: str = require_conf(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch")
     content: str = await async_url_read(url, encoding=objconf.encoding)
     return augment_entries(parse_rss(content=content))
 
@@ -106,7 +104,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The pipe configuration, containing `url`.
+        objconf: The module configuration, containing `url`.
 
     Returns:
 
@@ -127,7 +125,7 @@ def parser(
         'Donations'
 
     """
-    url: str = require_conf(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch")
     entries = parse_rss(url, encoding=objconf.encoding)
     return augment_entries(entries)
 
@@ -135,18 +133,18 @@ def parser(
 @processor(DEFAULTS, isasync=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    Asynchronously fetches an RSS feed and yields one feed entries.
+    Asynchronously fetches an RSS feed and yields its entries.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 
@@ -169,7 +167,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
     Notes:
 
-        ``memoize`` is ignored on this path.
+        ``memoize`` is ignored by the async pipe.
 
     Examples:
 
@@ -191,20 +189,20 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 @processor(DEFAULTS, **OPTS)
 def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
-    Fetches an RSS feed and yields one feed entries.
+    Fetches an RSS feed and yields its entries.
 
     Args:
 
         item (Item | Items): The entry, or stream of entries. Unused.
 
-        conf (dict): The pipe configuration.
+        conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
             memoize (bool): Whether to cache the fetched feed (default:
                 False).
 
-        context (Context): the execution context
+        context (Context): the run environment
 
     Kwargs:
 

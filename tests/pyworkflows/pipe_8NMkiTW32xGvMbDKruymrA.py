@@ -10,19 +10,22 @@ from riko.modules.fetch import pipe as fetch
 from riko.modules.filter import pipe as _filter
 from riko.modules.sort import pipe as sort
 from riko.modules.union import pipe as union
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
+from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf, FilterRawConf, SortRawConf
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
-def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = []
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["fetch", "filter", "sort"]
-    else:
+INPUTS = []
+DEPENDENCIES = ["fetch", "filter", "sort"]
+
+
+@workflow(subtype="source")
+def pipe(item: Item | None = None, context: Context | None = None, **_):
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_35_1 = fetch(
             None,
             conf=FetchRawConf(
@@ -149,11 +152,14 @@ def pipe(item=None, context: Context | None = None, **_):
             context=context,
         )
         _OUTPUT = sw_105
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="source")
 
 
 if __name__ == "__main__":

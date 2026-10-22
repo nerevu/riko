@@ -37,12 +37,12 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
-| `async_partial` | `_util.py` | **Remove** | very high | Only appears in bado's export machinery (`riko/bado/__init__.py`), no production caller; it's just `partial(maybe_deferred, f, **kwargs)`. |
+| `async_partial` | `_util.py` | **Remove** | very high | Only appears in bado's export machinery (`riko/bado/__init__.py`), no production caller; it's just `partial(maybe_async, f, **kwargs)`. |
 | `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
-| `maybe_deferred` | `_util.py` | **Rename → `maybe_await`/`invoke`** | medium-high | Semantics are useful (one API over sync+async callbacks; used by module/decorator machinery) but `deferred` is dead Twisted vocabulary (Twisted gone since v0.72). Rename the private primitive; keep behavior. |
-| `async_return` | `_util.py` | **Deprecation candidate** | medium | **In the stable public `__all__`** (`riko/api.py` + `riko/__init__.py`) → SemVer-guaranteed. `async def f(): return value` already does this. Next-major deprecation, not a patch; keep a private `_async_identity` if internally needed. |
+| `maybe_deferred` | `_util.py` | **Renamed → `maybe_async`** (done 2026-10-10) | medium-high | Semantics are useful (one API over sync+async callbacks; used by module/decorator machinery) but `deferred` is dead Twisted vocabulary (Twisted gone since v0.72). Rename the private primitive; keep behavior. |
+| `async_return` | `_util.py` | **Deprecation candidate** | medium | **In the stable public `__all__`** (`riko/__init__.py`) → SemVer-guaranteed. `async def f(): return value` already does this. Next-major deprecation, not a patch; keep a private `_async_identity` if internally needed. |
 | `coop_reduce` | `itertools.py` | **Keep** | low | Distinct semantics: sync reducer + explicit `await checkpoint()` between iterations. Real consumers (`rename`, `regex`, `refind`, `strfind`, `strreplace`, `strtransform`). AnyIO `reduce` wants an awaitable reducer — not a drop-in. |
 | `async_iter` | `itertools.py` | **Reduce usage, keep** | low | AnyIO itertools increasingly take sync iterables, cutting adapter need — but Riko's `cooperative=True` (scheduler checkpoints) is a real feature. Shift the model from "convert every sync iterable" to "adapt only when an API needs `AsyncIterable` or cooperative iteration." |
 | `async_map`, `async_map_stream`, `async_map_ordered_stream`, `async_merge`, `_pool_stream` | `itertools.py` | **Keep** | — | Encode Riko's concurrency/ordering/shared-budget/streaming/backpressure semantics on top of AnyIO primitives (`create_memory_object_stream`, `create_task_group`) — the layering AnyIO itself recommends, not a reinvention. |
@@ -56,7 +56,7 @@ missing — one a sync/async parity gap, one absent from both paths.
 
 | Gap | Sync today | Async today | Priority |
 |---|---|---|---|
-| **`async_memoize`** | `_io.get_opener(memoize=True)` wraps the opener in `mezmorize.memoize`; reachable via `Fetch(url, memoize=...)` and the `memoize` conf key | `bado/io.async_url_read`/`async_url_open` take no `memoize`; the key is accepted and dropped | high |
+| **`async_memoize`** | `_io.build_opener(memoize=True)` wraps the opener in `mezmorize.memoize`; reachable via `Fetch(url, memoize=...)` and the `memoize` conf key | `bado/io.async_url_read`/`async_url_open` take no `memoize`; the key is accepted and dropped | high |
 | **`throttle`** | not implemented | not implemented (the removed `delay` was a pre-fetch sleep, not throttling) | medium |
 
 ### `async_memoize`
@@ -68,7 +68,7 @@ same url pays full cost every time, with no warning.
 Design notes:
 
 * The cache belongs at the **fetch** boundary (`async_url_read`/`async_url_open`), not in each
-  module, so every async source inherits it the way sync sources inherit `get_opener`'s.
+  module, so every async source inherits it the way sync sources inherit `build_opener`'s.
 * `mezmorize` is sync-only and is already slated for replacement — see
   [rdp-connect.md](rdp-connect.md) § Milestone 10. **Do these together**: whatever replaces
   `mezmorize` should be async-aware from the start rather than growing a second, divergent cache.
@@ -77,7 +77,7 @@ Design notes:
   documents the `_UNSUPPORTED` sentinel behavior.
 * Needs an eviction/TTL story that sync memoization currently ducks — a long-lived async service
   is the likely consumer, unlike a one-shot sync script.
-* Separate the cache TTL from the network timeout. `get_opener` forwards the same `**kwargs` to
+* Separate the cache TTL from the network timeout. `build_opener` forwards the same `**kwargs` to
   the opener and to `mezmorize.memoize(**kwargs)`, so one `timeout` sets both the `urlopen`
   timeout and the cache entry lifetime (`riko/io/_sync.py` `Fetch.__init__` TODO).
 
@@ -129,7 +129,9 @@ Notes:
   `r.encoding or encoding` has it backwards and should move to the same helper.
 * One helper (`resolve_encoding(explicit, charset)`) shared by `async_url_open`,
   `async_url_read`, and `_io.opener` — the divergence is a missing argument, not a
-  different algorithm, so a second copy would drift again.
+  different algorithm, so a second copy would drift again. It replaces
+  `riko/io/_sync.py::get_response_encoding` (declared charset, else `def_encoding`), which
+  keeps its off-table `get_` name until then rather than being renamed twice.
 * `fetchpage` (and any other async source that reads `objconf.encoding`) has to forward
   it; grep for `async_url_read(` / `async_url_open(` call sites when this lands.
 * Do this **with** `async_memoize` (§ 2b): encoding is part of the cache key, so both
@@ -140,14 +142,14 @@ Notes:
   UTF-16 document raises `UnicodeDecodeError` in both modes; reading those formats as bytes
   lets the parser honor the declaration. That needs an explicit `encoding` to be
   distinguishable from the `ENCODING` default first (the `Defaults` merge erases the
-  difference today). Tripwire: `tests/public/test_fetchdata.py::TestLocalDocuments::
+  difference today). Tripwire: `tests/public/test_modules.py::TestLocalDocuments::
   test_declared_encoding_is_honored`.
 * Line-ending translation is part of decode parity. `async_url_open` decodes through
   `TextIOWrapper` with universal newlines (`\r` and `\r\n` become `\n`); the sync
   `Reencoder` translates only when the source contains no `\n` at all, so `b"abc\rdef\n"`
   reads `'abc\ndef\n'` async and `'abc\rdef\n'` sync. Pick one policy (translate
   everywhere, or `newline=""` everywhere) in the same shared decode helper. Tripwire:
-  `tests/internal/test_io.py::test_sync_and_async_decode_line_endings_alike`.
+  `tests/internal/test_io.py::TestAsyncUrlOpen::test_sync_and_async_decode_line_endings_alike`.
 
 ## 3. The replacement decision rule
 
@@ -177,7 +179,7 @@ Audited while removing `delay`; **fix these before trusting any sync-vs-async nu
 |---|---|---|
 | Pure sleep | `baseline*`, pool variants, `baseline_async` | Fine — they call `sleep`/`async_sleep` directly over `iterable`. |
 | Collections | `sync_workflow`, `async_workflow` | **Real work, no latency.** One Workflow v2 graph fans a fetch of every feed into a single `union` node and runs it through the v2 execution. The old `sync_collection`/`par_sync_collection`/`async_collection` rows and their dead `sleep=` kwarg are gone; there is no parallel variant because the execution has no concurrency option yet. |
-| Fetch | `sync_pipeline`, `sync_pipe`, `async_pipeline`, `async_pipe` | **Was asymmetric.** `delay` was honored only by `async_url_read`; the sync path never forwarded it (`parse_rss(url, encoding=...)`) and `_io.opener`'s delay was a `logger.debug` stub. Async paid ~0.1 s × 13 feeds that sync did not, so the comparison measured the handicap. `sync_pipe`/`async_pipe` are now one `Pipeline` run per feed; unlike the old `async_pipe2`, which only constructed a pipe, `async_pipe` really executes the fetch. |
+| Fetch | `sync_module`, `sync_pipeline`, `async_module`, `async_pipeline` | **Was asymmetric.** `delay` was honored only by `async_url_read`; the sync path never forwarded it (`parse_rss(url, encoding=...)`) and `_io.opener`'s delay was a `logger.debug` stub. Async paid ~0.1 s × 13 feeds that sync did not, so the comparison measured the handicap. `sync_pipe`/`async_pipe` are now one `Pipeline` run per feed; unlike the old `async_pipe2`, which only constructed a pipe, `async_pipe` really executes the fetch. |
 
 `delay` is now removed, so the fetch group is at least consistent — but it simulates no latency at
 all, and local-file parsing gives async concurrency nothing to win against. Restoring that signal
@@ -222,7 +224,9 @@ time."
 2. **Delete or rewrite `gather_results`** via AnyIO 4.14 task handles (fixes the `None`-dropping bug regardless).
 3. **Delete `async_json`;** use `response.json()` directly.
 4. **Audit `async_reduce` callers** (`sort`, `regex`); delegate to `anyio.functools.reduce` if the strict async-reducer contract suffices.
-5. **Rename `maybe_deferred` → `maybe_await`/`invoke`** (private; touches decorator machinery).
+5. ~~Rename `maybe_deferred` → `maybe_await`/`invoke`~~ **Done 2026-10-10 as `maybe_async`** (after
+   discord.py's `maybe_coroutine`; "coroutine" is reserved in riko). No `a` prefix: it has no sync
+   twin. `as_awaitable` (the value-taking form) keeps its name.
 6. **Mark `async_return`** a next-major deprecation candidate (stable public API).
 7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless profiling shows a real problem.
 8. **Repair the benchmark harness** (§4) — the missing latency fixture — before using it to

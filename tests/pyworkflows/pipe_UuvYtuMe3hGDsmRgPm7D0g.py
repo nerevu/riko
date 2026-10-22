@@ -12,7 +12,8 @@ from riko.modules.input import pipe as _input
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._workflows import mark_subpipe
+from riko.runtime._workflow_pipes import workflow
+from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     CsvRawConf,
     FilterRawConf,
@@ -23,14 +24,16 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from riko import Context
+    from riko.types import Item
 
 
-def pipe(item=None, context: Context | None = None, **_):
-    if context and context.describe_input:
-        _OUTPUT = [("", "name", "Name", "text", "Lancaster")]
-    elif context and context.describe_dependencies:
-        _OUTPUT = ["csv", "filter", "input", "loop", "rename"]
-    else:
+INPUTS = [("", "name", "Name", "text", "Lancaster")]
+DEPENDENCIES = ["csv", "filter", "input", "loop", "rename"]
+
+
+@workflow(subtype="transformer")
+def pipe(item: Item | None = None, context: Context | None = None, **_):
+    if context is None or context.mode is ExecutionMode.RUN:
         sw_371 = _input(
             item,
             conf=InputRawConf(
@@ -185,11 +188,14 @@ def pipe(item=None, context: Context | None = None, **_):
             embed=strconcat,
         )
         _OUTPUT = sw_573
+    elif context.mode is ExecutionMode.DESCRIBE:
+        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+    elif context.describe_input:
+        _OUTPUT = INPUTS
+    else:
+        _OUTPUT = DEPENDENCIES
 
     return _OUTPUT
-
-
-mark_subpipe(pipe, subtype="transformer")
 
 
 if __name__ == "__main__":

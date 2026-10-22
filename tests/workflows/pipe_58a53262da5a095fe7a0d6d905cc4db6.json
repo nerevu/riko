@@ -1,6 +1,7 @@
 {
     "edges": [
         {
+            "family": "stream",
             "source": {
                 "node": "sw-550-union",
                 "port": "out"
@@ -8,10 +9,10 @@
             "target": {
                 "node": "sw-580",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-565",
                 "port": "out"
@@ -19,10 +20,10 @@
             "target": {
                 "node": "sw-596",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-572",
                 "port": "out"
@@ -30,10 +31,10 @@
             "target": {
                 "node": "sw-580",
                 "port": "in:1"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-580",
                 "port": "out"
@@ -41,10 +42,10 @@
             "target": {
                 "node": "sw-565",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-596",
                 "port": "out"
@@ -52,10 +53,10 @@
             "target": {
                 "node": "sw-625",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-606",
                 "port": "out"
@@ -63,10 +64,10 @@
             "target": {
                 "node": "sw-572",
                 "port": "in:_1_URL"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-550-1",
                 "port": "out"
@@ -74,10 +75,10 @@
             "target": {
                 "node": "sw-550-union",
                 "port": "in"
-            },
-            "type": "stream"
+            }
         },
         {
+            "family": "stream",
             "source": {
                 "node": "sw-550-2",
                 "port": "out"
@@ -85,8 +86,7 @@
             "target": {
                 "node": "sw-550-union",
                 "port": "in:1"
-            },
-            "type": "stream"
+            }
         }
     ],
     "nodes": {
@@ -97,9 +97,9 @@
                     "value": "file://riko/data/blog.ouseful.info_feed.xml"
                 }
             },
+            "family": "module",
             "id": "sw-550-1",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-550-2": {
             "conf": {
@@ -108,14 +108,14 @@
                     "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml"
                 }
             },
+            "family": "module",
             "id": "sw-550-2",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-550-union": {
+            "family": "module",
             "id": "sw-550-union",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-565": {
             "conf": {
@@ -132,9 +132,9 @@
                     }
                 ]
             },
+            "family": "module",
             "id": "sw-565",
-            "name": "sort",
-            "type": "module"
+            "name": "sort"
         },
         "sw-572": {
             "conf": {
@@ -143,14 +143,14 @@
                     "type": "url"
                 }
             },
+            "family": "module",
             "id": "sw-572",
-            "name": "fetch",
-            "type": "module"
+            "name": "fetch"
         },
         "sw-580": {
+            "family": "module",
             "id": "sw-580",
-            "name": "union",
-            "type": "module"
+            "name": "union"
         },
         "sw-596": {
             "conf": {
@@ -159,9 +159,9 @@
                     "value": "3"
                 }
             },
+            "family": "module",
             "id": "sw-596",
-            "name": "truncate",
-            "type": "module"
+            "name": "truncate"
         },
         "sw-606": {
             "conf": {
@@ -186,14 +186,14 @@
                     "value": ""
                 }
             },
+            "family": "module",
             "id": "sw-606",
-            "name": "urlbuilder",
-            "type": "module"
+            "name": "urlbuilder"
         },
         "sw-625": {
+            "family": "module",
             "id": "sw-625",
-            "name": "reverse",
-            "type": "module"
+            "name": "reverse"
         }
     },
     "outputs": {
