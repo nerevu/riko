@@ -31,8 +31,9 @@ each phase is one response:
 
 ## 0. Tidy (one subagent)
 
-Launch one fresh `general-purpose` agent (not a fork — it needs only the diff,
-not this session's context) with: "Follow
+Launch one fresh `general-purpose` agent with `model: "opus"` (not a fork — it
+needs only the diff, not this session's context; pin the model so it never
+inherits a Fable session's) with: "Follow
 `.claude/skills/tidy/SKILL.md` in the repo at the current working directory. You
 cannot ask the user: apply mechanical fixes, and return phase-owned findings
 and framed judgment questions instead of deciding them." Wait for its report

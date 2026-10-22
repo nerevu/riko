@@ -47,7 +47,8 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
-   subagent given the skill text, never as an in-loop grep pass (it skips
+   subagent (`model: "opus"`, so it never inherits a Fable session's model)
+   given the skill text, never as an in-loop grep pass (it skips
    itself when its marker says the tree is already tidy). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
