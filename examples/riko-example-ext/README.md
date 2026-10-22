@@ -52,4 +52,4 @@ When you don't need a discoverable, installable extension package, skip the entr
 point and call `riko.ext.register_module` directly:
 
 - [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=` callables.
-- [`../register_alias.py`](../register_alias.py): the `module=` convention.
+- [`../register_alias.py`](../register_alias.py): aliasing a built-in with `ModuleDefinition.from_module`.

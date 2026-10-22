@@ -112,7 +112,10 @@ undecorated callables (documented, and run by both executions), but its slots an
 Readers cope with `getattr` defaults, and `gen_registry_catalog` skips such definitions by catching
 `AttributeError`. The module contract decides one of: normalize plain callables at the definition
 boundary (stamping declared metadata), reject them, or type the slots honestly. Do not stamp
-metadata or widen the slot types ahead of that decision.
+metadata or widen the slot types ahead of that decision. Since 2026-10-21
+`ModuleDefinition.from_module(module, *, name, description)` (which replaced the `module=` kwarg) reads
+a module's callables, name, and docstring summary once into a plain keyword-only record; it is the
+definition-boundary normalization point this decision would extend.
 
 ## E2. Plugin ecosystem v1
 

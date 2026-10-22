@@ -51,12 +51,12 @@ if TYPE_CHECKING:
     )
 
 
-def _resolve_definition(obj: object) -> ModuleDefinition | None:
+def _resolve_definition(obj: object, name: str) -> ModuleDefinition | None:
     """Passes a ``ModuleDefinition`` through, and wraps a bare pipe-exposing module."""
     if isinstance(obj, ModuleDefinition):
         definition = obj
     elif hasattr(obj, "pipe") or hasattr(obj, "async_pipe"):
-        definition = ModuleDefinition(module=obj)
+        definition = ModuleDefinition.from_module(obj, name=name)
     else:
         definition = None
 
@@ -102,7 +102,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     def _load(self, ep: EntryPoint) -> ModuleDefinition:
         loaded = ep.load()
         obj = loaded() if callable(loaded) else loaded
-        definition = _resolve_definition(obj)
+        definition = _resolve_definition(obj, ep.name)
 
         if definition is None:
             raise TypeError(

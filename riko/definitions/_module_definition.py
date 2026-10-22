@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from attrs import Factory, define, field
+from attrs import define, field
 
 from riko.base._strutils import get_doc_summary
 from riko.types._enums import ModuleName, ModuleNameLike
@@ -31,40 +31,28 @@ if TYPE_CHECKING:
         SyncModuleWrapper,
     )
 
-
 _UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
-_description = Factory(lambda self: get_doc_summary(self.module), takes_self=True)
 
 
-@define(frozen=True, slots=True)
+@define(frozen=True, slots=True, kw_only=True)
 class ModuleDefinition:
     """
     Defines a named module and its sync/async pipe callables.
 
-    Callables may be given directly, or read off ``module`` on demand. This lets an
-    extension point at a module exposing ``pipe``/``async_pipe`` by the same convention
-    as a built-in.
-
-    An entry point may skip this object entirely and name the module itself. The
-    registry then synthesizes a definition by reading the interface callables
-    off the module and its ``description`` from the module docstring summary.
+    Callables are either passed directly, or read from a module exposing ``pipe``/
+    ``async_pipe`` with ``from_module`` (the same convention a built-in follows).
+    The definition is a snapshot: changes to the module or callables don't alter it.
 
     Attributes:
 
-        declared_name: The identifier as given (the ``name`` constructor argument),
-            or an empty string when omitted. Required by ``register`` unless ``name``
-            can derive one. This is optional for an entry-point definition because the
-            registry determines it from the entry-point key. In that case the external
-            declaration stays the single source of truth.
+        declared_name: The identifier as given (the ``name`` constructor argument, or
+            the last part of the Python module's ``__name__`` that ``from_module``
+            read), the entry-point key, or an empty string when omitted. Required by
+            ``ModuleRegistry.register`` unless ``name`` can derive one.
 
-        sync_pipe: Sync interface callable. Wins over ``module``'s ``pipe``.
-
-        async_pipe: Async interface callable. Wins over ``module``'s ``async_pipe``.
-
-        module: Object to read the interface callables off of.
-
-        description: Summary used by module discovery. Defaults to the first
-            non-blank line of ``module``'s docstring.
+        sync_pipe: Sync interface callable.
+        async_pipe: Async interface callable.
+        description: Summary used by module discovery.
 
     Examples:
 
@@ -78,32 +66,70 @@ class ModuleDefinition:
         ('example', 'example')
         >>> definition.get_pipe() is pipe
         True
-        >>>
-        >>> from types import SimpleNamespace
-        >>>
-        >>> module = SimpleNamespace(__doc__="Shouts each item.")
-        >>> ModuleDefinition(module=module).description
-        'Shouts each item.'
-        >>> ModuleDefinition(module=module, description="Yells.").description
-        'Yells.'
 
     """
 
     declared_name: str = field(default="", alias="name")
     sync_pipe: SyncModuleWrapper | None = None
     async_pipe: AsyncModuleWrapper | None = None
-    module: object | None = None
-    description: str | None = field(default=_description)
+    description: str | None = None
+
+    @classmethod
+    def from_module(
+        cls, module: object, *, name: str = "", description: str | None = None
+    ) -> ModuleDefinition:
+        """
+        Builds a definition from a module exposing ``pipe`` and/or ``async_pipe``.
+
+        Args:
+
+            module: Object having ``pipe``/``async_pipe``, e.g., a Python module import.
+            name: Declared name (default: last component of module's ``__name__``).
+            description: Summary (default: first non-blank line of module's docstring).
+
+        Returns:
+
+            The definition with the module's interface callables bound.
+
+        Examples:
+
+            >>> from types import SimpleNamespace
+            >>>
+            >>> def pipe(*args, **kwargs):
+            ...     return []
+            >>>
+            >>> ns = SimpleNamespace(pipe=pipe, __name__="ext.shout", __doc__="Shouts.")
+            >>> definition = ModuleDefinition.from_module(ns)
+            >>> definition.name, definition.description
+            ('shout', 'Shouts.')
+            >>> definition.get_pipe() is pipe
+            True
+
+        """
+        summary = get_doc_summary(module) if description is None else description
+        module_name = getattr(module, "__name__", None)
+        pipe = getattr(module, "pipe", None)
+        async_pipe = getattr(module, "async_pipe", None)
+
+        if name:
+            declared = name
+        elif module_name is None:
+            declared = ""
+        else:
+            declared = module_name.rsplit(".", 1)[-1]
+
+        return cls(
+            name=declared, sync_pipe=pipe, async_pipe=async_pipe, description=summary
+        )
 
     @property
     def name(self) -> str:
         """
         The registry key, from the declared name or else a bound callable.
 
-        A declared name wins. Otherwise the last component of ``module``'s
-        ``__name__`` is used, then the bound pipe callable's ``__name__``.
-        Generic ``<lambda>``/``pipe``/``async_pipe`` names are considered un-nameable,
-        so those require an explicit ``name``.
+        A declared name wins. Otherwise the bound pipe callable's ``__name__`` is
+        used. Generic ``<lambda>``/``pipe``/``async_pipe`` names are considered
+        un-nameable, so those require an explicit ``name``.
 
         Returns:
 
@@ -119,14 +145,11 @@ class ModuleDefinition:
             ''
 
         """
-        pipe = self.sync_pipe or self.async_pipe
+        pipe = self.sync_pipe if self.sync_pipe is not None else self.async_pipe
         candidate = getattr(pipe, "__name__", "")
-        module_name = getattr(self.module, "__name__", "")
 
         if self.declared_name:
             name = self.declared_name
-        elif module_name:
-            name = module_name.rsplit(".", 1)[-1]
         elif candidate not in _UNNAMEABLE_PIPES:
             name = candidate
         else:
@@ -136,16 +159,15 @@ class ModuleDefinition:
 
     def get_pipe(self, is_async: bool = False) -> AnyModuleWrapper | None:
         """
-        Resolves this definition's sync or async pipe callable.
+        Selects this definition's sync or async pipe callable.
 
         Args:
 
-            is_async: Whether to resolve ``async_pipe`` instead of ``pipe``.
+            is_async: Whether to return ``async_pipe`` instead of ``pipe``.
 
         Returns:
 
-            The explicitly configured callable, the corresponding attribute from
-            ``module``, or ``None`` when that interface is undefined.
+            The bound callable, or ``None`` when that interface is undefined.
 
         Examples:
 
@@ -158,13 +180,7 @@ class ModuleDefinition:
             True
 
         """
-        pipe = self.async_pipe if is_async else self.sync_pipe
-
-        if pipe is None and self.module is not None:
-            interface = "async_pipe" if is_async else "pipe"
-            pipe = getattr(self.module, interface, None)
-
-        return pipe
+        return self.async_pipe if is_async else self.sync_pipe
 
     @property
     def interfaces(self) -> frozenset[Interface]:

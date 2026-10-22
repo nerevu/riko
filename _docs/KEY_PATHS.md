@@ -102,7 +102,7 @@ iterator is consumed.
 
 | Path | Role |
 |---|---|
-| `riko/definitions/_module_definition.py` | frozen attrs `ModuleDefinition` used by built-ins, registry entries, and discovery: derived `name` over `declared_name`, `description` defaulting to the module docstring summary |
+| `riko/definitions/_module_definition.py` | frozen attrs `ModuleDefinition` used by built-ins, registry entries, and discovery: derived `name` over `declared_name`; `from_module` reads a module's `pipe`/`async_pipe`, name, and docstring summary once |
 | `riko/definitions/_nodes.py` | the closed node families (`ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` over `Node`) and edge families (`StreamEdge`/`PublishEdge`), their field converters, and `get_family_edges`; nodes carry declarative intent only |
 | `riko/definitions/_normalize.py` | the single shorthand normalization boundary: `build_workflow_fields` turns a flexible workflow mapping into the strict `WorkflowFields` a `Workflow` is built from, `build_raw_graph` reads a `Workflow` back into that mapping, and `resolve_port` owns the port shorthand; it returns data and builds no `Workflow` |
 | `riko/definitions/_migrate.py` | expansion of the terser listings into a `RawWorkflow`: `parse_dag_graph` (`PipeDag`) and `migrate_pipe_def` (`PipeDef`, which warns), with the private v1 key/port/write-mode translation helpers; returns data only |

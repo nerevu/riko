@@ -207,7 +207,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         raw = call_factory(plan)
         value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
 
-        if cleanup := plan.cleanup:
+        if (cleanup := plan.cleanup) is not False:
             self.callback(cleanup, value)
 
         return value

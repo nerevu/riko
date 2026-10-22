@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 # initializing.
 def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSubtypes]:
     subtype: ModuleSubtype | None = None
-    subtypes: ModuleSubtypes = set()
+    subtypes: set[ModuleSubtype] = set()
     reasons: list[str] = []
 
     for inference in gen_return_inferences(pipe):
@@ -53,7 +53,7 @@ def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSub
 
         raise TypeError(msg)
 
-    return subtype, subtypes
+    return subtype, frozenset(subtypes)
 
 
 SEQUENTIAL_READERS = frozenset({"join", "union"})
@@ -76,9 +76,9 @@ def get_module_subtypes(
     if module_type == "processor":
         none_ftype = ftype == BasicCastType.NONE
         subtype = "source" if none_ftype else "transformer"
-        result: tuple[ModuleSubtype, ModuleSubtypes] = subtype, {subtype}
+        result: tuple[ModuleSubtype, ModuleSubtypes] = subtype, frozenset({subtype})
     elif module_type == "splitter":
-        result = "splitter", {"splitter"}
+        result = "splitter", frozenset({"splitter"})
     else:
         result = _get_operator_subtypes(pipe)
 

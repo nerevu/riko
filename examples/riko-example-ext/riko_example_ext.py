@@ -12,7 +12,7 @@ For auto registration, point an entry point at the module itself (E.g., in
 callables and summary line from the module.
 
 For explicit interface callables + runtime ``register``, see ``register_module.py``.
-For aliasing a built-in via ``module=``, see ``register_alias.py``.
+For aliasing a built-in via ``ModuleDefinition.from_module``, see ``register_alias.py``.
 
 Examples:
     Install alongside riko and resolve ``example.shout`` by name::

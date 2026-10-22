@@ -367,12 +367,7 @@ def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
 
         if definition is None:  # noqa: SIM102
             if module := import_or_else(f"{_PACKAGE}.{canonical}"):
-                definition = ModuleDefinition(
-                    name=canonical,
-                    module=module,
-                    sync_pipe=getattr(module, "pipe", None),
-                    async_pipe=getattr(module, "async_pipe", None),
-                )
+                definition = ModuleDefinition.from_module(module, name=canonical)
     else:
         definition = None
 

@@ -305,7 +305,7 @@ equivalent to looping it:
 - **`riko/runtime/_module_registry.py`** (exported from `riko.ext`) — `ModuleRegistry` (built-ins imported lazily per name; runtime
   `register` + `reset()`; entry points via `[project.entry-points."riko.modules"]`, discovered by
   name lazily; precedence **runtime → entry-point → built-in**) + `ModuleDefinition`
-  (`module=` by-convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
+  (`from_module` by convention *or* explicit `sync_pipe`/`async_pipe`; `name` optional, stamped from the
   entry-point key with a mismatch guard).
 - **`riko/runtime/_workflow_resolver.py` + `_workflow_stores.py`** — `WorkflowResolver` + an injectable `ModuleStore`
   (`Package`/`Mapping`/`Composite`) and `DirectoryStore` (now parsing `WorkflowDocument`s);

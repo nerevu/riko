@@ -42,7 +42,7 @@ type ModuleSubtype = Literal[
     "aggregator", "composer", "source", "transformer", "splitter"
 ]
 
-type ModuleSubtypes = set[ModuleSubtype]
+type ModuleSubtypes = frozenset[ModuleSubtype]
 
 
 class OperatorReturnKind(StrEnum):

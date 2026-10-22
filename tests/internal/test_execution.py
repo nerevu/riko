@@ -67,6 +67,19 @@ class _SyncClient:
         self.closed = True
 
 
+class _FalsyCleanup:
+    """A falsy cleanup callable: only the literal ``False`` opts out of cleanup."""
+
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __call__(self, value: object) -> None:
+        self.events.append(value)
+
+
 class _AsyncClient:
     def __init__(self) -> None:
         self.closed = False
@@ -683,6 +696,14 @@ class TestResourceAcquisition:
         assert events == ["x"]
         assert client.closed is False
 
+    def test_sync_acquire_runs_a_falsy_cleanup_callable(self) -> None:
+        cleanup = _FalsyCleanup()
+
+        with SyncExecution() as execution:
+            execution.acquire(Resource.from_factory(lambda: "value", cleanup=cleanup))
+
+        assert cleanup.events == ["value"]
+
     @async_test
     async def test_sync_acquire_async_value_factory_bridges(self) -> None:
         acquired = None
@@ -920,6 +941,17 @@ class TestAsyncResourceAcquisition:
             assert acquired == "value"
 
         assert events == ["cleanup"]
+
+    @async_test
+    async def test_async_acquire_runs_a_falsy_cleanup_callable(self) -> None:
+        cleanup = _FalsyCleanup()
+
+        async with AsyncExecution() as execution:
+            await execution.aacquire(
+                Resource.from_factory(lambda: "value", cleanup=cleanup)
+            )
+
+        assert cleanup.events == ["value"]
 
     @async_test
     async def test_async_acquire_is_single_flight(self) -> None:

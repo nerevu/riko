@@ -426,7 +426,7 @@ def stamp_wrapper_meta(
     name: str,
     module_type: ModuleType | str,
     subtype: ModuleSubtype,
-    subtypes: ModuleSubtypes,
+    subtypes: Iterable[ModuleSubtype],
     pollable: bool,
     loopable: bool,
     isasync: bool,
@@ -466,7 +466,7 @@ def stamp_wrapper_meta(
         ...     name="mine",
         ...     module_type="processor",
         ...     subtype="transformer",
-        ...     subtypes={"transformer"},
+        ...     subtypes=("transformer",),
         ...     pollable=False,
         ...     loopable=True,
         ...     isasync=False,
@@ -480,7 +480,7 @@ def stamp_wrapper_meta(
     setattr(target, "name", name)  # noqa: B010
     setattr(target, "type", module_type)  # noqa: B010
     setattr(target, "subtype", subtype)  # noqa: B010
-    setattr(target, "subtypes", subtypes)  # noqa: B010
+    setattr(target, "subtypes", frozenset(subtypes))  # noqa: B010
     setattr(target, "pollable", pollable)  # noqa: B010
     setattr(target, "loopable", loopable)  # noqa: B010
     setattr(target, "isasync", isasync)  # noqa: B010

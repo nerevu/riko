@@ -763,12 +763,15 @@ Registering a custom module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To make a custom module resolvable by name, i.e., so
-``Pipeline.from_module('your.module', ...)`` and the ``|`` operator find it, register
-it with ``riko.ext.register_module`` or declare a ``[project.entry-points."riko.modules"]``
-entry point. Point a ``ModuleDefinition`` at a module exposing ``pipe``/``async_pipe``,
-or pass those callables explicitly. See `riko-example-ext`_ (installable extension
-package), `register_module.py`_ (runtime ``register_module`` with explicit callables), and
-`register_alias.py`_ (runtime ``register_module`` aliasing a built-in), plus the `FAQ`_ entry
+``Pipeline.from_module('your.module', ...)`` and the ``|`` operator find it, register it
+with ``riko.ext.register_module`` or declare a ``[project.entry-points."riko.modules"]``
+entry point.
+
+Build a ``ModuleDefinition`` from a module exposing ``pipe``/``async_pipe`` with
+``ModuleDefinition.from_module``, or pass those callables explicitly. See
+`riko-example-ext`_ (installable extension package), `register_module.py`_ (runtime
+``register_module`` with explicit callables), and `register_alias.py`_ (runtime
+``register_module`` aliasing a built-in), plus the `FAQ`_ entry
 `Can I create custom modules`_ for the mechanics.
 
 Providing resources

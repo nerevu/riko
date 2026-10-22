@@ -141,6 +141,18 @@ marker = cast("SyncModuleWrapper", lambda source, **_: source)
 MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
 
 
+class _FalsyPipe:
+    """A pipe callable whose truthiness is ``False`` but which still has a name."""
+
+    __name__ = "double"
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __call__(self, source, **kwargs):
+        return source
+
+
 class TestIsasyncInferenceValid:
     """
     Every non-contradictory combination and its resolved ``isasync``.
@@ -786,6 +798,12 @@ class TestModuleMetadata:
     def test_builtin_metadata_provider(self):
         assert get_module_metadata("fetch", strict=True).provider == "riko"
 
+    def test_metadata_subtypes_are_frozen(self):
+        metadata = get_module_metadata("fetch", strict=True)
+
+        assert isinstance(metadata.subtypes, frozenset)
+        assert metadata.subtypes == {"source"}
+
     def test_unknown_module_metadata_raises_when_strict(self):
         with pytest.raises(ValueError, match="has no metadata"):
             get_module_metadata("not_a_builtin_module", strict=True)
@@ -813,6 +831,7 @@ class TestWrapperMeta:
             isasync=False,
         )
         assert _carries_wrapper_meta(pipe)
+        assert isinstance(cast("SyncModuleWrapper", pipe).subtypes, frozenset)
 
     def test_workflow_decorator_carries_wrapper_meta(self):
         def pipe(item=None, **kwargs):
@@ -1306,17 +1325,39 @@ class TestModuleRegistry:
         with pytest.raises(ValueError, match="needs a name"):
             fixed_registry.register(ModuleDefinition(sync_pipe=marker))
 
+    def test_falsy_callable_supplies_name(self):
+        pipe = cast("SyncModuleWrapper", _FalsyPipe())
+        assert ModuleDefinition(sync_pipe=pipe).name == "double"
+
+    def test_module_convention_snapshots_at_construction(self, fixed_registry):
+        other = cast("SyncModuleWrapper", lambda source, **_: source)
+        mod = SimpleNamespace(pipe=marker, __name__="pkg.snap")
+        definition = ModuleDefinition.from_module(mod)
+        fixed_registry.register(definition)
+        mod.pipe = other
+        mod.__name__ = "pkg.other"
+
+        assert definition.name == "snap"
+        assert attrs.evolve(definition, description="z").name == "snap"
+        assert fixed_registry.require("snap") is marker
+
     def test_module_convention_derives_both_interfaces(self, fixed_registry):
         mod = SimpleNamespace(pipe=marker, async_pipe=marker)
-        fixed_registry.register(ModuleDefinition(name=_NAME, module=mod))
+        fixed_registry.register(ModuleDefinition.from_module(mod, name=_NAME))
 
         assert fixed_registry.require(_NAME) is marker
         assert fixed_registry.require(_NAME, True) is marker
 
+    def test_module_convention_description_override(self):
+        mod = SimpleNamespace(pipe=marker, __doc__="Shouts.")
+        definition = ModuleDefinition.from_module(mod, description="Yells.")
+        assert definition.description == "Yells."
+
     def test_explicit_callable_overrides_module(self, fixed_registry):
         other = cast("SyncModuleWrapper", lambda source, **_: source)
         mod = SimpleNamespace(pipe=other, async_pipe=other)
-        definition = ModuleDefinition(name=_NAME, sync_pipe=marker, module=mod)
+        derived = ModuleDefinition.from_module(mod, name=_NAME)
+        definition = attrs.evolve(derived, sync_pipe=marker)
         fixed_registry.register(definition)
 
         assert fixed_registry.require(_NAME) is marker  # explicit wins
@@ -1333,7 +1374,7 @@ class TestPublicRegister:
 
     def test_register_runs_end_to_end(self, fixed_registry):
         """A registered alias of a built-in resolves and runs through a pipeline."""
-        register_module(ModuleDefinition(name=_NAME, module=tokenizer_module))
+        register_module(ModuleDefinition.from_module(tokenizer_module, name=_NAME))
         source = Pipeline(source=[{"content": "a b c"}])
         pipeline = source.pipe(_NAME, conf={"delimiter": " "})
         expected = ["a", "b", "c"]
@@ -1460,6 +1501,21 @@ class TestEntryPointModules:
 
         with pytest.raises(ValueError, match="must match"):
             fixed_registry.require(_NAME)
+
+    def test_from_module_definition_must_name_the_entry_point(
+        self, monkeypatch, fixed_registry
+    ):
+        """A module-derived name declares the module tail, so the key must match it."""
+        mod = SimpleNamespace(pipe=marker, __name__="pkg.shout")
+        defn = ModuleDefinition.from_module(mod)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
+
+        with pytest.raises(ValueError, match="must match"):
+            fixed_registry.require(_NAME)
+
+        named = ModuleDefinition.from_module(mod, name=_NAME)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, named))
+        assert fixed_registry.require(_NAME) is marker
 
     def test_entry_point_may_name_a_bare_module(self, monkeypatch, fixed_registry):
         """The entry point resolves to a module, not a ModuleDefinition."""

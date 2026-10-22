@@ -371,8 +371,6 @@ Both accept a plain ``str`` or a ``StrEnum`` member.
     >>> write.name, write.description
     ('write', 'Writes a stream to a file and passes its items through unchanged.')
     >>> fetch = describe_module(Sources.FETCH)
-    >>> fetch.module
-    <module 'riko.modules.fetch' from '...fetch.py'>
     >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
     ('pipe', 'async_pipe')
     >>> describe_module('does-not-exist')
@@ -855,8 +853,7 @@ exposes ``pipe`` and/or ``async_pipe`` functions, then either register it with t
 module registry at runtime or declare an entry point.
 
 For entry point discovery, point it straight at the module. riko reads ``pipe``/
-``async_pipe`` off it and uses its docstring summary as the discovery
-``description``:
+``async_pipe`` off it and uses its docstring summary as the discovery ``description``:
 
 .. code-block:: toml
 
@@ -873,7 +870,9 @@ For finer control (explicit callables, a custom description), name a
     from riko.ext import ModuleDefinition
     from your_ext import shout
 
-    shout_definition = ModuleDefinition(module=shout, description="Uppercase 'content'.")
+    shout_definition = ModuleDefinition.from_module(
+        shout, name="example.shout", description="Uppercase 'content'."
+    )
 
 .. code-block:: toml
 
@@ -887,14 +886,15 @@ For runtime registration, call ``register_module`` instead:
 
     from riko.ext import ModuleDefinition, register_module
 
-    register_module(ModuleDefinition(name="example.shout", module=shout))
+    register_module(ModuleDefinition.from_module(shout, name="example.shout"))
 
-``module`` takes an object exposing ``pipe``/``async_pipe``. You can alternatively pass
-``sync_pipe``/``async_pipe`` explicitly for bare callables. Registered and
-entry-point names surface in ``list_modules()`` alongside the packaged built-ins.
-See ``examples/riko-example-ext`` for a complete example, the `Cookbook`_ for custom
-``processor`` and ``operator`` examples, and the `contributing guide`_ for the
-additional work required for a built-in module.
+``from_module`` takes an object exposing ``pipe``/``async_pipe`` and binds what it finds
+there. You can alternatively pass ``sync_pipe``/``async_pipe`` to ``ModuleDefinition``
+directly for bare callables. Registered and entry-point names surface in
+``list_modules()`` alongside the packaged built-ins. See ``examples/riko-example-ext``
+for a complete example, the `Cookbook`_ for custom ``processor`` and ``operator``
+examples, and the `contributing guide`_ for the additional work required for a built-in
+module.
 
 How should errors and resource cleanup be handled?
 --------------------------------------------------

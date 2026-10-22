@@ -265,7 +265,7 @@ the Twisted `asyncioreactor` escape hatch for server roles) is roadmap, in ROADM
 Module discovery is the derived catalog. `list_modules()` /
 `list_modules(show_metadata=True)` (defined in `riko/modules/_metadata.py`, re-exported from the stable
 `riko` surface) discover built-in pipes via `pkgutil` and read `ModuleMetadata` off the
-decorator-set wrapper attributes (`type`, `subtype`, `subtypes`, `pollable`); subtype is derived
+decorator-set wrapper attributes (`type`, `subtype`, `subtypes` as a `frozenset`, `pollable`); subtype is derived
 (see `get_module_subtypes` in `riko/modules/_derive.py`). The catalog is derived, not declared. Since P8 it **overlays** registry
 (runtime-registered + entry-point) modules via `gen_registry_catalog`, so extension modules are
 discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
@@ -341,10 +341,14 @@ like a built-in. External packages add modules with **no core edit** (`examples/
 The module registry and a private target registry (`riko/runtime/_target_registry.py`, built-in
 `FileTarget`, entry points under `riko.targets`) share a generic `Registry[T]` base
 (`riko/runtime/_registry.py`) — one three-tier runtime → entry-point → built-in lifetime, each keyed by a
-per-domain `_key` hook (module `name`, target `backend`). `ModuleDefinition` (`riko/definitions/_module_definition.py`) is a frozen attrs
-class: `declared_name` holds the name as given (constructor keyword `name=`), `name` is the derived
-registry key (declared name, else `module.__name__`'s last part, else a non-generic pipe `__name__`), and
-`description` defaults to the module docstring summary. An entry-point definition with no declared name
+per-domain `_key` hook (module `name`, target `backend`). `ModuleDefinition` (`riko/definitions/_module_definition.py`) is a keyword-only
+frozen attrs class holding plain data: `declared_name` holds the name as given (constructor
+keyword `name=`), `name` is the derived registry key (declared name, else a non-generic pipe `__name__`),
+and `sync_pipe`/`async_pipe`/`description` are stored as passed. `ModuleDefinition.from_module(module, *,
+name="", description=None)` reads a module's `pipe`/`async_pipe`, the last part of its `__name__` (the
+declared name unless `name` is given), and its docstring summary once, so the record never references the
+module and mutating it afterwards never changes a definition; the registry builds a bare entry-point module
+with `from_module(obj, name=ep.name)`. An entry-point definition with no declared name
 takes the entry-point key; a declared one must match it. A runtime `register` of a built-in or
 entry-point name raises unless `replace=True`. A registered `WorkflowDocument` directory resolves by
 name: `WorkflowResolver` (given the dispatcher via `register_dispatcher` in `_resolver.py`) builds the document's

@@ -460,7 +460,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         value = await as_awaitable(raw)
 
-        if (cleanup := plan.cleanup) not in (None, False):
+        if (cleanup := plan.cleanup) is not False:
             self._register_teardown(cleanup, value, is_async=plan.is_teardown_async)
 
         return value

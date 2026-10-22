@@ -111,11 +111,19 @@ Changes
   mapping as its single item.
 
 - ``ModuleDefinition.name`` returns the module's effective name: the ``name`` passed,
-  or one derived from ``module`` or the pipe callable. The exact name as given is now
-  ``declared_name``. ``description`` defaults to the ``module``'s docstring first line.
+  or else the pipe callable's name. The exact name as given is now ``declared_name``.
 
-- ``ModuleDefinition`` is no longer a dataclass. Derive a changed copy with
-  ``attrs.evolve`` instead of ``dataclasses.replace``.
+- ``ModuleDefinition`` is no longer a dataclass. Change one with ``attrs.evolve``
+  instead of ``dataclasses.replace``. Its constructor is now keyword-only.
+
+- ``ModuleDefinition.get_pipe(interface)`` is now ``get_pipe(is_async=False)``.
+
+- ``ModuleDefinition(module=…)`` is now ``ModuleDefinition.from_module(module, name=…,
+  description=…)``. It reads the module's ``pipe``, ``async_pipe``, name, and docstring
+  summary. Changing the module afterwards no longer changes the definition, which no
+  longer keeps a ``module`` attribute. The module name becomes the declared name. A
+  ``from_module`` definition named by an entry point must pass ``name=`` matching the
+  entry-point key.
 
 - Registering a module under the name of a built-in or entry-point module raises
   ``ValueError`` unless you pass ``replace=True``.
@@ -126,6 +134,10 @@ Changes
 - ``ModuleRegistry.resolve(name, interface)`` is now ``require(name, is_async=False)``.
   It returns the module's wrapper. ``definition`` is now ``load_definition``.
   ``require_interfaces`` reports which of a module's sync and async interfaces exist.
+
+- ``ModuleMetadata.subtypes`` and the ``subtypes`` stamped on a decorated pipe are now a
+  ``frozenset`` (the ``ModuleSubtypes`` alias changed to match). Mutating a metadata
+  record's subtypes used to change the module's discovery metadata.
 
 - ``@processor``, ``@operator``, and ``@splitter`` raise ``TypeError`` at decoration
   time for an invalid option, e.g., a typo or a call option like ``count``.
