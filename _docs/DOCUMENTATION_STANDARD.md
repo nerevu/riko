@@ -414,8 +414,8 @@ Two more terms name the roles these forms play at run time:
 The other Python form `run-pipe` executes — a file defining `pipe(test=False)` — is a
 **pipe script**. Its `pipe` signature, not its author, sets it apart from a
 `WorkflowModule`, and a workflow store cannot load it. It has no type: `run-pipe` loads
-any `.py` path without telling a pipe script from a saved `WorkflowModule`, so a type
-would claim what nothing checks.
+any `.py` path and checks only for the `@workflow` stamp on `pipe` (an undecorated file
+of either shape runs as a pipe script), so a type would claim what nothing checks.
 Never call either Python form a "pipe file" or "pipe module": "pipe module" already
 means a `PipeDef` module entry (`PipeModule`).
 
