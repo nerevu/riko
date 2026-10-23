@@ -948,6 +948,51 @@ def require_instances[K, T](  # noqa: E302
 require_str = partial(require_instance, str)
 
 
+def require_nonblank_str(
+    value: object,
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
+) -> str:
+    """
+    Narrows ``value`` to a string with at least one non-whitespace character.
+
+    Args:
+
+        value: The value to check.
+        what: The name used in the error message.
+
+    Kwargs:
+
+        error: The exception raised when ``value`` isn't such a string.
+
+    Returns:
+
+        ``value``, typed as ``str``.
+
+    Raises:
+
+        error: If ``value`` isn't a string, or is empty or only whitespace.
+
+    Examples:
+
+        >>> require_nonblank_str(" a ", "node 'id'")
+        ' a '
+        >>> require_nonblank_str(" ", "node 'id'")
+        Traceback (most recent call last):
+        ...
+        riko.base.exceptions.InvalidPipelineError: ...node 'id' must not be blank
+
+    """
+    text = require_str(value, what, error=error)
+
+    if not text.strip():
+        raise error(f"{what} must not be blank")
+
+    return text
+
+
 def require_from_form[T](
     form: TypeForm[T],
     what: str | None = None,
@@ -1168,6 +1213,57 @@ def mapping_converter[FV](  # noqa: E302
 
 
 @overload
+def normalize_mapping[T](  # noqa: E704
+    item: Mapping[str, T] | None, what: str = ..., *, strict: Literal[False] = ...
+) -> dict[str, T]: ...
+@overload  # noqa: E302
+def normalize_mapping(  # noqa: E704
+    item: object, what: str = ..., *, strict: Literal[True]
+) -> dict[str, object]: ...
+def normalize_mapping(  # noqa: E302
+    item: object, what: str = "value", *, strict: bool = False
+) -> dict[str, Any]:
+    """
+    Normalizes an optional mapping to a new ``dict``, empty for ``None``.
+
+    Args:
+
+        item: The mapping to copy, or ``None``.
+        what: The name used in the error message when ``strict``.
+
+    Kwargs:
+
+        strict: Whether anything other than a mapping or ``None`` raises.
+
+    Returns:
+
+        A new ``dict`` with ``item``'s entries.
+
+    Raises:
+
+        InvalidPipelineError: If ``strict`` and ``item`` is not a mapping.
+
+    Examples:
+
+        >>> normalize_mapping({"a": 1}), normalize_mapping(None)
+        ({'a': 1}, {})
+        >>> normalize_mapping([("a", 1)], "inputs", strict=True)
+        Traceback (most recent call last):
+        ...
+        riko.base.exceptions.InvalidPipelineError: ...inputs must be a mapping
+
+    """
+    if item is None:
+        result: dict[str, Any] = {}
+    elif strict:
+        result = dict(require_mapping(item, what))
+    else:
+        result = dict(cast("Mapping[str, object]", item))
+
+    return result
+
+
+@overload
 def optional_mapping_converter[FV](  # noqa: E704
     freezer: Freezer[FV],
     *,
@@ -1225,7 +1321,7 @@ def optional_mapping_converter[FV](  # noqa: E302
         FrozenDict({'b': 2})
 
     """
-    item: Mapping[str, object] = {} if default is None else default
+    item: Mapping[str, object] = normalize_mapping(default)
 
     def converter(value: object) -> FrozenDict[str, FV]:
         mapped = item if value is None else require_mapping(value, what, error=error)

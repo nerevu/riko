@@ -11,7 +11,16 @@ from dataclasses import asdict, dataclass
 from operator import itemgetter, methodcaller
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter
-from typing import TYPE_CHECKING, ClassVar, cast, get_args, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    NoReturn,
+    assert_type,
+    cast,
+    get_args,
+    get_origin,
+)
 
 import pytest
 
@@ -26,7 +35,7 @@ from riko.base.exceptions import (
     UnsupportedTargetError,
 )
 from riko.definitions._context import Context, ExecutionMode
-from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
+from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge, WriteNode
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteCapabilities, WriteMode
@@ -36,7 +45,7 @@ from riko.modules.write import async_pipe, pipe
 from riko.parsing._dotdict import DotDict
 from riko.runtime._module_registry import register_module, reset_module_registry
 from riko.runtime._pipeline import Pipeline
-from riko.types._enums import Backends, Executor, Formats, ModuleName
+from riko.types._enums import Backends, Executor, Formats, IdentityMode, ModuleName
 from riko.types._guards import is_mapping, is_stateful_item
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
@@ -59,7 +68,7 @@ from tests._execution import agen_source, awaitable_source, module_workflow
 from tests._lifecycle import LIFECYCLE_SRC, boom, fanned_in_fetches, tokenized_letters
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
 
     from riko.types._streams import Item, Items
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
@@ -94,14 +103,6 @@ PUBSUB_PENDING = pytest.mark.xfail(
 )
 SPLIT_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.split() is not available yet"
-)
-CALLABLE_PENDING = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Pipeline.map() is not available yet; once it is, the callable's return "
-        "type should flow through as the pipeline's item type instead of the "
-        "current Pipeline[Any] fallback"
-    ),
 )
 SEED_PENDING = pytest.mark.xfail(
     strict=True,
@@ -256,6 +257,14 @@ class TestPipelineChaining:
     def test_or_chains_single_module_template(self):
         pipeline = Pipeline.from_module("fetch") | Pipeline.from_module("sort")
         assert sorted(pipeline.workflow.nodes) == ["fetch-1", "sort-1"]
+
+    def test_or_keeps_a_module_template_resources_and_label(self):
+        node = ModuleNode(id="hash-1", name="hash", resources="db", label="L")
+        template = Pipeline(Workflow().with_node(node))
+        pipeline = Pipeline.from_module("fetch") | template
+        chained = pipeline.workflow.nodes["hash-1"]
+        assert (dict(chained.resources), chained.label) == ({"db": "db"}, "L")
+        assert pipeline.workflow.resources == ("db",)
 
     def test_or_string_matches_attribute_chaining(self):
         via_or = list(Pipeline(source=SRC) | "hash")
@@ -1478,6 +1487,9 @@ class TestPipelineWrite:
         pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.json")
         assert list(pipeline) == ITEMS
 
+    def test_passthrough_reaches_a_target_without_a_path(self):
+        assert list(Pipeline(source=ITEMS).write(_RecordStore())) == ITEMS
+
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
         pipeline = Pipeline(source=ITEMS).write(path).tail(conf={"count": 1})
@@ -1701,9 +1713,263 @@ class TestSplit:
 STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
 
-@CALLABLE_PENDING
+def _scaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
+    return item["x"] * factor
+
+
+def _keywords(_: object, **kwargs: object) -> list[str]:
+    return sorted(kwargs)
+
+
+def _upper_content(item: Mapping[str, object]) -> str:
+    return str(item["content"]).upper()
+
+
+async def _ascaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
+    await checkpoint()
+    return item["x"] * factor
+
+
+def _raise_value_error(item: object) -> NoReturn:
+    raise ValueError(item)
+
+
+def _enrich(item: Mapping[str, object], *, db: Mapping[str, int]) -> dict[str, object]:
+    return {**item, "owner": db["owner"]}
+
+
+def _open_db() -> Generator[dict[str, int]]:
+    yield {"owner": 7}
+
+
+def _to_list(_: object) -> list[int]:
+    return [1, 2]
+
+
+def _to_tuple(_: object) -> tuple[int, ...]:
+    return (1, 2)
+
+
+def _to_generator(_: object) -> Iterator[int]:
+    return (value for value in (1, 2))
+
+
+def _count(value: Iterable[object]) -> int:
+    return len(list(value))
+
+
+_THREAD = {"executor": "thread", "concurrency": 2, "ordered": True}
+_PROCESS = {"executor": "process", "concurrency": 2, "ordered": True}
+
+_LISTLIKE_ITEMS = [
+    pytest.param(_to_list, {}, id="list-inline"),
+    pytest.param(_to_list, _THREAD, id="list-thread"),
+    pytest.param(_to_list, _PROCESS, id="list-process"),
+    pytest.param(_to_tuple, {}, id="tuple-inline"),
+    pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
+    pytest.param(_to_tuple, _PROCESS, id="tuple-process"),
+    pytest.param(_to_generator, {}, id="generator-inline"),
+    pytest.param(_to_generator, _THREAD, id="generator-thread"),
+]
+
+_LISTLIKE_PRODUCERS = [
+    pytest.param(_to_list, id="list"),
+    pytest.param(_to_tuple, id="tuple"),
+    pytest.param(_to_generator, id="generator"),
+]
+
+_PASSTHROUGH_CASES = [
+    pytest.param(["hi"], [len], [2], id="scalar-reaches-fn-unwrapped"),
+    pytest.param([{"c": "hi"}], [itemgetter("c"), len], [2], id="chained-scalar"),
+    pytest.param([{"x": 1}], [lambda _: None], [None], id="none-is-a-result"),
+    pytest.param([{"x": 1}], [lambda i: {"y": i["x"]}], [{"y": 1}], id="mapping"),
+    pytest.param([{"x": 1}, {"x": 2}], [_scaled], [2, 4], id="one-per-item"),
+]
+
+_MAP_ERRORS = [
+    pytest.param({"resources": "db", "db": 1}, "share names", id="alias-collision"),
+    pytest.param({"resources": {"no-dash": "db"}}, "identifiers", id="bad-alias"),
+    pytest.param({"resources": "class"}, "identifiers", id="keyword-alias"),
+    pytest.param({"obj": object()}, "JSON", id="non-json-kwarg"),
+    pytest.param({"identity": "bogus"}, "identity", id="bad-identity"),
+]
+
+_BAD_VERSIONS = [
+    pytest.param(None, "'version' must not be None", id="none"),
+    pytest.param([1], "'version' must be a hashable scalar", id="unhashable"),
+    pytest.param(([1],), "'version' must be a hashable scalar", id="nested-unhashable"),
+    pytest.param(object(), "'version' must be a hashable scalar", id="opaque-object"),
+    pytest.param(range(3), "'version' must be a hashable scalar", id="range"),
+]
+
+_EXECUTIONS = [
+    pytest.param({}, id="inline"),
+    pytest.param(_THREAD, id="thread"),
+    pytest.param(_PROCESS, id="process"),
+]
+
+
 class TestCallableNodes:
     """A plain callable chained as its own node."""
+
+    @pytest.mark.parametrize(("source", "fns", "expected"), _PASSTHROUGH_CASES)
+    def test_map_passes_values_through_as_is(self, source, fns, expected):
+        pipeline = Pipeline(source=source)
+
+        for fn in fns:
+            pipeline = pipeline.map(fn)
+
+        assert list(pipeline) == expected
+
+    @pytest.mark.parametrize(("produce", "settings"), _LISTLIKE_ITEMS)
+    def test_a_listlike_item_reaches_the_next_map_whole(self, produce, settings):
+        pipeline = Pipeline(source=[{"x": 1}]).map(produce).map(_count)
+        assert list(pipeline.with_execution(**settings)) == [2]
+
+    @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
+    @async_test
+    async def test_a_listlike_item_stays_whole_under_async_mapping(self, produce):
+        pipeline = Pipeline(source=[{"x": 1}]).map(produce).map(_count)
+        mapped = pipeline.with_execution(concurrency=2)
+        assert [item async for item in mapped] == [2]
+
+    @pytest.mark.parametrize("settings", [{}, _THREAD], ids=["inline", "thread"])
+    def test_a_seed_of_lists_maps_each_list_whole(self, settings):
+        seeded = Pipeline(source=[[1, 2], [3]])  # pyright: ignore[reportArgumentType]
+        assert list(seeded.map(len).with_execution(**settings)) == [2, 1]
+
+    @pytest.mark.parametrize("returned", [[1, 2], []], ids=["full", "empty"])
+    def test_map_returns_an_iterator_as_one_item(self, returned):
+        items = list(Pipeline(source=[{"x": 1}]).map(lambda _: iter(returned)))
+        assert len(items) == 1
+        assert list(items[0]) == returned
+
+    def test_map_propagates_exceptions(self):
+        with pytest.raises(ValueError, match="'x': 1"):
+            list(Pipeline(source=[{"x": 1}]).map(_raise_value_error))
+
+    def test_map_binds_keywords(self):
+        pipeline = Pipeline(source=[{"x": 1}, {"x": 2}]).map(_scaled, factor=10)
+        assert list(pipeline) == [10, 20]
+
+    def test_bound_keywords_are_identity_significant(self):
+        ten = Pipeline().map(_scaled, factor=10).workflow.nodes["_scaled-1"]
+        twenty = Pipeline().map(_scaled, factor=20).workflow.nodes["_scaled-1"]
+        assert ten == Pipeline().map(_scaled, factor=10).workflow.nodes["_scaled-1"]
+        assert ten != twenty
+
+    def test_map_passes_resources_by_alias(self):
+        pipeline = (
+            Pipeline(source=[{"x": 1}])
+            .with_resource("primary", _open_db)
+            .map(_enrich, resources={"db": "primary"})
+        )
+        assert pipeline.workflow.resources == ("primary",)
+        assert list(pipeline) == [{"x": 1, "owner": 7}]
+
+    def test_map_requires_the_context_to_provide_its_resources(self):
+        pipeline = Pipeline(source=[{"x": 1}]).map(_enrich, resources="db")
+
+        with pytest.raises(InvalidPipelineError, match="'db' not provided"):
+            list(pipeline)
+
+    @pytest.mark.parametrize(("kwargs", "match"), _MAP_ERRORS)
+    def test_map_rejects_invalid_arguments(self, kwargs, match):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Pipeline(source=[{}]).map(_enrich, **kwargs)
+
+    @pytest.mark.parametrize(("version", "match"), _BAD_VERSIONS)
+    def test_map_rejects_an_invalid_version(self, version, match):
+        with pytest.raises(TypeError, match=match):
+            Pipeline(source=[{}]).map(len, version=version)
+
+    @pytest.mark.parametrize("settings", _EXECUTIONS)
+    def test_map_passes_only_bound_keywords(self, settings):
+        pipeline = Pipeline(source=[{"x": 1}]).map(_keywords, factor=2)
+        contextual = pipeline.with_context(Context(inputs={"q": 1}))
+        assert list(contextual.with_execution(**settings)) == [["factor"]]
+
+    @async_test
+    async def test_async_map_passes_only_bound_keywords(self):
+        pipeline = Pipeline(source=[{"x": 1}]).map(_keywords, factor=2)
+        assert [item async for item in pipeline] == [["factor"]]
+
+    def test_maps_binding_one_resource_declare_it_once(self):
+        pipeline = (
+            Pipeline(source=[{"x": 1}])
+            .with_resource("db", _open_db)
+            .map(_enrich, resources="db")
+            .map(_enrich, resources="db")
+        )
+        assert pipeline.workflow.resources == ("db",)
+        assert list(pipeline) == [{"x": 1, "owner": 7}]
+
+    def test_map_carries_version_and_identity(self):
+        flow = Pipeline().map(len, version="len-v1", identity="derive").workflow
+        node = flow.nodes["len-1"]
+        assert isinstance(node, CallableNode)
+        assert node.version == "len-v1"
+        assert node.identity is IdentityMode.DERIVE
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "rejecting identity modes a one-to-one map cannot honor is not yet "
+            "implemented"
+        ),
+    )
+    def test_map_rejects_combine_identity(self):
+        with pytest.raises(InvalidPipelineError):
+            Pipeline(source=[{}]).map(len, identity="combine")
+
+    @pytest.mark.parametrize(
+        ("fn", "node_id"),
+        [
+            pytest.param(len, "len-1", id="named"),
+            pytest.param(lambda item: item, "map-1", id="lambda"),
+            pytest.param(itemgetter("x"), "map-1", id="itemgetter"),
+        ],
+    )
+    def test_map_names_the_node_after_the_callable(self, fn, node_id):
+        assert list(Pipeline().map(fn).workflow.nodes) == [node_id]
+
+    def test_map_types_its_items_from_the_callable(self):
+        pipeline = Pipeline(source=[{"content": "a"}]).map(_upper_content)
+        assert_type(pipeline, Pipeline[str])
+        assert list(pipeline) == ["A"]
+
+    def test_a_callable_template_chains_with_or(self):
+        seeded = Pipeline(source=[1])  # pyright: ignore[reportArgumentType]
+        pipeline = seeded.map(str) | Pipeline().map(str)
+        assert list(pipeline.workflow.nodes) == ["str-1", "str-2"]
+        assert list(pipeline) == ["1"]
+
+    @skipif_issync
+    def test_sync_iteration_bridges_an_async_callable(self):
+        pipeline = Pipeline(source=[{"x": 1}, {"x": 2}]).map(_ascaled, factor=3)
+        assert list(pipeline) == [3, 6]
+
+    @async_test
+    async def test_async_iteration_awaits_an_async_callable(self):
+        pipeline = Pipeline(source=[{"x": 1}, {"x": 2}]).map(_ascaled)
+        assert [item async for item in pipeline] == [2, 4]
+
+    @async_test
+    async def test_async_iteration_runs_a_sync_callable(self):
+        seeded = Pipeline(source=["hi", "you"])  # pyright: ignore[reportArgumentType]
+        pipeline = seeded.map(len)
+        assert [item async for item in pipeline] == [2, 3]
+
+    def test_process_executor_runs_a_module_level_callable(self):
+        pipeline = Pipeline(source=[{"x": x} for x in range(4)]).map(_scaled)
+        assert list(pipeline.with_execution(**_PROCESS)) == [0, 2, 4, 6]
+
+    def test_process_executor_rejects_a_lambda_when_planning(self):
+        pipeline = Pipeline(source=[{"x": 1}]).map(lambda item: item)
+        settings = {"executor": "process", "concurrency": 2}
+
+        with pytest.raises(InvalidPipelineError, match="cannot be pickled"):
+            list(pipeline.with_execution(**settings))
 
     def test_map_extracts_a_field(self):
         pipeline = _tokenized().map(itemgetter("content"))

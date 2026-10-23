@@ -87,7 +87,7 @@ the `IO_` contract group.
 <!-- api-surface:other -->
 ```python
 >>> sorted(OTHER)
-['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'Node', 'OneShotResource', 'Pipeline', 'Resource', 'ReusableResource', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
+['Backends', 'CastType', 'Context', 'DocumentShape', 'Edge', 'Endpoint', 'ExecutionMode', 'Executor', 'IdentityMode', 'Node', 'OneShotResource', 'Pipeline', 'Resource', 'ReusableResource', 'Workflow', 'WorkflowDocument', 'WorkflowLike', 'WorkflowModule', 'get_path', 'get_temp_file', 'list_modules']
 ```
 <!-- /api-surface:other -->
 
@@ -149,7 +149,7 @@ authors rather than ordinary application code.
 <!-- api-surface:extension -->
 ```python
 >>> sorted(EXTENSION)
-['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'Dispatcher', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'reset_module_registry', 'reset_target_registry', 'reset_workflow_resolver', 'splitter']
+['ActionNode', 'AsyncOperatorWrapper', 'AsyncProcessorWrapper', 'AsyncSplitterWrapper', 'CacheNode', 'CallableNode', 'Dispatcher', 'DynamicConf', 'FileTarget', 'ModuleDefinition', 'ModuleMetadata', 'ModuleName', 'ModuleNameLike', 'ModuleNode', 'ModuleRegistry', 'ModuleSubtype', 'ModuleType', 'ModuleWrapper', 'PreparedCall', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'SupportsActions', 'SupportsRead', 'SupportsWrite', 'SyncOperatorWrapper', 'SyncProcessorWrapper', 'SyncSplitterWrapper', 'Target', 'TargetRegistry', 'WriteCapabilities', 'WriteNode', 'get_conf_type', 'get_module_category', 'migrate_v1_to_v2', 'normalize_module_name', 'normalize_workflow', 'operator', 'processor', 'register_module', 'register_target', 'register_workflow_store', 'reset_module_registry', 'reset_target_registry', 'reset_workflow_resolver', 'splitter']
 ```
 <!-- /api-surface:extension -->
 
@@ -183,7 +183,7 @@ dispatcher protocol.
 <!-- api-surface:ext-workflows -->
 ```python
 >>> sorted(EXT_WORKFLOWS)
-['ActionNode', 'CacheNode', 'Dispatcher', 'ModuleNode', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'WriteNode', 'migrate_v1_to_v2', 'normalize_workflow', 'register_workflow_store', 'reset_workflow_resolver']
+['ActionNode', 'CacheNode', 'CallableNode', 'Dispatcher', 'ModuleNode', 'PublishEdge', 'ReadNode', 'StreamEdge', 'SubscribeNode', 'WriteNode', 'migrate_v1_to_v2', 'normalize_workflow', 'register_workflow_store', 'reset_workflow_resolver']
 ```
 <!-- /api-surface:ext-workflows -->
 

@@ -16,6 +16,7 @@ from riko.definitions._module_definition import ModuleDefinition, normalize_modu
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     PublishEdge,
     ReadNode,
@@ -70,6 +71,7 @@ __all__ = [
     "AsyncProcessorWrapper",
     "AsyncSplitterWrapper",
     "CacheNode",
+    "CallableNode",
     "Dispatcher",
     "DynamicConf",
     "FileTarget",

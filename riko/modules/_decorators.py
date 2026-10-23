@@ -8,7 +8,7 @@ Examples:
 
         >>> from riko.ext import DynamicConf, processor
         >>>
-        >>> @processor()
+        >>> @processor
         ... def pipe(item, extraction, objconf, **kwargs) -> int:
         ...     return item * objconf.times
         >>>
@@ -245,6 +245,32 @@ class Module[B: (Literal[True], Literal[False])]:
     context_options: ClassVar[frozenset[str]] = _CONTEXT_OPTS
     call_record: ClassVar[type[_PreparedCall[Any]]]
 
+    def __new__(cls, *args: object, **kwargs: object) -> object:
+        """
+        Creates the decorator, or wraps a function when applied bare.
+
+        Applied without parentheses, the decorator wraps the function exactly as
+        its called, option-free form does.
+
+        Raises:
+
+            TypeError: When the function to wrap is passed along with decoration
+                options.
+
+        """
+        pipe = args[0] if args else None
+
+        if callable(pipe) and (len(args) > 1 or kwargs):
+            msg = f"@{cls.__name__} takes either the function to wrap or decoration "
+            raise TypeError(msg + "options, not both")
+        elif callable(pipe):
+            wrap = cast("Callable[[Callable[..., object]], ModuleWrapper]", cls())
+            result = wrap(pipe)
+        else:
+            result = super().__new__(cls)
+
+        return result
+
     @overload
     def __init__(  # noqa: E704
         self: Module[Literal[True]],
@@ -277,14 +303,6 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = BasicCastType.PASS,
         **opts: object,
     ):
-        if callable(defaults):
-            name = type(self).__name__
-            raise TypeError(
-                f"@{name} must be called before decorating (use @{name}()); the "
-                f"bare form is not supported yet and would have taken "
-                f"{defaults!r} as the pipe defaults"
-            )
-
         # Only called once on pipe import
         self.defaults: Defaults = defaults or Defaults()
         self._opts: DecorationOptions = DecorationOptions(ftype=ftype, ptype=ptype)
@@ -1039,6 +1057,33 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedProcessor
 
     @overload
+    def __new__[I, E, O: ItemOrValue](  # noqa: E704
+        cls, pipe: AwaitableProcessorParser[I, E, O], /
+    ) -> AsyncProcessorWrapper: ...
+    @overload  # noqa: E301
+    def __new__[I, E, O: ItemOrValue](  # noqa: E704
+        cls, pipe: SyncProcessorParser[I, E, O], /
+    ) -> SyncProcessorWrapper: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> processor[Literal[True]]: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> processor[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> Any:  # noqa: E301
+        return super().__new__(cls, *args, **kwargs)
+
+    @overload
     def __init__(  # noqa: E704
         self: processor[Literal[True]],
         defaults: Defaults | None = ...,
@@ -1115,12 +1160,12 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             >>> from riko import async_return, issync, run
             >>>
-            >>> @processor()
+            >>> @processor
             ... def pipe(item, extraction, objconf, **kwargs):
             ...     content = item["content"]
             ...     return f'say "{content}" {objconf.times} times!'
             >>>
-            >>> @processor()
+            >>> @processor
             ... async def async_pipe(item, extraction, objconf, **kwargs):
             ...     content = await async_return(item["content"])
             ...     return f'say "{content}" {objconf.times} times!'
@@ -1348,6 +1393,33 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     module_type: ClassVar[ModuleType] = "operator"
     decoration_options: ClassVar[frozenset[str]] = _OPERATOR_OPTS
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedOperator
+
+    @overload
+    def __new__[T: ItemOrValue, E](  # noqa: E704
+        cls, pipe: AwaitableOperatorParser[T, E], /
+    ) -> AsyncOperatorWrapper: ...
+    @overload  # noqa: E301
+    def __new__[T: ItemOrValue, E](  # noqa: E704
+        cls, pipe: SyncOperatorParser[T, E], /
+    ) -> SyncOperatorWrapper: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> operator[Literal[True]]: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> operator[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> Any:  # noqa: E301
+        return super().__new__(cls, *args, **kwargs)
 
     @overload
     def __init__(  # noqa: E704
@@ -1746,6 +1818,33 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
     call_options: ClassVar[frozenset[str]] = _SPLITTER_CALL_OPTS
     context_options: ClassVar[frozenset[str]] = frozenset()
     call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedSplitter
+
+    @overload
+    def __new__[E](  # noqa: E704
+        cls, pipe: AwaitableSplitterParser[E], /
+    ) -> AsyncSplitterWrapper: ...
+    @overload  # noqa: E301
+    def __new__[E](  # noqa: E704
+        cls, pipe: SyncSplitterParser[E], /
+    ) -> SyncSplitterWrapper: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> splitter[Literal[True]]: ...
+    @overload  # noqa: E301
+    def __new__(  # noqa: E704
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> splitter[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> Any:  # noqa: E301
+        return super().__new__(cls, *args, **kwargs)
 
     @overload
     def __init__(  # noqa: E704

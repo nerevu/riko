@@ -32,6 +32,7 @@ Planned** (nothing ships yet). Find any `§N` via the [ROADMAP §-index](ROADMAP
 - [Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)](#workflow-v2-serialization--workflowserialize--workflowparse-r4a5-shipped)
 - [25. Conversion — export converters (shipped)](#25-conversion--export-converters-shipped)
 - [Private execution runtime — `SyncExecution` / `AsyncExecution` (R4B, shipped)](#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)
+- [Callable nodes — `Pipeline.map` (R4C, shipped)](#callable-nodes--pipelinemap-r4c-shipped)
 - [Write sessions — private seam awaiting `WriteNode`](#write-sessions--private-seam-awaiting-writenode)
 
 ---
@@ -373,12 +374,11 @@ name signal can't reach the type checker: a sync async-interface callable not na
 (e.g. a lambda), or a sync `def async_pipe` handed to a typed API such as
 `ModuleDefinition(async_pipe=…)`. A function named `pipe` that resolves async raises `TypeError`.
 The typed `__call__` overloads track the `async def` case (`@operator()` on a coroutine is statically
-async). Tests: `tests/internal/test_modules.py`. The decorators must be called before
-decorating: a bare `@processor` (no parentheses) would land the function in the positional
-`defaults`, so `Module.__init__` rejects a callable `defaults` with `TypeError` at decoration.
-Bare-form support (bare = configured with no options) is specified by
-`_docs/gameplans/callable-pipes.md`; a strict-xfail tripwire in the same test module flips when
-it lands, at which point the guard branch becomes the bare-wrap branch.
+async). Tests: `tests/internal/test_modules.py`. The bare form (`@processor` with no parentheses) is
+handled by `Module.__new__`: a lone callable argument returns `cls()(fn)`, so it wraps exactly as
+the option-free called form; a callable plus options raises `TypeError`; a no-argument
+`cls.__new__(cls)` (pickle/copy) still returns an instance. Per-subclass `__new__` overloads type
+the bare form as the wrapper and the called form as the decorator instance.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipeline | "name"`,
 `pipeline | ("name", conf)`, `pipeline | Pipeline.from_module(...)`, `items | Pipeline(...)`, and
@@ -1015,10 +1015,11 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `TypeError` on any other positional value — while the `Pipeline.from_module(name, conf=…)`
   classmethod seeds one `ModuleNode`; `.pipe(name,
   conf=…)`, attribute chaining (`pipeline.sort(conf=…)` — underscore and mapping names raise
-  `AttributeError`), and `|` (a name, a `(name, conf)` pair, or a one-module template) each mint a
-  `<name>-<occurrence>` node id (`_mint_node_id`, matching `normalize_workflow`'s scheme), append the
-  node plus a `StreamEdge` from the current default output, and re-point `outputs["default"]`
-  (`_build_chained_workflow`); prior nodes/edges are shared by reference. `items | Pipeline(…)` /
+  `AttributeError`), and `|` (a name, a `(name, conf)` pair, or a one-node module or callable template) each mint a
+  `<name>-<occurrence>` node id (`Workflow.get_node_id`, the id `normalize_workflow` gives an appended node without one; both use `get_free_occurrence`),
+  append the node plus a `StreamEdge` from the current default output, and re-point
+  `outputs["default"]` (`Workflow.with_node`); prior nodes/edges are shared by reference. A one-node
+  template is re-identified with `evolve`, so every node field (resources, label) carries over. `items | Pipeline(…)` /
   `Pipeline(source=items)` bind an external iterable as `Pipeline.source` — definition-level but
   `Workflow`-external, so serializing a seeded pipeline never captures items — and `__iter__`/`__aiter__`
   pass it to `run(plan, source=…)`, which delivers it to the subgraph's single open default input
@@ -1098,6 +1099,58 @@ direct call. Measured: `Module.prepare` ran 50 times for 50 items before and onc
 (`riko/modules/_assignment.py`) runs the embed's conf and call options through `build_call` and
 calls the prepared call per parent item, so the embed is no longer re-prepared per parent
 (2026-10-20; conf-parse memoization in `riko/parsing/config.py` went with it).
+
+## Callable nodes — `Pipeline.map` (R4C, shipped)
+
+`PipelineDefinition.map(fn, *, resources, version, identity, **kwargs)` appends a `CallableNode`
+(`riko/definitions/_nodes.py`): `fn` (compared by identity), `version`, `identity` (`IdentityMode`
+or `None`, inert until R5A), and the keyword arguments frozen JSON-native in `kwargs`. The node is
+named after `fn.__name__` when that is an identifier, else `map`; its id comes from `Workflow.get_node_id`.
+Construction checks that resource aliases are identifiers and disjoint from the keyword arguments.
+Keyword arguments reach `fn` frozen, like `ModuleNode.options`/`ActionNode.params`: a list arrives as a
+tuple and a dict as a `FrozenDict`.
+
+- **Resolution.** `ExecutionPlan.from_workflow` resolves every callable node to the built-in `udf`
+  module through the dispatcher (`_resolve_callable` in `riko/execution/_prepared.py`), so the
+  node's flags (`loopable`), wrapper identity (`require_stream`/`require_async_stream`), and
+  interface selection are `udf`'s. Plan validation and `PreparedNode` use
+  `Workflow.runnable_nodes` and `require_runnable_only("execution")`; code generation refuses
+  callable nodes through `normalize_workflow`, which has no document form for them.
+- **Adapter preparation.** `udf`'s parser is not called. `PreparedNode._build_native` builds two
+  prepared calls: `call = partial(_gen_stream_results | _agen_stream_results, fn, kwargs)` for the
+  stream path and `item_call = partial(_gen_item_result | _agen_item_result, fn, kwargs)` for the
+  mapped paths; all four are module-level, so both calls pickle by reference. They pass each value to `fn` as is, splat the
+  keyword arguments and then the `ResourceView`, drop `context`, and yield each return value as one
+  result. `udf` is resolved but its parser does not run (the gameplan's `fn` riding into `udf` as a
+  per-call extra) for two reasons: execution sits below `modules` in the layer DAG, so it cannot import an
+  adapter from `riko/modules/udf.py`; and the processor's `_start` (`normalize_input` →
+  `setup`/`get_skip`/`get_field`) assumes a `DotDict` item, so skipping `_wrap_item` would mean a
+  parallel `_start` branch behind a hidden keyword. Direct `udf.pipe` is untouched.
+- **One value vs. a stream.** `PreparedInterface.item_call` is the call an execution maps over
+  items one at a time (the sync thread/process pools via `build_item_call`, the async mapped path in
+  `AsyncExecution._build_item_call`) and the one `require_process_safe` pickles; it equals `call`
+  for a module node. A callable node's `item_call` applies `fn` to exactly one item and its `call`
+  iterates the stream one level, so neither inspects an item for list-likeness: a list, tuple, or
+  iterator item reaches `fn` whole under every executor.
+- **Async `fn`.** When `is_async_callable(fn)`, `_resolve_callable` drops `udf`'s sync pipe, so sync
+  iteration takes the existing async-only bridge (`SyncExecution._build_stream` else-branch through
+  the portal) and the node is never sync-mapped. Async iteration awaits `fn` via `maybe_async`; a
+  sync `fn` under async iteration runs inline like `udf.async_pipe`.
+- **Process executor.** `require_process_safe` pickles `node.sync_interface.item_call`, so a lambda or
+  closure `fn` fails at planning ("cannot be pickled") and a bound resource fails with "live
+  resource values cannot cross a process boundary".
+- **Resources.** `Workflow.with_node` declares each appended node's bound Context names on
+  `Workflow.resources` (order-stable, de-duplicated), so `Workflow.validate` accepts them; a missing
+  binding still fails in `_require_bindings` before acquisition.
+- **No document form.** `validate_document_nodes` refuses a callable node in `serialize_graph` and
+  `build_raw_graph` (so `Workflow.serialize`, `normalize_workflow`/`Workflow.parse` of a `Workflow`,
+  and `compile_workflow` all raise); a raw node with family `"callable"` raises in `_build_node`.
+- **Typing.** `map[R]` takes `Callable[[T], R] | Callable[Concatenate[T, ...], R]` and casts the
+  derived definition to `PipelineDefinition[R]`; `Pipeline.map` narrows it to `Pipeline[R]`.
+
+Regressions: `tests/public/test_pipeline.py::TestCallableNodes`,
+`tests/internal/test_definitions.py::TestCallableNode`, and
+`tests/public/test_workflow.py::TestCallableNodeDocuments`.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

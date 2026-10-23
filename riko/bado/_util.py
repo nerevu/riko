@@ -147,6 +147,8 @@ async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
             await aclose()
 
 
-def async_partial(f, **kwargs):
-    """Binds ``kwargs`` to ``f`` for later awaiting via :func:`maybe_async`."""
-    return partial(maybe_async, f, **kwargs)
+def async_partial[T](
+    func: Callable[..., T | Awaitable[T]], **kwargs
+) -> Callable[..., Awaitable[T]]:
+    """Applies ``kwargs`` to ``func`` for later awaiting via :func:`maybe_async`."""
+    return partial(maybe_async, func, **kwargs)

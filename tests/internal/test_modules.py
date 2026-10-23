@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import itertools
 import pickle  # noqa: S403
-from collections.abc import AsyncIterator, Awaitable, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
 from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 
 import attrs
 import pytest
@@ -71,6 +72,7 @@ from riko.types._wrappers import (
     AsyncSplitterWrapper,
     AsyncSubPipe,
     ProcessorWrapper,
+    SyncProcessorWrapper,
     stamp_wrapper_meta,
 )
 from riko.types.modules import (
@@ -383,30 +385,91 @@ class TestProcessorSkipIf:
         assert result == [{"x": 1}, {"y": "processed"}]
 
 
+async def _async_shout(item: Item, *args, **kwargs) -> str:
+    return shout(item)
+
+
+def _count(stream: Stream, *args, **kwargs) -> int:
+    return sum(1 for _ in stream)
+
+
+async def _async_count(stream: Stream, *args, **kwargs) -> int:
+    return _count(stream)
+
+
+def _twice(stream: Stream, *args, **kwargs) -> Cascade:
+    items = list(stream)
+    return iter([iter(items), iter(items)])
+
+
+async def _async_twice(stream: Stream, *args, **kwargs) -> Cascade:
+    return _twice(stream)
+
+
+async def _drain(value: object) -> object:
+    resolved = await value if isawaitable(value) else value
+
+    if isinstance(resolved, AsyncIterable):
+        result = [await _drain(part) async for part in resolved]
+    elif isinstance(resolved, Iterator):
+        result = [await _drain(part) for part in resolved]
+    else:
+        result = resolved
+
+    return result
+
+
+BARE_ROWS = [{"content": "hi"}]
+BARE_FORMS = [
+    pytest.param(processor, shout, {"assign": "content"}, id="processor-sync"),
+    pytest.param(processor, _async_shout, {"assign": "content"}, id="processor-async"),
+    pytest.param(operator, _count, {}, id="operator-sync"),
+    pytest.param(operator, _async_count, {}, id="operator-async"),
+    pytest.param(splitter, _twice, {}, id="splitter-sync"),
+    pytest.param(splitter, _async_twice, {}, id="splitter-async"),
+]
+BARE_AND_OPTIONS = [
+    pytest.param(processor, (), {"isasync": True}, id="processor+isasync"),
+    pytest.param(operator, ({},), {}, id="operator+defaults"),
+    pytest.param(splitter, (), {"objectify": False}, id="splitter+objectify"),
+]
+DECORATORS = [processor, operator, splitter]
+
+
 class TestBareDecorator:
-    """A decorator used without being called first."""
+    """A decorator applied without being called first."""
 
-    @pytest.mark.parametrize("decorator", [processor, operator, splitter])
-    def test_bare_decorator_raises_at_decoration(self, decorator) -> None:
-        """
-        Decorating without calling the decorator first is an author error.
+    @pytest.mark.parametrize(("decorator", "parser", "kwargs"), BARE_FORMS)
+    def test_bare_stamps_called_metadata(self, decorator, parser, kwargs) -> None:
+        bare, called = decorator(parser), decorator()(parser)
+        assert [getattr(bare, attr) for attr in WRAPPER_META] == [
+            getattr(called, attr) for attr in WRAPPER_META
+        ]
 
-        The decorated function would otherwise be swallowed as the positional
-        ``defaults`` and the mistake would surface only on the first call.
-        """
-        with pytest.raises(TypeError, match=rf"@{decorator.__name__}\(\)"):
-            decorator(shout)
+    @async_test
+    @pytest.mark.parametrize(("decorator", "parser", "kwargs"), BARE_FORMS)
+    async def test_bare_output_matches_called(self, decorator, parser, kwargs) -> None:
+        bare = await _drain(decorator(parser)(BARE_ROWS, **kwargs))
+        assert bare == await _drain(decorator()(parser)(BARE_ROWS, **kwargs))
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="owned by the pending callable-pipes decorator work: a bare @processor "
-        "(no parentheses) is rejected at decoration instead of wrapping the function "
-        "as an unconfigured pipe",
-    )
     def test_bare_processor_wraps_an_unconfigured_pipe(self) -> None:
-        pipe = processor(shout)  # pyright: ignore[reportArgumentType]
-        stream = pipe({"content": "hi"}, assign="content")  # pyright: ignore[reportCallIssue]
+        pipe = processor(shout)
+        stream = pipe({"content": "hi"}, assign="content")
         assert next(stream) == {"content": "HI"}
+
+    def test_bare_and_called_forms_type_check(self) -> None:
+        assert_type(processor(shout), SyncProcessorWrapper)
+        assert_type(processor(), processor[Literal[False]])
+
+    @pytest.mark.parametrize(("decorator", "args", "kwargs"), BARE_AND_OPTIONS)
+    def test_function_with_options_raises(self, decorator, args, kwargs) -> None:
+        with pytest.raises(TypeError, match="either the function to wrap or"):
+            decorator(shout, *args, **kwargs)
+
+    @pytest.mark.parametrize("decorator", DECORATORS)
+    def test_default_instance_round_trips(self, decorator) -> None:
+        copies = [pickle.loads(pickle.dumps(decorator())), copy.copy(decorator())]  # noqa: S301
+        assert [type(each) for each in copies] == [decorator, decorator]
 
 
 def _fixed_processor(item: Item, extraction: object, objconf: object) -> str:

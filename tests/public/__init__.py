@@ -17,6 +17,6 @@ Index (file, then the subjects it owns, in file order):
                         Subscriptions, Split, CallableNodes, ConditionalNodes,
                         UnseededPipeline
     test_workflow.py    Workflow, NodeFamily, ParsePort, WorkflowParse, PipeDag,
-                        NormalizeWorkflow, RequireModuleOnly, Validate, Migrate,
-                        Serialize, WorkflowDocumentResolution
+                        NormalizeWorkflow, RequireRunnableOnly, CallableNodeDocuments,
+                        Validate, Migrate, Serialize, WorkflowDocumentResolution
 """

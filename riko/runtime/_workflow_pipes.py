@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
 from riko.bado.itertools import as_async
 from riko.base._config import SUBPIPE_TYPE
 from riko.definitions._composition import PipelineDefinition
+from riko.types._collections import normalize_mapping
 from riko.types._enums import ExecutionMode
 from riko.types._guards import is_async_callable
 from riko.types._wrappers import stamp_wrapper_meta
@@ -214,7 +215,7 @@ def build_workflow_pipes(
         [{'x': 1}]
 
     """
-    inputs = {} if inputs is None else dict(inputs)
+    inputs = normalize_mapping(inputs)
     description = {"inputs": inputs, "dependencies": list(dependencies)}
 
     def pipe(

@@ -47,6 +47,7 @@ from ._collections import (
     FrozenDict,
     freeze,
     require_instance,
+    require_nonblank_str,
     require_str,
     validator_from_require,
 )
@@ -64,7 +65,10 @@ type NodeId = str
 type Port = str
 type ResourceName = str
 type WorkflowDocument = bytes
-type NodeFamily = Literal["module", "read", "write", "cache", "action", "subscribe"]
+type DocumentNodeFamily = Literal[
+    "module", "read", "write", "cache", "action", "subscribe"
+]
+type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]
 
@@ -99,7 +103,7 @@ class RawNode(TypedDict, total=False):
 
     id: str
     name: Required[str]
-    family: NodeFamily
+    family: DocumentNodeFamily
     label: str
     conf: Conf | Mapping[str, object]
     options: RawCallOptions | Mapping[str, object]
@@ -130,7 +134,7 @@ class RawWorkflow(TypedDict, total=False):
 class Endpoint:
     """A reference to one port on one node that edges and outputs point through."""
 
-    node: NodeId = field(validator=validator_from_require(require_str))
+    node: NodeId = field(validator=validator_from_require(require_nonblank_str))
     port: Port = field(validator=validator_from_require(require_str))
 
     def __str__(self) -> str:
@@ -353,6 +357,7 @@ class GraphIndex:
 
 __all__ = [
     "WORKFLOW_VERSION",
+    "DocumentNodeFamily",
     "EdgeFamily",
     "Endpoint",
     "GraphEdge",

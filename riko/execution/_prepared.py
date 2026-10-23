@@ -11,17 +11,22 @@ dispatcher, or registry.
 from __future__ import annotations
 
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, NamedTuple, Self
+from typing import TYPE_CHECKING, NamedTuple, Self, cast
 
-from attrs import define, field
+from attrs import define, evolve, field
 from typing_extensions import TypeIs
 
+from riko.bado._util import async_partial, maybe_async
+from riko.bado.itertools import as_async
+from riko.base._iterutils import map_values
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._nodes import (
     FROZEN_CONF,
+    NO_OPTIONS,
+    CallableNode,
     ModuleNode,
     conf_converter,
-    require_module_node,
+    require_runnable_node,
 )
 from riko.definitions._workflow_definition import Workflow
 from riko.types._collections import (
@@ -30,18 +35,30 @@ from riko.types._collections import (
     instances_freezer,
     mapping_converter,
     narrow_from_require,
+    normalize_mapping,
     optional_mapping_converter,
     require_instance,
     require_str,
     validator_from_require,
 )
+from riko.types._guards import is_async_callable
 from riko.types._workflow import parse_port
 from riko.types._wrappers import build_call, require_single_output
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import (
+        AsyncIterator,
+        Awaitable,
+        Callable,
+        Iterable,
+        Iterator,
+        Mapping,
+    )
 
-    from riko.definitions._nodes import ConfInput
+    from riko.definitions._context import Context
+    from riko.definitions._nodes import ConfInput, RunnableNode
+    from riko.types._collections import FrozenJSON
+    from riko.types._streams import AnyIterable
     from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId, ParsedPort
     from riko.types._wrappers import (
         AnyModuleWrapper,
@@ -237,6 +254,71 @@ class ResolvedModule:
         return _has_flag(self.select_async(), "sequential_inputs")
 
 
+_CALLABLE_MODULE = "udf"
+
+
+def _gen_item_result(
+    fn: Callable[..., object],
+    item: object = None,
+    *,
+    context: Context | None = None,
+    resources: Mapping[str, object] | None = None,
+    **kwargs: FrozenJSON,
+) -> Iterator[object]:
+    """
+    Applies a callable node's ``fn`` to exactly one item, whatever its type.
+
+    The item reaches ``fn`` as is, even a list or an iterator, and the return value is
+    the one result, even ``None`` or an iterator. The ``context`` is accepted for the
+    prepared call signature but never passed on to ``fn``.
+    """
+    yield fn(item, **kwargs, **normalize_mapping(resources))
+
+
+async def _agen_item_result[T](
+    fn: Callable[..., T | Awaitable[T]],
+    item: object = None,
+    *,
+    context: Context | None = None,
+    resources: Mapping[str, object] | None = None,
+    **kwargs: FrozenJSON,
+) -> AsyncIterator[T]:
+    """The async twin of ``_gen_item_result``: an async ``fn`` is awaited."""
+    yield await maybe_async(fn, item, **kwargs, **normalize_mapping(resources))
+
+
+def _gen_stream_results[T](
+    fn: Callable[..., T],
+    item: Iterable[object] = (),
+    *,
+    context: Context | None = None,
+    resources: Mapping[str, object] | None = None,
+    **kwargs: FrozenJSON,
+) -> Iterator[T]:
+    """Applies a callable node's ``fn`` to each item of a stream, one result each."""
+    call = partial(fn, **kwargs, **normalize_mapping(resources))
+    return map(call, item)
+
+
+async def _agen_stream_results[T](
+    fn: Callable[..., T | Awaitable[T]],
+    item: AnyIterable[object] = (),
+    *,
+    context: Context | None = None,
+    resources: Mapping[str, object] | None = None,
+    **kwargs: FrozenJSON,
+) -> AsyncIterator[T]:
+    """
+    Applies a callable node's ``fn`` to each item of a stream, awaiting an async ``fn``.
+
+    The async twin of ``_gen_stream_results``; the stream may be async or sync.
+    """
+    call = async_partial(fn, **kwargs, **normalize_mapping(resources))
+
+    async for value in as_async(item):
+        yield await call(value)
+
+
 class PreparedInterface(NamedTuple):
     """
     The pipe a sync or async execution runs for a node, with its call prepared once.
@@ -245,13 +327,26 @@ class PreparedInterface(NamedTuple):
 
         pipe: The callable that execution runs.
         call: The pipe with the node's configuration, options, and extras bound.
+        item_call: The per-item call the mapped paths run (``call`` for a module node).
         native: Whether ``pipe`` runs natively for the execution, without an adapter.
 
     """
 
     pipe: AnyModuleWrapper
     call: PreparedCall
+    item_call: PreparedCall
     native: bool
+
+
+def _resolve_callable(dispatcher: Dispatcher, node: CallableNode) -> ResolvedModule:
+    """
+    Resolves the module a callable node runs as.
+
+    An async ``fn`` has no synchronous implementation, so synchronous iteration
+    bridges it the way it bridges any async-only module.
+    """
+    module = ResolvedModule.from_dispatcher(dispatcher, _CALLABLE_MODULE)
+    return evolve(module, sync_pipe=None) if is_async_callable(node.fn) else module
 
 
 _build_is_module = partial(validator_from_require, require_instance, ResolvedModule)
@@ -265,7 +360,7 @@ class PreparedNode:
 
     Attributes:
 
-        node: The ``Workflow`` module node this was resolved from.
+        node: The ``Workflow`` module or callable node this was resolved from.
 
         module: The node's resolved implementation.
 
@@ -303,7 +398,7 @@ class PreparedNode:
 
     """
 
-    node: ModuleNode = field(converter=require_module_node)
+    node: RunnableNode = field(converter=require_runnable_node)
     module: ResolvedModule = field(validator=_build_is_module())
     embed: ResolvedModule | None = field(default=None, validator=_is_optional_module)
     incoming: tuple[GraphEdge, ...] = field(default=(), converter=tuple)
@@ -314,7 +409,7 @@ class PreparedNode:
 
     @property
     def options(self) -> CallOptions:
-        return self.node.options
+        return self.node.options if isinstance(self.node, ModuleNode) else NO_OPTIONS
 
     @property
     def embed_or_self_conf(self) -> FrozenConf:
@@ -340,7 +435,8 @@ class PreparedNode:
         has_others = any(port.is_positional for port in self.input_ports)
         others = ["others"] if has_others else []
         resources = ["resources"] if self.node.resources else []
-        embed = [] if self.node.embed is None else ["embed"]
+        has_embed = isinstance(self.node, ModuleNode) and self.node.embed is not None
+        embed = ["embed"] if has_embed else []
         return (*named, *others, *resources, *embed)
 
     @cached_property
@@ -379,9 +475,19 @@ class PreparedNode:
         return self.module.async_pipe is None and not (mapped and self.is_mappable)
 
     def _build_native(self, pipe: AnyModuleWrapper) -> PreparedInterface:
-        conf, options = self.embed_or_self_conf, self.options.kwargs
-        call = build_call(pipe, *self.extras, conf=conf, **options)
-        return PreparedInterface(pipe, call, native=True)
+        if isinstance(node := self.node, CallableNode):
+            if self.module.is_async_pipe(pipe):
+                stream, one = _agen_stream_results, _agen_item_result
+            else:
+                stream, one = _gen_stream_results, _gen_item_result
+
+            call = cast("PreparedCall", partial(stream, node.fn, **node.kwargs))
+            item_call = cast("PreparedCall", partial(one, node.fn, **node.kwargs))
+        else:
+            conf, options = self.embed_or_self_conf, self.options.kwargs
+            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+
+        return PreparedInterface(pipe, call, item_call, native=True)
 
     @cached_property
     def sync_interface(self) -> PreparedInterface:
@@ -481,9 +587,9 @@ class ExecutionPlan:
     Raises:
 
         InvalidPipelineError: If ``workflow`` is not a ``Workflow``, its graph is
-            invalid, a source port fans out to more than one edge, a node is not a
-            module node, ``modules`` does not resolve exactly the workflow's nodes, or
-            ``embeds`` does not resolve exactly its loop embeds.
+            invalid, a source port fans out to more than one edge, a node is neither a
+            module node nor a callable node, ``modules`` does not resolve exactly the
+            workflow's nodes, or ``embeds`` does not resolve exactly its loop embeds.
 
     Examples:
 
@@ -531,8 +637,8 @@ class ExecutionPlan:
         Raises:
 
             InvalidPipelineError: If the graph is invalid, a source port fans out to
-                more than one edge, a node isn't a module node (write, action, cache,
-                or subscribe), or a node runs a multi-output splitter.
+                more than one edge, a node isn't a module or callable node (write,
+                action, cache, or subscribe), or a node runs a multi-output splitter.
 
             UnsupportedModuleError: If no module has the name a node gives.
 
@@ -555,9 +661,11 @@ class ExecutionPlan:
 
         """
         resolve = partial(ResolvedModule.from_dispatcher, dispatcher)
+        resolve_callable = partial(_resolve_callable, dispatcher)
         modules = {k: resolve(n.name, n.conf) for k, n in flow.module_nodes.items()}
         embeds = {k: resolve(e["name"], e["conf"]) for k, e in flow.embeds.items()}
-        return cls(flow, modules, embeds)
+        callables = map_values(resolve_callable, flow.callable_nodes)
+        return cls(flow, {**modules, **callables}, embeds)
 
     @property
     def index(self) -> GraphIndex:
@@ -568,7 +676,7 @@ class ExecutionPlan:
     def nodes(self) -> PreparedNodes:
         """Each workflow node paired with its resolved module and embed."""
         embeds, modules, incoming = self.embeds, self.modules, self.index.incoming
-        pairs = self.workflow.module_nodes.items()
+        pairs = self.workflow.runnable_nodes.items()
         prepared = {
             k: PreparedNode(n, modules[k], embeds.get(k), incoming.get(k, ()))
             for k, n in pairs
@@ -721,9 +829,9 @@ class ExecutionPlan:
         Raises:
 
             InvalidPipelineError: If the graph is invalid, a source port fans out to
-                more than one edge, a workflow node is not a module node, ``modules``
-                does not resolve the workflow's nodes, or ``embeds`` does not resolve
-                its loop embeds.
+                more than one edge, a workflow node is neither a module node nor a
+                callable node, ``modules`` does not resolve the workflow's nodes, or
+                ``embeds`` does not resolve its loop embeds.
 
         """
         flow = self.workflow
@@ -732,9 +840,9 @@ class ExecutionPlan:
             flow.validate()
 
         flow.require_executable()
-        flow.require_module_only("execution")
+        flow.require_runnable_only("execution")
 
-        if unresolved := set(flow.module_nodes).symmetric_difference(self.modules):
+        if unresolved := set(flow.runnable_nodes).symmetric_difference(self.modules):
             msg = f"modules must match the workflow's nodes: {sorted(unresolved)}"
             raise InvalidPipelineError(msg)
         elif mismatched := set(flow.embeds).symmetric_difference(self.embeds):

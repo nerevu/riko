@@ -126,7 +126,7 @@ def _get_process_unsafe_reason(
         reason = "its embedded module has no synchronous implementation"
     else:
         try:
-            pickle.dumps((node.sync_interface.call, context, embed_pipe))
+            pickle.dumps((node.sync_interface.item_call, context, embed_pipe))
         except Exception as error:  # noqa: BLE001
             reason, cause = f"it cannot be pickled ({error})", error
 

@@ -149,6 +149,14 @@ sessions were deleted at the v1 cutover, so `WriteNode` is their next caller. Te
 at a graph leaf) versus passthrough (more nodes follow) is a consumption difference, not a distinct
 node family — R5C adds the canonical caller, not a second implementation.
 
+**Targets without a path (open, R5C).** `WriteNode.from_prepared` records a target's `backend`
+and its `dest` when it has one; a native target object without `dest` (for example a keyed
+`AIRTABLE` record store) is not recorded, so the node alone cannot reach it. R5C decides how a
+`WriteNode` carries such a live target, presumably as a Context resource binding (extensibility
+E3.7: "Resource bindings to live clients are separate"). Tripwire:
+`tests/public/test_pipeline.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
+(under the class-level write-node xfail).
+
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
 session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
 into the write effect and maintains lineage externally, rather than teaching the session about pipeline

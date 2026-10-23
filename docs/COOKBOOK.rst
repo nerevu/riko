@@ -679,31 +679,33 @@ Using a one-off function
 
 The built-in ``udf`` ``processor`` applies a Python callable to each ``item``.
 It is the simplest option when a transformation is local to one application.
-A ``Pipeline`` holds only JSON-native values, so a callable cannot
-travel through ``options``; call the ``pipe`` functionally instead.
+Call its ``pipe`` functionally:
 
 .. code-block:: python
 
     >>> from riko.modules.udf import pipe as udf
     >>>
-    >>> def add_length(item):
-    ...     return {**item, 'length': len(item['content'])}
+    >>> def set_length(item):
+    ...     return {**item, "length": len(item["content"])}
     >>>
-    >>> items = [{'content': 'a'}, {'content': 'abcd'}]
-    >>> [item['length'] for item in udf(items, func=add_length, emit=True)]
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
+    >>> [item["length"] for item in udf(items, func=set_length, emit=True)]
     [1, 4]
 
-Inside a ``Pipeline`` chain, ``map`` will append the callable as its own node.
+Inside a ``Pipeline`` chain, ``map`` appends the callable as its own node. It passes
+keyword arguments to the callable, and ``resources=`` passes resources the ``Context``
+provides to it.
 
 .. code-block:: python
 
-    pipeline = Pipeline(source=items).map(add_length)
-    [item['length'] for item in pipeline]
-
-.. note::
-
-   Pending. ``map`` exists on ``Pipeline`` but raises ``NotImplementedError``
-   until callable nodes land.
+    >>> from riko import Pipeline
+    >>>
+    >>> def set_offset_length(item, *, offset):
+    ...     return {**item, "length": len(item["content"]) + offset}
+    >>>
+    >>> pipeline = Pipeline(source=items).map(set_offset_length, offset=10)
+    >>> [item["length"] for item in pipeline]
+    [11, 14]
 
 Use the extension decorators when the transformation should have normal ``riko``
 configuration, assignment, metadata, and sync/async wrappers.
@@ -719,7 +721,7 @@ by name (see `Registering a custom module`_ below).
 
     >>> from riko.ext import processor
     >>>
-    >>> @processor()
+    >>> @processor
     ... def uppercase(item, extraction, objconf, **kwargs) -> str:
     ...     return str(item['content']).upper()
     >>>

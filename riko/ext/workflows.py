@@ -34,6 +34,7 @@ Examples:
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     PublishEdge,
     ReadNode,
@@ -51,6 +52,7 @@ from riko.types._wrappers import Dispatcher
 __all__ = [
     "ActionNode",
     "CacheNode",
+    "CallableNode",
     "Dispatcher",
     "ModuleNode",
     "PublishEdge",

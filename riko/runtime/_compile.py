@@ -212,8 +212,9 @@ def compile_workflow(
 
     Raises:
 
-        InvalidPipelineError: If the workflow is invalid, or carries a node family
-            that cannot be generated yet.
+        InvalidPipelineError: If the workflow is invalid, has a callable node (a Python
+            callable has no generated form), or carries a node family that cannot be
+            generated yet.
 
     Examples:
 
@@ -228,7 +229,7 @@ def compile_workflow(
     """
     flow = normalize_workflow(flow)
     flow.validate()
-    flow.require_module_only("code generation")
+    flow.require_runnable_only("code generation")
     nodes = list(flow.module_nodes.values())
     edge_names = sorted({type(edge).__name__ for edge in flow.edges})
     loader = PackageLoader("riko.runtime")

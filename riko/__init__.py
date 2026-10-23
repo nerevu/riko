@@ -40,6 +40,7 @@ from riko.types._enums import (
     ExecutionMode,
     Executor,
     Formats,
+    IdentityMode,
 )
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
@@ -67,6 +68,7 @@ __all__ = [
     "ExecutionMode",
     "Executor",
     "Formats",
+    "IdentityMode",
     "InvalidPipelineError",
     "Modules",
     "Node",

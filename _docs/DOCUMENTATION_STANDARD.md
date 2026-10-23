@@ -596,6 +596,11 @@ it. This applies to docstrings and `docs/*.rst` alike.
   plain text, written as the Python value: `(default: "content")`, `(default: False)`.
 - Double quotes, per the doctest rule below; single-quoted ``'x'`` appears only in
   expected output Python prints that way.
+- A **callable named in prose** — function, method, or module verb — has no empty
+  call parentheses: ``.first``, ``close``, ``aclose``, ``pipe.filter``. Keep ``()``
+  only where dropping them would change or blur the meaning, e.g. a call being
+  compared with another call (``SyncPipe("fetch")`` vs ``pipe.filter()``), or a call
+  with arguments (``.pipe(name)``).
 
 The test: pasted into Python, does the literal mean the right thing? ``thread`` would
 be a variable, so a value needs ``"thread"``; ``"content"`` would be a string, so a

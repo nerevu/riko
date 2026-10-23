@@ -118,6 +118,40 @@ def unique_everseen[T](  # noqa: E302
             yield element
 
 
+@overload
+def gen_non_none[T](value: Iterable[T | None]) -> Iterator[T]: ...  # noqa: E704
+@overload  # noqa: E302
+def gen_non_none[T, R](  # noqa: E704
+    value: Iterable[T | None], func: Callable[[T], R]
+) -> Iterator[R]: ...
+def gen_non_none[T, R](  # noqa: E302
+    value: Iterable[T | None], func: Callable[[T], R] | None = None
+) -> Iterator[T | R]:
+    """
+    Applies a function to each non-None value in an iterable.
+
+    Args:
+
+        value: The source iterable.
+        func: Optional function applied to each non-None element.
+
+    Yields:
+
+        Each non-None element, or ``func``'s result for it.
+
+    Examples:
+
+        >>> list(gen_non_none([1, None, 0, 2]))
+        [1, 0, 2]
+        >>> "".join(gen_non_none(["a", None, 1], str))
+        'a1'
+
+    """
+    for item in value:
+        if item is not None:
+            yield item if func is None else func(item)
+
+
 def betwix[T](
     iterable: Iterable[T],
     start: str | None = None,

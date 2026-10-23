@@ -485,21 +485,17 @@ seed the same ``stream``.
     >>> Pipeline(source=source[0]).hash(options=options).first()
     {'x': 0, 'hash': 2328942002}
 
-``udf`` itself is not reachable this way, because a ``Pipeline``'s ``options`` must be
-JSON-native and a callable is not. Chaining a callable as its own node is what ``map``
-will be for.
-
-.. note::
-
-    Pending. The ``map`` call exists but raises ``NotImplementedError`` until
-    callable nodes land. Call ``riko.modules.udf.pipe`` directly, as above, in the
-    meantime.
+``udf`` is not reachable this way, because a ``Pipeline``'s ``options`` must be
+JSON-native and a callable is not. ``map`` chains a callable as its own node instead.
+The callable receives each ``item`` as is, and sets its output as the next ``item``.
 
 .. code-block:: python
 
-    from riko import Pipeline
-
-    pipeline = Pipeline(source=source).map(func)
+    >>> from riko import Pipeline
+    >>>
+    >>> items = [{"x": 0}, {"x": 1}]
+    >>> list(Pipeline(source=items).map(lambda item: {"y": item["x"] + 3}))
+    [{'y': 3}, {'y': 4}]
 
 What file types are supported?
 ------------------------------

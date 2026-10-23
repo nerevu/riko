@@ -571,7 +571,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         A synchronous pipe runs on a worker thread, or on the event-loop thread
         when the settings choose the inline executor.
         """
-        prepared = interface.call
+        prepared = interface.item_call
 
         if interface.native:
 
