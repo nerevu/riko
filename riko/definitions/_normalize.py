@@ -19,12 +19,13 @@ from attrs import AttrsInstance
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._graph import edges_to_graph, leaves
-from riko.base._iterutils import map_values, unzip
+from riko.base._iterutils import gen_non_none, map_values, unzip
 from riko.base.exceptions import InvalidPipelineError
 from riko.types._collections import (
     FrozenDict,
     FrozenJSON,
     freeze_json,
+    normalize_mapping,
     normalize_strs,
     require_from_attrs,
     require_from_typed_dict,
@@ -47,6 +48,7 @@ from riko.types._workflow import (
 from ._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     Node,
     PublishEdge,
@@ -158,11 +160,43 @@ def _build_node(raw: RawNode) -> Node:
     _family = resolved.pop("family", None)
     family = "module" if _family is None else str(_family)
 
-    if (builder := _NODE_BUILDERS.get(family)) is None:
+    if family == CallableNode.family:
+        msg = "a workflow document cannot hold a callable node. "
+        msg += "Chain the callable with Pipeline.map instead"
+        raise InvalidPipelineError(msg)
+    elif (builder := _NODE_BUILDERS.get(family)) is None:
         raise InvalidPipelineError(f"unknown node family: {family!r}")
 
     require_from_attrs(builder)(resolved)
     return builder(**cast("dict[str, Any]", resolved))
+
+
+def get_free_occurrence(name: str, taken: Iterable[str], start: int = 1) -> int:
+    """
+    Gets the first occurrence number from ``start`` whose ``<name>-<n>`` id is free.
+
+    Args:
+
+        name: The node name the id is based on.
+        taken: The ids already in use.
+        start: The first occurrence number to try.
+
+    Returns:
+
+        The occurrence number of the first ``<name>-<n>`` not in ``taken``.
+
+    Examples:
+
+        >>> get_free_occurrence("fetch", ("fetch-1", "fetch-2"))
+        3
+        >>> get_free_occurrence("fetch", ["fetch-2"])
+        1
+        >>> get_free_occurrence("fetch", ["fetch-1"], start=3)
+        3
+
+    """
+    _taken = frozenset(taken)
+    return next(n for n in count(start) if f"{name}-{n}" not in _taken)
 
 
 def _gen_node_info(
@@ -177,17 +211,14 @@ def _gen_node_info(
 def _gen_nodes(raw_nodes: Iterable[object]) -> Iterator[RawNode]:
     """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
     _taken, nodes = unzip(_gen_node_info(raw_nodes))
-    taken = set(_taken)
+    taken = set(gen_non_none(_taken))
     counts: dict[str, int] = defaultdict(int)
 
     for node in nodes:
         if (node_id := node.pop("id", None)) is None:
             name = require_str(node.get("name"), "node 'name'")
-            counts[name] += 1
-
-            while (node_id := f"{name}-{counts[name]}") in taken:
-                counts[name] += 1
-
+            counts[name] = get_free_occurrence(name, taken, counts[name] + 1)
+            node_id = f"{name}-{counts[name]}"
             taken.add(node_id)
 
         yield RawNode(id=str(node_id), **node)
@@ -296,7 +327,7 @@ def _normalize_input(raw: object) -> FrozenDict[str, FrozenJSON]:
 
 def _normalize_inputs(raw: object) -> dict[str, FrozenDict[str, FrozenJSON]]:
     """Normalizes input declarations into name-keyed full JSON Schema mappings."""
-    inputs = {} if raw is None else require_mapping(raw, "inputs")
+    inputs = normalize_mapping(raw, "inputs", strict=True)
     return map_values(_normalize_input, inputs)
 
 
@@ -322,7 +353,12 @@ def build_raw_graph(flow: Workflow) -> RawWorkflow:
 
         The ``RawWorkflow`` describing the same graph.
 
+    Raises:
+
+        InvalidPipelineError: If the workflow has a callable node.
+
     """
+    flow.validate_document_nodes()
     edges = dict(zip(count(), flow.edges, strict=False))
 
     return RawWorkflow(

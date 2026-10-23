@@ -972,7 +972,8 @@ Deliver:
 - the bare decorator form: `@processor` / `@operator` / `@splitter` wrap a function exactly as
   `@processor()` does, for sync and `async def` implementations alike
   ([callable-pipes.md](callable-pipes.md) § Existing decorator model), so a module author never
-  needs empty parentheses;
+  needs empty parentheses. The async case is `@processor async def async_pipe`; a single async
+  implementation named `pipe` keeps raising until R4E classifies interfaces by `isasync`;
 - `Pipeline.open()`: a fresh single-use run handle per call that is a sync and async context manager
   (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
   whose semantics [execution-semantics.md](execution-semantics.md) owns; it rides this slot as the
@@ -998,9 +999,8 @@ gating, pending a decision).
 **Exit:**
 
 - **ADD:** `Pipeline.map` exists as a mode-neutral callable node; the callable-node tripwires in
-  `tests/public/test_pipeline.py` flip to passes. The bare decorator form wraps, and
-  `tests/internal/test_modules.py::TestBareDecorator::test_bare_decorator_raises_at_decoration` (which pins today's
-  decoration-time `TypeError`) is replaced by a test that the bare and called forms wrap identically.
+  `tests/public/test_pipeline.py` flip to passes. The bare decorator form wraps (shipped 2026-10-22:
+  `tests/internal/test_modules.py::TestBareDecorator` checks the bare and called forms wrap identically).
   `Pipeline.open()` exists, with sync and async tests that a `break` inside the block closes the run
   in the opening task and that concurrent `open()` calls on one pipeline run independently; README,
   FAQ, and the abandoned-async-iteration note recommend it over `aclosing(aiter(...))`.
@@ -1021,6 +1021,11 @@ Deliver:
 - `Workflow` input declarations (canonical full JSON Schema; authoring shorthands normalize to it;
   requiredness inferred from an absent default; `default: null` implies nullable);
 - the `{"input": name}` structural reference grammar in node configuration;
+- a decision on callable nodes (R4C `map`): whether `{"input": name}` references also apply to a
+  `CallableNode`'s keyword arguments, so `pipeline.map(fn, q={"input": "q"})` calls `fn(item, q=<value>)`,
+  and whether a callable ever receives `context=` (R4C passes none;
+  [callable-pipes.md](callable-pipes.md) § Callable Context). References covering the real uses
+  closes `context=` as "not passed"; adopting it needs a concrete need references cannot express;
 - validation of `Context.inputs` against the declarations at plan/preparation time, before resources
   open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
@@ -1072,7 +1077,7 @@ gating (`skip_if`), whose successor is still undecided. Write execution (`TestPi
 and is **not** a parity item. [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main)
 points here for merge sequencing; its correctness-audit rows remain the gate's defect half.
 
-### R4E — Module configuration contracts and strict conf validation
+### R4E — Module configuration contracts, strict conf validation, and `isasync` interface classification
 
 Scheduled 2026-10-04 **after M1 and before M2**. [extensibility.md](extensibility.md) E1 owns the
 module contract ("generate configuration JSON Schema from typed configs"; invalid config fails before
@@ -1092,7 +1097,15 @@ Deliver:
   naming the node and key, before resources open or the source is read; a node whose module declares
   no contract is not rejected. The check lands inside `ModuleWrapper.prepare`, which the plan already
   calls once per node (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is needed;
-- the same check for built-in and entry-point modules.
+- the same check for built-in and entry-point modules;
+- interface classification by `isasync` rather than by attribute name, so a single async
+  implementation named `pipe` (`@processor async def pipe`) wraps as the async interface instead of
+  raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
+  [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns the semantics,
+  [release-readiness.md § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)
+  makes it a 1.0 requirement). It touches the decorator wrapper builder, `ModuleDefinition`'s
+  interface slots, and codegen, beside the plain-callable slot decision in
+  [extensibility.md](extensibility.md) E1.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
 annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers
@@ -1176,7 +1189,9 @@ configuration schema that `describe_module()` consumes (above) is that route.
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
   `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read`
-  (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes.
+  (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes. `@processor async def
+  pipe` wraps as async; `tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises`
+  (which pins today's `TypeError`) is replaced by a test that it wraps.
 - **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees,
   including the per-item `TypeError`s for a missing `extract` key (`build_conf` in
   `riko/modules/_prepare.py`) and an unsupported `simplemath` op, which only the `bad-op` and
@@ -1282,7 +1297,9 @@ Deliver:
 - explicit derive/combine handling for 1→N/N→1/N→N;
 - source-node namespace in root identity;
 - node semantic fingerprints using R2A encoding and the R2B best-effort/version contract;
-- custom-node `identity="preserve"|"derive"|"combine"` only where inference is ambiguous;
+- custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference is ambiguous,
+  including which modes a one-to-one `map` accepts (R4C carries all three inert; strict xfail
+  `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`);
 - node `version=` override plumbing;
 - declared resource bindings included in semantic fingerprints by resolved definition, not Context
   lookup name.
@@ -1299,6 +1316,8 @@ envelope may migrate immediately rather than waiting for R10.
   envelope and resolved resource definitions participate in semantic fingerprints.
 - **DELETE:** none at the public surface; migrated modules retain no second per-item
   provenance/identity carrier beside `_FeedItem`.
+- **CHANGES:** `riko.IdentityMode` is exported but inert until this phase; its `docs/CHANGES.rst`
+  entry lands with the phase that makes `identity=` take effect (triage 2026-10-27).
 
 ### R5B — CacheNode runtime / Mezmoize replay
 

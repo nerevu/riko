@@ -73,7 +73,13 @@ def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocume
 
         The ``WorkflowDocument`` as UTF-8 JSON bytes.
 
+    Raises:
+
+        InvalidPipelineError: If the workflow has a callable node.
+
     """
+    flow.validate_document_nodes()
+
     if indent is None:
         separators = (",", ":")
         suffix = ""

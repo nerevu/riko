@@ -579,7 +579,7 @@ Positional derivation is allowed only when stable ordering is guaranteed. N-to-1
 Built-ins infer identity behavior from known semantics/module metadata. Ambiguous custom operators have only:
 
 ```python
-identity: Literal["preserve", "derive", "combine"]
+identity: IdentityMode  # StrEnum: "preserve" | "derive" | "combine"
 ```
 
 A custom derive operator may additionally need `stable_order=True` before positional fallback is safe. Combine semantics may declare whether contributor order is significant. Execution `ordered=True` and operator semantic `stable_order=True` are distinct concepts.

@@ -197,6 +197,29 @@ class Executor(StrEnum):
     PROCESS = "process"
 
 
+class IdentityMode(StrEnum):
+    """
+    How a callable node's results relate to the identity of the items it receives.
+
+    ``PRESERVE`` keeps each input item's identity on its one result. ``DERIVE`` gives
+    each result a child identity derived from its input item. ``COMBINE`` builds a
+    result's identity from every item that contributed to it. A node carries the mode
+    it declares, but no run acts on it yet.
+
+    Examples:
+
+        >>> from riko import IdentityMode
+        >>>
+        >>> IdentityMode("derive") is IdentityMode.DERIVE, IdentityMode.COMBINE.value
+        (True, 'combine')
+
+    """
+
+    PRESERVE = "preserve"
+    DERIVE = "derive"
+    COMBINE = "combine"
+
+
 class DocumentShape(StrEnum):
     """
     The three JSON shapes a workflow input may take.
@@ -317,5 +340,6 @@ type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
 type ExecutorLike = Executor | str
+type IdentityModeLike = IdentityMode | str
 type DocumentShapeLike = DocumentShape | str
 type ConcurrencyLike = int | Literal["auto"]

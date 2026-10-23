@@ -22,7 +22,8 @@ Examples:
 from __future__ import annotations
 
 from contextlib import aclosing, closing
-from typing import TYPE_CHECKING, overload
+from functools import partial
+from typing import TYPE_CHECKING, Concatenate, cast, overload
 
 from attrs import define
 from typing_extensions import TypeVar
@@ -36,7 +37,12 @@ from ._resolver import dispatcher
 from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Callable, Generator
+
+    from riko.definitions._nodes import CallableVersion
+    from riko.definitions._resource_definition import ResourcesLike
+    from riko.types._enums import IdentityModeLike
+
 
 T = TypeVar("T", default=Item)
 
@@ -84,6 +90,65 @@ class Pipeline(PipelineDefinition[T]):
 
         """
         return arun_pipeline(self, dispatcher)
+
+    def map[R](
+        self,
+        fn: Callable[[T], R] | Callable[Concatenate[T, ...], R],
+        *,
+        resources: ResourcesLike = (),
+        version: CallableVersion = MISSING,
+        identity: IdentityModeLike | None = None,
+        **kwargs: object,
+    ) -> Pipeline[R]:
+        """
+        Chains ``fn`` as its own node and calls it with each item.
+
+        ``fn`` receives each item as is and its return value becomes the next item. It
+        is called with the item, then the keyword arguments, then each bound resource as
+        a keyword named after its alias. Keyword arguments must be JSON-native, so use
+        ``functools.partial`` to pass a non-JSON-native value.
+
+        Args:
+
+            fn: The callable to apply to each item.
+
+        Kwargs:
+
+            resources: The Context resources ``fn`` receives as keywords.
+            version: The durable identity of ``fn``'s behavior, if declared.
+
+            identity: How each result's identity relates to its input item
+                (``"preserve"``, ``"derive"``, or ``"combine"``), if declared. Not yet
+                implemented.
+
+            kwargs (JSONValue): The JSON-native keywords ``fn`` receives with each item.
+
+        Returns:
+
+            A new pipeline whose default output is the callable node.
+
+        Raises:
+
+            InvalidPipelineError: If a resource alias is not a Python identifier, a
+                keyword argument shares its name with a resource alias, a keyword
+                argument is not JSON-native, or ``identity`` is not an identity mode.
+
+            TypeError: If ``fn`` is not callable, or ``version`` is ``None`` or
+                unhashable.
+
+        Examples:
+
+            >>> from operator import itemgetter
+            >>>
+            >>> pipeline = Pipeline(source=[{"x": 1}, {"x": 2}])
+            >>> list(pipeline.map(lambda item: item["x"] * 10))
+            [10, 20]
+            >>> list(pipeline.map(itemgetter("x")))
+            [1, 2]
+
+        """
+        mapper = partial(super().map, fn, resources=resources, **kwargs)
+        return cast("Pipeline[R]", mapper(version=version, identity=identity))
 
     @overload
     def first(self) -> T: ...  # noqa: E704

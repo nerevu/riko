@@ -12,7 +12,17 @@ from __future__ import annotations
 
 from functools import partial
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Generic, Literal, Self, TypeGuard, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Concatenate,
+    Generic,
+    Literal,
+    Self,
+    TypeGuard,
+    cast,
+    overload,
+)
 
 from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
@@ -28,10 +38,10 @@ from riko.types._guards import is_mapping, is_streamlike
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
-from riko.types._workflow import Endpoint, NodeId
 
 from ._context import Context
-from ._nodes import ModuleNode, Node, StreamEdge, WriteNode
+from ._module_definition import get_callable_name
+from ._nodes import CallableNode, ModuleNode, WriteNode
 from ._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._targets import build_write
 from ._workflow_definition import Workflow
@@ -44,6 +54,7 @@ if TYPE_CHECKING:
         ConcurrencyLike,
         ExecutorLike,
         FmtLike,
+        IdentityModeLike,
         ModuleNameLike,
         StrLike,
     )
@@ -53,7 +64,12 @@ if TYPE_CHECKING:
     from riko.types._streams import SourceLike
     from riko.types.modules import AnyModuleConf, CallOptionsLike, Conf
 
-    from ._resource_definition import ResourceDefinition, ReusableResource
+    from ._nodes import CallableVersion
+    from ._resource_definition import (
+        ResourceDefinition,
+        ResourcesLike,
+        ReusableResource,
+    )
     from ._write import Destination
 
 T = TypeVar("T", default=Item)
@@ -76,75 +92,6 @@ def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
 
 
 _EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
-
-
-def _get_node_id(flow: Workflow, name: str) -> NodeId:
-    """Mints a conflict free ``<name>-<occurrence>`` node id."""
-    count = len([node for node in flow.nodes.values() if node.name == name]) + 1
-    candidate = f"{name}-{count}"
-
-    while candidate in flow.nodes:
-        count += 1
-        candidate = f"{name}-{count}"
-
-    return candidate
-
-
-def _build_appended_workflow(node: Node, flow: Workflow | None = None) -> Workflow:
-    """Builds a workflow with ``node``s and re-points the default output to it."""
-    flow = _EMPTY_WORKFLOW if flow is None else flow
-
-    if (tail := flow.outputs.get("default")) is None:
-        edges = flow.edges
-    else:
-        edges = (*flow.edges, StreamEdge(tail, Endpoint(node.id, "in")))
-
-    return Workflow(
-        nodes=[*flow.nodes.values(), node],
-        outputs={**flow.outputs, "default": Endpoint(node.id, "out")},
-        inputs=flow.inputs,
-        edges=edges,
-        resources=flow.resources,
-        version=flow.version,
-    )
-
-
-def _build_chained_workflow(
-    name: str,
-    flow: Workflow | None = None,
-    *,
-    conf: FrozenConf | Conf | None = None,
-    options: CallOptionsLike | None = None,
-    embed: Embed | None = None,
-) -> Workflow:
-    """Builds a workflow that appends a module node and re-points the default output."""
-    flow = _EMPTY_WORKFLOW if flow is None else flow
-    node_id = _get_node_id(flow, name)
-    node = ModuleNode(id=node_id, name=name, conf=conf, options=options, embed=embed)
-    return _build_appended_workflow(node, flow)
-
-
-def _build_write_workflow(
-    flow: Workflow,
-    dest: Destination,
-    *,
-    mode: WriteMode | str = WriteMode.REPLACE,
-    fmt: FmtLike | None = None,
-    keys: StrLike | None = None,
-) -> Workflow:
-    """Builds a workflow with a validated write node bound to ``dest``'s backend."""
-    prepared = build_write(dest, mode, fmt=fmt, keys=keys)
-    location: object = getattr(prepared.target, "dest", None)
-    node = WriteNode(
-        id=_get_node_id(flow, "write"),
-        name="write",
-        backend=prepared.target.backend,
-        dest=None if location is None else str(location),
-        fmt=prepared.fmt,
-        mode=prepared.operation.mode,
-        keys=prepared.operation.keys,
-    )
-    return _build_appended_workflow(node, flow)
 
 
 def _require_workflow(value: object, what: str | None = None, **_) -> Workflow:
@@ -258,14 +205,49 @@ class PipelineDefinition(Generic[T]):
             Endpoint(node='sort-1', port='out')
 
         """
-        flow = _build_chained_workflow(
-            str(name), conf=conf, options=options, embed=embed
-        )
-        return cls(flow)
+        return cls().pipe(name, conf=conf, options=options, embed=embed)
 
-    def _derive(self, flow: Workflow, source: SourceLike | None) -> Self:
-        """Builds a sibling pipeline over a derived workflow and source."""
-        return evolve(self, workflow=flow, source=source)
+    def replace(
+        self,
+        *,
+        workflow: Workflow | None = None,
+        source: SourceLike | MissingType | None = MISSING,
+    ) -> Self:
+        """
+        Derives a fresh pipeline with the given workflow or source.
+
+        The original is left unchanged, and the new pipeline keeps its context and
+        execution settings.
+
+        Kwargs:
+
+            workflow: Replacement workflow, or ``None`` to keep the current one.
+
+            source: Replacement source, omitted to keep the current one, or ``None`` for
+                no source.
+
+        Returns:
+
+            A new pipeline of the same type.
+
+        Examples:
+
+            >>> sort = PipelineDefinition.from_module("sort")
+            >>> seeded = sort.replace(source=[{"x": 1}])
+            >>> seeded.source
+            [{'x': 1}]
+            >>> seeded.workflow == sort.workflow
+            True
+            >>> seeded.replace(source=None).source
+            >>> seeded.replace(workflow=Workflow()).source
+            [{'x': 1}]
+
+        """
+        return evolve(
+            self,
+            workflow=self.workflow if workflow is None else workflow,
+            source=self.source if isinstance(source, MissingType) else source,
+        )
 
     def pipe(
         self,
@@ -310,9 +292,12 @@ class PipelineDefinition(Generic[T]):
             CallOptions(emit=True)
 
         """
-        args = str(name), self.workflow
-        flow = _build_chained_workflow(*args, conf=conf, options=options, embed=embed)
-        return self._derive(flow, self.source)
+        module, flow = str(name), self.workflow
+        node_id = flow.get_node_id(module)
+        node = ModuleNode(
+            id=node_id, name=module, conf=conf, options=options, embed=embed
+        )
+        return self.replace(workflow=flow.with_node(node))
 
     def write(
         self,
@@ -360,6 +345,7 @@ class PipelineDefinition(Generic[T]):
 
             TypeError: If ``dest`` is given together with ``conf``, ``options``,
                 or ``embed``.
+
             ValueError: If ``dest``, ``mode``, ``fmt``, and ``keys`` do not form a
                 write the destination supports.
 
@@ -378,10 +364,10 @@ class PipelineDefinition(Generic[T]):
             msg = "write() takes either a destination or module arguments, not both"
             raise TypeError(msg)
         else:
-            flow = _build_write_workflow(
-                self.workflow, dest, mode=mode, fmt=fmt, keys=keys
-            )
-            written = self._derive(flow, self.source)
+            prepared = build_write(dest, mode, fmt=fmt, keys=keys)
+            node_id = self.workflow.get_node_id("write")
+            node = WriteNode.from_prepared(prepared, id=node_id)
+            written = self.replace(workflow=self.workflow.with_node(node))
 
         return written
 
@@ -603,21 +589,70 @@ class PipelineDefinition(Generic[T]):
         """
         raise NotImplementedError("streaming fan-out is not available yet")
 
-    def map(self, *args: object, **kwargs: object) -> Self:
+    def map[R](
+        self,
+        fn: Callable[[T], R] | Callable[Concatenate[T, ...], R],
+        *,
+        resources: ResourcesLike = (),
+        version: CallableVersion = MISSING,
+        identity: IdentityModeLike | None = None,
+        **kwargs: object,
+    ) -> PipelineDefinition[R]:
         """
-        Reserves chaining a callable as its own node; its arguments are not settled.
+        Chains ``fn`` as its own node and calls it with each item.
+
+        ``fn`` receives each item as is and its return value becomes the next item. It
+        is called with the item, then the keyword arguments, then each bound resource as
+        a keyword named after its alias. Keyword arguments must be JSON-native, so use
+        ``functools.partial`` to pass a non-JSON-native value.
 
         Args:
 
-            args: The not-yet-settled positional arguments.
-            kwargs: The not-yet-settled keyword arguments.
+            fn: The callable to apply to each item.
+
+        Kwargs:
+
+            resources: The Context resources ``fn`` receives as keywords.
+            version: The durable identity of ``fn``'s behavior, if declared.
+
+            identity: How each result's identity relates to its input item
+                (``"preserve"``, ``"derive"``, or ``"combine"``), if declared. Not yet
+                implemented.
+
+            kwargs (JSONValue): The JSON-native keywords ``fn`` receives with each item.
+
+        Returns:
+
+            A new pipeline whose default output is the callable node.
 
         Raises:
 
-            NotImplementedError: Always; callable nodes are not available yet.
+            InvalidPipelineError: If a resource alias is not a Python identifier, a
+                keyword argument shares its name with a resource alias, a keyword
+                argument is not JSON-native, or ``identity`` is not an identity mode.
+
+            TypeError: If ``fn`` is not callable, or ``version`` is ``None`` or
+                unhashable.
+
+        Examples:
+
+            >>> from operator import itemgetter
+            >>>
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> definition = fetch.map(itemgetter("title"))
+            >>> sorted(definition.workflow.nodes)
+            ['fetch-1', 'map-1']
+            >>> definition.workflow.outputs["default"]
+            Endpoint(node='map-1', port='out')
 
         """
-        raise NotImplementedError("chaining a callable as a node is not available yet")
+        flow = self.workflow
+        name = get_callable_name(fn, "map")
+        args = {"version": version, "identity": identity, "kwargs": kwargs}
+        _id = flow.get_node_id(name)
+        node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **args)
+        mapped = self.replace(workflow=flow.with_node(node))
+        return cast("PipelineDefinition[R]", mapped)
 
     def __getattr__(self, name: str) -> Callable[..., Self]:
         """
@@ -633,21 +668,18 @@ class PipelineDefinition(Generic[T]):
 
         return partial(self.pipe, name)
 
-    def _or_template(self, other: PipelineDefinition) -> Self:
-        """Chains a single-module, source-less pipeline used as a reusable template."""
+    def _or_template(self, other: PipelineDefinition[Any]) -> Self:
+        """Chains a single-node, source-less pipeline used as a reusable template."""
         flow = other.workflow
-        single = len(flow.nodes) == len(flow.module_nodes) == 1
-        node = next(iter(flow.module_nodes.values())) if single else None
+        single = len(flow.nodes) == len(flow.runnable_nodes) == 1
+        node = next(iter(flow.runnable_nodes.values())) if single else None
 
-        if other.source is None and node is not None:
-            chained = self.pipe(
-                node.name, conf=node.conf, options=node.options, embed=node.embed
-            )
-        else:
-            msg = "pipeline template must define exactly one module"
+        if other.source is not None or node is None:
+            msg = "pipeline template must define exactly one module or callable"
             raise InvalidPipelineError(msg)
 
-        return chained
+        fresh = evolve(node, id=self.workflow.get_node_id(node.name))
+        return self.replace(workflow=self.workflow.with_node(fresh))
 
     def __or__(self, other: object) -> Self:
         """
@@ -706,7 +738,7 @@ class PipelineDefinition(Generic[T]):
 
         """
         if self.source is None and _is_source(other):
-            primed = self._derive(self.workflow, other)
+            primed = self.replace(source=other)
         else:
             primed = cast("Self", NotImplemented)
 

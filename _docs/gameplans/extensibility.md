@@ -115,7 +115,10 @@ boundary (stamping declared metadata), reject them, or type the slots honestly. 
 metadata or widen the slot types ahead of that decision. Since 2026-10-21
 `ModuleDefinition.from_module(module, *, name, description)` (which replaced the `module=` kwarg) reads
 a module's callables, name, and docstring summary once into a plain keyword-only record; it is the
-definition-boundary normalization point this decision would extend.
+definition-boundary normalization point this decision would extend. Since 2026-10-22 a `Pipeline.map`
+callable node borrows the built-in `udf` wrapper for this metadata (`_resolve_callable` in
+`riko/execution/_prepared.py`; `udf`'s parser never runs), so the ruling covers callable nodes too:
+stamping or honest slot types would let a callable node resolve without a donor module.
 
 ## E2. Plugin ecosystem v1
 
@@ -465,6 +468,7 @@ unknown node/edge family
 unknown structural field
 unknown/undeclared port
 duplicate node id
+empty or blank node id or module name
 missing referenced node
 more than one StreamEdge into one target stream port
 invalid/missing required fan-in positions

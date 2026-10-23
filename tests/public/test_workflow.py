@@ -18,6 +18,7 @@ from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     PublishEdge,
     ReadNode,
@@ -31,10 +32,11 @@ from riko.definitions._workflow_definition import (
     normalize_workflow,
 )
 from riko.definitions._write import WriteMode
+from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import register_workflow_store
-from riko.types._collections import FrozenDict
+from riko.types._collections import FrozenDict, normalize_mapping
 from riko.types._enums import Backends, DocumentShape, ExecutionMode, Formats
 from riko.types._pipedef import Embed
 from riko.types._workflow import Endpoint, ParsedPort, parse_port
@@ -1000,8 +1002,8 @@ def _workflow(
     return Workflow(
         nodes=nodes,
         edges=tuple(edges),
-        outputs={} if outputs is None else outputs,
-        inputs={} if inputs is None else inputs,
+        outputs=normalize_mapping(outputs),
+        inputs=normalize_mapping(inputs),
         resources=resources,
         version=version,
     )
@@ -1017,11 +1019,11 @@ _A = ModuleNode(id="a", name="fetch")
 _B = ModuleNode(id="b", name="sort")
 
 
-class TestRequireModuleOnly:
+class TestRequireRunnableOnly:
     def test_a_module_only_workflow_passes(self):
         flow = Workflow(nodes=[_A], outputs={"default": Endpoint("a", "out")})
 
-        assert flow.require_module_only("execution") is None
+        assert flow.require_runnable_only("execution") is None
 
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
@@ -1030,7 +1032,40 @@ class TestRequireModuleOnly:
         flow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
-            flow.require_module_only("execution")
+            flow.require_runnable_only("execution")
+
+    def test_callable_nodes_pass(self):
+        node = CallableNode(id="c", name="len", fn=len)
+        flow = Workflow(nodes=[_A, node], outputs={"default": Endpoint("c", "out")})
+        assert flow.require_runnable_only("execution") is None
+
+
+_CALLABLE_FLOW = Workflow(
+    nodes=[CallableNode(id="len-1", name="len", fn=len)],
+    outputs={"default": Endpoint("len-1", "out")},
+)
+
+
+class TestCallableNodeDocuments:
+    @pytest.mark.parametrize(
+        "write",
+        [
+            pytest.param(Workflow.serialize, id="serialize"),
+            pytest.param(normalize_workflow, id="normalize"),
+            pytest.param(partial(compile_workflow, name="pipe_len"), id="compile"),
+        ],
+    )
+    def test_a_callable_node_has_no_document_form(self, write):
+        with pytest.raises(
+            InvalidPipelineError, match=r"callable node\(s\) \['len-1'\]"
+        ):
+            write(_CALLABLE_FLOW)
+
+    def test_a_document_cannot_declare_a_callable_node(self):
+        raw = {"nodes": [{"name": "len", "family": "callable"}]}
+
+        with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
+            Workflow.parse(raw)
 
 
 _A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")

@@ -326,7 +326,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             )
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
-            bound = partial(call, context=self.context, **extra)
+            item_call = node.sync_interface.item_call
+            bound = partial(item_call, context=self.context, **extra)
             stream = self._map_stream(cast("Callable[[T], Iterable[T]]", bound), source)
         elif sync_native:
             _stream = call(source, context=self.context, **extra)

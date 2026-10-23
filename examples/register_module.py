@@ -71,7 +71,7 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     return parser(*args, **kwargs)
 
 
-@operator()
+@operator
 def pipe(*args: Any, **kwargs: Any) -> Stream:
     """
     Uppercases each item's ``content`` field.

@@ -45,6 +45,7 @@ OTHER = frozenset(
         "Endpoint",
         "ExecutionMode",
         "Executor",
+        "IdentityMode",
         "Node",
         "OneShotResource",
         "Pipeline",
@@ -137,6 +138,7 @@ EXT_WORKFLOWS = frozenset(
     {
         "ActionNode",
         "CacheNode",
+        "CallableNode",
         "Dispatcher",
         "ModuleNode",
         "PublishEdge",

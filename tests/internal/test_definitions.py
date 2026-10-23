@@ -38,14 +38,15 @@ from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     ReadNode,
     StreamEdge,
     SubscribeNode,
     WriteNode,
-    require_module_node,
+    require_runnable_node,
 )
-from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
+from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
@@ -94,12 +95,18 @@ from riko.types._collections import (
     require_strlike,
     typed_dict_keys,
 )
-from riko.types._enums import Backends, Executor, Formats, resolve_enum
+from riko.types._enums import Backends, Executor, Formats, IdentityMode, resolve_enum
 from riko.types._guards import require_mapping, require_sequence
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._resource import SyncLifecyclePlan
+from riko.types._workflow import (
+    DocumentNodeFamily,
+    Endpoint,
+    RawEdge,
+    RawEndpoint,
+    RawNode,
+)
 from riko.types._workflow import Edge as EdgeBase
-from riko.types._workflow import Endpoint, NodeFamily, RawEdge, RawEndpoint, RawNode
 from riko.types.modules import CallOptions, RawCallOptions
 from tests import async_test, skipif_issync
 
@@ -413,6 +420,21 @@ class _Rule:
     field: str
 
 
+_BLANK_IDENTIFIERS = [
+    pytest.param(lambda: ModuleNode(id="", name="hash"), "ModuleNode 'id'", id="id"),
+    pytest.param(
+        lambda: ModuleNode(id=" ", name="hash"), "ModuleNode 'id'", id="blank"
+    ),
+    pytest.param(lambda: ModuleNode(id="a", name=""), "ModuleNode 'name'", id="name"),
+    pytest.param(lambda: Endpoint("", "out"), "Endpoint 'node'", id="endpoint"),
+    pytest.param(
+        lambda: Workflow.parse({"nodes": [{"name": " "}], "outputs": {}}),
+        "ModuleNode 'name'",
+        id="document-name",
+    ),
+]
+
+
 class TestNodes:
     def test_module_conf_accepts_floats_and_none(self):
         node = ModuleNode(id="a", name="sleep", conf={"wait": 1.5, "join_key": None})
@@ -428,6 +450,11 @@ class TestNodes:
         with pytest.raises(InvalidPipelineError, match="ModuleNode 'id'"):
             ModuleNode(id=1, name="hash")  # pyright: ignore[reportArgumentType]
 
+    @pytest.mark.parametrize(("build", "match"), _BLANK_IDENTIFIERS)
+    def test_blank_identifiers_are_rejected(self, build, match):
+        with pytest.raises(InvalidPipelineError, match=f"{match} must not be blank"):
+            build()
+
     @pytest.mark.parametrize(
         ("node", "kwargs", "match"),
         [
@@ -441,7 +468,41 @@ class TestNodes:
             node(id="a", name="n", **kwargs)
 
 
+_CALLABLE_NODE_ERRORS = [
+    pytest.param({"resources": {"a-b": "db"}}, InvalidPipelineError, "identifiers"),
+    pytest.param({"resources": "def"}, InvalidPipelineError, "identifiers"),
+    pytest.param(
+        {"resources": "db", "kwargs": {"db": 1}}, InvalidPipelineError, "share names"
+    ),
+    pytest.param({"version": None}, TypeError, "must not be None"),
+    pytest.param({"version": ["v1"]}, TypeError, "must be a hashable scalar"),
+    pytest.param({"identity": "bogus"}, InvalidPipelineError, "'identity'"),
+    pytest.param({"fn": "len"}, TypeError, "callable"),
+]
+
+
+class TestCallableNode:
+    @pytest.mark.parametrize(("kwargs", "error", "match"), _CALLABLE_NODE_ERRORS)
+    def test_construction_is_validated(self, kwargs: Any, error: Any, match: str):
+        with pytest.raises(error, match=match):
+            CallableNode(**{"id": "a", "name": "len", "fn": len, **kwargs})
+
+    def test_identity_accepts_a_bare_string(self):
+        node = CallableNode(id="a", name="len", fn=len, identity="preserve")
+        assert node.identity is IdentityMode.PRESERVE
+
+    def test_fn_is_compared_by_identity(self):
+        node = CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
+        assert node == CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
+        assert node != CallableNode(id="a", name="len", fn=lambda value: value)
+
+
 class TestWorkflowFields:
+    def test_appending_a_node_declares_its_resources(self):
+        flow = Workflow(resources=("cache",))
+        node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
+        assert flow.with_node(node).resources == ("cache", "db")
+
     def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
         with pytest.raises(TypeError, match="not JSON serializable"):
             json.dumps(object(), cls=WorkflowEncoder)
@@ -561,7 +622,22 @@ class TestWorkflowFields:
             Workflow(nodes=[], outputs={}, inputs={"q": declaration})
 
 
+_EXISTING_IDS = [
+    pytest.param((), "fetch-1", id="empty"),
+    pytest.param(("fetch-1",), "fetch-2", id="next"),
+    pytest.param(("fetch-a",), "fetch-1", id="custom-id"),
+    pytest.param(("fetch-2",), "fetch-1", id="gap"),
+]
+
+
 class TestNormalizeInternals:
+    @pytest.mark.parametrize(("ids", "expected"), _EXISTING_IDS)
+    def test_get_node_id_matches_a_normalized_id(self, ids, expected):
+        existing = [{"id": node_id, "name": "fetch"} for node_id in ids]
+        normalized = list(_build_nodes([*existing, {"name": "fetch"}]))[-1]
+        flow = Workflow(nodes=[ModuleNode(**node) for node in existing])
+        assert flow.get_node_id("fetch") == normalized == expected
+
     @pytest.mark.parametrize(
         ("legacy", "direction", "canonical"),
         [
@@ -584,8 +660,8 @@ class TestNormalizeInternals:
     ):
         assert _normalize_port(legacy, direction) == canonical
 
-    def test_every_node_family_has_a_builder(self):
-        families = set(get_args(NodeFamily.__value__))
+    def test_every_document_node_family_has_a_builder(self):
+        families = set(get_args(DocumentNodeFamily.__value__))
         assert set(_NODE_BUILDERS) == families
         assert {builder.family for builder in _NODE_BUILDERS.values()} == families
 
@@ -712,7 +788,12 @@ class TestExecutionPlanFields:
         match = ": PreparedNode 'node': write node execution"
 
         with pytest.raises(InvalidPipelineError, match=match):
-            require_module_node(node, "PreparedNode 'node'")
+            require_runnable_node(node, "PreparedNode 'node'")
+
+    def test_a_callable_node_prepares_with_no_call_options(self):
+        node = CallableNode(id="a", name="len", fn=len, resources="db")
+        prepared = PreparedNode(node, _HASH)
+        assert (prepared.options, prepared.extras) == (CallOptions(), ("resources",))
 
 
 class TestPipelineDefinitionFields:
@@ -730,6 +811,12 @@ class TestPipelineDefinitionFields:
     def test_a_context_is_accepted(self):
         context = Context()
         assert PipelineDefinition(context=context).context is context
+
+    def test_chained_maps_declare_resources_once_in_order(self):
+        first = PipelineDefinition().map(len, resources={"a": "db"})
+        second = first.map(str, resources=("cache", "db"))
+        assert second.workflow.resources == ("db", "cache")
+        assert second.workflow.isvalid
 
 
 _INVALID: list[tuple[Callable[..., object], object]] = [
