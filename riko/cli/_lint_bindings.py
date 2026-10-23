@@ -3,9 +3,11 @@
 Checks code and doctests for a ``Workflow`` bound to ``workflow`` rather than ``flow``.
 
 A parameter, local, module-level, or doctest binding that holds a ``Workflow`` is
-named ``flow``; the name ``workflow`` is the decorator that tags a workflow module's
-pipe. Instance fields (``pipeline.workflow``), the ``from_workflow`` constructor
-name, and the ``workflow=`` keywords that set those fields keep their names.
+named ``flow``. The name ``workflow`` is the decorator that tags a workflow module's
+pipe. Instance fields (``pipeline.workflow``), the ``from_workflow`` constructor name,
+and the ``workflow=`` keywords that set those fields keep their names, including a
+method's keyword-only parameter named after its class's field
+(``replace(*, workflow=None)``).
 """
 
 from __future__ import annotations
@@ -126,18 +128,33 @@ def _binds_workflow(node: _Binding, helpers: frozenset[str]) -> bool:
     return binds
 
 
+def _gen_field_keywords(cls: ast.ClassDef) -> Iterator[ast.arg]:
+    """Generates the keyword-only method parameters named after one of the fields."""
+    names = {
+        statement.target.id
+        for statement in cls.body
+        if isinstance(statement, ast.AnnAssign)
+        and isinstance(statement.target, ast.Name)
+    }
+    methods = (
+        statement
+        for statement in cls.body
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+
+    for method in methods:
+        yield from (arg for arg in method.args.kwonlyargs if arg.arg in names)
+
+
 def _gen_tree_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[int]:
     """Finds the line of each reserved-name ``Workflow`` binding in a tree."""
-    fields = {
-        id(statement)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef)
-        for statement in node.body
-    }
+    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    fields = {id(statement) for cls in classes for statement in cls.body}
+    keywords = {id(arg) for cls in classes for arg in _gen_field_keywords(cls)}
     bindings = (
         node
         for node in ast.walk(tree)
-        if isinstance(node, _BINDINGS) and id(node) not in fields
+        if isinstance(node, _BINDINGS) and id(node) not in fields | keywords
     )
 
     for node in bindings:
