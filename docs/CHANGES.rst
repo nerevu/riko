@@ -344,8 +344,8 @@ Fixes
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g., ``CST``) toward US zones.
 
-- Parsing a stream of date strings now caches at most the 1024 most recent strings
-  (``RIKO_PARSED_DATE_CACHE_SIZE``) instead of every distinct one.
+- Parsing a stream of date strings now caches at most ``RIKO_PARSED_DATE_CACHE_SIZE``
+  most recent strings instead of every distinct one.
 
 - ``compile-workflow --help`` and its usage errors now show the command's installed name
   instead of ``compile``.

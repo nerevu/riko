@@ -24,12 +24,12 @@ from typing import TYPE_CHECKING, Any, cast, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_tt, resolve_aware_datetime
 from riko.coercion._sequences import truncate_content
 from riko.io._sync import Fetch
 from riko.parsing.documents import IS_FASTFEEDPARSER, rss_parser
-from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator

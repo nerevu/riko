@@ -25,7 +25,7 @@ from riko.bado._backend import (
     create_task_group,
     fail_after,
 )
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     InvalidPipelineError,
     PipelineStateError,
     ResourceInterpretationWarning,

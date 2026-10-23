@@ -11,8 +11,9 @@ from typing import TYPE_CHECKING, BinaryIO
 from riko.bado import _backend
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
-from riko.base._constants import ENCODING
-from riko.base.exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._config import ENCODING
+from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._guards import is_mapping
 from riko.definitions._resource_definition import OneShotResource, Resource
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
@@ -26,7 +27,6 @@ from riko.definitions._write import (
 from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import serialize_items
 from riko.types._enums import FmtLike, Formats, StrLike
-from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator

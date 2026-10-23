@@ -11,8 +11,8 @@ from itertools import repeat
 from time import struct_time
 from typing import TYPE_CHECKING, Any, Self, cast, overload
 
+from riko.base._guards import is_known_sequence, is_listlike, is_mapping
 from riko.base._iterutils import map_values, multi_try
-from riko.types._guards import is_known_sequence, is_listlike, is_mapping
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping

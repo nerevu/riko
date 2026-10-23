@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
 
 import riko.types._enums as enums_module
 import riko.types._scalars as scalars_module
+from riko.base._guards import is_mapping
+from riko.base._require_guards import require_from_form
 from riko.base._typing import resolve_type_hints
-from riko.types._collections import require_from_form
-from riko.types._guards import is_mapping
 from riko.types.modules import RegexConfRule, RegexRule
 
 if TYPE_CHECKING:

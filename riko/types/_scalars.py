@@ -8,6 +8,8 @@ from uuid import UUID
 
 from typing_extensions import TypeIs
 
+from riko.base._typing import HashableType
+
 type AnyStr = str | bytes
 type BasicValue = str | int
 type NumLike = float | int | Decimal
@@ -32,34 +34,6 @@ type NonNullHashable = (
 )
 type Hashable = NonNullHashable | None
 type DateDict = dict[str, str | int | date | bool]
-
-# Instance Types
-AnyStrType: tuple[type[str], type[bytes]] = (str, bytes)
-BasicValueType: tuple[type[str], type[int]] = (str, int)
-TemporalType: tuple[type, ...] = (datetime, date, struct_time)
-DateLikeType: tuple[type, ...] = (str, int, datetime, date, struct_time)
-NumLikeType: tuple[type, ...] = (float, int, Decimal)
-PrimitiveValueType: tuple[type, ...] = (
-    str,
-    int,
-    float,
-    Decimal,
-    datetime,
-    date,
-    struct_time,
-)
-HashableType: tuple[type, ...] = (
-    str,
-    int,
-    float,
-    Decimal,
-    date,
-    struct_time,
-    PurePath,
-    bytes,
-    UUID,
-    tuple,
-)
 
 
 def is_non_null_hashable(value: object) -> TypeIs[NonNullHashable]:

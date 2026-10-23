@@ -16,13 +16,13 @@ import click
 import requests
 from click import Choice
 
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import DOCS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from pathlib import Path
 
-_CHANGELOG_PATH = ROOT_DIR / "docs" / "CHANGES.rst"
+_CHANGELOG_PATH = DOCS_DIR / "CHANGES.rst"
 _GITHUB_REPO = "nerevu/riko"
 _PYPI_PROJECT = "riko"
 

@@ -15,17 +15,18 @@ from itertools import chain, pairwise
 from typing import TYPE_CHECKING, cast
 
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_mapping, require_mapping, require_sequence
 from riko.base._iterutils import partition, unzip
 from riko.base._logging import get_logger
-from riko.base._strutils import pythonise
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
+from riko.base._require_guards import (
     def_from_require,
     require_from_typed_dict,
     require_str,
     typed_dict_keys,
 )
-from riko.types._guards import is_mapping, require_mapping, require_sequence
+from riko.base._strutils import pythonise
+from riko.types._options import RawCallOptions
 from riko.types._pipedef import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._workflow import (
     WORKFLOW_VERSION,
@@ -34,7 +35,7 @@ from riko.types._workflow import (
     RawNode,
     RawWorkflow,
 )
-from riko.types.modules import Conf, RawCallOptions, WriteConf, require_module_conf
+from riko.types.modules import Conf, WriteConf, require_module_conf
 
 from ._nodes import optional_str
 from ._normalize import resolve_port

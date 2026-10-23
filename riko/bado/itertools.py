@@ -29,8 +29,8 @@ from contextlib import aclosing
 from functools import partial
 from typing import TYPE_CHECKING, cast, overload
 
-from riko.base._constants import DEF_CONCURRENCY_LIMIT
-from riko.types._sentinels import MISSING
+from riko.base._config import DEF_CONCURRENCY_LIMIT
+from riko.base._sentinels import MISSING
 
 from ._backend import (
     CapacityLimiter,

@@ -11,20 +11,19 @@ from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._guards import (
+    is_known_sequence,
+    is_mapping,
+    is_mapping_seq,
+    is_value_seq,
+)
 from riko.base._logging import get_logger
+from riko.base._sentinels import Sentinel, SentinelValue, StreamState, is_sentinel
 from riko.base._strutils import replacer
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_value, resolve_cast_type
 from riko.types._enums import CastType
-from riko.types._guards import (
-    is_known_sequence,
-    is_mapping,
-    is_mapping_seq,
-    is_sentinel,
-    is_type_value,
-    is_value_seq,
-)
-from riko.types._sentinels import Sentinel, SentinelValue, StreamState
+from riko.types.modules import is_type_value
 
 if TYPE_CHECKING:
     from logging import Logger

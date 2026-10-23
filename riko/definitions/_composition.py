@@ -27,16 +27,15 @@ from typing import (
 from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
-    FrozenConf,
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_mapping, is_streamlike
+from riko.base._require_guards import (
     narrow_def_from_require,
     require_instance,
     validator_from_require,
 )
-from riko.types._guards import is_mapping, is_streamlike
+from riko.base._sentinels import MISSING, MissingType
 from riko.types._module_ids import BUILTIN_MODULE_IDS
-from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
 
 from ._context import Context
@@ -59,10 +58,12 @@ if TYPE_CHECKING:
         StrLike,
     )
     from riko.types._events import EventSink
+    from riko.types._frozendict import FrozenConf
+    from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
     from riko.types._streams import SourceLike
-    from riko.types.modules import AnyModuleConf, CallOptionsLike, Conf
+    from riko.types.modules import AnyModuleConf, Conf
 
     from ._nodes import CallableVersion
     from ._resource_definition import (

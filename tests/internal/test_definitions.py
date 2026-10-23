@@ -28,11 +28,23 @@ import pytest
 from attrs import fields_dict
 
 from riko.bado import as_async
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     InvalidPipelineError,
     PipelineStateError,
     UnsupportedTargetError,
 )
+from riko.base._guards import require_mapping, require_sequence
+from riko.base._recordutils import field_names
+from riko.base._require_guards import (
+    normalize_strs,
+    require_finite,
+    require_from_form,
+    require_from_typed_dict,
+    require_str,
+    require_strlike,
+    typed_dict_keys,
+)
+from riko.base._typing import resolve_enum
 from riko.definitions._composition import PipelineDefinition
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -44,6 +56,7 @@ from riko.definitions._nodes import (
     StreamEdge,
     SubscribeNode,
     WriteNode,
+    require_binding,
     require_runnable_node,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
@@ -83,20 +96,9 @@ from riko.runtime._write_session import (
     file_write_session,
     write_through,
 )
-from riko.types._collections import (
-    FrozenDict,
-    field_names,
-    normalize_strs,
-    require_binding,
-    require_finite,
-    require_from_form,
-    require_from_typed_dict,
-    require_str,
-    require_strlike,
-    typed_dict_keys,
-)
-from riko.types._enums import Backends, Executor, Formats, IdentityMode, resolve_enum
-from riko.types._guards import require_mapping, require_sequence
+from riko.types._enums import Backends, Executor, Formats, IdentityMode
+from riko.types._frozendict import FrozenDict
+from riko.types._options import CallOptions, RawCallOptions
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._resource import SyncLifecyclePlan
 from riko.types._workflow import (
@@ -107,7 +109,6 @@ from riko.types._workflow import (
     RawNode,
 )
 from riko.types._workflow import Edge as EdgeBase
-from riko.types.modules import CallOptions, RawCallOptions
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:

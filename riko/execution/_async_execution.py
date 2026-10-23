@@ -34,7 +34,7 @@ from riko.bado.itertools import (
     async_map_stream,
 )
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,

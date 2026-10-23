@@ -19,20 +19,17 @@ import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko.base._strutils import replacer
-from riko.base.exceptions import InvalidPipelineError
-
-from ._scalars import BasicValueType, PrimitiveValueType
-from ._sentinels import MISSING, SentinelValue, StreamState
+from ._exceptions import InvalidPipelineError
+from ._sentinels import MISSING
+from ._typing import BasicValueType, PrimitiveValueType
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from ._scalars import BasicValue
-    from ._sentinels import MissingType, Sentinel
-    from ._streams import AnyIterable, Item, StatefulItem
-    from ._values import BasicList
-    from .modules import AnyConfRule, Conf, ConfArg
+    from riko.types._scalars import BasicValue
+    from riko.types._streams import AnyIterable
+    from riko.types._values import BasicList
+    from riko.types.modules import Conf
 
 
 def _protocol_signature(method: Callable) -> Signature:
@@ -137,10 +134,6 @@ def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
     return attrs.has(type(value)) and not is_mapping(value)
 
 
-def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
-    return is_dataclass_inst(value) and type(value).__name__.endswith("ConfRule")
-
-
 @overload
 def require_mapping(  # noqa: E704
     value: Conf | None,
@@ -169,14 +162,6 @@ def require_mapping[K, V](  # noqa: E302
         raise error(f"{what} must be a mapping")
 
     return value
-
-
-def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
-    return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
-
-
-def is_missing_type(val: Item | MissingType | None) -> TypeIs[MissingType]:
-    return val is MISSING
 
 
 def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
@@ -280,20 +265,6 @@ def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]
 
     """
     return is_listlike(value) or isinstance(value, AsyncIterable)
-
-
-def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:
-    if SentinelValue in val:
-        sentinel = str(val[SentinelValue])
-        key = replacer(sentinel, "")
-    else:
-        key = None
-
-    return all([key, (len(val) in {2, 3}), key in kwargs])
-
-
-def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
-    return len(val) == 2 and "type" in val and "value" in val
 
 
 @overload

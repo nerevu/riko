@@ -9,15 +9,15 @@ from typing import TYPE_CHECKING, cast, overload
 
 from attrs import Factory, define, field
 
+from riko.base._guards import is_mapping
 from riko.base._iterutils import broadcast, dispatch
+from riko.base._require_guards import narrow_from_require, require_from_form
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import cast_none, cast_pass, cast_value, resolve_cast_type
 from riko.parsing._dotdict import match_key
 from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
-from riko.types._collections import narrow_from_require, require_from_form
 from riko.types._enums import BasicCastType, CastType
-from riko.types._guards import is_mapping
 from riko.types._options import (
     Casted,
     DecorationOptions,
@@ -329,7 +329,7 @@ class PreparedModule[T, E]:
 
         Examples:
 
-            >>> from riko.types._guards import is_mapping
+            >>> from riko.base._guards import is_mapping
             >>>
             >>> opts = {"assign": "content", "emit": is_mapping}
             >>> prepared = PreparedModule(name="pipe", opts=opts)

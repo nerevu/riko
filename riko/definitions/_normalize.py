@@ -18,21 +18,23 @@ from typing import TYPE_CHECKING, Any, TypedDict, cast, get_args
 from attrs import AttrsInstance
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._graph import edges_to_graph, leaves
+from riko.base._guards import is_mapping, require_mapping, require_sequence
 from riko.base._iterutils import gen_non_none, map_values, unzip
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
-    FrozenDict,
-    FrozenJSON,
-    freeze_json,
-    normalize_mapping,
+from riko.base._recordutils import serialize_attrs
+from riko.base._require_guards import (
     normalize_strs,
     require_from_attrs,
     require_from_typed_dict,
     require_str,
-    serialize_attrs,
 )
-from riko.types._guards import is_mapping, require_mapping, require_sequence
+from riko.types._frozendict import (
+    FrozenDict,
+    FrozenJSON,
+    freeze_json,
+    normalize_mapping,
+)
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,

@@ -25,11 +25,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.rss.discovery import aload_rss_links, load_rss_links
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger

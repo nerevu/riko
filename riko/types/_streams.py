@@ -11,7 +11,10 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, TypeGuard
+
+from riko.base._guards import is_mapping
+from riko.base._sentinels import StreamState
 
 from ._geo import AnyLocation
 
@@ -19,7 +22,6 @@ if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
     from ._rss import RSSEntry
-    from ._sentinels import StreamState
     from ._values import RikoDict, RikoValue, StringyDict
 
 
@@ -74,3 +76,7 @@ type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
 type SourceLike = Item | Feed | Awaitable[Item | Feed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams
+
+
+def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
+    return isinstance(val.get("state"), StreamState) if is_mapping(val) else False

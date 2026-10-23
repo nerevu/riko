@@ -28,11 +28,11 @@ from typing import TYPE_CHECKING, Any, cast
 from babel.numbers import format_currency
 
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.base.currencies import CURRENCY_CODES
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from decimal import Decimal

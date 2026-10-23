@@ -1129,7 +1129,7 @@ and `ModuleNode.conf` upstream is already frozen JSON, so this is a latent hazar
 - **Interim, sized 2026-10-13:** mark every key of the conf `TypedDict`s `ReadOnly[...]` (PEP 705; no
   class-wide flag exists). A scripted rewrite of `riko/types/modules.py` wraps 247 keys across 89
   classes and adds no pyright errors (no code writes into a conf `TypedDict`). It needs two helpers to
-  look through `ReadOnly[...]`: `_get_key_qualifier` (`riko/types/_collections.py`), without which
+  look through `ReadOnly[...]`: `_get_key_qualifier` (`riko/base/_require_guards.py`), without which
   `typed_dict_keys` misreads `Required`/`NotRequired` in 27 conf types; and `_strip_required`
   (`riko/cli/_gen_config.py`), without which regenerating `_configs.py` changes 127 lines and the
   codegen drift test fails. Enforcement is static only.
@@ -1399,7 +1399,10 @@ v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/fin
 (`file_write_session` vs `async_file_write_session` differ only by `await`; the
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
 decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
-with its tests).
+with its tests). Likewise `resolve_format` (`riko/definitions/_targets.py`), whose only consumer outside
+`_targets.py` (where `FileTarget.capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
+audit): reuse it for `WriteNode` format inference from a locator; it stays either way because
+`FileTarget` needs it.
 Coverage triage (2026-10-15): the async twin's incremental stream write, append-mode trailing-newline
 probe (`aends_with_newline`/`ainitial_file_size`/`aneeds_newline`), and unsupported-target guard in
 `async_file_write_session` run in no test; they were left untested rather than mirrored, so whichever
@@ -1555,6 +1558,9 @@ twin, avoid `get_` on a method that creates channel state, and say *subscribe*/*
 Audit note (2026-10-10 structural audit): `riko/runtime/_pubsub/_types.py` holds two aliases whose
 three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge it into
 `riko/types/_streams.py` when this phase reshapes the hub types rather than moving it twice.
+The sync hub's `coroutine` receiver decorator (`riko/runtime/_pubsub/__init__.py`) has one consumer,
+`riko/modules/receive.py` (2026-10-23 move audit); delete it with that module unless the new
+subscribe API reuses it.
 
 **Exit:**
 
@@ -1732,6 +1738,13 @@ drift), the six-line table-reader block repeated across `csv.py`/`fetchtable.py`
 in `fetchtext`, `feedautodiscovery`, `write`, `timeout`, `aggregate`, `udf`, and `fetchsitefeed`, and
 `rss/discovery.py`'s `load_rss_links`/`aload_rss_links`. Collapse each pair to one body as it moves to
 the Feed-native path.
+
+Audit note (2026-10-23 file-split audit): `riko/modules/_decorators.py` (~2050 lines) has three clean
+seams — the `Module` base with its option sets and terminal materialization, the `_Prepared*` call
+records, and the `processor`/`operator`/`splitter` classes, which never reference each other. Split it
+along those seams once this phase's shim deletions shrink the base, not before: extracting the base
+now would move the `_materialize_terminal*` shims this phase deletes. Repoint every internal importer
+of `processor`/`operator`/`splitter` in the same change; `riko.ext` stays the facade authors import.
 
 **Exit:**
 

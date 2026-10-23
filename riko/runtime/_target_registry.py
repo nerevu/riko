@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from riko.base.exceptions import UnsupportedTargetError
+from riko.base._exceptions import UnsupportedTargetError
 from riko.definitions._targets import FileTarget
 from riko.types._enums import BackendLike, Backends
 from riko.types._target_protocols import Target

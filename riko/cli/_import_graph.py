@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from tokenize import open as open_python
 from typing import TYPE_CHECKING, Literal
 
+from riko.base._exceptions import ImportAnalysisError
 from riko.base._iterutils import gen_non_none
-from riko.base.exceptions import ImportAnalysisError
 
 if TYPE_CHECKING:
     from pathlib import Path

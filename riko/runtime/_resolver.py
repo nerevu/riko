@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, overload
 
-from riko.base.exceptions import UnsupportedModuleError, UnsupportedWorkflowError
+from riko.base._exceptions import UnsupportedModuleError, UnsupportedWorkflowError
 
 from ._module_registry import module_registry
 from ._workflow_resolver import WorkflowResolver, workflow_resolver

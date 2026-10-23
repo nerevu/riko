@@ -30,7 +30,7 @@ import requests
 from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
-from riko.base._constants import ENCODING, STREAMING_THRESHOLD
+from riko.base._config import ENCODING, STREAMING_THRESHOLD
 from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
 from riko.coercion._sequences import truncate_content

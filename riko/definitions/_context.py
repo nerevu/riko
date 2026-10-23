@@ -26,15 +26,16 @@ from typing import TYPE_CHECKING, Any, Literal, Self, overload
 
 from attrs import define, evolve, field
 
-from riko.types._collections import (
+from riko.base._guards import require_mapping
+from riko.base._require_guards import def_from_require
+from riko.base._typing import resolve_enum
+from riko.types._enums import ExecutionMode
+from riko.types._frozendict import (
     FrozenDict,
-    def_from_require,
     freeze,
     instances_freezer,
     mapping_converter,
 )
-from riko.types._enums import ExecutionMode, resolve_enum
-from riko.types._guards import require_mapping
 from riko.types._resource import is_lifecycle_factory
 
 from ._resource_definition import Resource, ReusableResource

@@ -28,9 +28,9 @@ from typing import TYPE_CHECKING, Concatenate, cast, overload
 from attrs import define
 from typing_extensions import TypeVar
 
-from riko.base.exceptions import EmptyPipelineError
+from riko.base._exceptions import EmptyPipelineError
+from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._composition import PipelineDefinition
-from riko.types._sentinels import MISSING, MissingType
 from riko.types._streams import Item
 
 from ._resolver import dispatcher

@@ -79,8 +79,8 @@ from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Literal, cast, overload
 
+from riko.base._exceptions import UnsupportedWorkflowError
 from riko.base._strutils import pythonise
-from riko.base.exceptions import UnsupportedWorkflowError
 from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe

@@ -29,14 +29,14 @@ from typing import TYPE_CHECKING, Any
 
 from meza.io import read
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
 from riko.io._sync import Fetch, auto_close, seekable
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger

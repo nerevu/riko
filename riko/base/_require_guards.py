@@ -1,20 +1,24 @@
-"""Immutable mappings and the narrowing helpers that validate typed records."""
+"""
+The ``require_*`` narrowing guards and their attrs adapters.
+
+Each guard narrows a value or raises, and the ``narrow_*``/``def_from_*``/
+``validator_from_*`` helpers turn a guard into an attrs converter or validator. It also
+reads a TypedDict's required and optional keys, normalizes key lists, and raises on a
+pipe call's missing required argument or conf key.
+"""
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
-from dataclasses import Field, asdict, fields, is_dataclass
+from collections.abc import Callable, Collection, Iterable, Mapping
 from functools import partial
 from math import isinf, isnan
 from typing import (
     TYPE_CHECKING,
     Any,
-    ClassVar,
     Literal,
     Protocol,
     cast,
-    final,
     get_args,
     get_origin,
     is_typeddict,
@@ -22,60 +26,25 @@ from typing import (
     runtime_checkable,
 )
 
-import attrs
 from attrs import Attribute, AttrsInstance, validators
 from typing_extensions import TypeForm
 
-from riko.base._iterutils import map_values, sort_stably
-from riko.base._typing import gen_union_members
-from riko.base.exceptions import InvalidPipelineError
-
-from ._guards import (
-    is_attrs_inst,
-    is_conf_rule,
-    is_known_sequence,
-    is_mapping,
-    require_mapping,
-)
+from ._exceptions import InvalidPipelineError
+from ._guards import is_mapping, require_mapping
+from ._iterutils import sort_stably
+from ._recordutils import field_names, required_attrs_keys
+from ._typing import gen_union_members
 
 if TYPE_CHECKING:
-    from _typeshed import DataclassInstance
+    from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._enums import StrLike
 
-    from ._enums import StrLike
-    from ._workflow import GraphEdge
 
-type FrozenJSON = (
-    bool
-    | int
-    | float
-    | str
-    | tuple[FrozenJSON, ...]
-    | FrozenDict[str, FrozenJSON]
-    | None
-)
-
-type FrozenConf = FrozenDict[str, FrozenJSON]
-type FrozenParams = FrozenDict[str, FrozenJSON]
-type FrozenPolicy = FrozenDict[str, FrozenJSON]
-type FrozenTupleMapping = FrozenDict[str, tuple[GraphEdge, ...]]
-type FrozenSetMapping = FrozenDict[str, frozenset[str]]
 type AttrsValidator[T] = Callable[[AttrsInstance, Attribute[Any], T], None]
-
-type Freezer[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
-type MappingConverter[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
-type TypeConverter[T, FV] = Callable[[T], FrozenDict[str, FV]]
-type OptionalMappingConverter[FV] = Callable[
-    [Mapping[str, object] | None], FrozenDict[str, FV]
-]
-type OptionalTypeConverter[T, FV] = Callable[[T | None], FrozenDict[str, FV]]
 type DefFunc[T, R] = Callable[[T | None], R]
-
 _KEY_QUALIFIERS = frozenset({"Required", "NotRequired"})
 
-type DataclassLike = DataclassInstance | type[DataclassInstance]
 
-
-# Other
 @runtime_checkable
 class TypeRequire[T, R](Protocol):
     """
@@ -103,76 +72,6 @@ class InstanceRequire[T, R](Protocol):
 
 
 type Require[T, R] = TypeRequire[T, R] | InstanceRequire[T, R]
-
-
-def _is_classvar(annotation: object) -> bool:
-    if isinstance(annotation, str):
-        text = annotation.strip()
-        result = text == "ClassVar" or text.startswith(("ClassVar[", "typing.ClassVar"))
-    else:
-        result = annotation is ClassVar or get_origin(annotation) is ClassVar
-
-    return result
-
-
-def _keep_or_has_value(*keep_fields: str):
-    keep = frozenset(keep_fields)
-
-    def has_value(field: Field[Any] | Attribute[Any], value: object) -> bool:
-        if isinstance(value, (Mapping, tuple)):
-            _has_value = bool(value)
-        elif is_attrs_inst(value):
-            _has_value = bool(serialize_attrs(value))
-        else:
-            _has_value = value is not None
-
-        return _has_value or field.name in keep
-
-    return has_value
-
-
-@overload
-def _freeze_value(  # noqa: E704
-    value: object, json_native: Literal[True]
-) -> FrozenJSON: ...
-@overload
-def _freeze_value(value: object, json_native: bool = ...) -> object: ...  # noqa: E704
-def _freeze_value(value: object, json_native: bool = False) -> object:  # noqa: E302
-    """Freezes built-in containers recursively, optionally allowing only JSON."""
-    is_named_tuple = isinstance(value, tuple) and hasattr(value, "_fields")
-
-    if value is None or isinstance(value, (str, int)):
-        result = value
-    elif isinstance(value, float):
-        result = require_finite(value) if json_native else value
-    elif isinstance(value, FrozenDict) and not json_native:
-        result = value
-    elif is_mapping(value):
-        result = FrozenDict.from_frozen(_freeze_items(value, json_native))
-    elif is_named_tuple and not json_native:
-        result = value
-    elif is_known_sequence(value):
-        result = tuple(_freeze_value(item, json_native) for item in value)
-    elif json_native and is_conf_rule(value):
-        result = FrozenDict.from_frozen(_freeze_items(asdict(value), json_native))
-    elif json_native:
-        raise InvalidPipelineError(f"{type(value).__name__} is not JSON-native")
-    elif isinstance(value, set):
-        result = frozenset(value)
-    else:
-        result = value
-
-    return result
-
-
-def _freeze_items[K, V](
-    data: Mapping[K, V] | Iterable[tuple[K, V]], json_native: bool = False
-) -> dict[K | str, object]:
-    """Freezes each value of a mapping or of key/value pairs into a new dict."""
-    items = (data if is_mapping(data) else dict(data)).items()
-    check = partial(require_str, what="mapping key") if json_native else None
-    keyed = ((key if check is None else check(key), item) for key, item in items)
-    return {key: _freeze_value(item, json_native) for key, item in keyed}
 
 
 @overload
@@ -218,9 +117,9 @@ def narrow_from_require[T, R](  # noqa: E302
         'abc'
         >>> narrow_from_require(require_instance, int, what="count")(3)
         3
-        >>> to_binding = narrow_from_require(require_binding, accepted=str)
-        >>> to_binding("db")
-        FrozenDict({'db': 'db'})
+        >>> to_keys = narrow_from_require(normalize_strs, accepted=str)
+        >>> to_keys("db")
+        ('db',)
 
     """
     return partial(require, *args, **kwargs)
@@ -427,35 +326,6 @@ def require_from_typed_dict[T](
     return require
 
 
-def required_attrs_keys(cls: type[AttrsInstance]) -> frozenset[str]:
-    """
-    Names the ``__init__`` arguments of an attrs ``cls`` that have no default.
-
-    Args:
-
-        cls: An attrs-decorated type.
-
-    Returns:
-
-        The required argument names, using each field's init alias.
-
-    Examples:
-
-        >>> @attrs.define
-        ... class Point:
-        ...     x: int
-        ...     _label: str = attrs.field(alias="label")
-        ...     y: int = 0
-        >>>
-        >>> sorted(required_attrs_keys(Point))
-        ['label', 'x']
-
-    """
-    fields = attrs.fields(cls)
-    is_required = lambda field: field.init and field.default is attrs.NOTHING
-    return frozenset(field.alias for field in fields if is_required(field))
-
-
 def require_from_attrs[T: AttrsInstance, V](
     cls: type[T],
     what: str | None = None,
@@ -489,6 +359,8 @@ def require_from_attrs[T: AttrsInstance, V](
 
     Examples:
 
+        >>> import attrs
+        >>>
         >>> @attrs.define
         ... class Point:
         ...     x: int
@@ -576,7 +448,7 @@ def def_from_require[D, R](  # noqa: E302
 
     Examples:
 
-        >>> from riko.types._guards import require_mapping
+        >>> from riko.base._guards import require_mapping
         >>>
         >>> optional_mapping = def_from_require(require_mapping, error=TypeError)
         >>> optional_mapping(None) is None
@@ -709,11 +581,11 @@ def narrow_def_from_require[D, R](  # noqa: E302
 
     Examples:
 
-        >>> to_binding = narrow_def_from_require(require_binding, {}, accepted=str)
-        >>> to_binding(None)
-        {}
-        >>> to_binding("db")
-        FrozenDict({'db': 'db'})
+        >>> to_keys = narrow_def_from_require(normalize_strs, (), accepted=str)
+        >>> to_keys(None)
+        ()
+        >>> to_keys("db")
+        ('db',)
 
     """
 
@@ -750,6 +622,8 @@ def validator_from_require(
 
     Examples:
 
+        >>> import attrs
+        >>>
         >>> is_bool = validator_from_require(require_instance, bool, error=TypeError)
         >>>
         >>> @attrs.define
@@ -802,6 +676,8 @@ def validator_from_typed_dict[T](
 
     Examples:
 
+        >>> import attrs
+        >>>
         >>> from typing import TypedDict
         >>>
         >>> class Point(TypedDict):
@@ -1116,220 +992,6 @@ def require_from_form[T](
     return require
 
 
-def instances_freezer[T](
-    cls: type[T], what: str, *, error: type[Exception] = InvalidPipelineError
-) -> Freezer[T]:
-    """
-    Builds a freezer that requires every value of a mapping to be a ``cls`` instance.
-
-    Pass it to ``mapping_converter`` or ``optional_mapping_converter`` for a field
-    whose values must all share one type.
-
-    Args:
-
-        cls: The class every value must be an instance of.
-        what: The name used in error messages.
-
-    Kwargs:
-
-        error: The exception raised for a value that isn't a ``cls``.
-
-    Returns:
-
-        A freezer that returns the checked mapping as a ``FrozenDict``.
-
-    Examples:
-
-        >>> freezer = instances_freezer(int, "count")
-        >>> freezer({"a": 1})
-        FrozenDict({'a': 1})
-        >>> freezer({"b": "x"})
-        Traceback (most recent call last):
-        ...
-        riko.base.exceptions.InvalidPipelineError: ...'b' must be of type int, not str
-
-    """
-
-    def freezer(value: Mapping[str, object]) -> FrozenDict[str, T]:
-        return FrozenDict(require_instances(cls, value, what, error=error))
-
-    return freezer
-
-
-@overload
-def mapping_converter[FV](  # noqa: E704
-    freezer: Freezer[FV], *, what: str = ..., error: type[Exception] = ...
-) -> MappingConverter[FV]: ...
-@overload  # noqa: E302
-def mapping_converter[FV, T](  # noqa: E704
-    freezer: Freezer[FV],
-    accepted: TypeForm[T],
-    /,
-    *,
-    what: str = ...,
-    error: type[Exception] = ...,
-) -> TypeConverter[T, FV]: ...
-def mapping_converter[FV](  # noqa: E302
-    freezer: Freezer[FV],
-    *_: object,
-    what: str = "value",
-    error: type[Exception] = InvalidPipelineError,
-) -> Callable[..., FrozenDict[str, FV]]:
-    """
-    Builds an attrs converter that freezes a required mapping and rejects anything else.
-
-    Pass it as a field's only ``converter`` to retain the ``accepted`` type signature
-    (pyright can't infer the type signature when using a list as an attrs converter).
-
-    Args:
-
-        freezer: Freezes the checked mapping, e.g. ``freeze_json``.
-
-    Kwargs:
-
-        what: The name used in the error message.
-        error: The exception raised for a value that isn't a mapping.
-
-    Returns:
-
-        A one-argument converter that returns a ``FrozenDict``.
-
-    Examples:
-
-        >>> converter = mapping_converter(freeze_json, what="inputs")
-        >>> converter({"ids": [1]})
-        FrozenDict({'ids': (1,)})
-        >>> converter("abc")
-        Traceback (most recent call last):
-            ...
-        riko.base.exceptions.InvalidPipelineError: ...inputs must be a mapping
-
-    """
-
-    def converter(value: object) -> FrozenDict[str, FV]:
-        return freezer(require_mapping(value, what, error=error))
-
-    return converter
-
-
-@overload
-def normalize_mapping[T](  # noqa: E704
-    item: Mapping[str, T] | None, what: str = ..., *, strict: Literal[False] = ...
-) -> dict[str, T]: ...
-@overload  # noqa: E302
-def normalize_mapping(  # noqa: E704
-    item: object, what: str = ..., *, strict: Literal[True]
-) -> dict[str, object]: ...
-def normalize_mapping(  # noqa: E302
-    item: object, what: str = "value", *, strict: bool = False
-) -> dict[str, Any]:
-    """
-    Normalizes an optional mapping to a new ``dict``, empty for ``None``.
-
-    Args:
-
-        item: The mapping to copy, or ``None``.
-        what: The name used in the error message when ``strict``.
-
-    Kwargs:
-
-        strict: Whether anything other than a mapping or ``None`` raises.
-
-    Returns:
-
-        A new ``dict`` with ``item``'s entries.
-
-    Raises:
-
-        InvalidPipelineError: If ``strict`` and ``item`` is not a mapping.
-
-    Examples:
-
-        >>> normalize_mapping({"a": 1}), normalize_mapping(None)
-        ({'a': 1}, {})
-        >>> normalize_mapping([("a", 1)], "inputs", strict=True)
-        Traceback (most recent call last):
-        ...
-        riko.base.exceptions.InvalidPipelineError: ...inputs must be a mapping
-
-    """
-    if item is None:
-        result: dict[str, Any] = {}
-    elif strict:
-        result = dict(require_mapping(item, what))
-    else:
-        result = dict(cast("Mapping[str, object]", item))
-
-    return result
-
-
-@overload
-def optional_mapping_converter[FV](  # noqa: E704
-    freezer: Freezer[FV],
-    *,
-    default: Mapping[str, object] | None = ...,
-    what: str = ...,
-    error: type[Exception] = ...,
-) -> OptionalMappingConverter[FV]: ...
-@overload  # noqa: E302
-def optional_mapping_converter[FV, T](  # noqa: E704
-    freezer: Freezer[FV],
-    accepted: TypeForm[T],
-    /,
-    *,
-    default: Mapping[str, object] | None = ...,
-    what: str = ...,
-    error: type[Exception] = ...,
-) -> OptionalTypeConverter[T, FV]: ...
-def optional_mapping_converter[FV](  # noqa: E302
-    freezer: Freezer[FV],
-    *_: object,
-    default: Mapping[str, object] | None = None,
-    what: str = "value",
-    error: type[Exception] = InvalidPipelineError,
-) -> Callable[..., FrozenDict[str, FV]]:
-    """
-    Builds an attrs converter to freeze mappings or ``None`` and reject anything else.
-
-    Like ``mapping_converter``, pass it as a field's only ``converter`` to retain the
-    ``accepted`` type signature (pyright can't infer the type signature when using a
-    list as an attrs converter).
-
-    Args:
-
-        freezer: Freezes the checked mapping, e.g. ``freeze_json``.
-
-    Kwargs:
-
-        default: The mapping to freeze for ``None`` (default: an empty mapping).
-        what: The name used in the error message (default: "value").
-        error: The exception raised for a value that isn't a mapping or ``None``.
-
-    Returns:
-
-        A one-argument converter that returns a ``FrozenDict``.
-
-    Examples:
-
-        >>> converter = optional_mapping_converter(freeze_json)
-        >>> converter(None)
-        FrozenDict({})
-        >>> converter = optional_mapping_converter(freeze_json, default={"a": 1})
-        >>> converter(None)
-        FrozenDict({'a': 1})
-        >>> converter({"b": 2})
-        FrozenDict({'b': 2})
-
-    """
-    item: Mapping[str, object] = normalize_mapping(default)
-
-    def converter(value: object) -> FrozenDict[str, FV]:
-        mapped = item if value is None else require_mapping(value, what, error=error)
-        return freezer(mapped)
-
-    return converter
-
-
 def require_strlike(
     value: object,
     what: str | None = "value",
@@ -1452,7 +1114,7 @@ def require_finite(
     """
     Narrows ``value`` to a finite float.
 
-    Used by ``freeze_json`` to reject NaN and infinity.
+    Rejects NaN and infinity, which JSON cannot carry.
 
     Args:
 
@@ -1488,374 +1150,113 @@ def require_finite(
     return value
 
 
-def require_binding(
-    value: object,
-    what: str | None = "value",
-    *,
-    error: type[Exception] = InvalidPipelineError,
-    **_,
-) -> FrozenDict[str, str]:
+def require_arg[T](value: T | None, name: str, module: str, strict: bool = False) -> T:
     """
-    Narrows ``value`` to a resource binding (map of local alias to Context name).
+    Narrows a module's required keyword argument to ``T`` and raises when it is omitted.
 
-    A bare name, or each name of an iterable, is bound to itself.
+    The argument is one that a module's ``pipe`` passes on to its ``parser`` function,
+    which declares it keyword-only as ``T | None = None``. Omitting it raises this
+    error. The error names the module and the argument.
 
     Args:
 
-        value: A name, an iterable of names, or a mapping of alias to name.
-        what: The name used in error messages.
+        value: The supplied argument value, or ``None`` when omitted.
 
-    Kwargs:
+        name: The argument being validated, used in the error message.
 
-        error: The exception raised for a malformed binding.
+        module: The module name, used in the error message.
+
+        strict: Whether to also reject a present but falsy value, e.g. an empty
+            ``others`` list that would publish to nobody. Use it only where a
+            falsy value can never be legitimate — never on an argument for
+            which ``0``, ``False`` or ``""`` is a real value (default: False).
 
     Returns:
 
-        The binding as a ``FrozenDict`` that maps local alias to Context name.
+        The value, narrowed to ``T``.
 
     Raises:
 
-        error: If ``value`` has the wrong shape, an alias or name isn't a non-empty
-            string, or an alias repeats.
+        TypeError: If ``value`` is ``None``, or is falsy under ``strict``.
 
     Examples:
 
-        >>> require_binding(["db", "cache"])
-        FrozenDict({'db': 'db', 'cache': 'cache'})
-        >>> require_binding({"db": "primary_db"})
-        FrozenDict({'db': 'primary_db'})
-
-    """
-    if isinstance(value, str):
-        pairs = [(value, value)]
-    elif isinstance(value, Mapping):
-        pairs = list(value.items())
-    elif isinstance(value, Iterable):
-        pairs = [(name, name) for name in value]
-    else:
-        raise error(f"{what} must be a str, mapping, or iterable of strs")
-
-    if not all(isinstance(name, str) and name for pair in pairs for name in pair):
-        raise error(f"{what} must bind non-empty strings, got {value!r}")
-    elif len(dict(pairs)) < len(pairs):
-        raise error(f"{what} must not repeat an alias, got {value!r}")
-
-    return FrozenDict(cast("list[tuple[str, str]]", pairs))
-
-
-def serialize_dataclass(
-    value: DataclassLike, *keep_fields: str, compact: bool = True
-) -> dict[str, object]:
-    """
-    Reads a dataclass's set fields into a dict.
-
-    A field that is ``None``, an empty mapping or tuple, or an attrs record with no set
-    fields is left out unless it is named in ``keep_fields``.
-
-    Args:
-
-        value: The dataclass instance or class to read.
-        keep_fields: Names of fields to include even when they are unset.
-        compact: Whether to leave out unset fields. When false, every field is kept.
-
-    Returns:
-
-        The field names mapped to their values.
-
-    Examples:
-
-        >>> from dataclasses import dataclass
-        >>>
-        >>> @dataclass
-        ... class Rule:
-        ...     field: str
-        ...     default: str | None = None
-        >>>
-        >>> serialize_dataclass(Rule("title"))
-        {'field': 'title'}
-
-    """
-    filterer = _keep_or_has_value(*keep_fields) if compact else lambda *_: True
-    pairs = ((field, getattr(value, field.name)) for field in fields(value))
-    return {field.name: item for field, item in pairs if filterer(field, item)}
-
-
-def serialize_attrs(
-    value: AttrsInstance, *keep_fields: str, recurse: bool = False, compact: bool = True
-) -> dict[str, object]:
-    """
-    Reads an attrs record's set fields into a dict.
-
-    A field that is ``None``, an empty mapping or tuple, or an attrs record with no set
-    fields is left out unless it is named in ``keep_fields``. A mapping field,
-    including a ``FrozenDict``, is kept as is.
-
-    Args:
-
-        value: The attrs record to read.
-        keep_fields: Names of fields to include even when they are unset.
-        recurse: Whether a field holding another attrs record is read into a dict too.
-        compact: Whether to leave out unset fields. When false, every field is kept.
-
-    Returns:
-
-        The field names mapped to their values.
-
-    Examples:
-
-        >>> @attrs.define
-        ... class Point:
-        ...     x: int
-        ...     label: str | None = None
-        >>>
-        >>> @attrs.define
-        ... class Segment:
-        ...     start: Point
-        ...     end: Point
-        >>>
-        >>> serialize_attrs(Point(1))
-        {'x': 1}
-        >>> serialize_attrs(Point(1), "label")
-        {'x': 1, 'label': None}
-        >>> serialize_attrs(Segment(Point(0), Point(1)), recurse=True)
-        {'start': {'x': 0}, 'end': {'x': 1}}
-
-    """
-    filterer = _keep_or_has_value(*keep_fields)
-    asdict = partial(attrs.asdict, filter=filterer) if compact else attrs.asdict
-    result = asdict(value, recurse=False)
-    serialize = partial(serialize_attrs, recurse=True, compact=compact)
-    unwrap = lambda item: serialize(item) if is_attrs_inst(item) else item
-    return map_values(unwrap, result) if recurse else result
-
-
-@final
-@attrs.define(frozen=True, slots=True, eq=False, repr=False, init=False)
-class FrozenDict[K, V](Mapping[K, V]):
-    """
-    A read-only mapping whose built-in container values are frozen too.
-
-    It copies its source, a mapping or key/value pairs, and freezes the values as
-    ``freeze`` does, so it never changes once built. It compares equal to any
-    mapping with the same items.
-
-    Examples:
-
-        >>> frozen = FrozenDict({"a": [1, {"b": 2}]})
-        >>> frozen["a"]
-        (1, FrozenDict({'b': 2}))
-        >>> frozen == {"a": (1, {"b": 2})}
-        True
-
-    """
-
-    _data: Mapping[K, V]
-
-    def __init__(self, data: Mapping[K, V] | Iterable[tuple[K, V]] = (), /) -> None:
-        frozen = data._data if isinstance(data, FrozenDict) else _freeze_items(data)
-        object.__setattr__(self, "_data", dict(frozen))  # noqa: PLC2801
-
-    def __getitem__(self, key: K) -> V:
-        return self._data[key]
-
-    def __iter__(self) -> Iterator[K]:
-        return iter(self._data)
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def __repr__(self) -> str:
-        return f"FrozenDict({dict(self._data)!r})"
-
-    @classmethod
-    def from_frozen(cls, data: Mapping[K, V]) -> FrozenDict[K, V]:
-        """Wraps ``data`` whose values the caller has already frozen."""
-        frozen = object.__new__(cls)
-        object.__setattr__(frozen, "_data", dict(data))  # noqa: PLC2801
-        return frozen
-
-
-@overload
-def freeze(value: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[K, V](  # noqa: E704
-    value: Mapping[K, list[V]],
-) -> FrozenDict[K, tuple[V]]: ...
-@overload  # noqa: E302
-def freeze[K, V](  # noqa: E704
-    value: Mapping[K, set[V]],
-) -> FrozenDict[K, frozenset[V]]: ...
-@overload  # noqa: E302
-def freeze[K, V](value: Mapping[K, V]) -> FrozenDict[K, V]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: set[T] | frozenset[T]) -> frozenset[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: T) -> T: ...  # noqa: E704
-def freeze(value: object) -> object:  # noqa: E302
-    """
-    Freezes the built-in containers in a value, recursively.
-
-    Mappings become ``FrozenDict``s, lists and tuples become tuples, and sets become
-    frozensets. A ``FrozenDict``, a named tuple, and any other object, such as a
-    caller-owned client, are kept as is.
-
-    Args:
-
-        value: The value to freeze.
-
-    Returns:
-
-        The value with every built-in container frozen.
-
-    Examples:
-
-        >>> from collections import namedtuple
-        >>>
-        >>> frozen = freeze({"a": [1, {"b": {2}}], "c": object})
-        >>> frozen["a"]
-        (1, FrozenDict({'b': frozenset({2})}))
-        >>> frozen["c"]
-        <class 'object'>
-        >>> Point = namedtuple("Point", "x y")
-        >>> freeze(Point(1, [2]))
-        Point(x=1, y=[2])
-
-    """
-    return _freeze_value(value)
-
-
-@overload
-def freeze_json(value: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze_json(  # noqa: E704
-    value: Mapping[str, object],
-) -> FrozenDict[str, FrozenJSON]: ...
-@overload  # noqa: E302
-def freeze_json(  # noqa: E704
-    value: Mapping[object, object],
-) -> FrozenDict[str, FrozenJSON]: ...
-@overload  # noqa: E302
-def freeze_json(value: object) -> FrozenJSON: ...  # noqa: E704
-def freeze_json(value: object) -> FrozenJSON:  # noqa: E302
-    """
-    Freezes a value into an immutable JSON-native tree.
-
-    Mappings become string-keyed ``FrozenDict``s and lists and tuples become tuples,
-    recursively. A value with no JSON form (a set, ``Decimal``, date, bytes,
-    non-finite float, non-string key, or any other object) is rejected, so a
-    workflow never carries a value that cannot round-trip through JSON.
-
-    Args:
-
-        value: The value to freeze.
-
-    Returns:
-
-        The frozen JSON-native value.
-
-    Raises:
-
-        InvalidPipelineError: When the value is not JSON-native.
-
-    Examples:
-
-        >>> frozen = freeze_json({"a": [1, {"b": 2}]})
-        >>> frozen["a"]
-        (1, FrozenDict({'b': 2}))
-        >>> freeze_json({"a": {1, 2}})
+        >>> require_arg(len, "func", "udf")
+        <built-in function len>
+        >>> require_arg(None, "func", "udf")
         Traceback (most recent call last):
-        ...
-        riko.base.exceptions.InvalidPipelineError: ...d pipeline: set is not JSON-native
+            ...
+        TypeError: the 'udf' module requires the 'func' keyword argument
+
+        >>> # A falsy value passes unless strict is set
+        >>> require_arg([], "others", "send")
+        []
+        >>> require_arg([], "others", "send", strict=True)
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'send' module requires the 'others' keyword argument
 
     """
-    return _freeze_value(value, json_native=True)
+    if (value is None) or (strict and not value):
+        raise TypeError(f"the {module!r} module requires the {name!r} keyword argument")
+
+    return value
 
 
-@overload
-def thaw[K, V](value: Mapping[K, V]) -> dict[K, V]: ...  # noqa: E704
-@overload  # noqa: E302
-def thaw(value: object) -> object: ...  # noqa: E704
-def thaw(value: object) -> object:  # noqa: E302
+def require_conf_key[T](  # noqa: E704
+    objconf: DynamicConf, key: str, module: str, strict: bool = False
+) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """
-    Copies a value's containers into plain mutable ones, recursively.
+    Reads a module's required conf key and raises when the conf leaves it unset.
 
-    Any mapping, such as a ``FrozenDict`` or ``DotDict``, becomes a dict, a tuple a
-    list, and a frozenset a set, so ``thaw`` undoes ``freeze``. A named tuple and any
-    other object are kept as is.
+    Only the conf is checked. A field missing from an item is a data condition
+    the module skips, not an error.
 
     Args:
 
-        value: The value to copy.
+        objconf: The parsed module configuration.
+
+        key: The conf key that must be set.
+
+        module: The module name, used in the error message.
+
+        strict: Whether to also reject a present but falsy value, e.g. a ``url``
+            set to ``""``. Use it only where a falsy value can never be
+            legitimate — never on a key for which ``0``, ``False`` or ``""`` is
+            a real value (default: False).
 
     Returns:
 
-        A mutable copy of the value.
+        The value stored under ``key``.
+
+    Raises:
+
+        TypeError: If ``key`` is absent or ``None``, or is falsy under
+            ``strict``.
 
     Examples:
 
-        >>> from types import MappingProxyType
+        >>> from meza.fntools import Objectify
         >>>
-        >>> thaw(freeze({"a": [1, {"b": 2}]}))
-        {'a': [1, {'b': 2}]}
-        >>> thaw(MappingProxyType({"a": MappingProxyType({"b": 2})}))
-        {'a': {'b': 2}}
-        >>> thaw(frozenset({1}))
-        {1}
+        >>> require_conf_key(Objectify({"url": "x"}), "url", "csv")
+        'x'
+        >>> require_conf_key(Objectify({}), "url", "csv")
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'csv' module requires the 'url' conf key
+
+        >>> # A falsy value passes unless strict is set
+        >>> require_conf_key(Objectify({"url": ""}), "url", "csv")
+        ''
+        >>> require_conf_key(Objectify({"url": ""}), "url", "csv", strict=True)
+        Traceback (most recent call last):
+            ...
+        TypeError: the 'csv' module requires the 'url' conf key
 
     """
-    if is_mapping(value):
-        result = map_values(thaw, value)
-    elif type(value) is tuple:
-        result = [thaw(item) for item in value]
-    elif type(value) is frozenset:
-        result = set(value)
-    else:
-        result = value
+    value = getattr(objconf, key, None)
 
-    return result
+    if (value is None) or (strict and not value):
+        raise TypeError(f"the {module!r} module requires the {key!r} conf key")
 
-
-def field_names(cls: type) -> frozenset[str]:
-    """
-    Names the fields of an attrs or dataclass ``cls``, including ``ClassVar`` members.
-
-    Mimics dataclass's ``__dataclass_fields__`` which retains ``ClassVar`` attributes.
-
-    Args:
-
-        cls: An attrs-decorated or dataclass type.
-
-    Returns:
-
-        The instance field names together with every ``ClassVar`` member name.
-
-    Examples:
-
-        >>> from dataclasses import dataclass
-        >>> from typing import ClassVar
-        >>> from riko.types._collections import field_names
-        >>>
-        >>> @dataclass
-        ... class Point:
-        ...     kind: ClassVar[str] = "cartesian"
-        ...     x: int = 0
-        ...     y: int = 0
-        >>>
-        >>> sorted(field_names(Point))
-        ['kind', 'x', 'y']
-
-    """
-    if attrs.has(cls):
-        names = set(attrs.fields_dict(cls))
-    elif is_dataclass(cls):
-        names = {member.name for member in fields(cls)}
-    else:
-        names = set()
-
-    for _class in cls.__mro__:
-        annotations = getattr(_class, "__annotations__", {})
-        names.update(name for name, hint in annotations.items() if _is_classvar(hint))
-
-    return frozenset(names)
+    return cast("T", value)

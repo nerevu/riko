@@ -34,10 +34,9 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, PackageLoader
 
-from riko.base._source_format import ruff_format
-from riko.base._strutils import pythonise
+from riko.base._guards import is_known_sequence, is_mapping
+from riko.base._strutils import pythonise, ruff_format
 from riko.definitions._workflow_definition import normalize_workflow
-from riko.types._guards import is_known_sequence, is_mapping
 from riko.types._workflow import WorkflowModule
 
 if TYPE_CHECKING:
@@ -45,7 +44,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._nodes import ModuleNode
     from riko.definitions._workflow_definition import WorkflowLike
-    from riko.types._collections import FrozenConf
+    from riko.types._frozendict import FrozenConf
     from riko.types._pipedef import Embed
     from riko.types._workflow import Edge, Endpoint
     from riko.types.modules import Conf

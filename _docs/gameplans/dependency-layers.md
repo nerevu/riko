@@ -47,9 +47,9 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 
 | Source path | Layer | Role |
 |---|---|---|
-| `riko/base/` | `base` | low-level constants, paths, logging, string/iterator/date/graph helpers, exceptions, API declarations |
+| `riko/base/` | `base` | low-level constants, paths, logging, string/iterator/date/graph helpers, generic guards/narrowing and record helpers, sentinels, exceptions (private `_exceptions.py` behind the public `exceptions.py` facade), API declarations |
 | `riko/_package.py` | `base` | package metadata kept below the public facade |
-| `riko/types/` | `types` | type contracts, config TypedDicts, stream/resource/compiler types, enums |
+| `riko/types/` | `types` | type contracts, config TypedDicts, stream/resource/compiler types, enums, and the immutable contract records that validate themselves (see *Returning `types` to contracts*) |
 | `riko/coercion/` | `coercion` | casting, dynamic config/objectification, canonical identity |
 | `riko/bado/` | `bado` | async backend selection, async itertools, async utilities |
 | `riko/definitions/` | `definitions` | immutable/declarative module, resource, target, and write contracts, including the `Context` (`_context.py`) and `Resource` (`_resource_definition.py`) definitions |
@@ -186,6 +186,43 @@ New pipeline behavior that only composes the graph belongs on
    execution/runtime side of the boundary.
 5. Run `manage lint imports --all` after package moves. Run `manage lint --all`
    before merging so the same contracts CI sees are exercised locally.
+
+## Returning `types` to contracts
+
+Decided and landed 2026-10-23 (move/consolidation audit). `types/` is for type contracts: aliases,
+protocols, TypedDicts, enums, and the immutable contract records that validate themselves. Runtime
+machinery that knows no contract lives in `base/`; behavior shared across higher layers lives in the
+lowest layer its importers share.
+
+- **Generic runtime helpers are in `base/`.** `_guards.py` (generic shape guards), `_require_guards.py`
+  (the `require_*`/`narrow_*`/`def_from_*`/`validator_from_*` family plus `require_arg`/
+  `require_conf_key`), `_recordutils.py` (`field_names`, `required_attrs_keys`, the compact serializers),
+  `_sentinels.py` (moved whole: `MISSING`, `StreamState`, the `Sentinel` shape and its guards),
+  and in `_typing.py` `resolve_enum` plus the runtime `isinstance` tuples (their type aliases stay
+  in `types/_scalars.py`).
+- **`_sentinels.py` is a deliberate exception.** `_guards.py` needs `MISSING` at runtime, so the file
+  moved whole rather than splitting it or giving `_guards.py` its own placeholder object. The
+  `StreamState` enum and the `Sentinel` TypedDict came along, two contracts that would otherwise
+  belong in `types`. The terminal-reference helpers (`Sentinel`, `SentinelValue`, `is_sentinel`)
+  leave when they move into configuration parsing (`dotdict-parsing.md`); `MISSING` and
+  `StreamState` stay.
+- **Exceptions sit behind a facade.** The same-layer rule bars a private `base` module from importing
+  the public `exceptions.py`, so the classes live in `base/_exceptions.py`, internal code imports
+  them from there, and `exceptions.py` re-exports them as the documented `riko.base.exceptions` path.
+  Each class's `__module__` names that public path, so tracebacks and pickles are unchanged.
+- **Contract-specific guards stay in `types`:** `is_conf_rule` in
+  `_frozendict.py`, `is_type_value` in `modules.py` beside `ConfArg`. `is_conf_rule` narrows
+  `AnyConfRule` from `modules.py` but cannot live there: `freeze_json` calls it at runtime, and the
+  same-layer rule bars private `_frozendict.py` from importing public `modules.py`.
+- **Contract records stay in `types`:** `Endpoint`/`Edge`/`GraphIndex`, `CallOptions`, the resource
+  plan records, and `_frozendict.py`. `freeze_json`'s JSON-native rule accepts conf-rule dataclasses
+  and rejects every other dataclass (`test_module_conf_rejects_dataclass_values`), so it is a contract,
+  not a generic helper.
+- **Cross-layer wrapper behavior is in `definitions/_wrapping.py`:** `prepare_call`/`build_call`/
+  `stamp_wrapper_meta`, needed by both `execution` and `modules`. The wrapper protocols stay in
+  `types/_wrappers.py`.
+
+No layer was added and `LAYER_DEPENDENCIES` did not change.
 
 The old flat top-level layout and its proposed `definition/`/`runtime/` regrouping
 are historical. The current `base/`, `types/`, `coercion/`, `bado/`,

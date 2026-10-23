@@ -19,7 +19,7 @@ import pytest
 from riko.bado._backend import async_sleep, create_task_group, fail_after, lowlevel
 from riko.base._config import get_worker_cnt
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge

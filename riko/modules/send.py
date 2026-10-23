@@ -36,10 +36,10 @@ from typing import TYPE_CHECKING, Any
 
 from riko.bado.itertools import as_async
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_arg
 from riko.runtime._pubsub import async_hub, sync_hub
 
 from ._decorators import operator
-from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger

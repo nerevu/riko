@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
+from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.base._paths import ROOT_DIR
-from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.cli import (
     _codegen,
     _docs,

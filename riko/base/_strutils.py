@@ -1,9 +1,10 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides string sanitization and docstring-summary helpers."""
+"""Provides string sanitization, docstring-summary, and source-formatting helpers."""
 
 from __future__ import annotations
 
 from functools import reduce
+from subprocess import CalledProcessError, run
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -85,3 +86,38 @@ def get_doc_summary(obj: object) -> str | None:
     """
     lines = (getattr(obj, "__doc__", None) or "").strip().splitlines()
     return lines[0].strip() if lines else None
+
+
+def ruff_format(code: str) -> str:
+    """
+    Formats generated Python source with Ruff when available.
+
+    Args:
+
+        code: Python source to format.
+
+    Returns:
+
+        Ruff's formatted source, or the original source when Ruff is unavailable
+        or formatting fails.
+
+    Examples:
+
+        >>> ruff_format("x = 1\\n")
+        'x = 1\\n'
+
+    """
+    try:
+        result = run(
+            ["ruff", "format", "-"],  # noqa: S607
+            input=code,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, CalledProcessError):
+        formatted = code
+    else:
+        formatted = result.stdout or code
+
+    return formatted

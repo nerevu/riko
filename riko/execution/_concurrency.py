@@ -12,7 +12,7 @@ from functools import lru_cache, partial
 from typing import TYPE_CHECKING, cast
 
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 from riko.types._enums import Executor
 
 if TYPE_CHECKING:

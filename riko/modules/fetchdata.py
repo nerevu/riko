@@ -28,8 +28,9 @@ from __future__ import annotations
 from os.path import splitext
 from typing import TYPE_CHECKING, Any, cast
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion._sequences import listize
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
@@ -38,7 +39,6 @@ from riko.parsing.documents import any2dict
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger

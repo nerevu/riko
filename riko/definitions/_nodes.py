@@ -19,36 +19,39 @@ from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 from itertools import filterfalse
 from keyword import iskeyword
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 from attrs import define, field
 from attrs.validators import is_callable
 
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import require_mapping
+from riko.base._require_guards import (
+    def_from_require,
+    def_from_typed_dict,
+    narrow_def_from_require,
+    normalize_strs,
+    require_nonblank_str,
+    require_str,
+    validator_from_require,
+)
+from riko.base._sentinels import MISSING, MissingType
+from riko.base._typing import resolve_enum
+from riko.types._enums import Backends, Formats, IdentityMode
+from riko.types._frozendict import (
     FrozenConf,
     FrozenDict,
     FrozenJSON,
     FrozenParams,
     FrozenPolicy,
-    def_from_require,
-    def_from_typed_dict,
     freeze_json,
-    narrow_def_from_require,
-    normalize_strs,
     optional_mapping_converter,
-    require_binding,
-    require_nonblank_str,
-    require_str,
-    validator_from_require,
 )
-from riko.types._enums import Backends, Formats, IdentityMode, resolve_enum
-from riko.types._guards import require_mapping
+from riko.types._options import CallOptions
 from riko.types._pipedef import Embed
 from riko.types._scalars import is_non_null_hashable
-from riko.types._sentinels import MISSING, MissingType
 from riko.types._workflow import Edge, NodeId
-from riko.types.modules import CallOptions, ConfValues, MaybeFrozenConf
+from riko.types.modules import ConfValues, MaybeFrozenConf
 
 from ._resource_definition import ResourcesLike
 from ._write import WriteMode
@@ -75,6 +78,62 @@ _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
 _normalize_identity = partial(
     resolve_enum, IdentityMode, what="CallableNode 'identity'", strict=False
 )
+
+
+def require_binding(
+    value: object,
+    what: str | None = "value",
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
+) -> FrozenDict[str, str]:
+    """
+    Narrows ``value`` to a resource binding (map of local alias to Context name).
+
+    A bare name, or each name of an iterable, is bound to itself.
+
+    Args:
+
+        value: A name, an iterable of names, or a mapping of alias to name.
+        what: The name used in error messages.
+
+    Kwargs:
+
+        error: The exception raised for a malformed binding.
+
+    Returns:
+
+        The binding as a ``FrozenDict`` that maps local alias to Context name.
+
+    Raises:
+
+        error: If ``value`` has the wrong shape, an alias or name isn't a non-empty
+            string, or an alias repeats.
+
+    Examples:
+
+        >>> require_binding(["db", "cache"])
+        FrozenDict({'db': 'db', 'cache': 'cache'})
+        >>> require_binding({"db": "primary_db"})
+        FrozenDict({'db': 'primary_db'})
+
+    """
+    if isinstance(value, str):
+        pairs = [(value, value)]
+    elif isinstance(value, Mapping):
+        pairs = list(value.items())
+    elif isinstance(value, Iterable):
+        pairs = [(name, name) for name in value]
+    else:
+        raise error(f"{what} must be a str, mapping, or iterable of strs")
+
+    if not all(isinstance(name, str) and name for pair in pairs for name in pair):
+        raise error(f"{what} must bind non-empty strings, got {value!r}")
+    elif len(dict(pairs)) < len(pairs):
+        raise error(f"{what} must not repeat an alias, got {value!r}")
+
+    return FrozenDict(cast("list[tuple[str, str]]", pairs))
+
 
 optional_str = narrow_def_from_require(require_str)
 

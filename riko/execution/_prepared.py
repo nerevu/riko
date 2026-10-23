@@ -18,8 +18,15 @@ from typing_extensions import TypeIs
 
 from riko.bado._util import async_partial, maybe_async
 from riko.bado.itertools import as_async
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_async_callable
 from riko.base._iterutils import gen_non_none, map_values
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._require_guards import (
+    narrow_from_require,
+    require_instance,
+    require_str,
+    validator_from_require,
+)
 from riko.definitions._nodes import (
     FROZEN_CONF,
     NO_OPTIONS,
@@ -29,21 +36,17 @@ from riko.definitions._nodes import (
     require_runnable_node,
 )
 from riko.definitions._workflow_definition import Workflow
-from riko.types._collections import (
+from riko.definitions._wrapping import build_call
+from riko.types._frozendict import (
     FrozenConf,
     FrozenDict,
     instances_freezer,
     mapping_converter,
-    narrow_from_require,
     normalize_mapping,
     optional_mapping_converter,
-    require_instance,
-    require_str,
-    validator_from_require,
 )
-from riko.types._guards import is_async_callable
 from riko.types._workflow import parse_port
-from riko.types._wrappers import build_call, require_single_output
+from riko.types._wrappers import require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -57,7 +60,8 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.definitions._nodes import ConfInput, RunnableNode
-    from riko.types._collections import FrozenJSON
+    from riko.types._frozendict import FrozenJSON
+    from riko.types._options import CallOptions
     from riko.types._streams import AnyIterable
     from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId, ParsedPort
     from riko.types._wrappers import (
@@ -69,7 +73,6 @@ if TYPE_CHECKING:
         PreparedCall,
         SyncModuleWrapper,
     )
-    from riko.types.modules import CallOptions
 
 type PreparedNodes = FrozenDict[NodeId, PreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]

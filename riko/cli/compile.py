@@ -34,7 +34,7 @@ import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 from riko.runtime._compile import compile_workflow
 
 from ._document import read_document, require_workflow

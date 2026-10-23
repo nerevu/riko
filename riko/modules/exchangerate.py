@@ -35,8 +35,7 @@ from os import getenv
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from riko.bado._util import async_get, async_json
-from riko.base._config import settings
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING, settings
 from riko.base._logging import get_logger
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch

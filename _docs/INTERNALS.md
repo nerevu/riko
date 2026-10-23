@@ -28,7 +28,7 @@ manage codegen --all
 The private command implementation is `riko/cli/_codegen.py`; individual generators
 live beside it as `_gen_*.py`. Standalone `gen-*` console scripts remain available.
 All Python-source generators format through the shared
-`riko.base._source_format.ruff_format(str) -> str` helper rather than shelling out
+`riko.base._strutils.ruff_format(str) -> str` helper rather than shelling out
 at call sites.
 
 - **Config** — `riko/cli/_gen_config.py` derives `<Name>Objconf` classes from the

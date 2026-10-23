@@ -73,6 +73,12 @@ short description/examples/docs/distribution metadata
 Do not add a second traits/runtime framework when existing decorator/module metadata can express the
 same information.
 
+Placement (2026-10-23 file-split audit): `ModuleMetadata`, `ReturnInference`, and
+`get_module_provider` sit at the head of `riko/types/modules.py`, whose body is the per-module
+`RawConf`/`Conf` TypedDicts that `manage codegen --config` reads. When this contract grows, give it its
+own `riko/types/` file (re-exported from `riko.types.modules` and `riko.ext`, where `ModuleMetadata` is
+EXTENSION-tier) rather than growing it inside the conf catalog.
+
 State/checkpoint declarations are references to the common core model, not a module-specific store:
 
 ```text

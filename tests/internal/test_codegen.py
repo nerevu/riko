@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import PACKAGE_DIR
 from riko.base._strutils import pythonise
-from riko.base.exceptions import InvalidPipelineError
 from riko.cli._gen_config import objconf_structure, render
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode, WriteNode

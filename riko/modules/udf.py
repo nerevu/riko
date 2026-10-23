@@ -28,9 +28,9 @@ from typing import TYPE_CHECKING, Any
 
 from riko.bado._util import maybe_async
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_arg
 
 from ._decorators import processor
-from ._require import require_arg
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

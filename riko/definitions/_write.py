@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from attrs import define, field
 
-from riko.types._collections import normalize_strs
-from riko.types._enums import FmtLike, Formats, resolve_enum
+from riko.base._require_guards import normalize_strs
+from riko.base._typing import resolve_enum
+from riko.types._enums import FmtLike, Formats
 from riko.types._io import PathLike
 from riko.types._target_protocols import SupportsWrite
 

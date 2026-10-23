@@ -50,6 +50,11 @@ def parse_conf(...):
     if value_seq := parse_value_seq(conf):
         ...
 
+Today's stand-ins are `is_value_seq` and `is_mapping_seq` in `riko/base/_guards.py`, whose only
+consumer is `riko/parsing/_dotdict.py`. Their names say "generic", but `is_value_seq` narrows to the
+typed-value sequence. When `parse_value_seq` lands, they go with it into configuration parsing (or are
+deleted), rather than staying in the generic guard module.
+
 Is expressing types in plain text valuable enough?
 
 Yes, as a configuration interchange format.
@@ -83,6 +88,11 @@ configuration-specific sentinels
 Naming: the helpers that move here (`resolve_sentinel`, `is_sentinel`, the `Sentinel` TypedDict and
 `SentinelValue` key) implement *terminal references*, not sentinels; name them `resolve_terminal`,
 `is_terminal_ref`, and `TerminalRef` when they move, leaving "sentinel" to true sentinels such as `MISSING`.
+`is_sentinel`, `Sentinel`, and `SentinelValue` currently sit in `riko/base/_sentinels.py`, which moved
+whole to `base` on 2026-10-23 (`dependency-layers.md`), and `resolve_sentinel` is in
+`riko/parsing/_dotdict.py`. The move takes the three out of `base`, and `MISSING` and `StreamState` stay
+there. `is_sentinel` depends on the caller's terminal names, so it moves with the code that
+interprets terminal references, not with a generic guard module.
 
 Measured 2026-10-15 (no owner before this phase): `gen_dict` resolves a nested mapping through
 `resolve_sentinel(v, v)` (`riko/parsing/_dotdict.py`), which returns a plain `dict`, so every nesting level

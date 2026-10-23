@@ -34,10 +34,10 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urljoin
 
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._require import require_conf_key
 from ._textops import INVALID_FILECHAR_PATTERN
 
 if TYPE_CHECKING:

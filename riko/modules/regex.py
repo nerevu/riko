@@ -33,9 +33,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from riko.bado.itertools import async_reduce, coop_reduce
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING
 from riko.coercion._dataclass import build_regex_rule
 from riko.parsing._dotdict import DotDict
-from riko.types._sentinels import MISSING
 
 from ._decorators import processor
 from ._sortutils import group_by
