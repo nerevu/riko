@@ -459,7 +459,7 @@ class PipelineDefinition(Generic[T]):
 
         Returns:
 
-            A new pipeline bound to ``context``; this one is unchanged.
+            A new pipeline that runs with ``context``.
 
         Examples:
 
@@ -537,8 +537,8 @@ class PipelineDefinition(Generic[T]):
 
         """
         base = Context() if self.context is None else self.context
-        bound = base.with_resource(name, definition, credential=credential, lazy=lazy)
-        return evolve(self, context=bound)
+        context = base.with_resource(name, definition, credential=credential, lazy=lazy)
+        return evolve(self, context=context)
 
     @classmethod
     def subscribe(cls, *args: object, **kwargs: object) -> Self:

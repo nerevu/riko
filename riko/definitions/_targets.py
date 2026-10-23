@@ -234,11 +234,11 @@ def build_write(
     keys: StrLike | None = None,
 ) -> PreparedWrite:
     """
-    Resolves, validates, and binds a write into a ``PreparedWrite``.
+    Resolves, validates, and prepares a write as a ``PreparedWrite``.
 
-    The target reports its ``(target × fmt)`` capabilities; the keys are
-    normalized; the ``(target, mode, keys)`` triple is validated; and the result is a
-    fully validated, execution-ready specification.
+    The target reports its ``(target × fmt)`` capabilities; the keys are normalized;
+    the ``(target, mode, keys)`` triple is validated; and the result is a fully
+    validated, execution-ready specification.
 
     Args:
 
@@ -249,7 +249,8 @@ def build_write(
 
     Returns:
 
-        The target-bound, validated write specification.
+        A validated write specification that has been checked against its target's
+            capabilities.
 
     Raises:
 

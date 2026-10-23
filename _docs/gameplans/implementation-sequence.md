@@ -934,7 +934,7 @@ to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_
 
 As-built close (2026-10-03): `Pipeline.with_execution(executor=, concurrency=, ordered=, event_sink=,
 shutdown_timeout=)` stores a frozen `ExecutionSettings` (`riko/definitions/_settings.py`; omitted
-arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` bind the
+arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` set the
 run's `Context`, and `ExecutionSettings.sync_policy`/`async_policy` derive the per-run mapping policy
 both executions honor (details in [IMPLEMENTED § Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)).
 Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
@@ -1549,7 +1549,8 @@ Naming (2026-10-10 naming triage): the async hub's `publish`/`complete`/`_get_or
 (`riko/runtime/_pubsub/_async.py`) are deleted with the hub lifecycle, so they were not renamed. The
 R7 protocols should use one vocabulary for both colors (today the sync hub says `send`/`notify_complete`
 where the async hub says `publish`/`complete`), give a coroutine an `a` prefix only when it has a sync
-twin, and avoid `get_` on a method that creates channel state.
+twin, avoid `get_` on a method that creates channel state, and say *subscribe*/*attach*, never
+*bind*, for a sender's receiver association (the sync hub's docstrings say "bound to" today).
 
 Audit note (2026-10-10 structural audit): `riko/runtime/_pubsub/_types.py` holds two aliases whose
 three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge it into

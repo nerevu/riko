@@ -884,8 +884,8 @@ For runtime registration, call ``register_module`` instead:
 
     register_module(ModuleDefinition.from_module(shout, name="example.shout"))
 
-``from_module`` takes an object exposing ``pipe``/``async_pipe`` and binds what it finds
-there. You can alternatively pass ``sync_pipe``/``async_pipe`` to ``ModuleDefinition``
+``from_module`` takes an object exposing ``pipe``/``async_pipe`` and registers what it
+finds there. You can alternatively pass ``sync_pipe``/``async_pipe`` to ``ModuleDefinition``
 directly for bare callables. Registered and entry-point names surface in
 ``list_modules()`` alongside the packaged built-ins. See ``examples/riko-example-ext``
 for a complete example, the `Cookbook`_ for custom ``processor`` and ``operator``

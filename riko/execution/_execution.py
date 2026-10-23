@@ -4,7 +4,7 @@ Shared state and plan checks for the private sync/async executions.
 
 A prepared workflow (an execution plan) is a reusable structural snapshot; running
 it creates a one-shot sync or async execution. Each owns the exit stack and sync/async
-bridge that bound a run's acquired resources and adapted work. These
+bridge that scope a run's acquired resources and adapted work. These
 types are private to the runtime and belong to no supported surface.
 """
 

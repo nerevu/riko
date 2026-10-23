@@ -92,7 +92,7 @@ def require_conf_key[T](  # noqa: E704
 
     Returns:
 
-        The value bound to ``key``.
+        The value stored under ``key``.
 
     Raises:
 

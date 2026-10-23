@@ -566,7 +566,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self, interface: PreparedInterface, extra: ExtraInput
     ) -> Callable[[T], Awaitable[Iterable[T]]]:
         """
-        Binds a mapped node's pipe into a call that collects one item's results.
+        Builds a call from a mapped node's pipe that collects one item's results.
 
         A synchronous pipe runs on a worker thread, or on the event-loop thread
         when the settings choose the inline executor.
@@ -589,8 +589,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             call = call_native
         else:
-            bound = partial(prepared, context=self.context, **extra)
-            sync_call = cast("Callable[[T], Iterable[T]]", bound)
+            mapped = partial(prepared, context=self.context, **extra)
+            sync_call = cast("Callable[[T], Iterable[T]]", mapped)
 
             if self.settings.async_policy.inline:
 
@@ -610,7 +610,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         limit: int,
     ) -> AsyncIterator[T]:
         """
-        Maps a bound call over a node's items under the run's shared ceiling.
+        Maps a prepared call over a node's items under the run's shared ceiling.
 
         Closing the stream early stops its in-flight calls in the consuming task.
         """

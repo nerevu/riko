@@ -18,7 +18,7 @@ from typing_extensions import TypeIs
 
 from riko.bado._util import async_partial, maybe_async
 from riko.bado.itertools import as_async
-from riko.base._iterutils import map_values
+from riko.base._iterutils import gen_non_none, map_values
 from riko.base.exceptions import InvalidPipelineError
 from riko.definitions._nodes import (
     FROZEN_CONF,
@@ -326,7 +326,7 @@ class PreparedInterface(NamedTuple):
     Attributes:
 
         pipe: The callable that execution runs.
-        call: The pipe with the node's configuration, options, and extras bound.
+        call: The pipe with the node's configuration, options, and extras applied.
         item_call: The per-item call the mapped paths run (``call`` for a module node).
         native: Whether ``pipe`` runs natively for the execution, without an adapter.
 
@@ -431,7 +431,7 @@ class PreparedNode:
     @cached_property
     def extras(self) -> ExtraNames:
         """The names of the extra inputs delivered with each item, in call order."""
-        named = [port.name for port in self.input_ports if port.name is not None]
+        named = gen_non_none(port.name for port in self.input_ports)
         has_others = any(port.is_positional for port in self.input_ports)
         others = ["others"] if has_others else []
         resources = ["resources"] if self.node.resources else []

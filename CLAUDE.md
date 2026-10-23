@@ -242,6 +242,7 @@ new permanent bullet here.
   not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`
   (codegen: returns generated source), `gen_` (generators: a generator function must use it, a method that yields may),
   `migrate` (version migration), `serialize`, `register`, `read`/`write`/`open`/`close`,
+  `bind` (resource binding only; fixing a call's configuration is `prepare`),
   and `is`/`has` for predicates (an attrs `validator=` callable keeps the predicate
   name it checks, `_is_single`/`_has_pipe`: attrs owns the raise).
 

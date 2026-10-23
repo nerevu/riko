@@ -117,7 +117,8 @@ class WriteOperation:
 
     A ``WriteOperation`` is not a fully validated write specification: whether its
     ``mode``/``keys`` are legal depends on a target's :class:`WriteCapabilities`.
-    :class:`PreparedWrite` is the target-bound, validated object.
+    :class:`PreparedWrite` is the validated write that has been checked against its
+    target's capabilities.
 
     Attributes:
 
@@ -139,7 +140,7 @@ type Destination = PathLike | SupportsWrite
 @dataclass(frozen=True, slots=True)
 class PreparedWrite:
     """
-    A target-bound, validated write ready for execution.
+    A validated, target-capability-checked, ready-to-execute write.
 
     Attributes:
 
