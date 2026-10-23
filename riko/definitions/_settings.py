@@ -11,13 +11,14 @@ from attrs import define, field
 
 from riko.base._config import get_worker_cnt
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._require_guards import (
     def_from_require,
     require_instance,
     validator_from_require,
 )
-from riko.types._enums import Executor, resolve_enum
+from riko.base._typing import resolve_enum
+from riko.types._enums import Executor
 
 if TYPE_CHECKING:
     from riko.types._events import EventSink

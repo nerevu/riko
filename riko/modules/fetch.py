@@ -27,14 +27,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_read
 from riko.rss.feeds import augment_entries, parse_rss
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

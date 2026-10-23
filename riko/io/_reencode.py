@@ -13,7 +13,7 @@ from meza import BOM
 from meza.io import IterStringIO as _IterStringIO
 from meza.io import Reencoder as _Reencoder
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:

@@ -21,7 +21,7 @@ from uuid import UUID
 
 import attrs
 
-from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
 
 from ._dates import resolve_aware_datetime, tt_to_datetime
 

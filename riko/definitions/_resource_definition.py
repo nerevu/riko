@@ -8,8 +8,8 @@ from warnings import warn
 
 from attrs import define, field
 
-from riko.base.exceptions import ResourceInterpretationWarning
-from riko.types._collections import FrozenDict
+from riko.base._exceptions import ResourceInterpretationWarning
+from riko.types._frozendict import FrozenDict
 from riko.types._io import is_closeable
 from riko.types._resource import (
     AnyContextManager,

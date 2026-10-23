@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Self, cast, overload
 from attrs import define, field
 
 from riko.bado._backend import start_blocking_portal
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.types._enums import Executor
 from riko.types._resource import (
     AsyncLifecyclePlan,

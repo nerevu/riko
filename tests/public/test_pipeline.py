@@ -27,13 +27,14 @@ import pytest
 from riko import export
 from riko.bado._backend import async_sleep, checkpoint, fail_after
 from riko.bado.itertools import alist, async_iter
-from riko.base._paths import ROOT_DIR, get_path
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     EmptyPipelineError,
     InvalidPipelineError,
     PipelineError,
     UnsupportedTargetError,
 )
+from riko.base._guards import is_mapping
+from riko.base._paths import ROOT_DIR, get_path
 from riko.definitions._context import Context, ExecutionMode
 from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge, WriteNode
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
@@ -46,10 +47,10 @@ from riko.parsing._dotdict import DotDict
 from riko.runtime._module_registry import register_module, reset_module_registry
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, Executor, Formats, IdentityMode, ModuleName
-from riko.types._guards import is_mapping, is_stateful_item
+from riko.types._options import CallOptions
+from riko.types._streams import is_stateful_item
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
-    CallOptions,
     ConfArg,
     Embed,
     ItemBuilderConf,

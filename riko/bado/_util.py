@@ -23,7 +23,7 @@ from functools import partial
 from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
-from riko.types._sentinels import MISSING
+from riko.base._sentinels import MISSING
 
 from ._backend import AsyncClient, Path, create_task_group
 

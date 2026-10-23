@@ -42,24 +42,24 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._iterutils import map_values
-
-from ._collections import (
-    FrozenDict,
-    freeze,
+from riko.base._require_guards import (
     require_instance,
     require_nonblank_str,
     require_str,
     validator_from_require,
 )
 
+from ._frozendict import FrozenDict, freeze
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from ._collections import FrozenSetMapping, FrozenTupleMapping
     from ._enums import BackendLike, FmtLike, StrLike
+    from ._frozendict import FrozenSetMapping, FrozenTupleMapping
     from ._io import PathLike
+    from ._options import RawCallOptions
     from ._pipedef import Embed
-    from .modules import Conf, RawCallOptions
+    from .modules import Conf
 
 type NodeId = str
 type Port = str

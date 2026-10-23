@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from typing_extensions import TypeIs
 
-from ._guards import isinstance_strict
+from riko.base._guards import isinstance_strict
 
 type PathLike = str | Path
 

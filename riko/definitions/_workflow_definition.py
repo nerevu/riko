@@ -36,19 +36,19 @@ from typing import TYPE_CHECKING, Self
 
 from attrs import define, evolve, field
 
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import require_sequence
 from riko.base._iterutils import unique_everseen
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
+from riko.base._require_guards import normalize_strs, require_instances
+from riko.base._typing import resolve_enum
+from riko.types._enums import DocumentShape
+from riko.types._frozendict import (
     FrozenDict,
     FrozenJSON,
     freeze_json,
     instances_freezer,
     mapping_converter,
-    normalize_strs,
-    require_instances,
 )
-from riko.types._enums import DocumentShape, resolve_enum
-from riko.types._guards import require_sequence
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     Edge,

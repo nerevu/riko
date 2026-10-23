@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from meza.fntools import Objectify as _Objectify
 
-from riko.types._guards import is_mapping
+from riko.base._guards import is_mapping
 
 _VT = TypeVar("_VT")
 

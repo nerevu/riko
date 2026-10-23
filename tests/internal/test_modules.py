@@ -17,15 +17,18 @@ import attrs
 import pytest
 
 from riko.bado.itertools import as_async
-from riko.base._paths import TESTS_DIR
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     InvalidPipelineError,
     UnsupportedModuleError,
     UnsupportedWorkflowError,
 )
+from riko.base._guards import is_mapping
+from riko.base._paths import TESTS_DIR
+from riko.base._sentinels import MISSING
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._workflow_definition import Workflow
+from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.modules import _metadata
 from riko.modules import count as count_module
 from riko.modules import regex as regex_module
@@ -63,9 +66,7 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
-from riko.types._guards import is_mapping
 from riko.types._options import ItemDispatch, ValueDispatch
-from riko.types._sentinels import MISSING
 from riko.types._wrappers import (
     WRAPPER_META,
     AsyncProcessorWrapper,
@@ -73,7 +74,6 @@ from riko.types._wrappers import (
     AsyncSubPipe,
     ProcessorWrapper,
     SyncProcessorWrapper,
-    stamp_wrapper_meta,
 )
 from riko.types.modules import (
     Conf,
@@ -1347,7 +1347,7 @@ class TestModuleRegistry:
 
             return __import__(name, *args, **kwargs)
 
-        monkeypatch.setattr("riko.base._imports.import_module", fake_import)
+        monkeypatch.setattr("riko.base._typing.import_module", fake_import)
 
         with pytest.raises(ModuleNotFoundError) as e:
             fixed_registry.require("tokenizer")

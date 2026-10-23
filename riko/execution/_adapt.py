@@ -15,9 +15,10 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 from riko.bado._util import maybe_aclosing
-from riko.types._guards import is_listlike
-from riko.types._sentinels import MISSING
-from riko.types._wrappers import require_single_output, stamp_wrapper_meta
+from riko.base._guards import is_listlike
+from riko.base._sentinels import MISSING
+from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.types._wrappers import require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

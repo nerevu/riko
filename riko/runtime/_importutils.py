@@ -7,8 +7,8 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from riko.base._imports import import_or_else
-from riko.base.exceptions import UnsupportedModuleError, UnsupportedWorkflowError
+from riko.base._exceptions import UnsupportedModuleError, UnsupportedWorkflowError
+from riko.base._typing import import_or_else
 
 if TYPE_CHECKING:
     from riko.types._wrappers import AnyModuleWrapper, Interface

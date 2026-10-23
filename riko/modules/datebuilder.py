@@ -27,9 +27,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
+from riko.base._typing import DateLikeType
 from riko.coercion.cast import cast_datetime
 from riko.types._enums import BasicCastType
-from riko.types._scalars import DateLikeType
 
 from ._decorators import processor
 

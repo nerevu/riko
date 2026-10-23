@@ -26,7 +26,7 @@ from __future__ import annotations
 from itertools import repeat, takewhile
 from typing import TYPE_CHECKING, Any
 
-from riko.base._constants import FOREVER_ITEM
+from riko.base._config import FOREVER_ITEM
 from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts
 

@@ -9,13 +9,14 @@ from itertools import chain, islice
 from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._logging import get_logger
+from riko.definitions._wrapping import build_call
 from riko.parsing._dotdict import DotDict
-from riko.types._wrappers import build_call
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from riko.definitions._context import Context
+    from riko.types._options import RawCallOptions
     from riko.types._pipedef import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
         SyncProcessorWrapperOutput,
         SyncSubPipe,
     )
-    from riko.types.modules import RawCallOptions
 
 logger: Logger = get_logger(__name__)
 

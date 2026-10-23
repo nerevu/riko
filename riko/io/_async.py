@@ -28,7 +28,7 @@ from typing_extensions import TypeIs
 from riko.bado import _backend
 from riko.bado._backend import async_open
 from riko.bado._util import async_get, async_read
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
 

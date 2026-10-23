@@ -45,27 +45,31 @@ from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
 )
-from riko.base._logging import get_logger
-from riko.definitions._context import Context
-from riko.parsing._dotdict import DotDict
-from riko.parsing.config import get_field, get_skip
-from riko.types._collections import require_from_typed_dict, typed_dict_keys
-from riko.types._enums import BasicCastType
-from riko.types._guards import (
+from riko.base._guards import (
     is_async_callable,
     is_known_sequence,
     is_listlike,
     is_mapping,
     is_streamlike,
 )
+from riko.base._logging import get_logger
+from riko.base._require_guards import require_from_typed_dict, typed_dict_keys
+from riko.definitions._context import Context
+from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.parsing._dotdict import DotDict
+from riko.parsing.config import get_field, get_skip
+from riko.types._enums import BasicCastType
 from riko.types._io import is_async_closeable
 from riko.types._options import (
     Casted,
+    ContextOverrides,
     DecorationOptions,
     Defaults,
     OperatorDecorationOptions,
     ProcessorDecorationOptions,
+    RawCallOptions,
     SharedDecorationOptions,
+    build_require_raw_call_options,
 )
 from riko.types._pipedef import CountValues, EmbedKwargs
 from riko.types._streams import (
@@ -77,14 +81,8 @@ from riko.types._streams import (
     Stream,
     StreamOrValueStream,
 )
-from riko.types._wrappers import PreparedCall, stamp_wrapper_meta
-from riko.types.modules import (
-    Conf,
-    ContextOverrides,
-    RawCallOptions,
-    build_require_raw_call_options,
-    require_conf,
-)
+from riko.types._wrappers import PreparedCall
+from riko.types.modules import Conf, require_conf
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, has_sequential_inputs, is_loopable

@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import evolve
 
-from riko.base.exceptions import UnsupportedModuleError
+from riko.base._exceptions import UnsupportedModuleError
 from riko.definitions._module_definition import ModuleDefinition
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._pipedef import is_pipe_id

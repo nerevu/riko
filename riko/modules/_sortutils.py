@@ -22,11 +22,11 @@ from math import isnan
 from time import struct_time
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
 from riko.coercion.cast import CAST_SWITCH, cast_value, resolve_cast_type
 from riko.types._enums import CastType
-from riko.types._guards import is_mapping
 from riko.types._scalars import PrimitiveValue, SortableValue
 
 if TYPE_CHECKING:

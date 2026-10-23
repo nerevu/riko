@@ -15,7 +15,8 @@ from urllib.request import urlopen
 import pytest
 
 from riko.base._dateutils import get_tzname
-from riko.base.exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.base._guards import is_mapping
 from riko.coercion._sequences import listize, truncate_content
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
@@ -28,7 +29,6 @@ from riko.io import async_url_open
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
-from riko.types._guards import is_mapping
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from tests import TESTS_DIR, async_test

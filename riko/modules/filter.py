@@ -33,12 +33,12 @@ from typing import TYPE_CHECKING, Any
 
 from dateutil.parser import ParserError
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING
 from riko.coercion._objectify import Objectify
 from riko.coercion.cast import cast_date, cast_decimal
 from riko.parsing._dotdict import DotDict
-from riko.types._guards import is_mapping
-from riko.types._sentinels import MISSING
 
 from ._decorators import operator
 

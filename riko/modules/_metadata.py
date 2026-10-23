@@ -22,7 +22,7 @@ from pkgutil import iter_modules as iter_package_modules
 from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._config import SINK_NAMES
-from riko.base._imports import import_or_else
+from riko.base._typing import import_or_else
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
 from riko.types._wrappers import WRAPPER_META, require_wrapper_meta

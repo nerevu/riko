@@ -72,8 +72,8 @@ the `IO_` contract group.
 ```
 <!-- /api-surface:modules -->
 
-**Root exceptions** — the `RikoError` hierarchy implemented in
-`riko.base.exceptions` and promoted onto the stable surface:
+**Root exceptions** — the `RikoError` hierarchy defined in
+`riko/base/_exceptions.py`, importable from `riko.base.exceptions`, and promoted onto the stable surface:
 
 <!-- api-surface:root-exceptions -->
 ```python

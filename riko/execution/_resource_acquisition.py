@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, overload
 
 from riko.base._iterutils import map_values
-from riko.types._collections import thaw
+from riko.types._frozendict import thaw
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

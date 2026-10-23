@@ -6,7 +6,7 @@ from __future__ import annotations
 import ast
 
 from riko.base._paths import PACKAGE_DIR
-from riko.base._source_format import ruff_format
+from riko.base._strutils import ruff_format
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"

@@ -501,16 +501,16 @@ forbids a key and `not_required=` only drops it from the required set. The conf 
 (`require_module_conf`, `require_conf`) live beside them in `riko/types/modules.py`, off `__all__`.
 Mapping fields use one converter callable, never a converter list: pyright types the generated
 `__init__` parameter from a single converter's argument but falls back to the field annotation for a
-list. The helpers live in `riko/types/_collections.py`: `mapping_converter` (required — `None` or a
+list. The helpers live in `riko/types/_frozendict.py`: `mapping_converter` (required — `None` or a
 non-mapping raises, `error=` selectable) and `optional_mapping_converter` (`None` → empty) wrap a
 freezer, `freeze_json` for JSON fields or `instances_freezer(cls, what)` for `nodes`/`outputs`,
 `ExecutionPlan.modules`/`embeds`, and `Context.resources` (`error=TypeError`). Their optional positional
 `accepted` type form only sets the static input type (e.g. `ConfInput` keeps the conf vocabulary
 visible while the stored `FrozenConf` is `FrozenDict[str, FrozenJSON]`); the runtime check is the
 freezer's. `ModuleNode.options` is the exception: it stores the typed `CallOptions` record (below). `Node.resources` takes
-`ResourcesLike` through the single `binding_converter`, which runs `require_binding` (`riko/types/_collections.py`): it returns the normalized `FrozenDict` alias→Context-name binding and rejects non-string/empty names and repeated aliases. `Workflow.edges` requires `Edge` instances, `Endpoint`/`Edge`/`Node.id` validate their fields, `PipelineDefinition.context`/`settings` raise `TypeError` on a wrong type, and `ExecutionPlan` takes only what the `Workflow` cannot supply — `modules` (one `ResolvedModule` per node id) and `embeds` (one per loop embed) — derives `index` at init and `nodes` (the `PreparedNode` views) as a `cached_property`; `ExecutionPlan.validate()`, run from `__attrs_post_init__`, raises `InvalidPipelineError` at construction for a non-module node or when either key set does not match the workflow. `Context.inputs` and `ModuleNode.embed` still
+`ResourcesLike` through the single `binding_converter`, which runs `require_binding` (beside it in `riko/definitions/_nodes.py`): it returns the normalized `FrozenDict` alias→Context-name binding and rejects non-string/empty names and repeated aliases. `Workflow.edges` requires `Edge` instances, `Endpoint`/`Edge`/`Node.id` validate their fields, `PipelineDefinition.context`/`settings` raise `TypeError` on a wrong type, and `ExecutionPlan` takes only what the `Workflow` cannot supply — `modules` (one `ResolvedModule` per node id) and `embeds` (one per loop embed) — derives `index` at init and `nodes` (the `PreparedNode` views) as a `cached_property`; `ExecutionPlan.validate()`, run from `__attrs_post_init__`, raises `InvalidPipelineError` at construction for a non-module node or when either key set does not match the workflow. `Context.inputs` and `ModuleNode.embed` still
 use converter lists until R4D and R9 settle their value types. Field introspection
-uses `riko.types._collections.field_names` (attrs-or-dataclass field names *including* `ClassVar`
+uses `riko.base._recordutils.field_names` (attrs-or-dataclass field names *including* `ClassVar`
 discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both drop), never
 `dataclasses.*`; derive variants with `attrs.evolve`. `PipelineDefinition` (and so `Pipeline`) is an
 `attrs @define(frozen, slots)` class like the rest of the model — generic `PipelineDefinition[T]` via a
@@ -600,7 +600,7 @@ compact `separators=(",", ":")` form) — with `sort_keys` ordering map keys at 
 same `Workflow` always yields identical bytes for golden-fixture comparison; edge order follows the `Workflow`
 while the semantic wiring lives in the endpoints, not the array order. `WorkflowEncoder` (a
 `json.JSONEncoder`) renders **every** structural and value type: it emits the `Workflow` envelope
-and each `Node`/`Edge` via **reflection** — `serialize_attrs` (`riko/types/_collections.py`) uses `attrs.asdict(recurse=False)`
+and each `Node`/`Edge` via **reflection** — `serialize_attrs` (`riko/base/_recordutils.py`) uses `attrs.asdict(recurse=False)`
 for the attrs `Workflow`, nodes, and edges, dropping empties (`_has_value`) while keeping required
 keys — and it coerces the remaining
 structural leaf, `Mapping`/`FrozenDict`→dict (`json` already writes tuples as arrays and `StrEnum`
@@ -610,7 +610,7 @@ serialization is field-reflection rather than a per-family branch, a new node fi
 serializes as `family`; `RawNode`/`RawEdge` have no `type` key, and a node that gives one is
 rejected with a hint naming `name` (the module) and `family` (the kind). Canonical
 `conf`/`options`/`policy`/`params`/`embed`/`inputs` values are JSON-native by construction: their
-field converters freeze them through `freeze_json` (`riko/types/_collections.py`), which rejects
+field converters freeze them through `freeze_json` (`riko/types/_frozendict.py`), which rejects
 `Decimal`, `date`, `set`, `bytes`, non-finite floats, non-string keys, and any other object, turns
 lists into tuples, and builds every mapping as a `FrozenDict` (re-walking a `FrozenDict` so
 permissively frozen values are still checked). The permissive `freeze` (definitions' `inputs`,
@@ -671,7 +671,7 @@ the node's `embed = {name, conf}` the loop runs (a `pipe:`-prefixed type stays v
 name); a module key outside `PipeModule`'s closed set raises `InvalidPipelineError` (checked by
 `require_from_typed_dict(PipeModule)`, the same rule `write` modules always had; a `write` conf takes
 `WriteConf`'s keys plus `keys`, which is a `WriteNode` field rather than write-module conf, via
-`extra={"keys"}`). `typed_dict_keys` (`riko/types/_collections.py`) reads `Required`/`NotRequired`
+`extra={"keys"}`). `typed_dict_keys` (`riko/base/_require_guards.py`) reads `Required`/`NotRequired`
 from each annotation's source text with `ast`, because CPython 3.12 ignores string-form qualifiers
 under postponed annotations; it never evaluates the annotated types, so it needs no namespaces; a wire target
 port that is not an identifier is pythonised (`1_URL` → `_1_URL`) to match how module extras are
@@ -1072,7 +1072,7 @@ context and the secondary input streams, `resources`, or `embed`. The decorators
 `_PreparedCall[M]` (the decorator, wrapper, prepared module, and prepared options, plus derived
 `field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
 plain wrapper (a stored-workflow pipe, a sync/async adapter) is prepared by `prepare_call`/`build_call`
-(`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
+(`riko/definitions/_wrapping.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
 (`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,
 extras, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/
 `static_casted` are cached derivations, so it pickles and the process executor ships it. Dynamic-conf
@@ -1174,7 +1174,7 @@ v1-cutover step 4 (2026-10-02). What remains is four durable layers:
   independent facts (`modes`, `fmt`, `incremental`, `match_keyed_modes`, `idempotent_modes`);
   `appendable`/`serializes`/`keyed_modes` are **derived** properties. `build_write` +
   `validate_target_mode` live in `riko/definitions/_targets.py`; `normalize_strs` lives in
-  `riko/types/_collections.py` so `WriteOperation` can normalize its own `mode`/`keys` (it is a
+  `riko/base/_require_guards.py` so `WriteOperation` can normalize its own `mode`/`keys` (it is a
   dedicated helper, *not* a widened `_iterutils.listize`). `Pipeline.write(dest)` calls `build_write`
   to validate the destination when it declares the `WriteNode`.
 - **runtime** — the `SyncWriteSession`/`AsyncWriteSession` protocols (`write` / `finalize` / `abort` /

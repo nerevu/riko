@@ -24,10 +24,10 @@ from typing import TYPE_CHECKING, Any, Never, cast, overload
 from attrs import Factory, define, field
 
 from riko.bado._backend import asyncify
-from riko.base._constants import FOREVER_ITEM
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._config import FOREVER_ITEM
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from riko.types._collections import FrozenDict
+from riko.types._frozendict import FrozenDict
 from riko.types._workflow import parse_port
 from riko.types._wrappers import ModuleWrapper
 

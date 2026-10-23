@@ -32,10 +32,10 @@ from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 from attrs import define, field
 from typing_extensions import TypeIs
 
+from riko.base._guards import is_async_callable
 from riko.base._iterutils import noop
 
-from ._collections import FrozenDict, freeze
-from ._guards import is_async_callable
+from ._frozendict import FrozenDict, freeze
 from ._io import is_async_closeable, is_sync_closeable
 
 if TYPE_CHECKING:

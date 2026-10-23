@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from riko.bado.itertools import as_async
-from riko.base.exceptions import InvalidPipelineError, UnsupportedWorkflowError
+from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
@@ -36,8 +36,8 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import register_workflow_store
-from riko.types._collections import FrozenDict, normalize_mapping
 from riko.types._enums import Backends, DocumentShape, ExecutionMode, Formats
+from riko.types._frozendict import FrozenDict, normalize_mapping
 from riko.types._pipedef import Embed
 from riko.types._workflow import Endpoint, ParsedPort, parse_port
 from riko.types.modules import ItemBuilderConf, StrconcatRawConf, TruncateRawConf

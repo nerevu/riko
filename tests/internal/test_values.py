@@ -29,10 +29,10 @@ from feedparser import FeedParserDict
 
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
+from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import ROOT_DIR, get_path
-from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
@@ -68,7 +68,7 @@ from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from riko.types.modules import XpathFetchPageConf
 
 if TYPE_CHECKING:
-    from riko.types._collections import FrozenSetMapping
+    from riko.types._frozendict import FrozenSetMapping
 
 NOON_UTC = datetime(2020, 6, 15, 12, tzinfo=UTC)
 NOON_TT = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))

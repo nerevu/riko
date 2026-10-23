@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import attrs
 
 from riko.base._config import OUTPUT_MODULE
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import serialize_attrs
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_listlike, is_mapping, require_mapping
+from riko.base._recordutils import serialize_attrs
 from riko.types._enums import DocumentShape
-from riko.types._guards import is_listlike, is_mapping, require_mapping
 from riko.types._workflow import Edge, RawWorkflow, WorkflowDocument
 
 from ._migrate import migrate_pipe_def, parse_dag_graph

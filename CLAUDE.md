@@ -20,7 +20,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | Path | Role |
 |---|---|
 | `riko/__init__.py` | stable application facade; implementations live below it |
-| `riko/base/` | bottom-layer constants, paths, logging, strings/iterators/date/graph helpers, exceptions, private API declarations |
+| `riko/base/` | bottom-layer constants, paths, logging, strings/iterators/date/graph helpers, generic guards/narrowing and record helpers, sentinels, exceptions, private API declarations |
 | `riko/types/` | static contracts: streams/items, configs, options, compiler/pipeline/resource/I/O types, enums/wrappers |
 | `riko/coercion/` | casts, `DynamicConf`, **generated** objconf classes, objectification, canonical-identity helpers |
 | `riko/bado/` | stable async backend/iterator API; transport/file I/O is in `riko/io/` |
@@ -47,7 +47,7 @@ Important concrete locations:
 - context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource.plan`; owned-value teardown: `riko/execution/_resource_teardown.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
-- exceptions/API declarations: `riko/base/exceptions.py` + `_api_surface.py`
+- exceptions/API declarations: `riko/base/_exceptions.py` (public facade `riko/base/exceptions.py`) + `_api_surface.py`
 - generated config objects: `riko/coercion/_configs.py`
 - generated discovery/id files: `riko/modules/_names.py` + `riko/types/_module_ids.py`
 
@@ -162,7 +162,7 @@ new permanent bullet here.
   specialized pattern explicitly requires it.
 - Runtime data conditions degrade only when the data contract survives
   (`logger.warning` + carry on). Missing required call arguments are programming
-  errors and raise; `require_arg` in `riko/modules/_require.py` owns that pattern.
+  errors and raise; `require_arg` in `riko/base/_require_guards.py` owns that pattern.
 - Docstrings follow `_docs/DOCUMENTATION_STANDARD.md`: annotations own types except
   the documented pipe conventions; summaries use third-person present. Public
   modules (including private files that define re-exported public APIs) keep a useful
@@ -211,10 +211,13 @@ new permanent bullet here.
   and the overload layout conflict.
 - Keep package-local imports relative; canonical import and architecture rules are
   enforced by `manage lint imports`.
-- **Guards live beside the contract they narrow** — `riko/types/_guards.py` holds only
+- **Guards live beside the contract they narrow** — `riko/base/_guards.py` holds only
   guards over generic shapes (mappings, sequences, callables, protocol checks); a guard
   for a specific contract (`is_subpipe`, `is_closeable`, `is_lifecycle_factory`,
-  `is_pipe_id`) is defined in the module that defines that contract.
+  `is_pipe_id`) is defined in the module that defines that contract. Two exceptions keep
+  a guard with its consumer: moving it would need an import the layer rules bar
+  (`is_conf_rule`, `_is_source`), or it decides between alternative forms for a single
+  consumer (`is_pipedag`/`is_pipedeflike`/`is_raw_workflow` in `_serialize.py`).
 - **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
   Python call site** (a parameter, or a field callers construct) or for a runtime
   **state** — they get named members and one import instead of magic strings; `.value`

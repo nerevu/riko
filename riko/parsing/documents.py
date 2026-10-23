@@ -19,11 +19,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 import feedparser
 
-from riko.base._constants import STREAMING_THRESHOLD
+from riko.base._config import STREAMING_THRESHOLD
+from riko.base._guards import is_mapping
 from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
-from riko.types._guards import is_mapping
 
 from ._dotdict import DotDict
 

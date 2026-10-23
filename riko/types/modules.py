@@ -4,33 +4,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import partial
-from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
-
-import attrs
-from attrs import define
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NotRequired,
+    Required,
+    TypedDict,
+    TypeGuard,
+)
 
 from riko.base._config import BUILTIN_PROVIDER
+from riko.base._require_guards import require_from_form
 
-from ._collections import (
-    FrozenConf,
-    require_from_form,
-    require_from_typed_dict,
-    require_instance,
-    serialize_attrs,
-    validator_from_require,
-)
+from ._options import CallOptions, CallOptionsLike, ContextOverrides, RawCallOptions
 from ._pipedef import CountValues, Embed
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from re import Pattern, RegexFlag
 
-    from ._collections import TypeRequire
-    from ._enums import CastType, ExecutionMode, FmtLike, LocationType, SortableCastType
+    from riko.base._require_guards import TypeRequire
+
+    from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._frozendict import FrozenConf
     from ._io import PathLike
     from ._scalars import BasicValue
-    from ._values import Inputs
 
 
 # Shared
@@ -954,104 +953,8 @@ require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(
 require_conf: TypeRequire[object, Conf] = require_from_form(Conf)
 
 
-class RawCallOptions(TypedDict, total=False):
-    """Call options forwarded to a module callable, as keyword arguments."""
-
-    emit: bool
-    assign: str
-    field: str
-    count: CountValues
-
-
-type CallOptionsLike = CallOptions | RawCallOptions | Mapping[str, OptionValues]
-
-_is_optional_bool = validator_from_require(require_instance, bool, optional=True)
-_is_optional_str = validator_from_require(require_instance, str, optional=True)
-_require_count = require_from_form(CountValues)
-_is_optional_count = validator_from_require(_require_count, optional=True)
-_item, _what = RawCallOptions, "call options"
-build_require_raw_call_options: Callable[
-    ..., TypeRequire[Mapping[str, object], RawCallOptions]
-] = partial(require_from_typed_dict, _item, _what)
-_require_raw_call_options = build_require_raw_call_options()
-
-
-@define(frozen=True, slots=True, kw_only=True, repr=False)
-class CallOptions:
-    """
-    Call options forwarded to a module callable alongside its configuration.
-
-    Attributes:
-
-        emit: Whether to yield the result as a new item rather than assign it.
-        assign: The item field the result is assigned to.
-        field: The item field whose value the module receives.
-        count: Whether to keep the first result or all of them.
-
-    Examples:
-
-        >>> options = CallOptions.from_raw({"field": "title", "emit": True})
-        >>> options
-        CallOptions(emit=True, field='title')
-        >>> options.field, options.assign
-        ('title', None)
-        >>> options.kwargs
-        {'emit': True, 'field': 'title'}
-
-    """
-
-    emit: bool | None = attrs.field(default=None, validator=_is_optional_bool)
-    assign: str | None = attrs.field(default=None, validator=_is_optional_str)
-    field: str | None = attrs.field(default=None, validator=_is_optional_str)
-    count: CountValues | None = attrs.field(default=None, validator=_is_optional_count)
-
-    @classmethod
-    def from_raw(
-        cls, raw: CallOptionsLike | None = None, what: str | None = None
-    ) -> CallOptions:
-        """
-        Builds call options from keyword-argument form.
-
-        Args:
-
-            raw: The options to convert or return as is. ``None`` means no options.
-            what: The name used in error messages (default: "call options").
-
-        Returns:
-
-            The call options.
-
-        Raises:
-
-            InvalidPipelineError: If ``raw`` has a key that is not a call option, or
-                an option value of the wrong type.
-
-        """
-        if raw is None:
-            options = cls()
-        elif isinstance(raw, CallOptions):
-            options = raw
-        else:
-            options = cls(**_require_raw_call_options(raw, what))
-
-        return options
-
-    @property
-    def kwargs(self) -> RawCallOptions:
-        """The set options as fresh keyword arguments."""
-        return _require_raw_call_options(serialize_attrs(self))
-
-    def __repr__(self) -> str:
-        pairs = ", ".join(f"{key}={value!r}" for key, value in self.kwargs.items())
-        return f"CallOptions({pairs})"
-
-
-class ContextOverrides(TypedDict, total=False):
-    """The per-call overrides a pipe call applies to its ``Context``."""
-
-    mode: ExecutionMode
-    inputs: Inputs
-    test: bool
+def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
+    return len(val) == 2 and "type" in val and "value" in val
 
 
 __all__ = [

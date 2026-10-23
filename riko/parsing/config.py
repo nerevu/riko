@@ -23,10 +23,12 @@ from functools import partial
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
+from riko.base._guards import is_dataclass_inst, is_mapping
 from riko.base._iterutils import map_values
+from riko.base._sentinels import is_sentinel
 from riko.coercion._sequences import listize
-from riko.types._guards import is_dataclass_inst, is_mapping, is_sentinel, is_type_value
 from riko.types._values import RikoValue
+from riko.types.modules import is_type_value
 
 from ._dotdict import DotDict
 

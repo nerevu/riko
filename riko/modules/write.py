@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING, Any, cast
 from meza import io
 
 from riko.base._logging import get_logger
+from riko.base._typing import AnyStrType
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
 from riko.io._filelike import IOFileLike, IOFileLikeType
 from riko.io._serialization import serialize_items
 from riko.types._options import DecorationOptions, Defaults
-from riko.types._scalars import AnyStr, AnyStrType
 
 from ._decorators import operator
 
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import WriteObjconf
+    from riko.types._scalars import AnyStr
     from riko.types._streams import Items, Stream
     from riko.types._wrappers import PipeTuples
 

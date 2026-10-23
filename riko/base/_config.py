@@ -1,10 +1,11 @@
-"""Provides central project policy and operator-tunable runtime settings."""
+"""Provides central project policy, tunable runtime settings, and shared constants."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from os import environ
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from ._logging import get_logger
@@ -194,3 +195,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
 
 
 settings = load_settings()
+
+DEF_CONCURRENCY_LIMIT = settings.concurrency_limit
+STREAMING_THRESHOLD = settings.streaming_threshold
+ENCODING = settings.encoding
+FOREVER_ITEM: Mapping[str, bool] = MappingProxyType({"forever": True})

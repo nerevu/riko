@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from riko.types._collections import normalize_strs
-from riko.types._enums import Backends, FmtLike, Formats, StrLike, resolve_enum
+from riko.base._require_guards import normalize_strs
+from riko.base._typing import resolve_enum
+from riko.types._enums import Backends, FmtLike, Formats, StrLike
 from riko.types._io import PathLike, PathLikeType
 from riko.types._target_protocols import SupportsWrite
 

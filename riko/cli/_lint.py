@@ -18,13 +18,14 @@ import click
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._build import twine_check
-from ._docs import AS_BUILT_DOCS, lint_docs, lint_rst
+from ._docs import AS_BUILT_DOCS, lint_docs
 from ._docstyle import gen_docstring_issues
 from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_basenames import gen_basename_issues
 from ._lint_bindings import gen_binding_issues
 from ._lint_deps import gen_hook_pin_issues, gen_import_issues
 from ._lint_literals import gen_literal_issues
+from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
 from ._lint_tests import gen_layout_issues
 

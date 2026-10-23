@@ -37,7 +37,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
-| `async_partial` | `_util.py` | **Remove** | very high | Only appears in bado's export machinery (`riko/bado/__init__.py`), no production caller; it's just `partial(maybe_async, f, **kwargs)`. |
+| `async_partial` | `_util.py` | **Remove** | very high | It's just `partial(maybe_async, f, **kwargs)`. Besides bado's export machinery (`riko/bado/__init__.py`) it now has one production caller, `riko/execution/_prepared.py` (2026-10-23 move audit); inline the `partial` there when deleting it. |
 | `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
