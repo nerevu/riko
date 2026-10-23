@@ -723,6 +723,24 @@ BINDING_CASES = [
     ),
     pytest.param("class P:\n    workflow: Workflow = field()\n", [], id="field"),
     pytest.param("evolve(self, workflow=flow)\n", [], id="keyword"),
+    pytest.param(
+        "class P:\n    workflow: Workflow\n"
+        "    def replace(self, *, workflow: Workflow | None = None): ...\n",
+        [],
+        id="field-keyword",
+    ),
+    pytest.param(
+        "class P:\n    flow: Workflow\n"
+        "    def replace(self, *, workflow: Workflow | None = None): ...\n",
+        [3],
+        id="non-field-keyword",
+    ),
+    pytest.param(
+        "class P:\n    workflow: Workflow\n"
+        "    def replace(self, workflow: Workflow): ...\n",
+        [3],
+        id="positional-field-name",
+    ),
     pytest.param("def from_workflow(cls, flow: Workflow): ...\n", [], id="method"),
     pytest.param(
         'def f():\n    """\n    >>> workflow = Workflow(nodes=[])\n    """\n',
