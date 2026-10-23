@@ -392,6 +392,12 @@ SORT_KEY_WARNINGS = [
     pytest.param("bogus", 1, id="unknown"),
 ]
 
+ANY2DICT_LISTS = [
+    pytest.param([{"a": 1}, None, {"b": 0}], None, None, id="list-skips-null"),
+    pytest.param('[{"a": 1}, null, {"b": 0}]', "json", None, id="json-array"),
+    pytest.param('{"x": [{"a": 1}, {"b": 0}]}', "json", "x", id="json-path"),
+]
+
 INVALID_CAST_KEYS = [
     pytest.param("abc", "abc", id="str"),
     pytest.param(7, 7, id="int"),
@@ -716,6 +722,11 @@ class TestParsers:
                 "severity",
                 "urgency",
             ]
+
+    @pytest.mark.parametrize(("content", "ext", "path"), ANY2DICT_LISTS)
+    def test_any2dict_yields_list_entries(self, content, ext, path):
+        result = list(any2dict(content, ext=ext, path=path))
+        assert result == [{"a": 1}, {"b": 0}]
 
     def test_xpathfetchpage_strips_xhtml_namespace_from_nested_keys(self):
         conf = XpathFetchPageConf(

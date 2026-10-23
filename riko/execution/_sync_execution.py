@@ -278,7 +278,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     def _map_stream(
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]
     ) -> Iterator[T]:
-        """Maps a bound pipe over its items once the consumer first pulls."""
+        """Maps a prepared pipe over its items once the consumer first pulls."""
         self._require_open("map items in")
         func = build_item_call(call, self.settings.sync_policy.executor)
         yield from self._pool.flat_map(func, source, ordered=self.settings.ordered)
@@ -327,8 +327,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
             item_call = node.sync_interface.item_call
-            bound = partial(item_call, context=self.context, **extra)
-            stream = self._map_stream(cast("Callable[[T], Iterable[T]]", bound), source)
+            _mapped = partial(item_call, context=self.context, **extra)
+            mapped = cast("Callable[[T], Iterable[T]]", _mapped)
+            stream = self._map_stream(mapped, source)
         elif sync_native:
             _stream = call(source, context=self.context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)

@@ -2,7 +2,7 @@
 """
 Per-item work that synchronous and asynchronous executions run on workers.
 
-A loopable node's bound pipe runs one item at a time on a worker thread or process.
+A loopable node's prepared pipe runs one item at a time on a worker thread or process.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ def _load_call(payload: bytes) -> Callable[[object], Iterable[object]]:
 
 def run_item[T](call: Callable[[T], Iterable[T]], item: T) -> list[T]:
     """
-    Runs one item through a bound pipe and collects that item's results.
+    Runs one item through a prepared pipe and collects that item's results.
 
     Args:
 
-        call: A pipe with its configuration and call options already bound.
+        call: A pipe with its configuration and call options already applied.
         item: The item to run.
 
     Returns:
@@ -56,11 +56,11 @@ def run_item[T](call: Callable[[T], Iterable[T]], item: T) -> list[T]:
 
 def run_shipped_item[T](payload: bytes, item: T) -> list[T]:
     """
-    Runs one item through a pickled bound pipe and collects that item's results.
+    Runs one item through a pickled prepared pipe and collects that item's results.
 
     Args:
 
-        payload: A pickled pipe with its configuration and call options already bound.
+        payload: A pickled pipe with its configuration and call options already applied.
         item: The item to run.
 
     Returns:
@@ -88,7 +88,7 @@ def build_item_call[T](
 
     Args:
 
-        call: A pipe with its configuration and call options already bound.
+        call: A pipe with its configuration and call options already applied.
         executor: The executor whose pool runs the items.
 
     Returns:

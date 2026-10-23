@@ -104,7 +104,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The definition with the module's interface callables bound.
+            The definition with the module's interface callables attached.
 
         Examples:
 
@@ -140,9 +140,9 @@ class ModuleDefinition:
     @property
     def name(self) -> str:
         """
-        The registry key, from the declared name or else a bound callable.
+        The registry key, from the declared name or else an interface callable.
 
-        A declared name wins. Otherwise the bound pipe callable's ``__name__`` is
+        A declared name wins. Otherwise the pipe callable's ``__name__`` is
         used. Generic ``<lambda>``/``pipe``/``async_pipe`` names are considered
         un-nameable, so those require an explicit ``name``.
 
@@ -173,7 +173,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The bound callable, or ``None`` when that interface is undefined.
+            The interface callable, or ``None`` when that interface is undefined.
 
         Examples:
 
@@ -195,7 +195,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The subset of ``pipe``/``async_pipe`` with a bound callable.
+            The subset of ``pipe``/``async_pipe`` with a callable.
 
         Examples:
 

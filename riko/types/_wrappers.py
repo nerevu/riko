@@ -156,7 +156,7 @@ class SyncFieldParseFunc(Protocol):
 
 
 class SyncConfParseFunc(Protocol):
-    """Resolves a module's bound configuration against one item."""
+    """Resolves a module's prepared configuration against one item."""
 
     def __call__(  # noqa: E704
         self, item: ItemOrValue, /, **kwargs: Any
@@ -183,7 +183,7 @@ type PrepareConf = MaybeFrozenConf | DynamicConf
 
 class PreparedCall(Protocol):
     """
-    A module call with its configuration and call options bound.
+    A module call with its configuration and call options already applied.
 
     It is called once per item, or once per stream for a module that takes a
     whole stream. Each call supplies the ``context`` and any secondary input
@@ -197,11 +197,11 @@ class PreparedCall(Protocol):
 
 class Preparer(Protocol):
     """
-    Binds a call's configuration and call options once for reuse over many items.
+    Prepares a call's configuration and call options once for reuse over many items.
 
     Every module wrapper carries one as its ``prepare``. The ``context`` and any
     secondary input streams, resources, or embed are supplied with each item call
-    rather than bound here.
+    rather than fixed here.
     """
 
     def __call__(  # noqa: E704
@@ -233,22 +233,22 @@ class WrapperMeta(Protocol):
 
 
 class ModuleWrapper(WrapperMeta, Protocol):
-    """A module wrapper: the discovery metadata plus a ``prepare`` binding its calls."""
+    """A module wrapper: the discovery metadata plus a ``prepare`` for its calls."""
 
     prepare: Preparer
 
 
-def bind_call(
+def prepare_call(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
     *_: ExtraName,
     conf: PrepareConf | None = None,
     **options: Unpack[RawCallOptions],
 ) -> PreparedCall:
     """
-    Binds a pipe's configuration and call options for reuse over many items.
+    Prepares a pipe's configuration and call options for reuse over many items.
 
     Calling the return value calls ``wrapper`` with its configuration, call options,
-    ``context``, and keyword arguments bound. Can be pickled whenever ``wrapper`` can.
+    ``context``, and keyword arguments. Can be pickled whenever ``wrapper`` can.
 
     Args:
 
@@ -282,7 +282,7 @@ def bind_call(
         >>> def pipe(item=None, conf=None, context=None, **kwargs):
         ...     return iter([{**item, **conf, **kwargs}])
         >>>
-        >>> call = bind_call(pipe, conf={"x": 1}, emit=True)
+        >>> call = prepare_call(pipe, conf={"x": 1}, emit=True)
         >>> list(call({"y": 2}, other="z"))
         [{'y': 2, 'x': 1, 'emit': True, 'other': 'z'}]
 
@@ -297,11 +297,11 @@ def build_call(
     **options: Unpack[RawCallOptions],
 ) -> PreparedCall:
     """
-    Binds ``pipe``'s configuration and call options once for reuse over many items.
+    Prepares ``pipe``'s configuration and call options once for reuse over many items.
 
     A module wrapper prepares its own call. A plain callable registered as a module
-    carries no ``prepare``, so its configuration and call options are bound with
-    ``bind_call``.
+    carries no ``prepare``, so its configuration and call options are prepared with
+    ``prepare_call``.
 
     Args:
 
@@ -343,7 +343,7 @@ def build_call(
     prepare: Preparer | None = getattr(pipe, "prepare", None)
 
     if prepare is None:
-        call = bind_call(pipe, *extras, conf=conf, **options)
+        call = prepare_call(pipe, *extras, conf=conf, **options)
     else:
         call = prepare(*extras, conf=conf, **options)
 
@@ -437,7 +437,7 @@ def stamp_wrapper_meta(
     Stamps the discovery metadata every module wrapper carries onto ``target``.
 
     Afterwards ``target`` carries every attribute named in ``WRAPPER_META``, and a
-    ``prepare`` that binds configuration and call options for reuse.
+    ``prepare`` that applies configuration and call options for reuse.
 
     Args:
 
@@ -453,8 +453,8 @@ def stamp_wrapper_meta(
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
 
-        prepare: Binds a call for reuse over many items. Defaults to binding ``target``
-            with its configuration and call options (default: None).
+        prepare: Prepares a call for reuse over many items. Defaults to preparing
+            ``target`` with its configuration and call options (default: None).
 
     Examples:
 
@@ -485,12 +485,12 @@ def stamp_wrapper_meta(
     setattr(target, "loopable", loopable)  # noqa: B010
     setattr(target, "isasync", isasync)  # noqa: B010
     setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
-    bound = prepare
+    preparer = prepare
 
-    if bound is None and is_wrapper_meta(target):
-        bound = partial(bind_call, target)
+    if preparer is None and is_wrapper_meta(target):
+        preparer = partial(prepare_call, target)
 
-    setattr(target, "prepare", bound)  # noqa: B010
+    setattr(target, "prepare", preparer)  # noqa: B010
 
 
 class SyncModuleWrapper(ModuleWrapper, Protocol):

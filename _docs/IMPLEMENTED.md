@@ -781,7 +781,7 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > `validator_from_require` — `ordered` is `validator_from_require(require_instance, bool,
 > error=TypeError)`, `concurrency` a `def_from_require` converter that also accepts
 > `"auto"` — raising `TypeError`/`ValueError` because the values come from Python call
-> sites, and a NaN `shutdown_timeout` is rejected); `with_context`/`with_resource` bind the run's
+> sites, and a NaN `shutdown_timeout` is rejected); `with_context`/`with_resource` set the run's
 > `Context`. `concurrency=None` is sequential even beside an explicit `thread`/`process` executor (a
 > one-worker pool, async limit 1); `concurrency="auto"` sizes the sync pool with `get_worker_cnt`
 > (cores ×2 for threads) and the async limit from `concurrency_limit`. `ExecutionSettings`
@@ -931,7 +931,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   boundary: a node with no default (`in`) edge receives the `{"forever": True}` seed unless it has a
   positional (`in:N`) edge, in which case its default input is empty (so `union` with only secondary
   inputs wired never sees the seed as data); named value ports alone do not suppress the seed. Every
-  module node's `options` are bound as call options when the node is prepared, and a loop node's pipe receives its embed's
+  module node's `options` are applied as call options when the node is prepared, and a loop node's pipe receives its embed's
   `conf` (`PreparedNode.embed_or_self_conf`). An adapted node (async-only pipe under sync execution) runs through the execution's
   blocking portal: `_async_drain` pulls the async stream one `__anext__` at a time on the portal loop and
   re-exposes it as a lazy sync `Stream`. A reachable non-`out` source port or a selected non-`out` output
@@ -1058,7 +1058,7 @@ own open output streams leave free, raises `InvalidPipelineError`; other executi
 first item), and the execution's exit stack returns any it still holds.
 
 **Process executor ships each call once** (2026-10-16). `build_item_call`
-(`riko/execution/_concurrency.py`) pickles a mapped node's bound call once on first pull; each task
+(`riko/execution/_concurrency.py`) pickles a mapped node's prepared call once on first pull; each task
 carries those bytes and `run_shipped_item` unpickles them through a per-worker `lru_cache`
 (`settings.shipped_call_cache_size`, `RIKO_SHIPPED_CALL_CACHE_SIZE`), so a call is rebuilt once per worker rather than once per item (measured
 ~22–30% faster per item on a four-worker pool). The thread executor maps the call directly.
@@ -1069,9 +1069,9 @@ once per item: `PreparedNode.sync_interface`/`async_interface` (cached `Prepared
 executions call `interface.call(item, context=..., **extra)`, supplying only the per-item
 context and the secondary input streams, `resources`, or `embed`. The decorators' call records
 `_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter` share the generic attrs base
-`_PreparedCall[M]` (the decorator, wrapper, prepared module, and bound options, plus derived
+`_PreparedCall[M]` (the decorator, wrapper, prepared module, and prepared options, plus derived
 `field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
-plain wrapper (a stored-workflow pipe, a sync/async adapter) is bound by `bind_call`/`build_call`
+plain wrapper (a stored-workflow pipe, a sync/async adapter) is prepared by `prepare_call`/`build_call`
 (`riko/types/_wrappers.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
 (`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,
 extras, defaults; all but the name default) whose `assign`/`emit` (read from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`casters`/
@@ -1091,11 +1091,11 @@ Direct wrapper calls share `Module._call_direct`, which still prepares with ever
 per-item input: a direct call cannot tell an input port named like a call option (`tail`'s `count`)
 from the option. A decoration option (`skip_if`, `ftype`, …) handed to a direct call or to
 `prepare` raises `TypeError` (`Module._validate_call_keywords`) instead of being dropped. One
-precedence nuance: when a node both binds a call option and receives a
+precedence nuance: when a node both sets a call option and receives a
 secondary input stream under the same name (e.g. `count`), the stream wins, as it already did on a
 direct call. Measured: `Module.prepare` ran 50 times for 50 items before and once per plan after; a
 2,000-item inline `strtransform` run takes ~46 ms. Regressions:
-`tests/internal/test_execution_plan.py::TestPreparedCall` and `tests/internal/test_modules.py::TestPrepare`. A loop's embed is bound the same way once per stream: `bind_subpipe`
+`tests/internal/test_execution_plan.py::TestPreparedCall` and `tests/internal/test_modules.py::TestPrepare`. A loop's embed is prepared the same way once per stream: `bind_subpipe`
 (`riko/modules/_assignment.py`) runs the embed's conf and call options through `build_call` and
 calls the prepared call per parent item, so the embed is no longer re-prepared per parent
 (2026-10-20; conf-parse memoization in `riko/parsing/config.py` went with it).

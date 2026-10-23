@@ -45,6 +45,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("terminal sub-source", "secondary input stream"),
     BannedTerm("input requirements", "input declarations"),
     BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
+    BannedTerm("bound keyword", "keyword argument"),
     BannedTerm("named workflow", "stored workflow"),
     BannedTerm("registered workflow", "stored workflow"),
     BannedTerm("imported workflow", "resolved workflow"),

@@ -72,7 +72,7 @@ New
   registrations. ``riko.ext.Dispatcher`` is the protocol that finds a module's or
   stored workflow's pipe by name.
 
-- Module wrappers gained ``prepare``, which binds a call's configuration and call
+- Module wrappers gained ``prepare``, which applies a call's configuration and call
   options once for reuse over many items. ``riko.ext.PreparedCall`` annotates what
   ``prepare`` returns.
 
@@ -177,7 +177,7 @@ Changes
   splitters are unchanged.
 
 - A module's ``pipe`` now parses ``conf`` on every call. To parse ``conf`` just once,
-  bind the configuration with ``pipe.prepare(conf=...)`` and call that result per item.
+  prepare the configuration with ``pipe.prepare(conf=...)`` and call that result per item.
 
 - Renamed ``derive_category`` to ``get_module_category``, which no longer takes
   ``provider`` or ``override``, and ``riko.ext.register`` to

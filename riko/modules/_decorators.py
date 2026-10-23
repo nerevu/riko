@@ -352,7 +352,7 @@ class Module[B: (Literal[True], Literal[False])]:
         Stamps discovery metadata onto a finished wrapper.
 
         Derives and sets the module's name, subtype(s), and loopability from the parser
-        and decoration options, and the ``prepare`` that binds a call for reuse.
+        and decoration options, and the ``prepare`` that prepares a call for reuse.
 
         Args:
 
@@ -498,7 +498,7 @@ class Module[B: (Literal[True], Literal[False])]:
         **options: Unpack[RawCallOptions],
     ) -> PreparedCall:
         """
-        Binds ``wrapper``'s configuration and call options for reuse over many items.
+        Prepares ``wrapper``'s configuration and call options for reuse over many items.
 
         Every module wrapper exposes this as its ``prepare``. The configuration and call
         options are resolved here. Each item call supplies the ``context`` and any
@@ -727,7 +727,7 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
         module: The decorator that built the wrapper.
         wrapper: The module wrapper being called.
         prepared: The module's prepared call-time state.
-        options: The bound call options.
+        options: The prepared call options.
 
     """
 

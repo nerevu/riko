@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import feedparser
 
 from riko.base._constants import STREAMING_THRESHOLD
+from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
 from riko.types._guards import is_mapping
@@ -438,7 +439,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
 
 def any2dict(
-    content: FileLike | RikoDict | list[RikoDict],
+    content: FileLike | RikoDict | list[RikoDict | None] | str,
     ext: str | None = "xml",
     html5: bool = False,
     path: str | None = None,
@@ -456,9 +457,7 @@ def any2dict(
     elif is_mapping(content):
         yield content
     elif isinstance(content, list):
-        for item in content:
-            if item is not None:
-                yield item
+        yield from gen_non_none(content)
     elif ext and ext in {"xml", "html"}:
         if ext == "xml":
             root = xml2etree(content, xml=True, html5=html5).getroot()
@@ -497,8 +496,8 @@ def any2dict(
             except JSONDecodeError as e:
                 logger.error(e)
             else:
-                value = DotDict(json).get(path, "")
-                yield from any2dict(cast("list[RikoDict]", value), ext=None)
+                value = DotDict(json).get(path, "") if path else json
+                yield from any2dict(cast("list[RikoDict | None]", value), ext=None)
         else:
             try:
                 json_obj = load(content)

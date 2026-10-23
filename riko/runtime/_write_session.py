@@ -632,13 +632,14 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     """
     A resource lifecycle that acquires a file write session and tears it down.
 
-    The lifecycle only acquires and releases the session; committing (finalize) or
-    abandoning (abort) is the execution host's decision, made before the ``with``
+    The lifecycle only acquires and releases the session. Committing (finalize) or
+    abandoning (abort) is the execution host's decision and made before the ``with``
     block exits.
 
     Args:
 
-        prepared: The target-bound, validated write.
+        prepared: A validated write that has been checked against its target's
+            capabilities.
 
     Yields:
 
@@ -745,7 +746,12 @@ def write_through(
     Args:
 
         source: The upstream stream to write and pass through.
-        prepared: The target-bound, validated write.
+
+        prepared: A validated write that has been checked against its target's
+            capabilities.
+
+    Kwargs:
+
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 
     Yields:
@@ -784,7 +790,12 @@ async def awrite_through(
     Args:
 
         source: The upstream stream to write and pass through.
-        prepared: The target-bound, validated write.
+
+        prepared: A validated write that has been checked against its target's
+            capabilities.
+
+    Kwargs:
+
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 
     Yields:

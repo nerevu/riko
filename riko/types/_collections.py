@@ -93,7 +93,7 @@ class InstanceRequire[T, R](Protocol):
     """
     A guard that narrows a value to ``cls``, as ``require_instance`` does.
 
-    The helpers that accept it bind the class first, which also types their result
+    The helpers that accept it apply the class first, which also types their result
     for that class.
     """
 
@@ -194,19 +194,19 @@ def narrow_from_require[T, R](  # noqa: E302
     Advertises a typed converter to callers but validates any object at runtime.
 
     The advertised input is the guard's output type, or ``accepted`` when given.
-    ``accepted`` only sets that static type. ``args`` and ``kwargs`` are bound as
-    ``functools.partial`` does. A class bound before the value (as ``require_instance``
-    takes it) also sets the advertised type.
+    ``accepted`` only sets that static type. ``args`` and ``kwargs`` are applied as
+    ``functools.partial`` does. A class applied before the value (as
+    ``require_instance`` takes it) also sets the advertised type.
 
     Args:
 
         require: The guard to run on each value.
-        args: Arguments bound before the value, such as ``require_instance``'s class.
+        args: Arguments applied before the value, such as ``require_instance``'s class.
 
     Kwargs:
 
         accepted: The input type to advertise in place of the guard's output type.
-        **kwargs: Keyword arguments bound to ``require``, such as ``what``.
+        **kwargs: Keyword arguments applied to ``require``, such as ``what``.
 
     Returns:
 
@@ -556,19 +556,19 @@ def def_from_require[D, R](  # noqa: E302
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
 
     A ``None`` value becomes ``default``. Anything else is checked with
-    ``require(*args, value, **kwargs)``. ``args`` are bound before the value (just like
-    ``functools.partial``). ``what`` is forwarded only when given.
+    ``require(*args, value, **kwargs)``. ``args`` are applied before the value
+    (just like ``functools.partial``). ``what`` is forwarded only when given.
 
     Args:
 
         require: The guard to run on a non-``None`` value.
-        args: Arguments bound before the value, such as ``require_instance``'s class.
+        args: Arguments applied before the value, such as ``require_instance``'s class.
 
     Kwargs:
 
         default: The result for ``None``.
         what: The name used in the guard's error messages.
-        **kwargs: Other keyword arguments bound to ``require``, such as ``error``.
+        **kwargs: Other keyword arguments applied to ``require``, such as ``error``.
 
     Returns:
 
@@ -734,7 +734,7 @@ def validator_from_require(
     Adapts a ``require_*`` guard into an attrs field validator.
 
     The validator calls ``require(*args, value, label, **kwargs)``, so ``args`` are
-    bound before the value as with ``functools.partial``. The label names the
+    applied before the value as with ``functools.partial``. The label names the
     class and field.
 
     Args:
