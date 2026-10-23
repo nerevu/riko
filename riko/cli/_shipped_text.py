@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Extracts the prose-bearing lines of shipped source and documentation files."""
+"""Extracts the prose-bearing text of shipped source and documentation files."""
 
 from __future__ import annotations
 
@@ -14,12 +14,33 @@ if TYPE_CHECKING:
 _TEXT_SUFFIXES = frozenset({".rst", ".md"})
 
 
-def _gen_python_text(source: str) -> Iterator[tuple[int, str]]:
-    """Extracts each string literal, f-string text, and comment with its line."""
+def _gen_python_blocks(source: str) -> Iterator[tuple[int, str]]:
+    """Extracts each string literal, f-string text, and comment with its first line."""
     for token in generate_tokens(StringIO(source).readline):
         if token.type in {STRING, FSTRING_MIDDLE, COMMENT}:
-            for offset, line in enumerate(token.string.splitlines()):
-                yield token.start[0] + offset, line
+            yield token.start[0], token.string
+
+
+def gen_blocks(path: Path) -> Iterator[tuple[int, str]]:
+    """
+    Extracts the prose-bearing blocks of a file with the line each starts on.
+
+    Args:
+
+        path: A Python file (one block per string or comment) or a prose file (one
+            block for the whole file).
+
+    Yields:
+
+        ``(lineno, block)`` pairs in file order.
+
+    """
+    source = path.read_text(encoding="utf-8")
+
+    if path.suffix == ".py":
+        yield from _gen_python_blocks(source)
+    else:
+        yield 1, source
 
 
 def gen_text(path: Path) -> Iterator[tuple[int, str]]:
@@ -35,12 +56,9 @@ def gen_text(path: Path) -> Iterator[tuple[int, str]]:
         ``(lineno, line)`` pairs in file order.
 
     """
-    source = path.read_text(encoding="utf-8")
-
-    if path.suffix == ".py":
-        yield from _gen_python_text(source)
-    else:
-        yield from enumerate(source.splitlines(), start=1)
+    for start, block in gen_blocks(path):
+        for offset, line in enumerate(block.splitlines()):
+            yield start + offset, line
 
 
 def gen_files(root: Path, excluded: frozenset[str]) -> Iterator[Path]:
@@ -66,4 +84,4 @@ def gen_files(root: Path, excluded: frozenset[str]) -> Iterator[Path]:
             yield path
 
 
-__all__ = ["gen_files", "gen_text"]
+__all__ = ["gen_blocks", "gen_files", "gen_text"]

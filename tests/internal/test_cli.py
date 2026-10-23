@@ -642,6 +642,17 @@ class TestTermLint:
         found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
         assert found == [(1, "riko.ext.registry"), (2, "riko.ext.names")]
 
+    def test_phrases_split_across_lines_are_checked(self, tmp_path: Path) -> None:
+        (tmp_path / "GUIDE.md").write_text(
+            "Intro.\n\nA node with bound\nkeywords and a\nsub-pipeline.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "mod.py").write_text(
+            '"""\nSummary.\n\nRuns in the other\n    mode.\n"""\n', encoding="utf-8"
+        )
+        found = [(issue.path.name, issue.lineno) for issue in gen_term_issues(tmp_path)]
+        assert found == [("GUIDE.md", 3), ("GUIDE.md", 5), ("mod.py", 4)]
+
     def test_prose_files_are_checked_except_the_changelog(self, tmp_path: Path) -> None:
         (tmp_path / "GUIDE.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
         (tmp_path / "CHANGES.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
