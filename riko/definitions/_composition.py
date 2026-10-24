@@ -476,7 +476,7 @@ class PipelineDefinition(Generic[T]):
         return evolve(self, context=context)
 
     @overload
-    def with_resource[R](  # noqa: E704
+    def with_resource[R](
         self,
         name: str,
         definition: LifecycleFactory[R],
@@ -484,8 +484,8 @@ class PipelineDefinition(Generic[T]):
         credential: str | None = ...,
         lazy: bool = ...,
     ) -> Self: ...
-    @overload  # noqa: E301
-    def with_resource[R](  # noqa: E704
+    @overload
+    def with_resource[R](
         self,
         name: str,
         definition: ReusableResource[R],
@@ -493,7 +493,7 @@ class PipelineDefinition(Generic[T]):
         credential: None = ...,
         lazy: Literal[False] = ...,
     ) -> Self: ...
-    def with_resource[R](  # noqa: E301
+    def with_resource[R](
         self,
         name: str,
         definition: ResourceDefinition[R],

@@ -59,10 +59,10 @@ def get_path(name: str) -> str:
 
 
 @overload
-def get_temp_file(as_path: Literal[True]) -> str: ...  # noqa: E704
+def get_temp_file(as_path: Literal[True]) -> str: ...
 @overload
-def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...  # noqa: E704
-def get_temp_file(as_path: bool = False) -> str | IO[bytes]:  # noqa: E302
+def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...
+def get_temp_file(as_path: bool = False) -> str | IO[bytes]:
     if as_path:
         with NamedTemporaryFile(delete=False) as fp:
             return fp.name

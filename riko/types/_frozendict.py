@@ -53,12 +53,10 @@ def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
 
 
 @overload
-def _freeze_value(  # noqa: E704
-    value: object, json_native: Literal[True]
-) -> FrozenJSON: ...
+def _freeze_value(value: object, json_native: Literal[True]) -> FrozenJSON: ...
 @overload
-def _freeze_value(value: object, json_native: bool = ...) -> object: ...  # noqa: E704
-def _freeze_value(value: object, json_native: bool = False) -> object:  # noqa: E302
+def _freeze_value(value: object, json_native: bool = ...) -> object: ...
+def _freeze_value(value: object, json_native: bool = False) -> object:
     """Freezes built-in containers recursively, optionally allowing only JSON."""
     is_named_tuple = isinstance(value, tuple) and hasattr(value, "_fields")
 
@@ -120,7 +118,7 @@ class FrozenDict[K, V](Mapping[K, V]):
 
     def __init__(self, data: Mapping[K, V] | Iterable[tuple[K, V]] = (), /) -> None:
         frozen = data._data if isinstance(data, FrozenDict) else _freeze_items(data)
-        object.__setattr__(self, "_data", dict(frozen))  # noqa: PLC2801
+        object.__setattr__(self, "_data", dict(frozen))
 
     def __getitem__(self, key: K) -> V:
         return self._data[key]
@@ -143,24 +141,20 @@ class FrozenDict[K, V](Mapping[K, V]):
 
 
 @overload
-def freeze(value: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[K, V](  # noqa: E704
-    value: Mapping[K, list[V]],
-) -> FrozenDict[K, tuple[V]]: ...
-@overload  # noqa: E302
-def freeze[K, V](  # noqa: E704
-    value: Mapping[K, set[V]],
-) -> FrozenDict[K, frozenset[V]]: ...
-@overload  # noqa: E302
-def freeze[K, V](value: Mapping[K, V]) -> FrozenDict[K, V]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: set[T] | frozenset[T]) -> frozenset[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze[T](value: T) -> T: ...  # noqa: E704
-def freeze(value: object) -> object:  # noqa: E302
+def freeze(value: None) -> None: ...
+@overload
+def freeze[K, V](value: Mapping[K, list[V]]) -> FrozenDict[K, tuple[V]]: ...
+@overload
+def freeze[K, V](value: Mapping[K, set[V]]) -> FrozenDict[K, frozenset[V]]: ...
+@overload
+def freeze[K, V](value: Mapping[K, V]) -> FrozenDict[K, V]: ...
+@overload
+def freeze[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]: ...
+@overload
+def freeze[T](value: set[T] | frozenset[T]) -> frozenset[T]: ...
+@overload
+def freeze[T](value: T) -> T: ...
+def freeze(value: object) -> object:
     """
     Freezes the built-in containers in a value, recursively.
 
@@ -194,18 +188,14 @@ def freeze(value: object) -> object:  # noqa: E302
 
 
 @overload
-def freeze_json(value: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def freeze_json(  # noqa: E704
-    value: Mapping[str, object],
-) -> FrozenDict[str, FrozenJSON]: ...
-@overload  # noqa: E302
-def freeze_json(  # noqa: E704
-    value: Mapping[object, object],
-) -> FrozenDict[str, FrozenJSON]: ...
-@overload  # noqa: E302
-def freeze_json(value: object) -> FrozenJSON: ...  # noqa: E704
-def freeze_json(value: object) -> FrozenJSON:  # noqa: E302
+def freeze_json(value: None) -> None: ...
+@overload
+def freeze_json(value: Mapping[str, object]) -> FrozenDict[str, FrozenJSON]: ...
+@overload
+def freeze_json(value: Mapping[object, object]) -> FrozenDict[str, FrozenJSON]: ...
+@overload
+def freeze_json(value: object) -> FrozenJSON: ...
+def freeze_json(value: object) -> FrozenJSON:
     """
     Freezes a value into an immutable JSON-native tree.
 
@@ -241,10 +231,10 @@ def freeze_json(value: object) -> FrozenJSON:  # noqa: E302
 
 
 @overload
-def thaw[K, V](value: Mapping[K, V]) -> dict[K, V]: ...  # noqa: E704
-@overload  # noqa: E302
-def thaw(value: object) -> object: ...  # noqa: E704
-def thaw(value: object) -> object:  # noqa: E302
+def thaw[K, V](value: Mapping[K, V]) -> dict[K, V]: ...
+@overload
+def thaw(value: object) -> object: ...
+def thaw(value: object) -> object:
     """
     Copies a value's containers into plain mutable ones, recursively.
 
@@ -336,11 +326,11 @@ def instances_freezer[T](
 
 
 @overload
-def mapping_converter[FV](  # noqa: E704
+def mapping_converter[FV](
     freezer: Freezer[FV], *, what: str = ..., error: type[Exception] = ...
 ) -> MappingConverter[FV]: ...
-@overload  # noqa: E302
-def mapping_converter[FV, T](  # noqa: E704
+@overload
+def mapping_converter[FV, T](
     freezer: Freezer[FV],
     accepted: TypeForm[T],
     /,
@@ -348,7 +338,7 @@ def mapping_converter[FV, T](  # noqa: E704
     what: str = ...,
     error: type[Exception] = ...,
 ) -> TypeConverter[T, FV]: ...
-def mapping_converter[FV](  # noqa: E302
+def mapping_converter[FV](
     freezer: Freezer[FV],
     *_: object,
     what: str = "value",
@@ -394,14 +384,14 @@ def mapping_converter[FV](  # noqa: E302
 
 
 @overload
-def normalize_mapping[T](  # noqa: E704
+def normalize_mapping[T](
     item: Mapping[str, T] | None, what: str = ..., *, strict: Literal[False] = ...
 ) -> dict[str, T]: ...
-@overload  # noqa: E302
-def normalize_mapping(  # noqa: E704
+@overload
+def normalize_mapping(
     item: object, what: str = ..., *, strict: Literal[True]
 ) -> dict[str, object]: ...
-def normalize_mapping(  # noqa: E302
+def normalize_mapping(
     item: object, what: str = "value", *, strict: bool = False
 ) -> dict[str, Any]:
     """
@@ -445,15 +435,15 @@ def normalize_mapping(  # noqa: E302
 
 
 @overload
-def optional_mapping_converter[FV](  # noqa: E704
+def optional_mapping_converter[FV](
     freezer: Freezer[FV],
     *,
     default: Mapping[str, object] | None = ...,
     what: str = ...,
     error: type[Exception] = ...,
 ) -> OptionalMappingConverter[FV]: ...
-@overload  # noqa: E302
-def optional_mapping_converter[FV, T](  # noqa: E704
+@overload
+def optional_mapping_converter[FV, T](
     freezer: Freezer[FV],
     accepted: TypeForm[T],
     /,
@@ -462,7 +452,7 @@ def optional_mapping_converter[FV, T](  # noqa: E704
     what: str = ...,
     error: type[Exception] = ...,
 ) -> OptionalTypeConverter[T, FV]: ...
-def optional_mapping_converter[FV](  # noqa: E302
+def optional_mapping_converter[FV](
     freezer: Freezer[FV],
     *_: object,
     default: Mapping[str, object] | None = None,

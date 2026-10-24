@@ -114,7 +114,7 @@ class SyncProcessorParser[I, E, O: ItemOrValue](Protocol):
     ``test``).
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
     ) -> ProcessorParserOutput[O]: ...
 
@@ -126,7 +126,7 @@ class SyncOperatorParser[T: ItemOrValue, E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
     ) -> OperatorParserOutput[T]: ...
 
@@ -138,7 +138,7 @@ class SyncSplitterParser[E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
     ) -> SplitterParserOutput: ...
 
@@ -151,15 +151,13 @@ type SyncWrapperInput = (
 class SyncFieldParseFunc(Protocol):
     """Reads a module's configured field from one item."""
 
-    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> ItemValue: ...  # noqa: E704
+    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> ItemValue: ...
 
 
 class SyncConfParseFunc(Protocol):
     """Resolves a module's prepared configuration against one item."""
 
-    def __call__(  # noqa: E704
-        self, item: ItemOrValue, /, **kwargs: Any
-    ) -> AnyModuleConf | None: ...
+    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> AnyModuleConf | None: ...
 
 
 class ParseFuncs(NamedTuple):
@@ -189,7 +187,7 @@ class PreparedCall(Protocol):
     streams, resources, or embed.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, item: Any = None, *, context: Context | None = None, **extra: object
     ) -> WrapperOutput | SplitterWrapperOutput: ...
 
@@ -203,7 +201,7 @@ class Preparer(Protocol):
     rather than fixed here.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         *extras: ExtraName,
         conf: PrepareConf | None = None,
@@ -217,7 +215,7 @@ class WrapperMeta(Protocol):
     __name__: str
     __qualname__: str
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> WrapperOutput | SplitterWrapperOutput: ...
 
@@ -310,20 +308,18 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
 class SyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = False
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> SyncWrapperOutput | SyncSplitterWrapperOutput: ...
 
 
 class SyncSubPipe(SyncModuleWrapper):
-    def __call__(  # noqa: E704
-        self, *_: object, **__: object
-    ) -> SyncProcessorWrapperOutput:
+    def __call__(self, *_: object, **__: object) -> SyncProcessorWrapperOutput:
         return iter(())
 
 
 class SyncProcessorWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         item: SyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
@@ -337,7 +333,7 @@ class SyncProcessorWrapper(SyncModuleWrapper):
 
 
 class SyncOperatorWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         items: SyncOperatorWrapperInput | None = None,
         conf: Conf | None = None,
@@ -352,7 +348,7 @@ class SyncOperatorWrapper(SyncModuleWrapper):
 
 
 class SyncSplitterWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         items: SyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
@@ -376,9 +372,9 @@ class AsyncWrapperStream[Y, A](Protocol):
     ``await async_pipe(...)`` path).
     """
 
-    def __await__(self) -> Generator[object, None, A]: ...  # noqa: E704
-    def __aiter__(self) -> AsyncIterator[Y]: ...  # noqa: E301, E704
-    def __anext__(self) -> Awaitable[Y]: ...  # noqa: E301, E704
+    def __await__(self) -> Generator[object, None, A]: ...
+    def __aiter__(self) -> AsyncIterator[Y]: ...
+    def __anext__(self) -> Awaitable[Y]: ...
 
 
 type AsyncOperatorWrapperOutput = AsyncStream
@@ -409,7 +405,7 @@ class AwaitableProcessorParser[I, E, O: ItemOrValue](Protocol):
     ``test``).
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
     ) -> Awaitable[ProcessorParserOutput[O]]: ...
 
@@ -421,7 +417,7 @@ class AwaitableOperatorParser[T: ItemOrValue, E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: Any
     ) -> Awaitable[OperatorParserOutput[T]]: ...
 
@@ -433,7 +429,7 @@ class AwaitableSplitterParser[E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
     ) -> Awaitable[SplitterParserOutput]: ...
 
@@ -450,13 +446,13 @@ type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = True
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> AsyncWrapperOutput | AsyncSplitterWrapperOutput: ...
 
 
 class AsyncProcessorWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         item: AsyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
@@ -470,14 +466,12 @@ class AsyncProcessorWrapper(AsyncModuleWrapper):
 
 
 class AsyncSubPipe(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
-        self, *_: object, **__: object
-    ) -> AsyncProcessorWrapperOutput:
+    def __call__(self, *_: object, **__: object) -> AsyncProcessorWrapperOutput:
         raise NotImplementedError
 
 
 class AsyncOperatorWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         items: AsyncOperatorWrapperInput | None = None,
         conf: Conf | None = None,
@@ -492,7 +486,7 @@ class AsyncOperatorWrapper(AsyncModuleWrapper):
 
 
 class AsyncSplitterWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         items: AsyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
@@ -593,19 +587,15 @@ class Resolver(Protocol):
     """
 
     @overload
-    def require(  # noqa: E704
+    def require(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
-    @overload  # noqa: E301
-    def require(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncModuleWrapper: ...
-    def require(  # noqa: E301, E704
-        self, name: str, is_async: bool = False
-    ) -> ModuleWrapper: ...
+    @overload
+    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper: ...
 
-    def is_compatible(self, name: str) -> bool: ...  # noqa: E704
-    def require_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
+    def is_compatible(self, name: str) -> bool: ...
+    def require_interfaces(self, name: str) -> frozenset[Interface]: ...
 
 
 class Dispatcher(Protocol):
@@ -616,16 +606,14 @@ class Dispatcher(Protocol):
     names.
     """
 
-    def validate(self, name: str) -> None: ...  # noqa: E704
+    def validate(self, name: str) -> None: ...
 
     @overload
-    def resolve(  # noqa: E704
+    def resolve(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
-    @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    @overload
+    def resolve(
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve(  # noqa: E301, E704
-        self, name: str, is_async: bool = False
-    ) -> ModuleWrapper | None: ...
+    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper | None: ...

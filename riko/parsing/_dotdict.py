@@ -130,20 +130,20 @@ def detach_nested[VT](data: MutableMapping[str, VT], key: str) -> VT | None:
 
 
 @overload
-def resolve_sentinel(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def resolve_sentinel(  # pyright: ignore[reportOverlappingOverload]
     value: ConfArg, default: object | None = ...
 ) -> PrimitiveValue: ...
-@overload  # noqa: E302
-def resolve_sentinel[D](  # noqa: E704
+@overload
+def resolve_sentinel[D](
     value: Sentinel, default: D | None = ..., **kwargs: object
 ) -> Item | D | None: ...
-@overload  # noqa: E302
-def resolve_sentinel[D, VT](  # noqa: E704
+@overload
+def resolve_sentinel[D, VT](
     value: Mapping[str, VT],
     default: D | None = ...,  # pyright: ignore[reportInvalidTypeVarUse]
     **kwargs: VT,
 ) -> dict[str, VT]: ...
-def resolve_sentinel[D, VT](  # noqa: E302
+def resolve_sentinel[D, VT](
     value: Sentinel | Mapping[str, VT], default: D | None = None, **kwargs: VT
 ) -> Item | D | dict[str, VT] | PrimitiveValue:
     if is_sentinel(value, **kwargs):
@@ -203,44 +203,44 @@ def gen_dotdict_items[VT](
 
 
 @overload
-def gen_dict[VT](  # noqa: E704
+def gen_dict[VT](
     data: DotDict[VT] | Mapping[str, VT],
     key: Key | None = ...,
     default_key: str = ...,
     **kwargs: VT,
 ) -> Iterator[tuple[str, VT | None]]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: DotDict[VT] | Mapping[str, VT], key: Key, default_key: None, **kwargs: VT
 ) -> Iterator[dict[str, VT | None]]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: list[VT] | tuple[VT, ...],
     key: Key | None = ...,
     default_key: str = ...,
     **kwargs: VT,
 ) -> Iterator[dict[str, VT | None]]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: list[VT | None] | tuple[VT, ...],
     key: Key | None = ...,
     *,
     default_key: None,
     **kwargs: VT,
 ) -> Iterator[list[VT | None]]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: VT, key: Key | None = ..., default_key: str = ...
 ) -> Iterator[tuple[str, VT | None]]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: Sentinel | ConfArg, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
-@overload  # noqa: E302
-def gen_dict[VT](  # noqa: E704
+@overload
+def gen_dict[VT](
     data: VT, key: Key | None = ..., *, default_key: None, **kwargs: VT
 ) -> Iterator[VT | None]: ...
-def gen_dict(  # noqa: C901, E302
+def gen_dict(
     data: object,
     key: Key | None = None,
     default_key: str | None = "self",
@@ -359,28 +359,26 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
     @overload
     @classmethod
-    def dictize(cls, value: StatefulItem) -> DotDict[StreamState]: ...  # noqa: E704
+    def dictize(cls, value: StatefulItem) -> DotDict[StreamState]: ...
     @overload
     @classmethod
-    def dictize[V](cls, value: Mapping[str, V]) -> DotDict[V]: ...  # noqa: E704
+    def dictize[V](cls, value: Mapping[str, V]) -> DotDict[V]: ...
     @overload
     @classmethod
-    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V | None: ...  # noqa: E704
-    @overload  # noqa: E301
+    def dictize[V](cls, value: Mapping[str, V], key: Key) -> V | None: ...
+    @overload
     @classmethod
-    def dictize[V, D](  # noqa: E704
+    def dictize[V, D](
         cls,
         value: Mapping[str, V],
         key: Key | None = ...,
         default: D | None = ...,
         **kwargs: V,
     ) -> V | D | None: ...
-    @overload  # noqa: E301
+    @overload
     @classmethod
-    def dictize[V](  # noqa: E704
-        cls, value: V
-    ) -> V: ...
-    @classmethod  # noqa: E301
+    def dictize[V](cls, value: V) -> V: ...
+    @classmethod
     def dictize(
         cls,
         value: object,
@@ -404,26 +402,26 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         return result
 
     @overload
-    def _parse_value(  # noqa: E704
+    def _parse_value(
         self,
         value: Mapping[str, VT],
         key: str | int,
         default: D | None = ...,
         **kwargs: VT,
     ) -> VT | dict[str, VT] | ItemOrValue | D | None: ...
-    @overload  # noqa: E301
-    def _parse_value(  # noqa: E704
+    @overload
+    def _parse_value(
         self,
         value: list[VT] | tuple[VT, ...],
         key: str | int,
         default: object | None = ...,
         **kwargs: VT,
     ) -> RikoList | BasicValue: ...
-    @overload  # noqa: E301
-    def _parse_value[V, D](  # noqa: E704
+    @overload
+    def _parse_value[V, D](
         self, value: V, key: str | int, default: D | None = ..., **kwargs: VT
     ) -> V | D | None: ...
-    def _parse_value(  # noqa: E301
+    def _parse_value(
         self, value: object, key: str | int, default: object | None = None, **kwargs: VT
     ) -> object:
         """
@@ -583,12 +581,10 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             raw_set(reduce(reducer, rest, self), last, value)
 
     @overload
-    def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __or__[T](  # noqa: E704
-        self, other: SupportsKeysAndGetItem[str, T]
-    ) -> DotDict[VT | T]: ...
-    def __or__[T](  # noqa: E301
+    def __or__(self, other: SupportsKeysAndGetItem[str, VT]) -> Self: ...
+    @overload
+    def __or__[T](self, other: SupportsKeysAndGetItem[str, T]) -> DotDict[VT | T]: ...
+    def __or__[T](
         self, other: SupportsKeysAndGetItem[str, T]
     ) -> Self | DotDict[VT | T]:
         """
@@ -608,20 +604,18 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         return dd
 
     @overload
-    def get(  # noqa: E704
-        self, key: Key | None, default: None = None
-    ) -> VT | None: ...
+    def get(self, key: Key | None, default: None = None) -> VT | None: ...
     @overload
-    def get(self, key: Key | None, default: D) -> D: ...  # noqa: E704
-    @overload  # noqa: E301
-    def get(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    def get(self, key: Key | None, default: D) -> D: ...
+    @overload
+    def get(  # pyright: ignore[reportOverlappingOverload]
         self, key: Key | None, default: D | VT
     ) -> D | VT: ...
     @overload
-    def get(self) -> VT: ...  # noqa: E704
+    def get(self) -> VT: ...
     @overload
-    def get(self, **kwargs: VT) -> VT | None: ...  # noqa: E704
-    def get(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
+    def get(self, **kwargs: VT) -> VT | None: ...
+    def get(  # pyright: ignore[reportInconsistentOverload]
         self, key: Key | None = None, default: D | None = None, **kwargs: VT
     ) -> Self | VT | D | Item | dict[str, VT] | PrimitiveValue:
         """
@@ -725,24 +719,18 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             del reduced[matched]
 
     @overload
-    def update(  # noqa: E704
-        self, data: SupportsKeysAndGetItem[str, VT]
-    ) -> None: ...
-    @overload  # noqa: E301
-    def update(  # noqa: E704
-        self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT
-    ) -> None: ...
+    def update(self, data: SupportsKeysAndGetItem[str, VT]) -> None: ...
     @overload
-    def update(self, data: DotDictInput[VT]) -> None: ...  # noqa: E704
-    @overload  # noqa: E301
-    def update(  # noqa: E704
-        self, data: DotDictInput[VT], **kwargs: VT
-    ) -> None: ...
+    def update(self, data: SupportsKeysAndGetItem[str, VT], **kwargs: VT) -> None: ...
     @overload
-    def update(self, **kwargs: VT) -> None: ...  # noqa: E704
+    def update(self, data: DotDictInput[VT]) -> None: ...
     @overload
-    def update(self, data: None) -> None: ...  # noqa: E704
-    def update(  # noqa: E301  # pyright: ignore[reportInconsistentOverload]
+    def update(self, data: DotDictInput[VT], **kwargs: VT) -> None: ...
+    @overload
+    def update(self, **kwargs: VT) -> None: ...
+    @overload
+    def update(self, data: None) -> None: ...
+    def update(  # pyright: ignore[reportInconsistentOverload]
         self,
         data: SupportsKeysAndGetItem[str, VT] | DotDictInput[VT] | None = None,
         **kwargs: VT,

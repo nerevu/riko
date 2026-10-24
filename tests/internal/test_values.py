@@ -292,7 +292,7 @@ class TestReprCache:
 
     def test_scalar_arguments_skip_canonical_encoding(self, monkeypatch):
         encoded: list[object] = []
-        spy = lambda value: encoded.append(value) or canonical_bytes(value)  # noqa: E731
+        spy = lambda value: encoded.append(value) or canonical_bytes(value)
         monkeypatch.setattr(_canonical, "canonical_bytes", spy)
         calls, tally = _counting_cache()
         assert (tally(42), tally(42), tally("42")) == (1, 1, 2)
@@ -357,7 +357,7 @@ class TestCastDatetime:
     def test_plain_date_string_never_consults_the_clock(self, monkeypatch):
         zones: list[bool] = []
         load_local_tz = cast_module.load_local_tz
-        spy = lambda **kwargs: zones.append(True) or load_local_tz(**kwargs)  # noqa: E731
+        spy = lambda **kwargs: zones.append(True) or load_local_tz(**kwargs)
         monkeypatch.setattr(cast_module, "load_local_tz", spy)
         assert cast_datetime("Jan. 12, 2001") is not None
         assert zones == []

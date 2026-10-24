@@ -389,14 +389,12 @@ class WorkflowResolver:
         return self._load_resolved_document(pipe_id) if module is None else module
 
     @overload
-    def require(  # noqa: E704
+    def require(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
-    @overload  # noqa: E301
-    def require(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    @overload
+    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
         """
         Finds a stored workflow's pipe by its ``pipe_<id>`` name, or raises.
 

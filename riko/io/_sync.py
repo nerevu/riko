@@ -240,22 +240,22 @@ def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
 
 
 @overload
-def buffer(  # noqa: E704
+def buffer(
     f: StringFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[str]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: BinaryFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[bytes]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: BinaryFileLike, binary: bool = ..., *, encoding: str
 ) -> SpooledTemporaryFile[str]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: FileLike, binary: bool | None = ..., encoding: str | None = ...
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]: ...
-def buffer(  # noqa: E302
+def buffer(
     f: FileLike, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
@@ -353,7 +353,7 @@ def seekable(
 
 
 @overload
-def opener(  # noqa: E704
+def opener(
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
@@ -364,8 +364,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
@@ -376,8 +376,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
@@ -387,8 +387,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[StringIO, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
@@ -398,7 +398,7 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[StreamReader, str | None]: ...
-def opener(  # noqa: E302
+def opener(
     url: str,
     memoize: bool = False,
     encoding: str = ENCODING,
@@ -548,22 +548,22 @@ class Fetch[B: (Literal[True], Literal[False])]:
     content_type: str | None
 
     @overload
-    def __init__(  # noqa: E704
+    def __init__(
         self: Fetch[Literal[True]],
         url: str = ...,
         *,
         binary: Literal[True],
         **kwargs: BasicArg,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: Fetch[Literal[False]],
         url: str = ...,
         *,
         binary: Literal[False] = ...,
         **kwargs: BasicArg,
     ) -> None: ...
-    def __init__(  # noqa: E301
+    def __init__(
         self,
         url: str = "",
         *,
@@ -605,10 +605,10 @@ class Fetch[B: (Literal[True], Literal[False])]:
         self.close()
 
     @overload
-    def __iter__(self: Fetch[Literal[True]]) -> Iterator[bytes]: ...  # noqa: E704
+    def __iter__(self: Fetch[Literal[True]]) -> Iterator[bytes]: ...
     @overload
-    def __iter__(self: Fetch[Literal[False]]) -> Iterator[str]: ...  # noqa: E704
-    def __iter__(self) -> Iterator[bytes | str]:  # noqa: E301
+    def __iter__(self: Fetch[Literal[False]]) -> Iterator[str]: ...
+    def __iter__(self) -> Iterator[bytes | str]:
         if self.file:
             result = iter(self.file)
         elif self.binary:
@@ -619,20 +619,20 @@ class Fetch[B: (Literal[True], Literal[False])]:
         return result
 
     @overload
-    def __next__(self: Fetch[Literal[True]]) -> bytes: ...  # noqa: E704
+    def __next__(self: Fetch[Literal[True]]) -> bytes: ...
     @overload
-    def __next__(self: Fetch[Literal[False]]) -> str: ...  # noqa: E704
-    def __next__(self) -> bytes | str:  # noqa: E301
+    def __next__(self: Fetch[Literal[False]]) -> str: ...
+    def __next__(self) -> bytes | str:
         if self.file:
             return next(self.file)
 
         raise StopIteration
 
     @overload
-    def read(self: Fetch[Literal[True]], size: int = ...) -> bytes: ...  # noqa: E704
+    def read(self: Fetch[Literal[True]], size: int = ...) -> bytes: ...
     @overload
-    def read(self: Fetch[Literal[False]], size: int = ...) -> str: ...  # noqa: E704
-    def read(self, size: int = -1) -> bytes | str:  # noqa: E301
+    def read(self: Fetch[Literal[False]], size: int = ...) -> str: ...
+    def read(self, size: int = -1) -> bytes | str:
         if self.file:
             result = self.file.read(size)
         else:

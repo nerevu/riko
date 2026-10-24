@@ -26,14 +26,14 @@ if TYPE_CHECKING:
         read as attributes (``kw.key``) regardless of their original casing.
         """
 
-        def __init__(  # noqa: E704
+        def __init__(
             self, data: Mapping[str, _VT], *args: Any, **kwargs: object
-        ) -> None: ...  # noqa: E704
-        def __len__(self) -> int: ...  # noqa: E704
-        def __getattribute__(self, *_: object) -> _VT: ...  # noqa: E704
-        def __getitem__(self, *_: object) -> _VT: ...  # noqa: E704
-        def __iter__(self) -> Iterator[str]: ...  # noqa: E704
-        def iteritems(self) -> Iterator[tuple[str, _VT]]: ...  # noqa: E704
+        ) -> None: ...
+        def __len__(self) -> int: ...
+        def __getattribute__(self, *_: object) -> _VT: ...
+        def __getitem__(self, *_: object) -> _VT: ...
+        def __iter__(self) -> Iterator[str]: ...
+        def iteritems(self) -> Iterator[tuple[str, _VT]]: ...
 else:
 
     class Objectify(_Objectify, Mapping[str, _VT]):
@@ -87,22 +87,18 @@ else:
 
 
 @overload
-def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def objectify[T](data: T) -> T: ...  # noqa: E704
-@overload  # noqa: E302
-def objectify[T](  # noqa: E704
-    data: Mapping[str, T], func: ArgCaster
-) -> Objectify[T]: ...
-@overload  # noqa: E302
-def objectify[T](  # noqa: E704
+def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...
+@overload
+def objectify[T](data: T) -> T: ...
+@overload
+def objectify[T](data: Mapping[str, T], func: ArgCaster) -> Objectify[T]: ...
+@overload
+def objectify[T](
     data: Sequence[T], func: ArgCaster
 ) -> list[ItemOrValue | Objectify[object]]: ...
-@overload  # noqa: E302
-def objectify[T](  # noqa: E704
-    data: T, func: ArgCaster
-) -> T | ItemOrValue: ...
-def objectify[T](  # noqa: E302
+@overload
+def objectify[T](data: T, func: ArgCaster) -> T | ItemOrValue: ...
+def objectify[T](
     data: T, func: ArgCaster | None = None, **defaults: object
 ) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
     """

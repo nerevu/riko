@@ -129,14 +129,14 @@ def _metadata_from_targets(
 
 
 @overload
-def get_module_metadata(  # noqa: E704
+def get_module_metadata(
     name: ModuleNameLike, strict: Literal[False] = ...
 ) -> ModuleMetadata | None: ...
-@overload  # noqa: E302
-def get_module_metadata(  # noqa: E704
+@overload
+def get_module_metadata(
     name: ModuleNameLike, strict: Literal[True]
 ) -> ModuleMetadata: ...
-def get_module_metadata(  # noqa: E302
+def get_module_metadata(
     name: ModuleNameLike, strict: bool = False
 ) -> ModuleMetadata | None:
     """
@@ -236,9 +236,9 @@ def _matches_subtype(
 
 
 @overload
-def list_modules(  # noqa: E704
+def list_modules(
     *,
-    type: ModuleType | str | None = ...,  # noqa: A002
+    type: ModuleType | str | None = ...,
     subtype: ModuleSubtype | str | None = ...,
     category: ModuleCategory | str | None = ...,
     provider: str | None = ...,
@@ -246,10 +246,10 @@ def list_modules(  # noqa: E704
     loopable: bool | None = ...,
     show_metadata: Literal[False] = ...,
 ) -> list[str]: ...
-@overload  # noqa: E302
-def list_modules(  # noqa: E704
+@overload
+def list_modules(
     *,
-    type: ModuleType | str | None = None,  # noqa: A002
+    type: ModuleType | str | None = None,
     subtype: ModuleSubtype | str | None = None,
     category: ModuleCategory | str | None = ...,
     provider: str | None = ...,
@@ -257,9 +257,9 @@ def list_modules(  # noqa: E704
     loopable: bool | None = ...,
     show_metadata: Literal[True],
 ) -> list[ModuleMetadata]: ...
-def list_modules(  # noqa: E302
+def list_modules(
     *,
-    type: ModuleType | str | None = None,  # noqa: A002
+    type: ModuleType | str | None = None,
     subtype: ModuleSubtype | str | None = None,
     category: ModuleCategory | str | None = None,
     provider: str | None = None,

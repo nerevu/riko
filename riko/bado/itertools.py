@@ -189,14 +189,14 @@ async def async_iter[T](
 
 
 @overload
-async def coop_reduce[T, S](  # noqa: E704
+async def coop_reduce[T, S](
     func: Callable[[T, S], T], content: Iterable[S], initial: T
 ) -> T: ...
-@overload  # noqa: E302
-async def coop_reduce[T, S](  # noqa: E704
+@overload
+async def coop_reduce[T, S](
     func: Callable[[T | S | None, S], T], content: Iterable[S], initial: None = ...
 ) -> T | S | None: ...
-async def coop_reduce[T, S](  # noqa: E302 # pyright: ignore[reportInconsistentOverload]
+async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
     func: Callable[[T | S | None, S], T], content: Iterable[S], initial: T | None = None
 ) -> T | S | None:
     """

@@ -57,9 +57,9 @@ class CacheInfo(NamedTuple):
 
 
 class ReprCacheWrapper(Protocol[T_co]):
-    def __call__(self, *args: VT, **kwargs: VT) -> T_co: ...  # noqa: E704
-    def cache_clear(self) -> None: ...  # noqa: E704
-    def cache_info(self) -> CacheInfo: ...  # noqa: E704
+    def __call__(self, *args: VT, **kwargs: VT) -> T_co: ...
+    def cache_clear(self) -> None: ...
+    def cache_info(self) -> CacheInfo: ...
 
 
 def _type_id(cls: type) -> str:

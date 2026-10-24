@@ -164,7 +164,7 @@ class Context:
         )
 
     @overload
-    def with_resource[T](  # noqa: E704
+    def with_resource[T](
         self,
         name: str,
         definition: LifecycleFactory[T],
@@ -172,8 +172,8 @@ class Context:
         credential: str | None = ...,
         lazy: bool = ...,
     ) -> Self: ...
-    @overload  # noqa: E301
-    def with_resource[T](  # noqa: E704
+    @overload
+    def with_resource[T](
         self,
         name: str,
         definition: ReusableResource[T],
@@ -181,8 +181,8 @@ class Context:
         credential: None = ...,
         lazy: Literal[False] = ...,
     ) -> Self: ...
-    @overload  # noqa: E301
-    def with_resource[T](  # noqa: E704
+    @overload
+    def with_resource[T](
         self,
         name: str,
         definition: ResourceDefinition[T],
@@ -190,7 +190,7 @@ class Context:
         credential: str | None = ...,
         lazy: bool = ...,
     ) -> Self: ...
-    def with_resource[T](  # noqa: E301
+    def with_resource[T](
         self,
         name: str,
         definition: ResourceDefinition[T],

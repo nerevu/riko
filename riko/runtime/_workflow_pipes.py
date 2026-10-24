@@ -66,22 +66,22 @@ class SubPipes(NamedTuple):
 
 class _WorkflowTagger(Protocol):
     @overload
-    def __call__(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    def __call__(  # pyright: ignore[reportOverlappingOverload]
         self, pipe: AsyncFunc
     ) -> AsyncSubPipe: ...
-    @overload  # noqa: E301
-    def __call__(self, pipe: Func) -> SyncSubPipe: ...  # noqa: E704
+    @overload
+    def __call__(self, pipe: Func) -> SyncSubPipe: ...
 
 
 @overload
-def workflow(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def workflow(  # pyright: ignore[reportOverlappingOverload]
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: Literal[True]
 ) -> Callable[[Func], AsyncSubPipe]: ...
-@overload  # noqa: E302
-def workflow(  # noqa: E704
+@overload
+def workflow(
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: bool | None = ...
 ) -> _WorkflowTagger: ...
-def workflow(  # noqa: E302
+def workflow(
     *args: object,
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,

@@ -277,9 +277,9 @@ def build_location(
 
 
 GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
-    "coordinates": build_location,  # noqa: PLW0108
-    "street_address": build_street_address,  # noqa: PLW0108
-    "ip_address": build_ip_address,  # noqa: PLW0108
+    "coordinates": build_location,
+    "street_address": build_street_address,
+    "ip_address": build_ip_address,
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
 
@@ -320,34 +320,32 @@ def cast_location(
 
 
 @overload
-def cast_datetime(  # noqa: E704
-    value: DateLike, *, try_local_tz: bool = ...
-) -> dt | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
+def cast_datetime(value: DateLike, *, try_local_tz: bool = ...) -> dt | None: ...
+@overload
+def cast_datetime(
     value: DateLike, as_date: Literal[True], *, try_local_tz: bool = ...
 ) -> date | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
+@overload
+def cast_datetime(
     value: DateLike, as_date: Literal[False] = ..., *, try_local_tz: bool = ...
 ) -> dt | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
+@overload
+def cast_datetime(
     value: DateLike,
     as_date: Literal[True],
     as_datedict: Literal[True],
     *,
     try_local_tz: bool = ...,
 ) -> DateDict | None: ...
-@overload  # noqa: E302
-def cast_datetime(  # noqa: E704
+@overload
+def cast_datetime(
     value: DateLike,
     *,
     as_date: Literal[False] = ...,
     as_datedict: Literal[True],
     try_local_tz: bool = ...,
 ) -> DateDict | None: ...
-def cast_datetime(  # noqa: E302
+def cast_datetime(
     value: DateLike, as_date=False, as_datedict=False, *, try_local_tz=False
 ) -> date | dt | DateDict | None:
     """
@@ -523,56 +521,54 @@ def resolve_cast_type(type_: str | CastType | None) -> CastType:
 
 
 @overload
-def cast_value(content: object) -> str: ...  # noqa: E704
-@overload  # noqa: E302
-def cast_value[T](  # noqa: E704
-    content: T, type_: Literal[CastType.PASS], **kwargs: object
-) -> T: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+def cast_value(content: object) -> str: ...
+@overload
+def cast_value[T](content: T, type_: Literal[CastType.PASS], **kwargs: object) -> T: ...
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.NONE], **kwargs: object
 ) -> None: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.TEXT], **kwargs: object
 ) -> str: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.FLOAT], **kwargs: object
 ) -> float: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.DECIMAL], **kwargs: object
 ) -> Decimal: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.INT], **kwargs: object
 ) -> int: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.DATETIME], **kwargs: object
 ) -> dt: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.DATE], **kwargs: object
 ) -> date: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.URL], **kwargs: object
 ) -> str: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.LOCATION], **kwargs: object
 ) -> AnyLocation: ...
-@overload  # noqa: E302
-def cast_value(  # noqa: E704
+@overload
+def cast_value(
     content: object, type_: Literal[CastType.BOOL], **kwargs: object
 ) -> bool: ...
-@overload  # noqa: E302
-def cast_value[T](  # noqa: E704
+@overload
+def cast_value[T](
     content: T, type_: CastType, **kwargs: object
 ) -> T | PrimitiveValue: ...
-def cast_value[T](  # noqa: E302
+def cast_value[T](
     content: T, type_: CastType = CastType.TEXT, **kwargs: object
 ) -> T | PrimitiveValue | AnyLocation:
     """

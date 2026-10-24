@@ -147,13 +147,13 @@ class CyclicIdentityError(IdentityError):
         super().__init__("cannot canonically encode a cyclic structure")
 
 
-class ImportLintError(RikoError): ...  # noqa: E701
+class ImportLintError(RikoError): ...
 
 
-class ImportAnalysisError(ImportLintError): ...  # noqa: E701
+class ImportAnalysisError(ImportLintError): ...
 
 
-class InvalidArchitectureError(ImportLintError): ...  # noqa: E701
+class InvalidArchitectureError(ImportLintError): ...
 
 
 class RikoWarning(UserWarning):

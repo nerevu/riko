@@ -207,8 +207,6 @@ new permanent bullet here.
   `isinstance`/`match` narrow.
 - Guard optional imports with `try/except` and set the backend/feature flag in the
   exception path.
-- Use the established `noqa: E302` / `noqa: E704` overload exceptions where Ruff
-  and the overload layout conflict.
 - Keep package-local imports relative; canonical import and architecture rules are
   enforced by `manage lint imports`.
 - **Guards live beside the contract they narrow** — `riko/base/_guards.py` holds only

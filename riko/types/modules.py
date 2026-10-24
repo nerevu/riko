@@ -824,7 +824,7 @@ class TokenizerConf(TypedDict, total=False):
     delimiter: str
     dedupe: bool
     sort: bool
-    token_key: str  # noqa: S105
+    token_key: str
 
 
 class TruncateConf(TypedDict, total=False):

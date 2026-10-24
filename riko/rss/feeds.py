@@ -50,16 +50,14 @@ logger: Logger = get_logger(__name__)
 # The overloads are so I can call parse_rss(**kwargs) without Pyright complaining.
 # https://stackoverflow.com/q/79673094
 @overload
-def parse_rss(  # noqa: E704
+def parse_rss(
     url: str, *, content: None = ..., **kwargs: BasicArg
 ) -> list[ParserRSSEntry]: ...
-@overload  # noqa: E302
-def parse_rss(  # noqa: E704
-    *, content: AnyStr, **kwargs: BasicArg
-) -> list[ParserRSSEntry]: ...
 @overload
-def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...  # noqa: E704
-def parse_rss(  # noqa: E302
+def parse_rss(*, content: AnyStr, **kwargs: BasicArg) -> list[ParserRSSEntry]: ...
+@overload
+def parse_rss(**kwargs: Any) -> list[ParserRSSEntry]: ...
+def parse_rss(
     url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
 ) -> list[ParserRSSEntry]:
     """
