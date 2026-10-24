@@ -348,7 +348,7 @@ def xpath(
     yield from elements
 
 
-def xml2etree(  # noqa: E302
+def xml2etree(
     f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """

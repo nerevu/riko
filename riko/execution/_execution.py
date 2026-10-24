@@ -194,12 +194,12 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._stack.callback(self._record_cleanup_error, func, *args)
 
     @overload
-    def enter_context(  # noqa: E704
+    def enter_context(
         self, cm: AbstractContextManager[BlockingPortal]
     ) -> BlockingPortal: ...
     @overload
-    def enter_context[V](self, cm: AbstractContextManager[V]) -> V: ...  # noqa: E704
-    def enter_context[V](  # noqa: E301
+    def enter_context[V](self, cm: AbstractContextManager[V]) -> V: ...
+    def enter_context[V](
         self, cm: AbstractContextManager[BlockingPortal | V]
     ) -> BlockingPortal | V:
         """

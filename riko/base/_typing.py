@@ -187,7 +187,7 @@ HashableType: tuple[type, ...] = (
 
 
 @overload
-def resolve_enum[E: StrEnum](  # noqa: E704
+def resolve_enum[E: StrEnum](
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -196,8 +196,8 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     strict: Literal[True] = ...,
     error: type[Exception] = ...,
 ) -> E: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
+@overload
+def resolve_enum[E: StrEnum](
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -206,8 +206,8 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     strict: Literal[False],
     error: type[Exception] = ...,
 ) -> E | None: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
+@overload
+def resolve_enum[E: StrEnum](
     enum: type[E],
     value: E | str | None,
     what: str | None = ...,
@@ -216,7 +216,7 @@ def resolve_enum[E: StrEnum](  # noqa: E704
     strict: bool,
     error: type[Exception] = ...,
 ) -> E | None: ...
-def resolve_enum[E: StrEnum](  # noqa: E302
+def resolve_enum[E: StrEnum](
     enum: type[E],
     value: E | str | None,
     what: str | None = None,

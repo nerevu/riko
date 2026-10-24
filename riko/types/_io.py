@@ -14,12 +14,12 @@ type PathLike = str | Path
 
 @runtime_checkable
 class SyncCloseable(Protocol):
-    def close(self) -> object | None: ...  # noqa: E704
+    def close(self) -> object | None: ...
 
 
 @runtime_checkable
 class AsyncCloseable(Protocol):
-    async def aclose(self) -> object | None: ...  # noqa: E704
+    async def aclose(self) -> object | None: ...
 
 
 type Closeable = SyncCloseable | AsyncCloseable

@@ -72,14 +72,12 @@ class ResolverDispatcher:
         return resolver
 
     @overload
-    def require(  # noqa: E704
+    def require(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
-    @overload  # noqa: E301
-    def require(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    @overload
+    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
         """
         Resolves ``name`` to its ``pipe``, or its ``async_pipe`` when ``is_async``.
 
@@ -168,16 +166,14 @@ class ResolverDispatcher:
         return interface in self.require_resolver(name).require_interfaces(name)
 
     @overload
-    def resolve(  # noqa: E704
+    def resolve(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
-    @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    @overload
+    def resolve(
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve(  # noqa: E301
-        self, name: str, is_async: bool = False
-    ) -> ModuleWrapper | None:
+    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper | None:
         """
         Resolves ``name`` to its ``pipe`` (or ``async_pipe`` when ``is_async``).
 

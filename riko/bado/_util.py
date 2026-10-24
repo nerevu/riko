@@ -48,14 +48,14 @@ async def async_get(url: str, **kwargs: Any) -> HTTPXResponse:
 
 
 @overload
-async def async_read(  # noqa: E704
+async def async_read(
     url: str, binary: Literal[True], encoding: str | None = ...
 ) -> bytes: ...
-@overload  # noqa: E302
-async def async_read(  # noqa: E704
+@overload
+async def async_read(
     url: str, binary: Literal[False] = ..., encoding: str | None = ...
 ) -> str: ...
-async def async_read(  # noqa: E302
+async def async_read(
     url: str, binary: bool = False, encoding: str | None = None
 ) -> bytes | str:
     """Reads a local ``file://`` path as bytes or text."""

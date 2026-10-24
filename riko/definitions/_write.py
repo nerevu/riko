@@ -177,7 +177,7 @@ class SyncWriteSession(Protocol):
     One session type serves every write, whatever consumes the pipeline.
     """
 
-    def write(self, value: Item | Items) -> None:  # noqa: E301
+    def write(self, value: Item | Items) -> None:
         """Delivers an item or the whole stream through this session."""
         ...
 
@@ -201,8 +201,8 @@ class SyncWriteSession(Protocol):
 class AsyncWriteSession(Protocol):
     """A live, execution-owned asynchronous write session."""
 
-    async def awrite(self, value: Item | Feed) -> None: ...  # noqa: E704
-    async def aacquire(self) -> None: ...  # noqa: E704
-    async def afinalize(self) -> WriteResult: ...  # noqa: E704
-    def abort(self) -> None: ...  # noqa: E704
-    async def ateardown(self) -> None: ...  # noqa: E704
+    async def awrite(self, value: Item | Feed) -> None: ...
+    async def aacquire(self) -> None: ...
+    async def afinalize(self) -> WriteResult: ...
+    def abort(self) -> None: ...
+    async def ateardown(self) -> None: ...

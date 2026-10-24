@@ -90,12 +90,12 @@ def parse_date_string(value: str) -> dt:
 
 
 @overload
-def date_to_datetime(content: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def date_to_datetime(  # noqa: E704
+def date_to_datetime(content: None) -> None: ...
+@overload
+def date_to_datetime(
     content: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> AwareDT: ...
-def date_to_datetime(  # noqa: E302
+def date_to_datetime(
     content: date | None,
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,
@@ -110,20 +110,20 @@ def date_to_datetime(  # noqa: E302
 
 
 @overload
-def tt_to_datetime(  # noqa: E704
+def tt_to_datetime(
     tt: None, as_date: bool = ..., def_tzinfo: tzinfo | None = ...
 ) -> None: ...
-@overload  # noqa: E302
-def tt_to_datetime(  # noqa: E704
+@overload
+def tt_to_datetime(
     tt: AwareST | NaiveST, as_date: Literal[True], def_tzinfo: tzinfo | None = ...
 ) -> date: ...
-@overload  # noqa: E302
-def tt_to_datetime(  # noqa: E704
+@overload
+def tt_to_datetime(
     tt: AwareST | NaiveST,
     as_date: Literal[False] = ...,
     def_tzinfo: tzinfo | None = ...,
 ) -> AwareDT | NaiveDT: ...
-def tt_to_datetime(  # noqa: E302
+def tt_to_datetime(
     tt: struct_time | None, as_date: bool = False, def_tzinfo: tzinfo | None = None
 ) -> date | dt | None:
     # convert and account for leapseconds
@@ -138,14 +138,12 @@ def tt_to_datetime(  # noqa: E302
 
 
 @overload
-def date_to_tt(content: None) -> None: ...  # noqa: E704
-@overload  # noqa: E302
-def date_to_tt(content: AwareDT) -> AwareST: ...  # noqa: E704
-@overload  # noqa: E302
-def date_to_tt(content: NaiveDT | date) -> NaiveST: ...  # noqa: E704
-def date_to_tt(  # noqa: E302
-    content: AwareDT | NaiveDT | date | None,
-) -> AwareST | NaiveST | None:
+def date_to_tt(content: None) -> None: ...
+@overload
+def date_to_tt(content: AwareDT) -> AwareST: ...
+@overload
+def date_to_tt(content: NaiveDT | date) -> NaiveST: ...
+def date_to_tt(content: AwareDT | NaiveDT | date | None) -> AwareST | NaiveST | None:
     tzname = get_tzname(content)
 
     if isinstance(content, dt) and tzname:
@@ -164,14 +162,12 @@ def date_to_tt(  # noqa: E302
 
 
 @overload
-def tt_to_datedict(  # noqa: E704
-    tt: None, normal: date, def_tzinfo: tzinfo | None = ...
-) -> None: ...
-@overload  # noqa: E302
-def tt_to_datedict(  # noqa: E704
+def tt_to_datedict(tt: None, normal: date, def_tzinfo: tzinfo | None = ...) -> None: ...
+@overload
+def tt_to_datedict(
     tt: AwareST | NaiveST, normal: date, def_tzinfo: tzinfo | None = ...
 ) -> DateDict: ...
-def tt_to_datedict(  # noqa: E302
+def tt_to_datedict(
     tt: struct_time | None, normal: date, def_tzinfo: tzinfo | None = None
 ) -> DateDict | None:
     # Make Sunday the first day of the week
@@ -191,26 +187,26 @@ def tt_to_datedict(  # noqa: E302
 
 
 @overload
-def resolve_aware_datetime(  # noqa: E704
+def resolve_aware_datetime(
     _date: None, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> None: ...
-@overload  # noqa: E302
-def resolve_aware_datetime(  # noqa: E704
+@overload
+def resolve_aware_datetime(
     _date: AwareDT | NaiveDT | str,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareDT: ...
-@overload  # noqa: E302
-def resolve_aware_datetime(  # noqa: E704
+@overload
+def resolve_aware_datetime(
     _date: AwareST | NaiveST,
     try_local_tz: bool | None = ...,
     fallback_tzinfo: tzinfo = ...,
 ) -> AwareST: ...
-@overload  # noqa: E302
-def resolve_aware_datetime(  # noqa: E704
+@overload
+def resolve_aware_datetime(
     _date: date, try_local_tz: bool | None = ..., fallback_tzinfo: tzinfo = ...
 ) -> date: ...
-def resolve_aware_datetime(  # noqa: E302
+def resolve_aware_datetime(
     _date: AwareDT | NaiveDT | AwareST | NaiveST | date | str | None,
     try_local_tz: bool | None = True,
     fallback_tzinfo: tzinfo = UTC,

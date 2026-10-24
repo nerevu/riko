@@ -54,7 +54,7 @@ class TypeRequire[T, R](Protocol):
     any such guard into an attrs converter or validator.
     """
 
-    def __call__(self, value: T, what: str | None = None, **_: Any) -> R: ...  # noqa: E704
+    def __call__(self, value: T, what: str | None = None, **_: Any) -> R: ...
 
 
 @runtime_checkable
@@ -66,7 +66,7 @@ class InstanceRequire[T, R](Protocol):
     for that class.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, cls: type[R], value: T, what: str | None = None, **_: Any
     ) -> R: ...
 
@@ -75,18 +75,18 @@ type Require[T, R] = TypeRequire[T, R] | InstanceRequire[T, R]
 
 
 @overload
-def narrow_from_require[T, R](  # noqa: E704
+def narrow_from_require[T, R](
     require: InstanceRequire[T, R], cls: type[R], /, **kwargs: object
 ) -> Callable[[R], R]: ...
-@overload  # noqa: E302
-def narrow_from_require[T, R](  # noqa: E704
+@overload
+def narrow_from_require[T, R](
     require: Require[object, R], *args: object, accepted: TypeForm[T], **kwargs: object
 ) -> Callable[[T], R]: ...
-@overload  # noqa: E302
-def narrow_from_require[T, R](  # noqa: E704
+@overload
+def narrow_from_require[T, R](
     require: Require[T, R], *args: object, **kwargs: object
 ) -> Callable[[R], R]: ...
-def narrow_from_require[T, R](  # noqa: E302
+def narrow_from_require[T, R](
     require: Require[T, R], *args: object, accepted: object = None, **kwargs: object
 ) -> Callable[..., R]:
     """
@@ -386,19 +386,19 @@ def require_from_attrs[T: AttrsInstance, V](
 
 
 @overload
-def def_from_require[T, R](  # noqa: E704
+def def_from_require[T, R](
     require: TypeRequire[T, R],
     *,
     default: None = ...,
     what: str | None = ...,
     **kwargs: Any,
 ) -> DefFunc[T, R | None]: ...
-@overload  # noqa: E302
-def def_from_require[T, D, R](  # noqa: E704
+@overload
+def def_from_require[T, D, R](
     require: TypeRequire[T, R], *, default: D, what: str | None = ..., **kwargs: Any
 ) -> DefFunc[T, R | D]: ...
-@overload  # noqa: E302
-def def_from_require[T, R](  # noqa: E704
+@overload
+def def_from_require[T, R](
     require: InstanceRequire[T, R],
     cls: type[R],
     /,
@@ -407,8 +407,8 @@ def def_from_require[T, R](  # noqa: E704
     what: str | None = ...,
     **kwargs: Any,
 ) -> DefFunc[T, R | None]: ...
-@overload  # noqa: E302
-def def_from_require[T, D, R](  # noqa: E704
+@overload
+def def_from_require[T, D, R](
     require: InstanceRequire[T, R],
     cls: type[R],
     /,
@@ -417,7 +417,7 @@ def def_from_require[T, D, R](  # noqa: E704
     what: str | None = ...,
     **kwargs: Any,
 ) -> DefFunc[T, R | D]: ...
-def def_from_require[D, R](  # noqa: E302
+def def_from_require[D, R](
     require: Callable[..., R],
     *args: object,
     default: D | None = None,
@@ -520,38 +520,38 @@ def def_from_typed_dict[T, D](
 
 
 @overload
-def narrow_def_from_require[R](  # noqa: E704
+def narrow_def_from_require[R](
     require: TypeRequire[R, R], default: None = ...
 ) -> DefFunc[R, R | None]: ...
-@overload  # noqa: E302
-def narrow_def_from_require[D, R](  # noqa: E704
+@overload
+def narrow_def_from_require[D, R](
     require: TypeRequire[R, R], default: D
 ) -> DefFunc[R, R | D]: ...
-@overload  # noqa: E302
-def narrow_def_from_require[R](  # noqa: E704
+@overload
+def narrow_def_from_require[R](
     require: TypeRequire[R, R], default: None = ..., what: str | None = ...
 ) -> DefFunc[R, R | None]: ...
-@overload  # noqa: E302
-def narrow_def_from_require[D, R](  # noqa: E704
+@overload
+def narrow_def_from_require[D, R](
     require: TypeRequire[R, R], default: D, what: str | None = ...
 ) -> DefFunc[R, R | D]: ...
-@overload  # noqa: E302
-def narrow_def_from_require[T, R](  # noqa: E704
+@overload
+def narrow_def_from_require[T, R](
     require: TypeRequire[object, R],
     default: None = ...,
     what: str | None = ...,
     *,
     accepted: TypeForm[T],
 ) -> DefFunc[T, R | None]: ...
-@overload  # noqa: E302
-def narrow_def_from_require[T, D, R](  # noqa: E704
+@overload
+def narrow_def_from_require[T, D, R](
     require: TypeRequire[object, R],
     default: D,
     what: str | None = ...,
     *,
     accepted: TypeForm[T],
 ) -> DefFunc[T, R | D]: ...
-def narrow_def_from_require[D, R](  # noqa: E302
+def narrow_def_from_require[D, R](
     require: TypeRequire[Any, R],
     default: D | None = None,
     what: str | None = None,
@@ -752,7 +752,7 @@ def require_instance[T](
 
 
 @overload
-def require_instances[K, T](  # noqa: E704
+def require_instances[K, T](
     cls: type[T],
     value: Mapping[K, object],
     what: str | None = "value",
@@ -760,8 +760,8 @@ def require_instances[K, T](  # noqa: E704
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> dict[K, T]: ...
-@overload  # noqa: E302
-def require_instances[T](  # noqa: E704
+@overload
+def require_instances[T](
     cls: type[T],
     value: Iterable[object],
     what: str | None = "value",
@@ -769,7 +769,7 @@ def require_instances[T](  # noqa: E704
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> Iterable[T]: ...
-def require_instances[K, T](  # noqa: E302
+def require_instances[K, T](
     cls: type[T],
     value: Mapping[K, object] | Iterable[object],
     what: str | None = "value",
@@ -1203,7 +1203,7 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     return value
 
 
-def require_conf_key[T](  # noqa: E704
+def require_conf_key[T](
     objconf: DynamicConf, key: str, module: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
     """

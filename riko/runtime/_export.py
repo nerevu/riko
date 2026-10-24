@@ -53,19 +53,15 @@ def list_formats() -> list[str]:
 
 
 @overload
-def export(items: Items) -> list[Item]: ...  # noqa: E704
+def export(items: Items) -> list[Item]: ...
 @overload
-def export(items: Items, **kwargs: Any) -> list[Item]: ...  # noqa: E704
-@overload  # noqa: E302
-def export(  # noqa: E704
-    items: Items, type_: Literal["list"], **kwargs: Any
-) -> list[Item]: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
-    items: Items, type_: Literal["tuple"], **kwargs: Any
-) -> tuple[Item]: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
+def export(items: Items, **kwargs: Any) -> list[Item]: ...
+@overload
+def export(items: Items, type_: Literal["list"], **kwargs: Any) -> list[Item]: ...
+@overload
+def export(items: Items, type_: Literal["tuple"], **kwargs: Any) -> tuple[Item]: ...
+@overload
+def export(
     items: Items,
     type_: Literal[
         "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
@@ -73,8 +69,8 @@ def export(  # noqa: E704
     f: str,
     **kwargs: Any,
 ) -> int: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
+@overload
+def export(
     items: Items,
     type_: Literal[
         "csv", "json", "geojson", Formats.CSV, Formats.JSON, Formats.GEOJSON
@@ -82,25 +78,25 @@ def export(  # noqa: E704
     f: None = ...,
     **kwargs: Any,
 ) -> StringIO: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
+@overload
+def export(
     items: Items,
     type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: str,
     **kwargs: Any,
 ) -> int: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
+@overload
+def export(
     items: Items,
     type_: Literal["ofx", "qif", Formats.OFX, Formats.QIF],
     f: None = ...,
     **kwargs: Any,
 ) -> Iterable[str]: ...
-@overload  # noqa: E302
-def export(  # noqa: E704
+@overload
+def export(
     items: Items, type_: ExportType = ..., **kwargs: Any
 ) -> StringIO | Items | Iterable[str] | None: ...
-def export(  # noqa: E302
+def export(
     items: Items,
     type_: ExportType = "list",
     f: str | TextIO | None = None,

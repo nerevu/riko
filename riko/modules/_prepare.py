@@ -99,12 +99,12 @@ def build_conf(
 
 
 @overload
-def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+def _build_caster[T](type_: None) -> ArgCaster[T]: ...
 @overload
-def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-@overload  # noqa: E302
-def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-def _build_caster[T](  # noqa: E302
+def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...
+@overload
+def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...
+def _build_caster[T](
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
@@ -350,7 +350,7 @@ class PreparedModule[T, E]:
 
 
 @overload
-def resolve_and_cast[T, E](  # noqa: E704
+def resolve_and_cast[T, E](
     item: Item | RikoDict | DotDict[RikoValue],
     opts: DecorationOptions,
     *,
@@ -361,8 +361,8 @@ def resolve_and_cast[T, E](  # noqa: E704
     module: str = ...,
     **kwargs: object,
 ) -> ItemDispatch[T, E]: ...
-@overload  # noqa: E302
-def resolve_and_cast[T, E](  # noqa: E704
+@overload
+def resolve_and_cast[T, E](
     item: PrimitiveValue | RikoList,
     opts: DecorationOptions,
     *,
@@ -373,7 +373,7 @@ def resolve_and_cast[T, E](  # noqa: E704
     module: str = ...,
     **kwargs: object,
 ) -> ValueDispatch[T, E]: ...
-def resolve_and_cast[T, E](  # noqa: E302
+def resolve_and_cast[T, E](
     item: ItemOrValue,
     opts: DecorationOptions,
     *,

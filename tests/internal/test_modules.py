@@ -1078,7 +1078,7 @@ class TestLoopCharacterization:
     def test_loop_prepares_embed_once_per_stream(self, monkeypatch):
         prepares: list[object] = []
         prepare = tokenizer.prepare
-        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)
         monkeypatch.setattr(tokenizer, "prepare", spy)
         result = _tokenizer_loop(iter(PARENTS), emit=True)
         assert list(result) == [
@@ -1199,7 +1199,7 @@ class TestAsyncLoop:
     async def test_prepares_embed_once_per_stream(self, monkeypatch):
         prepares: list[object] = []
         prepare = async_tok.prepare
-        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)
         monkeypatch.setattr(async_tok, "prepare", spy)
         stream = async_loop(
             iter(PARENTS),

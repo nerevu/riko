@@ -28,7 +28,7 @@ type AsyncBackend = Literal["anyio", "empty"]
 class Run(Protocol):
     """The call signature of the async entry point, ``run``."""
 
-    def __call__[*PosArgsT, T](  # noqa: E704
+    def __call__[*PosArgsT, T](
         self, func: Callable[[Unpack[PosArgsT]], Awaitable[T]], *args: *PosArgsT
     ) -> T: ...
 

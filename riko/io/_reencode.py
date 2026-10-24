@@ -202,7 +202,7 @@ def reencode(  # pyright: ignore[reportRedeclaration])
 
 if TYPE_CHECKING:
 
-    class IterStringIO[T: AnyStr]:  # noqa: F811
+    class IterStringIO[T: AnyStr]:
         def __init__(
             self,
             iterable: Iterable[str] | None = None,
@@ -210,20 +210,18 @@ if TYPE_CHECKING:
             decode: bool = False,
             **kwargs,
         ) -> None: ...
-        def __buffer__(self, flags: int) -> memoryview: ...  # noqa: E704
-        def read(self, n: int | None = None) -> T: ...  # noqa: E704
-        def readline(  # noqa: E301, E704
-            self, n: int | None = None, keepends=True
-        ) -> T: ...
-        def readlines(self, keepends=True) -> list[T]: ...  # noqa: E704
+        def __buffer__(self, flags: int) -> memoryview: ...
+        def read(self, n: int | None = None) -> T: ...
+        def readline(self, n: int | None = None, keepends=True) -> T: ...
+        def readlines(self, keepends=True) -> list[T]: ...
 
-    class Reencoder[T: AnyStr]:  # noqa: F811
+    class Reencoder[T: AnyStr]:
         _f: SyncCloseable
         binary: bool
         join_char: T
         stream: Iterator[T]
 
-        def __init__(  # noqa: E704
+        def __init__(
             self,
             f: FileLike,
             fromenc: str = ...,
@@ -233,18 +231,16 @@ if TYPE_CHECKING:
             decode: bool = ...,
             remove_BOM: bool = ...,  # noqa: N803
         ) -> None: ...
-        def __buffer__(self, flags: int) -> memoryview: ...  # noqa: E704
-        def __iter__(self) -> Iterator[T]: ...  # noqa: E704
-        def __next__(self) -> T: ...  # noqa: E704
-        def read(self, n: int | None = None) -> T: ...  # noqa: E704
-        def readline(  # noqa: E301, E704
-            self, n: int | None = None, keepends=True
-        ) -> T: ...
-        def readlines(self, keepends=True) -> list[T]: ...  # noqa: E704
-        def close(self) -> None: ...  # noqa: E704
+        def __buffer__(self, flags: int) -> memoryview: ...
+        def __iter__(self) -> Iterator[T]: ...
+        def __next__(self) -> T: ...
+        def read(self, n: int | None = None) -> T: ...
+        def readline(self, n: int | None = None, keepends=True) -> T: ...
+        def readlines(self, keepends=True) -> list[T]: ...
+        def close(self) -> None: ...
 
     @overload
-    def reencode(  # noqa: E704, F811
+    def reencode(
         f: FileLike,
         fromenc: str = ...,
         toenc: str = ...,
@@ -253,8 +249,8 @@ if TYPE_CHECKING:
         decode: Literal[True],
         remove_BOM: bool = ...,  # noqa: N803
     ) -> Reencoder[str]: ...
-    @overload  # noqa: E301
-    def reencode(  # noqa: E704
+    @overload
+    def reencode(
         f: FileLike,
         fromenc: str = ...,
         toenc: str = ...,

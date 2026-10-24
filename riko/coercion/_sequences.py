@@ -24,30 +24,24 @@ if TYPE_CHECKING:
 
 
 @overload
-def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize(  # pyright: ignore[reportOverlappingOverload]
     value: Item | Iterable[Item],
 ) -> Iterable[Item]: ...
 @overload
-def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: dict[str, T],
-) -> list[dict[str, T]]: ...
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: CaseInsensitiveDict[T],
-) -> list[CaseInsensitiveDict[T]]: ...
+def listize[T](value: list[T]) -> list[T]: ...
 @overload
-def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: Sequence[T],
-) -> Sequence[T]: ...
+def listize[T](value: dict[str, T]) -> list[dict[str, T]]: ...
 @overload
-def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
+def listize[T](value: CaseInsensitiveDict[T]) -> list[CaseInsensitiveDict[T]]: ...
 @overload
-def listize[T](value: T) -> list[T]: ...  # noqa: E704
-def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
+def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...
+@overload
+def listize[T](value: Sequence[T]) -> Sequence[T]: ...
+@overload
+def listize[T](value: Iterable[T]) -> Iterable[T]: ...
+@overload
+def listize[T](value: T) -> list[T]: ...
+def listize[T](value: T) -> T | Iterable[T]:
     """
     Creates a listlike object from any value.
 
@@ -90,20 +84,16 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
 
 @overload
-def gen_items(  # noqa: E704
-    content: BasicDict | StringyDict, key: str | None = ...
-) -> Stream: ...
+def gen_items(content: BasicDict | StringyDict, key: str | None = ...) -> Stream: ...
 @overload
-def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
-@overload  # noqa: E302
-def gen_items(  # noqa: E704
-    content: RikoValue, key: str, yield_if_none: bool = ...
-) -> Stream: ...  # noqa: E704
-@overload  # noqa: E302
-def gen_items(  # noqa: E704
+def gen_items(content: RikoValue) -> ValueStream: ...
+@overload
+def gen_items(content: RikoValue, key: str, yield_if_none: bool = ...) -> Stream: ...
+@overload
+def gen_items(
     content: RikoValue, key: None = ..., yield_if_none: bool = ...
 ) -> ValueStream: ...
-def gen_items(  # noqa: E302
+def gen_items(
     content: RikoValue | BasicDict | StringyDict,
     key: str | None = None,
     yield_if_none=False,

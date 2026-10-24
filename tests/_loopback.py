@@ -46,7 +46,7 @@ def _make_handler(
     class _Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
@@ -56,7 +56,7 @@ def _make_handler(
                 for index in range(0, len(payload), CHUNK):
                     self.wfile.write(payload[index : index + CHUNK])
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     return _Handler

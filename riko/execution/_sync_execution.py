@@ -156,12 +156,12 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         return self.enter_context(portal_cm)
 
     @overload
-    def run_async[R](self, func: Awaitable[R], /) -> R: ...  # noqa: E704
-    @overload  # noqa: E301
-    def run_async[R](  # noqa: E704
+    def run_async[R](self, func: Awaitable[R], /) -> R: ...
+    @overload
+    def run_async[R](
         self, func: Callable[..., Awaitable[R]], /, *args: object
     ) -> R: ...
-    def run_async[R](  # noqa: E301
+    def run_async[R](
         self, func: Awaitable[R] | Callable[..., Awaitable[R]], *args: object
     ) -> R:
         """

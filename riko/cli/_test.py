@@ -80,9 +80,9 @@ def _ratchet_coverage(report: Path) -> int:
     "-p", "--parallel", help="Run tests in parallel in multiple processes", is_flag=True
 )
 def _test_command(
-    paths: tuple[str, ...] = (),  # noqa: PT028
-    where: tuple[str, ...] = (),  # noqa: PT028
-    stop: bool | None = None,  # noqa: PT028
+    paths: tuple[str, ...] = (),
+    where: tuple[str, ...] = (),
+    stop: bool | None = None,
     **kwargs: object,
 ) -> None:
     """Run pytest, tox, and script tests."""

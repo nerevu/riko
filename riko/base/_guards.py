@@ -135,22 +135,22 @@ def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
 
 
 @overload
-def require_mapping(  # noqa: E704
+def require_mapping(
     value: Conf | None,
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> Conf: ...
-@overload  # noqa: E302
-def require_mapping[K, V](  # noqa: E704
+@overload
+def require_mapping[K, V](
     value: Mapping[K, V] | object,
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> Mapping[K, V]: ...
-def require_mapping[K, V](  # noqa: E302
+def require_mapping[K, V](
     value: Mapping[K, V] | object,
     what: str | None = "value",
     *,
@@ -268,14 +268,12 @@ def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]
 
 
 @overload
-def is_async_callable[T](  # noqa: E704
+def is_async_callable[T](
     val: Callable[..., T | Awaitable[T]],
 ) -> TypeGuard[Callable[..., Awaitable[T]]]: ...
-@overload  # noqa: E302
-def is_async_callable(  # noqa: E704
-    val: object,
-) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
-def is_async_callable(val: object) -> bool:  # noqa: E302
+@overload
+def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
+def is_async_callable(val: object) -> bool:
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
     else:

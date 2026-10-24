@@ -129,7 +129,7 @@ async def _arun_document(flow: Workflow) -> list[Item]:
 
 def _failure(call) -> tuple[str, str]:
     """Reports the type and message of the error ``call`` raises."""
-    with pytest.raises(Exception) as info:  # noqa: PT011, B017
+    with pytest.raises(Exception) as info:  # noqa: PT011
         call()
 
     return type(info.value).__name__, str(info.value)
@@ -451,7 +451,7 @@ MEMBER_COLLISIONS = (
 
 def _exec_generated_names(*entries: NameEntry) -> dict:
     namespace: dict = {}
-    exec(generate_module_names(*entries), namespace)  # noqa: S102
+    exec(generate_module_names(*entries), namespace)
     return namespace
 
 

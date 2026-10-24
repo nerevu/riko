@@ -151,12 +151,10 @@ class Pipeline(PipelineDefinition[T]):
         return cast("Pipeline[R]", mapper(version=version, identity=identity))
 
     @overload
-    def first(self) -> T: ...  # noqa: E704
-    @overload  # noqa: E301
-    def first[D](self, default: D) -> T | D: ...  # noqa: E704
-    def first[D](  # noqa: E301
-        self, default: D | MissingType = MISSING
-    ) -> T | D:
+    def first(self) -> T: ...
+    @overload
+    def first[D](self, default: D) -> T | D: ...
+    def first[D](self, default: D | MissingType = MISSING) -> T | D:
         """
         Runs the pipeline just long enough to read its first item.
 
@@ -192,12 +190,10 @@ class Pipeline(PipelineDefinition[T]):
         return item
 
     @overload
-    async def afirst(self) -> T: ...  # noqa: E704
-    @overload  # noqa: E301
-    async def afirst[D](self, default: D) -> T | D: ...  # noqa: E704
-    async def afirst[D](  # noqa: E301
-        self, default: D | MissingType = MISSING
-    ) -> T | D:
+    async def afirst(self) -> T: ...
+    @overload
+    async def afirst[D](self, default: D) -> T | D: ...
+    async def afirst[D](self, default: D | MissingType = MISSING) -> T | D:
         """
         Asynchronously runs the pipeline just long enough to read its first item.
 
