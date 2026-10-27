@@ -3,14 +3,14 @@
 Worker pool lifetime for per-item work in synchronous executions.
 
 An execution maps a loopable node's items across one shared thread or process pool. It
-pulls its source no further ahead than the pool can take.
+pulls its source no further ahead than the pool can take. A worker process that dies
+fails the run with ``BrokenProcessPool`` rather than leaving it waiting.
 """
 
 from __future__ import annotations
 
 from collections import deque
-from multiprocessing.pool import Pool as CPUPoolType
-from multiprocessing.pool import ThreadPool as ThreadPoolType
+from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from queue import SimpleQueue
 from typing import TYPE_CHECKING, Self
 
@@ -18,68 +18,46 @@ from attrs import define, field
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
-    from multiprocessing.pool import ApplyResult
     from types import TracebackType
 
-type AnyPool = ThreadPoolType | CPUPoolType
+type AnyPool = Executor
 
 __all__ = ["AnyPool"]
-
-
-@define(frozen=True, slots=True)
-class _Failure:
-    """Carries a worker's error back to the consuming thread."""
-
-    error: BaseException
 
 
 def _map_ordered[T, R](
     pool: AnyPool, func: Callable[[T], R], source: Iterable[T], window: int
 ) -> Iterator[R]:
-    """Unlike ``Pool.imap``, maps in source order and pulls at most ``window`` ahead."""
-    pending: deque[ApplyResult[R]] = deque()
+    """Unlike ``Executor.map``, maps lazily and pulls at most ``window`` ahead."""
+    pending: deque[Future[R]] = deque()
 
     for item in source:
-        pending.append(pool.apply_async(func, (item,)))
+        pending.append(pool.submit(func, item))
 
         if len(pending) >= window:
-            yield pending.popleft().get()
+            yield pending.popleft().result()
 
     while pending:
-        yield pending.popleft().get()
+        yield pending.popleft().result()
 
 
 def _map_unordered[T, R](
     pool: AnyPool, func: Callable[[T], R], source: Iterable[T], window: int
 ) -> Iterator[R]:
-    """Unlike ``imap``, maps in completion order and pulls at most ``window`` ahead."""
-    done: SimpleQueue[R | _Failure] = SimpleQueue()
+    """Unlike ``as_completed``, maps lazily and pulls at most ``window`` ahead."""
+    done: SimpleQueue[Future[R]] = SimpleQueue()
     pending = 0
 
-    def take() -> R:
-        if isinstance(value := done.get(), _Failure):
-            raise value.error
-
-        return value
-
-    def submit(item: T) -> None:
-        pool.apply_async(
-            func,
-            (item,),
-            callback=done.put,
-            error_callback=lambda error: done.put(_Failure(error)),
-        )
-
     for item in source:
-        submit(item)
+        pool.submit(func, item).add_done_callback(done.put)
         pending += 1
 
         if pending >= window:
             pending -= 1
-            yield take()
+            yield done.get().result()
 
     for _ in range(pending):
-        yield take()
+        yield done.get().result()
 
 
 @define(eq=False)
@@ -88,17 +66,17 @@ class _PoolLifetime:
     Owns an execution's shared worker pool and decides how it is released.
 
     The pool waits out its pending work only when every mapped stream ran to exhaustion
-    and no error is propagating. Otherwise in-flight and read-ahead work is immediately
-    stopped, so an early-closed or failed run never waits on it.
+    and no error is propagating. Otherwise read-ahead work is cancelled and busy worker
+    processes are stopped. Busy threads cannot be stopped, only waited on.
 
     Examples:
 
         Basic usage::
 
-            >>> from multiprocessing.pool import ThreadPool
+            >>> from concurrent.futures import ThreadPoolExecutor
             >>> from riko.execution._pools import _PoolLifetime
             >>>
-            >>> with _PoolLifetime(ThreadPool(2), 2) as lifetime:
+            >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
             ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))
             [1, 1, 2, 2]
 
@@ -125,13 +103,22 @@ class _PoolLifetime:
 
     def close(self) -> None:
         """Waits out the pending work, then releases the pool."""
-        self.pool.close()
-        self.pool.join()
+        self.pool.shutdown(wait=True)
 
     def terminate(self) -> None:
-        """Stops the pending work at once, then releases the pool."""
-        self.pool.terminate()
-        self.pool.join()
+        """Cancels the pending work and stops or waits out the running workers."""
+        pool = self.pool
+        isprocess = isinstance(pool, ProcessPoolExecutor)
+        # `cancel_futures` drops only queued work, so busy processes are stopped below
+        processes = pool._processes if isprocess else None
+        workers = [] if processes is None else list(processes.values())
+        pool.shutdown(wait=not isprocess, cancel_futures=True)
+
+        for worker in workers:
+            worker.terminate()
+
+        for worker in workers:
+            worker.join()
 
     def flat_map[T](
         self, func: Callable[[T], list[T]], source: Iterable[T], *, ordered: bool

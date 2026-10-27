@@ -398,7 +398,7 @@ step 4, and `Pipeline.with_execution(executor=, concurrency=, ordered=)` is the 
 **Carryovers (both shipped with R4B).**
 - **Shared-budget execution wiring** — `AsyncExecution` shares one `Semaphore` budget across every
   node of a run; `Context` stays an immutable environment/resource definition.
-- **Sync bounded window** — the sync pool maps through `apply_async` within a bounded look-ahead
+- **Sync bounded window** — the sync pool maps through `Executor.submit` within a bounded look-ahead
   window and honors `ordered` (`riko/execution/_pools.py`).
 
 (The earlier "child `count="first"` aclose" and the `async_map_stream` early-close wart both **landed**

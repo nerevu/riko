@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import gc
+import os
 import warnings
+from concurrent.futures.process import BrokenProcessPool
+from contextlib import nullcontext
 from operator import itemgetter, methodcaller
+from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any, NoReturn, assert_type, cast, get_args, get_origin
 
 import pytest
@@ -968,6 +972,34 @@ class TestAsyncFanIn:
         assert [item async for item in stream] == []
 
 
+def _exit_worker(item):
+    os._exit(1)
+
+
+def _wait_or_block(item):
+    marker = Path(item["dir"], "blocked.pid")
+
+    if item["role"] == "block":
+        staged = marker.with_suffix(".tmp")
+        staged.write_text(str(os.getpid()))
+        staged.replace(marker)
+        sleep(60)
+
+    while not marker.exists():
+        sleep(0.01)
+
+    if item["role"] == "fail":
+        raise ValueError("boom")
+
+    return item
+
+
+_STOPPED_RUNS = [
+    pytest.param("pass", nullcontext(), id="early-close"),
+    pytest.param("fail", pytest.raises(ValueError, match="boom"), id="failing-sibling"),
+]
+
+
 class Recorder:
     def __init__(self) -> None:
         self.events: list[object] = []
@@ -977,6 +1009,36 @@ class Recorder:
 
 
 class TestWithExecution:
+    @pytest.mark.slow
+    @pytest.mark.timeout(60)
+    def test_a_dead_worker_process_fails_the_run(self) -> None:
+        mapped = Pipeline().map(_exit_worker)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+
+        with pytest.raises(BrokenProcessPool):
+            list(pipeline([{"x": 1}, {"x": 2}]))
+
+    @pytest.mark.slow
+    @pytest.mark.timeout(60)
+    @pytest.mark.parametrize(("role", "expectation"), _STOPPED_RUNS)
+    def test_stopping_the_run_kills_a_busy_worker_process(
+        self, tmp_path, role, expectation
+    ) -> None:
+        mapped = Pipeline().map(_wait_or_block)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+        items = [
+            {"dir": str(tmp_path), "role": "block"},
+            {"dir": str(tmp_path), "role": role},
+        ]
+
+        with expectation:
+            pipeline.first(items)
+
+        pid = int(Path(tmp_path, "blocked.pid").read_text())
+
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+
     def test_defaults(self):
         pipeline = Pipeline.from_module("fetch")
         assert pipeline.settings == DEF_EXECUTION_SETTINGS

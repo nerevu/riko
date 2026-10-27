@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import pickle  # noqa: S403
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import partial
 from itertools import chain, pairwise
-from multiprocessing.pool import ThreadPool
-from threading import Lock, Thread, get_ident
+from threading import Event, Lock, Thread, Timer, get_ident
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 
@@ -230,8 +230,12 @@ def opened(monkeypatch):
     calls: list[tuple[Executor, int]] = []
 
     def record(pool, window):
-        executor = Executor.THREAD if isinstance(pool, ThreadPool) else Executor.PROCESS
-        calls.append((executor, getattr(pool, "_processes")))  # noqa: B009
+        executor = (
+            Executor.THREAD
+            if isinstance(pool, ThreadPoolExecutor)
+            else Executor.PROCESS
+        )
+        calls.append((executor, window))
         return _PoolLifetime(pool, window)
 
     monkeypatch.setattr(_sync_execution, "_PoolLifetime", record)
@@ -376,6 +380,39 @@ class TestSyncConcurrency:
             stream.close()
 
         assert released == ["terminate"]
+
+    @pytest.mark.slow
+    def test_sync_closed_early_releases_resources_after_busy_threads(self) -> None:
+        events: list[str] = []
+        started, gate = Event(), Event()
+
+        def slow(item, resources=None, **_):
+            if item["x"] == 1:
+                started.set()
+                gate.wait(timeout=5)
+                events.append("worker done")
+
+            return iter([item])
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="slow", sync_pipe=mark_loopable(slow))
+        )
+        node = ModuleNode(id="s", name="slow", resources={"slot": "primary"})
+        flow = build_workflow([node], resources=("primary",))
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        cleanup = lambda _: events.append("cleanup")
+        resource = Resource.from_factory(object, cleanup=cleanup)
+        context = Context().with_resource("primary", resource)
+        settings = ExecutionSettings(concurrency=2)
+
+        with SyncExecution(context, settings=settings) as execution:
+            stream = cast("Generator", execution.run(plan, seed=ITEMS))
+            next(stream)
+            assert started.wait(timeout=5)
+            Timer(0.2, gate.set).start()
+            stream.close()
+
+        assert events == ["worker done", "cleanup"]
 
     @pytest.mark.slow
     @pytest.mark.parametrize("ordered", [False, True])
