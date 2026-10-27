@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
 from riko.bado.itertools import as_async
 from riko.base._config import SUBPIPE_TYPE
 from riko.base._guards import is_async_callable
-from riko.definitions._composition import PipelineDefinition
+from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._enums import ExecutionMode
 from riko.types._frozendict import normalize_mapping

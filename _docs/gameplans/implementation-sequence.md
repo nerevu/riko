@@ -623,7 +623,7 @@ R4A.5  deterministic serialization + acceptance
 - **R4A.1 — canonical v2 model.** The closed discriminated node union and edge families (E3.3/E3.4),
   full `{node, port}` endpoints and port grammar, the `nodes`/`edges`/`outputs`/`inputs` envelope
   (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
-  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/{_nodes,_workflow,_composition}.py` (placement supersedes
+  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/{_nodes,_workflow,_pipeline_definition}.py` (placement supersedes
   the original `riko/workflow/` package note — see the clean-break policy below).
 - **R4A.2 — `normalize_workflow()`. Landed** (see `IMPLEMENTED.md`). Authoring sugar → strict
   canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity deferred to
@@ -711,7 +711,7 @@ top-level package/layer; it lives in the existing declarative-contract layer. Pu
 with `Workflow.parse`/`load`/`serialize`, in `riko/definitions/_workflow_definition.py`, over the data-returning
 `_normalize.py`/`_migrate.py`/`_serialize.py` beside it (amended 2026-10-12, superseding the
 2026-10-05 amendment that put `normalize`/`migrate` in `riko/runtime/`); `PipelineDefinition` in
-`riko/definitions/_composition.py`; and the runnable `Pipeline` subclass that adds iteration in
+`riko/definitions/_pipeline_definition.py`; and the runnable `Pipeline` subclass that adds iteration in
 `riko/runtime/_pipeline.py`, so no definition imports upward. No `riko/workflow/` package is added.
 
 **R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `Workflow`

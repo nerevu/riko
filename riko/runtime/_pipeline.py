@@ -30,7 +30,7 @@ from typing_extensions import TypeVar
 
 from riko.base._exceptions import EmptyPipelineError
 from riko.base._sentinels import MISSING, MissingType
-from riko.definitions._composition import PipelineDefinition
+from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.types._streams import Item
 
 from ._resolver import dispatcher

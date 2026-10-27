@@ -43,7 +43,7 @@ Important concrete locations:
 - pub/sub: `riko/runtime/_pubsub/`
 - executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
 - stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
-- pipelines: composition on `PipelineDefinition` in `riko/definitions/_composition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
+- pipelines: composition on `PipelineDefinition` in `riko/definitions/_pipeline_definition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
 - context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource.plan`; owned-value teardown: `riko/execution/_resource_teardown.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`

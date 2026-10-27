@@ -13,7 +13,7 @@ from riko.execution._sync_execution import SyncExecution
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
-    from riko.definitions._composition import PipelineDefinition
+    from riko.definitions._pipeline_definition import PipelineDefinition
     from riko.types._wrappers import Dispatcher
 
 
@@ -42,7 +42,7 @@ def run_pipeline[T](
 
     Examples:
 
-        >>> from riko.definitions._composition import PipelineDefinition
+        >>> from riko.definitions._pipeline_definition import PipelineDefinition
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> definition = PipelineDefinition(source=[{"x": 1}]).count()
@@ -84,7 +84,7 @@ async def arun_pipeline[T](
     Examples:
 
         >>> from riko import run
-        >>> from riko.definitions._composition import PipelineDefinition
+        >>> from riko.definitions._pipeline_definition import PipelineDefinition
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> definition = PipelineDefinition(source=[{"x": 1}]).count()

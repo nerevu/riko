@@ -461,7 +461,7 @@ property, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant literals, `
 `riko/definitions/` — the closed node union
 `ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` and the edge families
 `StreamEdge`/`PublishEdge` in `_nodes.py`, the `Workflow` envelope in `_workflow_definition.py`, and the generic
-`PipelineDefinition[T]` in `_composition.py`, which owns every pipeline field and composition method
+`PipelineDefinition[T]` in `_pipeline_definition.py`, which owns every pipeline field and composition method
 (each returns `Self`). The runnable STABLE `Pipeline` is its
 subclass in `riko/runtime/_pipeline.py`, adding only `__iter__`/`__aiter__`/`first`/`afirst`, so no
 definition imports upward (the architecture lint fails function-local upward imports too).
