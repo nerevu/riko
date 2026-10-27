@@ -164,7 +164,7 @@ def get_response_encoding(
     r: HTTPResponse | addinfourl, def_encoding: str = ENCODING
 ) -> str:
     """
-    Resolves the response's charset.
+    Gets the response's declared charset, or ``def_encoding`` when it declares none.
 
     Args:
 

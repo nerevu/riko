@@ -385,7 +385,7 @@ def resolve_and_cast[T, E](
     **kwargs: object,
 ) -> ItemOrValueDispatch[T, E]:
     """
-    Parses and casts one item's field and conf into a dispatch record.
+    Resolves one item's field and conf and casts them into a dispatch record.
 
     Runs the field/conf parsers over the item, resolves the extract-or-conf via
     ``build_conf``, applies the casters, and wraps the result as an item

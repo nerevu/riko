@@ -42,7 +42,7 @@ def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str
 
 def get_path(name: str) -> str:
     """
-    Builds the ``file://`` URL for a bundled data file name.
+    Gets the ``file://`` URL for a bundled data file name.
 
     A name that is already an ``http`` or ``file:`` URL passes through unchanged.
 

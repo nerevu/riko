@@ -129,7 +129,7 @@ def build_regex_rule(
     rule: DynamicConf | RegexConfRule, recompile: bool = False
 ) -> RegexRule:
     """
-    Normalizes a parsed regex configuration into an executable rule mapping.
+    Builds an executable rule mapping from a parsed regex configuration.
 
     Args:
 

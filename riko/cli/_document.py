@@ -87,7 +87,7 @@ def read_document(path: PathLike) -> tuple[object | None, str]:
 
 def require_workflow(document: object) -> Workflow:
     """
-    Loads parsed input that must already be a workflow document.
+    Requires parsed input to be a workflow document.
 
     Args:
 

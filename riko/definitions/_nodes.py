@@ -171,7 +171,7 @@ _is_version = validator_from_require(_require_version)
 
 
 def require_embed_fields(value: Embed, what: str = "embed") -> Embed:
-    """Validates an Embed's keys."""
+    """Requires an Embed's keys to be well-formed."""
     require_str(value["name"], f"{what} 'name'")
     require_mapping(value["conf"], f"{what} 'conf'")
     optional_str(value.get("id"))

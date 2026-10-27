@@ -34,6 +34,7 @@ internals stay in `_docs/INTERNALS.md`.
 | Path | Role |
 |---|---|
 | `riko/base/_api_surface.py` | **private** declaration of `STABLE`, `EXTENSION`, `TYPES`, and private surface name sets; source for generated blocks in `_docs/API_SURFACE.md` |
+| `riko/base/_verbs.py` | **private** declaration of the general-purpose function-name verbs (`VERBS`) and their mistaken pairs (`VERB_PAIRS`); source for the generated verb tables and the `lint --docstrings` summary-verb check |
 | `riko/base/exceptions.py` | public facade that re-exports every exception and warning from `_exceptions.py`; the documented `riko.base.exceptions` import path |
 | `riko/base/_exceptions.py` | the exception hierarchy rooted at `RikoError` and the warnings rooted at `RikoWarning`; each class's `__module__` names the public `riko.base.exceptions`, so tracebacks and pickles show the public path; internal code imports from here (private `base` modules may not import the public facade); stable root exceptions are re-exported from `riko` |
 | `riko/base/_config.py` | static project policy (layer DAG, port/output tokens, `SINK_NAMES`, `SUBPIPE_TYPE`), `get_worker_cnt` worker-pool sizing, and the frozen `Settings` with `RIKO_*` overrides (`node_threads` from `RIKO_NODE_THREADS`, the `shipped_call_cache_size`/`parsed_date_cache_size` cache bounds among them); also the settings-derived runtime constants (`DEF_CONCURRENCY_LIMIT`, `STREAMING_THRESHOLD`, `ENCODING`) and `FOREVER_ITEM` |
@@ -186,10 +187,11 @@ write/session contracts.
 | `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
 | `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |
 | `riko/cli/_import_commands.py` | selector-based `manage lint imports` command and shared import-check runner |
-| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api`/`--tests` plus `--all` |
+| `riko/cli/_codegen.py` | selector-based `manage codegen`; defaults to config and supports additive `--config`/`--names`/`--api`/`--tests`/`--verbs` plus `--all` |
 | `riko/cli/_gen_config.py` | generates `riko/coercion/_configs.py` from `riko/types/modules.py` |
 | `riko/cli/_gen_names.py` | generates `riko/modules/_names.py` and `riko/types/_module_ids.py` |
 | `riko/cli/_gen_api_surface.py` | regenerates marked name blocks in `_docs/API_SURFACE.md` from `riko/base/_api_surface.py` |
+| `riko/cli/_gen_verbs.py` | `manage codegen --verbs`: regenerates the marked verb tables in `CLAUDE.md` and `CONTRIBUTING.rst` from `riko/base/_verbs.py` |
 | `riko/cli/_gen_tier_index.py` | `manage codegen --tests`: generates each `tests/<tier>/__init__.py` index from its files' `Test<Subject>` classes |
 | `riko/cli/_document.py` | shared JSON document front door for the console scripts: `read_document` and the `WorkflowDocument`-only `require_workflow` (the run-it-through-`build-workflow`-first guard for `run-pipe`/`compile-workflow`); `build-workflow` reads any shape through `Workflow.parse` |
 | `riko/cli/{compile,build_workflow,runpipe,benchmark}.py` | standalone console-script implementations, all on `Workflow` v2: `build-workflow` is the one lenient converter, `compile-workflow` generates from `WorkflowDocument`s only, `run-pipe` runs a pipe script, a `WorkflowModule`, or a `WorkflowDocument`, `benchmark` times `Pipeline` and workflow execution |

@@ -140,7 +140,7 @@ def _env_str(env: Mapping[str, str], key: str, default: str) -> str:
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """
-    Builds ``Settings`` from defaults overlaid with ``RIKO_*`` env vars.
+    Loads ``Settings`` from defaults overlaid with ``RIKO_*`` env vars.
 
     Args:
 

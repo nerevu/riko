@@ -73,7 +73,7 @@ def load_local_tz(
     try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
 ) -> tzinfo:
     """
-    Resolves the host's local timezone or a fallback timezone.
+    Loads the host's local timezone, or a fallback timezone.
 
     Args:
 

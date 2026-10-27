@@ -99,7 +99,7 @@ def require_async_stream[T](
 # TODO: isnt this just listize?
 def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
     """
-    Resolves a synchronous seed to the item stream it denotes.
+    Normalizes a synchronous seed to the item stream it denotes.
 
     A mapping or primitive is one item; any other iterable already is the stream.
     Async and awaitable seeds are resolved by the execution that owns the loop.

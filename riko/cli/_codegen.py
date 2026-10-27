@@ -17,6 +17,8 @@ from ._gen_names import _NAMES as NAMES_PATH
 from ._gen_names import main as gen_names_main
 from ._gen_tier_index import TIERS
 from ._gen_tier_index import main as gen_tier_index_main
+from ._gen_verbs import VERB_DOCS
+from ._gen_verbs import main as gen_verbs_main
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -42,6 +44,11 @@ _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
         lambda: f"regenerated the {', '.join(TIERS)} test indexes",
         "Error regenerating the test indexes!",
     ),
+    "verbs": (
+        gen_verbs_main,
+        lambda: f"regenerated the verb tables in {', '.join(map(str, VERB_DOCS))}",
+        "Error regenerating the verb tables!",
+    ),
 }
 
 
@@ -50,12 +57,14 @@ _CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
 @click.option("--names", help="Regenerate module-name catalogs", is_flag=True)
 @click.option("--api", help="Regenerate the API-surface document", is_flag=True)
 @click.option("--tests", help="Regenerate the test tier indexes", is_flag=True)
+@click.option("--verbs", help="Regenerate the function-name verb tables", is_flag=True)
 @click.option("--all", "all_", help="Run every generator", is_flag=True)
 def _codegen_command(
     config: bool = False,
     names: bool = False,
     api: bool = False,
     tests: bool = False,
+    verbs: bool = False,
     all_: bool = False,
 ) -> None:
     """Regenerate generated project artifacts."""
@@ -69,6 +78,7 @@ def _codegen_command(
                 ("names", names),
                 ("api", api),
                 ("tests", tests),
+                ("verbs", verbs),
             )
             if enabled
         )

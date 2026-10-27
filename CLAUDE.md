@@ -247,16 +247,37 @@ new permanent bullet here.
   and `is`/`has` for predicates (an attrs `validator=` callable keeps the predicate
   name it checks, `_is_single`/`_has_pipe`: attrs owns the raise).
 
-| Verb | Meaning | Raising | Idempotency | Context / lookup | Hard rule |
-|---|---|---|---|---|---|
-| **`get`** | Query or compute a value from explicit semantic inputs | **MAY raise** for invalid input | No requirement | **MUST NOT** acquire external/ambient state | Returns information; does not canonicalize or construct a substantial artifact |
-| **`parse`** | Representation/grammar → semantic structure | Malformed input **MUST raise** | No requirement | **MUST NOT** use resolution context | Input is a representation *of* the output |
-| **`normalize`** | Accepted form → canonical equivalent form | Invalid form **MUST raise** | **MUST** be idempotent | **MUST NOT** use resolution context | Canonical output must itself be an accepted form |
-| **`resolve`** | Determine an effective value/object using reference, context, fallback, or precedence | **MUST NOT use "no match" as an error when absence/fallback is part of the contract**; invalid input may raise | No requirement | **MUST** involve reference/context/fallback/precedence | Chooses what applies rather than canonicalizing the input |
-| **`require`** | Enforce that a required value/object/precondition exists and return it in usable form | Requirement failure **MUST raise** | No general requirement | **MAY** use lookup/context, but need not | **MUST NOT silently default, repair, or substitute** for a missing required value |
-| **`load`** | Acquire through external/ambient/provider boundary | Acquisition failure normally surfaces | No requirement | **MUST** cross an acquisition boundary | Obtains data/state from somewhere outside the supplied semantic value |
-| **`validate`** | Check a contract | Invalid value **MUST raise** | Observationally idempotent | May inspect explicit supporting information | **MUST NOT transform or return a replacement value** |
-| **`build`** | Assemble a new semantic artifact | Construction failure may raise | No requirement | Dependencies should be explicit | Creates a new artifact from semantic components |
+Rows are in decision order: take the first verb whose rule fits, and start the
+docstring summary with its word (`manage lint --docstrings` enforces the match). The
+tables are generated from `riko/base/_verbs.py` (`manage codegen --verbs`).
+
+<!-- verbs -->
+| Verb | Summary starts with | Meaning | Raises | Returns | Rule | Example |
+| --- | --- | --- | --- | --- | --- | --- |
+| `load` | Loads | Acquire through an external, ambient, or provider boundary | Acquisition failure normally surfaces | The acquired data or state | **MUST** cross an acquisition boundary | `load_settings` |
+| `validate` | Validates | Check a contract | **MUST** raise for an invalid value | `None` | **MUST NOT** transform or return a replacement value; observationally idempotent | `Workflow.validate` |
+| `require` | Requires | Enforce that a required value, object, or precondition exists | **MUST** raise when the requirement fails | The value, narrowed to a usable form; `None` for a precondition | **MUST NOT** silently default, repair, or substitute; **MAY** use lookup or context | `require_str` |
+| `resolve` | Resolves | Determine the effective value from a reference, context, fallback, or precedence | **MUST NOT** treat a missing match as an error when a fallback is part of the contract; **MAY** raise for invalid input | The effective value, possibly a fallback | **MUST** involve reference, context, fallback, or precedence; chooses what applies rather than canonicalizing the input | `resolve_format` |
+| `parse` | Parses | Turn a representation or grammar into semantic structure | **MUST** raise for malformed input | A semantic structure of a different type than the input | **MUST NOT** use resolution context; the input is a representation *of* the output | `Workflow.parse` |
+| `normalize` | Normalizes | Rewrite an accepted form as its canonical equivalent | **MUST** raise for an invalid form | The canonical form, itself an accepted form | **MUST** be idempotent; **MUST NOT** use resolution context | `normalize_url` |
+| `build` | Builds | Assemble a new semantic artifact | **MAY** raise when construction fails | A new composite artifact | Creates a new artifact from semantic components; dependencies should be explicit | `build_conf` |
+| `get` | Gets | Query or compute a value from explicit semantic inputs | **MAY** raise for invalid input | Information about the inputs | **MUST NOT** acquire external or ambient state; does not canonicalize or construct a substantial artifact | `get_document_shape` |
+<!-- /verbs -->
+
+<!-- verb-pairs -->
+| Mistaken pair | Test |
+| --- | --- |
+| `get` / `load` | Does it read external or ambient state? Then `load`. |
+| `validate` / `require` | Does it return the checked value, or guard a precondition before an action? Then `require`; `validate` checks a contract and returns `None`. |
+| `require` / `resolve` | Does absence get a fallback? Then `resolve`; `require` raises instead. |
+| `resolve` / `normalize` | Does the contract fix the default (`normalize`), or does the caller supply it (`resolve`)? |
+| `parse` / `normalize` | Is the output a different type than the input? Then `parse`. |
+| `build` / `get` | Is the result a substantial new artifact? Then `build`. |
+<!-- /verb-pairs -->
+
+A function doing two of these is named for the guarantee callers rely on; its summary
+may describe the inner step (`require_from_keys` builds a guard that requires). The
+lint's `COMPOUND_FUNCTIONS` allowlist records those exceptions.
 
 Defaults split `normalize` from `resolve`: filling an omitted field with the default its
 contract fixes (an embed without `conf` means `conf: {}`) rewrites a shorthand, so it is a
@@ -280,12 +301,13 @@ is a fallback, so it is a `resolve`.
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--api`, `--tests` are additive; `--all` runs all generators.
+  `--names`, `--api`, `--tests`, `--verbs` are additive; `--all` runs all generators.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
   `riko/modules/_names.py`, `riko/types/_module_ids.py`, the marked name blocks in
-  `_docs/API_SURFACE.md`, and the tier indexes in `tests/<tier>/__init__.py` all have
-  canonical sources and drift guards. The `workflows`/`pyworkflows` fixture trees are
-  not generated; they are `WorkflowDocument`s plus hand-maintained typed probes.
+  `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md` and `CONTRIBUTING.rst`, and
+  the tier indexes in `tests/<tier>/__init__.py` all have canonical sources and drift
+  guards. The `workflows`/`pyworkflows` fixture trees are not generated; they are
+  `WorkflowDocument`s plus hand-maintained typed probes.
   Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
   runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
