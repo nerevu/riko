@@ -40,7 +40,7 @@ number of times each word appears.
 
 .. code-block:: python
 
-    >>> from riko import get_path, Pipeline, Sources
+    >>> from riko import get_path, Pipeline
     >>>
     >>> ### Set the module configurations ###
     >>> #
@@ -51,17 +51,24 @@ number of times each word appears.
     >>> #   4. split text in words using whitespace as the delimiter
     >>> #   5. count the number of times each word appears
     >>>
-    >>> url = get_path('users.jyu.fi.html')                   # 1
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
-    >>> replace_conf = {
-    ...     'rule': [{'find': '\r\n', 'replace': ' '}, {'find': '\n', 'replace': ' '}]
+    >>> url = get_path('users.jyu.fi.html')                                # 1
+    >>> fetch_conf = {
+    ...     'url': url,
+    ...     'start': '<body>',
+    ...     'end': '</body>',
+    ...     'detag': True,
     ... }
+    >>> replace_rule = [
+    ...     {'find': '\r\n', 'replace': ' '},
+    ...     {'find': '\n', 'replace': ' '},
+    ... ]
+    >>> replace_conf = {'rule': replace_rule}
     >>>
     >>> pipeline = (
-    ...     Pipeline.from_module(Sources.FETCHPAGE, conf=fetch_conf)          # 2
-    ...     .strreplace(conf=replace_conf, options={'assign': 'content'})     # 3
-    ...     .tokenizer(conf={'delimiter': ' '}, options={'emit': True})       # 4
-    ...     .count(conf={'count_key': 'content'})                             # 5
+    ...     Pipeline.from_module('fetchpage', conf=fetch_conf)             # 2
+    ...     .strreplace(conf=replace_conf, options={'assign': 'content'})  # 3
+    ...     .tokenizer(conf={'delimiter': ' '}, options={'emit': True})    # 4
+    ...     .count(conf={'count_key': 'content'})                          # 5
     ... )
     >>>
     >>> with pipeline.open() as stream:
@@ -189,6 +196,8 @@ Here's the ``riko`` vocabulary at a glance:
 +---------------------+---------------------------------------+----------------------------------------------------+
 | ``stream``          | an iterator of ``item``               | ``iter([{'title': 'Example'}])``                   |
 +---------------------+---------------------------------------+----------------------------------------------------+
+| ``items``           | an iterable of ``item``               | ``[{'title': 'Example'}]``                         |
++---------------------+---------------------------------------+----------------------------------------------------+
 | ``module``          | a named, reusable stream operation    | ``join``, ``slugify``, ``uniq``                    |
 +---------------------+---------------------------------------+----------------------------------------------------+
 | ``operator``        | a module that consumes a ``stream``   | ``count``, ``filter``, ``reverse``                 |
@@ -218,6 +227,10 @@ create a ``stream`` manually with something as simple as
 ``riko`` via ``modules``. A ``module`` is a named, reusable operation that accepts
 a ``seed`` (e.g., ``{'content': 'hello world'}``), and returns a ``stream``.
 
+``riko`` ``modules`` come in three types: ``processor``, ``operator``, and ``splitter``.
+An ``operator`` operates on a ``stream``, not on individual items. E.g., ``count``,
+``filter``, and ``reverse``. Use ``Pipeline.from_module`` to create a ``pipeline`` from
+any ``module``. Configure a module via ``conf``, e.g., ``from_module(name, conf=...)``.
 
 ``riko`` has a typed discovery tree (``Sources``/``Transforms``/``Sinks``) that holds the
 names of all built-in modules. These enums let your editor autocomplete module names and
@@ -345,20 +358,22 @@ If you are unsure of a ``module``'s module type, check its metadata.
 Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
 ``Pipeline`` performs this check for you to allow for convenient method chaining: any
-module name is available as a method that appends a ``node`` for that ``module``.
+module name is available as a method that appends a ``node`` for that ``module``. E.g.,
+``.reverse()`` appends a ``reverse`` ``node``, takes its configuration as ``conf=...``,
+and takes its call options as ``options=...``.
+
+The chained ``pipeline`` is composable: the output stream of each ``node`` becomes the
+input stream of the next.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Sources
     >>>
-    >>> attrs = [
-    ...     {'key': 'title', 'value': 'riko pt. 1'},
-    ...     {'key': 'content', 'value': "Let's talk about riko!"}
-    ... ]
-    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs}).hash()
-    >>> item = pipeline.first()
-    >>> item['title'], item['content'], item['hash']
-    ('riko pt. 1', "Let's talk about riko!", 197222720)
+    >>> attrs = {'key': 'content', 'value': "Let's talk about riko!"}
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
+    >>> item = pipeline.hash().first()
+    >>> item['content'], item['hash']
+    ("Let's talk about riko!", 197222720)
 
 To chain a ``module`` name held in a variable, a discovery enum such as
 ``Transforms.REVERSE``, or a dotted extension name such as ``example.shout``, use the

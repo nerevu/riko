@@ -30,7 +30,7 @@ New
   ``Context`` rejects. ``resource.plan`` describes how riko acquires a resource.
 
 - Added the ``Workflow`` graph (``Node``, ``Edge``, ``Endpoint``) that a ``Pipeline``
-  runs. ``Workflow.parse`` reads a workflow document (``riko.WorkflowDocument``, its
+  runs. ``Workflow.parse`` reads a workflow document (``riko.WorkflowDocument``: its
   JSON form), a bare-bones DAG (``riko.types.PipeDag``), or a pipe definition
   (``riko.types.PipeDef``). ``Workflow.load`` reads any ``riko.DocumentShape`` from a
   file, and ``flow.serialize`` writes a ``WorkflowDocument``. ``flow.with_node(node)``
@@ -227,7 +227,7 @@ Removed
 
 - Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
   ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
-  ``export(pipeline, …)`` replaces ``.export``, and multi-source fetching is a
+  ``export(pipeline, …)`` replaces ``.export``, and multi-source fetching is now a
   ``union`` fan-in in a ``Workflow``. ``udf(func=…)`` through a pipeline is
   ``pipeline.map(func)``, and ``pipeline.pipe(name, conf=conf)`` replaces ``pipe | (name,
   conf)``. ``subscribe``/``publish`` and ``split`` have no replacement.
