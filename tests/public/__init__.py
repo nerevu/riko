@@ -8,7 +8,7 @@ Index (file, then the subjects it owns, in file order):
                         ImportSurface
     test_pipeline.py    PipelineConstruction, PipelineChaining, ModuleNameEnum,
                         PipelineIteration, OutputParity, Reiteration, Close, Failure,
-                        AsyncSourceAdapter, Alist, FanIn, WithExecution,
+                        AsyncSourceAdapter, Alist, AsyncMap, FanIn, WithExecution,
                         ExecutionSettings, AsyncBoundedParallel, AsyncFanInParallel,
                         ContextMode, ContextImmutability, EnvironmentBinding,
                         Subscriptions, Split, CallableNodes, ConditionalNodes,

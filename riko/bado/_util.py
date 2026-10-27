@@ -30,7 +30,47 @@ from ._backend import AsyncClient, Path, create_task_group
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 
+    from anyio.abc import TaskGroup
+
     from ._backend import HTTPXResponse
+
+
+@asynccontextmanager
+async def open_task_group() -> AsyncGenerator[TaskGroup, None]:
+    """
+    Opens a task group that raises a lone failure as itself.
+
+    Several failures still arrive together as an ``ExceptionGroup``.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def fail():
+        ...     raise ValueError("bad")
+        >>>
+        >>> async def main():
+        ...     async with open_task_group() as tg:
+        ...         tg.start_soon(fail)
+        >>>
+        >>> run(main)
+        Traceback (most recent call last):
+        ValueError: bad
+
+    """
+    error: BaseException | None = None
+
+    try:
+        async with create_task_group() as tg:
+            yield tg
+    except BaseExceptionGroup as group:
+        if len(group.exceptions) != 1:
+            raise
+
+        error = group.exceptions[0]
+
+    if error is not None:
+        raise error
 
 
 async def async_get(url: str, **kwargs: Any) -> HTTPXResponse:
@@ -87,7 +127,7 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     async def collect(index: int, awaitable: Awaitable[T]) -> None:
         results[index] = await awaitable
 
-    async with create_task_group() as tg:
+    async with open_task_group() as tg:
         for index, awaitable in enumerate(aws):
             tg.start_soon(collect, index, awaitable)
 

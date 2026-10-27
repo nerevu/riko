@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, assert_type, cast, get_args, ge
 import pytest
 
 from riko.bado._backend import async_sleep, checkpoint, fail_after
-from riko.bado.itertools import alist, async_iter
+from riko.bado.itertools import alist, async_iter, async_map
 from riko.base._exceptions import (
     EmptyPipelineError,
     InvalidPipelineError,
@@ -833,6 +833,32 @@ class TestFailure:
         assert len(list(pipeline)) == 3
 
 
+def _fail_item(item):
+    raise ValueError("bad item")
+
+
+async def _afail_item(item):
+    raise ValueError("bad item")
+
+
+FAILING_MAPS = [
+    pytest.param(_fail_item, None, id="sync"),
+    pytest.param(_afail_item, None, id="async"),
+    pytest.param(_fail_item, 2, id="sync-concurrent"),
+    pytest.param(_afail_item, 2, id="async-concurrent"),
+]
+
+
+class TestAsyncFailure:
+    @pytest.mark.parametrize(("func", "concurrency"), FAILING_MAPS)
+    @async_test
+    async def test_a_failing_node_raises_its_own_error(self, func, concurrency):
+        pipeline = Pipeline().map(func).with_execution(concurrency=concurrency)
+
+        with pytest.raises(ValueError, match="bad item"):
+            await alist(pipeline(SRC))
+
+
 async def _coro_source():
     return list(LIFECYCLE_SRC)
 
@@ -878,6 +904,24 @@ class TestAlist:
     @async_test
     async def test_collects_a_sync_source(self):
         assert await alist([1, 2]) == [1, 2]
+
+
+async def _fail(value):
+    raise ValueError(f"bad {value}")
+
+
+class TestAsyncMap:
+    @async_test
+    async def test_a_lone_failure_raises_as_itself(self):
+        with pytest.raises(ValueError, match="bad 1"):
+            await async_map(_fail, [1])
+
+    @async_test
+    async def test_several_failures_raise_together(self):
+        with pytest.raises(ExceptionGroup) as caught:
+            await async_map(_fail, [1, 2])
+
+        assert len(caught.value.exceptions) == 2
 
 
 class TestFanIn:

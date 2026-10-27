@@ -39,9 +39,8 @@ from ._backend import (
     async_sleep,
     checkpoint,
     create_memory_object_stream,
-    create_task_group,
 )
-from ._util import maybe_aclosing, maybe_async
+from ._util import maybe_aclosing, maybe_async, open_task_group
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -340,7 +339,7 @@ async def async_map[T, S](
             async with limiter:
                 results[index] = await _func(item)
 
-    async with create_task_group() as tg:
+    async with open_task_group() as tg:
         for index, item in enumerate(items):
             tg.start_soon(work, index, item)
 
@@ -400,31 +399,22 @@ async def _pool_stream[T, S](
             async for item in items:
                 await drain(item, results)
 
-    try:
-        async with create_task_group() as tg:
-            tg.start_soon(feed)
+    async with open_task_group() as tg:
+        tg.start_soon(feed)
 
-            for _ in range(limit):
-                tg.start_soon(worker, result_send.clone(), item_recv.clone())
+        for _ in range(limit):
+            tg.start_soon(worker, result_send.clone(), item_recv.clone())
 
-            result_send.close()
-            item_recv.close()
+        result_send.close()
+        item_recv.close()
 
-            async with result_recv:
-                try:
-                    async for result in result_recv:
-                        yield result
-                except GeneratorExit:
-                    tg.cancel_scope.cancel()
-                    raise
-    except BaseExceptionGroup as group:
-        single = len(group.exceptions) == 1
-        closed = single and isinstance(group.exceptions[0], GeneratorExit)
-
-        if not closed:
-            raise
-
-        raise GeneratorExit from None
+        async with result_recv:
+            try:
+                async for result in result_recv:
+                    yield result
+            except GeneratorExit:
+                tg.cancel_scope.cancel()
+                raise
 
 
 async def async_map_stream[T, S](
