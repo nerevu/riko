@@ -745,7 +745,7 @@ def write_through(
 
     Args:
 
-        source: The upstream stream to write and pass through.
+        source: The input stream to write and pass through.
 
         prepared: A validated write that has been checked against its target's
             capabilities.
@@ -789,7 +789,7 @@ async def awrite_through(
 
     Args:
 
-        source: The upstream stream to write and pass through.
+        source: The input stream to write and pass through.
 
         prepared: A validated write that has been checked against its target's
             capabilities.

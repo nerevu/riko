@@ -180,8 +180,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         Args:
 
-            func: An async callable to invoke on the portal loop, or an awaitable
-                to await directly.
+            func: An async callable to invoke on the portal loop, or an awaitable to
+                await directly.
+
             args: Positional arguments forwarded to a callable ``func``.
 
         Returns:

@@ -17,9 +17,10 @@ from collections.abc import (
     Iterable,
     Iterator,
     Mapping,
+    Sequence,
 )
 from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any, Never, cast, overload
+from typing import TYPE_CHECKING, Any, Never, overload
 
 from attrs import Factory, define, field
 
@@ -49,7 +50,7 @@ type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
 type ExtraObjects[T] = ResourceView | ModuleWrapper
 type ExtraStreams[T] = (
-    AsyncIterable[T] | list[AsyncIterable[T]] | Iterator[T] | Iterable[Iterator[T]]
+    AsyncIterable[T] | Iterator[T] | Sequence[Iterator[T] | AsyncIterable[T]]
 )
 type ExtraValues[T] = ExtraObjects[T] | ExtraStreams[T]
 type ExtraInput[T] = Mapping[str, ExtraValues[T]]
@@ -236,20 +237,25 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         seed: I | None,
         *,
         as_stream: Callable[[I | Iterable[Any]], V],
-    ) -> tuple[V, ExtraOutput]:
+    ) -> tuple[V, ExtraOutput[object]]:
         """
-        Wires a node's upstream streams onto its input ports.
+        Wires the output streams of a node's upstream nodes onto its input ports.
 
-        The default input port takes its upstream stream, or else the seed. Positional
-        ``in:<n>`` ports arrive in order as ``others`` and named ``in:<name>`` ports
-        under their own name. When the default input port gets neither, the primary
-        input stream is empty if positional ports are wired and holds the default seed
-        items otherwise.
+        Each incoming edge carries its upstream node's output stream to one of this
+        node's input ports. The edge into the default input port supplies the primary
+        input stream. ``seed`` supplies it only when no edge targets that port. Edges
+        into positional ``in:<n>`` ports become ``others``, ordered by ``n``. Edges into
+        named ``in:<name>`` ports are passed under their own name.
+
+        When no edge targets the default input port and no seed is given, the primary
+        input stream is empty if any positional ports are wired. This is because the
+        node then reads only ``others``. Otherwise, the primary input stream holds the
+        default seed: one item that lets a self-starting node run once.
 
         Args:
 
             incoming: The stream edges that target the node.
-            steps: The streams already built for upstream nodes.
+            steps: The output stream of each upstream node, keyed by node id.
             seed: The items fed to the node's open input, if any.
             as_stream: Turns the seed into the execution's stream kind.
 
@@ -258,31 +264,30 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             The node's primary input stream and its secondary input streams.
 
         """
-        source: V | None = None if seed is None else as_stream(seed)
+        primary: V | None = None if seed is None else as_stream(seed)
         indexed: list[tuple[int, V]] = []
-        extra: ExtraOutput = {}
+        extra: ExtraOutput[object] = {}
 
         for edge in incoming:
             require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
-            port = parse_port(edge.target_port)
-            upstream = steps[edge.source]
+            input_port = parse_port(edge.target_port)
+            output_stream = steps[edge.source]
 
-            if port.is_default:
-                source = upstream
-            elif port.index is not None:
-                indexed.append((port.index, upstream))
-            elif port.name is not None:
-                extra[port.name] = upstream
+            if input_port.is_default:
+                primary = output_stream
+            elif input_port.index is not None:
+                indexed.append((input_port.index, output_stream))
+            elif input_port.name is not None:
+                extra[input_port.name] = output_stream
 
         if indexed:
             ordered = sorted(indexed, key=lambda item: item[0])
-            extra["others"] = cast("ExtraStreams", [stream for _, stream in ordered])
+            extra["others"] = [stream for _, stream in ordered]
 
-        if source is None:
-            seed_items: Iterable[Any] = () if indexed else DEFAULT_SEED
-            source = as_stream(seed_items)
+        if primary is None:
+            primary = as_stream(() if indexed else DEFAULT_SEED)
 
-        return source, extra
+        return primary, extra
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool

@@ -336,8 +336,8 @@ class Workflow:
             and not index.cyclic
             and len(index.order) == len(self.nodes)
             and len(index.roots) == 1
-            and all(len(upstream.get(node, ())) <= 1 for node in self.nodes)
-            and all(len(downstream.get(node, ())) <= 1 for node in self.nodes)
+            and all(len(upstream.get(node_id, ())) <= 1 for node_id in self.nodes)
+            and all(len(downstream.get(node_id, ())) <= 1 for node_id in self.nodes)
         )
 
     @property
@@ -364,7 +364,8 @@ class Workflow:
         return Counter((edge.source.node, edge.source.port) for edge in edges)
 
     def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
-        return Counter(edge.port for edge in get_family_edges(self.edges, family))
+        edges = get_family_edges(self.edges, family)
+        return Counter((edge.target.node, edge.target.port) for edge in edges)
 
     def _gen_edge_target_mismatches(self) -> Iterator[str]:
         """Detects a publish/subscribe mismatch between an edge and its target node."""

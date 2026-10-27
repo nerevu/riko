@@ -406,8 +406,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Raises:
 
             InvalidPipelineError: If ``demand`` exceeds the event loop's node-thread
-                budget, or what this execution's open output streams leave of it, so
-                the run could never get all its threads.
+                budget, or what this execution's open output streams leave free.
 
         """
         budget = _resolve_thread_budget()
@@ -789,7 +788,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         stays owned.
 
         A module without an async implementation runs on a thread it holds while it
-        reads its upstream stream. Every run on one event loop draws those threads from
+        reads its input stream. Every run on one event loop draws those threads from
         one shared budget (``RIKO_NODE_THREADS``), and a run takes all the threads it
         may need before reading anything. It waits while other executions hold them,
         and raises when this execution's own open output streams leave too few.

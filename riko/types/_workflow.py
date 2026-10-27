@@ -132,7 +132,15 @@ class RawWorkflow(TypedDict, total=False):
 
 @define(frozen=True, slots=True)
 class Endpoint:
-    """A reference to one port on one node that edges and outputs point through."""
+    """
+    A reference to one port on one node that edges and outputs point through.
+
+    Attributes:
+
+        node: The id of the node, named like the serialized endpoint's ``node`` key.
+        port: The port on that node (e.g. ``out``/``in``/``in:1``).
+
+    """
 
     node: NodeId = field(validator=validator_from_require(require_nonblank_str))
     port: Port = field(validator=validator_from_require(require_str))
@@ -146,7 +154,7 @@ _is_endpoint = validator_from_require(require_instance, Endpoint)
 
 @define(frozen=True, slots=True)
 class Edge:
-    """A stream edge delivering items from a source port to a target port."""
+    """A directed edge from a source port to a target port; its family says how."""
 
     family: ClassVar[EdgeFamily]
     source: Endpoint = field(validator=_is_endpoint)
@@ -154,10 +162,6 @@ class Edge:
 
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.source}, {self.target})"
-
-    @property
-    def port(self) -> tuple[str, str]:
-        return self.target.node, self.target.port
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,7 +227,7 @@ def parse_port(port: Port) -> ParsedPort:
 @dataclass(frozen=True, slots=True)
 class GraphEdge:
     """
-    One directed stream edge between two workflow node ports.
+    One directed edge between two workflow node ports.
 
     Ports keep their workflow spelling: ``out`` on the source, and on the target either
     the default ``in``, a positional ``in:1``/``in:2`` input port, or a named input port
@@ -265,7 +269,7 @@ class GraphIndex:
 
     Attributes:
 
-        nodes: Every node id, in declaration order.
+        node_ids: Every node id, in declaration order.
         edges: Every edge, in listing order.
         outputs: The workflow outputs, keyed by name.
         incoming: Edges entering each node, keyed by target id.
@@ -290,7 +294,7 @@ class GraphIndex:
 
     """
 
-    nodes: tuple[str, ...] = field(converter=tuple)
+    node_ids: tuple[NodeId, ...] = field(converter=tuple)
     edges: tuple[GraphEdge, ...] = field(converter=tuple)
     outputs: FrozenDict[str, Endpoint] = field(converter=FrozenDict)
 
@@ -313,7 +317,7 @@ class GraphIndex:
     @cached_property
     def downstream(self) -> FrozenSetMapping:
         pairs = ((edge.source, edge.target) for edge in self.edges)
-        return freeze(edges_to_graph(pairs, *self.nodes))
+        return freeze(edges_to_graph(pairs, *self.node_ids))
 
     @cached_property
     def upstream(self) -> FrozenSetMapping:
@@ -333,7 +337,7 @@ class GraphIndex:
 
     @cached_property
     def roots(self) -> tuple[str, ...]:
-        return tuple(node for node in self.order if not self.upstream[node])
+        return tuple(node_id for node_id in self.order if not self.upstream[node_id])
 
     @cached_property
     def leaves(self) -> tuple[str, ...]:
@@ -344,10 +348,8 @@ class GraphIndex:
         reach = partial(descendants, graph=self.upstream)
         items = self.outputs.items()
         members = {name: reach(ref.node) | {ref.node} for name, ref in items}
-        ordered = {
-            name: tuple(node for node in self.order if node in subgraph)
-            for name, subgraph in members.items()
-        }
+        get_ids = lambda value: tuple(_id for _id in self.order if _id in value)
+        ordered = map_values(get_ids, members)
         return FrozenDict(ordered)
 
     def is_open(self, node_id: str) -> bool:

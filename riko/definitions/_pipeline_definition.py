@@ -301,10 +301,9 @@ class PipelineDefinition(Generic[T]):
         """
         Appends a write to ``dest``, or chains the ``write`` module without one.
 
-        Given a destination, the new pipeline declares where its items go, how
-        they are serialized, and how they reconcile with what is already there.
-        Given no destination, the call chains the shipped ``write`` module with
-        the module arguments instead, so attribute chaining keeps working.
+        Given a destination, the new pipeline declares where its items go, how they are
+        serialized, and how they reconcile with what is already there. Without a
+        destination, it chains the ``write`` module with module arguments instead.
         Supplying both a destination and module arguments is a call-site error.
 
         Args:
@@ -313,15 +312,10 @@ class PipelineDefinition(Generic[T]):
                 ``write`` module.
 
             mode: How the items reconcile with the destination's contents.
-
             fmt: The serialization format, or ``None`` to derive one.
-
             keys: The match keys a keyed destination needs.
-
             conf: The ``write`` module's configuration, if any.
-
             options: The call options forwarded to the ``write`` module, if any.
-
             embed: The module a loop runs per item, with its configuration, if any.
 
         Returns:
