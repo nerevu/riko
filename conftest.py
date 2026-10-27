@@ -2,6 +2,7 @@
 
 import doctest
 import importlib.util
+import os
 import re
 from logging import getLogger
 
@@ -9,7 +10,7 @@ import pytest
 
 from riko.bado._backend import issync
 from riko.base._logging import LOGGER_NAME
-from riko.base._paths import TESTS_DIR
+from riko.base._paths import ROOT_DIR, TESTS_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._workflow_resolver import (
@@ -21,6 +22,13 @@ pytest_plugins = ["pytester", "tests._timeouts"]
 
 WORKFLOW_DIR = TESTS_DIR / "workflows"
 RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)
+
+
+def pytest_configure(config):
+    # Subprocesses (console scripts, examples) would otherwise import riko through the
+    # venv's editable install, which points at whichever checkout installed it.
+    paths = [str(ROOT_DIR), os.environ.get("PYTHONPATH")]
+    os.environ["PYTHONPATH"] = os.pathsep.join(path for path in paths if path)
 
 
 @pytest.fixture(autouse=True)

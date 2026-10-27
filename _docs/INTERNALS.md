@@ -209,7 +209,10 @@ sync when source is moved between package groups.
   (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.
   Coverage runs on the `sysmon` core (Python 3.12 `sys.monitoring`; about the cost of a
   no-coverage run) and measures the console scripts
-  through `patch = ["subprocess"]`. Dev-only `manage` modules are listed in
+  through `patch = ["subprocess"]`. The root `conftest.py` puts the checkout first on
+  `PYTHONPATH`, so those subprocesses run the checkout under test (a git worktree included)
+  rather than whatever checkout the venv's editable install points at
+  (`TestSubprocessImports` in `tests/internal/test_cli.py`). Dev-only `manage` modules are listed in
   `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
   ceiling is specific to the full dev environment on Python 3.12; other environments run
   `--no-cov`.

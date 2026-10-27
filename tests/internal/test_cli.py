@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
+import sys
 import tomllib
 from datetime import date, timedelta
 from importlib import import_module
@@ -1566,22 +1568,29 @@ def test_fails():
 
 
 class TestTimeouts:
-    def test_a_timeout_fails_an_xfail_test(
-        self, pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_timeout_fails_an_xfail_test(self, pytester: pytest.Pytester) -> None:
         """
         An xfail test that ends by its timeout is reported as failed.
 
         Runs in a subprocess so the signal never fires under this process's
         coverage tracer.
         """
-        monkeypatch.setenv("PYTHONPATH", str(ROOT_DIR))
         pytester.makepyfile(_TIMEOUT_SUITE)
         result = pytester.runpytest_subprocess(
             "-p", "tests._timeouts", "-p", "no:cacheprovider", "-o", "addopts="
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
+
+
+class TestSubprocessImports:
+    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
+        # A script outside the checkout resolves riko the way a console script does.
+        probe = tmp_path / "probe.py"
+        probe.write_text("import riko\nprint(riko.__file__)\n")
+        args = [sys.executable, str(probe)]
+        done = subprocess.run(args, capture_output=True, check=True, text=True)
+        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
 LOG_LEVELS = [
