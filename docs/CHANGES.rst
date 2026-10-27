@@ -98,7 +98,9 @@ Changes
 ~~~~~~~
 
 - ``Context`` is now a fully immutable snapshot, including nested ``inputs`` values.
-  Derive a changed context with ``replace`` instead of direct assignment.
+  Derive a changed context with ``replace`` instead of direct assignment. A frozen
+  mapping, such as ``Context(inputs=…).inputs``, is hashable when its values are, and
+  merges with ``|`` into a new frozen mapping.
 
 - The fetch modules (``fetch``/``fetchdata``/``fetchpage``/``fetchtable``/``fetchtext``/
   ``fetchsitefeed``) now raise when a URL can't be opened, e.g., a ``URLError`` for a

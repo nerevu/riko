@@ -102,7 +102,8 @@ class FrozenDict[K, V](Mapping[K, V]):
 
     It copies its source, a mapping or key/value pairs, and freezes the values as
     ``freeze`` does, so it never changes once built. It compares equal to any
-    mapping with the same items.
+    mapping with the same items, hashes when its values do, and merges with ``|``
+    into a new ``FrozenDict``.
 
     Examples:
 
@@ -111,6 +112,10 @@ class FrozenDict[K, V](Mapping[K, V]):
         (1, FrozenDict({'b': 2}))
         >>> frozen == {"a": (1, {"b": 2})}
         True
+        >>> hash(frozen) == hash(FrozenDict({"a": (1, {"b": 2})}))
+        True
+        >>> frozen | {"c": 3}
+        FrozenDict({'a': (1, FrozenDict({'b': 2})), 'c': 3})
 
     """
 
@@ -131,6 +136,21 @@ class FrozenDict[K, V](Mapping[K, V]):
 
     def __repr__(self) -> str:
         return f"FrozenDict({dict(self._data)!r})"
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self._data.items()))
+
+    def __or__(self, other: object) -> FrozenDict[K, V]:
+        merged = (
+            FrozenDict({**self._data, **other}) if isinstance(other, Mapping) else None
+        )
+        return NotImplemented if merged is None else merged
+
+    def __ror__(self, other: object) -> FrozenDict[K, V]:
+        merged = (
+            FrozenDict({**other, **self._data}) if isinstance(other, Mapping) else None
+        )
+        return NotImplemented if merged is None else merged
 
     @classmethod
     def from_frozen(cls, data: Mapping[K, V]) -> FrozenDict[K, V]:
