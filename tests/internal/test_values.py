@@ -40,7 +40,6 @@ from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
     IdentityDomain,
-    ReprCacheWrapper,
     canonical_bytes,
     canonicalize,
     digest,
@@ -267,7 +266,7 @@ class _Opaque:
     pass
 
 
-def _counting_cache() -> tuple[list[object], ReprCacheWrapper[int]]:
+def _counting_cache() -> tuple[list[object], repr_cache[int]]:
     calls: list[object] = []
 
     @repr_cache

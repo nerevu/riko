@@ -10,13 +10,13 @@ from dataclasses import fields, is_dataclass
 from datetime import UTC, date, datetime
 from decimal import Context, Decimal, localcontext
 from enum import Enum, StrEnum
-from functools import partial, wraps
+from functools import partial, update_wrapper
 from hashlib import blake2b
 from itertools import chain
 from math import isinf, isnan
 from pathlib import PurePath, PureWindowsPath
 from time import struct_time
-from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple
 from uuid import UUID
 
 import attrs
@@ -32,12 +32,9 @@ if TYPE_CHECKING:
     from attrs import AttrsInstance
 
 type CanonicalValue = str | bool | list[CanonicalValue] | None
-type Canonicalizer = Callable[[object, set[int]], CanonicalValue]
+type Canonicalizer[V] = Callable[[V, set[int]], CanonicalValue]
 
 IDENTITY_FORMAT_VERSION = 1
-
-T_co = TypeVar("T_co", covariant=True)
-VT = TypeVar("VT")
 
 
 class IdentityDomain(StrEnum):
@@ -54,12 +51,6 @@ class CacheInfo(NamedTuple):
     misses: int
     maxsize: int | None
     currsize: int
-
-
-class ReprCacheWrapper(Protocol[T_co]):
-    def __call__(self, *args: VT, **kwargs: VT) -> T_co: ...
-    def cache_clear(self) -> None: ...
-    def cache_info(self) -> CacheInfo: ...
 
 
 def _type_id(cls: type) -> str:
@@ -135,20 +126,18 @@ def _sort_key(canon: CanonicalValue) -> bytes:
     return canonical_json(canon)
 
 
-def _canon_seq(tag: str, values: object, seen: set[int]) -> CanonicalValue:
-    canon = [_canon(v, seen) for v in cast("tuple[object, ...]", values)]
+def _canon_seq(tag: str, values: Iterable[object], seen: set[int]) -> CanonicalValue:
+    canon = [_canon(v, seen) for v in values]
     return [tag, canon]
 
 
-def _canon_set(tag: str, value: object, seen: set[int]) -> CanonicalValue:
-    values = cast("AbstractSet[object]", value)
-    canon = sorted((_canon(v, seen) for v in values), key=_sort_key)
+def _canon_set(tag: str, value: AbstractSet[object], seen: set[int]) -> CanonicalValue:
+    canon = sorted((_canon(v, seen) for v in value), key=_sort_key)
     return [tag, canon]
 
 
-def _canon_map(value: object, seen: set[int]) -> CanonicalValue:
-    mapping = cast("Mapping[object, object]", value)
-    pairs = [(_canon(k, seen), _canon(v, seen)) for k, v in mapping.items()]
+def _canon_map(value: Mapping[object, object], seen: set[int]) -> CanonicalValue:
+    pairs = [(_canon(k, seen), _canon(v, seen)) for k, v in value.items()]
     ordered = sorted(pairs, key=lambda pair: _sort_key([pair[0], pair[1]]))
     return ["map", [[k, v] for k, v in ordered]]
 
@@ -160,18 +149,17 @@ def _canon_record(
     return ["record", _type_id(type(value)), [[name, canon] for name, canon in inner]]
 
 
-def _canon_dataclass(value: object, seen: set[int]) -> CanonicalValue:
-    instance = cast("DataclassInstance", value)
-    return _canon_record(value, (f.name for f in fields(instance)), seen)
+def _canon_dataclass(value: DataclassInstance, seen: set[int]) -> CanonicalValue:
+    return _canon_record(value, (f.name for f in fields(value)), seen)
 
 
-def _canon_attrs(value: object, seen: set[int]) -> CanonicalValue:
-    attributes = attrs.fields(cast("type[AttrsInstance]", type(value)))
+def _canon_attrs(value: AttrsInstance, seen: set[int]) -> CanonicalValue:
+    attributes = attrs.fields(type(value))
     return _canon_record(value, (a.name for a in attributes), seen)
 
 
-def _guard(
-    value: object, seen: set[int], canonicalizer: Canonicalizer
+def _guard[V](
+    value: V, seen: set[int], canonicalizer: Canonicalizer[V]
 ) -> CanonicalValue:
     marker = id(value)
 
@@ -331,17 +319,18 @@ def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
     return key
 
 
-def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
+class repr_cache[R]:  # noqa: N801
     """
-    Memoize a callable by the canonical encoding of its arguments.
+    Memoizes a callable by the canonical encoding of its arguments.
 
-    A call whose arguments are all plain scalars is keyed without the encoding step, so
-    hits on such calls stay cheap. Arguments that cannot be canonically encoded bypass
-    the cache so distinct instances never collide on a shared key.
+    A call whose arguments are all plain scalars is keyed without the encoding step.
+    Hits on such calls stay cheap. Arguments that cannot be canonically encoded bypass
+    the cache so distinct instances never collide on a shared key. The store is
+    unbounded and private to one decorated callable.
 
-    Returns:
+    Args:
 
-        A wrapper exposing ``cache_clear`` and ``cache_info``.
+        fn: The callable to memoize and carry over its name and docstring.
 
     Examples:
 
@@ -356,34 +345,36 @@ def repr_cache[R](fn: Callable[..., R]) -> ReprCacheWrapper[R]:
         >>> _ = (tally(Opaque()), tally(Opaque()))
         >>> len(calls)
         3
+        >>> tally.cache_info()
+        CacheInfo(hits=1, misses=3, maxsize=None, currsize=1)
 
     """
-    store: dict[Hashable, R] = {}
-    stats = {"hits": 0, "misses": 0}
 
-    @wraps(fn)
-    def wrapper(*args: VT, **kwargs: VT) -> R:
+    def __init__(self, fn: Callable[..., R]) -> None:
+        self._fn = fn
+        self._store: dict[Hashable, R] = {}
+        self._hits = 0
+        self._misses = 0
+        update_wrapper(self, fn)
+
+    def __call__(self, *args: object, **kwargs: object) -> R:
         key = _cache_key(*args, **kwargs)
 
         if key is None:
-            stats["misses"] += 1
-            result = fn(*args, **kwargs)
-        elif key in store:
-            stats["hits"] += 1
-            result = store[key]
+            self._misses += 1
+            result = self._fn(*args, **kwargs)
+        elif key in self._store:
+            self._hits += 1
+            result = self._store[key]
         else:
-            stats["misses"] += 1
-            result = store[key] = fn(*args, **kwargs)
+            self._misses += 1
+            result = self._store[key] = self._fn(*args, **kwargs)
 
         return result
 
-    def cache_clear() -> None:
-        store.clear()
-        stats.update(hits=0, misses=0)
+    def cache_clear(self) -> None:
+        self._store.clear()
+        self._hits = self._misses = 0
 
-    def cache_info() -> CacheInfo:
-        return CacheInfo(stats["hits"], stats["misses"], None, len(store))
-
-    setattr(wrapper, "cache_clear", cache_clear)  # noqa: B010
-    setattr(wrapper, "cache_info", cache_info)  # noqa: B010
-    return cast("ReprCacheWrapper[R]", wrapper)
+    def cache_info(self) -> CacheInfo:
+        return CacheInfo(self._hits, self._misses, None, len(self._store))

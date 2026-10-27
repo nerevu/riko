@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from time import struct_time
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, TypeVar, overload
 
 from meza.fntools import Objectify as _Objectify
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         """
 
         def __init__(
-            self, data: Mapping[str, _VT], *args: Any, **kwargs: object
+            self, data: Mapping[str, _VT], *args: object, **kwargs: object
         ) -> None: ...
         def __len__(self) -> int: ...
         def __getattribute__(self, *_: object) -> _VT: ...

@@ -28,8 +28,10 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Generic,
     Literal,
     NamedTuple,
+    TypeVar,
     Unpack,
     cast,
     overload,
@@ -175,6 +177,9 @@ _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverri
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
 _require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
+_require_decoration_options = require_from_typed_dict(
+    DecorationOptions, error=TypeError
+)
 
 
 def _resolve_context(
@@ -207,7 +212,7 @@ class _AsyncWrapperStream[T]:
         self._make = make
         self._agen: AsyncIterator[T] | None = None
 
-    def __await__(self) -> Generator[Any, None, AnyIterable[T]]:
+    def __await__(self) -> Generator[object, None, AnyIterable[T]]:
         return self._make().__await__()
 
     def __aiter__(self) -> AsyncIterator[T]:
@@ -225,7 +230,7 @@ class _AsyncWrapperStream[T]:
             await self._agen.aclose()
 
 
-class Module[B: (Literal[True], Literal[False])]:
+class Module[B: bool]:
     """
     Base for the ``processor``/``operator``/``splitter`` pipe decorators.
 
@@ -236,12 +241,12 @@ class Module[B: (Literal[True], Literal[False])]:
     per-call state those steps share.
     """
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType]
     decoration_options: ClassVar[frozenset[str]]
     call_options: ClassVar[frozenset[str]] = _CALL_OPTS
     context_options: ClassVar[frozenset[str]] = _CONTEXT_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]]
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]]
 
     def __new__(cls, *args: object, **kwargs: object) -> object:
         """
@@ -304,9 +309,14 @@ class Module[B: (Literal[True], Literal[False])]:
         # Only called once on pipe import
         self.defaults: Defaults = defaults or Defaults()
         self._opts: DecorationOptions = DecorationOptions(ftype=ftype, ptype=ptype)
-        self._opts.update(cast("DecorationOptions", opts))
-        self.isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
+        self._opts.update(_require_decoration_options(opts))
+        self._isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
         self.pollable: bool = pollable
+
+    @property
+    def isasync(self) -> B:
+        """Whether this decorator builds the async interface (``async_pipe``)."""
+        return self._isasync
 
     def _resolve_isasync(self, pipe: ModuleParser) -> bool:
         """
@@ -711,8 +721,13 @@ class _ProcessorCall(NamedTuple):
     stream_count: CountValues | None
 
 
+# Declared covariant: inferred variance turns invariant on Python 3.13+, where the
+# frozen record gains a ``__replace__`` that takes ``module``.
+M_co = TypeVar("M_co", bound=Module[bool], covariant=True)
+
+
 @define(frozen=True, slots=True)
-class _PreparedCall[M: Module[Any]](PreparedCall):
+class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     """
     A module call prepared once, holding what every prepared call kind shares.
 
@@ -725,7 +740,7 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
 
     """
 
-    module: M
+    module: M_co
     wrapper: ModuleWrapper
     prepared: PreparedModule[ItemOrValue, object]
     options: RawCallOptions
@@ -747,7 +762,7 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
 
 
 @define(frozen=True, slots=True)
-class _PreparedProcessor(_PreparedCall["processor[Any]"]):
+class _PreparedProcessor(_PreparedCall["processor[bool]"]):
     """A processor call prepared once and run once per item."""
 
     def __call__(
@@ -851,7 +866,7 @@ class _PreparedProcessor(_PreparedCall["processor[Any]"]):
 
 
 @define(frozen=True, slots=True)
-class _PreparedOperator(_PreparedCall["operator[Any]"]):
+class _PreparedOperator(_PreparedCall["operator[bool]"]):
     """An operator call prepared once and run once per stream."""
 
     def __call__(
@@ -990,7 +1005,7 @@ class _PreparedOperator(_PreparedCall["operator[Any]"]):
 
 
 @define(frozen=True, slots=True)
-class _PreparedSplitter(_PreparedCall["splitter[Any]"]):
+class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
     """A splitter call prepared once and run once per stream."""
 
     def __call__(
@@ -1042,13 +1057,13 @@ def _wrap_item(item: ItemOrValue) -> DotDict[RikoValue]:
     return DotDict(_item)
 
 
-class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class processor[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that processes individual items."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "processor"
     decoration_options: ClassVar[frozenset[str]] = _PROCESSOR_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedProcessor
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedProcessor
 
     @overload
     def __new__[I, E, O: ItemOrValue](
@@ -1074,7 +1089,7 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> processor[Literal[False]]: ...
-    def __new__(cls, *args: object, **kwargs: object) -> Any:
+    def __new__(cls, *args: object, **kwargs: object) -> object:
         return super().__new__(cls, *args, **kwargs)
 
     @overload
@@ -1377,13 +1392,13 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return wrapper
 
 
-class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class operator[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that processes an entire stream."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "operator"
     decoration_options: ClassVar[frozenset[str]] = _OPERATOR_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedOperator
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedOperator
 
     @overload
     def __new__[T: ItemOrValue, E](
@@ -1409,7 +1424,7 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> operator[Literal[False]]: ...
-    def __new__(cls, *args: object, **kwargs: object) -> Any:
+    def __new__(cls, *args: object, **kwargs: object) -> object:
         return super().__new__(cls, *args, **kwargs)
 
     @overload
@@ -1798,15 +1813,15 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return wrapper
 
 
-class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class splitter[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that splits a stream into multiple streams."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "splitter"
     decoration_options: ClassVar[frozenset[str]] = _SPLITTER_OPTS
     call_options: ClassVar[frozenset[str]] = _SPLITTER_CALL_OPTS
     context_options: ClassVar[frozenset[str]] = frozenset()
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedSplitter
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedSplitter
 
     @overload
     def __new__[E](
@@ -1830,7 +1845,7 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> splitter[Literal[False]]: ...
-    def __new__(cls, *args: object, **kwargs: object) -> Any:
+    def __new__(cls, *args: object, **kwargs: object) -> object:
         return super().__new__(cls, *args, **kwargs)
 
     @overload

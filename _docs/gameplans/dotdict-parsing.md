@@ -100,6 +100,12 @@ is re-wrapped in a fresh `DotDict` on the way back out: `asdict()` on a 20-key i
 (down from 110 before `DotDict.__contains__` answered from the store). Fold the wrap into one pass when
 `resolve_sentinel` moves here; a strict xfail cannot probe a construction count, so there is no tripwire.
 
+Typing (2026-10-27 `Any`/`cast` triage): `DotDict[VT]` declares no element type for a nested mapping,
+so nine casts in `riko/parsing/_dotdict.py` paper over it (`__setitem__`/`delete` store plain `dict`s in
+`VT` slots, and the reducers' `cast("Self", ...)` is false at runtime: the stored value is a `dict`, not
+a `DotDict`). A recursive value type (values `VT | DotDict[VT]`) removes them; land it with the
+`resolve_sentinel` move above, since both reshape how nested levels are stored.
+
 Measured 2026-10-20 (triage of the conf-parse memoization removal): the same churn makes `resolve_conf`
 (`riko/parsing/config.py`) cost 72 µs for a three-field typed rule conf, with 164 `is_mapping` checks per
 parse (`dictize` → `asdict` → `gen_dict` at every level). A dynamic conf pays it per item (198 µs per item

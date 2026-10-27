@@ -379,15 +379,15 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
     @classmethod
     def dictize[V](cls, value: V) -> V: ...
     @classmethod
-    def dictize(
+    def dictize[V](
         cls,
-        value: object,
+        value: Mapping[str, V] | object,
         key: Key | None = None,
         default: object | None = None,
         **kwargs: object,
     ) -> object:
         if is_mapping(value):
-            mapping = cast("Mapping[str, object]", value)
+            mapping = value
 
             if cls.is_self(mapping):
                 result: object = mapping
@@ -462,7 +462,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             if is_mapping_seq(value):
                 if isinstance(key, str):
                     try:
-                        parsed = cast("RikoList", [v[key] for v in value])
+                        parsed = [v[key] for v in value]
                     except (KeyError, IndexError):
                         parsed = default
                 else:
@@ -599,7 +599,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             {'key': 'baz'}
 
         """
-        dd = cast("DotDict[VT | T]", self.copy())
+        dd: DotDict[VT | T] = DotDict(self)
         dd.update(other)
         return dd
 
@@ -755,6 +755,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
         """
         if is_mapping(data):
             data = cast("Mapping[str, VT]", data)
+
             if self.is_self(data):
                 if kwargs:
                     _dict = data | kwargs

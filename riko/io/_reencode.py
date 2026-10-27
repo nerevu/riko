@@ -73,7 +73,7 @@ class PatchedReencoder[T: AnyStr](_Reencoder):
         if first_line is None:
             _stream: Iterator[str] | Iterator[bytes] = iter(())
         else:
-            chained = cast("Iterator[L]", chain([first_line], f))
+            chained = chain([first_line], f)
 
             if isinstance(first_line, bytes):
                 decoded = iterdecode(cast("Iterator[bytes]", chained), fromenc)

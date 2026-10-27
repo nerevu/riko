@@ -19,7 +19,6 @@ from typing import (
     NamedTuple,
     Protocol,
     TypedDict,
-    TypeGuard,
     Unpack,
     overload,
 )
@@ -127,7 +126,7 @@ class SyncOperatorParser[T: ItemOrValue, E](Protocol):
     """
 
     def __call__(
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> OperatorParserOutput[T]: ...
 
 
@@ -139,7 +138,7 @@ class SyncSplitterParser[E](Protocol):
     """
 
     def __call__(
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> SplitterParserOutput: ...
 
 
@@ -157,7 +156,9 @@ class SyncFieldParseFunc(Protocol):
 class SyncConfParseFunc(Protocol):
     """Resolves a module's prepared configuration against one item."""
 
-    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> AnyModuleConf | None: ...
+    def __call__(
+        self, item: ItemOrValue, /, **kwargs: object
+    ) -> AnyModuleConf | None: ...
 
 
 class ParseFuncs(NamedTuple):
@@ -280,7 +281,7 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
 
     Returns:
 
-        ``value``, narrowed to the wrapper metadata it carries.
+        ``value`` narrowed to the wrapper metadata it carries.
 
     Raises:
 
@@ -406,7 +407,7 @@ class AwaitableProcessorParser[I, E, O: ItemOrValue](Protocol):
     """
 
     def __call__(
-        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
+        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: object
     ) -> Awaitable[ProcessorParserOutput[O]]: ...
 
 
@@ -418,7 +419,7 @@ class AwaitableOperatorParser[T: ItemOrValue, E](Protocol):
     """
 
     def __call__(
-        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: Any
+        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: object
     ) -> Awaitable[OperatorParserOutput[T]]: ...
 
 
@@ -430,7 +431,7 @@ class AwaitableSplitterParser[E](Protocol):
     """
 
     def __call__(
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> Awaitable[SplitterParserOutput]: ...
 
 
@@ -520,8 +521,175 @@ type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
 type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 
-def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
-    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
+def is_subpipe[T: SubPipe](value: T | ModuleWrapper | object) -> TypeIs[T]:
+    """
+    Reports whether ``value`` is a callable the ``workflow`` decorator tagged.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is tagged as a stored workflow's pipe.
+
+    Examples:
+
+        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._workflow_pipes import workflow
+        >>>
+        >>> def flow_pipe(item=None, **kwargs):
+        ...     return iter(())
+        >>>
+        >>> is_subpipe(workflow(subtype="source")(flow_pipe)), is_subpipe(pipe)
+        (True, False)
+
+    """
+    return callable(value) and getattr(value, "type", None) == SUBPIPE_TYPE
+
+
+def require_subpipe(value: object) -> SubPipe:
+    """
+    Requires ``value`` to be a callable the ``workflow`` decorator tagged.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to a stored workflow's pipe.
+
+    Raises:
+
+        TypeError: If ``value`` is not tagged as a stored workflow's pipe.
+
+    Examples:
+
+        >>> require_subpipe(len)
+        Traceback (most recent call last):
+            ...
+        TypeError: <built-in function len> is not tagged as a stored workflow's pipe
+
+    """
+    if not is_subpipe(value):
+        raise TypeError(f"{value!r} is not tagged as a stored workflow's pipe")
+
+    return value
+
+
+def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
+    """
+    Reports whether ``value`` is a synchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is a module's sync interface (its ``pipe``).
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> is_sync_wrapper(pipe), is_sync_wrapper(async_pipe), is_sync_wrapper(len)
+        (True, False, False)
+
+    """
+    return is_wrapper_meta(value) and not value.isasync and hasattr(value, "prepare")
+
+
+def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
+    """
+    Reports whether ``value`` is an asynchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is a module's async interface (its ``async_pipe``).
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> is_async_wrapper(async_pipe), is_async_wrapper(pipe), is_async_wrapper(len)
+        (True, False, False)
+
+    """
+    return is_wrapper_meta(value) and value.isasync and hasattr(value, "prepare")
+
+
+def require_sync_wrapper(value: object) -> SyncModuleWrapper:
+    """
+    Requires ``value`` to be a synchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to a sync module wrapper.
+
+    Raises:
+
+        TypeError: If ``value`` is not a synchronous module wrapper.
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> require_sync_wrapper(pipe) is pipe
+        True
+        >>> require_sync_wrapper(async_pipe)
+        Traceback (most recent call last):
+            ...
+        TypeError: <function async_pipe at 0x...> is not a synchronous module wrapper
+
+    """
+    if not is_sync_wrapper(value):
+        raise TypeError(f"{value!r} is not a synchronous module wrapper")
+
+    return value
+
+
+def require_async_wrapper(value: object) -> AsyncModuleWrapper:
+    """
+    Requires ``value`` to be an asynchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to an async module wrapper.
+
+    Raises:
+
+        TypeError: If ``value`` is not an asynchronous module wrapper.
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> require_async_wrapper(async_pipe) is async_pipe
+        True
+        >>> require_async_wrapper(pipe)
+        Traceback (most recent call last):
+            ...
+        TypeError: <function pipe at 0x...> is not an asynchronous module wrapper
+
+    """
+    if not is_async_wrapper(value):
+        raise TypeError(f"{value!r} is not an asynchronous module wrapper")
+
+    return value
 
 
 def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:

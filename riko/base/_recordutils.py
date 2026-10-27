@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import Field, fields, is_dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, get_origin
+from typing import TYPE_CHECKING, ClassVar, get_origin
 
 import attrs
 from attrs import Attribute, AttrsInstance
@@ -27,7 +27,7 @@ type DataclassLike = DataclassInstance | type[DataclassInstance]
 def _keep_or_has_value(*keep_fields: str):
     keep = frozenset(keep_fields)
 
-    def has_value(field: Field[Any] | Attribute[Any], value: object) -> bool:
+    def has_value(field: Field[object] | Attribute[object], value: object) -> bool:
         if isinstance(value, (Mapping, tuple)):
             _has_value = bool(value)
         elif is_attrs_inst(value):

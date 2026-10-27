@@ -32,10 +32,11 @@ from __future__ import annotations
 from decimal import Decimal
 from json import load, loads
 from os import getenv
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from riko.bado._util import async_get, async_json
 from riko.base._config import ENCODING, settings
+from riko.base._guards import require_mapping
 from riko.base._logging import get_logger
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
@@ -70,9 +71,17 @@ class RatesJson(TypedDict):
     rates: Mapping[str, str]
 
 
-def build_rates(rates: Mapping[str, str | float]) -> dict[str, Decimal]:
+def _require_rate(value: object) -> str | float:
+    """Requires a currency rate to be a number or numeric string."""
+    if not isinstance(value, str | float | int):
+        raise TypeError(f"invalid rate: {value!r}")
+
+    return value
+
+
+def build_rates(rates: Mapping[str, object]) -> dict[str, Decimal]:
     if rates:
-        resp = {k: Decimal(v) for k, v in rates.items() if v}
+        resp = {k: Decimal(_require_rate(v)) for k, v in rates.items() if v}
     else:
         logger.warning("invalid json response:")
         logger.warning(rates)
@@ -152,7 +161,8 @@ async def async_parser(
         rates = await async_json(r)
     else:
         content = await async_url_read(objconf.url)
-        rates = cast("dict[str, Any]", loads(content).get("rates", {}))
+        loaded = loads(content).get("rates", {})
+        rates = require_mapping(loaded, "rates", error=TypeError)
 
     if rates and not same_currency:
         places = Decimal(10) ** -objconf.precision

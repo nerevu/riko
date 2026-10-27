@@ -13,7 +13,7 @@ from.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, TypeGuard
 
 import attrs
 
@@ -42,7 +42,7 @@ _WIRE_KEYS = frozenset({"src", "tgt"})
 class WorkflowEncoder(json.JSONEncoder):
     """Renders the structural and JSON-native value types a workflow carries."""
 
-    def default(self, o: object) -> Any:
+    def default(self, o: object) -> object:
         if isinstance(o, (Node, Edge)):
             result = {"family": o.family, **serialize_attrs(o)}
         elif is_mapping(o):

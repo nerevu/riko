@@ -57,7 +57,7 @@ def mean(*nums: NumLike) -> float:
         return float("inf")
 
 
-OPS: dict[str, Callable[[Any, Any], NumLike]] = {
+OPS: dict[str, Callable[[Decimal, Decimal], NumLike]] = {
     "add": operator.add,
     "subtract": operator.sub,
     "multiply": operator.mul,

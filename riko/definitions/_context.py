@@ -22,7 +22,7 @@ Examples:
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, Self, overload
+from typing import TYPE_CHECKING, Literal, Self, overload
 
 from attrs import define, evolve, field
 
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
     from ._resource_definition import ResourceDefinition, ReusableResources
 
-type ResourcesInput = Mapping[str, ReusableResource[Any]]
+type ResourcesInput = Mapping[str, ReusableResource[object]]
 
 INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
 DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}

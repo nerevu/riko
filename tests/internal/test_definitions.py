@@ -11,6 +11,7 @@ from collections import ChainMap
 from copy import deepcopy
 from dataclasses import dataclass, make_dataclass
 from dataclasses import field as dataclass_field
+from importlib.metadata import EntryPoint
 from pickle import dumps, loads  # noqa: S403
 from typing import (
     TYPE_CHECKING,
@@ -87,7 +88,11 @@ from riko.modules.hash import pipe as hash_pipe
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.runtime import _write_session
-from riko.runtime._target_registry import register_target, reset_target_registry
+from riko.runtime._target_registry import (
+    TargetRegistry,
+    register_target,
+    reset_target_registry,
+)
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
@@ -1147,6 +1152,16 @@ class TestRegisterTarget:
             assert register_target(_RecordStore) is _RecordStore
         finally:
             reset_target_registry()
+
+    def test_entry_point_loads_a_target_class(self) -> None:
+        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
+        assert TargetRegistry()._load(ep) is FileTarget
+
+    def test_entry_point_must_load_a_target_class(self) -> None:
+        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
+
+        with pytest.raises(TypeError, match="must load a target class"):
+            TargetRegistry()._load(ep)
 
 
 class TestResolveFormat:

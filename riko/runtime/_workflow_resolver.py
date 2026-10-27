@@ -77,13 +77,13 @@ from __future__ import annotations
 
 from functools import partial
 from types import ModuleType
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._exceptions import UnsupportedWorkflowError
 from riko.base._strutils import pythonise
 from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
-from riko.types._wrappers import is_subpipe
+from riko.types._wrappers import is_subpipe, is_wrapper_meta
 
 from ._importutils import load_interfaces, require_interface
 from ._workflow_pipes import build_workflow_pipes, workflow
@@ -440,8 +440,9 @@ class WorkflowResolver:
         if is_subpipe(pipe):
             tagged = pipe
         else:
-            subtype = cast("ModuleSubtype", getattr(pipe, "subtype", "source"))
-            loopable = cast("bool", getattr(pipe, "loopable", True))
+            meta = is_wrapper_meta(pipe)
+            subtype: ModuleSubtype = pipe.subtype if meta else "source"
+            loopable = pipe.loopable if meta else True
             tag = workflow(subtype=subtype, loopable=loopable, isasync=is_async)
             tagged = tag(pipe)
 

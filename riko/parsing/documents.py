@@ -106,7 +106,7 @@ class LinkParser(HTMLParser):
 
     def __init__(
         self,
-        *args: Any,
+        *args: object,
         external_only: bool = True,
         strict: bool = True,
         rss_only: bool = False,

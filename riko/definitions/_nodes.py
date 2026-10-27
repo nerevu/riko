@@ -15,11 +15,11 @@ than a live resource or write session.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from functools import partial
 from itertools import filterfalse
 from keyword import iskeyword
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from attrs import define, field
 from attrs.validators import is_callable
@@ -80,6 +80,12 @@ _normalize_identity = partial(
 )
 
 
+def _gen_named(*pairs: tuple[object, ...]) -> Iterator[tuple[str, str]]:
+    for alias, name in pairs:
+        if isinstance(alias, str) and isinstance(name, str) and alias and name:
+            yield (alias, name)
+
+
 def require_binding(
     value: object,
     what: str | None = "value",
@@ -121,18 +127,20 @@ def require_binding(
     if isinstance(value, str):
         pairs = [(value, value)]
     elif isinstance(value, Mapping):
-        pairs = list(value.items())
+        pairs = value.items()
     elif isinstance(value, Iterable):
         pairs = [(name, name) for name in value]
     else:
         raise error(f"{what} must be a str, mapping, or iterable of strs")
 
-    if not all(isinstance(name, str) and name for pair in pairs for name in pair):
+    named = list(_gen_named(*pairs))
+
+    if len(named) < len(pairs):
         raise error(f"{what} must bind non-empty strings, got {value!r}")
-    elif len(dict(pairs)) < len(pairs):
+    elif len(dict(named)) < len(named):
         raise error(f"{what} must not repeat an alias, got {value!r}")
 
-    return FrozenDict(cast("list[tuple[str, str]]", pairs))
+    return FrozenDict(named)
 
 
 optional_str = narrow_def_from_require(require_str)
@@ -422,7 +430,7 @@ def get_family_edges(
     return [edge for edge in edges if edge.family == family]
 
 
-type RunnableNode = ModuleNode | CallableNode[Any]
+type RunnableNode = ModuleNode | CallableNode[object]
 
 
 def require_runnable_node(value: Node, what: str | None = None, **_) -> RunnableNode:

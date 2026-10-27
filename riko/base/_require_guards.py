@@ -54,7 +54,7 @@ class TypeRequire[T, R](Protocol):
     any such guard into an attrs converter or validator.
     """
 
-    def __call__(self, value: T, what: str | None = None, **_: Any) -> R: ...
+    def __call__(self, value: T, what: str | None = None) -> R: ...
 
 
 @runtime_checkable
@@ -66,9 +66,7 @@ class InstanceRequire[T, R](Protocol):
     for that class.
     """
 
-    def __call__(
-        self, cls: type[R], value: T, what: str | None = None, **_: Any
-    ) -> R: ...
+    def __call__(self, cls: type[R], value: T, what: str | None = None) -> R: ...
 
 
 type Require[T, R] = TypeRequire[T, R] | InstanceRequire[T, R]
@@ -391,11 +389,11 @@ def def_from_require[T, R](
     *,
     default: None = ...,
     what: str | None = ...,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> DefFunc[T, R | None]: ...
 @overload
 def def_from_require[T, D, R](
-    require: TypeRequire[T, R], *, default: D, what: str | None = ..., **kwargs: Any
+    require: TypeRequire[T, R], *, default: D, what: str | None = ..., **kwargs: object
 ) -> DefFunc[T, R | D]: ...
 @overload
 def def_from_require[T, R](
@@ -405,7 +403,7 @@ def def_from_require[T, R](
     *,
     default: None = ...,
     what: str | None = ...,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> DefFunc[T, R | None]: ...
 @overload
 def def_from_require[T, D, R](
@@ -415,14 +413,14 @@ def def_from_require[T, D, R](
     *,
     default: D,
     what: str | None = ...,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> DefFunc[T, R | D]: ...
 def def_from_require[D, R](
     require: Callable[..., R],
     *args: object,
     default: D | None = None,
     what: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> Callable[..., R | D | None]:
     """
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
@@ -551,8 +549,8 @@ def narrow_def_from_require[T, D, R](
     *,
     accepted: TypeForm[T],
 ) -> DefFunc[T, R | D]: ...
-def narrow_def_from_require[D, R](
-    require: TypeRequire[Any, R],
+def narrow_def_from_require[T, D, R](
+    require: TypeRequire[T, R],
     default: D | None = None,
     what: str | None = None,
     *,
@@ -589,7 +587,7 @@ def narrow_def_from_require[D, R](
 
     """
 
-    def optional(value: object) -> R | D | None:
+    def optional(value: T | None) -> R | D | None:
         kwargs = {} if what is None else {"what": what}
         return default if value is None else require(value, **kwargs)
 
@@ -638,7 +636,7 @@ def validator_from_require(
     """
 
     def validator(
-        instance: AttrsInstance, field: Attribute[Any], value: object
+        instance: AttrsInstance, field: Attribute[object], value: object
     ) -> None:
         label = f"{type(instance).__name__} '{field.name}'"
         require(*args, value, label, **kwargs)
@@ -1030,17 +1028,18 @@ def require_strlike(
 
     """
     if isinstance(value, str):
-        valid = True
+        result: str | tuple[str, ...] | None = value
     elif isinstance(value, Iterable):
-        value = tuple(value)
-        valid = all(isinstance(v, str) for v in value)
+        items = tuple(value)
+        strs = tuple(v for v in items if isinstance(v, str))
+        result = strs if len(strs) == len(items) else None
     else:
-        valid = False
+        result = None
 
-    if not valid:
+    if result is None:
         raise error(f"{what} must be a str or iterable of strs")
 
-    return cast("str | tuple[str, ...]", value)
+    return result
 
 
 def normalize_strs(

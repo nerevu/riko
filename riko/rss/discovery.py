@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from riko.base._config import settings
 from riko.base._logging import get_logger
@@ -105,7 +105,7 @@ def load_rss_links(
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
-        stream = file2entries(cast("StringFileLike", f), parser)
+        stream = file2entries(f, parser)
         entries = auto_close(stream, f)
 
     if auto_sort:

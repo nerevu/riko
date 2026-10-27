@@ -91,7 +91,16 @@ if TYPE_CHECKING:
     from ._prepared import ExecutionPlan, PreparedInterface
 
 
-_worker_drain = partial(async_drain, call=run_from_thread)
+def _await_from_thread[R](func: Callable[[], Awaitable[R]]) -> R:
+    """Runs ``func`` to completion on the event loop from a worker thread."""
+
+    async def await_func() -> R:
+        return await func()
+
+    return run_from_thread(await_func)
+
+
+_worker_drain = partial(async_drain, call=_await_from_thread)
 
 
 def _bridge_inputs[T](
@@ -265,7 +274,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
     shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
-    _inflight: dict[Resource[Any], Event] = field(factory=dict, init=False)
+    _inflight: dict[Resource[object], Event] = field(factory=dict, init=False)
     _reservations: list[_Reservation] = field(factory=list, init=False)
 
     @cached_property

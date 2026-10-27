@@ -8,7 +8,7 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
-from riko.bado import _backend
+from riko.bado._backend import Path as AsyncPath
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
 from riko.base._config import ENCODING
@@ -443,7 +443,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
     async def ainitial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
         if self._initial_file_size is None:
-            path = _backend.Path(self.path)
+            path = AsyncPath(self.path)
 
             try:
                 file_stat = await path.stat()

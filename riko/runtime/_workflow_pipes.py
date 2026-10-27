@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from functools import partial, update_wrapper
 from inspect import isasyncgenfunction
-from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, overload
 
 from riko.bado.itertools import as_async
 from riko.base._config import SUBPIPE_TYPE
@@ -20,6 +20,7 @@ from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._enums import ExecutionMode
 from riko.types._frozendict import normalize_mapping
+from riko.types._wrappers import require_subpipe
 
 from ._run import arun_pipeline, run_pipeline
 
@@ -155,7 +156,7 @@ def workflow(
             isasync=resolved,
         )
 
-        return cast("SubPipe", tagged)
+        return require_subpipe(tagged)
 
     return tag
 

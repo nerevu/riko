@@ -14,7 +14,6 @@ from collections.abc import Iterable
 from functools import partial
 from typing import (
     TYPE_CHECKING,
-    Any,
     Concatenate,
     Generic,
     Literal,
@@ -670,7 +669,7 @@ class PipelineDefinition(Generic[T]):
 
         return context
 
-    def _compose(self, other: PipelineDefinition[Any]) -> Self:
+    def _compose(self, other: PipelineDefinition[object]) -> Self:
         """Chains ``other`` after this pipeline and combines their resources."""
         if other.settings != DEF_EXECUTION_SETTINGS:
             msg = "a pipeline on the right of '|' may not carry execution settings; "

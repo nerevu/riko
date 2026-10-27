@@ -27,12 +27,12 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from riko.base._exceptions import UnsupportedTargetError
 from riko.definitions._targets import FileTarget
 from riko.types._enums import BackendLike, Backends
-from riko.types._target_protocols import Target
+from riko.types._target_protocols import Target, is_target_class
 
 from ._registry import Registry
 
@@ -60,12 +60,11 @@ class TargetRegistry(Registry[type[Target]]):
     def _load(self, ep: EntryPoint) -> type[Target]:
         loaded = ep.load()
 
-        if not (isinstance(loaded, type) and hasattr(loaded, "backend")):
-            raise TypeError(
-                f"entry point {ep.name!r} must load a target class with a 'backend'"
-            )
+        if not is_target_class(loaded):
+            msg = f"entry point {ep.name!r} must load a target class with a 'backend'"
+            raise TypeError(msg)
 
-        return cast("type[Target]", loaded)
+        return loaded
 
     def _resolve_builtin(self, backend: BackendLike) -> type[Target]:
         if str(backend) == Backends.FILE:

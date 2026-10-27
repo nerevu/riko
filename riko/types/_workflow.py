@@ -29,7 +29,7 @@ from functools import cached_property, partial
 from itertools import chain
 from operator import attrgetter
 from types import ModuleType
-from typing import TYPE_CHECKING, ClassVar, Literal, NewType, Required, TypedDict, cast
+from typing import TYPE_CHECKING, ClassVar, Final, Literal, NewType, Required, TypedDict
 
 from attrs import define, field
 
@@ -72,7 +72,9 @@ type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]
 
+PORT_DIRECTIONS: Final[frozenset[PortDirection]] = frozenset({"in", "out"})
 WORKFLOW_VERSION = "2"
+
 WorkflowModule = NewType("WorkflowModule", str)
 ResolvedWorkflow = NewType("ResolvedWorkflow", ModuleType)
 
@@ -209,7 +211,7 @@ def parse_port(port: Port) -> ParsedPort:
     """
     direction, sep, rest = port.partition(":")
 
-    if direction not in {"in", "out"}:
+    if direction not in PORT_DIRECTIONS:
         raise ValueError(f"invalid port direction: {port!r}")
 
     if not sep:
@@ -221,7 +223,7 @@ def parse_port(port: Port) -> ParsedPort:
     else:
         raise ValueError(f"invalid port: {port!r}")
 
-    return ParsedPort(cast("PortDirection", direction), index, name)
+    return ParsedPort(direction, index, name)
 
 
 @dataclass(frozen=True, slots=True)
