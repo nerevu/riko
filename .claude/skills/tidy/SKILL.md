@@ -98,8 +98,10 @@ neighborhood it affects:
    `docs/MIGRATION.rst`, untracked scratch docs cited from stable docs.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
-   the change altered; doctests that rebind a name or reuse another section's
-   state; docstrings that explain mechanism instead of what the caller gets.
+   the change altered; code blocks that use a name they don't define
+   themselves or rebind a name within the block (setup repeated across blocks
+   is correct, never dedupe it); docstrings that explain mechanism instead of
+   what the caller gets.
 8. **Doc hygiene** — duplicated table rows or sections, broken cross-references
    the docs lint does not cover, `_docs/` paths in shipped text.
 9. **Test ownership** — for each new or moved test (`manage lint --tests` already
