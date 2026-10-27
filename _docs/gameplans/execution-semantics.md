@@ -56,6 +56,8 @@ There is no executing `collect()` terminal in the target API. `first()` / `afirs
 
 Stream exhaustion (decided 2026-10-25, revised 2026-10-26): a consumed or closed stream behaves exactly like an exhausted Python generator. Another `for`/`async for` yields nothing, and `next`/`anext` raise `StopIteration`/`StopAsyncIteration`, so `next(stream, default)`, `zip_longest`, and `islice` behave normally. The 2026-10-25 rule that raised `PipelineStateError` on a second pass or after close was withdrawn: a stream must not behave differently from a Python iterator, so only `next` signals the end. Iterating a started stream in the other mode still raises. A partly consumed stream may still be re-entered (`header = next(stream); for row in stream: ...`). Consumed, closed, and failed are one finished state.
 
+Open gap (triaged 2026-10-25, Flowfile comparison): run-to-node inspection. A developer cannot yet execute a workflow up to a selected node and read a bounded sample there without running downstream nodes. Bounded reading already exists (`first()`, `open()`, `take()`); the missing piece is truncating the graph to the target node and its ancestors (`GraphIndex`) before planning. The side-effect-aware half — refusing or stubbing upstream write/action nodes during a preview — depends on R5C's `WriteNode`/`ActionNode` and the side-effect classification in [extensibility.md](extensibility.md) E1, so do not build an interim preview mode before those land. Unscheduled; previews are ordinary executions with no implicit caching.
+
 **Seeds are run arguments, not definition state (direction adopted 2026-10-10, shipped 2026-10-24;
 replaces the earlier "immutability does not imply source replayability" ruling).** A definition stores
 no items. Before it shipped, a seeded `Pipeline` kept its seed on the definition
@@ -1075,6 +1077,8 @@ External disposition must be acknowledged before the item is treated as advanced
 ### 12.5 Internal counters
 
 Execution may maintain aggregate emitted/dropped/dead-lettered/failed/retried counts without requiring a per-item public event stream for the normal path.
+
+Open gap (triaged 2026-10-25, Flowfile comparison): [events.md](events.md) §1 names this plan as the owner of execution/node lifecycle payloads, and its §7 taxonomy lists execution start/finish, node start/finish, and per-node input/output counts and active/wait time. No phase in [implementation-sequence.md](implementation-sequence.md) schedules those payloads; only cache, effect, and fanout events have owning phases. They are the foundation for node-level run traces (which node dropped records, where time went) consumed by CLI/debugger/GUI through the one `EventSink`. Unscheduled; when scheduled, define them as aggregate per-node counters plus lifecycle events (not per-item events), emitted with the no-op default so they cost nothing unobserved, and never altering ordering, resource lifetimes, or write behavior.
 
 ---
 

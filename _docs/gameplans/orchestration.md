@@ -86,6 +86,8 @@ class PipelineRunResult:
     metrics: Mapping[str, JsonValue]
 ```
 
+Open gap (triaged 2026-10-25, Flowfile comparison): `PipelineRunResult` does not identify what ran. A portable run manifest should add the canonical `digest` of the executed `Workflow` (the shared canonical encoding, never `hash()`) and the resolved module versions, so a stored result can be tied back to an exact definition without a catalog service. Unscheduled; settle it with O0.
+
 Airflow, Prefect, Dagster, webhook workers, and CLI commands should call the same execution
 service rather than each building a separate Riko runner.
 
