@@ -11,12 +11,12 @@ Index (file, then the subjects it owns, in file order):
                         AsyncSourceAdapter, Alist, FanIn, WithExecution,
                         ExecutionSettings, AsyncBoundedParallel, AsyncFanInParallel,
                         ContextMode, ContextImmutability, EnvironmentBinding,
-                        WritePassthrough, WriteParity, WriteNestedItems, WriteSetValues,
-                        WriteSkips, WriteTargetFromExtension, PipelineWriteDefinition,
-                        PipelineWrite, ExportFormats, ExportPipeline, ExportFinance,
                         Subscriptions, Split, CallableNodes, ConditionalNodes,
                         UnseededPipeline
     test_workflow.py    Workflow, NodeFamily, ParsePort, WorkflowParse, PipeDag,
                         NormalizeWorkflow, RequireRunnableOnly, CallableNodeDocuments,
                         Validate, Migrate, Serialize, WorkflowDocumentResolution
+    test_write.py       WritePassthrough, WriteParity, WriteNestedItems, WriteSetValues,
+                        WriteSkips, WriteTargetFromExtension, PipelineWriteDefinition,
+                        PipelineWrite, ExportFormats, ExportPipeline, ExportFinance
 """

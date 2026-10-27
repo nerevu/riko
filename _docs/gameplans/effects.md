@@ -154,7 +154,7 @@ and its `dest` when it has one; a native target object without `dest` (for examp
 `AIRTABLE` record store) is not recorded, so the node alone cannot reach it. R5C decides how a
 `WriteNode` carries such a live target, presumably as a Context resource binding (extensibility
 E3.7: "Resource bindings to live clients are separate"). Tripwire:
-`tests/public/test_pipeline.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
+`tests/public/test_write.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
 (under the class-level write-node xfail).
 
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the

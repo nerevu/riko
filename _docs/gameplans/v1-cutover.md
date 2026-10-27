@@ -180,7 +180,7 @@ Depends on steps 1–3. Deletes `SyncPipe`, `AsyncPipe`, `PyPipe`, `PyCollection
   written against those forms — `tests/public/test_pipeline.py` (subscriptions,
   split, callable nodes, per-item gating), the fan-in branch-pulling cases in `tests/public/test_pipeline.py`
   (R7), and `TestPipelineWrite` in
-  `tests/internal/test_definitions.py` — so each flips to a pass when its owner lands. User docs keep the
+  `tests/public/test_write.py` — so each flips to a pass when its owner lands. User docs keep the
   same sections as `Pending.` code blocks. The one capability with no designed successor is the
   `skip_if` per-item callable guard (not JSON-native, so not a node option); `examples/kazeeki.py` and
   `pipe_kazeeki_full.py` dropped it, and `callable-pipes.md` owns the gap.
