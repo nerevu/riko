@@ -50,5 +50,5 @@ Index (file, then the subjects it owns, in file order):
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
                               TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,
-                              GraphIndex, Logging
+                              GraphIndex, Logging, RikoError
 """

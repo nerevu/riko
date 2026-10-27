@@ -268,6 +268,9 @@ Removed
 Fixes
 ~~~~~
 
+- riko's errors now survive pickling and copying, so one raised in a worker process
+  reaches the caller intact. Errors also no longer repeat their message.
+
 - A workflow's modules now run in the same order on every run.
 
 - Assignment to a dotted field (e.g., ``assign="author.uri"``) no longer changes nested

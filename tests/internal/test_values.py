@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import copy
 import os
+import pickle  # noqa: S403
 import subprocess
 import sys
 import time
@@ -27,6 +29,7 @@ from attrs import define
 from dateutil.relativedelta import relativedelta
 from feedparser import FeedParserDict
 
+from riko.base import _exceptions as errors
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
@@ -988,3 +991,39 @@ class TestLogging:
         after = get_logger("riko.tests.after")
         assert before.getEffectiveLevel() == ERROR
         assert after.getEffectiveLevel() == ERROR
+
+
+ERRORS = [
+    pytest.param(errors.RikoError(), id="riko"),
+    pytest.param(errors.PipelineError("plain"), id="pipeline"),
+    pytest.param(errors.InvalidPipelineError("bad"), id="invalid"),
+    pytest.param(errors.EmptyPipelineError(), id="empty"),
+    pytest.param(
+        errors.PipelineStateError("closed", "read", subject="run"), id="state"
+    ),
+    pytest.param(
+        errors.UnsupportedModuleError("trunkate", "why", candidates=iter(["truncate"])),
+        id="module",
+    ),
+    pytest.param(errors.UnsupportedWorkflowError("pipe_x", "gone"), id="workflow"),
+    pytest.param(errors.UnsupportedTargetError("ftp"), id="target"),
+    pytest.param(errors.ReceiverUnavailableError("alerts"), id="receiver"),
+    pytest.param(errors.DuplicateReceiverError("alerts"), id="duplicate"),
+    pytest.param(errors.IdentityEncodingError(set), id="encoding"),
+    pytest.param(errors.CyclicIdentityError(), id="cyclic"),
+]
+ROUND_TRIPS = [
+    pytest.param(lambda error: pickle.loads(pickle.dumps(error)), id="pickle"),  # noqa: S301
+    pytest.param(copy.copy, id="copy"),
+    pytest.param(copy.deepcopy, id="deepcopy"),
+]
+
+
+class TestRikoError:
+    @pytest.mark.parametrize("error", ERRORS)
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_round_trip_keeps_message_and_attributes(self, error, round_trip):
+        copied = round_trip(error)
+        assert type(copied) is type(error)
+        assert str(copied) == str(error)
+        assert vars(copied) == vars(error)

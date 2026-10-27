@@ -9,10 +9,12 @@ and names them as its own.
 from __future__ import annotations
 
 from difflib import get_close_matches
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
+
+type _Call = tuple[tuple[object, ...], dict[str, object]]
 
 
 def _get_detail(*parts: str | None) -> str:
@@ -20,8 +22,40 @@ def _get_detail(*parts: str | None) -> str:
     return f" ({joined})" if joined else ""
 
 
+def _rebuild[E: RikoError](
+    cls: type[E], args: tuple[object, ...], kwargs: dict[str, object]
+) -> E:
+    return cls(*args, **kwargs)
+
+
 class RikoError(Exception):
-    """Base class for Riko-specific errors."""
+    """
+    Base class for Riko-specific errors.
+
+    Every riko error pickles and copies intact, so one raised in a worker process
+    reaches the caller with its message and attributes unchanged.
+
+    Examples:
+
+        >>> import pickle
+        >>>
+        >>> error = pickle.loads(pickle.dumps(InvalidPipelineError("bad")))
+        >>> str(error), error.msg
+        ('Invalid pipeline: bad', 'bad')
+
+    """
+
+    _call: _Call
+
+    def __new__(cls, *args: object, **kwargs: object) -> Self:
+        error = super().__new__(cls, *args)
+        error._call = (args, kwargs)
+        return error
+
+    def __reduce__(
+        self,
+    ) -> tuple[Callable[..., Self], tuple[type[Self], *_Call], dict[str, object]]:
+        return (_rebuild, (type(self), *self._call), self.__dict__)
 
 
 class ModuleError(RikoError):
@@ -67,6 +101,7 @@ class UnsupportedModuleError(ModuleError):
         self.module_name = module_name
         self.reason = reason
         self.matches: tuple[str, ...] = matches
+        self._call = ((module_name, reason), {"candidates": matches})
 
 
 class TargetError(RikoError):
