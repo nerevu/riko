@@ -8,16 +8,17 @@ New
 ~~~
 
 - Added ``riko.Pipeline``, an immutable, runnable workflow. Start one with
-  ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``. Run
-  it with ``list``, ``async for``, or ``.first``/``.afirst``. Chain it by attribute
-  (``.sort``) or via ``.pipe(name)``. Chained modules take ``options=``. ``.map(fn)``
-  applies a callable to each item and yields what it returns. The node it appends (a
-  ``riko.ext.CallableNode``) makes a workflow un-serializable and un-compilable.
-  ``.with_context`` sets the ``Context``, ``.with_resource`` provides a resource, and
-  ``.replace(…)`` swaps the workflow or source. ``.with_execution`` runs items in
-  parallel when ``concurrency`` is ``"auto"`` or > 1. Its ``executor`` (a
-  ``riko.Executor``) picks where that work runs, and its ``event_sink`` takes a
-  ``riko.types.EventSink``.
+  ``Pipeline.from_module`` or ``Pipeline``. Run it with ``pipeline(items)``.
+  ``.first(items)``/``.afirst(items)`` read one item. Iterate a run with ``for`` or
+  ``async for``. A pipeline starting from a source module runs with no items
+  (``list(pipeline)``). ``pipeline.open(items)`` returns a context manager you can
+  iterate via (``with``/``async with``). Leaving the ``with`` block closes the run.
+
+  Chain a workflow by attribute (``.sort``), or by name via ``.pipe(name)`` or
+  ``pipeline | name``. ``.map(fn)`` appends a ``riko.ext.CallableNode`` that applies a
+  callable to each item. ``.with_context`` sets the ``Context``, ``.with_resource``
+  provides a resource, and ``.replace(…)`` swaps the workflow. ``.with_execution`` runs
+  items in parallel when ``concurrency`` is ``"auto"`` or > 1.
 
 - Added ``riko.Resource`` for use with ``.with_resource``. ``Resource(…)`` owns an
   existing value and closes it with ``cleanup`` or the value's own ``close``.
@@ -31,16 +32,16 @@ New
 - Added the ``Workflow`` graph (``Node``, ``Edge``, ``Endpoint``) that a ``Pipeline``
   runs. ``Workflow.parse`` reads a workflow document (``riko.WorkflowDocument``, its
   JSON form), a bare-bones DAG (``riko.types.PipeDag``), or a pipe definition
-  (``riko.types.PipeDef``), and ``riko.DocumentShape`` pins a specific shape.
-  ``Workflow.load`` reads any of those shapes from a file, and ``flow.serialize``
-  writes a ``WorkflowDocument``. ``flow.with_node(node)`` appends a node as the new
-  default output, and ``flow.get_node_id(name)`` picks a free ``<name>-<n>`` id.
+  (``riko.types.PipeDef``). ``Workflow.load`` reads any ``riko.DocumentShape`` from a
+  file, and ``flow.serialize`` writes a ``WorkflowDocument``. ``flow.with_node(node)``
+  appends a node, and ``flow.with_workflow(other)`` appends a workflow.
 
-- Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
-  expected, and ``riko.WorkflowModule`` to annotate the Python module source ``str``
-  that ``riko.compile_workflow`` returns. In ``riko.types``, ``RawWorkflow``,
-  ``RawNode``, ``RawEdge``, and ``RawEndpoint`` annotate a workflow written as a
-  mapping, and ``PipeDefLike`` a ``PipeDef`` or any mapping taken as one.
+- Added ``riko.WorkflowLike`` to annotate what ``riko.compile_workflow`` accepts, and
+  ``riko.WorkflowModule`` to annotate the Python module source ``str`` it returns. Added
+  to ``riko.types``: ``RawWorkflow``, ``RawEndpoint``, ``RawNode``, and ``RawEdge`` to
+  annotate a workflow written as a mapping; ``PipeDefLike`` for a ``PipeDef`` or mapping
+  taken as one; ``InputLike`` for the items a pipeline runs on; and ``PipelineStream``/
+  ``PipelineRun`` for what ``pipeline(items)``/``pipeline.open(items)`` returns.
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` (``run-pipe -p flow.json``, or an
   example id) or a ``WorkflowModule`` file directly, alongside the pipe scripts (Python
@@ -134,6 +135,10 @@ Changes
 - ``run-pipe`` reports any riko error, such as an unknown module, as a one-line message
   and exits with status 1 instead of printing a traceback.
 
+- Calling a compiled workflow module's ``pipe()`` without items, when it requires a seed
+  (input stream), now raises ``riko.InvalidPipelineError`` instead of feeding that module
+  ``None`` and yielding nothing. Pass the items instead, e.g., ``pipe(items)``.
+
 - ``ModuleDefinition`` is no longer a dataclass. Change one with ``attrs.evolve``
   instead of ``dataclasses.replace``. Its constructor is now keyword-only. ``name``
   returns the module's effective name: the ``name`` passed, or else the pipe callable's
@@ -164,6 +169,9 @@ Changes
 - ``ModuleMetadata.subtypes`` and the ``subtypes`` stamped on a decorated pipe are now a
   ``frozenset``. Mutating a metadata record's subtypes used to change the module's
   discovery metadata.
+
+- ``|`` no longer takes a ``(name, conf)`` tuple: ``pipeline | ("sort", conf)`` raises
+  ``TypeError``. To chain a configured module, use ``pipeline.sort(conf=conf)``.
 
 - ``@processor``, ``@operator``, and ``@splitter`` now work without parentheses. They
   also raise ``TypeError`` at decoration time for an invalid option (e.g., a typo or a
@@ -221,7 +229,8 @@ Removed
   ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
   ``export(pipeline, …)`` replaces ``.export``, and multi-source fetching is a
   ``union`` fan-in in a ``Workflow``. ``udf(func=…)`` through a pipeline is
-  ``pipeline.map(func)``. ``subscribe``/``publish`` and ``split`` have no replacement.
+  ``pipeline.map(func)``, and ``pipeline.pipe(name, conf=conf)`` replaces ``pipe | (name,
+  conf)``. ``subscribe``/``publish`` and ``split`` have no replacement.
 
 - Removed call-time decoration options. Passing ``skip_if``, ``ftype``, ``ptype``,
   ``extract``, ``listize``, ``objectify``, ``parse``, or ``pollable`` to a module call

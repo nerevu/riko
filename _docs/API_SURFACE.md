@@ -135,7 +135,7 @@ and extension authors.
 <!-- api-surface:types -->
 ```python
 >>> sorted(TYPES)
-['AsyncItems', 'AsyncLifecyclePlan', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'ExternalPlan', 'Feed', 'Item', 'Items', 'LifecyclePlan', 'OwnedPlan', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'ResourcePlan', 'ResourceStrategy', 'Stream', 'SyncLifecyclePlan', 'SyncPipeTuples', 'ValueFactoryPlan']
+['AsyncItems', 'AsyncLifecyclePlan', 'AsyncPipeTuples', 'AsyncStream', 'Conf', 'EventSink', 'ExternalPlan', 'Feed', 'InputLike', 'Item', 'Items', 'LifecyclePlan', 'OwnedPlan', 'PipeDag', 'PipeDef', 'PipeDefLike', 'PipeTuples', 'PipelineRun', 'PipelineStream', 'RawEdge', 'RawEndpoint', 'RawNode', 'RawWorkflow', 'ResourcePlan', 'ResourceStrategy', 'Stream', 'SyncLifecyclePlan', 'SyncPipeTuples', 'ValueFactoryPlan']
 ```
 <!-- /api-surface:types -->
 

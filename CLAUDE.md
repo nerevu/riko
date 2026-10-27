@@ -214,7 +214,7 @@ new permanent bullet here.
   for a specific contract (`is_subpipe`, `is_closeable`, `is_lifecycle_factory`,
   `is_pipe_id`) is defined in the module that defines that contract. Two exceptions keep
   a guard with its consumer: moving it would need an import the layer rules bar
-  (`is_conf_rule`, `_is_source`), or it decides between alternative forms for a single
+  (`is_conf_rule`, `_is_seed`), or it decides between alternative forms for a single
   consumer (`is_pipedag`/`is_pipedeflike`/`is_raw_workflow` in `_serialize.py`).
 - **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
   Python call site** (a parameter, or a field callers construct) or for a runtime

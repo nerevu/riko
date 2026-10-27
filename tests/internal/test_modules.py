@@ -58,7 +58,7 @@ from riko.runtime._module_registry import (
 )
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
-from riko.runtime._workflow_pipes import workflow
+from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
 from riko.runtime._workflow_resolver import WorkflowResolver
 from riko.runtime._workflow_stores import (
     CompositeStore,
@@ -89,6 +89,7 @@ from riko.types.modules import (
     TokenizerRawConf,
 )
 from tests import async_test, pyworkflows, skipif_issync
+from tests._execution import module_workflow
 
 if TYPE_CHECKING:
     from riko.types._streams import Cascade, Item, Stream
@@ -941,6 +942,13 @@ class TestWorkflowDecorator:
         with pytest.raises(TypeError, match="Pipeline"):
             workflow(object())  # pyright: ignore[reportCallIssue]
 
+    def test_an_unseeded_stored_workflow_pipe_requires_a_seed(self):
+        flow = module_workflow("reverse")
+        pipes = build_workflow_pipes(flow, dispatcher, subtype="transformer")
+
+        with pytest.raises(InvalidPipelineError, match="requires a seed"):
+            list(pipes.sync_pipe())
+
 
 LOOP_FOLD_CASES = [
     pytest.param(
@@ -1438,12 +1446,10 @@ class TestPublicRegister:
     def test_register_runs_end_to_end(self, fixed_registry):
         """A registered alias of a built-in resolves and runs through a pipeline."""
         register_module(ModuleDefinition.from_module(tokenizer_module, name=_NAME))
-        source = Pipeline(source=[{"content": "a b c"}])
-        pipeline = source.pipe(_NAME, conf={"delimiter": " "})
+        pipeline = Pipeline.from_module(_NAME, conf={"delimiter": " "})
+        stream = pipeline([{"content": "a b c"}])
         expected = ["a", "b", "c"]
-        assert [
-            item.get("content") for item in pipeline if is_mapping(item)
-        ] == expected
+        assert [item.get("content") for item in stream if is_mapping(item)] == expected
 
     def test_reset_registry_clears_registration(self, fixed_registry):
         register_module(MOD_DEFN)

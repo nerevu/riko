@@ -2,16 +2,16 @@
 """
 The immutable, composable ``PipelineDefinition`` around a ``Workflow``.
 
-Composition (chaining modules, appending writes, providing a context, resources, or
-execution settings, and seeding it with items) derives a new definition and leaves the
-original unchanged. Running one belongs to ``riko.Pipeline``.
+Composition (chaining modules; appending writes; or providing a context, resources, or
+execution settings) derives a new definition and leaves the original unchanged. Running
+a ``Workflow`` belongs to ``riko.Pipeline``.
 
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from functools import partial
-from inspect import isawaitable
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -28,13 +28,14 @@ from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_mapping, is_streamlike
+from riko.base._guards import is_mapping
 from riko.base._require_guards import (
     narrow_def_from_require,
     require_instance,
     validator_from_require,
 )
 from riko.base._sentinels import MISSING, MissingType
+from riko.types._enums import ExecutionMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._streams import Item
 
@@ -62,7 +63,6 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
-    from riko.types._streams import SourceLike
     from riko.types.modules import AnyModuleConf, Conf
 
     from ._nodes import CallableVersion
@@ -76,14 +76,8 @@ if TYPE_CHECKING:
 T = TypeVar("T", default=Item)
 
 
-def _is_source(value: object) -> TypeGuard[SourceLike]:
-    """A seed on the left of ``|``: a stream, an async stream, or an awaitable."""
-    seedlike = is_streamlike(value) or isawaitable(value)
-    return seedlike and not isinstance(value, PipelineDefinition)
-
-
 def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
-    """A ``(name, conf)`` pair on the right of ``|``."""
+    """A ``(name, conf)`` pair, which the constructor refuses with a hint."""
     return (
         isinstance(value, tuple)
         and len(value) == 2
@@ -97,9 +91,23 @@ _EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
 
 def _require_workflow(value: object, what: str | None = None, **_) -> Workflow:
     if not isinstance(value, Workflow):
-        msg = "Pipeline() takes a Workflow or None; use Pipeline.from_module(name) "
-        msg += "for a module, Pipeline(source=items) to seed an item stream, or "
-        msg += "Workflow.parse(document) for a document"
+        msg = "Pipeline() takes a Workflow or None. "
+
+        if isinstance(value, PipelineDefinition):
+            msg += "Got a Pipeline. Did you mean Pipeline(pipeline.workflow)?"
+        elif is_mapping(value):
+            msg += "Got a mapping. Did you mean Pipeline(Workflow.parse(document))?"
+        elif isinstance(value, str):
+            msg += "Got a str. Did you mean Pipeline.from_module(name)?"
+        elif _is_module_pair(value):
+            msg += "Got a module pair."
+            msg += " Did you mean Pipeline.from_module(name, conf=conf)?"
+        elif isinstance(value, Iterable):
+            msg += "Got an iterable. Did you mean:\n\n    "
+            msg += "pipeline = Pipeline.from_module(name)\n    pipeline(items)"
+        else:
+            msg += f"Got {type(value).__name__!r} instead."
+
         raise TypeError(msg)
 
     return value
@@ -119,16 +127,13 @@ class PipelineDefinition(Generic[T]):
     """
     An immutable, composable pipeline definition around a ``Workflow``.
 
-    Composition returns the caller's own class; ``Pipeline`` adds running. Build one
-    from a ``Workflow``, ``from_module(name)``, ``source=items``, or empty for ``|``.
-    A seed is not copied, so a generator is consumed by the first run.
+    Build one from a ``Workflow`` or with ``.from_module(name)``. Use an empty one to
+    chain callables (via ``.map``) or other pipelines (via ``|``). To run a ``Workflow``
+    use ``Pipeline`` instead.
 
     Attributes:
 
-        workflow: The ``Workflow`` this pipeline runs.
-
-        source: The seed (the items the pipeline starts from), or ``None`` when the
-            graph supplies its own.
+        workflow: The ``Workflow`` this pipeline composes.
 
         context: The environment each run uses, including the resources it provides, or
             ``None`` for a default one.
@@ -150,13 +155,10 @@ class PipelineDefinition(Generic[T]):
         Endpoint(node='sort-1', port='out')
         >>> definition
         PipelineDefinition(fetch-1 -> sort-1; outputs: default)
-        >>> PipelineDefinition(source=[{"x": 1}]).source
-        [{'x': 1}]
 
     """
 
     workflow: Workflow = field(default=_EMPTY_WORKFLOW, converter=_optional_workflow)
-    source: SourceLike | None = field(default=None, repr=False)
     context: Context | None = field(
         default=None, kw_only=True, repr=False, validator=_is_context
     )
@@ -165,10 +167,9 @@ class PipelineDefinition(Generic[T]):
     )
 
     def __repr__(self) -> str:
-        seed = "" if self.source is None else "; seed"
         context = "" if self.context is None else "; context"
         summary = self.workflow.summary
-        return f"{type(self).__name__}({summary}{seed}{context})"
+        return f"{type(self).__name__}({summary}{context})"
 
     @classmethod
     def from_module(
@@ -208,14 +209,9 @@ class PipelineDefinition(Generic[T]):
         """
         return cls().pipe(name, conf=conf, options=options, embed=embed)
 
-    def replace(
-        self,
-        *,
-        workflow: Workflow | None = None,
-        source: SourceLike | MissingType | None = MISSING,
-    ) -> Self:
+    def replace(self, *, workflow: Workflow | None = None) -> Self:
         """
-        Derives a fresh pipeline with the given workflow or source.
+        Derives a fresh pipeline with the given workflow.
 
         The original is left unchanged, and the new pipeline keeps its context and
         execution settings.
@@ -224,9 +220,6 @@ class PipelineDefinition(Generic[T]):
 
             workflow: Replacement workflow, or ``None`` to keep the current one.
 
-            source: Replacement source, omitted to keep the current one, or ``None`` for
-                no source.
-
         Returns:
 
             A new pipeline of the same type.
@@ -234,21 +227,14 @@ class PipelineDefinition(Generic[T]):
         Examples:
 
             >>> sort = PipelineDefinition.from_module("sort")
-            >>> seeded = sort.replace(source=[{"x": 1}])
-            >>> seeded.source
-            [{'x': 1}]
-            >>> seeded.workflow == sort.workflow
-            True
-            >>> seeded.replace(source=None).source
-            >>> seeded.replace(workflow=Workflow()).source
-            [{'x': 1}]
+            >>> sorted(sort.workflow.nodes)
+            ['sort-1']
+            >>> fetch = PipelineDefinition.from_module("fetch")
+            >>> sorted(sort.replace(workflow=fetch.workflow).workflow.nodes)
+            ['fetch-1']
 
         """
-        return evolve(
-            self,
-            workflow=self.workflow if workflow is None else workflow,
-            source=self.source if isinstance(source, MissingType) else source,
-        )
+        return evolve(self, workflow=self.workflow if workflow is None else workflow)
 
     def pipe(
         self,
@@ -352,9 +338,9 @@ class PipelineDefinition(Generic[T]):
 
         Examples:
 
-            >>> definition = PipelineDefinition(source=[{"x": 1}]).write("out.csv")
+            >>> definition = PipelineDefinition.from_module("fetch").write("out.csv")
             >>> sorted(definition.workflow.nodes)
-            ['write-1']
+            ['fetch-1', 'write-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='write-1', port='out')
 
@@ -669,81 +655,95 @@ class PipelineDefinition(Generic[T]):
 
         return partial(self.pipe, name)
 
-    def _or_template(self, other: PipelineDefinition[Any]) -> Self:
-        """Chains a single-node, source-less pipeline used as a reusable template."""
-        flow = other.workflow
-        single = len(flow.nodes) == len(flow.runnable_nodes) == 1
-        node = next(iter(flow.runnable_nodes.values())) if single else None
+    def _combine_context(self, other: Context | None) -> Context | None:
+        """Combines ``other``'s resources into this pipeline's context."""
+        base = Context() if self.context is None else self.context
+        resources = {} if other is None else other.resources
+        clashes = [k for k, v in resources.items() if base.resources.get(k, v) is not v]
+        _run = (ExecutionMode.RUN, None, False)
 
-        if other.source is not None or node is None:
-            msg = "pipeline template must define exactly one module or callable"
+        if other is not None and (other.mode, other.inputs, other.test) != _run:
+            msg = "a pipeline on the right of '|' may provide resources, but not a "
+            msg += "mode, inputs, or test flag; give them to the composed pipeline"
+            raise InvalidPipelineError(msg)
+        elif clashes:
+            msg = f"both pipelines provide different resources named {sorted(clashes)}"
+            raise InvalidPipelineError(msg)
+        elif resources:
+            context = evolve(base, _resources={**base.resources, **resources})
+        else:
+            context = self.context
+
+        return context
+
+    def _compose(self, other: PipelineDefinition[Any]) -> Self:
+        """Chains ``other`` after this pipeline and combines their resources."""
+        if other.settings != DEF_EXECUTION_SETTINGS:
+            msg = "a pipeline on the right of '|' may not carry execution settings; "
+            msg += "call with_execution on the composed pipeline"
             raise InvalidPipelineError(msg)
 
-        fresh = evolve(node, id=self.workflow.get_node_id(node.name))
-        return self.replace(workflow=self.workflow.with_node(fresh))
+        workflow = self.workflow.with_workflow(other.workflow)
+        context = self._combine_context(other.context)
+        return evolve(self, workflow=workflow, context=context)
 
     def __or__(self, other: object) -> Self:
         """
-        Chains a module name, config pair, or single-module template using ``|``.
+        Chains a module name or another pipeline using ``|``.
+
+        A pipeline on the right may have any number of nodes. Its nodes get fresh ids
+        where needed, so ``(a | b) | c`` and ``a | (b | c)`` build the same pipeline.
+        Its resources join this pipeline's context. To chain a function, use ``.map``
+        instead. To configure a module, use ``.pipe(name, conf=...)`` or attribute
+        chaining.
 
         Args:
 
-            other: A module name, a ``(name, conf)`` pair, or a one-module pipeline.
+            other: A module name (a plain string or a ``Sources``/``Transforms``/
+                ``Sinks`` member) or a pipeline.
 
         Returns:
 
-            A new pipeline with the module appended.
+            A new pipeline whose default output is ``other``'s.
+
+        Raises:
+
+            TypeError: If ``other`` is a function.
+
+            InvalidPipelineError: If ``other`` carries execution settings; a context
+                with a mode, inputs, or test flag; duplicates a resource name; or its
+                workflow cannot be appended (see ``Workflow.with_workflow``).
 
         Examples:
 
+            >>> from riko import Transforms
+            >>>
             >>> definition = PipelineDefinition.from_module("fetch") | "sort"
             >>> sorted(definition.workflow.nodes)
             ['fetch-1', 'sort-1']
-            >>> fetch = PipelineDefinition.from_module("fetch")
-            >>> configured = fetch | ("sort", {"combine": "a"})
-            >>> dict(configured.workflow.nodes["sort-1"].conf)
+            >>> sort = PipelineDefinition.from_module("sort", conf={"combine": "a"})
+            >>> steps = sort | Transforms.REVERSE
+            >>> composed = PipelineDefinition.from_module("fetch") | steps
+            >>> composed.workflow.index.order
+            ('fetch-1', 'sort-1', 'reverse-1')
+            >>> dict(composed.workflow.nodes["sort-1"].conf)
             {'combine': 'a'}
+            >>> (composed | steps).workflow.index.order
+            ('fetch-1', 'sort-1', 'reverse-1', 'sort-2', 'reverse-2')
 
         """
-        if isinstance(other, str):
+        if isinstance(other, PipelineDefinition):
+            chained = self._compose(other)
+        elif isinstance(other, str):
             chained = self.pipe(other)
-        elif _is_module_pair(other):
-            name, conf = other
-            chained = self.pipe(name, conf=conf)
-        elif isinstance(other, PipelineDefinition):
-            chained = self._or_template(other)
+        elif callable(other):
+            msg = "'|' takes a module name or a pipeline, not a function. "
+            msg += "Use .map(fn) to call a function with each item."
+            raise TypeError(msg)
         else:
             chained = cast("Self", NotImplemented)
 
         return chained
-
-    def __ror__(self, other: object) -> Self:
-        """
-        Seeds the pipeline with the items on the left of ``|``.
-
-        Args:
-
-            other: The item stream, async item stream, or awaitable to seed this
-                pipeline with.
-
-        Returns:
-
-            A new pipeline seeded with ``other``.
-
-        Examples:
-
-            >>> items = [{"x": 1}, {"x": 2}]
-            >>> definition = items | PipelineDefinition.from_module("sort")
-            >>> definition.source is items
-            True
-
-        """
-        if self.source is None and _is_source(other):
-            primed = self.replace(source=other)
-        else:
-            primed = cast("Self", NotImplemented)
-
-        return primed
 
 
 __all__ = ["PipelineDefinition"]

@@ -21,8 +21,8 @@ Examples:
         python << 'EOF'
         from riko import Pipeline
 
-        source = [{'content': 'hi'}]
-        print(Pipeline(source=source).pipe('example.shout').first())
+        items = [{'content': 'hi'}]
+        print(Pipeline.from_module('example.shout').first(items))
         EOF
 
 """

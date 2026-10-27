@@ -38,7 +38,8 @@ Pipeline nodes and branches:
 incoming = Pipeline.subscribe("incoming")
 alerts = Pipeline.subscribe("alerts")
 
-pipeline = Pipeline(source=incoming).map(normalize).map(classify).publish(alerts)
+pipeline = Pipeline().map(normalize).map(classify).publish(alerts)
+stream = pipeline(incoming)
 ```
 
 No separate graph definition is required. Shared graph construction, validation,
@@ -87,10 +88,10 @@ class Subscription[T](Protocol): ...
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
-An external event source implementing `Subscription[T]` is an ordinary Pipeline source:
+An external event source implementing `Subscription[T]` is an ordinary Pipeline seed:
 
 ```python
-pipeline = Pipeline(source=subscription)
+stream = pipeline(subscription)
 ```
 
 An external event destination implementing `Publisher[T]` can be a publish target:

@@ -11,7 +11,9 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from typing import TYPE_CHECKING, Any, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, TypeGuard
+
+from typing_extensions import TypeVar
 
 from riko.base._guards import is_mapping
 from riko.base._sentinels import StreamState
@@ -74,9 +76,52 @@ type StreamGenerator = Generator[Any, None, Stream]
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
-type SourceLike = Item | Feed | Awaitable[Item | Feed]
+type InputLike = Item | Feed | Awaitable[Item | Feed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams
 
 
 def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
+
+
+T_co = TypeVar("T_co", covariant=True, default=Item)
+
+
+class PipelineStream(Protocol[T_co]):
+    """
+    One single-use pipeline run that can be iterated with ``for`` or ``async for``.
+
+    ``pipeline(items)`` returns a stream that is its own iterator: once consumed or
+    closed, another ``for`` loop yields nothing and ``next(stream, default)`` returns
+    ``default``. Use ``pipeline.open(items)`` instead to return a context manager that
+    closes the run on exit.
+    """
+
+    def __iter__(self) -> Iterator[T_co]: ...
+    def __next__(self) -> T_co: ...
+
+    def close(self) -> None:
+        """Stops the run and releases its resources (closing again does nothing)."""
+        ...
+
+    def __aiter__(self) -> AsyncIterator[T_co]: ...
+    async def __anext__(self) -> T_co: ...
+
+    async def aclose(self) -> None:
+        """Stops an asynchronous run and releases its resources."""
+        ...
+
+
+class PipelineRun(Protocol[T_co]):
+    """
+    A context manager over one pipeline run that closes the run on exit.
+
+    ``pipeline.open(items)`` returns a run: ``with`` yields a synchronous iterator and
+    ``async with`` an asynchronous one. Leaving the block (by exhaustion, ``break``, or
+    an exception) closes the run in the task that opened it.
+    """
+
+    def __enter__(self) -> Iterator[T_co]: ...
+    def __exit__(self, *exc: object) -> None: ...
+    async def __aenter__(self) -> AsyncIterator[T_co]: ...
+    async def __aexit__(self, *exc: object) -> None: ...

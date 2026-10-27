@@ -90,13 +90,13 @@ def pipe(*args: Any, **kwargs: Any) -> Stream:
 
 
 if __name__ == "__main__":
-    source = [{"content": "hi"}]
+    items = [{"content": "hi"}]
     name = "example.shout"
 
     if issync:
 
         def main() -> None:
-            print(list(Pipeline(source=source).pipe(name)))
+            print(list(Pipeline.from_module(name)(items)))
 
         register_module(ModuleDefinition(name=name, sync_pipe=pipe))
         main()
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     else:
 
         async def amain() -> None:
-            print([item async for item in Pipeline(source=source).pipe(name)])
+            print([item async for item in Pipeline.from_module(name)(items)])
 
         module = ModuleDefinition(name=name, sync_pipe=pipe, async_pipe=async_pipe)
         register_module(module)

@@ -227,8 +227,8 @@ class GraphEdge:
 
     Ports keep their workflow spelling: ``out`` on the source, and on the target either
     the default ``in``, a positional ``in:1``/``in:2`` input port, or a named input port
-    such as ``in:count``. Every input port delivers a stream; ``is_positional`` reports
-    whether the target port is a positional one.
+    such as ``in:count``. Every input port delivers a stream. ``is_default`` reports
+    whether the target port is the default one.
 
     Attributes:
 
@@ -245,8 +245,8 @@ class GraphEdge:
     target_port: str
 
     @property
-    def is_positional(self) -> bool:
-        return parse_port(self.target_port).is_positional
+    def is_default(self) -> bool:
+        return parse_port(self.target_port).is_default
 
 
 @define(frozen=True, slots=True)
@@ -350,9 +350,31 @@ class GraphIndex:
         }
         return FrozenDict(ordered)
 
-    def is_open(self, node: str) -> bool:
-        """Reports whether ``node``'s default input port is free for a seed to feed."""
-        return all(edge.is_positional for edge in self.incoming.get(node, ()))
+    def is_open(self, node_id: str) -> bool:
+        """
+        Reports whether node's default input port can accept a seed.
+
+        Only an edge into the bare default ``in`` port closes it. Positional ``in:<n>``
+        and named ``in:<name>`` edges leave it open.
+
+        Args:
+
+            node_id: The id of the node to check.
+
+        Returns:
+
+            ``True`` when no edge targets the node's default input port.
+
+        Examples:
+
+            >>> named = GraphEdge("a", "c", "out", "in:count")
+            >>> default = GraphEdge("b", "d", "out", "in")
+            >>> index = GraphIndex(["a", "b", "c", "d"], [named, default], {})
+            >>> index.is_open("c"), index.is_open("d")
+            (True, False)
+
+        """
+        return not any(map(attrgetter("is_default"), self.incoming.get(node_id, ())))
 
 
 __all__ = [

@@ -8,7 +8,14 @@ portal for async-only components, and the run's one worker pool.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Callable, Iterable, Iterator, Mapping
+from collections.abc import (
+    AsyncIterable,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+)
 from contextlib import ExitStack
 from functools import cached_property, partial
 from inspect import isawaitable
@@ -44,7 +51,7 @@ from ._execution import (
     _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _require_source,
+    _require_seed,
 )
 from ._pools import _PoolLifetime
 from ._resource_acquisition import build_context_manager, call_factory
@@ -341,16 +348,26 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return stream
 
-    def _build_source_stream(
-        self, value: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
+    def _open_seed(
+        self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
     ) -> Iterator[T]:
-        """Resolves a seed of any accepted shape to one lazy item stream."""
-        resolved = self.run_async(value) if isawaitable(value) else value
+        """
+        Opens a seed as the item stream this execution reads.
 
-        if isinstance(resolved, AsyncIterable):
-            stream = self._async_drain(resolved)
-        else:
+        A seed is one item, an item stream, an async item stream, or an awaitable
+        resolving to one of those. An awaitable is awaited when the run starts; the
+        stream itself stays lazy. A seed that is both sync- and async-iterable is
+        read synchronously. The execution closes a generator seed when it exits.
+        """
+        resolved = self.run_async(seed) if isawaitable(seed) else seed
+
+        if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
             stream = iter(normalize_items(resolved))
+        else:
+            stream = self._async_drain(resolved)
+
+        if isinstance(resolved, Generator):
+            self.callback(resolved.close)
 
         return stream
 
@@ -358,7 +375,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         self,
         plan: ExecutionPlan,
         output: str,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> Iterator[T]:
         """Builds the item stream for one of the plan's workflow outputs."""
         endpoint = plan.require_output(output)
@@ -367,9 +384,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         if self.settings.sync_policy.executor is Executor.PROCESS:
             require_process_safe(plan, output, self.context)
 
-        seed = None if source is None else self._build_source_stream(source)
+        stream = None if seed is None else self._open_seed(seed)
 
-        for node_id, node_seed in plan.gen_build_order(output, seed=seed):
+        for node_id, node_seed in plan.gen_build_order(output, seed=stream):
             steps[node_id] = self._build_stream(plan, node_id, steps, node_seed)
 
         return steps[endpoint.node]
@@ -379,7 +396,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         plan: ExecutionPlan,
         output: str = "default",
         *,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> Iterator[T]:
         """
         Builds the item stream for one of the plan's workflow outputs.
@@ -394,11 +411,12 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
             output: The name of the workflow output to produce.
 
-            source: A seed for the workflow output's open input in place of the
-                default empty seed. It can be one item, an item stream, an async item
-                stream, or an awaitable resolving to one of those. When omitted, only a
-                node with no default or positional input port receives that default. A
-                plan with no nodes streams it unchanged as its default output.
+            seed: Items for the workflow output's open input. It can be one item, an
+                item stream, an async item stream, or an awaitable resolving to one of
+                those. When omitted, every node whose default input port gets no input
+                stream must be self-starting (a source module, or a node that only feeds
+                named input ports). A plan with no nodes streams the seed unchanged as
+                its default output.
 
         Returns:
 
@@ -406,18 +424,19 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such workflow output, if it
-                has no nodes and no ``source`` is given, if ``source`` is supplied but
-                the workflow output has no single open input, or if the process executor
-                is chosen and a node cannot be sent to a worker process.
+            InvalidPipelineError: If ``output`` is not exposed by ``plan``; if ``seed``
+                isn't given and a node requires one, or the plan has no nodes; if
+                ``seed`` is given but the ``plan``'s ``output`` doesn't have exactly one
+                node for it to feed; or if the process executor is chosen and a node
+                cannot be sent to a worker process.
 
         """
         self._require_open("run")
 
         if plan.workflow.is_empty:
-            stream = self._build_source_stream(_require_source(source, output))
+            stream = self._open_seed(_require_seed(seed, output))
         else:
-            stream = self._run_plan(plan, output, source)
+            stream = self._run_plan(plan, output, seed)
 
         return stream
 
