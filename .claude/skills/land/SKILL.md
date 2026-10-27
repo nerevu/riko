@@ -1,6 +1,6 @@
 ---
 name: land
-description: Run riko's full pre-commit gate and get the working tree ready for the user to commit — dependency upgrade, /tidy, prettify, codegen drift, lint --all (which covers docs and docstrings), tests, check-types — then report a ready/not-ready verdict with a suggested commit message. Use when the user says "land this", "get this ready to commit", "run the gates", "is this ready to commit?", or wants a change finished and validated. This skill NEVER commits; the user commits themselves.
+description: Run riko's full pre-commit gate and get the working tree ready for the user to commit — dependency upgrade, /tidy, prettify, codegen drift, lint --all (which covers docs and docstrings), tests, check-types, verify-types — then report a ready/not-ready verdict with a suggested commit message. Use when the user says "land this", "get this ready to commit", "run the gates", "is this ready to commit?", or wants a change finished and validated. This skill NEVER commits; the user commits themselves.
 ---
 
 # Land (gate everything, commit nothing)
@@ -75,8 +75,10 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    judgment call for the user). When it lowers the ceiling, that `pyproject.toml`
    diff is part of the change — keep it. The ceiling is measured in the full dev
    environment (`--group dev --all-extras`, Python 3.12).
-6. **Types**: `manage lint --check-types` (never part of `--all`); add
-   `--verify-types` for changes to exported surfaces.
+6. **Types**: `manage lint --check-types` and `manage lint --verify-types`
+   (neither is part of `--all`). Always run both: an internal change (for
+   example a base class whose types come only from local `typings/` stubs) can
+   drop downstream type completeness without touching an exported surface.
 
 Fix real failures properly (root cause, not suppression), rerun the affected
 gate, and repeat until clean. If something cannot be fixed within the change's
@@ -96,10 +98,14 @@ on your own judgment.
 ## Commit plan
 
 Once the gates are clean, split the change into `fixup!` commits for the
-unpushed commits it amends, plus at most one new commit for the rest.
+branch commits it amends, plus at most one new commit for the rest.
 
-1. **Unpushed range**: `git log --oneline HEAD --not --remotes`. Only these
-   commits can be fixup targets; a pushed commit never is. If the range is
+1. **Branch range**: every commit past the branch's merge point, pushed or
+   not: the nearest merge-base with `next` or `main` (the mapper finds it;
+   `--base REF` overrides). Only these commits can be fixup targets; a commit
+   at or before the merge point never is. A pushed target is still a target:
+   the autosquash then rewrites published history, so `/wrapup`'s handover
+   ends with a force push (`git push --force-with-lease`). If the range is
    empty, skip to the single new-commit suggestion.
 2. **Map hunks to targets**: run the mapper instead of blaming by hand; it
    prints a short table however large the diff is:
@@ -113,9 +119,9 @@ unpushed commits it amends, plus at most one new commit for the rest.
    every new or deleted file, every untracked file, and every hunk whose added
    lines name something absent from its target's tree (an import of a module
    the change adds, a call to a name it introduces): squashed into an older
-   commit, those would leave it unable to build. A hunk whose blame is pushed
-   or spread over several commits falls back to its file's **latest touch**,
-   the newest unpushed commit editing that file, and is marked `*`. Blame
+   commit, those would leave it unable to build. A hunk whose blame predates the
+   branch or is spread over several commits falls back to its file's **latest touch**,
+   the newest branch commit editing that file, and is marked `*`. Blame
    doesn't vouch for a `*` hunk, so offer it only when the target's subject
    fits the hunk (a follow-up to that commit's work); otherwise drop it to the
    new commit. What remains are **fixup candidates**, listed per target with

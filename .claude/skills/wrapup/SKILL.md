@@ -50,8 +50,9 @@ single command batch:
 - `git status --short`, `git diff --stat` (staged and unstaged), and
   `git log --oneline -8`.
 - Pending fixups: `git log --format='%h %s' HEAD --not --remotes`. Each
-  `fixup! <subject>` line names its target by subject; the oldest target in
-  that range is the base for step 6's rebase line.
+  `fixup! <subject>` line names its target by subject. A target may already be
+  pushed, so find it in `git log --format='%h %s' HEAD`, not in that range; the
+  oldest target is the base for step 5's rebase line.
 - For each owner you expect to touch, the relevant section only: `grep -n` for
   the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
   `_docs/PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`
@@ -168,7 +169,10 @@ call that puts the autosquash line on the clipboard with `pbcopy`:
 git rebase -i --autosquash --autostash <oldest-target>~1
 ```
 
-`--autostash` lets it run while wrapup's doc edits are still uncommitted. In
+`--autostash` lets it run while wrapup's doc edits are still uncommitted. When
+a target was already pushed (`git branch -r --contains <target>` is non-empty),
+the rebase rewrites published history: append `&& git push --force-with-lease`
+to the clipboard line and say so in the report. In
 the handoff, record the fixups as "pending autosquash" with that line, so a
 session that starts before the user runs it knows to.
 
