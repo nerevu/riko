@@ -155,6 +155,8 @@ The common development commands are:
       - ``--tests``: stale generated tier indexes, tests outside a ``Test<Subject>``
         class, a subject owned by two files, and misplaced files.
       - ``--basenames``: two package modules sharing a file name.
+      - ``--escapes``: ``typing.Any`` references or ``typing.cast`` calls above their
+        ceilings in ``pyproject.toml`` (a lower count lowers the ceiling).
 
     - Runs all standard checks, including all import-contract ones, with ``--all``.
     - Keeps type completeness, strict pylint, and distribution checks explicit via

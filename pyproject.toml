@@ -298,6 +298,7 @@ omit = [
     "*/riko/cli/_import_*.py",
     "*/riko/cli/_lint*.py",
     "*/riko/cli/_logging.py",
+    "*/riko/cli/_ratchet.py",
     "*/riko/cli/_release.py",
     "*/riko/cli/_shipped_text.py",
     "*/riko/cli/_test.py",
@@ -309,6 +310,12 @@ omit = [
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain.
 uncovered = 415
+
+[tool.riko.typing]
+# Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
+# `typing.cast` calls. A run fails above either and lowers it on a gain.
+any = 229
+cast = 170
 
 [tool.pylint.format]
 max-line-length=88

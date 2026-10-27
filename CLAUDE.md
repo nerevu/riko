@@ -311,7 +311,7 @@ is a fallback, so it is a `resolve`.
   Details: `_docs/INTERNALS.md`.
 - **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
   runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
-  `--deps`, `--bindings`, `--tests`, `--basenames`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
+  `--deps`, `--bindings`, `--tests`, `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
   verification (`--check-types`/`--verify-types`), pylint strict mode, and
   distribution checks remain explicit heavyweight checks.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative

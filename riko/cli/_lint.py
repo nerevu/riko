@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import shutil
+from collections import Counter
 from functools import partial
 from glob import glob
 from itertools import chain
@@ -24,10 +25,12 @@ from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_basenames import gen_basename_issues
 from ._lint_bindings import gen_binding_issues
 from ._lint_deps import gen_hook_pin_issues, gen_import_issues
+from ._lint_escapes import ESCAPES, gen_escape_counts
 from ._lint_literals import gen_literal_issues
 from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
 from ._lint_tests import gen_layout_issues
+from ._ratchet import ratchet_ceiling
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -161,6 +164,18 @@ def _lint_basenames() -> int:
     return _report_text_lint(gen_basename_issues, PACKAGE_DIR)
 
 
+def _lint_escapes() -> int:
+    """Checks the package's ``Any`` and ``cast`` uses against their ceilings."""
+    pyproject = ROOT_DIR / "pyproject.toml"
+    totals = sum((counts for _, counts in gen_escape_counts(PACKAGE_DIR)), Counter())
+    ratchet = partial(ratchet_ceiling, pyproject, "typing")
+    codes = [
+        ratchet(escape.lower(), totals[escape], f"`{escape}` uses")
+        for escape in ESCAPES
+    ]
+    return max(codes)
+
+
 def _lint_deps() -> int:
     """Checks imports with deptry, then the run-time, guard, and pin rules it leaves."""
     if not _deptry:
@@ -290,6 +305,11 @@ def _check_command() -> None:
 @click.option(
     "--basenames", help="Check package modules for shared file names", is_flag=True
 )
+@click.option(
+    "--escapes",
+    help="Check Any and cast uses against their recorded ceilings",
+    is_flag=True,
+)
 @click.option("--all", "all_", help="Run every standard lint check", is_flag=True)
 @click.option(
     "-p",
@@ -317,6 +337,7 @@ def _lint_command(
     bindings: bool = False,
     tests: bool = False,
     basenames: bool = False,
+    escapes: bool = False,
     all_: bool = False,
     parallel: bool = False,
 ) -> None:
@@ -340,6 +361,7 @@ def _lint_command(
                 bindings,
                 tests,
                 basenames,
+                escapes,
                 all_,
             )
         )
@@ -374,6 +396,9 @@ def _lint_command(
 
         if basenames or all_:
             return_codes.append(_lint_basenames())
+
+        if escapes or all_:
+            return_codes.append(_lint_escapes())
 
         if actions or all_:
             exts = ["yml", "yaml"]

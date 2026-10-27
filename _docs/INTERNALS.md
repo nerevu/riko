@@ -186,6 +186,12 @@ sync when source is moved between package groups.
   (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
   `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer
   shared also fails, so the allowlist is pruned when a pair is renamed away.
+- **Escape ratchet.** `manage lint --escapes` counts `typing.Any` references and
+  `typing.cast` calls under `riko/` by import binding (an unrelated `cast`, such as a
+  coercion function, is not counted), including quoted annotations, quoted `cast` targets,
+  and quoted subscripts. The counts ratchet against `[tool.riko.typing]` `any`/`cast` in
+  `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as the coverage
+  ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml` diff).
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
   imports a public name through a private `riko` module path, and a module example in an
   underscore-prefixed module that defines no public name. Both read the public names

@@ -13,12 +13,8 @@ import click
 
 from riko.base._paths import ROOT_DIR
 
-from ._coverage import (
-    build_ceiling_text,
-    get_ratcheted_ceiling,
-    get_uncovered_ceiling,
-    load_uncovered_lines,
-)
+from ._coverage import load_uncovered_lines
+from ._ratchet import ratchet_ceiling
 
 _tox: str | None = shutil.which("tox")
 _pytest: str | None = shutil.which("pytest")
@@ -26,21 +22,10 @@ _pytest: str | None = shutil.which("pytest")
 
 def _ratchet_coverage(report: Path) -> int:
     pyproject = ROOT_DIR / "pyproject.toml"
-    text = pyproject.read_text(encoding="utf-8")
     uncovered = load_uncovered_lines(report)
-    recorded = get_uncovered_ceiling(text)
-    ceiling = uncovered if recorded is None else recorded
-    ratcheted = get_ratcheted_ceiling(ceiling, uncovered)
-
-    if uncovered > ceiling:
-        print(f"{uncovered} uncovered lines exceed the recorded ceiling of {ceiling}.")
-    elif recorded is None or ratcheted < recorded:
-        pyproject.write_text(build_ceiling_text(text, ratcheted), encoding="utf-8")
-        print(f"{uncovered} uncovered lines; recorded the ceiling as {ratcheted}.")
-    else:
-        print(f"{uncovered} uncovered lines hold the ceiling of {ceiling}.")
-
-    return 1 if uncovered > ceiling else 0
+    return ratchet_ceiling(
+        pyproject, "coverage", "uncovered", uncovered, "uncovered lines"
+    )
 
 
 @click.command(name="test")
@@ -88,6 +73,7 @@ def _test_command(
     """Run pytest, tox, and script tests."""
     _where = [*where, *paths]
     ratchet = bool(kwargs.get("ratchet"))
+
     if ratchet and (_where or kwargs.get("tox") or kwargs.get("failed")):
         msg = "--ratchet measures the whole suite under pytest; drop the paths, --tox, "
         raise click.UsageError(msg + "and --failed")

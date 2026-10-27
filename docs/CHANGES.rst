@@ -379,9 +379,9 @@ Dev
 ~~~
 
 - Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``,
-  ``--bindings``, ``--tests``, ``--basenames``, and ``--all`` to ``manage lint``, and
-  ``manage lint imports`` to check the internal import contracts. ``manage lint`` no
-  longer takes paths to check.
+  ``--bindings``, ``--tests``, ``--basenames``, ``--escapes``, and ``--all`` to
+  ``manage lint``; and ``manage lint imports`` to check the internal import contracts.
+  ``manage lint`` no longer takes paths to check.
 
 - Added ``manage test --ratchet``, which fails a full-suite run that leaves more
   statements uncovered than the ceiling recorded in ``pyproject.toml`` and lowers the

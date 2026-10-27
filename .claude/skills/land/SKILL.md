@@ -61,8 +61,8 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
 4. **Lint**: `manage lint --all`. It already runs Ruff, the RST/docs/docstring/
-   terms/literals/deps/bindings/tests/basenames checks, actionlint, YAML, and every import contract, so do not rerun
-   `--docs`, `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`, or `--basenames` separately. It does **not** run the type gate.
+   terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and every import contract, so do not rerun
+   `--docs`, `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes` separately. It does **not** run the type gate.
 5. **Tests**: targeted tests for the touched area first while iterating, then
    the full suite `manage test --ratchet --quiet` before declaring ready —
    in the foreground and alone: no other pytest or `manage` gate may run

@@ -28,7 +28,6 @@ from riko.cli import (
     _test,
     _upgrade,
 )
-from riko.cli._coverage import build_ceiling_text
 from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
 from riko.cli._docstyle import (
     gen_docstring_issues,
@@ -47,6 +46,7 @@ from riko.cli._lint_deps import (
     gen_runtime_imports,
     get_locked_version,
 )
+from riko.cli._lint_escapes import get_escape_counts
 from riko.cli._lint_import_architecture import (
     _validate_graph,
     load_architecture_report,
@@ -62,6 +62,7 @@ from riko.cli._lint_tests import (
     gen_layout_issues,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
+from riko.cli._ratchet import build_ceiling_text
 from riko.cli._upgrade import _pin_hooks
 from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
@@ -434,10 +435,6 @@ class TestCoverageRatchet:
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
 
-    def test_a_table_without_a_ceiling_line_is_rejected(self) -> None:
-        with pytest.raises(ValueError, match="has no uncovered line"):
-            build_ceiling_text("[tool.riko.coverage]\nother = 1\n", 5)
-
     @pytest.mark.parametrize(
         ("args", "present", "absent"),
         [
@@ -482,6 +479,34 @@ class TestCoverageRatchet:
         assert result.exit_code == 2
         assert "measures the whole suite" in result.output
         assert folders == []
+
+
+_TYPING = "[tool.riko.typing]\n"
+CEILING_TEXT_CASES = [
+    pytest.param("x = 1\n", "x = 1\n\n[tool.riko.typing]\nany = 4\n", id="no-table"),
+    pytest.param(f"{_TYPING}cast = 1\n", f"{_TYPING}any = 4\ncast = 1\n", id="no-key"),
+    pytest.param(f"{_TYPING}any = 9\n", f"{_TYPING}any = 4\n", id="rewrite"),
+    pytest.param(
+        f"{_TYPING}any = 9  # note\n",
+        f"{_TYPING}any = 4  # note\n",
+        id="inline-comment",
+    ),
+    pytest.param(
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 9\n",
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 4\n",
+        id="other-table-kept",
+    ),
+]
+
+
+class TestCeilingRatchet:
+    """The shared ``pyproject.toml`` ceiling a ratchet records."""
+
+    @pytest.mark.parametrize(("text", "expected"), CEILING_TEXT_CASES)
+    def test_ceiling_text_sets_only_the_named_key(
+        self, text: str, expected: str
+    ) -> None:
+        assert build_ceiling_text(text, "typing", "any", 4) == expected
 
 
 class TestConsoleScripts:
@@ -1209,6 +1234,60 @@ OPTIONAL_CASES = [
     pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
     pytest.param(REQUESTS, [], id="also-required"),
 ]
+
+
+ESCAPE_CASES = [
+    pytest.param("from typing import Any\nx: Any\n", 1, 0, id="bare-any"),
+    pytest.param("import typing as t\nx: t.Any\n", 1, 0, id="qualified-any"),
+    pytest.param("from typing import Any as A\nx: A\n", 1, 0, id="aliased-any"),
+    pytest.param("from typing import Any\nx: 'list[Any]'\n", 1, 0, id="quoted-any"),
+    pytest.param("from typing import Any\nX = A[B['Any']]\n", 1, 0, id="subscript"),
+    pytest.param("from typing import Any\ndef f() -> Any: ...\n", 1, 0, id="return"),
+    pytest.param("from typing import cast\ncast('int', x)\n", 0, 1, id="cast"),
+    pytest.param("import typing\ntyping.cast(int, x)\n", 0, 1, id="typing-cast"),
+    pytest.param(
+        "from typing import cast\ncast('dict[str, Any]', x)\n", 0, 1, id="unbound"
+    ),
+    pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
+]
+
+_ANY = "from typing import Any\n"
+_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
+ESCAPE_RATCHET_CASES = [
+    pytest.param(_ANY, 0, "any = 0\ncast = 0", id="gain-lowers"),
+    pytest.param(_ANY_CAST, 0, "any = 2\ncast = 1", id="equal-holds"),
+    pytest.param(_ANY + "x: Any\n" * 3, 1, "any = 2\ncast = 0", id="loss-fails"),
+]
+
+
+class TestEscapeLint:
+    """The ``Any`` and ``cast`` ceiling lint check."""
+
+    @pytest.mark.parametrize(("source", "any_", "cast"), ESCAPE_CASES)
+    def test_escapes_are_counted_once_by_binding(
+        self, source: str, any_: int, cast: int
+    ) -> None:
+        assert get_escape_counts(source) == {"Any": any_, "cast": cast}
+
+    @pytest.mark.parametrize(("source", "code", "ceilings"), ESCAPE_RATCHET_CASES)
+    def test_check_ratchets_each_ceiling(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        source: str,
+        code: int,
+        ceilings: str,
+    ) -> None:
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "mod.py").write_text(source, encoding="utf-8")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[tool.riko.typing]\nany = 2\ncast = 1\n")
+        monkeypatch.setattr(_lint, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
+
+        assert _lint._lint_escapes() == code
+        assert pyproject.read_text() == f"[tool.riko.typing]\n{ceilings}\n"
 
 
 class TestDependencyLint:
