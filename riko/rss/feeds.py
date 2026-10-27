@@ -91,7 +91,10 @@ def parse_rss(
 
         try:
             f = Fetch(source_name, binary=True, **kwargs)
-        except URLError:
+        except URLError as e:
+            if "File name too long" not in str(e.reason):
+                raise
+
             source, source_name = source_name, "content"
         else:
             if f.file and IS_FASTFEEDPARSER:

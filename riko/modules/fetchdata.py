@@ -92,7 +92,7 @@ async def async_parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
-    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    path = ".".join(listize(objconf.path))
     binary = ext == "json"
     f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
     ext = ext or getattr(f, "ext", None) or ""
@@ -137,8 +137,7 @@ def parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
-    paths = cast("list[str]", listize(objconf.path))
-    path = ".".join(paths)
+    path = ".".join(listize(objconf.path))
 
     with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext

@@ -100,6 +100,10 @@ Changes
 - ``Context`` is now a fully immutable snapshot, including nested ``inputs`` values.
   Derive a changed context with ``replace`` instead of direct assignment.
 
+- The fetch modules (``fetch``/``fetchdata``/``fetchpage``/``fetchtable``/``fetchtext``/
+  ``fetchsitefeed``) now raise when a URL can't be opened, e.g., a ``URLError`` for a
+  missing file, instead of logging an error and yielding empty content.
+
 - ``Context().inputs`` is now ``None`` when no input values are given, rather than an
   empty mapping. An ``input`` module still prompts when no input values are given, but
   an explicit ``inputs={}`` now uses each input's default instead of prompting.
@@ -270,6 +274,9 @@ Fixes
 
 - riko's errors now survive pickling and copying, so one raised in a worker process
   reaches the caller intact. Errors also no longer repeat their message.
+
+- The ``fetchdata`` module's ``async_pipe`` no longer raises ``TypeError`` when
+  ``path`` isn't set. It yields the whole document, like ``pipe``.
 
 - An async run or ``riko.async_map`` call whose single task fails now raises that error
   instead of wrapping it in an ``ExceptionGroup``.
