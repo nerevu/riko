@@ -1774,7 +1774,10 @@ phase deletes: the `regex.py` sync/async parsers (the sync one alone wraps `str(
 drift), the six-line table-reader block repeated across `csv.py`/`fetchtable.py`, the sync/async pairs
 in `fetchtext`, `feedautodiscovery`, `write`, `timeout`, `aggregate`, `udf`, and `fetchsitefeed`, and
 `rss/discovery.py`'s `load_rss_links`/`aload_rss_links`. Collapse each pair to one body as it moves to
-the Feed-native path.
+the Feed-native path. The collapsed table-reader body also owns the one narrowing from a meza row to
+`Item`: the local `typings/meza/` stubs type rows as `dict[str, str | None]` (`read_csv`) or `object`
+(`read`), which the invariant `Item` dict union rejects, so `csv.py` and `fetchtable.py` each carry two
+`cast("Stream", ...)` today (2026-10-27 typed-boundary triage).
 
 Audit note (2026-10-23 file-split audit): `riko/modules/_decorators.py` (~2050 lines) has three clean
 seams — the `Module` base with its option sets and terminal materialization, the `_Prepared*` call

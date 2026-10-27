@@ -309,13 +309,13 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain.
-uncovered = 415
+uncovered = 409
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
 # `typing.cast` calls. A run fails above either and lowers it on a gain.
-any = 229
-cast = 170
+any = 157
+cast = 137
 
 [tool.pylint.format]
 max-line-length=88

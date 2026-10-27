@@ -143,6 +143,6 @@ def export(
     else:
         fmt = cast("Formats", type_)
         serialized = serialize_items(items, fmt, **kwargs)
-        result = cast("int", io.write(f, serialized, **kwargs)) if f else serialized
+        result = io.write(f, serialized, **kwargs) if f else serialized
 
     return result

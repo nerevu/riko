@@ -232,6 +232,13 @@ sync when source is moved between package groups.
   `raw_set` doubles their cost.
 - **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
   the lower-level conversion semantics referenced by the runtime contract.
+- **Local type stubs.** meza ships no type information, so `typings/meza/` holds
+  hand-written `.pyi` stubs that pyright reads from its default `stubPath`. They cover
+  only the meza names riko imports, so a new meza import needs its stub here first.
+  `pyright --verifytypes` does not read `stubPath`, so a meza base class of a riko
+  class that reaches the verified surface is declared instead as a `TYPE_CHECKING`
+  facade in the subclass's module, with the meza import in the `else:` branch
+  (`_Objectify` in `riko/coercion/_objectify.py`).
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
   shortest useful form; implementation moves and private helper names do not belong
   there unless they change a supported import or command surface.
