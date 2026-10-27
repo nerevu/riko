@@ -16,11 +16,10 @@ from collections.abc import (
     Iterator,
     Mapping,
 )
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import ExitStack
 from functools import cached_property, partial
 from inspect import isawaitable
-from multiprocessing import Pool as CPUPool
-from multiprocessing.dummy import Pool as ThreadPool
 from typing import TYPE_CHECKING, Self, cast, overload
 
 from attrs import define, field
@@ -104,6 +103,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     """
 
     _stack: ExitStack = field(factory=ExitStack, init=False)
+    _pools: ExitStack = field(factory=ExitStack, init=False)
 
     def __enter__(self) -> Self:
         return self
@@ -117,8 +117,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             action = "open a worker pool in"
             raise PipelineStateError("sequential", action, subject="execution")
 
-        pool = ThreadPool(workers) if executor is Executor.THREAD else CPUPool(workers)
-        return self._stack.enter_context(_PoolLifetime(pool, workers))
+        pool_type = (
+            ThreadPoolExecutor if executor is Executor.THREAD else ProcessPoolExecutor
+        )
+        pool = pool_type(workers)
+        return self._pools.enter_context(_PoolLifetime(pool, workers))
 
     def close(
         self,
@@ -129,6 +132,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """
         Unwinds the exit stack and stops the portal under the primary error.
 
+        The worker pool is released first, so no worker still runs when resources close.
         Only the first call shuts the execution down. A repeated call does nothing.
         """
         suppressed = False
@@ -136,6 +140,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         if not self._closing:
             self._closing = True
             raised: BaseException | None = None
+            self._stack.push(self._pools)
 
             try:
                 suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))

@@ -175,7 +175,7 @@ Async mapping uses **bounded worker concurrency**: it does not create one task p
 item, materialize the entire source, or permit unbounded result buffering. Order-preserving
 streaming ships through `async_map_stream` / `async_map_ordered_stream`
 (`riko/bado/itertools.py`). Async ordering currently uses batched windows rather than a true
-indexed reorder buffer; the sync pool keeps order with a sliding `apply_async` look-ahead
+indexed reorder buffer; the sync pool keeps order with a sliding `Executor.submit` look-ahead
 window (`riko/execution/_pools.py`).
 
 `async_map` reads `limit=0` as unlimited (the streaming variants take a fixed worker count of
@@ -794,8 +794,11 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > (cores ×2 for threads) and the async limit from `concurrency_limit`. `ExecutionSettings`
 > derives a `SyncPolicy`/`AsyncPolicy` (`sync_policy`/`async_policy`):
 > sync maps loopable nodes over one shared pool (`_PoolLifetime.flat_map` in `riko/execution/_pools.py`) with
-> sliding `apply_async` windows that pull the source no further ahead than the pool width (`Pool.imap`
-> deadlocks when chained on the pool's single task-handler thread); async maps through
+> sliding `submit` windows on a `concurrent.futures` executor that pull the source no further ahead
+> than the pool width (a worker process that dies fails the run with `BrokenProcessPool`; an early close or a
+> failure terminates and joins every still-busy worker process, read from the executor's `_processes`,
+> since `cancel_futures` stops only queued work, and waits out busy threads, which cannot be stopped; the
+> execution releases the pool before unwinding its exit stack, so no worker outlives a resource); async maps through
 > `async_map_stream`/`async_map_ordered_stream` (fixed ordered batches; the sliding window waits on
 > R7's dedicated-task hosting) under one shared `Semaphore` budget, and the process
 > executor is refused under async. Concurrent pulling of fan-in branches is deferred to R7.
