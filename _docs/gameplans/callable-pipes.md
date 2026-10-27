@@ -45,7 +45,9 @@ module without a registered name (today a `ModuleNode` needs `name` and a `Calla
 with durable identity through `version=` and a process-executor story; design it with that node,
 not as a `|` special case. Strict xfail
 `tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`
-marks it (2026-10-27).
+marks it (2026-10-27). The typed `__or__` overloads on `PipelineDefinition` and `Pipeline` accept only
+a pipeline or a module name, so landing it also adds a decorated-module overload to both and drops
+the test's `pyright: ignore[reportOperatorIssue]`.
 
 Execution/planning characteristics may extend existing module options/metadata, including:
 

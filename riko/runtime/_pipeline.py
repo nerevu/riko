@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from functools import partial
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Concatenate, TypeGuard, cast, overload
+from typing import TYPE_CHECKING, Concatenate, TypeGuard, overload
 
 from attrs import define
 from typing_extensions import TypeVar
@@ -68,11 +68,15 @@ if TYPE_CHECKING:
 
     from riko.definitions._nodes import CallableVersion
     from riko.definitions._resource_definition import ResourcesLike
-    from riko.types._enums import IdentityModeLike
+    from riko.types._enums import IdentityModeLike, ModuleNameLike
+    from riko.types._frozendict import FrozenConf
+    from riko.types._options import CallOptionsLike
+    from riko.types._pipedef import Embed
     from riko.types._streams import InputLike, PipelineRun, PipelineStream
+    from riko.types.modules import Conf
 
 
-T = TypeVar("T", default=Item)
+T_co = TypeVar("T_co", covariant=True, default=Item)
 
 
 def _is_seed(value: object) -> TypeGuard[InputLike]:
@@ -82,7 +86,7 @@ def _is_seed(value: object) -> TypeGuard[InputLike]:
 
 
 @define(frozen=True, slots=True, repr=False)
-class Pipeline(PipelineDefinition[T]):
+class Pipeline(PipelineDefinition[T_co]):
     """
     An immutable, runnable chain of modules: each call with items is a fresh run.
 
@@ -109,7 +113,7 @@ class Pipeline(PipelineDefinition[T]):
 
     """
 
-    def __call__(self, seed: InputLike | None = None, /) -> PipelineStream[T]:
+    def __call__(self, seed: InputLike | None = None, /) -> PipelineStream[T_co]:
         """
         Starts a fresh run of the pipeline fed by ``seed``.
 
@@ -141,7 +145,7 @@ class Pipeline(PipelineDefinition[T]):
         """
         return _PipelineStream(self, dispatcher, seed)
 
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> Iterator[T_co]:
         """
         Synchronously runs a pipeline.
 
@@ -158,7 +162,7 @@ class Pipeline(PipelineDefinition[T]):
         """
         return iter(self())
 
-    def __aiter__(self) -> AsyncIterator[T]:
+    def __aiter__(self) -> AsyncIterator[T_co]:
         """
         Asynchronously runs a pipeline.
 
@@ -175,7 +179,7 @@ class Pipeline(PipelineDefinition[T]):
         """
         return aiter(self())
 
-    def __ror__(self, other: object) -> PipelineStream[T]:
+    def __ror__(self, other: object) -> PipelineStream[T_co]:
         """
         Starts a fresh run fed by the items on the left of ``|``.
 
@@ -219,7 +223,7 @@ class Pipeline(PipelineDefinition[T]):
 
         return stream
 
-    def open(self, seed: InputLike | None = None, /) -> PipelineRun[T]:
+    def open(self, seed: InputLike | None = None, /) -> PipelineRun[T_co]:
         """
         Starts a run fed by ``seed`` and returns it as a context manager.
 
@@ -253,7 +257,7 @@ class Pipeline(PipelineDefinition[T]):
 
     def map[R](
         self,
-        fn: Callable[[T], R] | Callable[Concatenate[T, ...], R],
+        fn: Callable[[T_co], R] | Callable[Concatenate[T_co, ...], R],
         *,
         resources: ResourcesLike = (),
         version: CallableVersion = MISSING,
@@ -308,16 +312,85 @@ class Pipeline(PipelineDefinition[T]):
             [1, 2]
 
         """
-        mapper = partial(super().map, fn, resources=resources, **kwargs)
-        return cast("Pipeline[R]", mapper(version=version, identity=identity))
+        flow = self._callable_workflow(
+            fn, resources=resources, version=version, identity=identity, **kwargs
+        )
+        return Pipeline[R](flow, context=self.context, settings=self.settings)
+
+    def pipe(
+        self,
+        name: ModuleNameLike,
+        *,
+        conf: FrozenConf | Conf | None = None,
+        options: CallOptionsLike | None = None,
+        embed: Embed | None = None,
+    ) -> Pipeline[Item]:
+        """
+        Chains the next module by name by re-pointing the default output to it.
+
+        Args:
+
+            name: The module to append.
+            conf: The module's configuration, if any.
+            options: The call options forwarded to the module, if any.
+            embed: The module a loop runs per item, with its configuration, if any.
+
+        Returns:
+
+            A new pipeline whose default output is the appended module.
+
+        Examples:
+
+            >>> pipeline = Pipeline().map(str).pipe("count")
+            >>> list(pipeline([1, 2]))
+            [{'count': 2}]
+
+        """
+        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        return Pipeline[Item](flow, context=self.context, settings=self.settings)
+
+    def __getattr__(self, name: str) -> Callable[..., Pipeline[Item]]:
+        """Chains a built-in module by attribute. E.g., ``.sort()`` appends sort."""
+        return partial(self.pipe, self._require_attribute(name))
+
+    def _compose[R](self, other: PipelineDefinition[R]) -> Pipeline[R]:
+        """Chains ``other`` after this pipeline and combines their resources."""
+        flow = self._composed_workflow(other)
+        context = self._combine_context(other.context)
+        return Pipeline[R](flow, context=context, settings=self.settings)
 
     @overload
-    def first(self, seed: InputLike | None = None, /) -> T: ...
+    def __or__[R](self, other: PipelineDefinition[R]) -> Pipeline[R]: ...
     @overload
-    def first[D](self, seed: InputLike | None = None, /, *, default: D) -> T | D: ...
+    def __or__(self, other: ModuleNameLike) -> Pipeline[Item]: ...
+    def __or__(self, other: object) -> PipelineDefinition[object]:
+        """
+        Chains a module name or another pipeline using ``|``.
+
+        Args:
+
+            other: A module name or a pipeline.
+
+        Returns:
+
+            A new pipeline whose default output is ``other``'s.
+
+        Examples:
+
+            >>> pipeline = Pipeline().map(str) | Pipeline().map(len)
+            >>> list(pipeline([10, 200]))
+            [2, 3]
+
+        """
+        return self._chain(other)
+
+    @overload
+    def first(self, seed: InputLike | None = None, /) -> T_co: ...
+    @overload
+    def first[D](self, seed: InputLike | None = None, /, *, default: D) -> T_co | D: ...
     def first[D](
         self, seed: InputLike | None = None, /, *, default: D | MissingType = MISSING
-    ) -> T | D:
+    ) -> T_co | D:
         """
         Runs the pipeline just long enough to read its first item.
 
@@ -360,14 +433,14 @@ class Pipeline(PipelineDefinition[T]):
         return item
 
     @overload
-    async def afirst(self, seed: InputLike | None = None, /) -> T: ...
+    async def afirst(self, seed: InputLike | None = None, /) -> T_co: ...
     @overload
     async def afirst[D](
         self, seed: InputLike | None = None, /, *, default: D
-    ) -> T | D: ...
+    ) -> T_co | D: ...
     async def afirst[D](
         self, seed: InputLike | None = None, /, *, default: D | MissingType = MISSING
-    ) -> T | D:
+    ) -> T_co | D:
         """
         Asynchronously runs the pipeline just long enough to read its first item.
 

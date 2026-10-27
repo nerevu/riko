@@ -910,7 +910,7 @@ executable, not guarded: `union` reads `others` as an ordered list and legacy `_
 `in:2` (`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
 `parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
 tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
-item is also done: `InputLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
+item is also done: `InputLike` (`Item | ValueFeed | Awaitable[Item | ValueFeed]`) is resolved once in
 `SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing
 `normalize_items` in `_adapt.py`); `Pipeline.__call__`, `__ror__`, and the generated module template
 hand the raw seed through, and the async `processor` wrapper maps an `AsyncIterable` input lazily
@@ -1042,6 +1042,14 @@ Deliver:
   another pipeline, while one that declares inputs over a source root counts as a transformer.
   Routed here from R4C's per-run seed work (2026-10-24) because the fix belongs with the input
   declarations it reads.
+- an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule starts any
+  non-output node whose outgoing edges all enter named ports, inferred from graph position alone,
+  so an ordinary transform there runs on the internal placeholder seed (`hash` feeding
+  `itembuilder`'s `in:v` yields `{"k": 0}` unseeded). The rule stays for v1 parity (the Yahoo Pipes
+  String Builder root in `pipe_b962874`) until a node can declare itself a value source; whether
+  undeclared feeders then keep starting themselves is this phase's call (if they do, delete the
+  tripwire rather than flip it). Strict xfail
+  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1119,6 +1127,12 @@ Deliver:
   makes it a 1.0 requirement). It touches the decorator wrapper builder, `ModuleDefinition`'s
   interface slots, and codegen, beside the plain-callable slot decision in
   [extensibility.md](extensibility.md) E1.
+- callable nodes that resolve without a donor module (triaged 2026-10-27): `Pipeline.map` borrows the
+  registered `udf` module's metadata (`_resolve_callable`), so `register_module(..., replace=True)`
+  of a sync-only `udf` makes `.map` of an async callable raise "neither a sync nor an async
+  callable" although `udf` itself never runs. The E1 plain-callable slot decision removes the
+  borrowing. Strict xfail
+  `tests/public/test_pipeline.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
 annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers

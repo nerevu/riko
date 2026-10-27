@@ -76,7 +76,8 @@ type StreamGenerator = Generator[object, None, Stream]
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
-type InputLike = Item | Feed | Awaitable[Item | Feed]
+type ValueFeed = AnyIterable[ItemValue]
+type InputLike = Item | ValueFeed | Awaitable[Item | ValueFeed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams
 
 

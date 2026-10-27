@@ -477,10 +477,11 @@ property, the `NodeFamily`/`EdgeFamily`/`PortDirection` discriminant literals, `
 `riko/definitions/` — the closed node union
 `ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` and the edge families
 `StreamEdge`/`PublishEdge` in `_nodes.py`, the `Workflow` envelope in `_workflow_definition.py`, and the generic
-`PipelineDefinition[T]` in `_pipeline_definition.py`, which owns every pipeline field and composition method
-(each returns `Self`). The runnable STABLE `Pipeline` is its
-subclass in `riko/runtime/_pipeline.py`, adding only `__iter__`/`__aiter__`/`first`/`afirst`, so no
-definition imports upward (the architecture lint fails function-local upward imports too).
+`PipelineDefinition[T_co]` in `_pipeline_definition.py`, which owns every pipeline field and composition method
+(settings/context/write derive `Self`; chaining by module name returns `PipelineDefinition[Item]`, `map[R]`
+and `|` with a pipeline retype to the last node's item type). The runnable STABLE `Pipeline` is its
+subclass in `riko/runtime/_pipeline.py`, adding the run entry points and re-typing the chaining methods to
+return `Pipeline[...]`, so no definition imports upward (the architecture lint fails function-local upward imports too).
 
 The node/edge model, `Endpoint`, and `Workflow` are all `attrs @define(frozen, slots)` classes.
 The six node families share a public **`Node`** base (`id`/`name`/`resources`/`label` + a `family`
@@ -529,8 +530,8 @@ use converter lists until R4D and R9 settle their value types. Field introspecti
 uses `riko.base._recordutils.field_names` (attrs-or-dataclass field names *including* `ClassVar`
 discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both drop), never
 `dataclasses.*`; derive variants with `attrs.evolve`. `PipelineDefinition` (and so `Pipeline`) is an
-`attrs @define(frozen, slots)` class like the rest of the model — generic `PipelineDefinition[T]` via a
-defaulted `TypeVar` (type-parameter defaults need Python 3.13; the floor is 3.12), with its `workflow`
+`attrs @define(frozen, slots)` class like the rest of the model — generic `PipelineDefinition[T_co]` via a
+defaulted covariant `TypeVar` (type-parameter defaults need Python 3.13; the floor is 3.12), with its `workflow`
 field normalizing `None`/omitted to the empty `Workflow` through the shared `_optional_workflow` converter, so
 `Pipeline()` is a valid empty pipeline to compose onto. The node/edge/`Workflow`/`Endpoint` model is EXTENSION
 (`riko.ext`). Tests:
@@ -1079,7 +1080,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   (`ExecutionPlan.require_seed_target`: an open node is one with no edge into its bare default `in`
   port — `GraphIndex.is_open`, 2026-10-23; the seed feeds the single open node that is not
   self-starting, else the single open node; otherwise `InvalidPipelineError`) while other open nodes take the
-  default seed and must be self-starting. The seed is an `InputLike` (`Item | Feed | Awaitable[Item | Feed]`,
+  default seed and must be self-starting. The seed is an `InputLike` (`Item | ValueFeed | Awaitable[Item | ValueFeed]`, a `ValueFeed` being any sync/async iterable of item values,
   `riko/types/_streams.py`) opened once per run — `SyncExecution._open_seed` awaits an
   awaitable through the portal and drains an async-only stream through it, `AsyncExecution.
   _aopen_seed` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
@@ -1207,8 +1208,8 @@ tuple and a dict as a `FrozenDict`.
 - **No document form.** `validate_document_nodes` refuses a callable node in `serialize_graph` and
   `build_raw_graph` (so `Workflow.serialize`, `normalize_workflow`/`Workflow.parse` of a `Workflow`,
   and `compile_workflow` all raise); a raw node with family `"callable"` raises in `_build_node`.
-- **Typing.** `map[R]` takes `Callable[[T], R] | Callable[Concatenate[T, ...], R]` and casts the
-  derived definition to `PipelineDefinition[R]`; `Pipeline.map` narrows it to `Pipeline[R]`.
+- **Typing.** `map[R]` takes `Callable[[T_co], R] | Callable[Concatenate[T_co, ...], R]` and builds a
+  `PipelineDefinition[R]` directly (no cast); `Pipeline.map` builds a `Pipeline[R]` the same way.
 
 Regressions: `tests/public/test_pipeline.py::TestCallableNodes`,
 `tests/internal/test_definitions.py::TestCallableNode`, and

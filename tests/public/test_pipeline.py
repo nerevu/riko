@@ -334,7 +334,7 @@ class TestPipelineChaining:
         def doubled(item, extraction, objconf, **kwargs) -> int:
             return item["x"] * 2
 
-        pipeline = Pipeline() | doubled
+        pipeline = Pipeline() | doubled  # pyright: ignore[reportOperatorIssue]
         assert list(pipeline([{"x": 3}])) == [{"x": 3, "doubled": 6}]
 
     def test_a_module_name_after_a_stream_asks_to_compose_first(self):
@@ -1772,7 +1772,7 @@ class TestCallableNodes:
     @pytest.mark.parametrize("settings", [{}, _THREAD], ids=["inline", "thread"])
     def test_a_seed_of_lists_maps_each_list_whole(self, settings):
         pipeline = Pipeline().map(len).with_execution(**settings)
-        assert list(pipeline([[1, 2], [3]])) == [2, 1]  # pyright: ignore[reportArgumentType]
+        assert list(pipeline([[1, 2], [3]])) == [2, 1]
 
     @pytest.mark.parametrize("returned", [[1, 2], []], ids=["full", "empty"])
     def test_map_returns_an_iterator_as_one_item(self, returned):
@@ -1858,6 +1858,24 @@ class TestCallableNodes:
         with pytest.raises(InvalidPipelineError):
             Pipeline().map(len, identity="combine")
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "callable nodes that resolve without borrowing the registered udf module "
+            "are not yet implemented"
+        ),
+    )
+    @skipif_issync
+    def test_map_ignores_a_replaced_udf_module(self):
+        reset_module_registry()
+        sync_pipe = cast("SyncModuleWrapper", list)
+        register_module(ModuleDefinition(name="udf", sync_pipe=sync_pipe), replace=True)
+
+        try:
+            assert list(Pipeline().map(_ascaled)([{"x": 1}])) == [2]
+        finally:
+            reset_module_registry()
+
     @pytest.mark.parametrize(
         ("fn", "node_id"),
         [
@@ -1877,7 +1895,15 @@ class TestCallableNodes:
     def test_a_callable_pipeline_chains_with_or(self):
         pipeline = Pipeline().map(str) | Pipeline().map(str)
         assert list(pipeline.workflow.nodes) == ["str-1", "str-2"]
-        assert list(pipeline([1])) == ["1"]  # pyright: ignore[reportArgumentType]
+        assert list(pipeline([1])) == ["1"]
+
+    def test_chaining_yields_the_last_nodes_type(self):
+        strings = Pipeline().map(str)
+        lengths = strings | Pipeline().map(len)
+        assert_type(lengths, Pipeline[int])
+        assert_type(strings | "count", "Pipeline[Item]")
+        assert_type(strings.pipe("count"), "Pipeline[Item]")
+        assert_type(strings.count(), "Pipeline[Item]")
 
     @skipif_issync
     def test_sync_iteration_bridges_an_async_callable(self):
@@ -1893,7 +1919,7 @@ class TestCallableNodes:
     async def test_async_iteration_runs_a_sync_callable(self):
         pipeline = Pipeline().map(len)
         seed = ["hi", "you"]
-        stream = pipeline(seed)  # pyright: ignore[reportArgumentType]
+        stream = pipeline(seed)
         assert [item async for item in stream] == [2, 3]
 
     def test_process_executor_runs_a_module_level_callable(self):

@@ -19,7 +19,6 @@ from typing import (
     Literal,
     Self,
     TypeGuard,
-    cast,
     overload,
 )
 
@@ -72,7 +71,7 @@ if TYPE_CHECKING:
     )
     from ._write import Destination
 
-T = TypeVar("T", default=Item)
+T_co = TypeVar("T_co", covariant=True, default=Item)
 
 
 def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
@@ -122,7 +121,7 @@ _is_settings = validator_from_require(
 
 
 @define(frozen=True, slots=True, repr=False)
-class PipelineDefinition(Generic[T]):
+class PipelineDefinition(Generic[T_co]):
     """
     An immutable, composable pipeline definition around a ``Workflow``.
 
@@ -206,7 +205,8 @@ class PipelineDefinition(Generic[T]):
             Endpoint(node='sort-1', port='out')
 
         """
-        return cls().pipe(name, conf=conf, options=options, embed=embed)
+        flow = cls()._module_workflow(name, conf=conf, options=options, embed=embed)
+        return cls(workflow=flow)
 
     def replace(self, *, workflow: Workflow | None = None) -> Self:
         """
@@ -242,7 +242,7 @@ class PipelineDefinition(Generic[T]):
         conf: FrozenConf | Conf | None = None,
         options: CallOptionsLike | None = None,
         embed: Embed | None = None,
-    ) -> Self:
+    ) -> PipelineDefinition[Item]:
         """
         Chains the next module by name by re-pointing the default output to it.
 
@@ -278,12 +278,26 @@ class PipelineDefinition(Generic[T]):
             CallOptions(emit=True)
 
         """
+        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        return PipelineDefinition[Item](
+            flow, context=self.context, settings=self.settings
+        )
+
+    def _module_workflow(
+        self,
+        name: ModuleNameLike,
+        *,
+        conf: FrozenConf | Conf | None = None,
+        options: CallOptionsLike | None = None,
+        embed: Embed | None = None,
+    ) -> Workflow:
+        """Appends module ``name`` to the workflow as its new default output."""
         module, flow = str(name), self.workflow
         node_id = flow.get_node_id(module)
         node = ModuleNode(
             id=node_id, name=module, conf=conf, options=options, embed=embed
         )
-        return self.replace(workflow=flow.with_node(node))
+        return flow.with_node(node)
 
     def write(
         self,
@@ -339,7 +353,10 @@ class PipelineDefinition(Generic[T]):
 
         """
         if dest is None:
-            written = self.pipe("write", conf=conf, options=options, embed=embed)
+            flow = self._module_workflow(
+                "write", conf=conf, options=options, embed=embed
+            )
+            written = self.replace(workflow=flow)
         elif conf is not None or options is not None or embed is not None:
             msg = "write() takes either a destination or module arguments, not both"
             raise TypeError(msg)
@@ -571,7 +588,7 @@ class PipelineDefinition(Generic[T]):
 
     def map[R](
         self,
-        fn: Callable[[T], R] | Callable[Concatenate[T, ...], R],
+        fn: Callable[[T_co], R] | Callable[Concatenate[T_co, ...], R],
         *,
         resources: ResourcesLike = (),
         version: CallableVersion = MISSING,
@@ -626,15 +643,28 @@ class PipelineDefinition(Generic[T]):
             Endpoint(node='map-1', port='out')
 
         """
-        flow = self.workflow
-        name = get_callable_name(fn, "map")
-        args = {"version": version, "identity": identity, "kwargs": kwargs}
-        _id = flow.get_node_id(name)
-        node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **args)
-        mapped = self.replace(workflow=flow.with_node(node))
-        return cast("PipelineDefinition[R]", mapped)
+        flow = self._callable_workflow(
+            fn, resources=resources, version=version, identity=identity, **kwargs
+        )
+        return PipelineDefinition[R](flow, context=self.context, settings=self.settings)
 
-    def __getattr__(self, name: str) -> Callable[..., Self]:
+    def _callable_workflow(
+        self,
+        fn: Callable[..., object],
+        *,
+        resources: ResourcesLike = (),
+        version: CallableVersion = MISSING,
+        identity: IdentityModeLike | None = None,
+        **kwargs: object,
+    ) -> Workflow:
+        """Appends a callable node for ``fn`` to the workflow as its default output."""
+        flow, name = self.workflow, get_callable_name(fn, "map")
+        _kwargs = {"version": version, "identity": identity, "kwargs": kwargs}
+        _id = flow.get_node_id(name)
+        node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **_kwargs)
+        return flow.with_node(node)
+
+    def __getattr__(self, name: str) -> Callable[..., PipelineDefinition[Item]]:
         """
         Chains a module by attribute. E.g., ``.sort()`` appends the sort module.
 
@@ -643,10 +673,14 @@ class PipelineDefinition(Generic[T]):
         ``.pipe(name)``, as does a built-in module named like a ``Pipeline`` method
         (e.g., ``split``).
         """
+        return partial(self.pipe, self._require_attribute(name))
+
+    def _require_attribute(self, name: str) -> str:
+        """Requires ``name`` to name a built-in module (``AttributeError`` if not)."""
         if name not in BUILTIN_MODULE_IDS:
             raise AttributeError(name)
 
-        return partial(self.pipe, name)
+        return name
 
     def _combine_context(self, other: Context | None) -> Context | None:
         """Combines ``other``'s resources into this pipeline's context."""
@@ -669,18 +703,41 @@ class PipelineDefinition(Generic[T]):
 
         return context
 
-    def _compose(self, other: PipelineDefinition[object]) -> Self:
-        """Chains ``other`` after this pipeline and combines their resources."""
+    def _composed_workflow(self, other: PipelineDefinition[object]) -> Workflow:
+        """Appends ``other``'s workflow unless it carries execution settings."""
         if other.settings != DEF_EXECUTION_SETTINGS:
             msg = "a pipeline on the right of '|' may not carry execution settings; "
             msg += "call with_execution on the composed pipeline"
             raise InvalidPipelineError(msg)
 
-        workflow = self.workflow.with_workflow(other.workflow)
-        context = self._combine_context(other.context)
-        return evolve(self, workflow=workflow, context=context)
+        return self.workflow.with_workflow(other.workflow)
 
-    def __or__(self, other: object) -> Self:
+    def _compose[R](self, other: PipelineDefinition[R]) -> PipelineDefinition[R]:
+        """Chains ``other`` after this pipeline and combines their resources."""
+        flow = self._composed_workflow(other)
+        context = self._combine_context(other.context)
+        return PipelineDefinition[R](flow, context=context, settings=self.settings)
+
+    def _chain(self, other: object) -> PipelineDefinition[object]:
+        """Chains a module name or another pipeline (the dispatch behind ``|``)."""
+        if isinstance(other, PipelineDefinition):
+            chained = self._compose(other)
+        elif isinstance(other, str):
+            chained = self.pipe(other)
+        elif callable(other):
+            msg = "'|' takes a module name or a pipeline, not a function. "
+            msg += "Use .map(fn) to call a function with each item."
+            raise TypeError(msg)
+        else:
+            chained = NotImplemented
+
+        return chained
+
+    @overload
+    def __or__[R](self, other: PipelineDefinition[R]) -> PipelineDefinition[R]: ...
+    @overload
+    def __or__(self, other: ModuleNameLike) -> PipelineDefinition[Item]: ...
+    def __or__(self, other: object) -> PipelineDefinition[object]:
         """
         Chains a module name or another pipeline using ``|``.
 
@@ -725,18 +782,7 @@ class PipelineDefinition(Generic[T]):
             ('fetch-1', 'sort-1', 'reverse-1', 'sort-2', 'reverse-2')
 
         """
-        if isinstance(other, PipelineDefinition):
-            chained = self._compose(other)
-        elif isinstance(other, str):
-            chained = self.pipe(other)
-        elif callable(other):
-            msg = "'|' takes a module name or a pipeline, not a function. "
-            msg += "Use .map(fn) to call a function with each item."
-            raise TypeError(msg)
-        else:
-            chained = cast("Self", NotImplemented)
-
-        return chained
+        return self._chain(other)
 
 
 __all__ = ["PipelineDefinition"]
