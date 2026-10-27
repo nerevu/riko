@@ -94,12 +94,12 @@ _TARGET = re.compile(
 
 
 def _read(path: Path) -> str:
-    """Read a UTF-8 document, returning empty text when it is absent."""
+    """Reads a UTF-8 document, or empty text when it is absent."""
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
 def _tracked_docs() -> set[Path]:
-    """List internal Markdown documents tracked by git."""
+    """Lists internal Markdown documents tracked by git."""
     if not _GIT:
         raise RuntimeError("git not found")
 
@@ -114,26 +114,26 @@ def _tracked_docs() -> set[Path]:
 
 
 def _gameplan_paths() -> list[Path]:
-    """List authoritative Markdown gameplans tracked by git in stable order."""
+    """Lists authoritative Markdown gameplans tracked by git in stable order."""
     tracked = _tracked_docs()
     globbed = _GAMEPLANS.glob("*.md") if _GAMEPLANS.exists() else []
     return sorted(path for path in globbed if path in tracked)
 
 
 def _root_doc_paths() -> list[Path]:
-    """List root internal Markdown documents tracked by git in stable order."""
+    """Lists root internal Markdown documents tracked by git in stable order."""
     tracked = _tracked_docs()
     return sorted(path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
 
 
 def _root_markdown_offenders() -> list[str]:
-    """Find tracked root Markdown documents outside the authority allowlist."""
+    """Finds tracked root Markdown documents outside the authority allowlist."""
     paths = _root_doc_paths()
     return [path.name for path in paths if path.name not in _ROOT_MARKDOWN]
 
 
 def _version_tuple(text: str) -> tuple[int, int, int]:
-    """Parse the first semantic version in text."""
+    """Parses the first semantic version in text."""
     if match := _VERSION.search(text):
         major, minor, patch = match.groups()
         parsed = (int(major), int(minor), int(patch))
@@ -144,20 +144,20 @@ def _version_tuple(text: str) -> tuple[int, int, int]:
 
 
 def _packaged_version() -> tuple[int, int, int]:
-    """Read the packaged project version from pyproject.toml."""
+    """Reads the packaged project version from pyproject.toml."""
     data = tomllib.loads(_read(_PYPROJECT)) if _PYPROJECT.exists() else {}
     raw = data.get("project", {}).get("version", "0.0.0")
     return _version_tuple(raw)
 
 
 def _status_banner_offenders() -> list[str]:
-    """Find gameplans that claim phase status locally."""
+    """Finds gameplans that claim phase status locally."""
     paths = _gameplan_paths()
     return [path.name for path in paths if _STATUS_BANNER.search(_read(path))]
 
 
 def _authority_namespace_offenders() -> list[str]:
-    """Find non-authoritative documents left in the active gameplan namespace."""
+    """Finds non-authoritative documents left in the active gameplan namespace."""
     offenders: list[str] = []
 
     for path in _gameplan_paths():
@@ -170,7 +170,7 @@ def _authority_namespace_offenders() -> list[str]:
 
 
 def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
-    """Find archive or research links listed in ROADMAP tables."""
+    """Finds archive or research links listed in ROADMAP tables."""
     return [
         line.strip()
         for line in roadmap.splitlines()
@@ -179,7 +179,7 @@ def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
 
 
 def _phase_closure_offenders() -> list[str]:
-    """Find R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
+    """Finds R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
     markers = ("- **ADD:**", "- **MIGRATE:**", "- **DELETE:**")
     offenders: list[str] = []
 
@@ -321,7 +321,7 @@ def _gen_citation_offenders(
     known: Iterable[str],
     *paths: Path,
 ) -> Iterator[str]:
-    """Format each document's stale citations as ``path:line: cited`` offenders."""
+    """Formats each document's stale citations as ``path:line: cited`` offenders."""
     _known = frozenset(known)
 
     for path in paths:
@@ -330,7 +330,7 @@ def _gen_citation_offenders(
 
 
 def _gen_stale_test_citation_offenders() -> Iterator[str]:
-    """Find tracked docs citing test files that no longer exist."""
+    """Finds tracked docs citing test files that no longer exist."""
     known = (
         path.relative_to(ROOT_DIR).as_posix() for path in TESTS_DIR.glob("*/test_*.py")
     )
@@ -345,7 +345,7 @@ def _gen_stale_test_citation_offenders() -> Iterator[str]:
 
 def _gen_stale_path_citation_offenders() -> Iterator[str]:
     """
-    Find current-state docs citing source files that no longer exist.
+    Finds current-state docs citing source files that no longer exist.
 
     ``MILESTONES.md`` records history, so it is not scanned.
     """
@@ -357,7 +357,7 @@ def _gen_stale_path_citation_offenders() -> Iterator[str]:
 
 
 def _api_surface_offenders() -> list[str]:
-    """Find API-surface blocks that drift from the contract declaration."""
+    """Finds API-surface blocks that drift from the contract declaration."""
     offenders: list[str] = []
 
     if text := _read(_DOC):
@@ -387,7 +387,7 @@ def _gen_verb_table_offenders() -> Iterator[str]:
 
 
 def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
-    """Find completion claims for versions newer than the packaged version."""
+    """Finds completion claims for versions newer than the packaged version."""
     return [
         line.strip()
         for path in (_TRACKER, _ROADMAP)
