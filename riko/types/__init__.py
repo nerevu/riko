@@ -7,6 +7,7 @@ not part of the SemVer-guaranteed API.
 """
 
 from ._events import EventSink
+from ._options import CallOptions, CallOptionsLike, RawCallOptions
 from ._pipedef import PipeDag, PipeDef, PipeDefLike
 from ._resource import (
     AsyncLifecyclePlan,
@@ -38,6 +39,8 @@ __all__ = [
     "AsyncLifecyclePlan",
     "AsyncPipeTuples",
     "AsyncStream",
+    "CallOptions",
+    "CallOptionsLike",
     "Conf",
     "EventSink",
     "ExternalPlan",
@@ -53,6 +56,7 @@ __all__ = [
     "PipeTuples",
     "PipelineRun",
     "PipelineStream",
+    "RawCallOptions",
     "RawEdge",
     "RawEndpoint",
     "RawNode",
