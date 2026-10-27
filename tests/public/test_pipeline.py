@@ -88,6 +88,11 @@ PUBSUB_PENDING = pytest.mark.xfail(
 SPLIT_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.split() is not available yet"
 )
+UNION_PENDING = pytest.mark.xfail(
+    raises=AttributeError,
+    strict=True,
+    reason="merging several pipelines in one call is not available yet",
+)
 PREDICATE_PENDING = pytest.mark.xfail(
     strict=True, reason="gating a node on a per-item predicate is not available yet"
 )
@@ -952,6 +957,13 @@ class TestFanIn:
         stream = fanned_in_fetches(get_path("feed.xml"))()
         stream.close()
         assert list(stream) == []
+
+    @UNION_PENDING
+    def test_union_merges_pipelines(self):
+        url = get_path("feed.xml")
+        fetch = Pipeline.from_module("fetch", conf={"url": url})
+        merged = Pipeline.union(fetch, fetch)  # pyright: ignore[reportAttributeAccessIssue]
+        assert len(list(merged)) == len(list(fanned_in_fetches(url, url)))
 
 
 class TestAsyncFanIn:
