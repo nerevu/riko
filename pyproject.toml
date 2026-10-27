@@ -112,6 +112,9 @@ exclude-newer = "1 week"
 # `uv sync`/tox/CI keep reusing a stale wheel of the unchanged version.
 cache-keys = [{ file = "pyproject.toml" }, { file = "riko/**/*.py" }]
 
+[tool.uv.audit]
+malware-check = true
+
 [tool.ruff]
 extend-exclude = [
     "**/pycache",
