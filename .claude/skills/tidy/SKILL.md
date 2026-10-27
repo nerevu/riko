@@ -24,7 +24,7 @@ is everything changed since that sha:
 - marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
   `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
 - marker missing or not an ancestor (after an autosquash rebase): the unpushed
-  commits (`git log HEAD --not --remotes`, the range `/land` uses) diffed from
+  commits (`git log HEAD --not --remotes`) diffed from
   the parent of the oldest one, plus the working tree and untracked files; with
   no unpushed commits, the working tree alone.
 

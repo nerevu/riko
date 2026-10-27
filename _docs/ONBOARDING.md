@@ -54,7 +54,7 @@ Findings from `/audit` go through `/triage` before anyone fixes them.
 **Environment**
 - Python 3.12+ and `uv`. Install with `uv sync --group dev --all-extras`. Add `--active` to `uv sync` / `uv run` only when your shell venv should win over the project's `.venv`.
 - `manage` (`riko.cli.manage:manager`) is the task runner. If the wrong `manage` executable wins (mezmorize ships one too), use `python -m riko.cli.manage ...`.
-- Full gate, in order: `manage prettify` → `manage codegen --all` → `manage lint --all` → `manage test --ratchet` → `manage lint --check-types`. `lint --all` already covers Ruff, RST, docs freshness, docstrings, and every import contract, so do not rerun those pieces separately. Always prettify before linting; never hand-fix formatting-class lint errors.
+- Full gate, in order: `manage prettify` → `manage codegen --all` → `manage lint --all` → `manage test --ratchet` → `manage lint --check-types` → `manage lint --verify-types`. `lint --all` already covers Ruff, RST, docs freshness, docstrings, and every import contract, so do not rerun those pieces separately. Always prettify before linting; never hand-fix formatting-class lint errors.
 - Doctests are tests: `pytest` collects `riko/`, `tests/`, `examples/`, `README.rst`, and `docs/`. Run one file with `uv run manage test --no-cov --where <path>`.
 
 **Where the truth lives**
