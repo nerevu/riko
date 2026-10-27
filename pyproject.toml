@@ -318,7 +318,7 @@ uncovered-lowered = 2026-10-27
 # day as `<key>-lowered`.
 any = 137
 any-lowered = 2026-10-27
-cast = 111
+cast = 108
 cast-lowered = 2026-10-27
 
 [tool.riko.ratchet]
