@@ -308,14 +308,22 @@ omit = [
 [tool.riko.coverage]
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
-# above it and lowers it on a gain.
+# above it and lowers it on a gain. It records the day as `uncovered-lowered`.
 uncovered = 409
+uncovered-lowered = 2026-10-27
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
-# `typing.cast` calls. A run fails above either and lowers it on a gain.
+# `typing.cast` calls. A run fails above either and lowers it on a gain. It records the
+# day as `<key>-lowered`.
 any = 157
+any-lowered = 2026-10-27
 cast = 137
+cast-lowered = 2026-10-27
+
+[tool.riko.ratchet]
+# Days a ceiling above may hold without being lowered before its ratchet warns.
+stale-days = 7
 
 [tool.pylint.format]
 max-line-length=88

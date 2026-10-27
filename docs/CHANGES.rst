@@ -385,7 +385,8 @@ Dev
 
 - Added ``manage test --ratchet``, which fails a full-suite run that leaves more
   statements uncovered than the ceiling recorded in ``pyproject.toml`` and lowers the
-  ceiling when it leaves fewer.
+  ceiling when it leaves fewer. It and ``manage lint --escapes`` warn, without failing,
+  when a ceiling has held longer than ``[tool.riko.ratchet] stale-days``.
 
 - ``manage -v``/``-vv``/``-q`` now set the log level (they previously had no effect).
 

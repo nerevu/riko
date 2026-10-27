@@ -46,7 +46,8 @@ def _ratchet_coverage(report: Path) -> int:
 @click.option(
     "-R",
     "--ratchet",
-    help="Fail when uncovered lines exceed the recorded ceiling; lower it on a gain",
+    help="Fail when uncovered lines exceed the recorded ceiling; lower it on a gain; "
+    "warn when it has held past [tool.riko.ratchet] stale-days",
     is_flag=True,
 )
 @click.option(

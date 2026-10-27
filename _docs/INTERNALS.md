@@ -192,6 +192,12 @@ sync when source is moved between package groups.
   and quoted subscripts. The counts ratchet against `[tool.riko.typing]` `any`/`cast` in
   `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as the coverage
   ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml` diff).
+- **Ratchet staleness.** Recording or lowering a ceiling also records the day as
+  `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
+  holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that key
+  there is no check. Exit codes never change. Under GitHub Actions the warning, and any
+  `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
+  annotations.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
   imports a public name through a private `riko` module path, and a module example in an
   underscore-prefixed module that defines no public name. Both read the public names

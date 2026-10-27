@@ -125,6 +125,8 @@ The common development commands are:
     - ``--ratchet`` runs the whole suite and fails when it leaves more statements
       uncovered than the ceiling recorded in ``pyproject.toml``
       (``[tool.riko.coverage]``), and lowers the ceiling when it leaves fewer.
+    - ``--ratchet`` warns, without failing, when the ceiling has held longer than
+      ``[tool.riko.ratchet] stale-days``.
     - ``--ratchet`` refuses paths, ``--tox``, and ``--failed``, and measures coverage
       even with ``--no-cov``.
 
@@ -156,7 +158,8 @@ The common development commands are:
         class, a subject owned by two files, and misplaced files.
       - ``--basenames``: two package modules sharing a file name.
       - ``--escapes``: ``typing.Any`` references or ``typing.cast`` calls above their
-        ceilings in ``pyproject.toml`` (a lower count lowers the ceiling).
+        ceilings in ``pyproject.toml`` (a lower count lowers the ceiling, and one held
+        longer than ``[tool.riko.ratchet] stale-days`` warns without failing).
 
     - Runs all standard checks, including all import-contract ones, with ``--all``.
     - Keeps type completeness, strict pylint, and distribution checks explicit via
