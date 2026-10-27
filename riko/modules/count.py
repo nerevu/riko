@@ -8,8 +8,8 @@ Examples:
 
         >>> from riko.modules.count import pipe
         >>>
-        >>> stream = [{"x": x} for x in range(5)]
-        >>> next(pipe(stream))["count"]
+        >>> items = [{"x": x} for x in range(5)]
+        >>> next(pipe(items))["count"]
         5
 
 Attributes:
@@ -72,9 +72,9 @@ def parser(
         >>> parser(stream, None, tuples)
         5
         >>> count_key = "word"
-        >>> stream = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
-        >>> tuples = zip(stream, repeat(count_key))
-        >>> counted = parser(stream, count_key, tuples)
+        >>> items = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
+        >>> tuples = zip(items, repeat(count_key))
+        >>> counted = parser(items, count_key, tuples)
         >>> next(counted)
         {'two': 2}
         >>> next(counted)
@@ -174,17 +174,17 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
     Examples:
 
-        >>> stream = [{"x": x} for x in range(5)]
-        >>> next(pipe(stream, emit=True))
+        >>> items = [{"x": x} for x in range(5)]
+        >>> next(pipe(items, emit=True))
         5
-        >>> next(pipe(stream))["count"]
+        >>> next(pipe(items))["count"]
         5
         >>> # Assign the count to "content":
-        >>> next(pipe(stream, assign="content"))
+        >>> next(pipe(items, assign="content"))
         {'content': 5}
         >>> # Count by the "word" field:
-        >>> stream = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
-        >>> counted = pipe(stream, conf={"count_key": "word"})
+        >>> items = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
+        >>> counted = pipe(items, conf={"count_key": "word"})
         >>> next(counted)
         {'two': 2}
         >>> next(counted)

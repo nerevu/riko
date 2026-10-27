@@ -450,14 +450,14 @@ is a single ``item``. So the following all behave predictably:
     >>> from riko.modules.udf import pipe
     >>>
     >>> func = lambda item: {"y": item["x"] + 3}
-    >>> source = [{"x": 0}, {"x": 1}]
-    >>> next(pipe(source[0], func=func))
+    >>> items = [{"x": 0}, {"x": 1}]
+    >>> next(pipe(items[0], func=func))
     {'y': 3}
-    >>> next(pipe(iter(source), func=func))
+    >>> next(pipe(iter(items), func=func))
     {'y': 3}
-    >>> next(pipe(source, func=func))
+    >>> next(pipe(items, func=func))
     {'y': 3}
-    >>> next(pipe(tuple(source), func=func))
+    >>> next(pipe(tuple(items), func=func))
     {'y': 3}
 
 Only the outermost argument is interpreted as one-or-many, so a list-valued
