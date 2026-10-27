@@ -3,87 +3,102 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from time import struct_time
-from typing import TYPE_CHECKING, TypeVar, overload
-
-from meza.fntools import Objectify as _Objectify
+from typing import TYPE_CHECKING, overload
 
 from riko.base._guards import is_mapping
 
-_VT = TypeVar("_VT")
-
-
 if TYPE_CHECKING:
+    from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView
+    from typing import Protocol
+
     from riko.types._streams import ItemOrValue
     from riko.types._wrappers import ArgCaster
 
-    class Objectify(Mapping[str, _VT]):
-        """
-        A case-normalized mapping with attribute access to its items.
+    class _Valued[V](Protocol):
+        @property
+        def data(self) -> Mapping[str, V]: ...
 
-        Input keys are lowercased at construction, so a function's kwargs can be
-        read as attributes (``kw.key``) regardless of their original casing.
-        """
-
+    class _Objectify:
         def __init__(
-            self, data: Mapping[str, _VT], *args: object, **kwargs: object
+            self,
+            kwargs: Mapping[str, object],
+            func: Callable[[object], object] | None = None,
+            **defaults: object,
         ) -> None: ...
-        def __len__(self) -> int: ...
-        def __getattribute__(self, *_: object) -> _VT: ...
-        def __getitem__(self, *_: object) -> _VT: ...
+        def keys(self) -> KeysView[str]: ...
+        def values[V](self: _Valued[V]) -> ValuesView[V]: ...
+        def items[V](self: _Valued[V]) -> ItemsView[str, V]: ...
+        def get[V](
+            self: _Valued[V], key: str, default: V | None = None, /
+        ) -> V | None: ...
+        def __getitem__[V](self: _Valued[V], key: str) -> V: ...
+        def __setitem__(self, key: str, value: object) -> None: ...
+        def __getattr__[V](self: _Valued[V], name: str) -> V: ...
+        def __delitem__(self, key: str) -> None: ...
         def __iter__(self) -> Iterator[str]: ...
-        def iteritems(self) -> Iterator[tuple[str, _VT]]: ...
+        def iteritems[V](self: _Valued[V]) -> Iterator[tuple[str, V]]: ...
+
 else:
+    from meza.fntools import Objectify as _Objectify
 
-    class Objectify(_Objectify, Mapping[str, _VT]):
+
+class Objectify[V](_Objectify, Mapping[str, V]):
+    """
+    A case-normalized mapping with attribute access to its items.
+
+    Input keys are lowercased at construction, so a function's kwargs can be
+    read as attributes (``kw.key``) regardless of their original casing.
+    """
+
+    data: dict[str, V]
+
+    def __init__(
+        self,
+        data: Mapping[str, V],
+        func: Callable[[object], object] | None = None,
+        **defaults: object,
+    ) -> None:
         """
-        A case-normalized mapping with attribute access to its items.
+        Initializes the object with lowercased attribute names.
 
-        Input keys are lowercased at construction, so a function's kwargs can be
-        read as attributes (``kw.key``) regardless of their original casing.
+        Args:
+
+            data: The attributes to set.
+            func: Optional callable applied to each value on access.
+            defaults: Default attributes, used for keys absent from ``data``.
+
+        Examples:
+            >>> kw = Objectify({"KEY": "foo"})
+            >>> kw.key
+            'foo'
+            >>> kw["key"]
+            'foo'
+            >>> kw.get("key")
+            'foo'
+
         """
+        _data = {k.lower(): v for k, v in data.items()}
+        super().__init__(_data, func, **defaults)
 
-        def __init__(self, data, *args, **kwargs):
-            """
-            Initializes the object with lowercased attribute names.
+    def __len__(self) -> int:
+        return len(self.data)
 
-            Args:
+    def __contains__(self, key: object) -> bool:
+        """
+        Reports whether ``key`` is one of the stored keys.
 
-                data: The attributes to set.
-                func: Optional callable applied to each value on access.
-                defaults: Default attributes, used for keys absent from ``data``.
+        Membership matches the lowercased keys that ``keys()`` lists, so a
+        missing key is absent even though reading it returns ``None``.
 
-            Examples:
-                >>> kw = Objectify({"KEY": "foo"})
-                >>> kw.key
-                'foo'
-                >>> kw["key"]
-                'foo'
-                >>> kw.get("key")
-                'foo'
+        Examples:
+            >>> kw = Objectify({"URL": "x"})
+            >>> ("url" in kw, "zzz" in kw)
+            (True, False)
 
-            """
-            _data = {k.lower(): v for k, v in data.items()}
-            super().__init__(_data, *args, **kwargs)
-
-        def __len__(self):
-            return len(self.data)
-
-        def __contains__(self, key):
-            """
-            Reports whether ``key`` is one of the stored keys.
-
-            Membership matches the lowercased keys that ``keys()`` lists, so a
-            missing key is absent even though reading it returns ``None``.
-
-            Examples:
-                >>> kw = Objectify({"URL": "x"})
-                >>> ("url" in kw, "zzz" in kw)
-                (True, False)
-
-            """
-            return key in self.data
+        """
+        return key in self.data
 
 
 @overload

@@ -31,8 +31,10 @@ Pipeline.cache()
 There is no Riko `CacheStore` hierarchy. Generally useful backend/cache behavior should move
 upstream to Mezmoize rather than being duplicated in Riko.
 
-The private integration module may follow the same pattern as `_objectify.py` / `_reencode.py`, for
-example `_mezmorize.py`.
+The private integration module may follow the same pattern as `_reencode.py`, for example
+`_mezmorize.py`: a runtime subclass of the upstream class, typed through a local `.pyi` stub under
+`typings/`. If the subclass reaches the surface `pyright --verifytypes` checks, which does not read
+local stubs, type its base through a `TYPE_CHECKING` facade instead, as `_objectify.py` does.
 
 ## 3. Definition versus contents
 

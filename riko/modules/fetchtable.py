@@ -25,7 +25,7 @@ Attributes:
 from __future__ import annotations
 
 from os.path import splitext
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from meza.io import read
 
@@ -105,7 +105,8 @@ async def async_parser(
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    return auto_close(read(source, ext, **rkwargs), source, r)
+    content = cast("Stream", read(source, ext, **rkwargs))
+    return auto_close(content, source, r)
 
 
 def parser(
@@ -150,7 +151,8 @@ def parser(
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    return auto_close(read(source, ext, **rkwargs), source, f)
+    content = cast("Stream", read(source, ext, **rkwargs))
+    return auto_close(content, source, f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
