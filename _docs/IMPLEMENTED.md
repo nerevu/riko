@@ -255,6 +255,14 @@ leaves `published_parsed=None` for formats such as `May 11, 2012 10:01:00 EST`, 
 `fastfeedparser` parses itself, so the two parsers now yield the same `struct_time`.
 `updated` falls back to the published keys.
 
+Feed parsing goes through `riko/parsing/documents.py::parse_feed`: with `fastfeedparser`
+installed it reads a file source into memory first (it accepts only text or bytes);
+otherwise `feedparser` receives the open file and reads it itself, so riko never reads the
+feed twice. Its result is typed by the `ParsedFeed` protocol (`riko/types/_rss.py`).
+Without `lxml` (the `perf` extra), `xml2etree` parses XML with the standard-library parser
+and HTML with `html5lib`, and the module's `etree`/`html`/`html5parser`/`XML_PARSER` names
+are `None`.
+
 ## 23. AnyIO runtime (shipped)
 
 > **Partial.** Protocol adapters + the `asyncioreactor` escape hatch → [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md).

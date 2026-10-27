@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import date
 from datetime import datetime as dt
 from time import struct_time
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, overload
 from urllib.error import URLError
 from xml.sax import SAXParseException  # noqa: S406
 
@@ -29,18 +29,14 @@ from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_tt, resolve_aware_datetime
 from riko.coercion._sequences import truncate_content
 from riko.io._sync import Fetch
-from riko.parsing.documents import IS_FASTFEEDPARSER, rss_parser
+from riko.parsing.documents import parse_feed
+from riko.types._rss import ParserRSSEntry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from logging import Logger
 
-    from riko.types._rss import (
-        ExpandedRSSEntry,
-        ParserRSSEntry,
-        RSSEntry,
-        YahooRSSEntry,
-    )
+    from riko.types._rss import AugmentedRSSEntry, RSSEntry
     from riko.types._scalars import AnyStr
     from riko.types._values import BasicArg
 
@@ -93,24 +89,19 @@ def parse_rss(
 
             source, source_name = source_name, "content"
         else:
-            if f.file and IS_FASTFEEDPARSER:
-                # fastfeedparser.parse takes str/bytes only (no file-like input)
-                source = f.read()
-            elif f.file:
-                source = f.file  # feedparser reads the file object directly
-            else:
-                source = b""
+            source = b"" if f.file is None else f.file
     else:
         source, source_name = content, "content"
 
     try:
-        parsed = rss_parser.parse(source)
+        parsed = parse_feed(source)
     finally:
         if f:
             f.close()
 
     bozo = parsed.get("bozo")
-    entry_count = len(parsed.entries)
+    entries = parsed["entries"]
+    entry_count = len(entries)
 
     if bozo is False and not entry_count:
         logger.warning(f"Parsed {source_name} successfully but no entries were found.")
@@ -126,7 +117,7 @@ def parse_rss(
 
         logger.warning(f"Content: {truncate_content(source)}")
 
-    return cast("list[ParserRSSEntry]", parsed.entries)
+    return entries
 
 
 def _get_entry_text(entry: ParserRSSEntry) -> str:
@@ -204,23 +195,20 @@ def augment_entries(entries: Iterable[ParserRSSEntry]) -> Iterator[RSSEntry]:
         pub_date = resolve_date(raw, *keys)
         updated_date = resolve_date(raw, "updated_parsed", "updated", *keys)
         text = _get_entry_text(raw)
-        entry = cast("YahooRSSEntry", dict(raw))
-
-        if not entry.get("summary"):
-            cast("ExpandedRSSEntry", entry)["summary"] = text
-
-        if not entry.get("description"):
-            cast("ExpandedRSSEntry", entry)["description"] = text
-
-        entry["author.name"] = entry.get("author_detail", {}).get("name")
-        entry["author.uri"] = entry.get("author_detail", {}).get("href")
-        entry["dc:creator"] = entry.get("author")
-        entry["y:id"] = entry.get("id")
-        entry["y:published"] = pub_date
-        entry["y:title"] = entry.get("title")
-        cast("ExpandedRSSEntry", entry)["updated_parsed"] = updated_date
-
-        for key in ("published_parsed", "pubDate"):
-            cast("ExpandedRSSEntry", entry)[key] = pub_date
+        copied = ParserRSSEntry(**raw)
+        entry: AugmentedRSSEntry = {
+            **copied,
+            "summary": copied.get("summary") or text,
+            "description": copied.get("description") or text,
+            "author.name": copied.get("author_detail", {}).get("name"),
+            "author.uri": copied.get("author_detail", {}).get("href"),
+            "dc:creator": copied.get("author"),
+            "y:id": copied.get("id"),
+            "y:published": pub_date,
+            "y:title": copied.get("title"),
+            "updated_parsed": updated_date,
+            "published_parsed": pub_date,
+            "pubDate": pub_date,
+        }
 
         yield entry
