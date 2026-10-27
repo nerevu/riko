@@ -449,6 +449,11 @@ ordered list, so `in` + `in:2` (legacy `_OTHER2`) executes
 `parse_port`; per-module fan-in arity belongs to the module port contracts, not this
 phase (tripwire `test_build_plan_rejects_undeclared_positional_input`).
 
+**Node vs node-id naming (triage 2026-10-25).** `GraphEdge.source`/`target` and the executor's
+`steps` table hold node ids under node-sense names. Rename them (`source_id`/`target_id`, a
+`(node_id, port)`-keyed table) as part of this phase's value-addressing rewrite rather than ahead of
+it. `Endpoint.node` keeps its name: it mirrors the serialized endpoint's `"node"` key.
+
 ## 11. Branch-to-fan-in composition
 
 Do not add a redundant generic `rejoin()` primitive. Branch outputs are ordinary Pipeline
