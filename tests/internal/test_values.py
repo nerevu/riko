@@ -65,7 +65,7 @@ from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
 from riko.types._enums import CastType
-from riko.types._rss import FeedParserRSSEntry
+from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from riko.types.modules import XpathFetchPageConf
 
@@ -776,14 +776,14 @@ class TestRSSUtils:
     @pytest.mark.parametrize(("entry", "expected"), AUGMENT_FALLBACKS)
     def test_augment_entries_fallbacks(self, entry, expected):
         """Feed-entry augmentation fallbacks from ``riko.rss.feeds``."""
-        item = next(augment_entries([FeedParserRSSEntry(entry)]))
+        item = next(augment_entries([ParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected
 
     def test_augment_entries_parses_date_the_parser_could_not(self):
         """A present-but-``None`` parsed date falls back to the raw date string."""
         raw = cast(
-            "FeedParserRSSEntry",
+            "ParserRSSEntry",
             {
                 "link": "https://example.com/feed-item",
                 "published": "May 11, 2012 10:01:00 EST",
@@ -806,7 +806,7 @@ class TestRSSUtils:
     def test_resolve_date_skips_blank_and_unparseable_values(self):
         """A blank or unparseable candidate never raises; the next key is tried."""
         raw = cast(
-            "FeedParserRSSEntry",
+            "ParserRSSEntry",
             {
                 "published_parsed": None,
                 "published": "not a date",
@@ -825,7 +825,7 @@ class TestRSSUtils:
     def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
         """Asking a feedparser entry for a missing ``updated`` key stays silent."""
         raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
-        entry = cast("FeedParserRSSEntry", raw)
+        entry = cast("ParserRSSEntry", raw)
         keys = ("updated_parsed", "updated", "published_parsed", "published")
         resolved = resolve_date(entry, *keys)
         assert isinstance(resolved, struct_time)
