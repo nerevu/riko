@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from riko.base._paths import DOCS_DIR, PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
+from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -337,6 +338,18 @@ def _api_surface_offenders() -> list[str]:
     return offenders
 
 
+def _gen_verb_table_offenders() -> Iterator[str]:
+    """Finds verb tables that drift from the verb declaration."""
+    for path, fmt in VERB_DOCS.items():
+        text = _read(path)
+        present = {match["key"] for match in VERB_PATTERNS[fmt].finditer(text)}
+
+        if missing := sorted(VERB_BLOCKS - present):
+            yield f"{path.name}: missing verb tables {missing}"
+        elif generate_verb_tables(text, fmt) != text:
+            yield f"{path.name}: verb tables are stale; run `manage codegen --verbs`"
+
+
 def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     """Find completion claims for versions newer than the packaged version."""
     return [
@@ -414,6 +427,9 @@ def lint_docs() -> int:
 
     if offenders := _api_surface_offenders():
         problems.append(f"{_DOC}: {'; '.join(offenders)}")
+
+    if offenders := list(_gen_verb_table_offenders()):
+        problems.append(f"verb tables drift: {'; '.join(offenders)}")
 
     if offenders := list(_gen_stale_test_citation_offenders()):
         problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")

@@ -316,20 +316,87 @@ Function names
 ^^^^^^^^^^^^^^
 
 Name a function by what it does. When choosing among the general-purpose verbs
-below, each row's rule is the test:
+below, work down the table and take the first verb whose rule fits; its docstring
+summary then starts with that verb's word:
 
-=============  =====================================  ===========================================================  ===========================
-Verb           Meaning                                Rule                                                         Example
-=============  =====================================  ===========================================================  ===========================
-``get``        Query or compute a value               No ambient state; doesn't canonicalize or construct          ``get_document_shape``
-``parse``      Representation → semantic structure    Malformed input raises; forbids reference/context/fallback   ``Workflow.parse``
-``normalize``  Accepted form → canonical form         Idempotent/no default=; output is itself an accepted form    ``normalize_url``
-``resolve``    Pick the effective value               Uses reference/context/fallback; "no match" is not an error  ``resolve_format``
-``require``    Enforce a required value or condition  Raises on failure; never defaults or substitutes             ``require_str``
-``load``       Acquire from outside                   Crosses an external/provider boundary                        ``load_settings``
-``validate``   Check a contract                       Raises if invalid; never transforms or replaces              ``Workflow.validate``
-``build``      Assemble a new artifact                Produces a new composite from inputs; failures may raise     ``build_conf``
-=============  =====================================  ===========================================================  ===========================
+.. begin verbs
+
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| Verb          | Summary     | Meaning                | Raises                   | Returns              | Rule                           | Example                |
+|               | starts with |                        |                          |                      |                                |                        |
++===============+=============+========================+==========================+======================+================================+========================+
+| ``load``      | Loads       | Acquire through an     | Acquisition failure      | The acquired data or | **MUST** cross an acquisition  | ``load_settings``      |
+|               |             | external, ambient, or  | normally surfaces        | state                | boundary                       |                        |
+|               |             | provider boundary      |                          |                      |                                |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``validate``  | Validates   | Check a contract       | **MUST** raise for an    | ``None``             | **MUST NOT** transform or      | ``Workflow.validate``  |
+|               |             |                        | invalid value            |                      | return a replacement value;    |                        |
+|               |             |                        |                          |                      | observationally idempotent     |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``require``   | Requires    | Enforce that a         | **MUST** raise when the  | The value, narrowed  | **MUST NOT** silently default, | ``require_str``        |
+|               |             | required value,        | requirement fails        | to a usable form;    | repair, or substitute; **MAY** |                        |
+|               |             | object, or             |                          | ``None`` for a       | use lookup or context          |                        |
+|               |             | precondition exists    |                          | precondition         |                                |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``resolve``   | Resolves    | Determine the          | **MUST NOT** treat a     | The effective value, | **MUST** involve reference,    | ``resolve_format``     |
+|               |             | effective value from a | missing match as an      | possibly a fallback  | context, fallback, or          |                        |
+|               |             | reference, context,    | error when a fallback is |                      | precedence; chooses what       |                        |
+|               |             | fallback, or           | part of the contract;    |                      | applies rather than            |                        |
+|               |             | precedence             | **MAY** raise for        |                      | canonicalizing the input       |                        |
+|               |             |                        | invalid input            |                      |                                |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``parse``     | Parses      | Turn a representation  | **MUST** raise for       | A semantic structure | **MUST NOT** use resolution    | ``Workflow.parse``     |
+|               |             | or grammar into        | malformed input          | of a different type  | context; the input is a        |                        |
+|               |             | semantic structure     |                          | than the input       | representation *of* the output |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``normalize`` | Normalizes  | Rewrite an accepted    | **MUST** raise for an    | The canonical form,  | **MUST** be idempotent;        | ``normalize_url``      |
+|               |             | form as its canonical  | invalid form             | itself an accepted   | **MUST NOT** use resolution    |                        |
+|               |             | equivalent             |                          | form                 | context                        |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``build``     | Builds      | Assemble a new         | **MAY** raise when       | A new composite      | Creates a new artifact from    | ``build_conf``         |
+|               |             | semantic artifact      | construction fails       | artifact             | semantic components;           |                        |
+|               |             |                        |                          |                      | dependencies should be         |                        |
+|               |             |                        |                          |                      | explicit                       |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+| ``get``       | Gets        | Query or compute a     | **MAY** raise for        | Information about    | **MUST NOT** acquire external  | ``get_document_shape`` |
+|               |             | value from explicit    | invalid input            | the inputs           | or ambient state; does not     |                        |
+|               |             | semantic inputs        |                          |                      | canonicalize or construct a    |                        |
+|               |             |                        |                          |                      | substantial artifact           |                        |
++---------------+-------------+------------------------+--------------------------+----------------------+--------------------------------+------------------------+
+
+.. end verbs
+
+When two verbs both seem to fit, the pair's test decides:
+
+.. begin verb-pairs
+
++-----------------------------+------------------------------------------------------------------------------------------+
+| Mistaken pair               | Test                                                                                     |
++=============================+==========================================================================================+
+| ``get`` / ``load``          | Does it read external or ambient state? Then ``load``.                                   |
++-----------------------------+------------------------------------------------------------------------------------------+
+| ``validate`` / ``require``  | Does it return the checked value, or guard a precondition before an action? Then         |
+|                             | ``require``; ``validate`` checks a contract and returns ``None``.                        |
++-----------------------------+------------------------------------------------------------------------------------------+
+| ``require`` / ``resolve``   | Does absence get a fallback? Then ``resolve``; ``require`` raises instead.               |
++-----------------------------+------------------------------------------------------------------------------------------+
+| ``resolve`` / ``normalize`` | Does the contract fix the default (``normalize``), or does the caller supply it          |
+|                             | (``resolve``)?                                                                           |
++-----------------------------+------------------------------------------------------------------------------------------+
+| ``parse`` / ``normalize``   | Is the output a different type than the input? Then ``parse``.                           |
++-----------------------------+------------------------------------------------------------------------------------------+
+| ``build`` / ``get``         | Is the result a substantial new artifact? Then ``build``.                                |
++-----------------------------+------------------------------------------------------------------------------------------+
+
+.. end verb-pairs
+
+A function that does two of these things is named for the guarantee its callers
+rely on, and its summary may describe the inner step. ``require_from_keys``
+builds a guard, but the guard requires, so it is a ``require``.
+
+Defaults split ``normalize`` from ``resolve``: filling an omitted field with the
+default its contract fixes rewrites a shorthand, so it is a ``normalize``;
+substituting a default the caller supplies is a fallback, so it is a ``resolve``.
 
 ``require`` is the general narrow-or-raise verb, not "``resolve`` that raises":
 ``require(resolve(...))`` is one specialization of it, which is why guards such

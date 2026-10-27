@@ -5,8 +5,8 @@ Index (file, then the subjects it owns, in file order):
 
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, ConsoleScripts, Docstyle,
-                              CitationLint, TermLint, LiteralLint, BindingLint,
-                              TierIndexCodegen, LayoutLint, BasenameLint,
+                              VerbTables, CitationLint, TermLint, LiteralLint,
+                              BindingLint, TierIndexCodegen, LayoutLint, BasenameLint,
                               DependencyLint, HookPinLint, CanonicalImportLint,
                               RelativeImportLint, ImportArchitectureLint, ValidateGraph,
                               RequireWorkflow, RunTarget, ReadDocument, Timeouts,

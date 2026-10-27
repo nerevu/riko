@@ -44,6 +44,11 @@ at call sites.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
+- **Verb tables** — `riko/cli/_gen_verbs.py` (`manage codegen --verbs`) rewrites the
+  marked `verbs`/`verb-pairs` blocks in `CLAUDE.md` (Markdown) and `CONTRIBUTING.rst`
+  (grid tables) from `riko/base/_verbs.py`, which `manage lint --docstrings` also
+  reads to match each summary's verb to its function name; `manage lint --docs`
+  flags stale blocks. Surrounding prose stays hand-maintained.
 - **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) rewrites the
   `Index (file, ...)` block ending each `tests/<tier>/__init__.py` docstring from the
   tier files' `Test<Subject>` classes.

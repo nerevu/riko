@@ -253,7 +253,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     def load_definition(self, name: str) -> ModuleDefinition | None:
         """
-        Resolves a runtime or entry-point definition by name.
+        Loads a runtime or entry-point definition by name.
 
         Args:
 

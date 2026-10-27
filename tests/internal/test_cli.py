@@ -37,6 +37,7 @@ from riko.cli._docstyle import (
 )
 from riko.cli._document import read_document, require_workflow
 from riko.cli._gen_tier_index import INDEX_HEADER, generate_tier_index
+from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
@@ -94,8 +95,8 @@ class TestCodegenCommand:
         [
             ([], ["config"]),
             (["--names", "--api"], ["names", "api"]),
-            (["--tests"], ["tests"]),
-            (["--all"], ["config", "names", "api", "tests"]),
+            (["--tests", "--verbs"], ["tests", "verbs"]),
+            (["--all"], ["config", "names", "api", "tests", "verbs"]),
         ],
     )
     def test_codegen_selectors(
@@ -528,6 +529,30 @@ EXAMPLE_RULES = [
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
+    pytest.param(
+        "mod.py",
+        'def _build_x():\n    """Resolves x."""\n',
+        ["summary verb does not match the name verb build"],
+        id="verb-mismatch",
+    ),
+    pytest.param(
+        "mod.py",
+        'async def _abuild_x():\n    """Resolves x."""\n',
+        ["summary verb does not match the name verb build"],
+        id="verb-mismatch-twin",
+    ),
+    pytest.param(
+        "mod.py", 'async def abuild_x():\n    """Builds x."""\n', [], id="verb-twin"
+    ),
+    pytest.param(
+        "mod.py", 'def build_x():\n    """Finds x."""\n', [], id="verb-off-table"
+    ),
+    pytest.param(
+        "_require_guards.py",
+        'def require_from_keys():\n    """Builds x."""\n',
+        [],
+        id="compound",
+    ),
 ]
 
 
@@ -549,6 +574,24 @@ class TestDocstyle:
     def test_docstring_summary_output_lead_detection(self) -> None:
         assert summary_leads_with_output("Returns the parsed response body.")
         assert not summary_leads_with_output("Parses the response body.")
+
+
+VERB_TABLE_MARKERS = [
+    pytest.param("md", "<!-- verbs -->\n<!-- /verbs -->", "| `load` |", id="md"),
+    pytest.param("rst", ".. begin verbs\n.. end verbs", "| ``load`` ", id="rst"),
+]
+
+
+class TestVerbTables:
+    """Generated function-name verb tables."""
+
+    @pytest.mark.parametrize(("fmt", "text", "row"), VERB_TABLE_MARKERS)
+    def test_generation_is_idempotent(
+        self, fmt: TableFormat, text: str, row: str
+    ) -> None:
+        generated = generate_verb_tables(text, fmt)
+        assert row in generated
+        assert generate_verb_tables(generated, fmt) == generated
 
 
 CITATION_SCANS = [

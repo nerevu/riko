@@ -79,7 +79,7 @@ class ResolverDispatcher:
     def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
     def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
         """
-        Resolves ``name`` to its ``pipe``, or its ``async_pipe`` when ``is_async``.
+        Requires the ``pipe`` ``name`` names, or its ``async_pipe`` when ``is_async``.
 
         Raises:
 
@@ -115,7 +115,7 @@ class ResolverDispatcher:
 
     def validate(self, name: str) -> None:
         """
-        Requires that ``name`` exposes ``pipe`` and/or ``async_pipe``.
+        Validates that ``name`` exposes ``pipe`` and/or ``async_pipe``.
 
         Args:
 

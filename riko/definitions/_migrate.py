@@ -93,7 +93,7 @@ def _parse_write_mode(mode: str) -> WriteMode:
 
 
 def _require_embed_ref_fields(value: EmbedRef, what: str = "embed") -> EmbedRef:
-    """Validates an EmbedRef's keys."""
+    """Requires an EmbedRef's keys to be well-formed."""
     require_str(value["type"], f"{what} 'type'")
     require_str(value["id"], f"{what} 'id'")
     return value
@@ -120,7 +120,7 @@ def _require_dag_name(value: DagModule, what: str = "dag module") -> str:
 
 
 def _require_dag_fields(value: DagModule, what: str = "dag module") -> DagModule:
-    """Validates a ``DagModule``'s keys."""
+    """Requires a ``DagModule``'s keys to be well-formed."""
     optional_str(value.get("id"))
     _require_dag_name(value, what)
     _optional_mapping(value.get("conf"))
@@ -134,7 +134,7 @@ def _get_write_mode(value: WriteConf) -> WriteMode | None:
 
 
 def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModule:
-    """Validates a ``PipeModule``'s keys."""
+    """Requires a ``PipeModule``'s keys to be well-formed."""
     require_str(value["id"], f"{what} 'id'")
     require_str(value["type"], f"{what} 'type'")
     require_mapping(value["conf"], f"{what} 'conf'")
@@ -142,7 +142,7 @@ def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModu
 
 
 def _require_v1_loop_fields(value: PipeModule, what: str = "loop module") -> PipeModule:
-    """Validates a ``loop`` ``PipeModule``'s embed."""
+    """Requires a ``loop`` ``PipeModule``'s embed to be well-formed."""
     embed = require_mapping(value.get("embed"), f"{what} 'embed'")
     _require_embed_ref_fields(_require_embed_ref(embed))
     return value
