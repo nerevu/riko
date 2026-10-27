@@ -215,6 +215,28 @@ class TestFrozenDict:
     def test_values_are_frozen_from_any_source(self, source: Any):
         assert FrozenDict(source)["ids"] == (1,)
 
+    def test_equal_frozen_dicts_hash_alike(self):
+        assert hash(FrozenDict({"a": [1]})) == hash(FrozenDict({"a": (1,)}))
+
+    def test_an_unhashable_value_makes_it_unhashable(self):
+        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
+            hash(FrozenDict({"a": bytearray()}))
+
+    @pytest.mark.parametrize(
+        ("merged", "expected"),
+        [
+            pytest.param(
+                FrozenDict({"a": 1}) | {"a": 2, "b": [3]}, {"a": 2, "b": (3,)}, id="or"
+            ),
+            pytest.param(
+                {"a": 2, "b": 3} | FrozenDict({"a": 1}), {"a": 1, "b": 3}, id="ror"
+            ),
+        ],
+    )
+    def test_merging_returns_a_frozen_dict(self, merged: Any, expected: dict):
+        assert isinstance(merged, FrozenDict)
+        assert merged == expected
+
 
 class TestContext:
     def test_nested_inputs_are_read_only(self):

@@ -128,6 +128,14 @@ class TestPipelineConstruction:
         assert pipeline.workflow.edges == ()
         assert pipeline.workflow.isvalid
 
+    def test_equal_pipelines_hash_alike(self):
+        conf = SortConf(rule=SortConfRule(field="x"))
+        pipeline = Pipeline.from_module("sort", conf=conf)
+        same = Pipeline.from_module("sort", conf=SortConf(rule=SortConfRule(field="x")))
+        assert pipeline == same
+        assert hash(pipeline) == hash(same)
+        assert hash(pipeline.workflow) == hash(same.workflow)
+
     def test_pipeline_repr_notes_nodes_and_context(self):
         fetch = Pipeline.from_module("fetch")
         assert repr(fetch) == "Pipeline(fetch-1; outputs: default)"
