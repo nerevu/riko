@@ -628,6 +628,11 @@ code block without interpreter prompts.
 - Show actual returned values, not boolean assertions
   (`>>> next(pipe(items))["count"]` → `5`, not `... == {"count": 5} → True`).
 - Follow Arrange → Act → Observe; keep each example focused on one behavior.
+- Every code block runs on its own: it imports and defines everything it uses,
+  even when an earlier block in the same file or section already did, because
+  readers land on a block directly. Repeating that setup across blocks is
+  expected, never duplication to remove. Within one block, never rebind a name:
+  give each step its own name (`page`, `feed`, `merged`).
 - Name inputs by role: `items`, `result`, `stream`, `conf`, `pipe`.
 - Prefer `list(result)` when demonstrating the complete sequence; `next(result)`
   when streaming/laziness is the point.
