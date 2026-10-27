@@ -81,13 +81,13 @@ def parser(
         >>> parser(stream, objconf, tuples)
         Decimal('10')
         >>> objconf = Objectify({"sum_key": "amount", "group_key": "x"})
-        >>> stream = [
+        >>> items = [
         ...     {"amount": 2, "x": "one"},
         ...     {"amount": 1, "x": "one"},
         ...     {"amount": 2, "x": "two"},
         ... ]
-        >>> tuples = zip(stream, repeat(objconf))
-        >>> summed = parser(stream, objconf, tuples)
+        >>> tuples = zip(items, repeat(objconf))
+        >>> summed = parser(items, objconf, tuples)
         >>> next(summed)
         {'one': Decimal('3')}
         >>> next(summed)
@@ -201,12 +201,12 @@ def pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]
         >>> next(pipe(stream))["sum"]
         Decimal('10')
         >>> # Sum by group:
-        >>> stream = [
+        >>> items = [
         ...     {"amount": 2, "x": "one"},
         ...     {"amount": 1, "x": "one"},
         ...     {"amount": 2, "x": "two"},
         ... ]
-        >>> summed = pipe(stream, conf={"sum_key": "amount", "group_key": "x"})
+        >>> summed = pipe(items, conf={"sum_key": "amount", "group_key": "x"})
         >>> next(summed)
         {'one': Decimal('3')}
         >>> next(summed)

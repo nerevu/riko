@@ -107,9 +107,9 @@ async def async_parser(
         ...     async with async_get_temp_file() as fp:
         ...         conf = {"dest": fp.name, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
-        ...         stream = [{"x": 0}, {"x": 1}]
-        ...         tuples = zip(stream, repeat(objconf))
-        ...         result = await async_parser(stream, objconf, tuples)
+        ...         items = [{"x": 0}, {"x": 1}]
+        ...         tuples = zip(items, repeat(objconf))
+        ...         result = await async_parser(items, objconf, tuples)
         ...         print(next(result))
         ...         print(await fp.read())
         >>>
@@ -155,9 +155,9 @@ def parser(
         >>>
         >>> with get_temp_file() as fp:
         ...     objconf = Objectify({"dest": fp.name, "fmt": "json", "mode": "wb+"})
-        ...     stream = [{"x": 0}, {"x": 1}]
-        ...     tuples = zip(stream, repeat(objconf))
-        ...     next(parser(stream, objconf, tuples))
+        ...     items = [{"x": 0}, {"x": 1}]
+        ...     tuples = zip(items, repeat(objconf))
+        ...     next(parser(items, objconf, tuples))
         ...     fp.read()
         {'x': 0}
         b'[{"x": 0}, {"x": 1}]'
