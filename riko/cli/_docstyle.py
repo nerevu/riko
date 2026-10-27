@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from ast import (
     AnnAssign,
     Assign,
@@ -36,6 +37,7 @@ COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
         ("_require_guards.py", "require_from_typed_dict"),
     }
 )
+_RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
@@ -182,6 +184,44 @@ def gen_example_prose(doc: str) -> Iterator[str]:
             following = next((rest for rest in lines[end:] if rest), "")
 
             if following.startswith(">>>") and not lines[end - 1].endswith("::"):
+                yield line
+
+
+def gen_malformed_raises(doc: str) -> Iterator[str]:
+    """
+    Finds ``Raises:`` entries that do not start with an exception name and a colon.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each entry line that does not read ``SomeError: description``.
+
+    Examples:
+
+        >>> doc = "Raises:\\n\\n    ValueError: If bad.\\n    KeyError if missing.\\n"
+        >>> list(gen_malformed_raises(doc))
+        ['KeyError if missing.']
+
+    """
+    section: int | None = None
+    entry: int | None = None
+
+    for raw in doc.splitlines():
+        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+
+        if line == "Raises:":
+            section, entry = indent, None
+        elif section is None or not line:
+            continue
+        elif indent <= section:
+            section = None
+        elif entry is None or indent <= entry:
+            entry = indent
+
+            if not _RAISES_ENTRY.match(line):
                 yield line
 
 
@@ -340,6 +380,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                         problem += name_verb
                         yield DocstringIssue(path, lineno, name, problem, summary)
 
+                for entry in gen_malformed_raises(doc):
+                    problem = "Raises: entry does not start with 'SomeError:'"
+                    yield DocstringIssue(path, lineno, name, problem, entry)
+
                 for prose in gen_example_prose(doc):
                     problem = "narrates between examples (use a >>> # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
@@ -360,6 +404,7 @@ __all__ = [
     "DocstringIssue",
     "gen_docstring_issues",
     "gen_example_prose",
+    "gen_malformed_raises",
     "gen_private_imports",
     "get_name_verb",
     "get_summary_verb",

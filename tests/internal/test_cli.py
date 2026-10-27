@@ -638,6 +638,28 @@ def _reserved_terms_section() -> str:
     return text.split("## Reserved terms", 1)[1].split("\n## ", 1)[0].lower()
 
 
+TERM_PATTERNS = [
+    pytest.param(
+        'REASON = "owned by R5C: write is still a sink module"\n'
+        "# see R4B.2 and P10, not R2D2 or PR9\n",
+        [(1, "R5C"), (2, "R4B.2"), (2, "P10")],
+        id="phase-codes",
+    ),
+    pytest.param(
+        "# scope the run with open(), or Scopes a run\n"
+        "# open it to scope one; scope a run's resources is fine\n",
+        [(1, "scope the run"), (1, "Scopes a run"), (2, "open it to scope")],
+        id="run-scoping",
+    ),
+    pytest.param(
+        "# import from riko.ext.registry, not riko.ext.modules\n"
+        "# riko.ext.names is gone too\n",
+        [(1, "riko.ext.registry"), (2, "riko.ext.names")],
+        id="removed-ext-paths",
+    ),
+]
+
+
 class TestTermLint:
     """The reserved-terms lint check."""
 
@@ -665,25 +687,14 @@ class TestTermLint:
             (4, "other mode"),
         ]
 
-    def test_phase_codes_are_checked(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(("text", "expected"), TERM_PATTERNS)
+    def test_patterns_are_checked(
+        self, tmp_path: Path, text: str, expected: list[tuple[int, str]]
+    ) -> None:
         source = tmp_path / "mod.py"
-        source.write_text(
-            'REASON = "owned by R5C: write is still a sink module"\n'
-            "# see R4B.2 and P10, not R2D2 or PR9\n",
-            encoding="utf-8",
-        )
+        source.write_text(text, encoding="utf-8")
         found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
-        assert found == [(1, "R5C"), (2, "R4B.2"), (2, "P10")]
-
-    def test_removed_ext_paths_are_checked(self, tmp_path: Path) -> None:
-        source = tmp_path / "mod.py"
-        source.write_text(
-            "# import from riko.ext.registry, not riko.ext.modules\n"
-            "# riko.ext.names is gone too\n",
-            encoding="utf-8",
-        )
-        found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
-        assert found == [(1, "riko.ext.registry"), (2, "riko.ext.names")]
+        assert found == expected
 
     def test_phrases_split_across_lines_are_checked(self, tmp_path: Path) -> None:
         (tmp_path / "GUIDE.md").write_text(
