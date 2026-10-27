@@ -45,7 +45,6 @@ from riko.base._require_guards import (
     typed_dict_keys,
 )
 from riko.base._typing import resolve_enum
-from riko.definitions._composition import PipelineDefinition
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
@@ -60,6 +59,7 @@ from riko.definitions._nodes import (
     require_runnable_node,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
+from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,

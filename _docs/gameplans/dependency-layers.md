@@ -163,7 +163,7 @@ When moving or adding source files:
 A pipeline is both an immutable definition and the user's entry point for running
 it. The type is split along that line rather than reaching upward:
 
-- `PipelineDefinition` (`riko/definitions/_composition.py`) owns the fields and every
+- `PipelineDefinition` (`riko/definitions/_pipeline_definition.py`) owns the fields and every
   composition method (`from_module`, `pipe`, `|`, `write`, `with_*`, …). Each
   returns the caller's own class, so composing a `Pipeline` yields a `Pipeline`.
   Definitions that embed a pipeline depend on this class.
