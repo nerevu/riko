@@ -119,55 +119,67 @@ Manage command reference
 The common development commands are:
 
 ``manage test``
-    Run pytest. Paths may be passed positionally or with repeatable ``--where``;
-    use ``--no-cov`` for faster focused runs and ``--tox`` for the tox runner.
-    ``--ratchet`` runs the whole suite and fails when it leaves more statements
-    uncovered than the ceiling recorded in ``pyproject.toml``
-    (``[tool.riko.coverage]``); when it leaves fewer, it lowers the ceiling.
+    - Runs pytest (or tox with ``--tox``).
+    - Takes paths positionally or with repeatable ``--where``.
+    - Uses ``--no-cov`` for faster focused runs.
+    - ``--ratchet`` runs the whole suite and fails when it leaves more statements
+      uncovered than the ceiling recorded in ``pyproject.toml``
+      (``[tool.riko.coverage]``), and lowers the ceiling when it leaves fewer.
+    - ``--ratchet`` refuses paths, ``--tox``, and ``--failed``, and measures coverage
+      even with ``--no-cov``.
 
 ``manage prettify``
-    Sort imports, apply Ruff fixes, and format Python. Use ``--where`` to limit
-    the scope and ``--yaml`` when formatting YAML instead.
+    - Sorts imports, applies Ruff fixes, and formats Python.
+    - Limits the scope with ``--where``.
+    - Formats YAML instead with ``--yaml``.
 
 ``manage check``
-    Run Ruff checks against staged Python files. This is a fast pre-commit check,
-    not a replacement for the full lint suite.
+    - Runs Ruff checks against staged Python files.
+    - Is a fast pre-commit check, not a replacement for the full lint suite.
 
 ``manage lint``
-    Run Ruff lint plus ``ruff format --check`` by default. Standard checks may be
-    selected additively with ``--rst``, ``--docs``, ``--actions``, ``--yaml``,
-    ``--docstrings``, ``--terms`` (phrases the reserved-terms rules replace, internal
-    phase codes, and the same phrases in the internal design notes),
-    ``--literals`` (single-quoted values, and backticked or unquoted string defaults),
-    ``--deps`` (deptry's missing, unused, and misplaced dependency checks, required
-    dependencies imported only under ``TYPE_CHECKING``, optional extras imported outside
-    a ``try`` that catches ``ImportError``, and pre-commit pins that differ from
-    ``uv.lock``),
-    ``--bindings`` (a ``Workflow`` bound to ``workflow`` rather than ``flow`` in code
-    or doctests), ``--tests`` (stale generated tier indexes, tests outside a
-    ``Test<Subject>`` class, a subject owned by two files, and misplaced files), and
-    ``--basenames`` (two package modules sharing a file name).
-    ``manage lint --all`` runs all standard checks, including all import-contract ones.
-    Type completeness, strict pylint, and distribution checks remain explicit via
-    ``--check-types``, ``--verify-types``, ``--strict``, and ``--dist``.
+    - Runs Ruff lint plus ``ruff format --check`` by default.
+    - Selects standard checks additively:
+
+      - ``--rst``, ``--docs``, ``--actions``, ``--yaml``, and ``--docstrings``.
+      - ``--terms``: phrases the reserved-terms rules replace, internal phase codes,
+        and the same phrases in the internal design notes.
+      - ``--literals``: single-quoted values, and backticked or unquoted string
+        defaults.
+      - ``--deps``: missing, unused, and misplaced dependency checks, required
+        dependencies imported only under ``TYPE_CHECKING``, optional extras imported
+        outside a ``try`` that catches ``ImportError``, and pre-commit pins that differ
+        from ``uv.lock``.
+      - ``--bindings``: a ``Workflow`` bound to ``workflow`` rather than ``flow`` in
+        code or doctests.
+      - ``--tests``: stale generated tier indexes, tests outside a ``Test<Subject>``
+        class, a subject owned by two files, and misplaced files.
+      - ``--basenames``: two package modules sharing a file name.
+
+    - Runs all standard checks, including all import-contract ones, with ``--all``.
+    - Keeps type completeness, strict pylint, and distribution checks explicit via
+      ``--check-types``, ``--verify-types``, ``--strict``, and ``--dist``.
 
 ``manage lint imports``
-    Check internal import contracts. With no selector it runs the canonical-import
-    check. Use ``--canonical``, ``--relative``, and ``--architecture`` additively,
-    or ``--all`` for all three.
+    - Checks internal import contracts.
+    - Runs the canonical-import check when no selector is given.
+    - Takes ``--canonical``, ``--relative``, and ``--architecture`` additively, or
+      ``--all`` for all three.
 
 ``manage upgrade``
-    Upgrade every locked dependency to the newest version ``pyproject.toml`` allows
-    (is at least a week old) then sync the active environment to the new lock. Use
-    repeatable ``--package`` to upgrade only named packages, ``--no-sync`` to update
-    ``uv.lock`` alone, and ``--daily`` to skip when a full upgrade already succeeded
-    today. CI installs exactly what ``uv.lock`` pins and never upgrades, so commit the
-    updated lock with the change it was tested against.
+    - Upgrades every locked dependency to the newest version ``pyproject.toml`` allows
+      (and at least a week old), then syncs the active environment to the new lock.
+    - Upgrades only named packages with repeatable ``--package``.
+    - Updates ``uv.lock`` alone with ``--no-sync``.
+    - Skips with ``--daily`` when a full upgrade already succeeded today.
+    - CI installs exactly what ``uv.lock`` pins and never upgrades, so commit the
+      updated lock with the change it was tested against.
 
 ``manage codegen``
-    Regenerate derived repository artifacts. With no selector it regenerates
-    configuration types. Use ``--config``, ``--names``, ``--api``, and ``--tests``
-    additively, or ``--all`` for every generator.
+    - Regenerates derived repository artifacts.
+    - Regenerates configuration types when no selector is given.
+    - Takes ``--config``, ``--names``, ``--api``, ``--tests``, and ``--verbs``
+      additively, or ``--all`` for every generator.
 
 Daily development workflow
 --------------------------
