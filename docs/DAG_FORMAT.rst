@@ -184,9 +184,14 @@ reads ``WorkflowDocument``\s only:
 
 .. code-block:: python
 
+    import json
+    from pathlib import Path
+
     from riko.ext import migrate_v1_to_v2
 
-    document = migrate_v1_to_v2(pipe_def).serialize()
+    path = Path("workflows/pipe_demo.json")
+    pipe_def = json.loads(path.read_text())
+    path.write_bytes(migrate_v1_to_v2(pipe_def).serialize())
 
 Commands
 --------

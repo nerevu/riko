@@ -197,27 +197,27 @@ dictionaries, aka ``items``.
     >>> # directory, so these examples run offline
     >>>
     >>> ### Fetch a web page ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
+    >>> page = Pipeline.from_module(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
     >>>
     >>> ### Fetch a data file ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
+    >>> data = Pipeline.from_module(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
-    >>> item = pipeline.first()
+    >>> item = data.first()
     >>> item['base']
     'USD'
     >>> ### Fetch an RSS feed ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
+    >>> feed = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first RSS feed found on a page ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
+    >>> site_feed = Pipeline.from_module(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all RSS links on a page and fetch the feeds ###
-    >>> pipeline = Pipeline.from_module(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
-    >>> urls = [entry['link'] for entry in pipeline]
+    >>> discovery = Pipeline.from_module(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
+    >>> urls = [entry['link'] for entry in discovery]
     >>> urls
     ['file://riko/data/bbci.co.uk.xml']
-    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': urls[0]})
+    >>> discovered = Pipeline.from_module(Sources.FETCH, conf={'url': urls[0]})
     >>>
     >>> ### Alternatively, fetch every discovered feed in one workflow ###
     >>> #
@@ -233,13 +233,13 @@ dictionaries, aka ``items``.
     ...     for n in range(len(urls))
     ... ]
     >>> modules.append({'id': 'merged', 'name': 'union', 'conf': {}})
-    >>> pipeline = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
+    >>> merged = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
     >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
-    >>> pipeline.first()['title']
+    >>> merged.first()['title']
     "EU sets out 'phased' Brexit strategy"
 
 Alternate ``conf`` value entry
@@ -401,6 +401,10 @@ A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-
 goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the `DAG format
 doc`_).
 
+Concurrency is an execution-wide setting rather than a property of a node. It is
+declared on the ``Pipeline`` with ``with_execution``. It applies to the item-wise
+``processor`` steps, such as ``fetch``.
+
 .. code-block:: python
 
     >>> from riko import Pipeline, Workflow, get_path
@@ -416,13 +420,6 @@ doc`_).
     >>> feeds = Pipeline(Workflow.parse(dag))
     >>> len(list(feeds))
     32
-
-Concurrency is an execution-wide setting rather than a property of a node. It is
-declared on the ``Pipeline`` with ``with_execution``. It applies to the item-wise
-``processor`` steps, such as ``fetch``.
-
-.. code-block:: python
-
     >>> concurrent = feeds.with_execution(executor="thread", concurrency=4)
     >>> len(list(concurrent))
     32
@@ -504,7 +501,7 @@ optional ``csv2ofx`` dependency). A format returns a ``StringIO`` buffer.
 
 .. code-block:: python
 
-    >>> from riko import Formats, list_formats
+    >>> from riko import Formats, Pipeline, export, list_formats
     >>>
     >>> items = [{"title": "a"}, {"title": "b"}]
     >>> pipeline = Pipeline.from_module("hash", options={"field": "title"})
@@ -547,6 +544,9 @@ already there.
 
 .. code-block:: python
 
+    from riko import Pipeline, Sources
+
+    conf = {"attrs": {"key": "content", "value": "a,bb,ccc"}}
     pipeline = (
         Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
         .tokenizer()
@@ -733,6 +733,7 @@ provides to it.
     >>> def set_offset_length(item, *, offset):
     ...     return {**item, "length": len(item["content"]) + offset}
     >>>
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
     >>> pipeline = Pipeline().map(set_offset_length, offset=10)
     >>> [item["length"] for item in pipeline(items)]
     [11, 14]
@@ -1003,14 +1004,23 @@ becomes a ``SortRawConf``, so a type checker catches a bad option.
 
 The module also exposes a single ``pipe`` (or, with ``is_async=True``, an
 ``async_pipe``) callable that runs the workflow through riko's execution with the
-``Context`` you hand it. It is ordinary importable Python that you can edit it or save
-as ``pipe_<id>.py`` in a package. Register the pacakage with
+``Context`` you hand it. It is ordinary importable Python that you can edit or save
+as ``pipe_<id>.py`` in a package. Register the package with
 ``riko.ext.register_workflow_store`` so a ``loop`` can embed it by the saved name.
 
 .. code-block:: python
 
-    >>> from riko import compile_workflow
+    >>> from riko import Workflow, compile_workflow
     >>>
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
+    >>> dag = {
+    ...     'modules': [
+    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'name': 'rename', 'conf': rename_conf},
+    ...     ]
+    ... }
+    >>> flow = Workflow.parse(dag)
     >>> source = compile_workflow(flow, 'pipe_demo')
     >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
     DEPENDENCIES: list[str] = ["itembuilder", "rename"]
@@ -1113,8 +1123,17 @@ declarations or list of module and stored-workflow names instead of running.
 
 .. code-block:: python
 
-    >>> from riko import Context, ExecutionMode, compile_workflow
+    >>> from riko import Context, ExecutionMode, Workflow, compile_workflow
     >>>
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
+    >>> dag = {
+    ...     'modules': [
+    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'name': 'rename', 'conf': rename_conf},
+    ...     ]
+    ... }
+    >>> flow = Workflow.parse(dag)
     >>> namespace = {}
     >>> exec(compile_workflow(flow, 'pipe_demo'), namespace)
     >>> pipe = namespace['pipe']

@@ -234,9 +234,9 @@ Removed
 - Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
   ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
   ``export(pipeline, …)`` replaces ``.export``, and multi-source fetching is now a
-  ``union`` fan-in in a ``Workflow``. ``udf(func=…)`` through a pipeline is
-  ``pipeline.map(func)``, and ``pipeline.pipe(name, conf=conf)`` replaces ``pipe | (name,
-  conf)``. ``subscribe``/``publish`` and ``split`` have no replacement.
+  ``union`` fan-in in a ``Workflow``. ``pipeline.map(func)`` replaces
+  ``SyncPipe(Transforms.UDF, func=…)``. ``subscribe``/``publish`` and ``split`` have no
+  replacement.
 
 - Removed call-time decoration options. Passing ``skip_if``, ``ftype``, ``ptype``,
   ``extract``, ``listize``, ``objectify``, ``parse``, or ``pollable`` to a module call
