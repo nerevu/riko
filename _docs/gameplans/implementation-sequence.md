@@ -947,7 +947,7 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
   execution lifetime; resource declarations normalize once into the executable lifecycle plan
   (`Resource.plan`). The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
-  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_definitions.py`).
+  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/public/test_write.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
   private resource-variant subclass hierarchy is absent, replaced by the `Resource.plan` tagged union.
@@ -1378,7 +1378,7 @@ Deliver:
 - `PipelineDefinition.write()` gives up its second meaning in the same commit: today a call without a
   destination chains the shipped `write` module (so attribute chaining keeps reaching it) while a call
   with one appends a `WriteNode`. Once the module is gone, `dest` is required and a bare `write()` is a
-  `TypeError` (tripwire `tests/public/test_pipeline.py::TestPipelineWriteDefinition::test_requires_a_destination`;
+  `TypeError` (tripwire `tests/public/test_write.py::TestPipelineWriteDefinition::test_requires_a_destination`;
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
