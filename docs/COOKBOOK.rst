@@ -396,10 +396,10 @@ chained ``pipeline`` is no different, so compose first and seed last.
 Fetch several sources
 ^^^^^^^^^^^^^^^^^^^^^
 
-A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-in
-with ``Workflow.parse``: each wire names the ``union`` port it enters, so the first
-source goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the
-`DAG format doc`_).
+A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-in with
+``Workflow.parse``. Each wire names the ``union`` port it enters, so the first source
+goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the `DAG format
+doc`_).
 
 .. code-block:: python
 
@@ -463,8 +463,8 @@ tears that run down and releases any acquired resources.
     ...     next(stream)['content']
     'a'
 
-Chaining derives a *new* definition and leaves the original untouched. A
-``pipeline`` can serve as the prefix of several ``pipelines``.
+Chaining derives a *new* definition and leaves the original untouched. A ``pipeline``
+can serve as the prefix of several ``pipelines``.
 
 .. code-block:: python
 
