@@ -348,11 +348,11 @@ If you are unsure of a ``module``'s module type, check its metadata.
 
     >>> from riko import get_module_metadata, Sources, Transforms
     >>>
-    >>> metadata = get_module_metadata(Sources.FETCHPAGE)
-    >>> metadata.name, metadata.type, metadata.subtype
+    >>> fetchpage = get_module_metadata(Sources.FETCHPAGE)
+    >>> fetchpage.name, fetchpage.type, fetchpage.subtype
     ('fetchpage', 'processor', 'source')
-    >>> metadata = get_module_metadata(Transforms.COUNT)
-    >>> metadata.name, metadata.type, metadata.subtype
+    >>> count = get_module_metadata(Transforms.COUNT)
+    >>> count.name, count.type, count.subtype
     ('count', 'operator', 'aggregator')
 
 Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.

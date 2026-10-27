@@ -26,7 +26,7 @@ Index
 - `Can I store a workflow as JSON`_
 - `What execution modes are available`_
 - `Can I create custom modules`_
-- `How should errors and resource cleanup be handled`_
+- `How should I handle errors and resource cleanup`_
 - `Where should I report problems or contribute`_
 
 What is riko's data model?
@@ -465,6 +465,8 @@ Only the outermost argument is interpreted as one-or-many, so a list-valued
 
 .. code-block:: python
 
+    >>> from riko.modules.udf import pipe
+    >>>
     >>> item = {"x": 0, "tags": ["a", "b"]}
     >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
     {'tags': ['a', 'b']}
@@ -641,8 +643,9 @@ keeps the default concurrency limit in flight. The process executor raises there
 
 .. code-block:: python
 
-    from riko import Pipeline, Sources
+    from riko import Pipeline, Sources, get_path
 
+    url = get_path('feed.xml')
     pipeline = (
         Pipeline.from_module(Sources.FETCH, conf={'url': url})
         .with_execution(executor='thread', concurrency=4, ordered=False)
@@ -902,6 +905,7 @@ For runtime registration, call ``register_module`` instead:
 .. code-block:: python
 
     from riko.ext import ModuleDefinition, register_module
+    from your_ext import shout
 
     register_module(ModuleDefinition.from_module(shout, name="example.shout"))
 
@@ -913,8 +917,8 @@ for a complete example, the `Cookbook`_ for custom ``processor`` and ``operator`
 examples, and the `contributing guide`_ for the additional work required for a built-in
 module.
 
-How should errors and resource cleanup be handled?
---------------------------------------------------
+How should I handle errors and resource cleanup?
+------------------------------------------------
 
 Normal module exceptions propagate out of the iteration that triggered them. An unknown
 module name raises ``UnsupportedModuleError`` before anything runs. A ``Pipeline``
@@ -953,7 +957,7 @@ documentation workflow.
 .. _Can I store a workflow as JSON: #can-i-store-a-workflow-as-json
 .. _What execution modes are available: #what-execution-modes-are-available
 .. _Can I create custom modules: #can-i-create-custom-modules
-.. _How should errors and resource cleanup be handled: #how-should-errors-and-resource-cleanup-be-handled
+.. _How should I handle errors and resource cleanup: #how-should-i-handle-errors-and-resource-cleanup
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
 .. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
 

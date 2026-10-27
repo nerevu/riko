@@ -152,8 +152,9 @@ Both executions stream: sync iteration pulls lazily; async iteration streams ite
 plan yields them. The old `parallel`/`workers`/`threads`/`pool` arguments are replaced by
 `Pipeline.with_execution(executor=, concurrency=, ordered=)` (since 2026-10-03; see the
 private execution runtime section below), which consumes the pool mechanics in
-`riko/execution/_pools.py`. The `subscribe`/`publish` and `split` conveniences and
-`udf(func=…)` through a pipeline have no replacement yet.
+`riko/execution/_pools.py`. `Pipeline.map(func)` replaces `SyncPipe(Transforms.UDF, func=…)`
+(a `Pipeline`'s `options` are JSON-native, so `udf`'s callable `func` cannot ride on them). The
+`subscribe`/`publish` and `split` conveniences have no replacement yet.
 
 A consumed, closed, or failed stream (`riko/runtime/_run.py` `_PipelineStream`, one `_finished`
 flag) behaves like an exhausted Python generator (2026-10-26): another `for` yields nothing and
