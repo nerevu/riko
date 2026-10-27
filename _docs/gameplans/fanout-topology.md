@@ -475,7 +475,9 @@ left_transform.out   -> union.in
 right_transform.out  -> union.in:1
 ```
 
-Concurrent async fan-in uses `merge`; sequential concatenation remains `union`.
+Concurrent async fan-in uses `merge`; sequential concatenation remains `union`. The fluent
+`Pipeline.union(...)` constructor above is an R7 deliverable (implementation-sequence R7), as the
+one-call replacement for the removed `SyncCollection`.
 
 ## 12. Ordering contract
 

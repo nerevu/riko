@@ -169,8 +169,8 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 ```text
 SyncPipe(mod, ...)           → src | Pipeline.from_module(mod)
 AsyncPipe(mod, ...)          → src | Pipeline.from_module(mod)
-SyncCollection(mod, srcs)    → srcs | Pipeline.from_module(mod)
-AsyncCollection(mod, srcs)   → srcs | Pipeline.from_module(mod)
+SyncCollection(mod, srcs)    → Pipeline(Workflow.parse(dag))  # hand-wired union fan-in; Pipeline.union(...) at R7
+AsyncCollection(mod, srcs)   → Pipeline(Workflow.parse(dag))  # same, iterated with async for
 ```
 
 ## 5. Error UX (owned by P12 / execution-semantics)

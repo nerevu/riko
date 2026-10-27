@@ -1503,6 +1503,13 @@ Deliver:
   makes that a **sum**, and that test changes with it; `union`/`join` (`sequential_inputs`) likewise
   score the max of their inputs (pinned by `test_async_sequential_fan_in_needs_only_its_deepest_input`),
   which holds only while they keep reading their inputs in turn;
+- a one-call fluent fan-in, `Pipeline.union(*pipelines)` (fanout-topology § 11), wiring each operand's
+  default output into one `union` node's `in`, `in:1`, … — the native replacement for
+  `SyncCollection(mod, srcs)`, which today needs a hand-wired `union` `Workflow` (assigned by triage
+  2026-10-26; tripwire `TestFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`).
+  Open shape question: a `Pipeline.union` classmethod shadows the module-name chaining
+  `pipeline.union(...)` that `__getattr__` provides today, so R7 decides between a classmethod that
+  also accepts the chained form or a distinct name;
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
   structurally from incoming `PublishEdge`s and owned sender endpoints;
