@@ -200,14 +200,14 @@ class TestPipelineWriteDefinition:
 
     def test_file_rejects_keys(self, tmp_path):
         with pytest.raises(ValueError, match="forbids 'keys'"):
-            Pipeline(source=ITEMS).write(tmp_path / "out.csv", keys="x")
+            Pipeline().write(tmp_path / "out.csv", keys="x")
 
     def test_destination_rejects_module_arguments(self, tmp_path):
         with pytest.raises(TypeError, match="not both"):
-            Pipeline(source=ITEMS).write(tmp_path / "out.csv", conf=WriteConf({}))
+            Pipeline().write(tmp_path / "out.csv", conf=WriteConf({}))
 
     def test_declares_the_resolved_format_and_mode(self, tmp_path):
-        pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.csv", mode="append")
+        pipeline = Pipeline().write(tmp_path / "out.csv", mode="append")
         node = pipeline.workflow.nodes["write-1"]
         assert isinstance(node, WriteNode)
         assert (node.fmt, node.mode, node.keys) == (Formats.CSV, WriteMode.APPEND, ())
@@ -219,7 +219,7 @@ class TestPipelineWriteDefinition:
     )
     def test_requires_a_destination(self):
         with pytest.raises(TypeError):
-            Pipeline(source=ITEMS).write()
+            Pipeline().write()
 
 
 @WRITE_NODE_PENDING
@@ -227,71 +227,78 @@ class TestPipelineWrite:
     """The ``write`` verb at the pipeline level, once a write node can run."""
 
     def test_passthrough_preserves_stream(self, tmp_path):
-        pipeline = Pipeline(source=ITEMS).write(tmp_path / "out.json")
-        assert list(pipeline) == ITEMS
+        pipeline = Pipeline().write(tmp_path / "out.json")
+        assert list(pipeline(ITEMS)) == ITEMS
 
     def test_passthrough_reaches_a_target_without_a_path(self):
-        assert list(Pipeline(source=ITEMS).write(_RecordStore())) == ITEMS
+        assert list(Pipeline().write(_RecordStore())(ITEMS)) == ITEMS
 
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
-        pipeline = Pipeline(source=ITEMS).write(path).tail(conf={"count": 1})
-        assert list(pipeline) == [{"x": 2}]
+        pipeline = Pipeline().write(path).tail(conf={"count": 1})
+        assert list(pipeline(ITEMS)) == [{"x": 2}]
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_replace_defers_truncation_until_consumed(self, tmp_path):
         path = tmp_path / "out.jsonl"
         path.write_bytes(b'{"old": 1}\n')
-        pipeline = Pipeline(source=ITEMS).write(path, mode="replace")
+        pipeline = Pipeline().write(path, mode="replace")
         assert path.read_bytes() == b'{"old": 1}\n'
-        list(pipeline)
+        list(pipeline(ITEMS))
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
     def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = iter(Pipeline(source=ITEMS).write(path))
+        stream = Pipeline().write(path)(ITEMS)
         next(stream)
         stream.close()
         assert path.read_bytes() == b'[{"x": 0}]'
 
     def test_exception_aborts(self, tmp_path):
+        def seed():
+            yield ITEMS[0]
+            raise RuntimeError("boom")
+
         path = tmp_path / "out.json"
-        stream = iter(Pipeline(source=ITEMS).write(path))
-        next(stream)
 
         with pytest.raises(RuntimeError, match="boom"):
-            stream.throw(RuntimeError("boom"))
+            list(Pipeline().write(path)(seed()))
 
         assert not path.exists()
 
     def test_csv_writes_the_header_once(self, tmp_path):
         path = tmp_path / "out.csv"
-        list(Pipeline(source=ITEMS).write(path))
+        list(Pipeline().write(path)(ITEMS))
         assert path.read_bytes() == b"x\r\n0\r\n1\r\n2\r\n"
+
+    def test_composes_after_a_chain(self, tmp_path):
+        path = tmp_path / "out.json"
+        pipeline = Pipeline.from_module("sort") | Pipeline().write(path)
+        assert list(pipeline(ITEMS)) == ITEMS
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
     def test_jsonl_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
-        list(Pipeline(source=ITEMS).write(path))
+        list(Pipeline().write(path)(ITEMS))
         assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
 
     def test_leaf_write_produces_one_framed_document(self, tmp_path):
         path = tmp_path / "out.json"
-        pipeline = Pipeline(source=ITEMS).hash(options={"assign": "h"}).write(path)
-        assert len(list(pipeline)) == len(ITEMS)
+        pipeline = Pipeline().hash(options={"assign": "h"}).write(path)
+        assert len(list(pipeline(ITEMS))) == len(ITEMS)
         assert path.read_bytes().startswith(b"[")
         assert path.read_bytes().endswith(b"]")
 
     def test_non_file_target_execution_unsupported(self):
-        pipeline = Pipeline(source=ITEMS).write(_RecordStore())
+        pipeline = Pipeline().write(_RecordStore())
 
         with pytest.raises(UnsupportedTargetError, match="_RecordStore"):
-            list(pipeline)
+            list(pipeline(ITEMS))
 
     def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        once = list(Pipeline(source=ITEMS).hash(options={"assign": "h"}))
-        source = Pipeline(source=ITEMS).hash(options={"assign": "h"})
-        through = list(source.write(tmp_path / "out.json"))
-        assert through == once
+        hashed = Pipeline().hash(options={"assign": "h"})
+        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
+        assert through == list(hashed(ITEMS))
 
 
 class TestExportFormats:

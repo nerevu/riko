@@ -3,20 +3,41 @@
 
 from __future__ import annotations
 
+from inspect import isasyncgenfunction, iscoroutinefunction
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._workflow_definition import Workflow
+from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._workflow import Endpoint
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Mapping, Sequence
+    from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 
     from riko.definitions._module_definition import ModuleDefinition
+
+
+def tag_source[F: Callable[..., object]](fn: F) -> F:
+    """Tags a bare test callable as a source module, so an unseeded run may start it."""
+    stamp_wrapper_meta(
+        fn,
+        name=getattr(fn, "name", getattr(fn, "__name__", "source")),
+        module_type=getattr(fn, "type", "processor"),
+        subtype="source",
+        subtypes={"source"},
+        pollable=getattr(fn, "pollable", False),
+        loopable=getattr(fn, "loopable", False),
+        isasync=getattr(
+            fn, "isasync", iscoroutinefunction(fn) or isasyncgenfunction(fn)
+        ),
+        sequential_inputs=getattr(fn, "sequential_inputs", False),
+        prepare=getattr(fn, "prepare", None),
+    )
+    return fn
 
 
 def build_dispatcher(*definitions: ModuleDefinition) -> ResolverDispatcher:

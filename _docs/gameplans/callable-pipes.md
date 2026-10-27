@@ -9,7 +9,8 @@ The same definition runs through sync or async execution; the target API does no
 separate final `SyncPipe.map` and `AsyncPipe.map` contracts.
 
 ```python
-pipeline = Pipeline(source=items).map(normalize)
+pipeline = Pipeline().map(normalize)
+stream = pipeline(items)
 ```
 
 ### Existing decorator model
@@ -35,6 +36,16 @@ equivalence. `@processor async def pipe` stays rejected (see below).
 
 Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection, or
 callable-context framework.
+
+**Decorated functions on `|` (open, triage 2026-10-25).** `pipeline | fn` raises `TypeError` for a
+plain function: map, flat-map, and whole-stream readings all fit it, so `.map(fn)` stays the only
+spelling. A function decorated with `@processor`/`@operator` declares its shape, so the target is to
+accept it on the right of `|` as an unregistered module. That needs a node that holds a decorated
+module without a registered name (today a `ModuleNode` needs `name` and a `CallableNode` always maps),
+with durable identity through `version=` and a process-executor story; design it with that node,
+not as a `|` special case. Strict xfail
+`tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`
+marks it (2026-10-27).
 
 Execution/planning characteristics may extend existing module options/metadata, including:
 
@@ -129,7 +140,7 @@ pipeline.map(partial(scale, factor=2))
 ```
 
 * `fn` receives the upstream value as is: a scalar from an earlier `map` reaches it unwrapped
-  (`Pipeline(source=["hi"]).map(len)` yields `2`), never as `{"content": value}`.
+  (`Pipeline().map(len)(["hi"])` yields `2`), never as `{"content": value}`.
 * The return value is the next item as is: a mapping stays an item, a scalar becomes a plain
   value. Nothing is assigned to a `"udf"` field (`TestCallableNodes` already expects this). A
   returned iterator is one item, not a fan-out; fanning out is `flat_map`.

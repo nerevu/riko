@@ -12,7 +12,7 @@ Index (file, then the subjects it owns, in file order):
                         ExecutionSettings, AsyncBoundedParallel, AsyncFanInParallel,
                         ContextMode, ContextImmutability, EnvironmentBinding,
                         Subscriptions, Split, CallableNodes, ConditionalNodes,
-                        UnseededPipeline
+                        PipelineSeeding, PipelineStream
     test_workflow.py    Workflow, NodeFamily, ParsePort, WorkflowParse, PipeDag,
                         NormalizeWorkflow, RequireRunnableOnly, CallableNodeDocuments,
                         Validate, Migrate, Serialize, WorkflowDocumentResolution

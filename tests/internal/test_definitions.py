@@ -498,11 +498,60 @@ class TestCallableNode:
         assert node != CallableNode(id="a", name="len", fn=lambda value: value)
 
 
+_SORT_NODE = ModuleNode(id="b", name="sort")
+_TWO_HASHES = [ModuleNode(id="b", name="hash"), ModuleNode(id="c", name="hash")]
+_B_OUT = Endpoint("b", "out")
+APPEND_REJECTIONS = [
+    pytest.param(
+        Workflow(nodes=[_SORT_NODE]), "appended workflow has nodes", id="no-default"
+    ),
+    pytest.param(
+        Workflow(nodes=_TWO_HASHES, outputs={"default": _B_OUT}),
+        "exactly one node",
+        id="two-open-inputs",
+    ),
+    pytest.param(
+        Workflow(nodes=[_SORT_NODE], outputs={"default": _B_OUT, "side": _B_OUT}),
+        "workflow output",
+        id="named-output-clash",
+    ),
+    pytest.param(
+        Workflow(inputs={"limit": {"type": "string"}}),
+        "declare input",
+        id="input-clash",
+    ),
+]
+APPENDS = [
+    pytest.param(lambda flow: flow.with_node(_SORT_NODE), id="node"),
+    pytest.param(
+        lambda flow: flow.with_workflow(Workflow().with_node(_SORT_NODE)), id="workflow"
+    ),
+]
+
+
 class TestWorkflowFields:
     def test_appending_a_node_declares_its_resources(self):
         flow = Workflow(resources=("cache",))
         node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
         assert flow.with_node(node).resources == ("cache", "db")
+
+    @pytest.mark.parametrize(("other", "match"), APPEND_REJECTIONS)
+    def test_appending_a_workflow_rejects(self, other, match):
+        flow = Workflow(
+            nodes=[ModuleNode(id="a", name="fetch")],
+            outputs={"default": Endpoint("a", "out"), "side": Endpoint("a", "out")},
+            inputs={"limit": {"type": "integer"}},
+        )
+        with pytest.raises(InvalidPipelineError, match=match):
+            flow.with_workflow(other)
+
+    @pytest.mark.parametrize("append", APPENDS)
+    def test_appending_needs_a_default_output_to_follow(self, append):
+        flow = Workflow(nodes=[ModuleNode(id="a", name="fetch")])
+        with pytest.raises(
+            InvalidPipelineError, match="this workflow has nodes but no default output"
+        ):
+            append(flow)
 
     def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
         with pytest.raises(TypeError, match="not JSON serializable"):

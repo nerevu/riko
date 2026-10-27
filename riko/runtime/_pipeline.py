@@ -1,10 +1,16 @@
 # vim: sw=4:ts=4:expandtab
 """
-The stable, runnable ``Pipeline``.
+Chains modules and functions into a reusable ``Pipeline`` and runs it on items.
 
-A ``Pipeline`` is a ``PipelineDefinition`` that runs. Iterating it, synchronously or
-asynchronously, executes its workflow and yields the items at its default output.
-Composing a ``Pipeline`` yields another ``Pipeline``, so a chain stays runnable.
+Start a pipeline with ``Pipeline.from_module(name, conf=...)``; extend by attribute
+(``.sort(conf=...)``), with ``.pipe(name, conf=...)``, or ``.map(fn)``; or pipe by a
+module name or another pipeline with ``|``. Each step returns a new pipeline and leaves
+the original unchanged. ``with_context``, ``with_resource``, and ``with_execution`` set
+what every run uses.
+
+Each run is fresh. ``pipeline(items)`` and ``items | pipeline`` return a single-use
+stream to iterate with ``for`` or ``async for``. ``pipeline.open(items)`` returns a
+context manager for a run you may leave early, and ``first``/``afirst`` read one item.
 
 Examples:
 
@@ -12,84 +18,238 @@ Examples:
 
         >>> from riko import Pipeline
         >>>
-        >>> source = [{"x": 2}, {"x": 1}]
-        >>> pipeline = Pipeline(source=source).sort(conf={"rule": {"field": "x"}})
-        >>> list(pipeline)
+        >>> items = [{"x": 2}, {"x": 1}]
+        >>> pipeline = Pipeline.from_module("sort", conf={"rule": {"field": "x"}})
+        >>> list(pipeline(items))
         [{'x': 1}, {'x': 2}]
+        >>> list(items | pipeline)
+        [{'x': 1}, {'x': 2}]
+        >>> with pipeline.open(items) as stream:
+        ...     print(next(stream))
+        {'x': 1}
+        >>> pipeline.first(items)
+        {'x': 1}
+
+    Asynchronous usage::
+
+        >>> from riko import Pipeline, run
+        >>>
+        >>> pipeline = Pipeline.from_module("count")
+        >>>
+        >>> async def main():
+        ...     async for item in pipeline([{"x": 1}, {"x": 2}]):
+        ...         print(item)
+        >>>
+        >>> run(main)
+        {'count': 2}
 
 """
 
 from __future__ import annotations
 
-from contextlib import aclosing, closing
 from functools import partial
-from typing import TYPE_CHECKING, Concatenate, cast, overload
+from inspect import isawaitable
+from typing import TYPE_CHECKING, Concatenate, TypeGuard, cast, overload
 
 from attrs import define
 from typing_extensions import TypeVar
 
 from riko.base._exceptions import EmptyPipelineError
+from riko.base._guards import is_mapping, is_streamlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.types._streams import Item
 
 from ._resolver import dispatcher
-from ._run import arun_pipeline, run_pipeline
+from ._run import _PipelineRun, _PipelineStream
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator
+    from collections.abc import AsyncIterator, Callable, Iterator
 
     from riko.definitions._nodes import CallableVersion
     from riko.definitions._resource_definition import ResourcesLike
     from riko.types._enums import IdentityModeLike
+    from riko.types._streams import InputLike, PipelineRun, PipelineStream
 
 
 T = TypeVar("T", default=Item)
 
 
+def _is_seed(value: object) -> TypeGuard[InputLike]:
+    """A seed before ``|``: one item, a stream, an async stream, or an awaitable."""
+    seedlike = is_mapping(value) or is_streamlike(value) or isawaitable(value)
+    return seedlike and not isinstance(value, PipelineDefinition)
+
+
 @define(frozen=True, slots=True, repr=False)
 class Pipeline(PipelineDefinition[T]):
     """
-    A runnable ``PipelineDefinition``: iterating it yields its default output.
+    An immutable, runnable chain of modules: each call with items is a fresh run.
+
+    Chaining (``from_module``, attribute chaining, ``pipe``, ``map``, ``|``, ``write``)
+    and the ``with_*`` methods return a new ``Pipeline``. Running never changes one.
+
+    Attributes:
+
+        workflow: The ``Workflow`` graph each run executes.
+
+        context: The environment each run uses, including the resources it provides, or
+            ``None`` for a default one.
+
+        settings: How each run executes its per-item work.
 
     Examples:
 
         >>> items = [{"x": 1}, {"x": 2}, {"x": 3}]
-        >>> pipeline = Pipeline(source=items).tail(conf={"count": 2})
-        >>> for item in pipeline:
+        >>> pipeline = Pipeline.from_module("tail", conf={"count": 2})
+        >>> for item in pipeline(items):
         ...     print(item)
         {'x': 2}
         {'x': 3}
 
     """
 
-    def __iter__(self) -> Generator[T, None]:
+    def __call__(self, seed: InputLike | None = None, /) -> PipelineStream[T]:
         """
-        Synchronously runs the pipeline with its context and execution settings.
+        Starts a fresh run of the pipeline fed by ``seed``.
 
-        Each iteration is a fresh run that owns its resources for the lifetime of
-        the returned iterator.
+        The returned stream is a sync or async iterator. If you need to ``break`` out of
+        iteration, use ``.open`` instead, which returns a context manager.
 
-        Yields:
+        Args:
 
-            The items produced at the pipeline's default output.
+            seed: Items for the pipeline's open input: one item, an item stream, an
+                async item stream, or an awaitable resolving to one of those. ``None``
+                means no seed (default: None).
+
+        Returns:
+
+            A single-use stream of the items at the pipeline's default output.
+
+        Raises:
+
+            InvalidPipelineError: On first read, if the workflow cannot be planned, or
+                no ``seed`` is given and the pipeline does not start with a source
+                module.
+
+        Examples:
+
+            >>> pipeline = Pipeline.from_module("count")
+            >>> list(pipeline([{"x": 1}, {"x": 2}]))
+            [{'count': 2}]
 
         """
-        return run_pipeline(self, dispatcher)
+        return _PipelineStream(self, dispatcher, seed)
 
-    def __aiter__(self) -> AsyncGenerator[T, None]:  # noqa: PYI058
+    def __iter__(self) -> Iterator[T]:
         """
-        Asynchronously runs the pipeline with its context and execution settings.
+        Synchronously runs a pipeline.
 
-        Each iteration is a fresh run that owns its resources for the lifetime of
-        the returned async iterator.
+        Each iteration is a fresh, unseeded run.
 
-        Yields:
+        Returns:
 
-            The items produced at the pipeline's default output.
+            An iterator over the items at the pipeline's default output.
+
+        Raises:
+
+            InvalidPipelineError: On first read, if the pipeline requires a seed.
 
         """
-        return arun_pipeline(self, dispatcher)
+        return iter(self())
+
+    def __aiter__(self) -> AsyncIterator[T]:
+        """
+        Asynchronously runs a pipeline.
+
+        Each iteration is a fresh, unseeded run.
+
+        Returns:
+
+            An async iterator over the items at the pipeline's default output.
+
+        Raises:
+
+            InvalidPipelineError: On first read, if the pipeline requires a seed.
+
+        """
+        return aiter(self())
+
+    def __ror__(self, other: object) -> PipelineStream[T]:
+        """
+        Starts a fresh run fed by the items on the left of ``|``.
+
+        Args:
+
+            other: The item, stream, async stream, or awaitable feeding the run.
+
+        Returns:
+
+            A single-use stream of the items at the pipeline's default output.
+
+        Raises:
+
+            TypeError: If ``other`` is a string, which could be a module name or an
+                item, with a hint for each.
+
+        Examples:
+
+            >>> items = [{"x": 2}, {"x": 1}]
+            >>> pipeline = Pipeline.from_module("sort", conf={"rule": {"field": "x"}})
+            >>> list(items | pipeline)
+            [{'x': 1}, {'x': 2}]
+            >>> list({"x": 3} | pipeline)
+            [{'x': 3}]
+            >>> "hash" | pipeline
+            Traceback (most recent call last):
+            TypeError: a string before | is ambiguous: ...
+
+        """
+        if isinstance(other, str):
+            msg = "a string before | is ambiguous: seed one item with "
+            msg += f"pipeline({other!r}), or compose "
+            msg += f"Pipeline.from_module({other!r}) | pipeline"
+            raise TypeError(msg)
+
+        if _is_seed(other):
+            stream = self(other)
+        else:
+            # Raising from __ror__ interferes with __or__
+            stream = NotImplemented
+
+        return stream
+
+    def open(self, seed: InputLike | None = None, /) -> PipelineRun[T]:
+        """
+        Starts a run fed by ``seed`` and returns it as a context manager.
+
+        Use ``with`` for synchronous iteration or ``async with`` for asynchronous
+        iteration. Leaving the ``with`` block, including by ``break`` or an exception,
+        closes the run in the task that opened it. If you want a direct stream instead,
+        call the pipeline.
+
+        Args:
+
+            seed: Items for the pipeline's open input: one item, an item stream, an
+                async item stream, or an awaitable resolving to one of those. ``None``
+                means no seed (default: None).
+
+        Returns:
+
+            A run that closes when its block exits.
+
+        Examples:
+
+            >>> pipeline = Pipeline.from_module("sort", conf={"rule": {"field": "x"}})
+            >>>
+            >>> with pipeline.open([{"x": 2}, {"x": 1}]) as stream:
+            ...     for item in stream:
+            ...         print(item)
+            ...         break
+            {'x': 1}
+
+        """
+        return _PipelineRun(self(seed))
 
     def map[R](
         self,
@@ -140,10 +300,11 @@ class Pipeline(PipelineDefinition[T]):
 
             >>> from operator import itemgetter
             >>>
-            >>> pipeline = Pipeline(source=[{"x": 1}, {"x": 2}])
-            >>> list(pipeline.map(lambda item: item["x"] * 10))
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> pipeline = Pipeline()
+            >>> list(pipeline.map(lambda item: item["x"] * 10)(items))
             [10, 20]
-            >>> list(pipeline.map(itemgetter("x")))
+            >>> list(pipeline.map(itemgetter("x"))(items))
             [1, 2]
 
         """
@@ -151,16 +312,24 @@ class Pipeline(PipelineDefinition[T]):
         return cast("Pipeline[R]", mapper(version=version, identity=identity))
 
     @overload
-    def first(self) -> T: ...
+    def first(self, seed: InputLike | None = None, /) -> T: ...
     @overload
-    def first[D](self, default: D) -> T | D: ...
-    def first[D](self, default: D | MissingType = MISSING) -> T | D:
+    def first[D](self, seed: InputLike | None = None, /, *, default: D) -> T | D: ...
+    def first[D](
+        self, seed: InputLike | None = None, /, *, default: D | MissingType = MISSING
+    ) -> T | D:
         """
         Runs the pipeline just long enough to read its first item.
 
         The run is closed as soon as the item is read.
 
         Args:
+
+            seed: Items for the pipeline's open input: one item, an item stream, an
+                async item stream, or an awaitable resolving to one of those. ``None``
+                means no seed (default: None).
+
+        Kwargs:
 
             default: The value returned when the pipeline produces no items.
 
@@ -175,13 +344,14 @@ class Pipeline(PipelineDefinition[T]):
 
         Examples:
 
-            >>> Pipeline(source=[{"x": 1}, {"x": 2}]).first()
+            >>> pipeline = Pipeline.from_module("sort", conf={"rule": {"field": "x"}})
+            >>> pipeline.first([{"x": 2}, {"x": 1}])
             {'x': 1}
-            >>> print(Pipeline(source=[]).first(default=None))
+            >>> print(pipeline.first([], default=None))
             None
 
         """
-        with closing(iter(self)) as stream:
+        with self.open(seed) as stream:
             item = next(stream, default)
 
         if isinstance(item, MissingType):
@@ -190,16 +360,26 @@ class Pipeline(PipelineDefinition[T]):
         return item
 
     @overload
-    async def afirst(self) -> T: ...
+    async def afirst(self, seed: InputLike | None = None, /) -> T: ...
     @overload
-    async def afirst[D](self, default: D) -> T | D: ...
-    async def afirst[D](self, default: D | MissingType = MISSING) -> T | D:
+    async def afirst[D](
+        self, seed: InputLike | None = None, /, *, default: D
+    ) -> T | D: ...
+    async def afirst[D](
+        self, seed: InputLike | None = None, /, *, default: D | MissingType = MISSING
+    ) -> T | D:
         """
         Asynchronously runs the pipeline just long enough to read its first item.
 
         The run is closed as soon as the item is read.
 
         Args:
+
+            seed: Items for the pipeline's open input: one item, an item stream, an
+                async item stream, or an awaitable resolving to one of those. ``None``
+                means no seed (default: None).
+
+        Kwargs:
 
             default: The value returned when the pipeline produces no items.
 
@@ -217,13 +397,13 @@ class Pipeline(PipelineDefinition[T]):
             >>> from riko import run
             >>>
             >>> async def main():
-            ...     print(await Pipeline(source=[{"x": 1}]).afirst())
+            ...     print(await Pipeline.from_module("count").afirst([{"x": 1}]))
             >>>
             >>> run(main)
-            {'x': 1}
+            {'count': 1}
 
         """
-        async with aclosing(aiter(self)) as stream:
+        async with self.open(seed) as stream:
             item = await anext(stream, default)
 
         if isinstance(item, MissingType):

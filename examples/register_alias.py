@@ -23,5 +23,5 @@ from riko.modules import count
 
 if __name__ == "__main__":
     register_module(ModuleDefinition.from_module(count, name="stats.count"))
-    source = [{"n": 1}, {"n": 2}, {"n": 3}]
-    print(list(Pipeline(source=source).pipe("stats.count")))
+    items = [{"n": 1}, {"n": 2}, {"n": 3}]
+    print(list(Pipeline.from_module("stats.count")(items)))

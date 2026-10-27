@@ -180,10 +180,10 @@ bounded-retention, ownership, and close semantics before it could ship.
 
 ### 4.2 External subscriptions and publishers
 
-An external `Subscription[T]` is an ordinary source:
+An external `Subscription[T]` is an ordinary seed:
 
 ```python
-pipeline = Pipeline(source=subscription)
+stream = pipeline(subscription)
 ```
 
 `publish()` accepts either a local subscription Pipeline or an external `Publisher[T]`.

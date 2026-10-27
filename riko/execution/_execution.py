@@ -80,15 +80,15 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     return await asyncify(func)(*args)
 
 
-def _require_source[S](source: S | None, output: str) -> S:
+def _require_seed[S](seed: S | None, output: str) -> S:
     """Requires the seed an identity plan streams as its default output."""
     if output != "default":
         raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
-    elif source is None:
+    elif seed is None:
         msg = "workflow has no nodes; an empty workflow requires a seed"
         raise InvalidPipelineError(msg)
 
-    return source
+    return seed
 
 
 @define(frozen=True, slots=True)

@@ -116,13 +116,14 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 
 > **Decisions locked (2026-08).** Clean break for the target Pipeline surface. Go straight to the
 > full `Pipeline` definition/private-execution split — no interim immutable-`PyPipe` stepping stone.
-> `Pipeline(source=...)` is the stream constructor; execution settings derive through
-> `with_execution(...)`.
+> A run takes its item stream as a seed (`pipeline(items)`, which replaced the `Pipeline(source=...)`
+> constructor on 2026-10-24); execution settings derive through `with_execution(...)`.
 
 - **`Pipeline` is the sole public pipeline concept.** A reusable, immutable definition lives in
-  `riko/pipeline.py`, exported from `riko`. `Pipeline.from_module("fetch")` seeds a module and
-  `Pipeline(source=...)` seeds an item stream; both create a definition, and fluent composition
-  returns new definitions and never mutates the original.
+  `riko/pipeline.py`, exported from `riko`. `Pipeline.from_module("fetch")` starts from a module and
+  `Pipeline()` starts empty; both create a definition that stores no items, each run takes its seed
+  (`pipeline(items)`, `items | pipeline`), and fluent composition returns new definitions and never
+  mutates the original.
 - **Definition vs execution — the full split.** `iter(pipeline)` builds a fresh private
   `SyncExecution`; `aiter(pipeline)` builds a fresh private `AsyncExecution`. The same definition runs
   under `for` or `async for`; each iteration is an independent one-shot execution. No public
@@ -130,8 +131,8 @@ final public Pipeline API; legacy low-level names are migration inputs only unti
 - **`SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` are not the target public surface.**
   Their mature mechanics are refactored into private execution machinery rather than preserved as
   parallel public concepts.
-- **Collection disappears as a separate concept.** `Pipeline(source=[...])` covers iterable
-  sources. Source classification is one boundary: mapping = one record; iterable = stream;
+- **Collection disappears as a separate concept.** `pipeline([...])` covers iterable
+  seeds. Source classification is one boundary: mapping = one record; iterable = stream;
   `str`/`bytes` = one item; async iterables/awaitables resolve through async execution. Replayability
   follows the source itself: a list can replay, while a generator instance remains one-shot and is
   never secretly buffered.

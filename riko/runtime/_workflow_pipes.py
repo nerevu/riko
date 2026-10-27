@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.definitions._workflow_definition import Workflow
-    from riko.types._streams import SourceLike
+    from riko.types._streams import InputLike
     from riko.types._wrappers import (
         AsyncFunc,
         AsyncSubPipe,
@@ -219,12 +219,12 @@ def build_workflow_pipes(
     description = {"inputs": inputs, "dependencies": list(dependencies)}
 
     def pipe(
-        item: SourceLike | None = None, context: Context | None = None, **_: object
+        item: InputLike | None = None, context: Context | None = None, **_: object
     ) -> Iterator[object] | dict[str, object] | list[str]:
         if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, source=item, context=context)
+            definition = PipelineDefinition(flow, context=context)
             result: Iterator[object] | dict[str, object] | list[str]
-            result = run_pipeline(definition, dispatcher)
+            result = run_pipeline(definition, dispatcher, seed=item)
         elif context.mode is ExecutionMode.DESCRIBE:
             result = description
         elif context.describe_input:
@@ -235,11 +235,12 @@ def build_workflow_pipes(
         return result
 
     def async_pipe(
-        item: SourceLike | None = None, context: Context | None = None, **_: object
+        item: InputLike | None = None, context: Context | None = None, **_: object
     ) -> AsyncIterator[object]:
         if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, source=item, context=context)
-            result: AsyncIterator[object] = arun_pipeline(definition, dispatcher)
+            definition = PipelineDefinition(flow, context=context)
+            result: AsyncIterator[object]
+            result = arun_pipeline(definition, dispatcher, seed=item)
         elif context.mode is ExecutionMode.DESCRIBE:
             result = as_async([description])
         elif context.describe_input:

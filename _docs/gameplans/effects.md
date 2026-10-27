@@ -157,6 +157,13 @@ E3.7: "Resource bindings to live clients are separate"). Tripwire:
 `tests/public/test_write.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
 (under the class-level write-node xfail).
 
+**Composed and wrapped writes (R5C).** `a | Pipeline().write(dest)` already composes (`|` appends
+any workflow); running it waits on `WriteNode` execution, pinned by
+`tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`. The private
+`write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their input stream `source`
+(the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
+caller rather than ahead of it (triage 2026-10-25).
+
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
 session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
 into the write effect and maintains lineage externally, rather than teaching the session about pipeline

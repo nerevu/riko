@@ -134,16 +134,18 @@ level); `truncate_content` (`riko/coercion/_sequences.py`) shortens `bytes` like
 
 `SyncPipe`/`AsyncPipe`/`SyncCollection`/`AsyncCollection` and `PipeState` were deleted at
 v1-cutover step 4 (2026-10-02, `54b53c29`). `Pipeline` is the one shipped execution
-surface and is a reusable definition: each `iter(pipeline)` / `aiter(pipeline)` builds an
-execution plan and runs it inside a fresh one-shot `SyncExecution` / `AsyncExecution`
-that owns the run's resources for the lifetime of the returned iterator.
+surface and is a reusable definition that stores no items: each run (`pipeline(items)`,
+`items | pipeline`, `pipeline.open(items)`, or `iter(pipeline)` / `aiter(pipeline)` for a
+self-starting pipeline) builds an execution plan and runs it inside a fresh one-shot
+`SyncExecution` / `AsyncExecution` that owns the run's resources for the lifetime of the run.
 
 ```python
-for item in pipeline:
+for item in pipeline(items):
     ...
 
-async for item in pipeline:
-    ...
+async with pipeline.open(items) as stream:
+    async for item in stream:
+        ...
 ```
 
 Both executions stream: sync iteration pulls lazily; async iteration streams items as the
@@ -152,6 +154,11 @@ plan yields them. The old `parallel`/`workers`/`threads`/`pool` arguments are re
 private execution runtime section below), which consumes the pool mechanics in
 `riko/execution/_pools.py`. The `subscribe`/`publish` and `split` conveniences and
 `udf(func=…)` through a pipeline have no replacement yet.
+
+A consumed, closed, or failed stream (`riko/runtime/_run.py` `_PipelineStream`, one `_finished`
+flag) behaves like an exhausted Python generator (2026-10-26): another `for` yields nothing and
+`next(stream, default)` returns the default. Only mixing sync and async iteration raises
+`PipelineStateError`. Pinned by `TestPipelineStream` in `tests/public/test_pipeline.py`.
 
 ### Feed reuse
 
@@ -381,7 +388,7 @@ the option-free called form; a callable plus options raises `TypeError`; a no-ar
 the bare form as the wrapper and the called form as the decorator instance.
 
 **Fluent surface (P9, partial — shipped):** value-taking chaining — `pipeline | "name"`,
-`pipeline | ("name", conf)`, `pipeline | Pipeline.from_module(...)`, `items | Pipeline(...)`, and
+`pipeline | other_pipeline` (associative composition), `items | Pipeline(...)`, and
 `.pipe()` — plus the `ModuleName` `StrEnum` base (`riko/types/_enums.py`) and `normalize_module_name` (`riko/definitions/_module_definition.py`); a name may
 be a `str` or `ModuleName` member anywhere, normalized to its canonical string at the boundary. The
 generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER` resolves identically to
@@ -516,7 +523,7 @@ discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both drop
 `attrs @define(frozen, slots)` class like the rest of the model — generic `PipelineDefinition[T]` via a
 defaulted `TypeVar` (type-parameter defaults need Python 3.13; the floor is 3.12), with its `workflow`
 field normalizing `None`/omitted to the empty `Workflow` through the shared `_optional_workflow` converter, so
-`Pipeline()` is a valid empty template. The node/edge/`Workflow`/`Endpoint` model is EXTENSION
+`Pipeline()` is a valid empty pipeline to compose onto. The node/edge/`Workflow`/`Endpoint` model is EXTENSION
 (`riko.ext`). Tests:
 `tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break deletion
 ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
@@ -926,11 +933,17 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   (`riko/runtime/_workflow_pipes.py`), which tags a copy of a hand-written workflow module's pipe and
   leaves the original untouched, alone defaults it from `is_async_callable`/`isasyncgenfunction`. A callable filling both slots is rejected at
   construction, since slot identity could not tell its mode.
-- `SyncExecution.run(plan, output="default")` runs only the selected output's dependency subgraph in
-  topological order and returns that output's stream, seeding source nodes at one normalization
-  boundary: a node with no default (`in`) edge receives the `{"forever": True}` seed unless it has a
-  positional (`in:N`) edge, in which case its default input is empty (so `union` with only secondary
-  inputs wired never sees the seed as data); named value ports alone do not suppress the seed. Every
+- `SyncExecution.run(plan, output="default", *, seed=None)` runs only the selected output's dependency
+  subgraph in topological order and returns that output's stream, feeding unwired default inputs at one
+  normalization boundary: a node with no default (`in`) edge receives the internal one-item default seed
+  unless it has a positional (`in:N`) edge, in which case its default input is empty (so `union` with
+  only secondary inputs wired never sees the default seed as data); named value ports alone do not
+  suppress it (`PreparedNode.takes_default_seed`). Unseeded, every node that takes the default seed must be self-starting
+  (`ExecutionPlan.require_self_starting`, 2026-10-24) — a source module (`ResolvedModule.is_source`:
+  declared `subtype == "source"`; missing metadata is not a source, a `CallableNode` never is) or a value
+  feeder (no output's node, at least one outgoing edge, all entering named `in:<name>` ports) — so the
+  default seed never reaches output; any other node that takes it raises `InvalidPipelineError`
+  ("requires a seed"). Every
   module node's `options` are applied as call options when the node is prepared, and a loop node's pipe receives its embed's
   `conf` (`PreparedNode.embed_or_self_conf`). An adapted node (async-only pipe under sync execution) runs through the execution's
   blocking portal: `_async_drain` pulls the async stream one `__anext__` at a time on the portal loop and
@@ -956,8 +969,8 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   key set checked at construction by the field's converter chain against the `Embed` TypedDict, an
   omitted `conf` filled with `{}` first so `Embed.conf` stays required for its readers, then deep-frozen;
   `LoopConf` is deleted and a loop node's own `conf` is empty; documents carry a node-level `embed`
-  key only when set; `Pipeline.pipe`/`from_module` take `conf=`/`options=`/`embed=` and `|` template
-  chaining copies all three; generated modules render `embed=Embed({...})` through the shared
+  key only when set; `Pipeline.pipe`/`from_module` take `conf=`/`options=`/`embed=` and `|`
+  composition copies all three; generated modules render `embed=Embed({...})` through the shared
   `render_value` literal renderer, which keeps conf keys verbatim — no lowercasing), and the loop's
   `emit`/`count`/`assign`/`field` live in `ModuleNode.options`
   (a `CallOptions` record; serialized only when an option is set). The
@@ -983,53 +996,85 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   from execution-owned `acquire`/`aacquire` (single-flight + exit-stack teardown), resolved against the
   execution's `Context`; a name absent from the Context raises before any sibling is acquired. Providing
   resources into the `Pipeline` surface itself is deferred.
-- `iter(pipeline)` (`Pipeline.__iter__`, returning a `Generator`) and `aiter(pipeline)`
-  (`Pipeline.__aiter__`, returning an `AsyncGenerator`) own the execution lifetime
-  (`with SyncExecution() as e: yield from e.run(plan)` / the `async with AsyncExecution()` analogue), so
-  early close, exhaustion, or failure unwinds upstream feeds and the exit stack.
-- **Source-only pipelines stream their source** (2026-10-04; one execution model since 2026-10-05). A
-  `Pipeline` with a `source` and no module nodes runs the **identity plan**: `ExecutionPlan.from_workflow`
+- `run_pipeline` / `arun_pipeline(definition, dispatcher, *, seed=None)` (`riko/runtime/_run.py`, plain
+  generators) own the execution lifetime (`with SyncExecution() as e: yield from e.run(plan, seed=seed)` /
+  the `async with AsyncExecution()` analogue), so early close, exhaustion, or failure unwinds upstream
+  feeds and the exit stack.
+- **Per-run seeds and `Pipeline.open()` (R4C, 2026-10-24).** `pipeline(seed=None, /)` and
+  `seed | pipeline` return a private `_PipelineStream` (`riko/runtime/_run.py`) behind the public
+  `riko.types.PipelineStream[T]` protocol: single-use, sync- *and* async-iterable, and its own iterator
+  in both modes, so `for x in pipeline(items)` keeps the run object alive for the
+  loop and its `__del__` cannot fire mid-iteration. It creates the `run_pipeline`/`arun_pipeline`
+  generator on first `iter`/`aiter`; a second `iter()` on a sync-started stream returns itself;
+  iterating after close yields nothing; iterating in the other colour after starting raises
+  `PipelineStateError`. Started
+  and garbage-collected unclosed, it emits a `ResourceWarning` (the `io.FileIO` / asyncio event-loop
+  precedent). It is not a context manager: its runtime `__enter__`/`__aenter__` raise `TypeError`
+  pointing at `open()`, and the protocol omits `__enter__`/`__exit__`/`__aenter__`/`__aexit__` so
+  pyright reports `with pipeline(items)` (pyright 1.1.414 does not report a `@deprecated` dunder used
+  through `with`). `pipeline.open(seed=None, /)` returns a private `_PipelineRun` behind
+  `riko.types.PipelineRun[T]`: `with` yields the stream as an `Iterator[T]`, `async with` as an
+  `AsyncIterator[T]`, and block exit closes it in the opening task, including on `break`.
+  `__iter__`/`__aiter__` are the unseeded run (`iter(self())`). `__ror__` accepts what `_is_seed` admits
+  (`is_streamlike` or awaitable, never a `PipelineDefinition`; Python tries a subclass right operand's
+  `__ror__` first and a `Pipeline` is iterable), so `pipeline_a(items) | pipeline_b` feeds one run into
+  another. A seed of `None` means no seed; `Pipeline()(items)` is the identity stream. The seed type is
+  `InputLike` (renamed from `SourceLike`). `Pipeline(source=…)`, `PipelineDefinition.source`, and
+  `replace(source=)` are deleted (unreleased, no deprecation).
+- **A node-less pipeline streams its seed** (2026-10-04; one execution model since 2026-10-05). A
+  seeded run of a `Pipeline` with no module nodes runs the **identity plan**: `ExecutionPlan.from_workflow`
   accepts a completely empty workflow (no nodes, edges, or outputs — `Workflow.is_empty`) without
-  `Workflow.validate()`, and `SyncExecution.run(plan, source=…)` / `AsyncExecution.arun(plan, source=…)`
-  stream the seeded source unchanged as the plan's `default` output, through the same
-  `_build_source_stream`/`_abuild_source_stream` boundary a seeded plan uses (awaitables and async iterables
-  resolve; a mapping is one record). `run` always takes a plan (there is no `plan=None` path).
-  `_require_source` raises `InvalidPipelineError` for any other output name, and for an empty plan
-  without a source, so `Pipeline()` still fails `workflow has no nodes`; a node-less workflow that
+  `Workflow.validate()`, and `SyncExecution.run(plan, seed=…)` / `AsyncExecution.arun(plan, seed=…)`
+  stream the seed unchanged as the plan's `default` output, through the same
+  `_open_seed`/`_aopen_seed` boundary a seeded plan uses (awaitables and async iterables
+  resolve; a mapping is one record; under sync execution a value that is both sync- and async-iterable is read synchronously).
+  `run` always takes a plan (there is no `plan=None` path). `_require_seed` raises
+  `InvalidPipelineError` for any other output name, and for an empty plan without a seed, so an unseeded
+  `Pipeline()` still fails `workflow has no nodes`; a node-less workflow that
   declares outputs or edges is not empty and still fails validation.
 - **One index per workflow** (2026-10-05). `Workflow.index` is a `cached_property`, so
   `ExecutionPlan.validate()` (which runs `Workflow.validate()`) and the plan's `index`
   share one `GraphIndex` (`test_execution_plan_indexes_the_workflow_once`); `evolve` yields a fresh
   workflow with its own cache.
-- **`first(default=MISSING)` / `afirst(default=MISSING)`** read one item and close the run before
-  returning (`closing(iter(self))` / `aclosing(aiter(self))`); with no item and no `default` they raise
+- **`first(seed=None, /, *, default=MISSING)` / `afirst(...)`** read one item and close the run before
+  returning (`with self.open(seed)` / `async with self.open(seed)`); with no item and no `default` they raise
   `EmptyPipelineError` (`PipelineError` + `LookupError`, exported from `riko`), so a bare
   `StopIteration` never leaks into an enclosing iterator. A bare `break` out of `async for` over a
   `Pipeline` is safe but releases the run only when the abandoned generator is garbage collected
   (regression
-  `test_async_pipe_lifecycle.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`);
-  the scoped `Pipeline.open()` for prompt release is scheduled in R4C.
+  `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`)
+  and warns with a `ResourceWarning`; `async with pipeline.open()` is the prompt-release form.
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
-  normalize/runtime import: the canonical constructor takes `(workflow, source=…)` — it accepts a
-  `Workflow` (or defaults to the empty `Workflow`) and an optional seeded item stream, raising
-  `TypeError` on any other positional value — while the `Pipeline.from_module(name, conf=…)`
+  normalize/runtime import: the canonical constructor takes `(workflow)` — it accepts a
+  `Workflow` (or defaults to the empty `Workflow`), raising `TypeError` on any other positional
+  value — while the `Pipeline.from_module(name, conf=…)`
   classmethod seeds one `ModuleNode`; `.pipe(name,
   conf=…)`, attribute chaining (`pipeline.sort(conf=…)` — underscore and mapping names raise
-  `AttributeError`), and `|` (a name, a `(name, conf)` pair, or a one-node module or callable template) each mint a
+  `AttributeError`), and `|` with a name each mint a
   `<name>-<occurrence>` node id (`Workflow.get_node_id`, the id `normalize_workflow` gives an appended node without one; both use `get_free_occurrence`),
   append the node plus a `StreamEdge` from the current default output, and re-point
-  `outputs["default"]` (`Workflow.with_node`); prior nodes/edges are shared by reference. A one-node
-  template is re-identified with `evolve`, so every node field (resources, label) carries over. `items | Pipeline(…)` /
-  `Pipeline(source=items)` bind an external iterable as `Pipeline.source` — definition-level but
-  `Workflow`-external, so serializing a seeded pipeline never captures items — and `__iter__`/`__aiter__`
-  pass it to `run(plan, source=…)`, which delivers it to the subgraph's single open default input
-  (`ExecutionPlan.require_seed_target`; two open roots raise `InvalidPipelineError`) while other roots keep the
-  `{"forever": True}` seed. The seed is a `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`,
-  `riko/types/_streams.py`) resolved once per run — `SyncExecution._build_source_stream` awaits an
-  awaitable through the portal and drains an async stream through it, `AsyncExecution.
-  _abuild_source_stream` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
-  primitive is one item, any other iterable is the stream) — so `Pipeline.source`, `__ror__`
-  (`is_streamlike` or awaitable, never a `Pipeline`), and the generated module's `pipe(item)` hand
+  `outputs["default"]` (`Workflow.with_node`); prior nodes/edges are shared by reference. `a | b`
+  appends `b`'s whole workflow (`Workflow.with_workflow`): a clashing `b` id gets the next free
+  `<name>-<occurrence>` (so `|` is associative), `a`'s default output feeds `b`'s single node with an
+  open default `in` port, and every node field carries over through `evolve`. `b`'s context may only
+  add resources (combined by name, a different definition under one name raises); its mode/inputs/test
+  flag or non-default execution settings raise `InvalidPipelineError`. A function or `(name, conf)`
+  tuple on the right raises `TypeError` (the function hint names `.map`), and `stream | "name"`
+  raises a compose-first `TypeError` (`_PipelineStream.__or__` returns `NotImplemented` otherwise, so
+  `stream | pipeline` still seeds). A run's
+  seed (`pipeline(items)` / `items | pipeline`) never touches the definition, so serializing a
+  pipeline never captures items; `run(plan, seed=…)` delivers it to one node
+  (`ExecutionPlan.require_seed_target`: an open node is one with no edge into its bare default `in`
+  port — `GraphIndex.is_open`, 2026-10-23; the seed feeds the single open node that is not
+  self-starting, else the single open node; otherwise `InvalidPipelineError`) while other open nodes take the
+  default seed and must be self-starting. The seed is an `InputLike` (`Item | Feed | Awaitable[Item | Feed]`,
+  `riko/types/_streams.py`) opened once per run — `SyncExecution._open_seed` awaits an
+  awaitable through the portal and drains an async-only stream through it, `AsyncExecution.
+  _aopen_seed` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
+  primitive is one item, any other iterable is the stream) and both registering a generator seed's
+  `close` on the execution's exit stack (the async side also an async generator seed's `aclose`), so
+  a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
+  (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the generated module's `pipe(item)` hand
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. An
   async `processor` node fed an async stream maps it lazily and in order (`_aprocess_stream` in
   `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the stream object as

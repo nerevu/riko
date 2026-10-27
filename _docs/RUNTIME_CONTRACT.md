@@ -98,16 +98,20 @@ yields items lazily. Incremental `httpx.stream()` body reads are not implemented
 
 ## 3. Pipe behavior
 
-A `Pipeline` is a reusable definition; each `iter(pipeline)` / `aiter(pipeline)` creates a fresh
-**one-shot** private execution that owns the run's resources for the lifetime of the returned
-iterator. Iteration never restarts and never raises on exhaustion; a consumed iterator simply
-yields nothing. Sync iteration pulls lazily; async iteration streams items as they are produced.
+A `Pipeline` is a reusable definition that stores no items; each run (`pipeline(items)` /
+`items | pipeline`, `pipeline.open(items)`, or `iter(pipeline)` / `aiter(pipeline)` for a pipeline
+that is self-starting) creates a fresh **one-shot** private execution that owns the run's resources for
+the lifetime of the returned stream, or until its `open()` block exits. Iteration never restarts.
+Exhaustion ends the run normally, and a consumed or closed stream behaves like any exhausted Python
+iterator: another `for` loop yields nothing and `next(stream, default)` returns the default. Only
+iterating a started stream in the other mode raises `PipelineStateError`. Sync iteration pulls lazily; async iteration streams items as they are
+produced.
 `AsyncStream`s behave like ordinary async iterators — riko does not detect or recreate a consumed
 feed. (The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were deleted
 at v1-cutover step 4, 2026-10-02.)
 
-This describes the shipped API only. Items seeded into a pipeline may themselves
-still be one-shot; a second iteration of the same pipeline does not recreate them.
+This describes the shipped API only. A seed may itself be one-shot; riko does not
+recreate it, so a second run takes a fresh seed.
 
 ## 6. Async execution and backpressure
 

@@ -11,6 +11,7 @@ dispatcher, or registry.
 from __future__ import annotations
 
 from functools import cached_property, partial
+from itertools import filterfalse
 from typing import TYPE_CHECKING, NamedTuple, Self, cast
 
 from attrs import define, evolve, field
@@ -256,6 +257,15 @@ class ResolvedModule:
         """
         return _has_flag(self.select_async(), "sequential_inputs")
 
+    @property
+    def is_source(self) -> bool:
+        """
+        Whether the module creates items on its own and needs no input stream.
+
+        A module without a declared subtype is not a source.
+        """
+        return getattr(self.select_async(), "subtype", None) == "source"
+
 
 _CALLABLE_MODULE = "udf"
 
@@ -426,10 +436,25 @@ class PreparedNode:
     def sequential_inputs(self) -> bool:
         return self.module.sequential_inputs
 
+    @property
+    def is_source(self) -> bool:
+        """Whether the node's module creates items on its own; a callable never does."""
+        return self.module.is_source
+
     @cached_property
     def input_ports(self) -> tuple[ParsedPort, ...]:
         """The parsed target port of each incoming stream edge, in edge order."""
         return tuple(parse_port(edge.target_port) for edge in self.incoming)
+
+    @cached_property
+    def takes_default_seed(self) -> bool:
+        """
+        Whether an unseeded run feeds the default seed to the node's default input.
+
+        True when no stream edge reaches the node's default or positional ports.
+        """
+        ports = self.input_ports
+        return not any(port.is_default or port.is_positional for port in ports)
 
     @cached_property
     def extras(self) -> ExtraNames:
@@ -768,13 +793,80 @@ class ExecutionPlan:
 
         return max(demand.values(), default=0)
 
+    @cached_property
+    def _output_nodes(self) -> frozenset[str]:
+        return frozenset(endpoint.node for endpoint in self.index.outputs.values())
+
+    def is_self_starting(self, node_id: str) -> bool:
+        """
+        Reports whether a node runs without a seed.
+
+        A source module is self-starting. So is a value feeder: a node that isn't
+        claimed by the workflow output and has at least one outgoing edge.
+
+        Args:
+
+            node_id: The id of the node to check.
+
+        Returns:
+
+            ``True`` when the node needs no seed on its default input.
+
+        Examples:
+
+            >>> from riko import Endpoint, Workflow
+            >>> from riko.ext import ModuleNode, StreamEdge
+            >>> from riko.modules.hash import pipe
+            >>>
+            >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>> flow = Workflow(
+            ...     nodes=[a, b],
+            ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:part"))],
+            ...     outputs={"default": Endpoint("b", "out")},
+            ... )
+            >>> module = ResolvedModule("hash", sync_pipe=pipe)
+            >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
+            >>> plan.is_self_starting("a"), plan.is_self_starting("b")
+            (True, False)
+
+        """
+        outgoing = self.index.outgoing.get(node_id, ())
+        named = all(parse_port(edge.target_port).name is not None for edge in outgoing)
+        feeds_values = bool(outgoing) and named and node_id not in self._output_nodes
+        return self.nodes[node_id].is_source or feeds_values
+
+    def require_self_starting(self, output: str) -> None:
+        """
+        Requires every default-seeded node that ``output`` runs to be self-starting.
+
+        A node whose default input port gets neither an input stream nor a seed must be
+        a source module or a value feeder (see ``is_self_starting``).
+
+        Args:
+
+            output: The name of the workflow output being run.
+
+        Raises:
+
+            InvalidPipelineError: If a node that takes the default seed is not
+                self-starting.
+
+        """
+        nodes, required = self.nodes, self.index.required[output]
+        defaulted = (_id for _id in required if nodes[_id].takes_default_seed)
+
+        if needy := list(filterfalse(self.is_self_starting, defaulted)):
+            names = ", ".join(map(repr, needy))
+            msg = f"node(s) {names} take an input stream; this pipeline requires a seed"
+            raise InvalidPipelineError(msg)
+
     def require_seed_target(self, output: str) -> str:
         """
-        Requires the one node ``output`` runs whose default input is open to a seed.
+        Requires that ``output``'s subgraph has exactly one node to feed.
 
-        A node's default input is open when every stream edge reaching it, if any,
-        targets a positional ``in:<n>`` port. An edge into its default port or a named
-        ``in:<name>`` port closes it. A seed needs exactly one open node.
+        A node's default input is open when no stream edge targets its ``in`` port. The
+        seed feeds the open node that isn't self-starting, or, when every open node is
+        self-starting, the one open node.
 
         Args:
 
@@ -782,17 +874,20 @@ class ExecutionPlan:
 
         Returns:
 
-            The id of the single node whose default input a supplied seed feeds.
+            The node id whose default input can accept a seed.
 
         Raises:
 
-            InvalidPipelineError: If the output's subgraph has no single open input.
+            InvalidPipelineError: If the output's subgraph doesn't have exactly one node
+                to feed.
 
         """
-        open_roots = list(filter(self.index.is_open, self.index.required[output]))
+        open_nodes = list(filter(self.index.is_open, self.index.required[output]))
+        needy = list(filterfalse(self.is_self_starting, open_nodes))
+        candidates = needy or open_nodes
 
-        if (count := len(open_roots)) == 1:
-            target = open_roots[0]
+        if (count := len(candidates)) == 1:
+            target = candidates[0]
         else:
             msg = f"a seed requires exactly one open input, found {count}"
             raise InvalidPipelineError(msg)
@@ -803,12 +898,12 @@ class ExecutionPlan:
         self, output: str, *, seed: V | None = None
     ) -> Iterator[tuple[str, V | None]]:
         """
-        Pairs each node ``output`` runs, in build order, with the seed it takes.
+        Pairs each node that ``output`` runs, in build order, with the seed it takes.
 
         Args:
 
             output: The name of the workflow output being run.
-            seed: The seed stream for the workflow output's open input, if any.
+            seed: Items for the workflow output's open input.
 
         Yields:
 
@@ -816,11 +911,16 @@ class ExecutionPlan:
 
         Raises:
 
-            InvalidPipelineError: If a seed is given and the output's subgraph has no
-                single open input.
+            InvalidPipelineError: If a seed is given and the output's subgraph doesn't
+                have exactly one node for it to feed, or no seed is given and a node
+                requires one.
 
         """
-        seed_target = None if seed is None else self.require_seed_target(output)
+        if seed is None:
+            self.require_self_starting(output)
+            seed_target = None
+        else:
+            seed_target = self.require_seed_target(output)
 
         for node_id in self.index.required[output]:
             yield node_id, seed if node_id == seed_target else None

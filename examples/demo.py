@@ -54,10 +54,7 @@ async def async_pipe(test: bool = False) -> AsyncStream:
     )
 
     for pipeline in (s1, s2):
-        stream = aiter(pipeline)
-        first = await anext(stream)
-        await stream.aclose()
-        yield first
+        yield await pipeline.afirst()
 
 
 def print_results(result: Items) -> None:

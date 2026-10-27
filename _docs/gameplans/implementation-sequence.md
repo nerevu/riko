@@ -910,9 +910,9 @@ executable, not guarded: `union` reads `others` as an ordered list and legacy `_
 `in:2` (`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
 `parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
 tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
-item is also done: `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
-`SyncExecution.run`/`AsyncExecution.arun` (`_build_source_stream`/`_abuild_source_stream`, sharing
-`normalize_items` in `_adapt.py`); `Pipeline.source`, `__ror__`, and the generated module template
+item is also done: `InputLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
+`SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing
+`normalize_items` in `_adapt.py`); `Pipeline.__call__`, `__ror__`, and the generated module template
 hand the raw seed through, and the async `processor` wrapper maps an `AsyncIterable` input lazily
 (`_aprocess_stream`) instead of treating it as one item. Shutdown reporting now meets the
 cleanup-error contract: plain callbacks and task/budget failures are recorded and grouped
@@ -974,8 +974,8 @@ Deliver:
   ([callable-pipes.md](callable-pipes.md) § Existing decorator model), so a module author never
   needs empty parentheses. The async case is `@processor async def async_pipe`; a single async
   implementation named `pipe` keeps raising until R4E classifies interfaces by `isasync`;
-- `Pipeline.open()`: a fresh single-use run handle per call that is a sync and async context manager
-  (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
+- **shipped 2026-10-24:** `Pipeline.open()`: a fresh single-use run handle per call that is a
+  sync and async context manager (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
   whose semantics [execution-semantics.md](execution-semantics.md) owns; it rides this slot as the
   next Pipeline-surface PR, not as callable-node work. It carries the adopted seed direction in
   [execution-semantics.md](execution-semantics.md) § Canonical definition and execution model: an
@@ -984,13 +984,17 @@ Deliver:
   open pipeline raises; `pipeline(items)` returns a plain stream and `open(items)` the only
   `PipelineRun` context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
 
-Open decision (triaged 2026-10-16): which node a seed targets. `GraphIndex.is_open` treats a node
-wired only through a named `in:<name>` port as not open (it tests `edge.is_positional`), yet
-`_resolve_node_inputs` still feeds that node's default input the default seed (pinned by
-`test_run_still_seeds_a_node_wired_only_through_a_named_value_port`). Making `is_open` test the
-bare default port instead would give that test's workflow two open inputs, so a seed would raise.
-The per-run seed work decides which definition is right; no tripwire until it does, since the target
-behavior is not yet chosen.
+Resolved (triaged 2026-10-16, decided 2026-10-23): which node a seed targets. The default port alone
+decides openness: `GraphIndex.is_open` is true when no edge enters the node's bare default `in` port,
+so a node wired only through named `in:<name>` or positional `in:<n>` ports is open (`GraphEdge.is_positional`
+is renamed `is_default` and the edge-level `is_positional` no longer exists). A seed feeds the single
+open node that does not start itself, or, when every open node starts itself, the single open node
+(`ExecutionPlan.require_seed_target`). Source modules (declared `subtype == "source"`) and value feeders
+(not an output's node; every outgoing edge enters a named port) start themselves; unseeded, any other
+placeholder-fed node raises `InvalidPipelineError` ("requires a seed") in
+`ExecutionPlan.gen_build_order`, so the internal placeholder never reaches output. The old
+`test_run_still_seeds_a_node_wired_only_through_a_named_value_port` became the named-port seed-target
+tests in `tests/internal/test_execution_plan.py`.
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope), side effects and
 idempotency (R6), state/checkpoints (R6), and per-item gating (`skip_if`, callable-pipes § Per-item
@@ -1003,13 +1007,15 @@ gating, pending a decision).
   `tests/internal/test_modules.py::TestBareDecorator` checks the bare and called forms wrap identically).
   `Pipeline.open()` exists, with sync and async tests that a `break` inside the block closes the run
   in the opening task and that concurrent `open()` calls on one pipeline run independently; README,
-  FAQ, and the abandoned-async-iteration note recommend it over `aclosing(aiter(...))`.
+  FAQ, and the abandoned-async-iteration note recommend it over `aclosing(aiter(...))` (shipped
+  2026-10-24).
 - **MIGRATE:** the retired `udf(func=…)`-through-a-pipeline usages and the kazeeki/example callables
   move onto `.map`; module preparation remains the single definition mechanism.
 - **DELETE:** none at the public surface; no parallel callable-wrapping path exists beside the
   decorator/preparation model.
   `PipelineDefinition.source` is deleted: no stored seed coexists with per-run seeds
-  (`pipeline(items)`/`open(items)`), and a generator-seeded pipeline re-runs when handed a fresh seed.
+  (`pipeline(items)`/`open(items)`), and a generator-seeded pipeline re-runs when handed a fresh seed
+  (shipped 2026-10-24, with `SourceLike` renamed `InputLike`).
 
 ### R4D — Workflow input declarations
 
@@ -1029,6 +1035,13 @@ Deliver:
 - validation of `Context.inputs` against the declarations at plan/preparation time, before resources
   open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
+- a stored workflow's module subtype derived from what its roots need: today a workflow store tags
+  the pipe `"transformer" if flow.inputs else "source"` (`riko/runtime/_workflow_resolver.py`, and
+  the generated module's `workflow(subtype=…)` in `riko/runtime/_compile.py`), so a workflow whose
+  root takes an input stream but declares no inputs counts as a source and starts itself as a node of
+  another pipeline, while one that declares inputs over a source root counts as a transformer.
+  Routed here from R4C's per-run seed work (2026-10-24) because the fix belongs with the input
+  declarations it reads.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1471,7 +1484,7 @@ Deliver:
 - `Publisher[T]`, `Subscription[T]`, `Channel[T]` runtime protocols;
 - `Pipeline.subscribe(name, ..., func=...)` local declaration;
 - `pipeline.publish(subscription_or_publisher, isolate=True)`;
-- external `Subscription` accepted as `Pipeline(source=...)`;
+- external `Subscription` accepted as a seed (`pipeline(subscription)`, `subscription | pipeline`);
 - execution-owned local branches and cleanup, with every subscriber/branch/merge task created under
   one execution-owned task group, which R7 introduces (R4B removed its unused eager group because
   entering it in the consumer's task made a bare `async for … break` cancel the consumer). The group
@@ -1580,8 +1593,8 @@ subscribe API reuses it.
 Deliver:
 
 ```python
-Pipeline(source=source, batch=False)
-Pipeline(source=source, batch=True, batch_size=...)
+Pipeline(batch=False)(items)
+Pipeline(batch=True, batch_size=...)(items)
 ```
 
 with capability/conversion-cost backend negotiation rather than a global library ranking:

@@ -63,7 +63,7 @@ resolved decisions are at the bottom.
 
 > **Pre-1.0 release gate.** The cross-cutting DX/API-shape polish that *sequences* items across
 > P9/P11/P12/P13 (pub/sub 1.0 contract, config-validation strictness, **clean-break**
-> Pipeline/Execution split, `Collection`→`Pipeline(source=…)`, execution-setting cleanup,
+> Pipeline/Execution split, `Collection`→`items | pipeline`, execution-setting cleanup,
 > wheel/PyPI release fidelity) plus its Must-land/Preferred/Can-wait triage lives in
 > [gameplans/release-readiness.md](gameplans/release-readiness.md). Target semantics live in their
 > owning gameplans; forward dependency order and exit sequencing live in
@@ -95,8 +95,8 @@ ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is still owed.
 | **R3** immutable Context/Resource (+ write-session seam) | ✅ done | `1c72a7a5` (2026-09-24); [IMPLEMENTED § Write sessions](IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode). Not built and re-homed (implementation-sequence R3): factory-signature and eager resource-graph validation → R11; `state_store` → R6; identity-encoder selection and resource identity metadata → R2B; Context-local module definitions/`with_module()` unscheduled |
 | **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
 | **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/public/test_write.py`) |
-| **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ⏳ in progress | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; `Pipeline.open()`, per-run seeds, and `source` deletion pending; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` waits on R5A |
-| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6 |
+| **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ⏳ in progress | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` waits on R5A |
+| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail `TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded` (explicit value sources) |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
 | **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestInvalidCombinations::test_async_named_pipe_raises` |
 | **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4E → merge → publish; acceptance = every announcement-post sample runs on the released wheel; not the 1.0 gate (implementation-sequence § 4 "M2") |
@@ -446,8 +446,10 @@ Folded in from the retired `REFINEMENT_PLAN.md`. Cross-phase decisions that surv
 2. **An execution is one-shot** — a single run, cannot restart (P5; the v1 pipe instances that first
    carried this were deleted, and each `Pipeline` iteration now gets its own
    `SyncExecution`/`AsyncExecution`).
-3. **Post-exhaustion iteration returns `[]`** (Python-iterator semantics); `PipelineStateError` is
-   reserved for lifecycle misuse, never ordinary iteration (P5).
+3. **A consumed or closed stream behaves like an exhausted Python iterator** — another `for` yields
+   nothing and `next`/`anext` raise `StopIteration`/`StopAsyncIteration`; only mixing sync and
+   async iteration raises `PipelineStateError` (execution-semantics "Stream exhaustion", revised
+   2026-10-26).
 4. **Each parser receives its explicit parsed config type**; generic framework code type-erases the
    concrete config/parser pair after preparation (`PreparedModule.invoke`) — it never enumerates
    module configs (P2). `DynamicConf` (`riko.ext`-only) is the legacy fallback; `Objconf` is gone.

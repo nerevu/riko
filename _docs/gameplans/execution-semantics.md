@@ -16,11 +16,11 @@ pipeline = (
 )
 ```
 
-> **Shipped (2026-09-27):** module-name fluent chaining — the canonical `Pipeline(workflow,
-> source=...)` constructor plus the `Pipeline.from_module(name, conf=...)` classmethod for
-> starting from a module, `.pipe(name, conf=...)`, attribute chaining, `|` (name, `(name, conf)` pair,
-> or one-module template), and `items | Pipeline(...)` source seeding — each deriving a new
-> definition that shares prior structure. Callable `.map`/`.flat_map` in the example above remain target API owned by
+> **Shipped (2026-09-27):** module-name fluent chaining — the canonical `Pipeline(workflow)`
+> constructor plus the `Pipeline.from_module(name, conf=...)` classmethod for
+> starting from a module, `.pipe(name, conf=...)`, attribute chaining, and `|` (name, `(name, conf)`
+> pair, or one-module template) — each deriving a new definition that shares prior structure. Per-run
+> seeds (`pipeline(items)`, `items | pipeline`) replaced the `source=` parameter on 2026-10-24. Callable `.map`/`.flat_map` in the example above remain target API owned by
 > [callable-pipes.md](callable-pipes.md); a strict-xfail tripwire guards the deferral.
 
 Execution is deliberately separate from definition:
@@ -52,30 +52,34 @@ Execution-wide settings use a separate immutable definition operation:
 pipeline = pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(iter(pipeline))` and an `aclosing`-wrapped `anext(aiter(pipeline))`: each starts a fresh execution, reads one item, and closes the run. They add no new way to run. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects sync or async exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no new way to run and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
+There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(stream)` inside `with pipeline.open(seed) as stream` and `await anext(stream)` inside its `async with` twin: each starts a fresh execution, reads one item, and closes the run. They add no new way to run. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects sync or async exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no new way to run and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
 
-**Seeds are run arguments, not definition state (direction adopted 2026-10-10; replaces the earlier
-"immutability does not imply source replayability" ruling).** A definition stores no items. Today a
-seeded `Pipeline` keeps its seed on the definition (`PipelineDefinition.source`), so a one-shot
-generator is consumed by the first `iter(pipeline)` and the second run silently yields nothing —
-execution-owned state carried on an immutable definition. In the target, a pipeline whose first node
+Stream exhaustion (decided 2026-10-25, revised 2026-10-26): a consumed or closed stream behaves exactly like an exhausted Python generator. Another `for`/`async for` yields nothing, and `next`/`anext` raise `StopIteration`/`StopAsyncIteration`, so `next(stream, default)`, `zip_longest`, and `islice` behave normally. The 2026-10-25 rule that raised `PipelineStateError` on a second pass or after close was withdrawn: a stream must not behave differently from a Python iterator, so only `next` signals the end. Iterating a started stream in the other mode still raises. A partly consumed stream may still be re-entered (`header = next(stream); for row in stream: ...`). Consumed, closed, and failed are one finished state.
+
+**Seeds are run arguments, not definition state (direction adopted 2026-10-10, shipped 2026-10-24;
+replaces the earlier "immutability does not imply source replayability" ruling).** A definition stores
+no items. Before it shipped, a seeded `Pipeline` kept its seed on the definition
+(`PipelineDefinition.source`), so a one-shot generator was consumed by the first `iter(pipeline)` and
+the second run silently yielded nothing — execution-owned state carried on an immutable definition.
+Now a pipeline whose first node
 is a `Sources` module stays directly iterable (`list(pipeline)`, `pipeline.open()`); an *open*
 pipeline (its first node has an open input) takes its seed per run: `pipeline(items)` (positional, so
 no public parameter needs a name), `items | pipeline` as its operator spelling, and
 `pipeline.open(items)` / `pipeline.first(items)`. Each run is single-use and cannot be composed
 further (the call and `open` forms are distinguished below); composition by name/template is
-unchanged, and `SourceLike` becomes the run argument's type (`InputLike`). One-shot seeds
+unchanged, and the run argument's type is `InputLike` (formerly `SourceLike`). One-shot seeds
 (iterators, generators, subscriptions) keep their native semantics *within* a run; re-running means
 passing a fresh seed, so the definition itself is always re-runnable.
 
 Decided 2026-10-10 (lands with R4C's `Pipeline.open()`, whose signature this fixes):
 (1) iterating, opening, or calling `first` on an open pipeline with no seed **raises**
 `InvalidPipelineError` ("requires a seed") as a missing required argument (the `require_arg` rule).
-Today it does not yield `[]`: a node with no input receives the internal one-item placeholder seed
-`[{"forever": True}]`, which lets a `Sources` module fire once but leaks into the output of any other
-first module (`Pipeline.from_module("reverse")` yields `[{'forever': True}]`); the placeholder stays
-internal to source-first pipelines (strict-xfail tripwire in
-`tests/public/test_pipeline.py`). (3) `Pipeline(source=…)` is removed outright
+Before it shipped, it did not even yield `[]`: a node with no input received the internal one-item
+placeholder seed `[{"forever": True}]`, which lets a `Sources` module fire once but leaked into the
+output of any other first module (`Pipeline.from_module("reverse")` yielded `[{'forever': True}]`).
+Now the placeholder stays internal: `ExecutionPlan.gen_build_order` requires every placeholder-fed
+node to start itself — a source module or a value feeder whose outgoing edges all enter named ports
+(decided 2026-10-23) — and raises "requires a seed" otherwise. (3) `Pipeline(source=…)` is removed outright
 (`Pipeline` is unreleased, so no deprecation): R4C's DELETE of `PipelineDefinition.source` leaves no
 stored seed for it to set. (2) Call and `open` get distinct roles, mirroring `iter(f)` vs
 `with open(f)` ("call to iterate, `open` to scope"): `pipeline(items)` / `items | pipeline` is the
@@ -86,13 +90,16 @@ protocols in `riko.types`. Neither carries `first`/`afirst`: `pipeline.first(ite
 `pipeline.afirst(items)` is the one spelling (on a partly consumed run "first" would mean "next";
 inside a block, `next(stream, None)` / `await anext(stream, None)` is the documented idiom). Every
 run entry point takes the seed as its first positional argument. Mitigations: the stream's
-`__enter__`/`__aenter__` raise a `TypeError` pointing at `open()` and are marked `@deprecated`
-(typing_extensions) so pyright flags `with pipeline(items)`; a run garbage-collected unclosed emits
+`__enter__`/`__aenter__` raise a `TypeError` pointing at `open()`, and the public `PipelineStream`
+protocol omits `__enter__`/`__exit__`/`__aenter__`/`__aexit__` so pyright reports `with pipeline(items)`
+(pyright does not report a `@deprecated` dunder used through `with`, so marking them deprecated would
+flag nothing); a run garbage-collected unclosed emits
 a `ResourceWarning`, like an unclosed file; the README glossary, `open()` docstring, FAQ early-exit
 entry, and the COOKBOOK's async early-exit examples state the rule and use `open()`.
-Until it lands, `source=` keeps its name and shipped prose calls the value the "seed" (Reserved terms
-in `_docs/DOCUMENTATION_STANDARD.md`); gameplan examples written as `Pipeline(source=subscription)`
-(agents.md, highergov-feed.md, callable-pipes.md, § Fan-out) migrate with it.
+Shipped 2026-10-24: `source=` is gone, shipped prose calls the value the "seed" (Reserved terms in
+`_docs/DOCUMENTATION_STANDARD.md`), and the gameplan examples once written as
+`Pipeline(source=subscription)` (agents.md, highergov-feed.md, callable-pipes.md, § Fan-out) use the
+seeded-run forms.
 
 ## Execution lifetime primitives
 
@@ -412,10 +419,10 @@ events = Pipeline.subscribe("events")
 pipeline = pipeline.publish(events)
 ```
 
-An external subscription is an ordinary source:
+An external subscription is an ordinary seed:
 
 ```python
-pipeline = Pipeline(source=subscription)
+stream = pipeline(subscription)
 ```
 
 `publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit write/action/subscription-`func`/routing effect.
@@ -924,7 +931,7 @@ A future explicit cancellation policy may distinguish draining from cancelling p
 
 When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
 
-**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C; until then `contextlib.aclosing(aiter(pipeline))`) remains the prompt-release spelling. Regression: `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
+**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the prompt-release spelling, and a started run collected unclosed warns with a `ResourceWarning`. Regression: `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
 
 Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
 
@@ -1094,9 +1101,9 @@ For finite `FeedResult.items`, final `FeedResult.state` becomes committable only
 The earlier public `Batch` / `BatchPipe` / `BatchPolicy` proposal is superseded. Riko keeps one `Pipeline[T]`; batch mode changes the values flowing through it rather than introducing a parallel pipeline hierarchy.
 
 ```python
-Pipeline(source=source, batch=False)
+Pipeline(batch=False)(items)
 
-Pipeline(source=source, batch=True, batch_size=3)
+Pipeline(batch=True, batch_size=3)(items)
 ```
 
 `batch_size` is invalid unless `batch=True`.

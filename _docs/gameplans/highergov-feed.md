@@ -49,24 +49,25 @@ HigherGov code should be written against the final mode-neutral Pipeline definit
 
 ```python
 pipeline = (
-    Pipeline(source=dataframe.to_dict("records"))
+    Pipeline()
     .map(processor)
     .with_execution(executor="thread", concurrency=workers, ordered=False)
 )
 
-result = pd.DataFrame(list(pipeline))
+result = pd.DataFrame(list(pipeline(dataframe.to_dict("records"))))
 ```
 
 For an expanding callable:
 
 ```python
-pipeline = Pipeline(source=items).flat_map(processor)
+pipeline = Pipeline().flat_map(processor)
+stream = pipeline(items)
 ```
 
 The same definition may run through async iteration when the surrounding application is async:
 
 ```python
-answers = [answer async for answer in pipeline]
+answers = [answer async for answer in pipeline(items)]
 ```
 
 There is no target `pipeline.collect()` execution terminal and no separate final `SyncPipe.map` /
@@ -171,8 +172,8 @@ def pipe(item, fn, objconf, **kwargs):
 Target usage:
 
 ```python
-Pipeline(source=items).map(fn)
-Pipeline(source=items).flat_map(fn)
+Pipeline().map(fn)(items)
+Pipeline().flat_map(fn)(items)
 ```
 
 The public `Context` remains immutable environment/resource configuration. Callables receive
@@ -369,12 +370,12 @@ and the same Pipeline abstraction handles the async callable:
 
 ```python
 pipeline = (
-    Pipeline(source=entry_feed(entries_df))
+    Pipeline()
     .map(analyze_entry)
     .with_execution(concurrency=MAX_CONCURRENT, ordered=False)
 )
 
-answers = [answer async for answer in pipeline]
+answers = [answer async for answer in pipeline(entry_feed(entries_df))]
 ```
 
 Recursive document summarization remains sequential **within one document** when later chunks depend
@@ -389,10 +390,11 @@ Blocking functions can run through the common async adaptation path:
 
 ```python
 pipeline = (
-    Pipeline(source=finder_opportunity_feed(dataframe))
+    Pipeline()
     .map(fetch_finder_content)
     .with_execution(executor="thread", concurrency=3, ordered=False)
 )
+stream = pipeline(finder_opportunity_feed(dataframe))
 ```
 
 This provides bounded submission and cancellation without a separate `AsyncPipe` API.
@@ -408,10 +410,11 @@ def call_highergov_api(item: dict, **kwargs) -> dict:
 
 
 pipeline = (
-    Pipeline(source=dataframe_feed(cleaned_higher_df))
+    Pipeline()
     .map(call_highergov_api)
     .with_execution(executor="thread", concurrency=4, ordered=False)
 )
+stream = pipeline(dataframe_feed(cleaned_higher_df))
 ```
 
 If the callable later becomes native async, the Pipeline definition shape remains the same and the
@@ -434,7 +437,7 @@ bounded batch database write
 
 ```python
 pipeline = (
-    Pipeline(source=opportunity_feed(logic_mapped))
+    Pipeline()
     .flat_map(fetch_documents)
     .map(normalize_document)
     .map(extract_document_text)
@@ -442,6 +445,7 @@ pipeline = (
     .map(hash_document)
     .with_execution(concurrency=MAX_CONCURRENT, ordered=False)
 )
+stream = pipeline(opportunity_feed(logic_mapped))
 ```
 
 One opportunity may expand to multiple documents, hence `flat_map`. Do not flatten summary chunks

@@ -18,7 +18,17 @@ from ._resource import (
     SyncLifecyclePlan,
     ValueFactoryPlan,
 )
-from ._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
+from ._streams import (
+    AsyncItems,
+    AsyncStream,
+    Feed,
+    InputLike,
+    Item,
+    Items,
+    PipelineRun,
+    PipelineStream,
+    Stream,
+)
 from ._workflow import RawEdge, RawEndpoint, RawNode, RawWorkflow
 from ._wrappers import AsyncPipeTuples, PipeTuples, SyncPipeTuples
 from .modules import Conf
@@ -32,6 +42,7 @@ __all__ = [
     "EventSink",
     "ExternalPlan",
     "Feed",
+    "InputLike",
     "Item",
     "Items",
     "LifecyclePlan",
@@ -40,6 +51,8 @@ __all__ = [
     "PipeDef",
     "PipeDefLike",
     "PipeTuples",
+    "PipelineRun",
+    "PipelineStream",
     "RawEdge",
     "RawEndpoint",
     "RawNode",

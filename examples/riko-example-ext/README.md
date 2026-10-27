@@ -42,7 +42,7 @@ uv pip install -e .  # alongside riko
 ```python
 from riko import Pipeline
 
-Pipeline(source=[{"content": "hi"}]).pipe("example.shout").first()
+Pipeline().pipe("example.shout").first([{"content": "hi"}])
 # {"content": "HI"}
 ```
 
