@@ -178,6 +178,8 @@ TYPES = frozenset(
         "AsyncStream",
         "AsyncItems",
         "AsyncPipeTuples",
+        "CallOptions",
+        "CallOptionsLike",
         "Conf",
         "EventSink",
         "Feed",
@@ -194,6 +196,7 @@ TYPES = frozenset(
         "PipeDef",
         "PipeDefLike",
         "PipeTuples",
+        "RawCallOptions",
         "Stream",
         "SyncPipeTuples",
     }

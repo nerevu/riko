@@ -38,10 +38,11 @@ New
 
 - Added ``riko.WorkflowLike`` to annotate what ``riko.compile_workflow`` accepts, and
   ``riko.WorkflowModule`` to annotate the Python module source ``str`` it returns. Added
-  to ``riko.types``: ``RawWorkflow``, ``RawEndpoint``, ``RawNode``, and ``RawEdge`` to
-  annotate a workflow written as a mapping; ``PipeDefLike`` for a ``PipeDef`` or mapping
-  taken as one; ``InputLike`` for the items a pipeline runs on; and ``PipelineStream``/
-  ``PipelineRun`` for what ``pipeline(items)``/``pipeline.open(items)`` returns.
+  to ``riko.types``: ``RawWorkflow``/``RawEndpoint``/``RawNode``/``RawEdge`` to annotate
+  workflows; ``PipeDefLike`` for a ``PipeDef`` or similar mapping; ``InputLike`` for
+  what a pipeline runs on; ``PipelineStream``/``PipelineRun`` for what
+  ``pipeline(items)``/``pipeline.open(items)`` returns; and ``RawCallOptions``/
+  ``CallOptions``/``CallOptionsLike`` for a module's call options (``options=``).
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` (``run-pipe -p flow.json``, or an
   example id) or a ``WorkflowModule`` file directly, alongside the pipe scripts (Python
