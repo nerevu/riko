@@ -88,8 +88,9 @@ def _test_command(
     """Run pytest, tox, and script tests."""
     _where = [*where, *paths]
     ratchet = bool(kwargs.get("ratchet"))
-    if ratchet and _where:
-        raise click.UsageError("--ratchet measures the whole suite; drop the paths")
+    if ratchet and (_where or kwargs.get("tox") or kwargs.get("failed")):
+        msg = "--ratchet measures the whole suite under pytest; drop the paths, --tox, "
+        raise click.UsageError(msg + "and --failed")
 
     report = Path(mkdtemp()) / "coverage.json" if ratchet else None
 
