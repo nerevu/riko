@@ -394,6 +394,13 @@ def _coverage_report(root: Path, uncovered: int) -> Path:
     return report
 
 
+PARTIAL_RATCHET_CASES = [
+    pytest.param(["tests/public"], id="paths"),
+    pytest.param(["--tox"], id="tox"),
+    pytest.param(["--failed"], id="failed"),
+]
+
+
 class TestCoverageRatchet:
     """The ``manage test --ratchet`` uncovered-line ceiling."""
 
@@ -464,13 +471,14 @@ class TestCoverageRatchet:
         assert not absent or absent not in command
         assert data_file == expected
 
+    @pytest.mark.parametrize("args", PARTIAL_RATCHET_CASES)
     def test_ratchet_refuses_a_partial_run(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, args: list[str]
     ) -> None:
         folders: list[str] = []
         monkeypatch.setattr(_test, "mkdtemp", lambda: folders.append("made") or "")
 
-        result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", "tests/public"])
+        result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", *args])
         assert result.exit_code == 2
         assert "measures the whole suite" in result.output
         assert folders == []
