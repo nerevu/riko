@@ -133,7 +133,9 @@ Enforcement:
   `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source file; gameplans,
   `MILESTONES.md`, and `docs/*.rst` keep historical paths and are exempt.
 - `manage test --ratchet` fails when the full suite leaves more statements uncovered than
-  `[tool.riko.coverage] uncovered` in `pyproject.toml`, and lowers that ceiling on a gain. The
+  `[tool.riko.coverage] uncovered` in `pyproject.toml`, and lowers that ceiling on a gain
+  (recording the day as `uncovered-lowered`; a ceiling held past `[tool.riko.ratchet]
+  stale-days` warns without failing). The
   ceiling counts uncovered lines rather than a percentage, so losing coverage of existing code and
   adding untested code both fail it while deleting code never does. It is measured in the full dev
   environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`

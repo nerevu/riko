@@ -28,7 +28,6 @@ from riko.cli import (
     _test,
     _upgrade,
 )
-from riko.cli._coverage import build_ceiling_text
 from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
 from riko.cli._docstyle import (
     gen_docstring_issues,
@@ -47,6 +46,7 @@ from riko.cli._lint_deps import (
     gen_runtime_imports,
     get_locked_version,
 )
+from riko.cli._lint_escapes import get_escape_counts
 from riko.cli._lint_import_architecture import (
     _validate_graph,
     load_architecture_report,
@@ -62,6 +62,7 @@ from riko.cli._lint_tests import (
     gen_layout_issues,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
+from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
 from riko.cli._upgrade import _pin_hooks
 from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
@@ -434,10 +435,6 @@ class TestCoverageRatchet:
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
 
-    def test_a_table_without_a_ceiling_line_is_rejected(self) -> None:
-        with pytest.raises(ValueError, match="has no uncovered line"):
-            build_ceiling_text("[tool.riko.coverage]\nother = 1\n", 5)
-
     @pytest.mark.parametrize(
         ("args", "present", "absent"),
         [
@@ -482,6 +479,85 @@ class TestCoverageRatchet:
         assert result.exit_code == 2
         assert "measures the whole suite" in result.output
         assert folders == []
+
+
+_TYPING = "[tool.riko.typing]\n"
+CEILING_TEXT_CASES = [
+    pytest.param("x = 1\n", "x = 1\n\n[tool.riko.typing]\nany = 4\n", id="no-table"),
+    pytest.param(f"{_TYPING}cast = 1\n", f"{_TYPING}any = 4\ncast = 1\n", id="no-key"),
+    pytest.param(f"{_TYPING}any = 9\n", f"{_TYPING}any = 4\n", id="rewrite"),
+    pytest.param(
+        f"{_TYPING}any = 9  # note\n",
+        f"{_TYPING}any = 4  # note\n",
+        id="inline-comment",
+    ),
+    pytest.param(
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 9\n",
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 4\n",
+        id="other-table-kept",
+    ),
+]
+
+
+_TODAY = date(2026, 10, 27)
+_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
+_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
+_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_DATED = "any = 8\nany-lowered = 2026-10-27\n"
+_LOWERED = f"{_DATED}{_WINDOW}"
+_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
+_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
+_HOLDS = "9 uses hold the ceiling of 9."
+_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
+_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
+_DISCARDED = (
+    " CI discards this change; run the ratchet locally and commit pyproject.toml."
+)
+_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
+STALE_CASES = [
+    pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
+    pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
+    pytest.param(_STALE, 9, True, _STALE, f"::warning::{_HELD}", id="stale-ci"),
+    pytest.param(_STALE, 8, False, _LOWERED, _RECORDED, id="lowering-resets"),
+    pytest.param(_STALE, 8, True, _LOWERED, _CI_DISCARDS, id="ci-discards"),
+    pytest.param("any = 8\n", 8, False, _DATED, _RECORDED, id="undated-starts-clock"),
+    pytest.param(_DATETIME, 8, False, _DATED, _RECORDED, id="datetime-restarts-clock"),
+    pytest.param(_UNWINDOWED, 9, False, _UNWINDOWED, _HOLDS, id="no-window"),
+]
+
+
+class TestCeilingRatchet:
+    """The shared ``pyproject.toml`` ceiling a ratchet records."""
+
+    @pytest.mark.parametrize(("text", "expected"), CEILING_TEXT_CASES)
+    def test_ceiling_text_sets_only_the_named_key(
+        self, text: str, expected: str
+    ) -> None:
+        assert build_ceiling_text(text, "typing", "any", 4) == expected
+
+    @pytest.mark.parametrize(("text", "count", "ci", "expected", "report"), STALE_CASES)
+    def test_ratchet_reports_ceiling_age(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        text: str,
+        count: int,
+        ci: bool,
+        expected: str,
+        report: str,
+    ) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(f"{_TYPING}{text}")
+        monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+        if ci:
+            monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+        code = ratchet_ceiling(pyproject, "typing", "any", count, "uses", today=_TODAY)
+        assert code == 0
+        assert pyproject.read_text() == f"{_TYPING}{expected}"
+        assert capsys.readouterr().out == f"{report}\n"
 
 
 class TestConsoleScripts:
@@ -1209,6 +1285,62 @@ OPTIONAL_CASES = [
     pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
     pytest.param(REQUESTS, [], id="also-required"),
 ]
+
+
+ESCAPE_CASES = [
+    pytest.param("from typing import Any\nx: Any\n", 1, 0, id="bare-any"),
+    pytest.param("import typing as t\nx: t.Any\n", 1, 0, id="qualified-any"),
+    pytest.param("from typing import Any as A\nx: A\n", 1, 0, id="aliased-any"),
+    pytest.param("from typing import Any\nx: 'list[Any]'\n", 1, 0, id="quoted-any"),
+    pytest.param("from typing import Any\nX = A[B['Any']]\n", 1, 0, id="subscript"),
+    pytest.param("from typing import Any\ndef f() -> Any: ...\n", 1, 0, id="return"),
+    pytest.param("from typing import cast\ncast('int', x)\n", 0, 1, id="cast"),
+    pytest.param("import typing\ntyping.cast(int, x)\n", 0, 1, id="typing-cast"),
+    pytest.param(
+        "from typing import cast\ncast('dict[str, Any]', x)\n", 0, 1, id="unbound"
+    ),
+    pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
+]
+
+_ANY = "from typing import Any\n"
+_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
+ESCAPE_RATCHET_CASES = [
+    pytest.param(_ANY, 0, "any = 0\ncast = 0", id="gain-lowers"),
+    pytest.param(_ANY_CAST, 0, "any = 2\ncast = 1", id="equal-holds"),
+    pytest.param(_ANY + "x: Any\n" * 3, 1, "any = 2\ncast = 0", id="loss-fails"),
+]
+
+
+class TestEscapeLint:
+    """The ``Any`` and ``cast`` ceiling lint check."""
+
+    @pytest.mark.parametrize(("source", "any_", "cast"), ESCAPE_CASES)
+    def test_escapes_are_counted_once_by_binding(
+        self, source: str, any_: int, cast: int
+    ) -> None:
+        assert get_escape_counts(source) == {"Any": any_, "cast": cast}
+
+    @pytest.mark.parametrize(("source", "code", "ceilings"), ESCAPE_RATCHET_CASES)
+    def test_check_ratchets_each_ceiling(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        source: str,
+        code: int,
+        ceilings: str,
+    ) -> None:
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "mod.py").write_text(source, encoding="utf-8")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[tool.riko.typing]\nany = 2\ncast = 1\n")
+        monkeypatch.setattr(_lint, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
+
+        assert _lint._lint_escapes() == code
+        typing = tomllib.loads(pyproject.read_text())["tool"]["riko"]["typing"]
+        recorded = {k: v for k, v in typing.items() if not k.endswith("-lowered")}
+        assert recorded == tomllib.loads(ceilings)
 
 
 class TestDependencyLint:
