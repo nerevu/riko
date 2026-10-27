@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterable
 from contextlib import aclosing
 from functools import partial
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, overload
 
 from riko.base._config import DEF_CONCURRENCY_LIMIT
-from riko.base._sentinels import MISSING
+from riko.base._sentinels import MISSING, MissingType
 
 from ._backend import (
     CapacityLimiter,
@@ -329,7 +329,7 @@ async def async_map[T, S](
 
     _func = _cap(partial(func, **kwargs) if kwargs else func, budget)
     items = list(content)
-    results: list[S | object] = [MISSING] * len(items)
+    results: list[S | MissingType] = [MISSING] * len(items)
     limiter = CapacityLimiter(limit) if limit else None
 
     async def work(index: int, item: T) -> None:
@@ -343,7 +343,7 @@ async def async_map[T, S](
         for index, item in enumerate(items):
             tg.start_soon(work, index, item)
 
-    return [cast("S", r) for r in results if r is not MISSING]
+    return [r for r in results if not isinstance(r, MissingType)]
 
 
 async def _pool_stream[T, S](

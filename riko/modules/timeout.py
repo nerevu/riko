@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
 from time import monotonic_ns
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 
 from riko.bado.itertools import alist, as_async
 from riko.base._logging import get_logger
@@ -164,7 +164,7 @@ async def async_parser(
         2
 
     """
-    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
+    td_kwargs: dict[str, int] = {k: objconf[k] for k in objconf if k}
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return await AsyncTimeoutIterator(stream, time_ms)
 
@@ -209,7 +209,7 @@ def parser(
 
     """
     # objconf only parses on __getitem__
-    td_kwargs = cast("dict[str, int]", {k: objconf[k] for k in objconf if k})
+    td_kwargs: dict[str, int] = {k: objconf[k] for k in objconf if k}
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return TimeoutIterator(stream, time_ms)
 

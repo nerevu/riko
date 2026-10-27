@@ -36,6 +36,7 @@ from riko.types._frozendict import (
     normalize_mapping,
 )
 from riko.types._workflow import (
+    PORT_DIRECTIONS,
     WORKFLOW_VERSION,
     Edge,
     EdgeFamily,
@@ -98,7 +99,7 @@ def _is_legacy_port(port: str, prefix: str) -> bool:
 
 def _normalize_port(port: str, direction: str) -> str:
     """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
-    if not port or port in {"in", "out"}:
+    if not port or port in PORT_DIRECTIONS:
         result = port
     elif port == INPUT_PORT:
         result = "in"
@@ -226,7 +227,7 @@ def _gen_nodes(raw_nodes: Iterable[object]) -> Iterator[RawNode]:
         yield RawNode(id=str(node_id), **node)
 
 
-def _keyed_node(key: object, raw_node: object) -> dict[str, Any]:
+def _keyed_node(key: object, raw_node: object) -> dict[str, object]:
     """Applies the authoritative mapping key and rejects a conflicting inner ``id``."""
     node = dict(require_mapping(raw_node, "node"))
     inner = node.get("id")

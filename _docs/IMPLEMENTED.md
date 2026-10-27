@@ -1118,8 +1118,11 @@ once per item: `PreparedNode.sync_interface`/`async_interface` (cached `Prepared
 executions call `interface.call(item, context=..., **extra)`, supplying only the per-item
 context and the secondary input streams, `resources`, or `embed`. The decorators' call records
 `_PreparedProcessor`/`_PreparedOperator`/`_PreparedSplitter` share the generic attrs base
-`_PreparedCall[M]` (the decorator, wrapper, prepared module, and prepared options, plus derived
-`field`/`count`/`parser`), which subclasses the `PreparedCall` protocol; a
+`_PreparedCall[M_co]` (the decorator, wrapper, prepared module, and prepared options, plus derived
+`field`/`count`/`parser`), which subclasses the `PreparedCall` protocol. `M_co` is an explicitly
+covariant `TypeVar` so each decorator's `call_record: type[_PreparedCall[Module[bool]]]` accepts its
+subclass: PEP 695 inferred variance turns invariant when pyright targets 3.13+, where the frozen
+record gains a `__replace__` taking `module`. A
 plain wrapper (a stored-workflow pipe, a sync/async adapter) is prepared by `prepare_call`/`build_call`
 (`riko/definitions/_wrapping.py`), and `stamp_wrapper_meta` attaches a default `prepare`. `PreparedModule`
 (`riko/modules/_prepare.py`) is a frozen attrs record of plain values (name, merged conf, options,

@@ -24,7 +24,7 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
 from riko.coercion.cast import SourceOpts, cast_value
@@ -57,6 +57,8 @@ def parser(
     extraction: object,
     objconf: InputObjconf,
     skip: bool = False,
+    *,
+    inputs: Inputs | None = None,
     **kwargs: object,
 ) -> PrimitiveValue:
     """
@@ -69,9 +71,13 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `prompt`, `default`, `type`
-            and `input_key`.
+        objconf: The module configuration: ``prompt``, ``default``, ``type``, and
+            ``input_key``.
         skip: Whether to use ``default`` instead of prompting.
+
+    Kwargs:
+
+        inputs: Preset answers keyed by ``input_key``, used instead of prompting.
 
     Returns:
 
@@ -88,7 +94,7 @@ def parser(
         30
 
     """
-    if (inputs := cast("Inputs | None", kwargs.get("inputs"))) is not None:
+    if inputs is not None:
         value = inputs.get(objconf.input_key, objconf.default)
     elif objconf.test or skip or kwargs.get("test"):
         value = objconf.default

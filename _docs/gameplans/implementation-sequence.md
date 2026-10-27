@@ -1198,6 +1198,16 @@ callable and answers `DynamicConf` for any other object (a name included) withou
 only name-to-conf map is the private `RAW_CONFS` in `riko/runtime/_compile.py`. The per-module
 configuration schema that `describe_module()` consumes (above) is that route.
 
+Typing note (2026-10-27 `Any`/`cast` audit): every module's `pipe`/`async_pipe` takes `*args: Any`
+(106 of the package's `Any` uses, two per module) because the processor/operator protocols in
+`riko/types/_wrappers.py` type the parser's `objconf` as `DynamicConf` while each parser annotates its
+generated `<Name>Objconf`, which pyright rejects for a callback parameter (`*args: object` gives 265
+errors). Making the protocols generic over the conf type removes them, but it presumes the
+`get_conf_type` decision above, so it lands with that decision. Likewise the 27 sync/async union casts
+in `riko/modules/_decorators.py` exist because a runtime `isasync` flag picks the output type;
+`isasync` interface classification here should type that split instead. `manage lint --escapes`
+lowers its ceilings as these go.
+
 **Exit:**
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
@@ -1581,6 +1591,13 @@ three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge 
 The sync hub's `coroutine` receiver decorator (`riko/runtime/_pubsub/__init__.py`) has one consumer,
 `riko/modules/receive.py` (2026-10-23 move audit); delete it with that module unless the new
 subscribe API reuses it.
+
+Typing note (2026-10-27 `Any`/`cast` audit): the input router's `V: (Iterator[Any], AsyncIterator[Any])`
+constraint (`_BaseExecution._resolve_node_inputs`) and the pipe-output casts in `_sync_execution.py`
+and `_async_execution.py` go when port-keyed dispatch retypes the router on port streams (the
+splitter-union exit below). The `Acquisitions` map (`dict[Resource[Any], Acquisition[Any]]`) stays
+existential: `Resource` is invariant, so `Resource[object]` rejects the typed call sites until
+`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry.
 
 **Exit:**
 

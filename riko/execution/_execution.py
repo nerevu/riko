@@ -218,7 +218,9 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._require_open("add a resource to")
         return self._stack.enter_context(cm)
 
-    def _require_bindings(self, binding: Mapping[str, str]) -> dict[str, Resource[Any]]:
+    def _require_bindings(
+        self, binding: Mapping[str, str]
+    ) -> dict[str, Resource[object]]:
         """Requires the context to provide every resource a node binds, by slot."""
         context = self.context
         available = {} if context is None else context.resources

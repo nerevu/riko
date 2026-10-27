@@ -26,7 +26,7 @@ Attributes:
 from __future__ import annotations
 
 from itertools import chain
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
@@ -82,8 +82,7 @@ def parser(
         15
 
     """
-    _others = DotDict(kwargs).get("others", [])
-    others = cast("Streams", _others)
+    others: Streams = DotDict(kwargs).get("others", [])
     return chain(stream, chain.from_iterable(others))
 
 

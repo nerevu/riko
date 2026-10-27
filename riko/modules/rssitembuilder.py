@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from datetime import UTC
 from datetime import datetime as dt
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
 from riko.parsing._dotdict import DotDict
@@ -49,25 +49,22 @@ OPTS: DecorationOptions = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
 logger: Logger = get_logger(__name__)
 
-RSS = cast(
-    "dict[str, str]",
-    DotDict(
-        {
-            "author": "author",
-            "description": "description",
-            "guid": "y:id",
-            "link": "link",
-            "mediaContentHeight": "media:content.height",
-            "mediaContentType": "media:content.type",
-            "mediaContentURL": "media:content.url",
-            "mediaContentWidth": "media:content.width",
-            "mediaThumbHeight": "media:thumbnail.height",
-            "mediaThumbURL": "media:thumbnail.url",
-            "mediaThumbWidth": "media:thumbnail.width",
-            "pubDate": "pubDate",
-            "title": "y:title",
-        }
-    ),
+RSS: DotDict[str] = DotDict(
+    {
+        "author": "author",
+        "description": "description",
+        "guid": "y:id",
+        "link": "link",
+        "mediaContentHeight": "media:content.height",
+        "mediaContentType": "media:content.type",
+        "mediaContentURL": "media:content.url",
+        "mediaContentWidth": "media:content.width",
+        "mediaThumbHeight": "media:thumbnail.height",
+        "mediaThumbURL": "media:thumbnail.url",
+        "mediaThumbWidth": "media:thumbnail.width",
+        "pubDate": "pubDate",
+        "title": "y:title",
+    }
 )
 
 

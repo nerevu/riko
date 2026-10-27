@@ -47,7 +47,7 @@ Index (file, then the subjects it owns, in file order):
                               AsyncLoop, CustomEmbed, ModuleRegistry, PublicRegister,
                               ResolverDispatcher, RequireInterface, EntryPointModules,
                               WorkflowResolver, Catalog, ResolvedDocuments, Modules,
-                              Prepare
+                              Prepare, ExchangeRate
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
                               TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,

@@ -26,7 +26,7 @@ Attributes:
 from __future__ import annotations
 
 from os.path import splitext
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import FetchDataObjconf
-    from riko.io._filelike import FileLike
     from riko.types._streams import Item, Stream
 
 OPTS: DecorationOptions = SourceOpts
@@ -141,8 +140,7 @@ def parser(
 
     with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
-        content = cast("FileLike", f)
-        yield from any2dict(content, ext, objconf.html5, path=path)
+        yield from any2dict(f, ext, objconf.html5, path=path)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

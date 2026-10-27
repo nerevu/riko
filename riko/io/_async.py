@@ -20,13 +20,12 @@ Examples:
 from __future__ import annotations
 
 from io import BytesIO, StringIO, TextIOWrapper
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
 
-from riko.bado import _backend
-from riko.bado._backend import async_open
+from riko.bado._backend import NamedTemporaryFile, async_open
 from riko.bado._util import async_get, async_read
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
-    from riko.bado._backend import NamedTemporaryFile
     from riko.types._io import PathLike
     from riko.types._scalars import AnyStr
 
@@ -231,7 +229,7 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
     return result
 
 
-class _AsyncURLStream[T]:
+class _AsyncURLStream[T: BytesIO | NamedTextIOWrapper]:
     """
     An awaitable, async-context-manager handle over a lazily opened buffer.
 
@@ -244,12 +242,12 @@ class _AsyncURLStream[T]:
         self._open = opener
         self._stream: BytesIO | NamedTextIOWrapper | None = None
 
-    def __await__(self) -> Generator[Any, None, T]:
+    def __await__(self) -> Generator[object, None, T]:
         return self._open().__await__()
 
     async def __aenter__(self) -> T:
         opened = await self._open()
-        self._stream = cast("BytesIO | NamedTextIOWrapper", opened)
+        self._stream = opened
         return opened
 
     async def __aexit__(self, *_: object) -> bool:
@@ -463,4 +461,4 @@ def async_get_temp_file() -> NamedTemporaryFile[bytes]:
         True
 
     """
-    return _backend.NamedTemporaryFile(delete=True, delete_on_close=False)
+    return NamedTemporaryFile(delete=True, delete_on_close=False)

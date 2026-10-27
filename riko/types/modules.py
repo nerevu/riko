@@ -4,15 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    NotRequired,
-    Required,
-    TypedDict,
-    TypeGuard,
-)
+from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict, TypeGuard
 
 from riko.base._config import BUILTIN_PROVIDER
 from riko.base._require_guards import require_from_form
@@ -953,7 +945,7 @@ require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(
 require_conf: TypeRequire[object, Conf] = require_from_form(Conf)
 
 
-def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
+def is_type_value(val: Mapping[str, object]) -> TypeGuard[ConfArg]:
     return len(val) == 2 and "type" in val and "value" in val
 
 

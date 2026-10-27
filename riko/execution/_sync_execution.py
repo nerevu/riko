@@ -26,6 +26,7 @@ from attrs import define, field
 
 from riko.bado._backend import start_blocking_portal
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._guards import is_awaitable
 from riko.types._enums import Executor
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -218,7 +219,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
     def _call_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         raw = call_factory(plan)
-        value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
+        value = self.run_async(raw) if is_awaitable(raw) else raw
 
         if (cleanup := plan.cleanup) is not False:
             self.callback(cleanup, value)
@@ -365,7 +366,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         stream itself stays lazy. A seed that is both sync- and async-iterable is
         read synchronously. The execution closes a generator seed when it exits.
         """
-        resolved = self.run_async(seed) if isawaitable(seed) else seed
+        resolved = self.run_async(seed) if is_awaitable(seed) else seed
 
         if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
             stream = iter(normalize_items(resolved))

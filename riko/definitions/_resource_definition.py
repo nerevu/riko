@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from inspect import isasyncgen, isgenerator
-from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
+from typing import TYPE_CHECKING, Literal, Never, Self, overload
 from warnings import warn
 
 from attrs import define, field
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
-type Values = Mapping[str, Any | Closeable]
+type Values = Mapping[str, object]
 
 
 @define(frozen=True, slots=True, eq=False, repr=False, init=False)
@@ -121,15 +121,13 @@ class Resource[T]:
     def __new__(cls, value: AnyContextManager[T]) -> Never: ...
     @overload
     def __new__(cls, value: T) -> Never: ...
-    def __new__(
-        cls, *args: object, **kwargs: object
-    ) -> OneShotResource[T] | ReusableResource[T]:
+    def __new__(cls, *args: object, **kwargs: object) -> Resource[T]:
         # pickle and copy rebuild an instance by calling __new__ with no arguments
         if args or kwargs:
             cls._validate_constructor()
 
         target = OneShotResource if cls is Resource else cls
-        return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
+        return object.__new__(target)
 
     @staticmethod
     def _validate_value(value: object) -> None:
@@ -171,14 +169,29 @@ class Resource[T]:
 
         self._set_fields(OwnedPlan(value, cleanup), credential, lazy)
 
-    @classmethod
-    def _from_plan[R: Resource[Any]](
-        cls,
-        target: type[R],
-        plan: ResourcePlan[Any],
+    @overload
+    @staticmethod
+    def _from_plan[V](
+        target: type[ReusableResource[V]],
+        plan: ResourcePlan[V],
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> ReusableResource[V]: ...
+    @overload
+    @staticmethod
+    def _from_plan[V](
+        target: type[OneShotResource[V]],
+        plan: ResourcePlan[V],
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> OneShotResource[V]: ...
+    @staticmethod
+    def _from_plan[V](
+        target: type[Resource[V]],
+        plan: ResourcePlan[V],
         credential: str | None = None,
         lazy: bool = False,
-    ) -> R:
+    ) -> Resource[V]:
         resource = object.__new__(target)
         resource._set_fields(plan, credential, lazy)
         return resource
@@ -427,7 +440,7 @@ class ReusableResource[T](Resource[T]):
         def __new__(cls, *args: object, **kwargs: object) -> Never: ...
 
 
-type ReusableResources = FrozenDict[str, ReusableResource[Any]]
+type ReusableResources = FrozenDict[str, ReusableResource[object]]
 type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 __all__ = ["OneShotResource", "Resource", "ReusableResource"]

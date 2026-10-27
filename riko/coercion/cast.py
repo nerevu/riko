@@ -313,7 +313,7 @@ def cast_location(
     result = GEOLOCATERS[loc_type](str(address))
 
     if location := result.get("location"):
-        extra = LOCATIONS.get(str(location), cast("dict[str, str]", {}))
+        extra = LOCATIONS.get(str(location), {})
         result = cast("AnyLocation", {**result, **extra})
 
     return result

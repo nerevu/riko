@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ._async import AsyncPubSubHub
 from ._sync import SyncPubSubHub
@@ -63,7 +63,7 @@ def coroutine(
         name = registry_name or func.__name__
 
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: object) -> Receiver:
+        def wrapper(*args: object, **kwargs: object) -> Receiver:
             gen = func(*args, **kwargs)
             next(gen)
             sync_hub.seed(name, gen, maxlen)

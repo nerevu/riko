@@ -9,11 +9,12 @@ from inspect import (
     Parameter,
     Signature,
     getmembers_static,
+    isawaitable,
     iscoroutinefunction,
     isfunction,
     signature,
 )
-from typing import TYPE_CHECKING, Any, TypeGuard, overload
+from typing import TYPE_CHECKING, TypeGuard, overload
 
 import attrs
 from requests.structures import CaseInsensitiveDict
@@ -169,13 +170,13 @@ def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
 
 
 def is_mapping_seq(
-    val: list[Any] | tuple[Any, ...],
-) -> TypeGuard[list[Mapping[Any, object]] | tuple[Mapping[Any, object], ...]]:
+    val: list[object] | tuple[object, ...],
+) -> TypeGuard[list[Mapping[object, object]] | tuple[Mapping[object, object], ...]]:
     return bool(val and is_mapping(val[0]))
 
 
 def is_value_seq(
-    val: list[Any] | tuple[Any, ...],
+    val: list[object] | tuple[object, ...],
 ) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
     return bool(val and isinstance(val[0], BasicValueType))
 
@@ -280,6 +281,32 @@ def is_async_callable(val: object) -> bool:
         result = False
 
     return result
+
+
+def is_awaitable[T](value: T | Awaitable[T]) -> TypeIs[Awaitable[T]]:
+    """
+    Reports whether ``value`` is awaitable.
+
+    Args:
+
+        value: A value or an awaitable that resolves to one.
+
+    Returns:
+
+        Whether ``value`` must be awaited to get its result.
+
+    Examples:
+
+        >>> async def answer():
+        ...     return 42
+        >>>
+        >>> coro = answer()
+        >>> is_awaitable(coro), is_awaitable(42)
+        (True, False)
+        >>> coro.close()
+
+    """
+    return isawaitable(value)
 
 
 def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:

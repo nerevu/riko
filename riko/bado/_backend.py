@@ -17,7 +17,7 @@ Examples:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Protocol, Unpack, cast
+from typing import TYPE_CHECKING, Literal, Protocol, Unpack, cast
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -37,29 +37,30 @@ try:
     import anyio
     from httpx import Response as HTTPXResponse
 except ImportError:
-    AsyncClient: Any = None
-    BlockingPortal: Any = None
+    AsyncClient: object = None
+    USE_CLIENT_DEFAULT: object = None
+    BlockingPortal: object = None
     CancelScope: type | None = None
     CapacityLimiter: type | None = None
     Event: type | None = None
-    HTTPXResponse: Any = None
-    MemoryObjectReceiveStream: Any = None
-    MemoryObjectSendStream: Any = None
-    NamedTemporaryFile: Any = None
-    Path: Any = None
+    HTTPXResponse: object = None
+    MemoryObjectReceiveStream: object = None
+    MemoryObjectSendStream: object = None
+    NamedTemporaryFile: object = None
+    Path: object = None
     Semaphore: type | None = None
-    async_chain: Callable[..., Any] = lambda *_, **_kw: None
-    async_open: Callable[..., Any] = lambda *_, **_kw: None
-    async_sleep: Callable[..., Any] = lambda *_, **_kw: None
-    asyncify: Callable[..., Any] = lambda *_, **_kw: None
+    async_chain: Callable[..., object] = lambda *_, **_kw: None
+    async_open: Callable[..., object] = lambda *_, **_kw: None
+    async_sleep: Callable[..., object] = lambda *_, **_kw: None
+    asyncify: Callable[..., object] = lambda *_, **_kw: None
     backend: AsyncBackend = "empty"
-    create_memory_object_stream: Callable[..., Any] | None = None
-    create_task_group: Callable[..., Any] | None = None
-    fail_after: Callable[..., Any] | None = None
-    gather_results: Callable[..., Any] = lambda *_, **_kw: None
-    lowlevel: Any = None
-    run_from_thread: Callable[..., Any] = lambda *_, **_kw: None
-    start_blocking_portal: Callable[..., Any] = lambda *_, **_kw: None
+    create_memory_object_stream: Callable[..., object] | None = None
+    create_task_group: Callable[..., object] | None = None
+    fail_after: Callable[..., object] | None = None
+    gather_results: Callable[..., object] = lambda *_, **_kw: None
+    lowlevel: object = None
+    run_from_thread: Callable[..., object] = lambda *_, **_kw: None
+    start_blocking_portal: Callable[..., object] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
         return None
@@ -91,7 +92,7 @@ else:
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from asyncer import asyncify
-    from httpx import AsyncClient
+    from httpx import USE_CLIENT_DEFAULT, AsyncClient
 
     backend = "anyio"
     run: Run = anyio.run
@@ -100,6 +101,7 @@ issync: bool = backend == "empty"
 isasync: bool = not issync
 
 __all__ = [
+    "USE_CLIENT_DEFAULT",
     "AsyncClient",
     "BlockingPortal",
     "CancelScope",

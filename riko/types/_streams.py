@@ -11,7 +11,7 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, Protocol, TypedDict, TypeGuard
 
 from typing_extensions import TypeVar
 
@@ -71,7 +71,7 @@ type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
 
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 type AsyncItemGenerator = AsyncGenerator[Item, None]
-type StreamGenerator = Generator[Any, None, Stream]
+type StreamGenerator = Generator[object, None, Stream]
 
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]

@@ -31,6 +31,7 @@ from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.modules import _metadata
 from riko.modules import count as count_module
+from riko.modules import exchangerate as exchangerate_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
 from riko.modules._decorators import operator, processor, splitter
@@ -74,6 +75,8 @@ from riko.types._wrappers import (
     AsyncSubPipe,
     ProcessorWrapper,
     SyncProcessorWrapper,
+    require_async_wrapper,
+    require_sync_wrapper,
 )
 from riko.types.modules import (
     Conf,
@@ -877,6 +880,12 @@ def _carries_wrapper_meta(func: object) -> bool:
     return all(hasattr(func, attr) for attr in WRAPPER_META)
 
 
+WRAPPER_REQUIRES = [
+    pytest.param(require_sync_wrapper, "synchronous", id="sync"),
+    pytest.param(require_async_wrapper, "asynchronous", id="async"),
+]
+
+
 class TestWrapperMeta:
     """Every way of building a pipe stamps the wrapper metadata."""
 
@@ -926,6 +935,11 @@ class TestWrapperMeta:
         assert _carries_wrapper_meta(processor()(shout))
         assert _carries_wrapper_meta(processor(isasync=True)(shout))
         assert _carries_wrapper_meta(operator()(total))
+
+    @pytest.mark.parametrize(("require", "match"), WRAPPER_REQUIRES)
+    def test_require_rejects_a_plain_function(self, require, match):
+        with pytest.raises(TypeError, match=match):
+            require(len)
 
 
 class TestWorkflowDecorator:
@@ -1988,3 +2002,9 @@ class TestPrepare:
     def test_operator_wraps_a_none_item_as_content(self):
         items = cast("Any", [None])
         assert next(operator().normalize_input(items)) == {"content": None}
+
+
+class TestExchangeRate:
+    def test_a_non_numeric_rate_raises(self):
+        with pytest.raises(TypeError, match="invalid rate"):
+            exchangerate_module.build_rates({"USD": [1]})

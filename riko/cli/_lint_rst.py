@@ -9,7 +9,7 @@ from glob import glob
 from io import StringIO
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from riko.base._paths import DOCS_DIR, ROOT_DIR
 
@@ -23,6 +23,8 @@ except ImportError:
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from docutils.nodes import document
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
@@ -44,7 +46,7 @@ def _gen_doc_files(where: str | None) -> Iterator[str]:
             yield str(location)
 
 
-def _render_rst(path: str) -> tuple[str, Any]:
+def _render_rst(path: str) -> tuple[str, document]:
     """Reads and parses an RST file into source text and doctree."""
     if not publish_doctree:
         raise RuntimeError("docutils not found")
@@ -61,7 +63,7 @@ def _render_rst(path: str) -> tuple[str, Any]:
     return text, publish_doctree(text, source_path=path, settings_overrides=overrides)
 
 
-def _get_doc_anchors(doctree: Any) -> set[str]:
+def _get_doc_anchors(doctree: document) -> set[str]:
     """Computes the GitHub heading anchors a rendered document exposes."""
     seen: dict[str, int] = {}
     anchors: set[str] = set()
@@ -79,7 +81,7 @@ def _get_doc_anchors(doctree: Any) -> set[str]:
     return anchors
 
 
-def _render_errors(path: str, doctree: Any) -> list[str]:
+def _render_errors(path: str, doctree: document) -> list[str]:
     """Collects docutils warning, error, and severe messages."""
     if nodes is None:
         raise RuntimeError("docutils not found")

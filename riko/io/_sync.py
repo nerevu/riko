@@ -458,7 +458,7 @@ def opener(
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = buffer(r, binary=True) if memoize else cast("RawIOBase", r)
+            response = buffer(r, binary=True) if memoize else r
         elif r:
             encoding = get_response_encoding(r, encoding)
 
@@ -473,7 +473,7 @@ def opener(
                 reencoded = reencode(r.fp, encoding, decode=True, owner=r)
                 response = cast("StreamReader", reencoded)
             else:
-                response = cast("TextIOBase", r)
+                response = r
         else:
             response = BytesIO() if binary else StringIO()
 

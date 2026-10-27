@@ -12,13 +12,17 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from riko.bado._util import maybe_aclosing
 from riko.base._guards import is_listlike
-from riko.base._sentinels import MISSING
+from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
-from riko.types._wrappers import require_single_output
+from riko.types._wrappers import (
+    require_async_wrapper,
+    require_single_output,
+    require_sync_wrapper,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -34,8 +38,21 @@ if TYPE_CHECKING:
 
     from ._prepared import ResolvedModule
 
-type LoopCall = Callable[[Callable[[], Any]], Any]
-type WorkerCall = Callable[..., Awaitable[Any]]
+
+class LoopCall(Protocol):
+    """Runs an awaitable-returning callable to completion from a worker thread."""
+
+    def __call__[R](self, func: Callable[[], Awaitable[R]], /) -> R: ...
+
+
+class WorkerCall(Protocol):
+    """Runs a blocking callable off the event loop and awaits its result."""
+
+    def __call__[R, *Ts](
+        self, func: Callable[[*Ts], R], /, *args: *Ts
+    ) -> Awaitable[R]: ...
+
+
 type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
 
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
@@ -155,10 +172,15 @@ def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
             yield item
 
 
+def _next_or_missing[T](iterator: Iterator[T]) -> T | MissingType:
+    """Gets the next item from ``iterator``, or ``MISSING`` once it is exhausted."""
+    return next(iterator, MISSING)
+
+
 async def pull_stream[T](
     closeable: object,
     iterator: Iterator[T],
-    *upstreams: AsyncIterator[Any],
+    *upstreams: AsyncIterator[object],
     pull: WorkerCall,
     close: WorkerCall,
 ) -> AsyncIterator[T]:
@@ -189,7 +211,9 @@ async def pull_stream[T](
             await stack.enter_async_context(maybe_aclosing(upstream))
 
         try:
-            while (item := await pull(next, iterator, MISSING)) is not MISSING:
+            while not isinstance(
+                item := await pull(_next_or_missing, iterator), MissingType
+            ):
                 yield item
         finally:
             await close(_close_generator, closeable)
@@ -261,7 +285,7 @@ def adapt_embed[T](embed: AsyncModuleWrapper, drain: Drain[T]) -> SyncModuleWrap
         return drain(stream)
 
     _copy_wrapper_meta(wrapper, embed, isasync=False)
-    return cast("SyncModuleWrapper", wrapper)
+    return require_sync_wrapper(wrapper)
 
 
 def async_adapt_embed(
@@ -291,7 +315,7 @@ def async_adapt_embed(
         return materialized
 
     _copy_wrapper_meta(wrapper, embed, isasync=True)
-    return cast("AsyncModuleWrapper", wrapper)
+    return require_async_wrapper(wrapper)
 
 
 def select_embed[T](

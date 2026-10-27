@@ -9,7 +9,7 @@ from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
-from typing import TYPE_CHECKING, Any, Self, cast, overload
+from typing import TYPE_CHECKING, Self, overload
 
 from riko.base._guards import is_known_sequence, is_listlike, is_mapping
 from riko.base._iterutils import map_values, multi_try
@@ -130,7 +130,7 @@ def gen_items(
         yield {key: content} if key else content
 
 
-def truncate_content[T](content: T | object, length: int = 20) -> T:
+def truncate_content(content: object, length: int = 20) -> object:
     """
     Shortens every string or bytes value for a log message, recursing into containers.
 
@@ -165,7 +165,7 @@ def truncate_content[T](content: T | object, length: int = 20) -> T:
     else:
         truncated = content
 
-    return cast("T", truncated)
+    return truncated
 
 
 class Chainable:
@@ -197,14 +197,13 @@ class Chainable:
         funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
         zipped = zip(funcs, repeat(AttributeError), strict=False)
         method = multi_try(name, zipped, default=None)
-        result = Chainable(self.data, method)
-        return cast("Self", result)
+        return type(self)(self.data, method)
 
-    def __call__(self, *args: Any, **kwargs: object) -> Self:
+    def __call__(self, *args: object, **kwargs: object) -> Self:
         method = self.method
 
         if method is None:
-            result = Chainable(self.data)
+            result = type(self)(self.data)
         else:
             try:
                 signature(method).bind(self.data, *args, **kwargs)
@@ -215,8 +214,8 @@ class Chainable:
                 data_first = True
 
             if data_first or not args:
-                result = Chainable(method(self.data, *args, **kwargs))
+                result = type(self)(method(self.data, *args, **kwargs))
             else:
-                result = Chainable(method(args[0], self.data, **kwargs))
+                result = type(self)(method(args[0], self.data, **kwargs))
 
-        return cast("Self", result)
+        return result
