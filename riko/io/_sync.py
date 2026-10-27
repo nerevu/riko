@@ -15,7 +15,6 @@ from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal, cast, overload
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from riko.coercion._canonical import repr_cache
@@ -31,9 +30,7 @@ from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
 from riko.base._config import ENCODING, STREAMING_THRESHOLD
-from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
-from riko.coercion._sequences import truncate_content
 
 from ._reencode import reencode
 
@@ -41,7 +38,6 @@ if TYPE_CHECKING:
     from codecs import StreamReader
     from collections.abc import Iterable, Iterator, Mapping
     from http.client import HTTPResponse
-    from logging import Logger
     from urllib.response import addinfourl
 
     from riko.types._scalars import AnyStr
@@ -50,8 +46,6 @@ if TYPE_CHECKING:
     from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
-
-logger: Logger = get_logger(__name__)
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:
@@ -531,9 +525,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
     """
     Opens a url or file as an iterable byte or text stream.
 
-    Degrades on a failed fetch: a ``URLError``/``RequestException`` is logged and
-    the instance yields a single empty chunk instead of raising. A broken source drops
-    out of a pipeline rather than aborting it.
+    A source that cannot be opened raises its error (e.g., a ``URLError`` wrapping a
+    missing file, or a ``requests`` error), as the asynchronous opener does.
 
     Args:
 
@@ -576,16 +569,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         self.content_type = None
         self.file = None
         opener = build_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
-
-        try:
-            self.file, self.content_type = opener(url)
-        except URLError as e:
-            if "File name too long" in str(e.reason):
-                raise
-
-            logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
-        except requests.RequestException as e:
-            logger.error(f"Error opening {truncate_content(url)}: {e}")
+        self.file, self.content_type = opener(url)
 
     def __getattr__(self, name: str) -> object:
         if self.file is not None:

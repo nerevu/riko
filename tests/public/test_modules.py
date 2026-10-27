@@ -32,6 +32,7 @@ import riko.runtime._workflow_resolver
 import riko.runtime._workflow_stores
 import riko.types
 from riko.bado._backend import create_task_group
+from riko.bado.itertools import alist
 from riko.base._api_surface import (
     BADO,
     COMPILE,
@@ -64,6 +65,7 @@ from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
 from riko.modules.udf import pipe as udf_pipe
+from riko.runtime._pipeline import Pipeline
 from riko.runtime._pubsub import async_hub
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
@@ -140,6 +142,34 @@ async def _titles(conf):
     return [item.get("title") async for item in stream]
 
 
+FETCH_MODULES = [
+    "fetch",
+    "fetchdata",
+    "fetchpage",
+    "fetchsitefeed",
+    "fetchtable",
+    "fetchtext",
+]
+MISSING_URL = "file:///nonexistent.xml"
+
+
+class TestFetchModules:
+    @pytest.mark.parametrize("name", FETCH_MODULES)
+    def test_an_unopenable_url_raises(self, name):
+        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
+
+        with pytest.raises(OSError, match="No such file"):
+            list(pipeline)
+
+    @pytest.mark.parametrize("name", FETCH_MODULES)
+    @async_test
+    async def test_an_unopenable_url_raises_asynchronously(self, name):
+        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
+
+        with pytest.raises(OSError, match="No such file"):
+            await alist(pipeline)
+
+
 class TestFetchdata:
     """``fetchdata`` infers the parser for extensionless URLs and local documents."""
 
@@ -153,6 +183,15 @@ class TestFetchdata:
         )
         result = await _titles({"url": URL, "path": "items"})
         assert result == ["A", "B"]
+
+    @async_test
+    async def test_without_a_path_yields_the_whole_document(self, tmp_path):
+        path = tmp_path / "data.json"
+        path.write_bytes(JSON)
+        stream = async_fetchdata_pipe(conf={"url": path.as_uri()})
+        items = [item async for item in stream]
+        assert items == list(fetchdata_pipe(conf={"url": path.as_uri()}))
+        assert items
 
     def test_minified_xml_parses(self, tmp_path):
         path = tmp_path / "data.xml"
