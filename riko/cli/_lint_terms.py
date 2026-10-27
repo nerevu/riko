@@ -45,6 +45,8 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("each side", "sync and async"),
     BannedTerm("missing side", "the missing sync or async interface"),
     BannedTerm("terminal sub-source", "secondary input stream"),
+    BannedTerm("upstream stream", "input stream"),
+    BannedTerm("scoped run", "context manager (`pipeline.open(items)` returns one)"),
     BannedTerm("input requirements", "input declarations"),
     BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
     BannedTerm("bound keyword", "keyword argument"),
@@ -84,6 +86,9 @@ def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
 
 
 PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work")
+RUN_SCOPING = BannedTerm(
+    "scoping a run", "context manager (`pipeline.open(items)` returns one)"
+)
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
@@ -94,6 +99,14 @@ _PHRASE_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
+    (
+        RUN_SCOPING,
+        re.compile(
+            r"\bscope[sd]?\s+(?:a|one|the|each)\s+run\b(?!')"
+            r"|\bopen\b[^.]{0,40}?\bto\s+scope\b",
+            re.IGNORECASE,
+        ),
+    ),
     (
         REMOVED_EXT_PATH,
         re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
@@ -189,6 +202,7 @@ __all__ = [
     "BANNED_TERMS",
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
+    "RUN_SCOPING",
     "BannedTerm",
     "TermIssue",
     "gen_phrase_issues",

@@ -87,6 +87,7 @@ _HISTORY_WORDS = re.compile(
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
 _CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
+_TODO = re.compile(r"^\s*TODO\b")
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
@@ -280,6 +281,41 @@ def gen_stale_path_citations(
                     yield (lineno, cited)
 
 
+def gen_todo_lines(text: str) -> Iterator[int]:
+    """
+    Finds lines that start with a ``TODO`` marker.
+
+    Args:
+
+        text: The document text.
+
+    Yields:
+
+        Each marker's line number.
+
+    Examples:
+
+        >>> from riko.cli._docs import gen_todo_lines
+        >>>
+        >>> text = "Intro.\\n\\nTODO: add seeding\\nA mid-line TODO is fine"
+        >>> list(gen_todo_lines(text))
+        [3]
+
+    """
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if _TODO.match(line):
+            yield lineno
+
+
+def _gen_todo_offenders() -> Iterator[str]:
+    """Names each ``TODO`` line left in the shipped user docs."""
+    docs = (ROOT_DIR / "README.rst", ROOT_DIR / "CONTRIBUTING.rst")
+
+    for path in (*docs, *sorted(DOCS_DIR.glob("*.rst"))):
+        for lineno in gen_todo_lines(_read(path)):
+            yield f"{path.relative_to(ROOT_DIR)}:{lineno}"
+
+
 def _gen_citation_offenders(
     scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
     known: Iterable[str],
@@ -436,6 +472,9 @@ def lint_docs() -> int:
 
     if offenders := list(_gen_stale_path_citation_offenders()):
         problems.append(f"cited source files no longer exist: {'; '.join(offenders)}")
+
+    if offenders := list(_gen_todo_offenders()):
+        problems.append(f"user docs carry TODO lines: {'; '.join(offenders)}")
 
     for problem in problems:
         print(problem)
