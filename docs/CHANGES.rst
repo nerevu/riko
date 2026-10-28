@@ -83,9 +83,9 @@ New
   gets its own discovery class, with the prefix left off its members: ``example.lookup``
   is ``Example.LOOKUP``, and ``Modules.EXAMPLE_LOOKUP`` keeps the full name.
 
-- Added ``riko.async_chain`` to chain async iterables, ``riko.alist`` to collect a sync
-  or async iterable into a list, and a ``cooperative`` option to ``riko.as_async`` to
-  yield control before each item of a sync source.
+- Added to ``riko``: ``async_chain`` to chain async iterables, ``alist`` to collect an
+  (a)sync iterable into a list, ``materialize`` to collect one into an iterator, and a
+  ``cooperative`` option to ``as_async`` to yield control before each item of a source.
 
 - Added the ``jsonl`` export format (one JSON object per line), accepted anywhere a
   ``riko.Formats`` member is.
