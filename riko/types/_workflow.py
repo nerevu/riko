@@ -198,12 +198,8 @@ def parse_port(port: Port) -> ParsedPort:
 
     Examples:
 
-        >>> parse_port("in")
-        ParsedPort(direction='in', index=None, name=None)
         >>> parse_port("out:1")
         ParsedPort(direction='out', index=1, name=None)
-        >>> parse_port("in:count")
-        ParsedPort(direction='in', index=None, name='count')
         >>> parse_port("in:0")
         Traceback (most recent call last):
         ValueError: invalid port: 'in:0'

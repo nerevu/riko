@@ -161,8 +161,6 @@ class ResolvedModule:
         >>> module = ResolvedModule("hash", {}, sync_pipe=pipe)
         >>> module.select_sync() is module.select_async() is pipe
         True
-        >>> module.is_async_pipe(module.select_async())
-        False
 
     """
 

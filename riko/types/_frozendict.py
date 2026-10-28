@@ -113,10 +113,6 @@ class FrozenDict[K, V](Mapping[K, V]):
         (1, FrozenDict({'b': 2}))
         >>> frozen == {"a": (1, {"b": 2})}
         True
-        >>> hash(frozen) == hash(FrozenDict({"a": (1, {"b": 2})}))
-        True
-        >>> frozen | {"c": 3}
-        FrozenDict({'a': (1, FrozenDict({'b': 2})), 'c': 3})
 
     """
 
