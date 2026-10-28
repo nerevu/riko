@@ -327,8 +327,9 @@ Fixes
   ``fetchdata``, ``fetchpage``, ``xpathfetchpage``, and ``csv`` yield its content
   instead of an empty result; and ``fetchtext`` keeps its blank lines.
 
-- A decode failure while sync fetching such a source over HTTP no longer leaves the
-  response open.
+- ``fetchdata`` now yields a dict instead of text for XML whose root holds only text.
+
+- A decode failure while sync fetching no longer leaves the response open.
 
 - Sync fetching a multi-line UTF-16 text source no longer drops everything after its
   first line, and sync fetching an empty text source returns empty content instead of

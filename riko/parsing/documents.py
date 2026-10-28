@@ -414,7 +414,7 @@ def xml2etree(
     return element_tree
 
 
-def _make_content(
+def _get_value(
     i: StringyDict,
     value: Stringy | None = None,
     tag="content",
@@ -441,26 +441,41 @@ def _make_content(
     return {tag: content} if content else {}
 
 
+def _get_child_value(child: AnyElement) -> Stringy:
+    converted = element2dict(child)
+    leaf = converted.get("content")
+
+    if child.text and isinstance(leaf, str) and set(converted) == {"content"}:
+        result: Stringy = leaf
+    else:
+        result = converted
+
+    return result
+
+
 def element2dict(element: AnyElement) -> StringyDict:
-    """Converts an element tree into a dict imitating how Yahoo Pipes does it."""
+    """
+    Converts an element tree into a dict imitating how Yahoo Pipes does it.
+
+    Examples:
+
+        >>> from xml.etree.ElementTree import fromstring
+        >>> element2dict(fromstring("<a><b>hi</b></a>"))
+        {'b': 'hi'}
+        >>> element2dict(fromstring("<a>hi</a>"))
+        {'content': 'hi'}
+
+    """
     i: StringyDict = dict(element.items())
-    text = element.text
-    content = _make_content(i, text, strip=True)
+    content = _get_value(i, element.text, strip=True)
     i.update(content)
 
     for child in element:
         tag = str(child.tag).split("}", 1)[-1]
-        value = element2dict(child)
-        content = _make_content(i, value, tag)
+        content = _get_value(i, _get_child_value(child), tag)
         i.update(content)
 
-    if text and not set(i).difference(["content"]):
-        # element is leaf node and doesn't have attributes
-        result = cast("StringyDict", i["content"])
-    else:
-        result = i
-
-    return result
+    return i
 
 
 def any2dict(
@@ -493,8 +508,7 @@ def any2dict(
             replaced = "/".join(path.split("."))
 
             for element in xpath(root, replaced):
-                value = element2dict(element)
-                yield from any2dict(value, ext=None)
+                yield element2dict(element)
         elif root is not None:
             yield element2dict(root)
     elif ext == "json":
