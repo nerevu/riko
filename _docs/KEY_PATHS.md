@@ -83,7 +83,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/bado/_util.py` | async utility helpers not tied to transport/file I/O |
 | `riko/io/_async.py` | async URL/file I/O (`async_url_open`, `async_write`, `async_get_temp_file`); owns the async-handle lifecycle details that previously lived under `bado` |
 | `riko/io/_sync.py` | synchronous URL/file open/read helpers |
-| `riko/io/_serialization.py` | stream serialization/export conversion helpers; records are `thaw`ed to plain dicts first, and `json`/`jsonl` use riko's `records2json` (meza's `CustomEncoder` subclassed so sets serialize as sorted arrays, the `_reencode.py` patching pattern) |
+| `riko/io/_serialization.py` | stream serialization/export conversion helpers (`require_conversion_format`, the `ENCODING_FORMATS` set whose converters take `encoding`, `build_empty_geojson`); records are `thaw`ed to plain dicts first, and `json`/`jsonl` use riko's `records2json` (meza's `CustomEncoder` subclassed so sets serialize as sorted arrays, the `_reencode.py` patching pattern) |
 | `riko/io/_reencode.py` | byte/text re-encoding utilities |
 | `riko/io/_filelike.py` | file-like and opener aliases (`IOFileLike`, the `io` base classes `async_write` reads in chunks, `BinaryFileLike`, `StringFileLike`, `FileLike`, `Opener`); they name `riko.io` handle classes, so they live with the I/O layer rather than in `riko/types` |
 | `riko/io/__init__.py` | narrow I/O facade; stable async I/O names are promoted through `riko` |

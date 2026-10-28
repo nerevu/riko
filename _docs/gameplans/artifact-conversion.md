@@ -119,6 +119,8 @@ Open sub-decisions for the default:
 Current gap: meza's `records2csv` writes every container cell with `str()`, so CSV output
 holds a Python repr that cannot be read back (`"{'b': [1, 2]}"`), and set cells follow
 hash order. The `json`/`jsonl` writer already encodes nested mappings and sorted sets.
+It also writes `bom=True`'s BOM as bytes into its text buffer (`TypeError`); strict-xfail tripwire
+`tests/public/test_write.py::TestExportFormats::test_csv_bom_is_written_in_the_given_encoding`.
 
 Arrow is an in-memory interchange type rather than an artifact format contract here;
 Arrow frame/table conversion is specified in `tabular-interop.md`. Arrow IPC/Feather, if
