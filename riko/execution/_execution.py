@@ -27,6 +27,7 @@ from attrs import Factory, define, field
 from riko.bado._backend import asyncify
 from riko.base._config import FOREVER_ITEM
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._iterutils import map_values
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._frozendict import FrozenDict
 from riko.types._workflow import parse_port
@@ -230,7 +231,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             msg = f"resource(s) {names} not provided by the context"
             raise InvalidPipelineError(msg)
 
-        return {slot: available[name] for slot, name in binding.items()}
+        return map_values(available.__getitem__, binding)
 
     def _resolve_node_inputs[I, V: (Iterator[Any], AsyncIterator[Any])](
         self,

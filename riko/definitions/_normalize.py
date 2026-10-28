@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping
+from functools import partial
 from itertools import count, starmap
 from typing import TYPE_CHECKING, Any, TypedDict, cast, get_args
 
@@ -21,7 +22,7 @@ from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._guards import is_mapping, require_mapping, require_sequence
-from riko.base._iterutils import gen_non_none, map_values, unzip
+from riko.base._iterutils import gen_non_none, map_keys_and_values, map_values, unzip
 from riko.base._recordutils import serialize_attrs
 from riko.base._require_guards import (
     normalize_strs,
@@ -301,10 +302,8 @@ def _normalize_outputs(raw: object, *edges: Edge, **nodes: Node) -> dict[str, En
     """Normalizes named outputs and defaults to a lone leaf only when omitted."""
     if raw is not None:
         outputs = require_mapping(raw, "outputs")
-        result = {
-            str(name): _normalize_endpoint(endpoint, "out")
-            for name, endpoint in outputs.items()
-        }
+        normalize = partial(_normalize_endpoint, default_port="out")
+        result = map_keys_and_values(str, normalize, outputs)
     else:
         pairs = ((e.source.node, e.target.node) for e in get_family_edges(edges))
         ends = leaves(edges_to_graph(pairs, *nodes))

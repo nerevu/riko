@@ -312,14 +312,14 @@ def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:
     return left, right
 
 
-def map_values[K, V, R](func: Callable[[V], R], items: Mapping[K, V]) -> dict[K, R]:
+def map_values[K, V, R](func: Callable[[V], R], item: Mapping[K, V]) -> dict[K, R]:
     """
     Applies a function to each value of a mapping.
 
     Args:
 
         func: The transform applied to each value.
-        items: The source mapping.
+        item: The source mapping.
 
     Returns:
 
@@ -332,7 +332,60 @@ def map_values[K, V, R](func: Callable[[V], R], items: Mapping[K, V]) -> dict[K,
         {'a': 2, 'b': 0}
 
     """
-    return {key: func(value) for key, value in items.items()}
+    return {key: func(value) for key, value in item.items()}
+
+
+def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
+    """
+    Applies a function to each key of a mapping.
+
+    Args:
+
+        func: The transform applied to each key.
+        item: The source mapping.
+
+    Returns:
+
+        A new dict with the transformed keys, in the same order, holding the
+        original values. When two keys transform to the same key, the later
+        value wins.
+
+    Examples:
+
+        >>> map_keys(str.lower, {"A": 1, "b": 2})
+        {'a': 1, 'b': 2}
+        >>> map_keys(str.lower, {"A": 1, "a": 2})
+        {'a': 2}
+
+    """
+    return {func(key): value for key, value in item.items()}
+
+
+def map_keys_and_values[K, V, RK, RV](
+    key_func: Callable[[K], RK], value_func: Callable[[V], RV], item: Mapping[K, V]
+) -> dict[RK, RV]:
+    """
+    Applies one function to each key of a mapping and another to each value.
+
+    Args:
+
+        key_func: The transform applied to each key.
+        value_func: The transform applied to each value.
+        item: The source mapping.
+
+    Returns:
+
+        A new dict with the transformed keys, in the same order, holding the
+        transformed values. When two keys transform to the same key, the later
+        value wins.
+
+    Examples:
+
+        >>> map_keys_and_values(str.lower, len, {"A": "xy", "b": ""})
+        {'a': 2, 'b': 0}
+
+    """
+    return {key_func(key): value_func(value) for key, value in item.items()}
 
 
 @overload
@@ -474,13 +527,13 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
             nexts = cycle(islice(nexts, active))
 
 
-def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
+def invert_dict[K, V](item: dict[K, V]) -> dict[V, K]:
     """
     Swaps a dict's keys and values.
 
     Args:
 
-        d: The dict to invert; its values must be hashable and unique.
+        item: The dict to invert; its values must be hashable and unique.
 
     Returns:
 
@@ -492,4 +545,4 @@ def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
         {1: 'a', 2: 'b'}
 
     """
-    return {v: k for k, v in d.items()}
+    return {v: k for k, v in item.items()}
