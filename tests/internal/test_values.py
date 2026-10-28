@@ -9,7 +9,9 @@ import pickle  # noqa: S403
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+import typing
+from dataclasses import dataclass, make_dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
@@ -20,7 +22,15 @@ from operator import methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, cast
+from typing import (
+    TYPE_CHECKING,
+    ClassVar,
+    Literal,
+    NotRequired,
+    Required,
+    TypedDict,
+    cast,
+)
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -32,10 +42,26 @@ from feedparser import FeedParserDict
 from riko.base import _exceptions as errors
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
-from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.base._exceptions import (
+    CyclicIdentityError,
+    IdentityEncodingError,
+    InvalidPipelineError,
+)
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
+from riko.base._guards import require_mapping, require_sequence
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import ROOT_DIR, get_path
+from riko.base._recordutils import field_names
+from riko.base._require_guards import (
+    normalize_strs,
+    require_finite,
+    require_from_form,
+    require_from_typed_dict,
+    require_str,
+    require_strlike,
+    typed_dict_keys,
+)
+from riko.base._typing import resolve_enum
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
@@ -54,23 +80,27 @@ from riko.coercion._dates import (
     tt_to_datedict,
 )
 from riko.coercion.cast import cast_datetime, resolve_cast_type
-from riko.definitions._nodes import ModuleNode, StreamEdge
-from riko.definitions._workflow_definition import Workflow
+from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode, require_binding
+from riko.definitions._write import WriteMode
 from riko.io._sync import Fetch
 from riko.modules._sortutils import def_itemgetter
-from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.parsing._dotdict import DotDict, match_key, raw_get
 from riko.parsing.config import get_skip, resolve_conf
 from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
-from riko.types._enums import CastType
+from riko.types._enums import CastType, Executor
+from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
+from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
-from riko.types.modules import XpathFetchPageConf
+from tests._execution import build_workflow
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     from riko.types._frozendict import FrozenSetMapping
+    from riko.types._scalars import BasicValue
 
 NOON_UTC = datetime(2020, 6, 15, 12, tzinfo=UTC)
 NOON_TT = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
@@ -378,6 +408,41 @@ class TestCastDatetime:
         assert result is not None
         assert int(result.timestamp()) == 1181230100
 
+    @pytest.mark.usefixtures("tokyo")
+    def test_defaults_to_utc(self):
+        if dt := cast_datetime("now"):
+            offset = dt.utcoffset()
+        else:
+            offset = None
+
+        assert offset == timedelta(0)
+
+    @pytest.mark.usefixtures("tokyo")
+    def test_honors_local_tz(self):
+        if dt := cast_datetime("now", try_local_tz=True):
+            offset = dt.utcoffset()
+        else:
+            offset = None
+
+        assert offset == timedelta(hours=9)
+
+    def test_rejects_positional_flags(self):
+        with pytest.raises(TypeError):
+            cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="owned by the settable date timezone work: with try_local_tz, named "
+        "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
+    )
+    @pytest.mark.usefixtures("tokyo")
+    def test_relative_offsets_share_the_named_day_zone(self):
+        named = cast_datetime("now", try_local_tz=True)
+        offset = cast_datetime("+1 seconds", try_local_tz=True)
+        assert named is not None
+        assert offset is not None
+        assert offset.utcoffset() == named.utcoffset()
+
 
 class TestResolveCastType:
     def test_unknown_name_warns_once_and_passes(self, caplog):
@@ -394,11 +459,6 @@ SORT_KEY_WARNINGS = [
     pytest.param("bogus", 1, id="unknown"),
 ]
 
-ANY2DICT_LISTS = [
-    pytest.param([{"a": 1}, None, {"b": 0}], None, None, id="list-skips-null"),
-    pytest.param('[{"a": 1}, null, {"b": 0}]', "json", None, id="json-array"),
-    pytest.param('{"x": [{"a": 1}, {"b": 0}]}', "json", "x", id="json-path"),
-]
 
 INVALID_CAST_KEYS = [
     pytest.param("abc", "abc", id="str"),
@@ -467,55 +527,7 @@ class TestFromdict:
             fromdict(_Sorted, dir="up")
 
 
-class TestTryLocalTz:
-    @pytest.mark.usefixtures("tokyo")
-    def test_defaults_to_utc(self):
-        if dt := cast_datetime("now"):
-            offset = dt.utcoffset()
-        else:
-            offset = None
-
-        assert offset == timedelta(0)
-
-    @pytest.mark.usefixtures("tokyo")
-    def test_honors_local_tz(self):
-        if dt := cast_datetime("now", try_local_tz=True):
-            offset = dt.utcoffset()
-        else:
-            offset = None
-
-        assert offset == timedelta(hours=9)
-
-    def test_keyword_only(self):
-        with pytest.raises(TypeError):
-            cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="owned by the settable date timezone work: with try_local_tz, named "
-        "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
-    )
-    @pytest.mark.usefixtures("tokyo")
-    def test_relative_offsets_share_the_named_day_zone(self):
-        named = cast_datetime("now", try_local_tz=True)
-        offset = cast_datetime("+1 seconds", try_local_tz=True)
-        assert named is not None
-        assert offset is not None
-        assert offset.utcoffset() == named.utcoffset()
-
-
-class NamelessZone(tzinfo):
-    def tzname(self, dt: datetime | None) -> None:
-        return None
-
-    def utcoffset(self, dt: datetime | None) -> timedelta:
-        return timedelta(0)
-
-    def dst(self, dt: datetime | None) -> timedelta:
-        return timedelta(0)
-
-
-class TestDates:
+class TestParseDateString:
     def test_parsed_date_cache_is_bounded(self):
         _parse_date_cached.cache_clear()
 
@@ -523,27 +535,6 @@ class TestDates:
             parse_date_string(f"2015-02-01T00:00:00.{second:06d}+00:00")
 
         assert _parse_date_cached.cache_info().currsize == config.parsed_date_cache_size
-
-    def test_resolve_aware_datetime_keeps_a_nameless_zone(self):
-        zone = NamelessZone()
-        result = resolve_aware_datetime(
-            datetime(2020, 1, 1, tzinfo=zone), try_local_tz=False
-        )
-        assert isinstance(result, datetime)
-        assert result.tzinfo is zone
-
-    def test_utime_honors_aware_offset(self):
-        """
-        Convert aware ``+03:00`` times to the represented instant.
-
-        Do not reinterpret the same wall-clock time as UTC.
-        """
-        tz = timezone(timedelta(hours=3))
-        aware = datetime(2020, 6, 15, 9, 0, 0, tzinfo=tz)
-        tt = date_to_tt(aware)
-
-        result = tt_to_datedict(tt, aware.date())
-        assert result["utime"] == int(aware.timestamp())
 
     def test_ambiguous_cst_resolves_to_us_central(self):
         """
@@ -572,6 +563,42 @@ class TestDates:
 
         parsed = parse_date_string("1 Feb 2015 12:00:00 JST")
         assert parsed.utcoffset() == timedelta(hours=9)
+
+
+class NamelessZone(tzinfo):
+    def tzname(self, dt: datetime | None) -> None:
+        return None
+
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+
+class TestResolveAwareDatetime:
+    def test_keeps_a_nameless_zone(self):
+        zone = NamelessZone()
+        result = resolve_aware_datetime(
+            datetime(2020, 1, 1, tzinfo=zone), try_local_tz=False
+        )
+        assert isinstance(result, datetime)
+        assert result.tzinfo is zone
+
+
+class TestTtToDatedict:
+    def test_utime_honors_aware_offset(self):
+        """
+        Convert aware ``+03:00`` times to the represented instant.
+
+        Do not reinterpret the same wall-clock time as UTC.
+        """
+        tz = timezone(timedelta(hours=3))
+        aware = datetime(2020, 6, 15, 9, 0, 0, tzinfo=tz)
+        tt = date_to_tt(aware)
+
+        result = tt_to_datedict(tt, aware.date())
+        assert result["utime"] == int(aware.timestamp())
 
 
 DOTDICT_DELETES = [
@@ -639,7 +666,6 @@ DOTDICT_CONTAINS = [
 ]
 
 MATCH_KEYS = [
-    pytest.param(dict, "TITLE", "Title", id="plain-dict"),
     pytest.param(DotDict, "TITLE", "Title", id="dotdict"),
     pytest.param(dict, "Title", "Title", id="exact"),
     pytest.param(dict, "author", None, id="missing"),
@@ -697,6 +723,13 @@ class TestDotDict:
         }
 
 
+ANY2DICT_LISTS = [
+    pytest.param([{"a": 1}, None, {"b": 0}], None, None, id="list-skips-null"),
+    pytest.param('[{"a": 1}, null, {"b": 0}]', "json", None, id="json-array"),
+    pytest.param('{"x": [{"a": 1}, {"b": 0}]}', "json", "x", id="json-path"),
+]
+
+
 class TestParsers:
     def test_get_skip_field_only_follows_presence_not_absent_text(self):
         """A truthy value is not skipped even when it reads like "no value"."""
@@ -742,16 +775,6 @@ class TestParsers:
         result = list(any2dict(DotDict({"a": {"b": 1}})))
         assert result == [{"a": {"b": 1}}]
         assert type(result[0]) is dict
-
-    def test_xpathfetchpage_strips_xhtml_namespace_from_nested_keys(self):
-        conf = XpathFetchPageConf(
-            {"url": get_path("users.jyu.fi.html"), "xpath": "/html/body/p/a"}
-        )
-
-        assert next(xpathfetchpage(conf=conf)) == {
-            "href": "http://www.w3.org/",
-            "img": {"src": "http://www.w3.org/Icons/w3c_home", "alt": "W3C"},
-        }
 
     def test_xml_parser_does_not_resolve_entities(self):
         """
@@ -940,48 +963,167 @@ class TestGraphIndex:
         assert len(calls) == 1
         assert index == GraphIndex(["a", "b"], [edge], outputs)
 
-    def test_workflow_index_orders_and_indexes(self) -> None:
-        a = ModuleNode(id="a", name="m")
-        b = ModuleNode(id="b", name="m")
-        c = ModuleNode(id="c", name="m")
-        edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
-        outputs = {"default": Endpoint("b", "out"), "extra": Endpoint("c", "out")}
-        flow = Workflow(
-            nodes=[a, b, c], outputs=outputs, inputs={}, edges=(edge,), resources=()
-        )
-        index = flow.index
-
-        assert set(index.order) == {"a", "b", "c"}
-        assert index.order.index("a") < index.order.index("b")
-        assert set(index.roots) == {"a", "c"}
-        assert set(index.leaves) == {"b", "c"}
-        assert index.upstream["b"] == frozenset({"a"})
-        assert index.downstream["a"] == frozenset({"b"})
-        assert index.incoming["b"][0].source == "a"
-        assert index.outgoing["a"][0].target == "b"
-        assert set(index.outputs) == {"default", "extra"}
-        assert index.required == {"default": ("a", "b"), "extra": ("c",)}
-
-    def test_cycle_names_only_the_nodes_on_the_cycle(self):
-        src = ModuleNode(id="src", name="fetch")
-        a = ModuleNode(id="a", name="sort")
-        b = ModuleNode(id="b", name="sort")
-        after = ModuleNode(id="after", name="sort")
+    def test_only_a_default_port_edge_closes_a_node_to_a_seed(self) -> None:
         edges = (
-            StreamEdge(Endpoint("src", "out"), Endpoint("a", "in")),
-            StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("a", "in:1")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("after", "in")),
+            StreamEdge(Endpoint("a", "out"), Endpoint("named", "in:count")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("positional", "in:1")),
+            StreamEdge(Endpoint("c", "out"), Endpoint("default", "in")),
         )
-        flow = Workflow(
-            nodes=[src, a, b, after],
-            edges=edges,
-            outputs={"default": Endpoint("after", "out")},
-            inputs={},
-            resources=(),
-            version="2",
+        ids = ["a", "b", "c", "named", "positional", "default"]
+        nodes = [ModuleNode(id=node_id, name="hash") for node_id in ids]
+        index = build_workflow(nodes, edges=edges).index
+
+        assert [node_id for node_id in ids if index.is_open(node_id)] == ids[:-1]
+
+
+_INVALID: list[tuple[Callable[..., object], object]] = [
+    (require_str, 1),
+    (require_strlike, 1),
+    (require_finite, float("nan")),
+    (require_mapping, "abc"),
+    (require_sequence, "abc"),
+]
+
+
+class TestRequireHelpers:
+    @pytest.mark.parametrize(("require", "value"), _INVALID)
+    def test_document_error_is_the_default(self, require, value):
+        with pytest.raises(InvalidPipelineError, match="field"):
+            require(value, "field")
+
+    @pytest.mark.parametrize(("require", "value"), [*_INVALID, (require_binding, 1)])
+    def test_caller_can_pick_the_error(self, require, value):
+        with pytest.raises(ValueError, match="field"):
+            require(value, "field", error=ValueError)
+
+
+class TestRequireFromForm:
+    def test_a_lone_class_is_checked_by_instance(self):
+        with pytest.raises(InvalidPipelineError, match="must be of type int, not str"):
+            require_from_form(int)("1")
+
+    def test_a_union_passes_any_class_member(self):
+        assert require_from_form(int | str)("a") == "a"
+
+    def test_a_literal_passes_one_of_its_values(self):
+        assert require_from_form(Literal["a", "b"])("b") == "b"
+
+    def test_a_literal_value_must_match_by_type(self):
+        with pytest.raises(InvalidPipelineError, match="Expected one of 1"):
+            require_from_form(Literal[1])(True)
+
+    def test_a_mixed_union_passes_a_literal_value(self):
+        assert require_from_form(int | Literal["auto"])("auto") == "auto"
+
+    def test_a_mixed_union_lists_its_literal_values(self):
+        with pytest.raises(InvalidPipelineError, match="'auto', not str"):
+            require_from_form(int | Literal["auto"], "limit")("all")
+
+    def test_an_unsupported_form_raises_when_built(self):
+        with pytest.raises(TypeError, match="not a class, TypedDict, or Literal"):
+            require_from_form(list[str])
+
+    def test_every_unsupported_form_is_named(self):
+        with pytest.raises(TypeError, match="are not classes, TypedDicts, or Literals"):
+            require_from_form(list[str] | dict[str, int])
+
+
+class TestResolveEnum:
+    @pytest.mark.parametrize("value", [None, "bogus"])
+    def test_resolve_enum_defaults_to_the_document_error(self, value):
+        with pytest.raises(InvalidPipelineError, match="WriteMode"):
+            resolve_enum(WriteMode, value)
+
+    def test_resolve_enum_lists_the_accepted_values(self):
+        with pytest.raises(ValueError, match="'bogus'") as excinfo:
+            resolve_enum(Executor, "bogus", error=ValueError)
+
+        assert all(name in str(excinfo.value) for name in Executor)
+
+
+class TestNormalizeStrs:
+    def test_empty_key_rejected(self):
+        with pytest.raises(InvalidPipelineError, match="non-empty"):
+            normalize_strs(["id", ""])
+
+    def test_duplicate_keys_rejected(self):
+        with pytest.raises(InvalidPipelineError, match="duplicate"):
+            normalize_strs(["id", "id"])
+
+    @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
+    def test_non_string_keys_rejected(self, value):
+        with pytest.raises(InvalidPipelineError, match="non-empty strings"):
+            normalize_strs(value)
+
+    def test_non_iterable_rejected(self):
+        with pytest.raises(InvalidPipelineError, match="string or iterable"):
+            normalize_strs(42)  # pyright: ignore[reportArgumentType]
+
+
+def _runtime_record() -> type:
+    # This module postpones annotations, so build a record whose ClassVar is an
+    # evaluated annotation rather than a string.
+    tag = ("tag", ClassVar[str], dataclass_field(default="point"))
+    return make_dataclass(
+        "_RuntimeRecord", [tag, ("x", int, dataclass_field(default=0))]
+    )
+
+
+class TestFieldNames:
+    def test_field_names_includes_classvar_for_attrs_and_dataclass(self):
+        assert "family" in field_names(EdgeBase)
+        assert "family" in field_names(WriteNode)
+        assert field_names(_runtime_record()) == frozenset({"tag", "x"})
+        assert "family" not in field_names(Endpoint)
+
+
+class Partial(TypedDict, total=False):
+    kept: Required[BasicValue]
+    loose: Sequence[BasicValue]
+
+
+class Whole(TypedDict):
+    plain: BasicValue
+    dropped: NotRequired[BasicValue]
+    qualified: typing.NotRequired[Sequence[BasicValue]]
+
+
+class Inherited(Partial):
+    added: BasicValue
+
+
+class TestTypedDictKeys:
+    def test_qualifiers_found_without_resolving_annotations(self):
+        assert typed_dict_keys(Partial) == (frozenset({"kept"}), frozenset({"loose"}))
+        assert typed_dict_keys(Whole) == (
+            frozenset({"plain"}),
+            frozenset({"dropped", "qualified"}),
         )
-        assert flow.index.cyclic == ("a", "b")
+
+    def test_rejects_a_plain_class(self):
+        with pytest.raises(TypeError, match="is not a TypedDict"):
+            typed_dict_keys(dict)
+
+    def test_inherited_keys_keep_each_class_totality(self):
+        assert typed_dict_keys(Inherited) == (
+            frozenset({"kept", "added"}),
+            frozenset({"loose"}),
+        )
+
+    def test_shipped_typed_dict_qualifiers_are_honored(self):
+        assert typed_dict_keys(PipeModule)[0] == {"id", "type", "conf"}
+        assert typed_dict_keys(Embed) == (
+            frozenset({"conf", "name"}),
+            frozenset({"id"}),
+        )
+
+    def test_required_qualifier_is_enforced(self):
+        require = require_from_typed_dict(PipeModule)
+
+        with pytest.raises(
+            InvalidPipelineError, match=r"missing PipeModule key\(s\): \['conf'\]"
+        ):
+            require({"id": "a", "type": "fetch"})
 
 
 class TestLogging:

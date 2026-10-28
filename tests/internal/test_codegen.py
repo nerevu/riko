@@ -7,23 +7,55 @@ import ast
 import dataclasses
 import importlib.util
 from importlib import import_module
+from importlib.resources import files
 from keyword import iskeyword
+from types import BuiltinFunctionType, FunctionType
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from riko.base._exceptions import InvalidPipelineError
+import riko
+import riko.bado
+import riko.base.exceptions
+import riko.definitions._workflow_definition
+import riko.ext
+import riko.ext.codegen
+import riko.ext.modules
+import riko.ext.targets
+import riko.ext.workflows
+import riko.modules
+import riko.modules._names
+import riko.runtime._compile
+import riko.runtime._export
+import riko.runtime._resolver
+import riko.runtime._workflow_pipes
+import riko.runtime._workflow_resolver
+import riko.runtime._workflow_stores
+import riko.types
+from riko.base._api_surface import (
+    BADO,
+    COMPILE,
+    EXPORT,
+    EXT_CODEGEN,
+    EXT_MODULES,
+    EXT_TARGETS,
+    EXT_WORKFLOWS,
+    EXTENSION,
+    MODULES,
+    PRIVATE_RESOLUTION,
+    ROOT_EXCEPTIONS,
+    STABLE,
+    TYPES,
+)
 from riko.base._paths import PACKAGE_DIR
 from riko.base._strutils import pythonise
 from riko.cli._gen_config import objconf_structure, render
 from riko.definitions._context import Context
-from riko.definitions._nodes import ModuleNode, WriteNode
+from riko.definitions._nodes import ModuleNode
 from riko.definitions._workflow_definition import Workflow, normalize_workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
-    NameEntry,
-    enum_member_name,
     gen_catalog_entries,
     generate_module_ids,
     generate_module_names,
@@ -43,15 +75,10 @@ from riko.types.modules import (
     SortRawRule,
 )
 from tests import TESTS_DIR, async_test
-from tests._workflows import (
-    EXAMPLES_DIR,
-    SPLIT_PENDING,
-    gen_fixture_paths,
-    run_document,
-    run_workflow,
-)
+from tests._workflows import EXAMPLES_DIR, SPLIT_PENDING, run_document, run_workflow
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
     from types import ModuleType
 
@@ -66,18 +93,6 @@ RENAME_CONF = RenameRawConf(
         )
     }
 )
-
-
-def _load(source: str, name: str, directory: Path) -> ModuleType:
-    """Imports generated ``source`` as a module named ``name`` under a directory."""
-    path = directory / f"{name}.py"
-    path.write_text(source)
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _build(flow: Workflow, name: str, directory: Path, **kwargs) -> ModuleType:
@@ -133,6 +148,15 @@ def _failure(call) -> tuple[str, str]:
         call()
 
     return type(info.value).__name__, str(info.value)
+
+
+FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
+
+
+def gen_fixture_paths() -> Iterator[Path]:
+    """Finds every committed ``pipe_*.json`` workflow document, sorted per directory."""
+    for directory in FIXTURE_DIRS:
+        yield from sorted(directory.glob("pipe_*.json"))
 
 
 class TestWorkflowModule:
@@ -280,10 +304,16 @@ SORT_CONF = SortRawConf(
 )
 
 
-def _loop_workflow() -> Workflow:
-    """Parses the committed loop fixture whose embed carries a typed config."""
-    data = (TESTS_DIR / "workflows" / "pipe_loop_assign.json").read_text()
-    return Workflow.parse(data)
+def _load(source: str, name: str, directory: Path) -> ModuleType:
+    """Imports generated ``source`` as a module named ``name`` under a directory."""
+    path = directory / f"{name}.py"
+    path.write_text(source)
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class TestCompileWorkflow:
@@ -326,31 +356,6 @@ class TestCompileWorkflow:
         ast.parse(source)
         module = _load(source, "pipe_parsed", tmp_path)
         assert module.flow.outputs["default"] == Endpoint("rename-1", "out")
-
-    def test_loop_embed_is_rendered_as_a_node_field(self):
-        """A loop node's embedded module is rebuilt from the typed ``Embed``."""
-        source = compile_workflow(_loop_workflow(), "pipe_x")
-        assert "embed=Embed(" in source
-        assert "LoopConf" not in source
-
-    def test_write_node_is_refused(self):
-        """A workflow with a node family that has no generated form is refused."""
-        node = WriteNode(id="write-1", name="write", backend="file", dest="out.csv")
-        flow = Workflow(nodes=[node], outputs={"default": Endpoint(node.id, "out")})
-
-        with pytest.raises(InvalidPipelineError, match="write node code generation"):
-            compile_workflow(flow, "pipe_written")
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "a public import path for generated workflow modules is not yet implemented"
-        ),
-    )
-    def test_generated_source_imports_no_private_module(self):
-        """A generated workflow module imports only supported riko paths."""
-        flow = Pipeline.from_module("itembuilder").workflow
-        assert "from riko.runtime._" not in compile_workflow(flow, "pipe_public")
 
 
 class TestPythonise:
@@ -426,33 +431,7 @@ class TestModuleCategory:
         assert list_modules(category="sink") == []
 
 
-class TestEnumMemberName:
-    @pytest.mark.parametrize(
-        ("name", "override", "expected"),
-        [
-            ("fetch", None, "FETCH"),
-            ("fetch-page", None, "FETCH_PAGE"),
-            ("microsoft.autopilot.ensure", None, "MICROSOFT_AUTOPILOT_ENSURE"),
-            ("a--b..c", None, "A_B_C"),
-            ("3m", None, "_3M"),
-            ("fetch", "grab", "GRAB"),
-        ],
-    )
-    def test_enum_member_name(self, name, override, expected):
-        assert enum_member_name(name, override=override) == expected
-
-
 _NAMES = PACKAGE_DIR / "modules" / "_names.py"
-MEMBER_COLLISIONS = (
-    pytest.param("my_mod", "my-mod", id="builtin"),
-    pytest.param("example.my_mod", "example.my-mod", id="provider"),
-)
-
-
-def _exec_generated_names(*entries: NameEntry) -> dict:
-    namespace: dict = {}
-    exec(generate_module_names(*entries), namespace)
-    return namespace
 
 
 class TestGenerateModuleNames:
@@ -463,50 +442,6 @@ class TestGenerateModuleNames:
 
         for actual, expected in zip(name_lines, generated_lines, strict=True):
             assert actual == expected
-
-    def test_generation_is_order_independent(self):
-        entries = list(gen_catalog_entries())
-        assert generate_module_names(*entries) == generate_module_names(
-            *reversed(entries)
-        )
-
-    def test_enum_name_override_resolves_collision(self):
-        entries = [
-            NameEntry(name="my_mod", category="transform"),
-            NameEntry(name="my-mod", category="transform", enum_name="my_mod_alt"),
-        ]
-        transforms = _exec_generated_names(*entries)["Transforms"]
-
-        assert transforms.MY_MOD_ALT.value == "my-mod"
-        assert transforms.MY_MOD.value == "my_mod"
-
-    def test_provider_namespace_flattens(self):
-        builtin = NameEntry(name="fetch", category="source")
-        entry = NameEntry(name="microsoft.autopilot.ensure", category="transform")
-        namespace = _exec_generated_names(builtin, entry)
-        provider = namespace["Microsoft"]
-        modules = namespace["Modules"]
-
-        assert entry.provider == "microsoft"
-        assert entry.class_name == "Microsoft"
-        assert entry.member == "AUTOPILOT_ENSURE"
-        assert entry.alias == "MICROSOFT_AUTOPILOT_ENSURE"
-        assert provider.AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
-        assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.AUTOPILOT_ENSURE
-        assert "AUTOPILOT_ENSURE" not in namespace["Transforms"].__members__
-
-    @pytest.mark.parametrize(("first", "second"), MEMBER_COLLISIONS)
-    def test_member_collision_fails_with_diagnostic(self, first, second):
-        entries = [
-            NameEntry(name=first, category="transform"),
-            NameEntry(name=second, category="transform"),
-        ]
-
-        with pytest.raises(ValueError, match="enum_name") as excinfo:
-            generate_module_names(*entries)
-
-        assert repr(first) in str(excinfo.value)
-        assert repr(second) in str(excinfo.value)
 
 
 _MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
@@ -640,3 +575,224 @@ class TestWorkflowProbes:
         probe = import_module(f"tests.pyworkflows.{name}")
         context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
         assert probe.pipe(context=context) == generated.pipe(context=context)
+
+
+SURFACE_MODULES = (
+    riko.bado,
+    riko.runtime._export,
+    riko.runtime._compile,
+    riko.definitions._workflow_definition,
+    riko.ext,
+    riko.modules,
+    riko.base.exceptions,
+    riko,
+    riko.types,
+)
+
+
+PARTIAL_SURFACES = (
+    (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
+    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
+)
+
+
+CONF_TYPES = riko.types.modules.__all__
+
+
+CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
+
+
+EQUAL_SURFACES = (
+    (riko.bado, BADO),
+    (riko.runtime._export, EXPORT),
+    (riko.runtime._compile, CODEGEN),
+    (
+        riko.definitions._workflow_definition,
+        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
+    ),
+    (riko.ext, EXTENSION),
+    (riko.ext.codegen, EXT_CODEGEN),
+    (riko.ext.modules, EXT_MODULES),
+    (riko.ext.targets, EXT_TARGETS),
+    (riko.ext.workflows, EXT_WORKFLOWS),
+    (riko, STABLE),
+    (riko.types, TYPES),
+)
+
+
+PUBLIC_EXTENSION_MODULES = (
+    "riko.ext.codegen",
+    "riko.ext.modules",
+    "riko.ext.targets",
+    "riko.ext.workflows",
+)
+
+
+REMOVED_PUBLIC_PATHS = tuple(
+    f"riko.ext.{name}" for name in ("config", "decorators", "protocols", "registry")
+)
+
+
+RESOLUTION_MODULES = (
+    riko.runtime._resolver,
+    riko.runtime._workflow_pipes,
+    riko.runtime._workflow_stores,
+    riko.runtime._workflow_resolver,
+)
+
+
+def id_func(val):
+    if hasattr(val, "__name__"):
+        return val.__name__
+    else:
+        return "vs-set"
+
+
+def _gen_subclasses(cls):
+    for subclass in cls.__subclasses__():
+        yield subclass
+        yield from _gen_subclasses(subclass)
+
+
+class TestImportSurface:
+    """
+    Check the public API boundary.
+
+    ``riko`` define the stable application API. ``riko.ext`` defines the
+    extension-author API. ``riko.bado`` is a supported async-runtime namespace; the
+    BADO subset is promoted into the stable application surface. These tests exercise
+    public imports rather than implementation details.
+    """
+
+    @pytest.mark.smoke
+    def test_package_ships_py_typed(self):
+        assert files("riko").joinpath("py.typed").is_file()
+
+    @pytest.mark.smoke
+    @pytest.mark.parametrize(("module", "surface"), EQUAL_SURFACES, ids=id_func)
+    def test_equal_surface_matches_expected(self, module, surface):
+        assert sorted(set(module.__all__)) == sorted(surface)
+
+    @pytest.mark.parametrize(("names", "surface"), PARTIAL_SURFACES, ids=id_func)
+    def test_partial_surface_matches_expected(self, names, surface):
+        assert surface.issubset(names)
+        assert not any(name.startswith("_") for name in names)
+
+    def test_normal_module_confs_are_public(self):
+        assert "FetchConf" in CONF_TYPES
+        assert "RegexConf" in CONF_TYPES
+        assert "ItemBuilderConf" in CONF_TYPES
+
+    def test_raw_module_confs_are_private(self):
+        leaked = sorted(
+            name for name in CONF_TYPES if name.endswith(("RawConf", "RawRule"))
+        )
+        assert not leaked, f"Raw module confs leaked into riko.types.modules: {leaked}"
+
+    def test_module_metadas_are_same(self):
+        assert riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
+
+    @pytest.mark.parametrize(
+        ("module", "surface"), [(riko, STABLE), (riko.ext, EXTENSION)]
+    )
+    def test_stable_names_importable(self, module, surface):
+        """Every declared stable names actually resolves on ``riko``."""
+        assert all(hasattr(module, name) for name in surface)
+
+    def test_bado_reexports_are_same_object(self):
+        mismatches = sorted(
+            name
+            for name in riko.bado.__all__
+            if getattr(riko, name) is not getattr(riko.bado, name)
+        )
+        assert not mismatches, f"Bado reexports differ from riko: {mismatches}"
+
+    def test_exception_reexports_are_same_object(self):
+        mismatches = sorted(
+            name
+            for name in ROOT_EXCEPTIONS
+            if getattr(riko, name) is not getattr(riko.base.exceptions, name)
+        )
+        assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
+
+    def test_exceptions_naming_the_public_module_are_importable_from_it(self):
+        public = riko.base.exceptions
+        roots = (public.RikoError, public.RikoWarning)
+        unexported = sorted(
+            cls.__name__
+            for root in roots
+            for cls in (root, *_gen_subclasses(root))
+            if cls.__module__ == public.__name__ and cls.__name__ not in public.__all__
+        )
+        assert not unexported, f"Not importable from {public.__name__}: {unexported}"
+
+    def test_private_resolution_names_exist(self):
+        """Every declared private resolution name is defined by a resolution module."""
+        missing = sorted(
+            name
+            for name in PRIVATE_RESOLUTION
+            if not any(hasattr(module, name) for module in RESOLUTION_MODULES)
+        )
+        assert not missing, f"Declared resolution internals do not exist: {missing}"
+
+    @pytest.mark.parametrize(
+        "module",
+        [*SURFACE_MODULES, *map(import_module, PUBLIC_EXTENSION_MODULES)],
+        ids=lambda module: module.__name__,
+    )
+    def test_no_accidental_internal_exports(self, module):
+        """Private resolution internals are neither exported nor reachable publicly."""
+        exported = PRIVATE_RESOLUTION.intersection(getattr(module, "__all__", ()))
+        reachable = {name for name in PRIVATE_RESOLUTION if hasattr(module, name)}
+        leaked = sorted(exported | reachable)
+        assert not leaked, f"Private resolution internals exposed: {leaked}"
+
+    @pytest.mark.parametrize("module", RESOLUTION_MODULES, ids=lambda m: m.__name__)
+    def test_resolution_internals_have_no_public_path(self, module):
+        """Resolution internals live only behind ``_``-prefixed modules."""
+        package, _, private_name = module.__name__.rpartition(".")
+        public_path = f"{package}.{private_name.lstrip('_')}"
+        assert private_name.startswith("_")
+
+        with pytest.raises(ModuleNotFoundError):
+            import_module(public_path)
+
+    def test_no_leaked_public_functions(self):
+        """
+        No bare function leaks into the top-level namespace outside ``__all__``.
+
+        Scoped to *functions* on purpose: classes and constants (e.g. ``Context``,
+        ``ENCODING``, ``objectify``) are intentionally importable while absent from
+        ``__all__``, so this guards callables rather than the whole attribute surface
+        (that surface is pinned by ``test_equal_surface_matches_expected``).
+        """
+        leaked = sorted(
+            name
+            for name, val in vars(riko).items()
+            if not (name.startswith("_") or name in STABLE)
+            and isinstance(val, (FunctionType, BuiltinFunctionType))
+        )
+        assert not leaked, f"Top-level functions leaked outside STABLE: {leaked}"
+
+    @pytest.mark.parametrize("path", REMOVED_PUBLIC_PATHS)
+    def test_removed_public_paths_are_gone(self, path):
+        with pytest.raises(ModuleNotFoundError):
+            import_module(path)
+
+    def test_modules_package_drops_decorators(self):
+        names = ("operator", "processor", "splitter")
+        assert not any(hasattr(riko.modules, name) for name in names)
+
+    def test_stable_and_extension_do_not_intersect(self):
+        common = STABLE & EXTENSION
+        assert not common, f"Stable and extension surfaces intersect: {common}"
+
+    def test_all_has_no_duplicates(self):
+        duplicates = {
+            module.__name__: sorted(
+                {name for name in module.__all__ if module.__all__.count(name) > 1}
+            )
+            for module in SURFACE_MODULES
+            if len(module.__all__) != len(set(module.__all__))
+        }
+        assert not duplicates, f"Duplicate __all__ entries: {duplicates}"

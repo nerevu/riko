@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides public tests for building, running, and writing a ``Pipeline``."""
+"""Provides public tests for building and running a ``Pipeline``."""
 
 from __future__ import annotations
 
@@ -8,11 +8,12 @@ import os
 import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
+from functools import partial
 from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter, sleep
-from typing import TYPE_CHECKING, Any, NoReturn, assert_type, cast, get_args, get_origin
+from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
 
 import pytest
 
@@ -27,23 +28,22 @@ from riko.base._exceptions import (
 from riko.base._guards import is_mapping
 from riko.base._paths import get_path
 from riko.definitions._context import Context, ExecutionMode
-from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
+from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
 from riko.definitions._workflow_definition import Workflow
 from riko.ext import ModuleDefinition, normalize_module_name, processor
 from riko.modules._names import Transforms
-from riko.runtime._module_registry import register_module, reset_module_registry
 from riko.runtime._pipeline import Pipeline
-from riko.types._enums import Executor, IdentityMode, ModuleName
+from riko.types._enums import Executor, ModuleName
 from riko.types._options import CallOptions
+from riko.types._pipedef import DagModule, PipeDag
 from riko.types._streams import is_stateful_item
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
     ConfArg,
     Embed,
-    ItemBuilderConf,
-    ParsedParam,
+    FetchRawConf,
     SortConf,
     SortConfRule,
     StrconcatConf,
@@ -52,28 +52,58 @@ from riko.types.modules import (
     TokenizerRawConf,
 )
 from tests import aresolve, async_test, skipif_issync
-from tests._execution import agen_source, awaitable_source, module_workflow, tag_source
-from tests._lifecycle import LIFECYCLE_SRC, boom, fanned_in_fetches, tokenized_letters
+from tests._execution import (
+    RecordingSink,
+    agen_source,
+    awaitable_source,
+    module_workflow,
+    registered_modules,
+    tag_source,
+)
+from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
+from tests._resources import (
+    CREDENTIAL,
+    Connection,
+    async_cm_factory,
+    async_gen_factory,
+    check_credential_and_lazy,
+    sync_cm_factory,
+    sync_gen_factory,
+)
+from tests._workflows import SPLIT_METHOD_PENDING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
+    from collections.abc import Callable, Iterator
 
     from riko.types._streams import Item, Items
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
+LIFECYCLE_SRC = [{"content": "x"}, {"content": "y"}]
+
+
+def boom():
+    raise RuntimeError("boom")
+    yield  # pragma: no cover
+
+
+def _fetch_node(index: int, url: str) -> DagModule:
+    """Builds one fetch module entry for the fan-in ``PipeDag``."""
+    conf = FetchRawConf({"url": ConfArg(type="url", value=url)})
+    return DagModule(id=f"f{index}", type="fetch", conf=conf)
+
+
+def fanned_in_fetches(*urls: str) -> Pipeline:
+    """Builds a pipeline whose single union node merges one fetch per url."""
+    fetches = [_fetch_node(index, url) for index, url in enumerate(urls)]
+    ports = ["in" if index == 0 else f"in:{index}" for index in range(len(urls))]
+    wires = [[f"f{index}", "u", port] for index, port in enumerate(ports)]
+    union = DagModule(id="u", type="union")
+    dag = PipeDag(modules=[*fetches, union], wires=wires)
+    return Pipeline(Workflow.parse(dag))
+
+
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
-VALUE = "once is 1x,twice is 2x,thrice is 3x"
-BUILDER_CONF = ItemBuilderConf(
-    {"attrs": ParsedParam({"key": "content", "value": VALUE})}
-)
-
-EXPECTED = [
-    {"content": "once is 1x"},
-    {"content": "twice is 2x"},
-    {"content": "thrice is 3x"},
-]
-
-ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
+_FEED = get_path("feed.xml")
 
 FANIN_PENDING = pytest.mark.xfail(
     strict=True,
@@ -85,9 +115,6 @@ FANIN_PENDING = pytest.mark.xfail(
 PUBSUB_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.subscribe()/publish() are not available yet"
 )
-SPLIT_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.split() is not available yet"
-)
 UNION_PENDING = pytest.mark.xfail(
     raises=AttributeError,
     strict=True,
@@ -96,12 +123,6 @@ UNION_PENDING = pytest.mark.xfail(
 PREDICATE_PENDING = pytest.mark.xfail(
     strict=True, reason="gating a node on a per-item predicate is not available yet"
 )
-
-
-def _tokenized() -> Pipeline:
-    """Builds a three-item token stream."""
-    source = Pipeline.from_module("itembuilder", conf=BUILDER_CONF)
-    return source.tokenizer(options={"emit": True})
 
 
 def _by_content(items):
@@ -261,13 +282,6 @@ class TestPipelineChaining:
         pipeline = Pipeline.from_module("sort").pipe("sort")
         assert sorted(pipeline.workflow.nodes) == ["sort-1", "sort-2"]
 
-    @pytest.mark.parametrize(
-        "name", ["_hidden", "keys", "values", "items", "get", "close", "sortt"]
-    )
-    def test_getattr_rejects_non_builtin_names(self, name):
-        with pytest.raises(AttributeError):
-            getattr(Pipeline.from_module("fetch"), name)
-
     def test_or_composes_associatively(self):
         sort, reverse = Pipeline.from_module("sort"), Pipeline.from_module("reverse")
         left, right = (sort | reverse) | sort, sort | (reverse | sort)
@@ -289,6 +303,17 @@ class TestPipelineChaining:
         assert pipeline.context is not None
         assert dict(pipeline.context.resources) == {"db": db}
         assert list(pipeline([{"x": 1}])) == [{"x": 1, "db": 7}]
+
+    def test_a_module_name_after_a_stream_asks_to_compose_first(self):
+        with pytest.raises(TypeError, match="compose the pipeline first"):
+            _ = ITEMS | Pipeline.from_module("sort") | "count"  # pyright: ignore[reportOperatorIssue]
+
+    @pytest.mark.parametrize(
+        "name", ["_hidden", "keys", "values", "items", "get", "close", "sortt"]
+    )
+    def test_getattr_rejects_non_builtin_names(self, name):
+        with pytest.raises(AttributeError):
+            getattr(Pipeline.from_module("fetch"), name)
 
     @pytest.mark.parametrize(
         ("combine", "error", "match"),
@@ -337,19 +362,17 @@ class TestPipelineChaining:
         pipeline = Pipeline() | doubled  # pyright: ignore[reportOperatorIssue]
         assert list(pipeline([{"x": 3}])) == [{"x": 3, "doubled": 6}]
 
-    def test_a_module_name_after_a_stream_asks_to_compose_first(self):
-        with pytest.raises(TypeError, match="compose the pipeline first"):
-            _ = ITEMS | Pipeline.from_module("sort") | "count"  # pyright: ignore[reportOperatorIssue]
-
-    def test_ror_on_a_stream_seeds_a_run(self):
-        hashed = Pipeline.from_module("hash")
-        counted = Pipeline.from_module("count")
-        assert list(hashed(SRC) | counted) == [{"count": 3}]
-
 
 class _Mod(ModuleName):
     HASH = "hash"
     TRUNCATE = "truncate"
+
+
+_TRUNCATED = Pipeline().pipe(_Mod.TRUNCATE, conf={"count": 1})
+ENUM_CHAINS = [
+    pytest.param(Pipeline() | _Mod.HASH, "hash-1", 3, id="operator"),
+    pytest.param(_TRUNCATED, "truncate-1", 1, id="method"),
+]
 
 
 class TestModuleNameEnum:
@@ -365,15 +388,10 @@ class TestModuleNameEnum:
         assert node.name == "hash"
         assert type(node.name) is str
 
-    def test_enum_through_operator(self):
-        pipeline = Pipeline() | _Mod.HASH
-        assert pipeline.workflow.nodes["hash-1"].name == "hash"
-        assert len(list(pipeline(SRC))) == 3
-
-    def test_enum_through_method(self):
-        pipeline = Pipeline().pipe(_Mod.TRUNCATE, conf={"count": 1})
-        assert pipeline.workflow.nodes["truncate-1"].name == "truncate"
-        assert len(list(pipeline(SRC))) == 1
+    @pytest.mark.parametrize(("pipeline", "node_id", "count"), ENUM_CHAINS)
+    def test_enum_through_chaining(self, pipeline, node_id, count):
+        assert pipeline.workflow.nodes[node_id].name == node_id.split("-")[0]
+        assert len(list(pipeline(SRC))) == count
 
 
 FIRST_CASES = [
@@ -400,25 +418,19 @@ class TestPipelineIteration:
         def double(source, **_):
             return ({"x": item["x"] * 2} for item in source)
 
-        reset_module_registry()
         sync_pipe = cast("SyncModuleWrapper", double)
-        register_module(ModuleDefinition(name="doubler", sync_pipe=sync_pipe))
 
-        try:
-            expected = [{"x": 2}, {"x": 4}]
-            assert (
-                list([{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")) == expected
-            )
+        with registered_modules(ModuleDefinition(name="doubler", sync_pipe=sync_pipe)):
+            pipeline = [{"x": 1}, {"x": 2}] | Pipeline.from_module("doubler")
+            assert list(pipeline) == [{"x": 2}, {"x": 4}]
             assert list(Pipeline().pipe("doubler")([{"x": 10}])) == [{"x": 20}]
-        finally:
-            reset_module_registry()
 
     @pytest.mark.parametrize(("seed", "default", "expected"), FIRST_CASES)
     def test_first_returns_the_default_on_an_empty_run(self, seed, default, expected):
         assert Pipeline().first(seed, default=default) == expected
 
     def test_first_reads_a_self_starting_pipeline_unseeded(self):
-        assert _tokenized().first(default=None) == EXPECTED[0]
+        assert tokenized(VALUE).first(default=None) == EXPECTED[0]
 
     def test_first_on_an_empty_pipeline_raises_a_lookup_error(self):
         with pytest.raises(EmptyPipelineError, match="no items") as info:
@@ -472,15 +484,12 @@ class TestAsyncPipelineIteration:
             async for item in source:
                 yield {"x": item["x"] * 2}
 
-        reset_module_registry()
         async_pipe = cast("AsyncModuleWrapper", adouble)
-        register_module(ModuleDefinition(name="adoubler", async_pipe=async_pipe))
+        definition = ModuleDefinition(name="adoubler", async_pipe=async_pipe)
 
-        try:
+        with registered_modules(definition):
             pipeline = make_seed() | Pipeline.from_module("adoubler")
             assert [item async for item in pipeline] == [{"x": 2}, {"x": 4}]
-        finally:
-            reset_module_registry()
 
     @async_test
     async def test_afirst_on_an_empty_pipeline_raises_a_lookup_error(self):
@@ -506,20 +515,12 @@ class TestAsyncPipelineIteration:
         assert consumed == []
 
 
-_PARITY_BUILDER_CONF = ItemBuilderConf(
-    {"attrs": {"key": "content", "value": "a,bb,ccc"}}
-)
 _PARITY_STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
-
-
-def _parity_tokens() -> Pipeline:
-    source = Pipeline.from_module("itembuilder", conf=_PARITY_BUILDER_CONF)
-    return source.tokenizer(options={"emit": True})
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
     """Iterate *build*'s pipeline both ways; return ``(sync_result, async_result)``."""
-    pipeline = build(_parity_tokens())
+    pipeline = build(tokenized("a,bb,ccc"))
     return list(pipeline), aresolve(pipeline)
 
 
@@ -556,11 +557,19 @@ class TestOutputParity:
         assert all("h" in item for item in sync_result if is_mapping(item))
 
 
+RERUNNABLE = [
+    pytest.param(tokenized, id="module-source"),
+    pytest.param(partial(fanned_in_fetches, _FEED), id="fan-in"),
+]
+
+
 class TestReiteration:
-    def test_module_source_replays(self):
-        pipeline = tokenized_letters()
-        assert len(list(pipeline)) == 3
-        assert len(list(pipeline)) == 3
+    @pytest.mark.parametrize("build", RERUNNABLE)
+    def test_pipeline_replays(self, build):
+        pipeline = build()
+        first = list(pipeline)
+        assert first
+        assert len(list(pipeline)) == len(first)
 
     def test_a_generator_seed_reruns_when_handed_a_fresh_seed(self):
         pipeline = Pipeline.from_module("hash")
@@ -568,17 +577,26 @@ class TestReiteration:
         assert len(list(pipeline(item for item in LIFECYCLE_SRC))) == len(LIFECYCLE_SRC)
 
     def test_chaining_after_a_run_builds_a_fresh_run(self):
-        pipeline = tokenized_letters()
+        pipeline = tokenized()
         assert len(list(pipeline)) == 3
         assert list(pipeline.count()) == [{"count": 3}]
+
+    def test_iteration_after_partial_iteration_restarts(self):
+        pipeline = tokenized()
+        stream = pipeline()
+        assert next(stream)
+        stream.close()
+        assert len(list(pipeline)) == 3
 
 
 class TestAsyncReiteration:
     @async_test
-    async def test_module_source_replays(self):
-        pipeline = tokenized_letters()
-        assert len([item async for item in pipeline]) == 3
-        assert len([item async for item in pipeline]) == 3
+    @pytest.mark.parametrize("build", RERUNNABLE)
+    async def test_pipeline_replays(self, build):
+        pipeline = build()
+        first = [item async for item in pipeline]
+        assert first
+        assert len([item async for item in pipeline]) == len(first)
 
     @async_test
     async def test_a_generator_seed_reruns_when_handed_a_fresh_seed(self):
@@ -589,7 +607,7 @@ class TestAsyncReiteration:
 
     @async_test
     async def test_iteration_after_partial_iteration_restarts(self):
-        pipeline = tokenized_letters()
+        pipeline = tokenized()
         stream = pipeline()
         assert await anext(stream) == {"content": "a"}
         await stream.aclose()
@@ -607,14 +625,10 @@ def probe_log():
         finally:
             log.append("closed")
 
-    reset_module_registry()
     sync_pipe = cast("SyncModuleWrapper", probe)
-    register_module(ModuleDefinition(name="probe", sync_pipe=sync_pipe))
 
-    try:
+    with registered_modules(ModuleDefinition(name="probe", sync_pipe=sync_pipe)):
         yield log
-    finally:
-        reset_module_registry()
 
 
 class TestClose:
@@ -629,8 +643,9 @@ class TestClose:
         stream.close()
         assert ran == []
 
-    def test_close_is_idempotent(self):
-        stream = tokenized_letters()()
+    @pytest.mark.parametrize("build", RERUNNABLE)
+    def test_close_is_idempotent(self, build):
+        stream = build()()
         stream.close()
         stream.close()
         assert list(stream) == []
@@ -653,13 +668,6 @@ class TestClose:
         assert len(consumed) < 20
         assert closed == [True]
 
-    def test_closing_one_stream_leaves_the_definition_runnable(self):
-        pipeline = tokenized_letters()
-        stream = pipeline()
-        assert next(stream)
-        stream.close()
-        assert len(list(pipeline)) == 3
-
     def test_early_close_closes_an_upstream_module(self) -> None:
         closed: list[bool] = []
 
@@ -671,17 +679,13 @@ class TestClose:
             finally:
                 closed.append(True)
 
-        reset_module_registry()
         sync_pipe = cast("SyncModuleWrapper", src)
-        register_module(ModuleDefinition(name="itersrc2", sync_pipe=sync_pipe))
 
-        try:
+        with registered_modules(ModuleDefinition(name="itersrc2", sync_pipe=sync_pipe)):
             stream = Pipeline(module_workflow("itersrc2"))()
             assert next(stream) == {"x": 1}
             stream.close()
             assert closed == [True]
-        finally:
-            reset_module_registry()
 
     def test_break_inside_open_closes_the_run_on_leaving_the_block(self, probe_log):
         with Pipeline.from_module("probe").open(SRC) as stream:
@@ -720,10 +724,6 @@ class TestClose:
         assert [item["content"] for item in rights] == ["c", "b", "a"]
 
 
-def _is_unclosed_run_warning(warning: warnings.WarningMessage) -> bool:
-    return "unclosed pipeline run" in str(warning.message)
-
-
 class TestAsyncClose:
     @async_test
     async def test_close_before_the_first_item_never_runs_the_source(self):
@@ -738,8 +738,9 @@ class TestAsyncClose:
         assert ran == []
 
     @async_test
-    async def test_close_is_idempotent(self):
-        stream = tokenized_letters()()
+    @pytest.mark.parametrize("build", RERUNNABLE)
+    async def test_close_is_idempotent(self, build):
+        stream = build()()
         await stream.aclose()
         await stream.aclose()
         assert [item async for item in stream] == []
@@ -806,23 +807,6 @@ class TestAsyncClose:
                 await checkpoint()
 
     @async_test
-    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
-        source = [{"content": str(index)} for index in range(5)]
-
-        with fail_after(5), warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-
-            async for _ in source | Pipeline.from_module("hash"):
-                break
-
-            gc.collect()
-
-            for _ in range(5):
-                await checkpoint()
-
-        assert any(map(_is_unclosed_run_warning, caught))
-
-    @async_test
     async def test_concurrent_open_runs_are_independent(self):
         pipeline = Pipeline.from_module("hash")
 
@@ -832,22 +816,6 @@ class TestAsyncClose:
         lefts, rights = zip(*pairs, strict=True)
         assert [item["content"] for item in lefts] == ["a", "b", "c"]
         assert [item["content"] for item in rights] == ["c", "b", "a"]
-
-
-class TestFailure:
-    def test_failing_source_propagates(self):
-        pipeline = boom() | Pipeline.from_module("hash")
-
-        with pytest.raises(RuntimeError, match="boom"):
-            list(pipeline)
-
-    def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
-        pipeline = tokenized_letters()
-
-        with pytest.raises(RuntimeError, match="boom"):
-            list(boom() | Pipeline.from_module("hash"))
-
-        assert len(list(pipeline)) == 3
 
 
 def _fail_item(item):
@@ -866,7 +834,21 @@ FAILING_MAPS = [
 ]
 
 
-class TestAsyncFailure:
+class TestFailure:
+    def test_failing_source_propagates(self):
+        pipeline = boom() | Pipeline.from_module("hash")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            list(pipeline)
+
+    def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
+        pipeline = tokenized()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            list(boom() | Pipeline.from_module("hash"))
+
+        assert len(list(pipeline)) == 3
+
     @pytest.mark.parametrize(("func", "concurrency"), FAILING_MAPS)
     @async_test
     async def test_a_failing_node_raises_its_own_error(self, func, concurrency):
@@ -940,125 +922,40 @@ class TestAsyncMap:
 
         assert len(caught.value.exceptions) == 2
 
+    @async_test
+    async def test_async_map_rejects_negative_limit(self):
+        with pytest.raises(ValueError, match="limit cannot be negative"):
+            await async_map(_fail, range(3), -1)
+
 
 class TestFanIn:
     @pytest.mark.smoke
     def test_fan_in_merges_every_source(self):
-        one = len(list(fanned_in_fetches(get_path("feed.xml"))))
-        both = len(list(fanned_in_fetches(get_path("feed.xml"), get_path("feed.xml"))))
+        one = len(list(fanned_in_fetches(_FEED)))
+        both = len(list(fanned_in_fetches(_FEED, _FEED)))
         assert one
         assert both == 2 * one
 
-    def test_fan_in_replays(self):
-        pipeline = fanned_in_fetches(get_path("feed.xml"))
-        assert len(list(pipeline)) == len(list(pipeline))
-
-    def test_fan_in_close_before_iteration_ends_the_run(self):
-        stream = fanned_in_fetches(get_path("feed.xml"))()
-        stream.close()
-        assert list(stream) == []
-
     @UNION_PENDING
     def test_union_merges_pipelines(self):
-        url = get_path("feed.xml")
-        fetch = Pipeline.from_module("fetch", conf={"url": url})
+        fetch = Pipeline.from_module("fetch", conf={"url": _FEED})
         merged = Pipeline.union(fetch, fetch)  # pyright: ignore[reportAttributeAccessIssue]
-        assert len(list(merged)) == len(list(fanned_in_fetches(url, url)))
+        assert len(list(merged)) == len(list(fanned_in_fetches(_FEED, _FEED)))
 
 
 class TestAsyncFanIn:
     @pytest.mark.smoke
     @async_test
     async def test_fan_in_merges_every_source(self):
-        single = fanned_in_fetches(get_path("feed.xml"))
-        doubled = fanned_in_fetches(get_path("feed.xml"), get_path("feed.xml"))
+        single = fanned_in_fetches(_FEED)
+        doubled = fanned_in_fetches(_FEED, _FEED)
         one = len([item async for item in single])
         both = len([item async for item in doubled])
         assert one
         assert both == 2 * one
 
-    @async_test
-    async def test_fan_in_replays(self):
-        pipeline = fanned_in_fetches(get_path("feed.xml"))
-        first = [item async for item in pipeline]
-        second = [item async for item in pipeline]
-        assert first
-        assert len(first) == len(second)
-
-    @async_test
-    async def test_fan_in_close_before_iteration_ends_the_run(self):
-        stream = fanned_in_fetches(get_path("feed.xml"))()
-        await stream.aclose()
-        assert [item async for item in stream] == []
-
-
-def _exit_worker(item):
-    os._exit(1)
-
-
-def _wait_or_block(item):
-    marker = Path(item["dir"], "blocked.pid")
-
-    if item["role"] == "block":
-        staged = marker.with_suffix(".tmp")
-        staged.write_text(str(os.getpid()))
-        staged.replace(marker)
-        sleep(60)
-
-    while not marker.exists():
-        sleep(0.01)
-
-    if item["role"] == "fail":
-        raise ValueError("boom")
-
-    return item
-
-
-_STOPPED_RUNS = [
-    pytest.param("pass", nullcontext(), id="early-close"),
-    pytest.param("fail", pytest.raises(ValueError, match="boom"), id="failing-sibling"),
-]
-
-
-class Recorder:
-    def __init__(self) -> None:
-        self.events: list[object] = []
-
-    def emit(self, event: object) -> None:
-        self.events.append(event)
-
 
 class TestWithExecution:
-    @pytest.mark.slow
-    @pytest.mark.timeout(60)
-    def test_a_dead_worker_process_fails_the_run(self) -> None:
-        mapped = Pipeline().map(_exit_worker)
-        pipeline = mapped.with_execution(executor="process", concurrency=2)
-
-        with pytest.raises(BrokenProcessPool):
-            list(pipeline([{"x": 1}, {"x": 2}]))
-
-    @pytest.mark.slow
-    @pytest.mark.timeout(60)
-    @pytest.mark.parametrize(("role", "expectation"), _STOPPED_RUNS)
-    def test_stopping_the_run_kills_a_busy_worker_process(
-        self, tmp_path, role, expectation
-    ) -> None:
-        mapped = Pipeline().map(_wait_or_block)
-        pipeline = mapped.with_execution(executor="process", concurrency=2)
-        items = [
-            {"dir": str(tmp_path), "role": "block"},
-            {"dir": str(tmp_path), "role": role},
-        ]
-
-        with expectation:
-            pipeline.first(items)
-
-        pid = int(Path(tmp_path, "blocked.pid").read_text())
-
-        with pytest.raises(ProcessLookupError):
-            os.kill(pid, 0)
-
     def test_defaults(self):
         pipeline = Pipeline.from_module("fetch")
         assert pipeline.settings == DEF_EXECUTION_SETTINGS
@@ -1106,7 +1003,7 @@ class TestWithExecution:
         assert pipeline.settings.concurrency == "auto"
 
     def test_omitted_arguments_keep_the_current_settings(self):
-        sink = Recorder()
+        sink = RecordingSink()
         pipeline = Pipeline.from_module("fetch").with_execution(
             executor="thread",
             concurrency=4,
@@ -1124,7 +1021,7 @@ class TestWithExecution:
             ("executor", "thread"),
             ("concurrency", 4),
             ("ordered", True),
-            ("event_sink", Recorder()),
+            ("event_sink", RecordingSink()),
             ("shutdown_timeout", 2.5),
         ],
     )
@@ -1139,20 +1036,48 @@ class TestWithExecution:
             assert reset.settings.concurrency == 8
 
     @pytest.mark.parametrize(
-        ("kwargs", "error"),
+        ("kwargs", "error", "match"),
         [
-            ({"executor": "gpu"}, ValueError),
-            ({"concurrency": 0}, ValueError),
-            ({"concurrency": "4"}, TypeError),
-            ({"concurrency": "max"}, TypeError),
-            ({"ordered": "yes"}, TypeError),
-            ({"shutdown_timeout": -1}, ValueError),
-            ({"shutdown_timeout": float("nan")}, ValueError),
+            ({"executor": "gpu"}, ValueError, "'gpu'. Expected one of auto, inline"),
+            ({"concurrency": 0}, ValueError, None),
+            ({"concurrency": "4"}, TypeError, None),
+            ({"concurrency": "max"}, TypeError, None),
+            ({"ordered": "yes"}, TypeError, None),
+            ({"shutdown_timeout": -1}, ValueError, None),
+            ({"shutdown_timeout": float("nan")}, ValueError, None),
         ],
     )
-    def test_invalid_settings_raise_at_call_time(self, kwargs, error):
-        with pytest.raises(error):
+    def test_invalid_settings_raise_at_call_time(self, kwargs, error, match):
+        with pytest.raises(error, match=match):
             Pipeline.from_module("fetch").with_execution(**kwargs)
+
+
+def _exit_worker(item):
+    os._exit(1)
+
+
+def _wait_or_block(item):
+    marker = Path(item["dir"], "blocked.pid")
+
+    if item["role"] == "block":
+        staged = marker.with_suffix(".tmp")
+        staged.write_text(str(os.getpid()))
+        staged.replace(marker)
+        sleep(60)
+
+    while not marker.exists():
+        sleep(0.01)
+
+    if item["role"] == "fail":
+        raise ValueError("boom")
+
+    return item
+
+
+_STOPPED_RUNS = [
+    pytest.param("pass", nullcontext(), id="early-close"),
+    pytest.param("fail", pytest.raises(ValueError, match="boom"), id="failing-sibling"),
+]
 
 
 class TestExecutionSettings:
@@ -1161,7 +1086,7 @@ class TestExecutionSettings:
     @pytest.mark.parametrize(
         ("build", "seed"),
         [
-            pytest.param(_tokenized, None, id="module-source"),
+            pytest.param(lambda: tokenized(VALUE), None, id="module-source"),
             pytest.param(Pipeline, SRC, id="seed"),
         ],
     )
@@ -1176,7 +1101,7 @@ class TestExecutionSettings:
         ("build", "seed", "settings", "expected"),
         [
             pytest.param(
-                _tokenized,
+                lambda: tokenized(VALUE),
                 None,
                 {"concurrency": 4, "ordered": True},
                 [item["content"] for item in EXPECTED],
@@ -1202,15 +1127,35 @@ class TestExecutionSettings:
         executed = list(pipeline.with_execution(executor=executor)(SRC))
         assert _by_content(executed) == _by_content(pipeline(SRC))
 
+    @pytest.mark.slow
+    @pytest.mark.timeout(60)
+    @pytest.mark.parametrize(("role", "expectation"), _STOPPED_RUNS)
+    def test_stopping_the_run_kills_a_busy_worker_process(
+        self, tmp_path, role, expectation
+    ) -> None:
+        mapped = Pipeline().map(_wait_or_block)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+        items = [
+            {"dir": str(tmp_path), "role": "block"},
+            {"dir": str(tmp_path), "role": role},
+        ]
 
-_PARALLEL_BUILDER_CONF = ItemBuilderConf(
-    {"attrs": {"key": "content", "value": "a,bb,ccc,dddd"}}
-)
+        with expectation:
+            pipeline.first(items)
 
+        pid = int(Path(tmp_path, "blocked.pid").read_text())
 
-def _hashed_tokens() -> Pipeline:
-    source = Pipeline.from_module("itembuilder", conf=_PARALLEL_BUILDER_CONF)
-    return source.tokenizer(options={"emit": True}).hash(options={"assign": "h"})
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    @pytest.mark.slow
+    @pytest.mark.timeout(60)
+    def test_a_dead_worker_process_fails_the_run(self) -> None:
+        mapped = Pipeline().map(_exit_worker)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+
+        with pytest.raises(BrokenProcessPool):
+            list(pipeline([{"x": 1}, {"x": 2}]))
 
 
 @pytest.mark.slow
@@ -1218,7 +1163,7 @@ def _hashed_tokens() -> Pipeline:
 class TestAsyncBoundedParallel:
     @pytest.mark.anyio
     async def test_parallel_matches_sequential_as_multiset(self):
-        pipeline = _hashed_tokens()
+        pipeline = tokenized("a,bb,ccc,dddd", hashed=True)
         sequential = [item async for item in pipeline]
         parallel = [item async for item in pipeline.with_execution(concurrency=4)]
         assert len(parallel) == len(sequential) == 4
@@ -1226,7 +1171,7 @@ class TestAsyncBoundedParallel:
 
     @pytest.mark.anyio
     async def test_ordered_parallel_preserves_order(self):
-        pipeline = _hashed_tokens()
+        pipeline = tokenized("a,bb,ccc,dddd", hashed=True)
         sequential = [item async for item in pipeline]
         ordered = pipeline.with_execution(concurrency=4, ordered=True)
         assert [item async for item in ordered] == sequential
@@ -1309,16 +1254,11 @@ def branch_log():
 
         return branch
 
-    reset_module_registry()
+    pipes = {name: cast("AsyncModuleWrapper", build_branch(name)) for name in BRANCHES}
+    definitions = [ModuleDefinition(name=n, async_pipe=p) for n, p in pipes.items()]
 
-    for name in BRANCHES:
-        async_pipe = cast("AsyncModuleWrapper", build_branch(name))
-        register_module(ModuleDefinition(name=name, async_pipe=async_pipe))
-
-    try:
+    with registered_modules(*definitions):
         yield log
-    finally:
-        reset_module_registry()
 
 
 @pytest.mark.slow
@@ -1437,20 +1377,18 @@ class TestContextImmutability:
             context.resources["db"] = object()  # pyright: ignore[reportIndexIssue]
 
     def test_augment_returns_independent_snapshot(self):
-        base = Context(inputs={"count": 2}, test=False)
-        derived = base.replace(test=True, inputs={"limit": 5})
+        base = Context(test=False)
+        derived = base.replace(test=True)
 
-        assert derived is not base
-        assert base.test is False
-        assert derived.test is True
-        assert base.inputs == {"count": 2}
-        assert derived.inputs == {"limit": 5}
+        assert (base.test, derived.test) == (False, True)
 
     def test_augment_source_mutation_does_not_leak(self):
-        source = {"count": 2}
+        tags = ["a"]
+        source = {"count": 2, "tags": tags}
         context = Context(inputs=source)
         source["count"] = 99
-        assert context.inputs == {"count": 2}
+        tags.append("b")
+        assert context.inputs == {"count": 2, "tags": ("a",)}
 
     def test_roundtrips_through_pickle(self):
         context = Context(mode=ExecutionMode.DESCRIBE, inputs={"count": 2}, test=True)
@@ -1462,6 +1400,95 @@ class TestContextImmutability:
 
         with pytest.raises(AttributeError):
             restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]
+
+
+class TestContext:
+    @pytest.mark.parametrize("inputs", ["abc", [("a", 1)]])
+    def test_non_mapping_inputs_are_rejected(self, inputs: Any):
+        with pytest.raises(TypeError, match="Context 'inputs' must be a mapping"):
+            Context(inputs=inputs)
+
+    @pytest.mark.parametrize(
+        ("mode", "match"),
+        [
+            pytest.param(5, "Invalid ExecutionMode: 5", id="non-string"),
+            pytest.param("bogus", "Invalid ExecutionMode: 'bogus'", id="unknown"),
+        ],
+    )
+    def test_invalid_mode_is_rejected(self, mode: Any, match: str):
+        with pytest.raises(ValueError, match=match):
+            Context(mode=mode)
+
+
+class TestResource:
+    """
+    Keep resource definitions structurally immutable and their constructors strict.
+
+    Fields cannot be reassigned and definition-owned containers are read-only, but
+    Riko does not recursively freeze arbitrary referenced values. Do not restore
+    public setters; mutable resolved state belongs to the execution layer.
+    """
+
+    def test_external_value_fields_are_read_only(self):
+        resource = Resource.from_external(Connection())
+
+        with pytest.raises(AttributeError):
+            resource.value = object()  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.credential = "other"  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.lazy = True  # pyright: ignore[reportAttributeAccessIssue]
+
+    def test_referenced_value_is_not_frozen(self):
+        connection = Connection()
+        resource = Resource.from_external(connection)
+        connection.opened = False
+        assert resource.value is connection
+
+        if isinstance(resource.value, Connection):
+            assert resource.value.closed
+
+    def test_factory_fields_and_containers_are_read_only(self):
+        resource = Resource.from_factory(sync_gen_factory)
+
+        with pytest.raises(AttributeError):
+            resource.plan = resource.plan  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
+
+    @pytest.mark.parametrize(
+        "factory",
+        [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
+    )
+    def test_credential_and_lazy_carried(self, factory):
+        context = Context().with_resource(
+            "factory", factory, credential=CREDENTIAL, lazy=True
+        )
+        resource = context.resources["factory"]
+        check_credential_and_lazy(resource)
+
+        resource = Resource.from_lifecycle(factory, credential=CREDENTIAL, lazy=True)
+        check_credential_and_lazy(resource)
+
+        resource = Resource.from_factory(factory, credential=CREDENTIAL, lazy=True)
+        check_credential_and_lazy(resource)
+
+    @pytest.mark.parametrize(
+        "factory",
+        [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],
+    )
+    def test_lifecycle_factory_is_not_a_value(self, factory):
+        with pytest.raises(TypeError, match="Expected a resolved resource"):
+            Resource(factory)
+
+        with pytest.raises(TypeError, match="Expected a resolved resource"):
+            Resource.from_external(factory)
+
+        with pytest.raises(TypeError, match="Cleanup is not allowed"):
+            Resource.from_factory(factory, cleanup=False)
 
 
 READER = "settings_resource_reader"
@@ -1485,14 +1512,10 @@ def reader():
     def read(_items=None, **kwargs):
         yield {"got": kwargs["resources"]["slot"]}
 
-    reset_module_registry()
     sync_pipe = cast("SyncModuleWrapper", read)
-    register_module(ModuleDefinition(name=READER, sync_pipe=sync_pipe))
 
-    try:
+    with registered_modules(ModuleDefinition(name=READER, sync_pipe=sync_pipe)):
         yield READER
-    finally:
-        reset_module_registry()
 
 
 class TestEnvironmentBinding:
@@ -1557,7 +1580,7 @@ class TestSubscriptions:
     def test_published_items_interleave_with_the_sender(self):
         seen: list[object] = []
         events = Pipeline.subscribe("receiver1", func=seen.append)
-        stream = iter(_tokenized().publish(events))
+        stream = iter(tokenized(VALUE).publish(events))
 
         assert next(stream) == EXPECTED[0]
         assert seen == EXPECTED[:1]
@@ -1569,7 +1592,7 @@ class TestSubscriptions:
         second_seen: list[object] = []
         first = Pipeline.subscribe("receiver1", func=first_seen.append)
         second = Pipeline.subscribe("receiver2", func=second_seen.append)
-        sender = _tokenized().publish(first).publish(second)
+        sender = tokenized(VALUE).publish(first).publish(second)
 
         assert list(sender) == EXPECTED
         assert first_seen == EXPECTED
@@ -1578,7 +1601,7 @@ class TestSubscriptions:
     def test_func_runs_per_item_and_items_pass_through(self):
         seen: list[object] = []
         archive = Pipeline.subscribe("archive", func=seen.append)
-        sender = _tokenized().publish(archive)
+        sender = tokenized(VALUE).publish(archive)
 
         assert list(sender) == EXPECTED
         assert seen == EXPECTED
@@ -1603,7 +1626,7 @@ class TestSubscriptions:
 
     def test_an_undrained_subscription_does_not_block_the_publisher(self):
         events = Pipeline.subscribe("undrained")
-        assert list(_tokenized().publish(events)) == EXPECTED
+        assert list(tokenized(VALUE).publish(events)) == EXPECTED
 
     def test_idle_drain_returns_promptly(self):
         started = perf_counter()
@@ -1612,24 +1635,24 @@ class TestSubscriptions:
 
     def test_draining_after_publishing_starts_a_fresh_empty_run(self):
         events = Pipeline.subscribe("fresh")
-        assert list(_tokenized().publish(events)) == EXPECTED
+        assert list(tokenized(VALUE).publish(events)) == EXPECTED
         assert list(events) == []
 
     def test_lifecycle_markers_do_not_leak_into_received_items(self):
         seen: list[Item] = []
         events = Pipeline.subscribe("leakcheck", func=seen.append)
-        list(_tokenized().publish(events))
+        list(tokenized(VALUE).publish(events))
 
         assert seen == EXPECTED
         assert not any(is_stateful_item(item) for item in seen)
 
 
-@SPLIT_PENDING
+@SPLIT_METHOD_PENDING
 class TestSplit:
     """Streaming fan-out into independently consumable branches."""
 
     def test_both_branches_yield_the_same_first_item(self):
-        left, right = _tokenized().split(2)
+        left, right = tokenized(VALUE).split(2)
         assert next(iter(left)) == EXPECTED[0]
         assert next(iter(right)) == EXPECTED[0]
 
@@ -1644,316 +1667,6 @@ class TestSplit:
         left, right = Pipeline.from_module("hash").split(2)
         assert list(left(source())) == list(right(source()))
         assert len(consumed) == 3
-
-
-STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
-
-
-def _scaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
-    return item["x"] * factor
-
-
-def _keywords(_: object, **kwargs: object) -> list[str]:
-    return sorted(kwargs)
-
-
-def _upper_content(item: Mapping[str, object]) -> str:
-    return str(item["content"]).upper()
-
-
-async def _ascaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
-    await checkpoint()
-    return item["x"] * factor
-
-
-def _raise_value_error(item: object) -> NoReturn:
-    raise ValueError(item)
-
-
-def _enrich(item: Mapping[str, object], *, db: Mapping[str, int]) -> dict[str, object]:
-    return {**item, "owner": db["owner"]}
-
-
-def _open_db() -> Generator[dict[str, int]]:
-    yield {"owner": 7}
-
-
-def _to_list(_: object) -> list[int]:
-    return [1, 2]
-
-
-def _to_tuple(_: object) -> tuple[int, ...]:
-    return (1, 2)
-
-
-def _to_generator(_: object) -> Iterator[int]:
-    return (value for value in (1, 2))
-
-
-def _count(value: Iterable[object]) -> int:
-    return len(list(value))
-
-
-_THREAD = {"executor": "thread", "concurrency": 2, "ordered": True}
-_PROCESS = {"executor": "process", "concurrency": 2, "ordered": True}
-
-_LISTLIKE_ITEMS = [
-    pytest.param(_to_list, {}, id="list-inline"),
-    pytest.param(_to_list, _THREAD, id="list-thread"),
-    pytest.param(_to_list, _PROCESS, id="list-process"),
-    pytest.param(_to_tuple, {}, id="tuple-inline"),
-    pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
-    pytest.param(_to_tuple, _PROCESS, id="tuple-process"),
-    pytest.param(_to_generator, {}, id="generator-inline"),
-    pytest.param(_to_generator, _THREAD, id="generator-thread"),
-]
-
-_LISTLIKE_PRODUCERS = [
-    pytest.param(_to_list, id="list"),
-    pytest.param(_to_tuple, id="tuple"),
-    pytest.param(_to_generator, id="generator"),
-]
-
-_PASSTHROUGH_CASES = [
-    pytest.param(["hi"], [len], [2], id="scalar-reaches-fn-unwrapped"),
-    pytest.param([{"c": "hi"}], [itemgetter("c"), len], [2], id="chained-scalar"),
-    pytest.param([{"x": 1}], [lambda _: None], [None], id="none-is-a-result"),
-    pytest.param([{"x": 1}], [lambda i: {"y": i["x"]}], [{"y": 1}], id="mapping"),
-    pytest.param([{"x": 1}, {"x": 2}], [_scaled], [2, 4], id="one-per-item"),
-]
-
-_MAP_ERRORS = [
-    pytest.param({"resources": "db", "db": 1}, "share names", id="alias-collision"),
-    pytest.param({"resources": {"no-dash": "db"}}, "identifiers", id="bad-alias"),
-    pytest.param({"resources": "class"}, "identifiers", id="keyword-alias"),
-    pytest.param({"obj": object()}, "JSON", id="non-json-kwarg"),
-    pytest.param({"identity": "bogus"}, "identity", id="bad-identity"),
-]
-
-_BAD_VERSIONS = [
-    pytest.param(None, "'version' must not be None", id="none"),
-    pytest.param([1], "'version' must be a hashable scalar", id="unhashable"),
-    pytest.param(([1],), "'version' must be a hashable scalar", id="nested-unhashable"),
-    pytest.param(object(), "'version' must be a hashable scalar", id="opaque-object"),
-    pytest.param(range(3), "'version' must be a hashable scalar", id="range"),
-]
-
-_EXECUTIONS = [
-    pytest.param({}, id="inline"),
-    pytest.param(_THREAD, id="thread"),
-    pytest.param(_PROCESS, id="process"),
-]
-
-
-class TestCallableNodes:
-    """A plain callable chained as its own node."""
-
-    @pytest.mark.parametrize(("source", "fns", "expected"), _PASSTHROUGH_CASES)
-    def test_map_passes_values_through_as_is(self, source, fns, expected):
-        pipeline = Pipeline()
-
-        for fn in fns:
-            pipeline = pipeline.map(fn)
-
-        assert list(pipeline(source)) == expected
-
-    @pytest.mark.parametrize(("produce", "settings"), _LISTLIKE_ITEMS)
-    def test_a_listlike_item_reaches_the_next_map_whole(self, produce, settings):
-        pipeline = Pipeline().map(produce).map(_count)
-        assert list(pipeline.with_execution(**settings)([{"x": 1}])) == [2]
-
-    @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
-    @async_test
-    async def test_a_listlike_item_stays_whole_under_async_mapping(self, produce):
-        pipeline = Pipeline().map(produce).map(_count)
-        mapped = pipeline.with_execution(concurrency=2)
-        assert [item async for item in mapped([{"x": 1}])] == [2]
-
-    @pytest.mark.parametrize("settings", [{}, _THREAD], ids=["inline", "thread"])
-    def test_a_seed_of_lists_maps_each_list_whole(self, settings):
-        pipeline = Pipeline().map(len).with_execution(**settings)
-        assert list(pipeline([[1, 2], [3]])) == [2, 1]
-
-    @pytest.mark.parametrize("returned", [[1, 2], []], ids=["full", "empty"])
-    def test_map_returns_an_iterator_as_one_item(self, returned):
-        items = list(Pipeline().map(lambda _: iter(returned))([{"x": 1}]))
-        assert len(items) == 1
-        assert list(items[0]) == returned
-
-    def test_map_propagates_exceptions(self):
-        with pytest.raises(ValueError, match="'x': 1"):
-            list(Pipeline().map(_raise_value_error)([{"x": 1}]))
-
-    def test_map_binds_keywords(self):
-        pipeline = Pipeline().map(_scaled, factor=10)
-        assert list(pipeline([{"x": 1}, {"x": 2}])) == [10, 20]
-
-    def test_bound_keywords_are_identity_significant(self):
-        ten = Pipeline().map(_scaled, factor=10).workflow.nodes["_scaled-1"]
-        twenty = Pipeline().map(_scaled, factor=20).workflow.nodes["_scaled-1"]
-        assert ten == Pipeline().map(_scaled, factor=10).workflow.nodes["_scaled-1"]
-        assert ten != twenty
-
-    def test_map_passes_resources_by_alias(self):
-        pipeline = (
-            Pipeline()
-            .with_resource("primary", _open_db)
-            .map(_enrich, resources={"db": "primary"})
-        )
-        assert pipeline.workflow.resources == ("primary",)
-        assert list(pipeline([{"x": 1}])) == [{"x": 1, "owner": 7}]
-
-    def test_map_requires_the_context_to_provide_its_resources(self):
-        pipeline = Pipeline().map(_enrich, resources="db")
-
-        with pytest.raises(InvalidPipelineError, match="'db' not provided"):
-            list(pipeline([{"x": 1}]))
-
-    @pytest.mark.parametrize(("kwargs", "match"), _MAP_ERRORS)
-    def test_map_rejects_invalid_arguments(self, kwargs, match):
-        with pytest.raises(InvalidPipelineError, match=match):
-            Pipeline().map(_enrich, **kwargs)
-
-    @pytest.mark.parametrize(("version", "match"), _BAD_VERSIONS)
-    def test_map_rejects_an_invalid_version(self, version, match):
-        with pytest.raises(TypeError, match=match):
-            Pipeline().map(len, version=version)
-
-    @pytest.mark.parametrize("settings", _EXECUTIONS)
-    def test_map_passes_only_bound_keywords(self, settings):
-        pipeline = Pipeline().map(_keywords, factor=2)
-        contextual = pipeline.with_context(Context(inputs={"q": 1}))
-        assert list(contextual.with_execution(**settings)([{"x": 1}])) == [["factor"]]
-
-    @async_test
-    async def test_async_map_passes_only_bound_keywords(self):
-        pipeline = Pipeline().map(_keywords, factor=2)
-        assert [item async for item in pipeline([{"x": 1}])] == [["factor"]]
-
-    def test_maps_binding_one_resource_declare_it_once(self):
-        pipeline = (
-            Pipeline()
-            .with_resource("db", _open_db)
-            .map(_enrich, resources="db")
-            .map(_enrich, resources="db")
-        )
-        assert pipeline.workflow.resources == ("db",)
-        assert list(pipeline([{"x": 1}])) == [{"x": 1, "owner": 7}]
-
-    def test_map_carries_version_and_identity(self):
-        flow = Pipeline().map(len, version="len-v1", identity="derive").workflow
-        node = flow.nodes["len-1"]
-        assert isinstance(node, CallableNode)
-        assert node.version == "len-v1"
-        assert node.identity is IdentityMode.DERIVE
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "rejecting identity modes a one-to-one map cannot honor is not yet "
-            "implemented"
-        ),
-    )
-    def test_map_rejects_combine_identity(self):
-        with pytest.raises(InvalidPipelineError):
-            Pipeline().map(len, identity="combine")
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "callable nodes that resolve without borrowing the registered udf module "
-            "are not yet implemented"
-        ),
-    )
-    @skipif_issync
-    def test_map_ignores_a_replaced_udf_module(self):
-        reset_module_registry()
-        sync_pipe = cast("SyncModuleWrapper", list)
-        register_module(ModuleDefinition(name="udf", sync_pipe=sync_pipe), replace=True)
-
-        try:
-            assert list(Pipeline().map(_ascaled)([{"x": 1}])) == [2]
-        finally:
-            reset_module_registry()
-
-    @pytest.mark.parametrize(
-        ("fn", "node_id"),
-        [
-            pytest.param(len, "len-1", id="named"),
-            pytest.param(lambda item: item, "map-1", id="lambda"),
-            pytest.param(itemgetter("x"), "map-1", id="itemgetter"),
-        ],
-    )
-    def test_map_names_the_node_after_the_callable(self, fn, node_id):
-        assert list(Pipeline().map(fn).workflow.nodes) == [node_id]
-
-    def test_map_types_its_items_from_the_callable(self):
-        pipeline = Pipeline().map(_upper_content)
-        assert_type(pipeline, Pipeline[str])
-        assert list(pipeline([{"content": "a"}])) == ["A"]
-
-    def test_a_callable_pipeline_chains_with_or(self):
-        pipeline = Pipeline().map(str) | Pipeline().map(str)
-        assert list(pipeline.workflow.nodes) == ["str-1", "str-2"]
-        assert list(pipeline([1])) == ["1"]
-
-    def test_chaining_yields_the_last_nodes_type(self):
-        strings = Pipeline().map(str)
-        lengths = strings | Pipeline().map(len)
-        assert_type(lengths, Pipeline[int])
-        assert_type(strings | "count", "Pipeline[Item]")
-        assert_type(strings.pipe("count"), "Pipeline[Item]")
-        assert_type(strings.count(), "Pipeline[Item]")
-
-    @skipif_issync
-    def test_sync_iteration_bridges_an_async_callable(self):
-        pipeline = Pipeline().map(_ascaled, factor=3)
-        assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
-
-    @async_test
-    async def test_async_iteration_awaits_an_async_callable(self):
-        pipeline = Pipeline().map(_ascaled)
-        assert [item async for item in pipeline([{"x": 1}, {"x": 2}])] == [2, 4]
-
-    @async_test
-    async def test_async_iteration_runs_a_sync_callable(self):
-        pipeline = Pipeline().map(len)
-        seed = ["hi", "you"]
-        stream = pipeline(seed)
-        assert [item async for item in stream] == [2, 3]
-
-    def test_process_executor_runs_a_module_level_callable(self):
-        pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
-        assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
-
-    def test_process_executor_rejects_a_lambda_when_planning(self):
-        pipeline = Pipeline().map(lambda item: item)
-        settings = {"executor": "process", "concurrency": 2}
-
-        with pytest.raises(InvalidPipelineError, match="cannot be pickled"):
-            list(pipeline.with_execution(**settings)([{"x": 1}]))
-
-    def test_map_extracts_a_field(self):
-        pipeline = _tokenized().map(itemgetter("content"))
-        assert isinstance(pipeline, Pipeline)
-        assert list(pipeline) == ["once is 1x", "twice is 2x", "thrice is 3x"]
-
-    def test_map_runs_once_per_item_mid_chain(self):
-        runs: list[int] = []
-
-        def record(item):
-            runs.append(1)
-            return item
-
-        pipeline = (
-            _tokenized()
-            .strreplace(conf=STRR_CONF, options={"assign": "content"})
-            .slugify(options={"assign": "content"})
-            .hash(options={"assign": "content"})
-            .map(record)
-        )
-        assert pipeline.first() == {"content": 396558121}
-        assert len(runs) == 1
 
 
 @PREDICATE_PENDING
@@ -1978,50 +1691,52 @@ def _first_in_open(pipeline: Pipeline) -> object:
     return item
 
 
-def _start_and_drop(pipeline: Pipeline) -> None:
-    stream = pipeline(SRC)
-    next(stream)
-
-
 UNSEEDED_RUNS = [
     pytest.param(list, id="iter"),
     pytest.param(_first_in_open, id="open"),
     pytest.param(Pipeline.first, id="first"),
 ]
 
-FINISHES = [
-    pytest.param(list, id="finished"),
-    pytest.param(methodcaller("close"), id="closed"),
-]
-
 
 class TestPipelineSeeding:
     """A run takes its seed per call; one whose first node needs input requires it."""
 
-    def test_a_string_before_or_is_refused_with_both_readings(self):
-        pipeline = Pipeline.from_module("hash")
-
-        with pytest.raises(
-            TypeError, match=r"pipeline\('sort'\).*from_module\('sort'\)"
-        ):
-            _ = "sort" | pipeline
+    def test_ror_on_a_stream_seeds_a_run(self):
+        hashed = Pipeline.from_module("hash")
+        counted = Pipeline.from_module("count")
+        assert list(hashed(SRC) | counted) == [{"count": 3}]
 
     @pytest.mark.parametrize("run", UNSEEDED_RUNS)
     def test_an_unseeded_pipeline_requires_a_seed(self, run):
         pipeline = Pipeline.from_module(Transforms.REVERSE)
 
-        with pytest.raises(InvalidPipelineError, match="requires a seed"):
+        with pytest.raises(InvalidPipelineError, match=r"'reverse-1'.*requires a seed"):
             run(pipeline)
 
     @async_test
     async def test_an_unseeded_pipeline_requires_a_seed_async(self):
         pipeline = Pipeline.from_module(Transforms.REVERSE)
 
-        with pytest.raises(InvalidPipelineError, match="requires a seed"):
+        with pytest.raises(InvalidPipelineError, match=r"'reverse-1'.*requires a seed"):
             _ = [item async for item in pipeline]
 
         with pytest.raises(InvalidPipelineError, match="requires a seed"):
             await pipeline.afirst()
+
+
+def _is_unclosed_run_warning(warning: warnings.WarningMessage) -> bool:
+    return "unclosed pipeline run" in str(warning.message)
+
+
+def _start_and_drop(pipeline: Pipeline) -> None:
+    stream = pipeline(SRC)
+    next(stream)
+
+
+FINISHES = [
+    pytest.param(list, id="finished"),
+    pytest.param(methodcaller("close"), id="closed"),
+]
 
 
 class TestPipelineStream:
@@ -2041,16 +1756,11 @@ class TestPipelineStream:
             async with stream:  # pyright: ignore[reportGeneralTypeIssues]
                 pass
 
-    def test_a_consumed_stream_yields_nothing_more(self):
-        stream = Pipeline()(SRC)
-        assert list(stream) == SRC
-        assert list(stream) == []
-        assert next(stream, None) is None
-
-    def test_a_closed_stream_yields_nothing_more(self):
+    @pytest.mark.parametrize("finish", FINISHES)
+    def test_a_finished_or_closed_stream_yields_nothing_more(self, finish):
         stream = Pipeline()(SRC)
         assert next(stream) == SRC[0]
-        stream.close()
+        finish(stream)
         assert list(stream) == []
         assert next(stream, None) is None
 
@@ -2065,6 +1775,40 @@ class TestPipelineStream:
         assert [item async for item in stream] == SRC
         assert [item async for item in stream] == []
         assert await anext(stream, None) is None
+
+    def test_dropping_a_started_unclosed_stream_warns(self):
+        with pytest.warns(ResourceWarning, match="unclosed pipeline run"):
+            _start_and_drop(Pipeline.from_module("hash"))
+
+    @pytest.mark.parametrize("finish", FINISHES)
+    def test_dropping_a_finished_or_closed_stream_does_not_warn(self, finish):
+        stream = Pipeline.from_module("hash")(SRC)
+        assert next(stream)
+        finish(stream)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            del stream
+            gc.collect()
+
+        assert not any(map(_is_unclosed_run_warning, caught))
+
+    @async_test
+    async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
+        source = [{"content": str(index)} for index in range(5)]
+
+        with fail_after(5), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+
+            async for _ in source | Pipeline.from_module("hash"):
+                break
+
+            gc.collect()
+
+            for _ in range(5):
+                await checkpoint()
+
+        assert any(map(_is_unclosed_run_warning, caught))
 
     @async_test
     async def test_mixing_sync_and_async_iteration_raises(self):
@@ -2085,20 +1829,3 @@ class TestPipelineStream:
 
         await sync_stream.aclose()
         await async_stream.aclose()
-
-    def test_dropping_a_started_unclosed_stream_warns(self):
-        with pytest.warns(ResourceWarning, match="unclosed pipeline run"):
-            _start_and_drop(Pipeline.from_module("hash"))
-
-    @pytest.mark.parametrize("finish", FINISHES)
-    def test_dropping_a_finished_or_closed_stream_does_not_warn(self, finish):
-        stream = Pipeline.from_module("hash")(SRC)
-        assert next(stream)
-        finish(stream)
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            del stream
-            gc.collect()
-
-        assert not any(map(_is_unclosed_run_warning, caught))

@@ -162,7 +162,11 @@ any workflow); running it waits on `WriteNode` execution, pinned by
 `tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`. The private
 `write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their input stream `source`
 (the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
-caller rather than ahead of it (triage 2026-10-25).
+caller rather than ahead of it (triage 2026-10-25). When `WriteNode` execution lands and the `WRITE_NODE_PENDING` tripwires in
+`tests/public/test_write.py` flip, trim the internal copies that assert the same bytes and errors through
+`write_through` (`tests/internal/test_io.py` `TestWriteExecution`/`TestAsyncWriteExecution`/`TestSink`),
+keeping only what has no public path: termination, the async
+terminate/throw cases (triage 2026-10-28).
 
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
 session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
@@ -297,7 +301,7 @@ failed/cancelled publication -> no successful result; clean partial artifact bes
 Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace` destinations
 for writing when the session is acquired, truncating the file before any record arrives, so an
 aborted replace write destroys the prior file instead of leaving it intact. A strict xfail in
-`tests/internal/test_definitions.py` marks it; the fix stages the replacement and publishes it only on
+`tests/internal/test_io.py` marks it; the fix stages the replacement and publishes it only on
 `finalize`.
 
 Detailed codecs remain owned by `artifact-conversion.md`; concrete FILE adapter mechanics belong to

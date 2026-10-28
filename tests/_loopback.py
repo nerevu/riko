@@ -6,7 +6,8 @@ A real socket server on ``127.0.0.1`` so tests drive the actual HTTP stack
 (``requests``, streaming vs. buffered reads, gzip, response close) without
 touching the internet. Prefer this over monkeypatching the client whenever a
 test cares about transport; reach for a mock only when the point is pure logic
-that does not depend on how the bytes arrive.
+that does not depend on how the bytes arrive; ``stub_async_get`` is that mock
+for the async fetch client.
 
 Basic usage::
 
@@ -23,6 +24,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,6 +33,16 @@ if TYPE_CHECKING:
     from riko.types._scalars import AnyStr
 
 CHUNK = 8192
+URL = "https://example.test/data"
+
+
+def stub_async_get(content: bytes, content_type: str):
+    """Builds an async client ``get`` that answers every URL with *content*."""
+
+    async def async_get(url: str, **_: object) -> SimpleNamespace:
+        return SimpleNamespace(content=content, headers={"content-type": content_type})
+
+    return async_get
 
 
 class _Server(ThreadingHTTPServer):

@@ -3,61 +3,27 @@
 
 from __future__ import annotations
 
-import copy
 import json
-import pickle  # noqa: S403
-import typing
 from collections import ChainMap
 from copy import deepcopy
-from dataclasses import dataclass, make_dataclass
-from dataclasses import field as dataclass_field
-from importlib.metadata import EntryPoint
+from functools import partial
 from pickle import dumps, loads  # noqa: S403
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Literal,
-    NotRequired,
-    Required,
-    TypedDict,
-    get_args,
-    get_type_hints,
-)
+from typing import TYPE_CHECKING, Any, get_args, get_type_hints
 
 import pytest
 from attrs import fields_dict
 
-from riko.bado import as_async
-from riko.base._exceptions import (
-    InvalidPipelineError,
-    PipelineStateError,
-    UnsupportedTargetError,
-)
-from riko.base._guards import require_mapping, require_sequence
-from riko.base._recordutils import field_names
-from riko.base._require_guards import (
-    normalize_strs,
-    require_finite,
-    require_from_form,
-    require_from_typed_dict,
-    require_str,
-    require_strlike,
-    typed_dict_keys,
-)
-from riko.base._typing import resolve_enum
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._require_guards import typed_dict_keys
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
-    CallableNode,
     ModuleNode,
     ReadNode,
     StreamEdge,
     SubscribeNode,
     WriteNode,
-    require_binding,
-    require_runnable_node,
 )
 from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
 from riko.definitions._pipeline_definition import PipelineDefinition
@@ -75,71 +41,56 @@ from riko.definitions._targets import (
     validate_target_mode,
 )
 from riko.definitions._workflow_definition import Workflow
-from riko.definitions._write import (
-    WriteCapabilities,
-    WriteMode,
-    WriteOperation,
-    WriteResult,
-)
-from riko.execution._prepared import ExecutionPlan, PreparedNode, ResolvedModule
-from riko.execution._resource_view import ResourceView
-from riko.execution._sync_execution import SyncExecution
-from riko.modules.hash import pipe as hash_pipe
-from riko.modules.tail import async_pipe as async_tail
-from riko.modules.tail import pipe as tail
-from riko.runtime import _write_session
-from riko.runtime._target_registry import (
-    TargetRegistry,
-    register_target,
-    reset_target_registry,
-)
-from riko.runtime._write_session import (
-    _SessionState,
-    _SyncFileWriteSession,
-    async_file_write_session,
-    awrite_through,
-    file_write_session,
-    write_through,
-)
-from riko.types._enums import Backends, Executor, Formats, IdentityMode
+from riko.definitions._write import WriteCapabilities, WriteMode, WriteOperation
+from riko.types._enums import Formats
 from riko.types._frozendict import FrozenDict
+from riko.types._io import is_closeable
 from riko.types._options import CallOptions, RawCallOptions
-from riko.types._pipedef import Embed, PipeModule
-from riko.types._resource import SyncLifecyclePlan
+from riko.types._resource import (
+    AsyncLifecyclePlan,
+    LifecycleFactory,
+    ResourceStrategy,
+    SyncLifecyclePlan,
+    ValueFactory,
+    ValueFactoryPlan,
+    build_factory_plan,
+    build_lifecycle_plan,
+)
 from riko.types._workflow import (
     DocumentNodeFamily,
     Endpoint,
+    ParsedPort,
     RawEdge,
     RawEndpoint,
     RawNode,
+    parse_port,
 )
 from riko.types._workflow import Edge as EdgeBase
-from tests import async_test, skipif_issync
+from tests._execution import OUTPUT_A
+from tests._resources import (
+    CREDENTIAL,
+    SCALAR,
+    VALUE_FACTORIES,
+    Connection,
+    async_callable_factory,
+    async_cm_factory,
+    async_gen_factory,
+    check_credential_and_lazy,
+    check_metadata,
+    close_async_connection,
+    close_connection,
+    sync_callable_factory,
+    sync_cm_factory,
+    sync_gen_factory,
+    wrapped_async_cm_factory,
+    wrapped_async_gen_factory,
+    wrapped_sync_cm_factory,
+    wrapped_sync_gen_factory,
+)
+from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
-
-    from riko.types._io import PathLike
-    from riko.types._scalars import BasicValue
-    from riko.types._streams import Feed, Items
-
-ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
-
-_OUT = {"default": Endpoint("a", "out")}
-_X0, _X1 = [{"x": 0}], [{"x": 1}]
-_CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
-_JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
-CSV_SINK_CASES = [
-    pytest.param(None, ITEMS, "replace", _CSV012, id="csv-replace-header-once"),
-    pytest.param(None, _X0, "append", _CSV0, id="csv-append-to-empty-emits-header"),
-    pytest.param(b"x\r\n0", _X1, "append", b"x\r\n0\n1\r\n", id="csv-unterminated"),
-    pytest.param(_CSV0, [], "append", _CSV0, id="csv-empty-append-unchanged"),
-]
-JSONL_APPEND_CASES = [
-    pytest.param(_JSON0, _X1, _JSON01, id="jsonl-append-terminated"),
-    pytest.param(b'{"x": 0}', _X1, _JSON01, id="jsonl-append-unterminated"),
-    pytest.param(_JSON0, [], _JSON0, id="jsonl-empty-append-unchanged"),
-]
+    from collections.abc import Callable
 
 
 def untyped_inputs(**values: Any) -> dict[str, Any]:
@@ -156,61 +107,6 @@ class _Client:
 
     def close(self) -> None:
         self.closed = True
-
-
-def _never() -> bool:
-    """Reports a graceful close rather than a termination."""
-    return False
-
-
-def _always() -> bool:
-    """Reports a termination rather than a graceful close."""
-    return True
-
-
-def _sink(items: Items, dest: PathLike, mode: str = "replace", **kwargs) -> WriteResult:
-    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    with file_write_session(build_write(dest, mode, **kwargs)) as session:
-        session.write(items)
-        result = session.finalize()
-
-    return result
-
-
-async def _asink(
-    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
-) -> WriteResult:
-    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
-        await session.awrite(items)
-        result = await session.afinalize()
-
-    return result
-
-
-@dataclass(frozen=True)
-class _RecordStore:
-    """A native keyed target exercising the match-keyed/idempotent branches."""
-
-    backend: ClassVar[Backends] = Backends.AIRTABLE
-
-    def capabilities(self, fmt=None) -> WriteCapabilities:
-        return WriteCapabilities(
-            modes=frozenset(WriteMode),
-            match_keyed_modes=frozenset({WriteMode.MERGE, WriteMode.DELETE}),
-            idempotent_modes=frozenset({WriteMode.APPEND}),
-        )
-
-
-MARKER_CONSTRUCTION_CASES = [
-    pytest.param(lambda: ReusableResource(_Client()), id="reusable-direct"),
-    pytest.param(lambda: OneShotResource(_Client()), id="one-shot-direct"),
-    pytest.param(lambda: ReusableResource.from_external(_Client()), id="external"),
-    pytest.param(
-        lambda: OneShotResource.from_factory(dict, cleanup=False), id="factory"
-    ),
-    pytest.param(lambda: ReusableResource.from_lifecycle(gen_client), id="lifecycle"),
-]
 
 
 class TestFrozenDict:
@@ -252,11 +148,6 @@ class TestContext:
         assert isinstance(meta, FrozenDict)
         assert meta["ids"] == (1,)
 
-    @pytest.mark.parametrize("inputs", ["abc", [("a", 1)]])
-    def test_non_mapping_inputs_are_rejected(self, inputs: Any):
-        with pytest.raises(TypeError, match="Context 'inputs' must be a mapping"):
-            Context(inputs=inputs)
-
     def test_resources_must_be_reusable(self):
         with pytest.raises(
             TypeError, match="Context resource 'r' must be of type ReusableResource"
@@ -268,28 +159,10 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    @pytest.mark.parametrize(
-        ("mode", "match"),
-        [
-            pytest.param(5, "Invalid ExecutionMode: 5", id="non-string"),
-            pytest.param("bogus", "Invalid ExecutionMode: 'bogus'", id="unknown"),
-        ],
-    )
-    def test_invalid_mode_is_rejected(self, mode: Any, match: str):
-        with pytest.raises(ValueError, match=match):
-            Context(mode=mode)
-
     def test_derived_inputs_are_read_only(self):
         derived = Context().replace(inputs=untyped_inputs(tags=["a"]))
         assert derived.inputs is not None
         assert derived.inputs["tags"] == ("a",)
-
-    def test_nested_source_mutation_does_not_leak(self):
-        tags = ["a"]
-        context = Context(inputs=untyped_inputs(tags=tags))
-        tags.append("b")
-        assert context.inputs is not None
-        assert context.inputs["tags"] == ("a",)
 
     @pytest.mark.parametrize("name", ["_mode", "_inputs", "_resources", "extra"])
     def test_private_fields_cannot_be_set(self, name: str):
@@ -301,24 +174,94 @@ class TestContext:
         with pytest.raises(AttributeError):
             delattr(context, name)
 
-    def test_pickle_round_trip_keeps_frozen_inputs(self):
+    def test_pickle_round_trip_keeps_resources(self):
         resource = Resource.from_external(_Client())
-        inputs = untyped_inputs(tags=["a"])
-        context = Context(inputs=inputs).with_resource("client", resource)
+        context = Context().with_resource("client", resource)
         restored = loads(dumps(context))  # noqa: S301
 
-        assert restored.inputs == context.inputs
         assert list(restored.resources) == ["client"]
-        assert restored.inputs is not None
-        assert restored.inputs["tags"] == ("a",)
+
+    def test_context_with_resource_is_immutable_copy(self):
+        base = Context(test=True)
+        resource = Resource.from_factory(sync_gen_factory)
+        derived = base.with_resource("resource", resource)
+
+        assert "resource" not in base.resources
+        assert derived.resources["resource"] is resource
+        assert derived.test
+        assert derived is not base
+
+
+def _sync_generator():
+    yield SCALAR
+
+
+async def _async_generator():
+    yield SCALAR
+
+
+GENERATOR_FUNCS = [
+    pytest.param(_sync_generator, id="sync"),
+    pytest.param(_async_generator, id="async"),
+]
+
+
+RESOURCE_SHAPES = [
+    pytest.param(
+        lambda: Resource.from_external(Connection()),
+        ResourceStrategy.EXTERNAL,
+        False,
+        True,
+        id="external",
+    ),
+    pytest.param(
+        lambda: Resource(Connection()), ResourceStrategy.OWNED, False, True, id="owned"
+    ),
+    pytest.param(
+        lambda: Resource.from_factory(sync_callable_factory, cleanup=close_connection),
+        ResourceStrategy.VALUE_FACTORY,
+        False,
+        False,
+        id="sync-value-factory",
+    ),
+    pytest.param(
+        lambda: Resource.from_factory(
+            async_callable_factory, cleanup=close_async_connection
+        ),
+        ResourceStrategy.VALUE_FACTORY,
+        True,
+        False,
+        id="async-value-factory",
+    ),
+    pytest.param(
+        lambda: Resource.from_lifecycle(sync_gen_factory),
+        ResourceStrategy.LIFECYCLE,
+        False,
+        False,
+        id="sync-lifecycle",
+    ),
+    pytest.param(
+        lambda: Resource.from_lifecycle(async_gen_factory),
+        ResourceStrategy.LIFECYCLE,
+        True,
+        False,
+        id="async-lifecycle",
+    ),
+]
+
+
+MARKER_CONSTRUCTION_CASES = [
+    pytest.param(lambda: ReusableResource(_Client()), id="reusable-direct"),
+    pytest.param(lambda: OneShotResource(_Client()), id="one-shot-direct"),
+    pytest.param(lambda: ReusableResource.from_external(_Client()), id="external"),
+    pytest.param(
+        lambda: OneShotResource.from_factory(dict, cleanup=False), id="factory"
+    ),
+    pytest.param(lambda: ReusableResource.from_lifecycle(gen_client), id="lifecycle"),
+]
 
 
 class TestResource:
-    @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
-    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
-        with pytest.raises(TypeError, match="is a declaration type"):
-            construct()
-
     def test_pickle_and_copy_round_trip(self):
         resource = Resource.from_factory(gen_client, retries=[1, 2], lazy=True)
 
@@ -330,6 +273,132 @@ class TestResource:
             assert restored.plan.source is gen_client
             assert restored.lazy
             assert restored.plan.kwargs["retries"] == (1, 2)
+
+    @pytest.mark.parametrize(
+        ("factory", "classification"),
+        [
+            pytest.param(sync_gen_factory, SyncLifecyclePlan, id="sync-gen"),
+            pytest.param(async_gen_factory, AsyncLifecyclePlan, id="async-gen"),
+            pytest.param(sync_cm_factory, SyncLifecyclePlan, id="sync-cm"),
+            pytest.param(async_cm_factory, AsyncLifecyclePlan, id="async-cm"),
+            pytest.param(
+                wrapped_sync_gen_factory, SyncLifecyclePlan, id="wraps-sync-gen"
+            ),
+            pytest.param(
+                wrapped_async_gen_factory, AsyncLifecyclePlan, id="wraps-async-gen"
+            ),
+            pytest.param(
+                wrapped_sync_cm_factory, SyncLifecyclePlan, id="wraps-sync-cm"
+            ),
+            pytest.param(
+                wrapped_async_cm_factory, AsyncLifecyclePlan, id="wraps-async-cm"
+            ),
+        ],
+    )
+    def test_lifecycle_factory_metadata[T](
+        self, factory: LifecycleFactory[T], classification: type
+    ):
+        assert isinstance(build_lifecycle_plan(factory), classification)
+        test_metadata = partial(check_metadata, classification=classification)
+
+        context = Context().with_resource("factory", factory)
+        resource = context.resources["factory"]
+        test_metadata(resource, ReusableResource, external=False, reusable=True)
+
+        resource = Resource.from_lifecycle(factory)
+        test_metadata(resource, OneShotResource, external=False, reusable=False)
+
+        resource = Resource.from_factory(factory)
+        test_metadata(resource, ReusableResource, external=False, reusable=True)
+
+    @pytest.mark.parametrize(
+        ("factory", "cleanup", "is_async"),
+        [
+            (sync_callable_factory, close_connection, False),
+            (async_callable_factory, close_async_connection, True),
+        ],
+    )
+    def test_value_factory_metadata[T](
+        self, factory: ValueFactory[T], cleanup, is_async: bool
+    ):
+        plan = build_factory_plan(factory, cleanup=cleanup)
+        assert isinstance(plan, ValueFactoryPlan)
+        assert plan.is_async is is_async
+        test_metadata = partial(check_metadata, typ=ReusableResource, reusable=True)
+
+        resource = Resource.from_external(factory)
+        test_metadata(resource, external=True)
+
+        resource = Resource.from_factory(factory, cleanup=cleanup)
+        test_metadata(resource, external=False, classification=ValueFactoryPlan)
+
+    @pytest.mark.parametrize(("factory", "cleanup"), VALUE_FACTORIES)
+    def test_value_factory_carries_credential_and_lazy[T](
+        self, factory: ValueFactory[T], cleanup
+    ):
+        resource = Resource.from_factory(
+            factory, cleanup=cleanup, credential=CREDENTIAL, lazy=True
+        )
+        check_credential_and_lazy(resource)
+
+    @pytest.mark.parametrize(
+        ("build", "strategy", "async_native", "has_value"), RESOURCE_SHAPES
+    )
+    def test_plan_derived_properties(
+        self,
+        build: Callable[[], Resource[Any]],
+        strategy: ResourceStrategy,
+        async_native: bool,
+        has_value: bool,
+    ):
+        resource = build()
+        assert resource.strategy is strategy
+        assert resource.async_native is async_native
+
+        if has_value:
+            assert isinstance(resource.value, Connection)
+        else:
+            with pytest.raises(AttributeError, match="no value until acquired"):
+                _ = resource.value
+
+    @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
+    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
+        with pytest.raises(TypeError, match="is a declaration type"):
+            construct()
+
+    @pytest.mark.parametrize("func", GENERATOR_FUNCS)
+    def test_generator_object_points_to_from_lifecycle(self, func):
+        started = func()
+        assert is_closeable(started)
+
+        with pytest.raises(TypeError, match=r"generator object.*from_lifecycle"):
+            Resource(started)
+
+    @pytest.mark.parametrize("factory", [sync_callable_factory, async_callable_factory])
+    def test_value_factory_needs_from_factory_and_cleanup[T](
+        self, factory: ValueFactory[T]
+    ):
+        with pytest.raises(TypeError, match=r"Invalid resource factory.*one-shot"):
+            Context().with_resource(  # pyright: ignore[reportCallIssue]
+                "factory",
+                factory,  # pyright: ignore[reportArgumentType]
+            )
+
+        with pytest.raises(TypeError, match="Must provide a Closeable value"):
+            Resource(factory)
+
+        with pytest.raises(TypeError, match="Invalid lifecycle factory"):
+            Resource.from_lifecycle(factory)  # pyright: ignore[reportArgumentType]
+
+        with pytest.raises(TypeError, match=r"ValueFactory requires.*cleanup function"):
+            Resource.from_factory(factory)  # pyright: ignore[reportArgumentType]
+
+    def test_classify_rejects_non_resource(self):
+        with pytest.raises(TypeError, match="Invalid lifecycle factory"):
+            build_lifecycle_plan(SCALAR)  # pyright: ignore[reportArgumentType]
+
+        with pytest.raises(TypeError, match="Invalid resource factory"):
+            Resource.from_factory(SCALAR)  # pyright: ignore[reportArgumentType]
 
 
 class TestResourceFreezing:
@@ -343,28 +412,6 @@ class TestResourceFreezing:
         assert resource.plan.args == (("arg",),)
         assert isinstance(headers, FrozenDict)
         assert headers["accept"] == ("json",)
-
-    def test_factory_receives_mutable_arguments(self):
-        received: dict[str, Any] = {}
-        client = _Client()
-
-        def factory(*args: object, **kwargs: object):
-            received.update(args=args, kwargs=kwargs)
-            yield object()
-
-        resource = Resource.from_factory(
-            factory, ["arg"], client, headers={"accept": ["json"]}
-        )
-
-        with SyncExecution() as execution:
-            execution.acquire(resource)
-
-        tags, passed_client = received["args"]
-        headers = received["kwargs"]["headers"]
-        assert tags == ["arg"]
-        assert passed_client is client
-        assert isinstance(headers, dict)
-        assert headers["accept"] == ["json"]
 
     def test_opaque_argument_values_are_untouched(self):
         client = _Client()
@@ -383,22 +430,6 @@ class TestResourceFreezing:
 
         with pytest.raises(AttributeError):
             delattr(resource, name)
-
-
-class TestResourceView:
-    @pytest.mark.parametrize(
-        "duplicate",
-        [
-            pytest.param(copy.copy, id="copy"),
-            pytest.param(copy.deepcopy, id="deepcopy"),
-            pytest.param(lambda view: pickle.loads(pickle.dumps(view)), id="pickle"),  # noqa: S301
-        ],
-    )
-    def test_resource_view_can_be_copied(self, duplicate):
-        assert dict(duplicate(ResourceView({"db": 1}))) == {"db": 1}
-
-    def test_resource_view_counts_its_bindings(self):
-        assert len(ResourceView({"db": 1, "cache": 2})) == 2
 
 
 class TestResourceBinding:
@@ -441,88 +472,6 @@ class TestResourceBinding:
         assert (
             ModuleNode(id="a", name="hash", resources=resources).resources == expected
         )
-
-
-@dataclass
-class _Rule:
-    field: str
-
-
-_BLANK_IDENTIFIERS = [
-    pytest.param(lambda: ModuleNode(id="", name="hash"), "ModuleNode 'id'", id="id"),
-    pytest.param(
-        lambda: ModuleNode(id=" ", name="hash"), "ModuleNode 'id'", id="blank"
-    ),
-    pytest.param(lambda: ModuleNode(id="a", name=""), "ModuleNode 'name'", id="name"),
-    pytest.param(lambda: Endpoint("", "out"), "Endpoint 'node'", id="endpoint"),
-    pytest.param(
-        lambda: Workflow.parse({"nodes": [{"name": " "}], "outputs": {}}),
-        "ModuleNode 'name'",
-        id="document-name",
-    ),
-]
-
-
-class TestNodes:
-    def test_module_conf_accepts_floats_and_none(self):
-        node = ModuleNode(id="a", name="sleep", conf={"wait": 1.5, "join_key": None})
-        assert node.conf == {"wait": 1.5, "join_key": None}
-
-    def test_module_conf_rejects_dataclass_values(self):
-        conf = {"rule": _Rule("x")}
-
-        with pytest.raises(InvalidPipelineError, match="not JSON-native"):
-            ModuleNode(id="a", name="sort", conf=conf)  # pyright: ignore[reportArgumentType]
-
-    def test_node_id_must_be_a_string(self):
-        with pytest.raises(InvalidPipelineError, match="ModuleNode 'id'"):
-            ModuleNode(id=1, name="hash")  # pyright: ignore[reportArgumentType]
-
-    @pytest.mark.parametrize(("build", "match"), _BLANK_IDENTIFIERS)
-    def test_blank_identifiers_are_rejected(self, build, match):
-        with pytest.raises(InvalidPipelineError, match=f"{match} must not be blank"):
-            build()
-
-    @pytest.mark.parametrize(
-        ("node", "kwargs", "match"),
-        [
-            (ActionNode, {"backend": "file", "params": 1}, "ActionNode 'params'"),
-            (CacheNode, {"policy": 1}, "CacheNode 'policy'"),
-            (SubscribeNode, {"policy": 1}, "SubscribeNode 'policy'"),
-        ],
-    )
-    def test_json_fields_name_themselves(self, node: Any, kwargs: Any, match: str):
-        with pytest.raises(InvalidPipelineError, match=f"{match} must be a mapping"):
-            node(id="a", name="n", **kwargs)
-
-
-_CALLABLE_NODE_ERRORS = [
-    pytest.param({"resources": {"a-b": "db"}}, InvalidPipelineError, "identifiers"),
-    pytest.param({"resources": "def"}, InvalidPipelineError, "identifiers"),
-    pytest.param(
-        {"resources": "db", "kwargs": {"db": 1}}, InvalidPipelineError, "share names"
-    ),
-    pytest.param({"version": None}, TypeError, "must not be None"),
-    pytest.param({"version": ["v1"]}, TypeError, "must be a hashable scalar"),
-    pytest.param({"identity": "bogus"}, InvalidPipelineError, "'identity'"),
-    pytest.param({"fn": "len"}, TypeError, "callable"),
-]
-
-
-class TestCallableNode:
-    @pytest.mark.parametrize(("kwargs", "error", "match"), _CALLABLE_NODE_ERRORS)
-    def test_construction_is_validated(self, kwargs: Any, error: Any, match: str):
-        with pytest.raises(error, match=match):
-            CallableNode(**{"id": "a", "name": "len", "fn": len, **kwargs})
-
-    def test_identity_accepts_a_bare_string(self):
-        node = CallableNode(id="a", name="len", fn=len, identity="preserve")
-        assert node.identity is IdentityMode.PRESERVE
-
-    def test_fn_is_compared_by_identity(self):
-        node = CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
-        assert node == CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
-        assert node != CallableNode(id="a", name="len", fn=lambda value: value)
 
 
 _SORT_NODE = ModuleNode(id="b", name="sort")
@@ -588,13 +537,13 @@ class TestWorkflowFields:
         nodes: Any = {"a": ModuleNode(id="a", name="hash")}
 
         with pytest.raises(InvalidPipelineError, match="'nodes' must be a list"):
-            Workflow(nodes=nodes, outputs=_OUT)
+            Workflow(nodes=nodes, outputs=OUTPUT_A)
 
     def test_a_node_id_cannot_repeat(self):
         nodes = [ModuleNode(id="a", name="hash"), ModuleNode(id="a", name="count")]
 
         with pytest.raises(InvalidPipelineError, match="must not repeat a node id"):
-            Workflow(nodes=nodes, outputs=_OUT)
+            Workflow(nodes=nodes, outputs=OUTPUT_A)
 
     @pytest.mark.parametrize("field", ["nodes", "edges"])
     @pytest.mark.parametrize("value", ["ab", b"ab", {"a": 1}, 3])
@@ -602,14 +551,14 @@ class TestWorkflowFields:
         kwargs = {"nodes": [ModuleNode(id="a", name="hash")], field: value}
 
         with pytest.raises(InvalidPipelineError, match=f"'{field}' must be a list"):
-            Workflow(outputs=_OUT, **kwargs)
+            Workflow(outputs=OUTPUT_A, **kwargs)
 
     def test_edges_must_be_edges(self):
         nodes = [ModuleNode(id="a", name="hash")]
         edges: Any = [("a", "b")]
 
         with pytest.raises(InvalidPipelineError, match="Workflow edge"):
-            Workflow(nodes=nodes, outputs=_OUT, edges=edges)
+            Workflow(nodes=nodes, outputs=OUTPUT_A, edges=edges)
 
     def test_edge_endpoints_must_be_endpoints(self):
         with pytest.raises(InvalidPipelineError, match="StreamEdge 'source'"):
@@ -743,8 +692,58 @@ class TestNormalizeInternals:
         assert {builder.family for builder in _NODE_BUILDERS.values()} == families
 
 
+BAD_PORTS = [
+    pytest.param("sideways", "invalid port direction", id="direction-sideways"),
+    pytest.param("up:1", "invalid port direction", id="direction-up-1"),
+    pytest.param("", "invalid port direction", id="direction-empty"),
+    pytest.param("out:-1", "invalid port", id="qualifier-out-negative"),
+    pytest.param("out:", "invalid port", id="qualifier-out-empty"),
+    pytest.param("out:a b", "invalid port", id="qualifier-out-a-b"),
+    pytest.param("in:", "invalid port", id="qualifier-in-empty"),
+    pytest.param("in:-1", "invalid port", id="qualifier-in-negative"),
+    pytest.param("in:a b", "invalid port", id="qualifier-in-a-b"),
+    pytest.param("out:0", "invalid port", id="zero-position"),
+]
+
+
+class TestParsePort:
+    @pytest.mark.parametrize(
+        ("port", "expected"),
+        [
+            ("in", ParsedPort("in", None, None)),
+            ("out", ParsedPort("out", None, None)),
+            ("in:1", ParsedPort("in", 1, None)),
+            ("out:2", ParsedPort("out", 2, None)),
+            ("out:matched", ParsedPort("out", None, "matched")),
+            ("in:count", ParsedPort("in", None, "count")),
+        ],
+    )
+    def test_parse_port_grammar(self, port, expected):
+        assert parse_port(port) == expected
+
+    @pytest.mark.parametrize(
+        ("port", "expected"),
+        [
+            pytest.param("in", (True, False), id="default"),
+            pytest.param("in:1", (False, True), id="positional"),
+            pytest.param("in:count", (False, False), id="named"),
+        ],
+    )
+    def test_parse_port_kind_predicates(self, port, expected):
+        parsed = parse_port(port)
+
+        assert (parsed.is_default, parsed.is_positional) == expected
+
+    @pytest.mark.parametrize(("port", "match"), BAD_PORTS)
+    def test_parse_port_rejects(self, port, match):
+        with pytest.raises(ValueError, match=match):
+            parse_port(port)
+
+
 _NODES = (ModuleNode, ReadNode, WriteNode, ActionNode, CacheNode, SubscribeNode)
+
 _NODE_ALIASES = frozenset({"family", "format"})
+
 _EDGE_ALIASES = frozenset({"family"})
 
 
@@ -790,89 +789,6 @@ class TestRawWorkflowFields:
         assert typed_dict_keys(RawEdge)[0] == {"source", "target"}
 
 
-_HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
-
-
-class TestExecutionPlanFields:
-    def test_workflow_must_be_a_workflow(self):
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan 'workflow'"):
-            ExecutionPlan(workflow={"nodes": []}, modules={})  # pyright: ignore[reportArgumentType]
-
-    def test_execution_plan_modules_must_be_resolved_modules(self):
-        flow = Workflow(nodes=[], outputs={})
-
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan module 'n'"):
-            ExecutionPlan(workflow=flow, modules={"n": 1})  # pyright: ignore[reportArgumentType]
-
-    @pytest.mark.parametrize("modules", ["abc", None])
-    def test_execution_plan_modules_must_be_a_mapping(self, modules: Any):
-        flow = Workflow(nodes=[], outputs={})
-
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan 'modules'"):
-            ExecutionPlan(workflow=flow, modules=modules)
-
-    @pytest.mark.parametrize(
-        "modules", [{}, {"a": _HASH, "b": _HASH}], ids=["missing", "extra"]
-    )
-    def test_modules_must_match_the_workflow(self, modules: dict[str, ResolvedModule]):
-        flow = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=_OUT)
-
-        with pytest.raises(InvalidPipelineError, match="modules must match"):
-            ExecutionPlan(workflow=flow, modules=modules)
-
-    @pytest.mark.parametrize(
-        ("embed", "embeds"),
-        [
-            pytest.param({"name": "hash", "conf": {}}, {}, id="missing"),
-            pytest.param(None, {"a": _HASH}, id="extra"),
-        ],
-    )
-    def test_embeds_must_match_the_loop_embeds(
-        self, embed: Any, embeds: dict[str, ResolvedModule]
-    ):
-        node = ModuleNode(id="a", name="loop", embed=embed)
-        flow = Workflow(nodes=[node], outputs=_OUT)
-
-        with pytest.raises(InvalidPipelineError, match="embeds must match"):
-            ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds=embeds)
-
-    def test_a_non_module_node_is_refused_when_built(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-        flow = Workflow(nodes=[node], outputs=_OUT)
-
-        with pytest.raises(InvalidPipelineError, match="not yet supported"):
-            ExecutionPlan(workflow=flow, modules={"a": _HASH})
-
-    def test_nodes_pair_workflow_nodes_with_their_modules(self):
-        node = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
-        flow = Workflow(nodes=[node], outputs=_OUT)
-        plan = ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds={"a": _HASH})
-        prepared = plan.nodes["a"]
-        assert (prepared.node, prepared.module, prepared.embed) == (node, _HASH, _HASH)
-
-    def test_prepared_module_must_be_resolved(self):
-        with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):
-            PreparedNode(ModuleNode(id="a", name="hash"), "hash")  # pyright: ignore[reportArgumentType]
-
-    def test_prepared_node_must_wrap_a_module_node(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-
-        with pytest.raises(InvalidPipelineError, match="write node execution"):
-            PreparedNode(node, _HASH)
-
-    def test_module_node_label_prefixes_the_family(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-        match = ": PreparedNode 'node': write node execution"
-
-        with pytest.raises(InvalidPipelineError, match=match):
-            require_runnable_node(node, "PreparedNode 'node'")
-
-    def test_a_callable_node_prepares_with_no_call_options(self):
-        node = CallableNode(id="a", name="len", fn=len, resources="db")
-        prepared = PreparedNode(node, _HASH)
-        assert (prepared.options, prepared.extras) == (CallOptions(), ("resources",))
-
-
 class TestPipelineDefinitionFields:
     @pytest.mark.parametrize(
         ("kwargs", "match"),
@@ -888,162 +804,6 @@ class TestPipelineDefinitionFields:
     def test_a_context_is_accepted(self):
         context = Context()
         assert PipelineDefinition(context=context).context is context
-
-    def test_chained_maps_declare_resources_once_in_order(self):
-        first = PipelineDefinition().map(len, resources={"a": "db"})
-        second = first.map(str, resources=("cache", "db"))
-        assert second.workflow.resources == ("db", "cache")
-        assert second.workflow.isvalid
-
-
-_INVALID: list[tuple[Callable[..., object], object]] = [
-    (require_str, 1),
-    (require_strlike, 1),
-    (require_finite, float("nan")),
-    (require_mapping, "abc"),
-    (require_sequence, "abc"),
-]
-
-
-class TestRequireHelpers:
-    @pytest.mark.parametrize(("require", "value"), _INVALID)
-    def test_document_error_is_the_default(self, require, value):
-        with pytest.raises(InvalidPipelineError, match="field"):
-            require(value, "field")
-
-    @pytest.mark.parametrize(("require", "value"), [*_INVALID, (require_binding, 1)])
-    def test_caller_can_pick_the_error(self, require, value):
-        with pytest.raises(ValueError, match="field"):
-            require(value, "field", error=ValueError)
-
-
-class TestRequireFromForm:
-    def test_a_lone_class_is_checked_by_instance(self):
-        with pytest.raises(InvalidPipelineError, match="must be of type int, not str"):
-            require_from_form(int)("1")
-
-    def test_a_union_passes_any_class_member(self):
-        assert require_from_form(int | str)("a") == "a"
-
-    def test_a_literal_passes_one_of_its_values(self):
-        assert require_from_form(Literal["a", "b"])("b") == "b"
-
-    def test_a_literal_value_must_match_by_type(self):
-        with pytest.raises(InvalidPipelineError, match="Expected one of 1"):
-            require_from_form(Literal[1])(True)
-
-    def test_a_mixed_union_passes_a_literal_value(self):
-        assert require_from_form(int | Literal["auto"])("auto") == "auto"
-
-    def test_a_mixed_union_lists_its_literal_values(self):
-        with pytest.raises(InvalidPipelineError, match="'auto', not str"):
-            require_from_form(int | Literal["auto"], "limit")("all")
-
-    def test_an_unsupported_form_raises_when_built(self):
-        with pytest.raises(TypeError, match="not a class, TypedDict, or Literal"):
-            require_from_form(list[str])
-
-    def test_every_unsupported_form_is_named(self):
-        with pytest.raises(TypeError, match="are not classes, TypedDicts, or Literals"):
-            require_from_form(list[str] | dict[str, int])
-
-
-class TestResolveEnum:
-    @pytest.mark.parametrize("value", [None, "bogus"])
-    def test_resolve_enum_defaults_to_the_document_error(self, value):
-        with pytest.raises(InvalidPipelineError, match="WriteMode"):
-            resolve_enum(WriteMode, value)
-
-    def test_resolve_enum_lists_the_accepted_values(self):
-        with pytest.raises(ValueError, match="'bogus'") as excinfo:
-            resolve_enum(Executor, "bogus", error=ValueError)
-
-        assert all(name in str(excinfo.value) for name in Executor)
-
-
-class TestNormalizeStrs:
-    def test_empty_key_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="non-empty"):
-            normalize_strs(["id", ""])
-
-    def test_duplicate_keys_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="duplicate"):
-            normalize_strs(["id", "id"])
-
-    @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
-    def test_non_string_keys_rejected(self, value):
-        with pytest.raises(InvalidPipelineError, match="non-empty strings"):
-            normalize_strs(value)
-
-    def test_non_iterable_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="string or iterable"):
-            normalize_strs(42)  # pyright: ignore[reportArgumentType]
-
-
-def _runtime_record() -> type:
-    # This module postpones annotations, so build a record whose ClassVar is an
-    # evaluated annotation rather than a string.
-    tag = ("tag", ClassVar[str], dataclass_field(default="point"))
-    return make_dataclass(
-        "_RuntimeRecord", [tag, ("x", int, dataclass_field(default=0))]
-    )
-
-
-class TestFieldNames:
-    def test_field_names_includes_classvar_for_attrs_and_dataclass(self):
-        assert "family" in field_names(EdgeBase)
-        assert "family" in field_names(WriteNode)
-        assert field_names(_runtime_record()) == frozenset({"tag", "x"})
-        assert "family" not in field_names(Endpoint)
-
-
-class Partial(TypedDict, total=False):
-    kept: Required[BasicValue]
-    loose: Sequence[BasicValue]
-
-
-class Whole(TypedDict):
-    plain: BasicValue
-    dropped: NotRequired[BasicValue]
-    qualified: typing.NotRequired[Sequence[BasicValue]]
-
-
-class Inherited(Partial):
-    added: BasicValue
-
-
-class TestTypedDictKeys:
-    def test_qualifiers_found_without_resolving_annotations(self):
-        assert typed_dict_keys(Partial) == (frozenset({"kept"}), frozenset({"loose"}))
-        assert typed_dict_keys(Whole) == (
-            frozenset({"plain"}),
-            frozenset({"dropped", "qualified"}),
-        )
-
-    def test_rejects_a_plain_class(self):
-        with pytest.raises(TypeError, match="is not a TypedDict"):
-            typed_dict_keys(dict)
-
-    def test_inherited_keys_keep_each_class_totality(self):
-        assert typed_dict_keys(Inherited) == (
-            frozenset({"kept", "added"}),
-            frozenset({"loose"}),
-        )
-
-    def test_shipped_typed_dict_qualifiers_are_honored(self):
-        assert typed_dict_keys(PipeModule)[0] == {"id", "type", "conf"}
-        assert typed_dict_keys(Embed) == (
-            frozenset({"conf", "name"}),
-            frozenset({"id"}),
-        )
-
-    def test_required_qualifier_is_enforced(self):
-        require = require_from_typed_dict(PipeModule)
-
-        with pytest.raises(
-            InvalidPipelineError, match=r"missing PipeModule key\(s\): \['conf'\]"
-        ):
-            require({"id": "a", "type": "fetch"})
 
 
 class TestWriteMode:
@@ -1146,24 +906,6 @@ class TestNormalizeTarget:
             normalize_target(42)  # pyright: ignore[reportArgumentType]
 
 
-class TestRegisterTarget:
-    def test_register_target_returns_the_class_for_decorator_use(self) -> None:
-        try:
-            assert register_target(_RecordStore) is _RecordStore
-        finally:
-            reset_target_registry()
-
-    def test_entry_point_loads_a_target_class(self) -> None:
-        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
-        assert TargetRegistry()._load(ep) is FileTarget
-
-    def test_entry_point_must_load_a_target_class(self) -> None:
-        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
-
-        with pytest.raises(TypeError, match="must load a target class"):
-            TargetRegistry()._load(ep)
-
-
 class TestResolveFormat:
     def test_explicit_format_wins(self):
         assert resolve_format("out.csv", "json") == "json"
@@ -1176,12 +918,7 @@ class TestResolveFormat:
 class TestFileCapabilities:
     @pytest.mark.parametrize(
         ("dest", "appendable", "incremental"),
-        [
-            ("out.csv", True, True),
-            ("out.jsonl", True, True),
-            ("out.json", False, False),
-            ("out.geojson", False, False),
-        ],
+        [("out.csv", True, True), ("out.geojson", False, False)],
     )
     def test_target_owns_format_behavior(self, dest, appendable, incremental):
         capabilities = FileTarget(dest).capabilities()
@@ -1195,9 +932,9 @@ class TestFileCapabilities:
 
 class TestValidateTargetMode:
     def test_match_keyed_without_keys_rejected(self):
-        capabilities = _RecordStore().capabilities()
+        capabilities = RecordStore().capabilities()
         with pytest.raises(ValueError, match="requires 'keys'"):
-            validate_target_mode(_RecordStore(), WriteMode.MERGE, capabilities)
+            validate_target_mode(RecordStore(), WriteMode.MERGE, capabilities)
 
     @pytest.mark.parametrize(
         ("mode", "keys"),
@@ -1208,8 +945,8 @@ class TestValidateTargetMode:
         ],
     )
     def test_supported_key_combinations(self, mode, keys):
-        capabilities = _RecordStore().capabilities()
-        validate_target_mode(_RecordStore(), mode, capabilities, keys=keys)
+        capabilities = RecordStore().capabilities()
+        validate_target_mode(RecordStore(), mode, capabilities, keys=keys)
 
     def test_unkeyed_mode_with_keys_rejected(self):
         capabilities = FileTarget("out.csv").capabilities()
@@ -1226,7 +963,7 @@ class TestBuildWrite:
         assert prepared.operation.mode is WriteMode.REPLACE
 
     def test_record_store_binds_match_keys(self):
-        prepared = build_write(_RecordStore(), "merge", keys="endpoint_id")
+        prepared = build_write(RecordStore(), "merge", keys="endpoint_id")
 
         assert prepared.operation.mode is WriteMode.MERGE
         assert prepared.operation.keys == ("endpoint_id",)
@@ -1251,331 +988,3 @@ class TestBuildWrite:
     def test_build_write_raises_call_site_errors(self, kwargs, error, match):
         with pytest.raises(error, match=match):
             build_write("out.csv", **kwargs)
-
-
-class TestConverterPath:
-    """The native whole-stream path and the temporary singleton path."""
-
-    def _spy(self, monkeypatch):
-        calls = []
-        original = _write_session.serialize_items
-
-        def spy(items, fmt, **kwargs):
-            materialized = list(items)
-            calls.append(materialized)
-            return original(materialized, fmt, **kwargs)
-
-        monkeypatch.setattr(_write_session, "serialize_items", spy)
-        return calls
-
-    def test_sink_converts_whole_stream_once(self, monkeypatch, tmp_path):
-        calls = self._spy(monkeypatch)
-        _sink(ITEMS, tmp_path / "out.jsonl")
-
-        assert len(calls) == 1
-        assert calls[0] == ITEMS
-
-    def test_passthrough_converts_per_item(self, monkeypatch, tmp_path):
-        calls = self._spy(monkeypatch)
-        prepared = build_write(tmp_path / "out.jsonl")
-        yielded = list(write_through(ITEMS, prepared, terminating=_never))
-
-        assert yielded == ITEMS
-        assert len(calls) == len(ITEMS)
-
-
-class TestCsv:
-    @pytest.mark.parametrize(("seed", "items", "mode", "expected"), CSV_SINK_CASES)
-    def test_sink_writes_expected_bytes(self, tmp_path, seed, items, mode, expected):
-        path = tmp_path / "out.csv"
-        if seed is not None:
-            path.write_bytes(seed)
-
-        _sink(items, path, mode)
-        assert path.read_bytes() == expected
-
-    def test_append_existing_skips_header(self, tmp_path):
-        path = tmp_path / "out.csv"
-        _sink([{"x": 0}], path)
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
-
-    def test_passthrough_singleton_preserves_schema(self, tmp_path):
-        path = tmp_path / "out.csv"
-        rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
-        list(write_through(rows, build_write(path), terminating=_never))
-        assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
-
-    def test_passthrough_unexpected_field_raises(self, tmp_path):
-        path = tmp_path / "out.csv"
-        rows = [{"a": 1}, {"a": 2, "b": 3}]
-
-        with pytest.raises(ValueError, match="not in the CSV header"):
-            list(write_through(rows, build_write(path), terminating=_never))
-
-
-class TestJsonl:
-    def test_singleton_has_no_array(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        list(write_through(ITEMS, build_write(path), terminating=_never))
-        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
-
-    @pytest.mark.parametrize(("seed", "items", "expected"), JSONL_APPEND_CASES)
-    def test_append_writes_expected_bytes(self, tmp_path, seed, items, expected):
-        path = tmp_path / "out.jsonl"
-        path.write_bytes(seed)
-        _sink(items, path, "append")
-        assert path.read_bytes() == expected
-
-
-class TestFramed:
-    def test_passthrough_buffers_until_finalize(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = write_through(ITEMS, build_write(path), terminating=_never)
-        first = next(stream)
-        assert not path.exists()
-        assert [first, *stream] == ITEMS
-        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-    def test_sink_writes_one_document(self, tmp_path):
-        path = tmp_path / "out.json"
-        result = _sink(ITEMS, path)
-        assert isinstance(result, WriteResult)
-        assert result.written > 0
-        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-    def test_abort_discards_staged_document(self, tmp_path):
-        path = tmp_path / "out.json"
-        prepared = build_write(path)
-
-        with file_write_session(prepared) as session:
-            session.write(ITEMS)
-            session.abort()
-
-        assert not path.exists()
-
-
-class TestSessionLifecycle:
-    def _session(self, tmp_path, name="out.json"):
-        session = _SyncFileWriteSession(build_write(tmp_path / name))
-        session.acquire()
-        return session
-
-    def test_open_to_finalized(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-        session.finalize()
-        assert session._state is _SessionState.FINALIZED
-        session.teardown()
-
-    def test_open_to_aborted(self, tmp_path):
-        session = self._session(tmp_path)
-        session.abort()
-        assert session._state is _SessionState.ABORTED
-        session.teardown()
-
-    def test_write_after_finalize_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-        session.finalize()
-
-        with pytest.raises(
-            PipelineStateError, match="the write session in state 'finalized'"
-        ):
-            session.write(ITEMS)
-
-        session.teardown()
-
-    def test_write_after_abort_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.abort()
-
-        with pytest.raises(PipelineStateError, match="aborted"):
-            session.write(ITEMS)
-
-        session.teardown()
-
-    def test_teardown_twice_is_safe(self, tmp_path):
-        session = self._session(tmp_path)
-        session.teardown()
-        session.teardown()
-
-    def test_teardown_never_commits(self, tmp_path):
-        path = tmp_path / "out.json"
-        session = _SyncFileWriteSession(build_write(path))
-        session.acquire()
-        session.write(ITEMS)
-        session.teardown()
-        assert not path.exists()
-
-    def test_incremental_abort_keeps_written_bytes(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        session = _SyncFileWriteSession(build_write(path))
-        session.acquire()
-        session.write({"x": 1})
-        session.abort()
-        session.teardown()
-        assert path.read_bytes() == b'{"x": 1}\n'
-
-    def test_stream_then_item_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-
-        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
-            session.write({"x": 0})
-
-        session.teardown()
-
-    def test_item_then_stream_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write({"x": 0})
-
-        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
-            session.write(ITEMS)
-
-        session.teardown()
-
-    def test_two_whole_streams_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-
-        with pytest.raises(PipelineStateError, match="cannot attempt multiple stream"):
-            session.write(ITEMS)
-
-        session.teardown()
-
-
-class TestWriteExecution:
-    def test_writes_mid_chain(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = write_through(ITEMS, build_write(path), terminating=_never)
-        assert list(tail(stream, conf={"count": 1})) == [{"x": 2}]
-        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-    def test_replace_defers_truncation_until_consumed(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        path.write_bytes(b'{"old": 1}\n')
-        prepared = build_write(path, "replace")
-        stream = write_through(ITEMS, prepared, terminating=_never)
-        assert path.read_bytes() == b'{"old": 1}\n'
-        list(stream)
-        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
-
-    def test_graceful_close_finalizes_prefix(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = write_through(ITEMS, build_write(path), terminating=_never)
-        next(stream)
-        stream.close()
-        assert path.read_bytes() == b'[{"x": 0}]'
-
-    def test_terminate_aborts(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = write_through(ITEMS, build_write(path), terminating=_always)
-        next(stream)
-        stream.close()
-        assert not path.exists()
-
-    def test_exception_aborts(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = write_through(ITEMS, build_write(path), terminating=_never)
-        next(stream)
-
-        with pytest.raises(RuntimeError, match="boom"):
-            stream.throw(RuntimeError("boom"))
-
-        assert not path.exists()
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "a streaming replace write opens its destination for writing up front, "
-            "so a failed run destroys the old content until writes publish atomically"
-        ),
-    )
-    @pytest.mark.parametrize(
-        ("name", "original"), [("out.csv", b"a\n1\n"), ("out.jsonl", b'{"a": 1}\n')]
-    )
-    def test_failed_replace_keeps_original_content(self, tmp_path, name, original):
-        path = tmp_path / name
-        path.write_bytes(original)
-
-        def source() -> Iterator[dict[str, int]]:
-            yield {"a": 2}
-            raise ValueError("boom")
-
-        stream = write_through(source(), build_write(path), terminating=_never)
-
-        with pytest.raises(ValueError, match="boom"):
-            list(stream)
-
-        assert path.read_bytes() == original
-
-
-@skipif_issync
-class TestAsyncWriteExecution:
-    @async_test
-    async def test_passthrough_preserves_stream(self, tmp_path):
-        prepared = build_write(tmp_path / "out.json")
-        stream = awrite_through(as_async(ITEMS), prepared, terminating=_never)
-        assert [item async for item in stream] == ITEMS
-
-    @async_test
-    async def test_writes_mid_chain(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        tailed = async_tail(stream, conf={"count": 1})
-        assert [item async for item in tailed] == [{"x": 2}]
-        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-    @async_test
-    async def test_csv_singleton_preserves_schema(self, tmp_path):
-        path = tmp_path / "out.csv"
-        rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
-        stream = awrite_through(as_async(rows), build_write(path), terminating=_never)
-        _ = [item async for item in stream]
-        assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
-
-    @async_test
-    async def test_graceful_close_finalizes_prefix(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
-        await stream.aclose()
-        assert path.read_bytes() == b'[{"x": 0}]'
-
-    @async_test
-    async def test_terminate_aborts(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_always)
-        await anext(stream)
-        await stream.aclose()
-        assert not path.exists()
-
-    @async_test
-    async def test_exception_aborts(self, tmp_path):
-        path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
-
-        with pytest.raises(RuntimeError, match="boom"):
-            await stream.athrow(RuntimeError("boom"))
-
-        assert not path.exists()
-
-    @async_test
-    async def test_whole_stream_writes_one_document(self, tmp_path):
-        path = tmp_path / "out.json"
-        result = await _asink(ITEMS, path)
-        assert result.written > 0
-        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
-
-class TestSink:
-    def test_non_file_target_execution_unsupported(self):
-        prepared = build_write(_RecordStore(), "replace")
-
-        with (
-            pytest.raises(UnsupportedTargetError, match="_RecordStore"),
-            file_write_session(prepared),
-        ):
-            pass  # pragma: no cover
