@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         Awaitable,
         Callable,
         Iterable,
+        Iterator,
     )
 
     from riko.types._streams import AnyIterable
@@ -150,6 +151,32 @@ async def alist[T](source: AnyIterable[T]) -> list[T]:
 
     """
     return [item async for item in as_async(source)]
+
+
+async def materialize[T](source: AnyIterable[T]) -> Iterator[T]:
+    """
+    Collects a sync or async iterable into a sync iterator.
+
+    Args:
+
+        source: A sync or async iterable.
+
+    Returns:
+
+        An iterator over the items of *source* in order.
+
+    Examples:
+
+        >>> from riko import as_async, run
+        >>>
+        >>> async def main():
+        ...     print(next(await materialize(as_async([1, 2]))))
+        >>>
+        >>> run(main)
+        1
+
+    """
+    return iter(await alist(source))
 
 
 async def async_iter[T](

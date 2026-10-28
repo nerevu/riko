@@ -55,7 +55,7 @@ Breaking changes to this surface follow riko's normal SemVer policy.
 <!-- api-surface:bado -->
 ```python
 >>> sorted(BADO)
-['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'materialize', 'run']
 ```
 <!-- /api-surface:bado -->
 
@@ -110,7 +110,7 @@ helpers. File/URL transport helpers live in the separate `riko.io` package.
 <!-- api-surface:bado-namespace -->
 ```python
 >>> sorted(BADO)
-['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'run']
+['alist', 'as_async', 'async_chain', 'async_map', 'async_map_stream', 'async_read', 'async_return', 'async_sleep', 'backend', 'isasync', 'issync', 'materialize', 'run']
 >>> BADO == set(riko.bado.__all__)
 True
 ```

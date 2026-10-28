@@ -121,8 +121,8 @@ key builder (`def_itemgetter`, which treats `PASS` as no casting so a sort rule 
 item), and typed-value sentinels all call it. `DotDict.__contains__` answers a plain key from the
 case-insensitive store without constructing nested `DotDict`s, and a dotted `item["a.b.c"]` wraps
 each nested plain mapping so it walks any depth case-insensitively, matching `get`; `match_key`
-returns the stored spelling for every mapping kind. `alist` (`riko/bado/itertools.py`, on the stable
-surface) collects any iterable through `as_async`. The item/value aliases live in
+returns the stored spelling for every mapping kind. `alist` and `materialize` (`riko/bado/itertools.py`, on the stable
+surface) collect any (a)sync iterable through `as_async`, into a list and an iterator. The item/value aliases live in
 `riko/types/_values.py`; `Context` has no `verbose` field (verbosity is the `riko` logger's
 level); `truncate_content` (`riko/coercion/_sequences.py`) shortens `bytes` like `str`.
 

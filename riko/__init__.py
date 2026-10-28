@@ -8,7 +8,13 @@ Application code imports from this namespace; extension authors use ``riko.ext``
 
 from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
-from riko.bado.itertools import alist, as_async, async_map, async_map_stream
+from riko.bado.itertools import (
+    alist,
+    as_async,
+    async_map,
+    async_map_stream,
+    materialize,
+)
 from riko.base._exceptions import (
     EmptyPipelineError,
     InvalidPipelineError,
@@ -110,5 +116,6 @@ __all__ = [
     "issync",
     "list_formats",
     "list_modules",
+    "materialize",
     "run",
 ]

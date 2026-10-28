@@ -41,11 +41,11 @@ from attrs import define
 
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import (
-    alist,
     as_async,
     async_iter,
     async_map,
     async_map_ordered_stream,
+    materialize,
 )
 from riko.base._guards import (
     is_async_callable,
@@ -629,14 +629,14 @@ async def _materialize_terminal[T](value: object) -> object:
         returned unchanged.
 
     """
-    materialized: Iterator[T] | list[T] | T
+    materialized: object
 
     if isinstance(value, AsyncIterable):
-        materialized = iter(await alist(value))
+        materialized = await materialize(value)
     elif is_known_sequence(value):
         materialized = [await _materialize_terminal(item) for item in value]
     else:
-        materialized = cast("T", value)
+        materialized = value
 
     return materialized
 
@@ -959,8 +959,7 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
             if async_native:
                 input_ = self.module.anormalize_input(items)
             else:
-                _items = await alist(self.module.anormalize_input(items))
-                input_ = iter(_items)
+                input_ = await materialize(self.module.anormalize_input(items))
         else:
             input_ = self.module.normalize_input(items)
 
