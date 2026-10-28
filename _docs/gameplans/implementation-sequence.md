@@ -901,7 +901,7 @@ Repaired locally in the same series (not deferred): non-default output ports now
 reachable `StreamEdge.source_port` other than `out`, or a selected output whose port is not `out`,
 raises `InvalidPipelineError` instead of silently aliasing the node's `out` stream; executable
 port-keyed fan-out/split delivery remains R7, which removes the guard. Regressions:
-`test_run_rejects_nondefault_source_output_port` / `test_run_rejects_nondefault_selected_output_port`.
+`tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects` rows `nondefault-source-output-port` / `nondefault-selected-output-port`.
 One more fail-closed guard sits beside it, `Workflow.require_executable()` (called from `ExecutionPlan.validate()`):
 a source port feeding more than one stream edge (the executor keys streams by node, so both consumers
 would share one iterator). R7's port-keyed delivery removes it. Regression:
@@ -926,8 +926,7 @@ is eager), surfaced a bare `TypeError` under async execution, and let a splitter
 were lists through as items. `_adapt.py`'s `require_items`/`arequire_items` are now `require_stream`/
 `require_async_stream(value, pipe)`: the execution-side boundary earns its narrowing from the same
 `is_splitter` `TypeIs` guard (`riko/types/_wrappers.py`) on the pipe's declared type, consuming nothing.
-Regressions: `test_build_plan_rejects_splitter_node_before_any_node_runs`,
-`test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
+Regressions: `test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
 `test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
 `test_iterating_a_split_pipeline_raises_before_running` pair. The async splitter wrapper's inability
 to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_async_input_stream`).
@@ -1044,7 +1043,7 @@ Deliver:
   declarations it reads. Since R4C's self-starting check, the second case fails outright: run
   unseeded, it raises "requires a seed" instead of starting its source root (triaged 2026-10-28).
   Strict xfail
-  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
 - an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule starts any
   non-output node whose outgoing edges all enter named ports, inferred from graph position alone,
   so an ordinary transform there runs on the internal placeholder seed (`hash` feeding
@@ -1052,7 +1051,7 @@ Deliver:
   String Builder root in `pipe_b962874`) until a node can declare itself a value source; whether
   undeclared feeders then keep starting themselves is this phase's call (if they do, delete the
   tripwire rather than flip it). Strict xfail
-  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1135,7 +1134,7 @@ Deliver:
   of a sync-only `udf` makes `.map` of an async callable raise "neither a sync nor an async
   callable" although `udf` itself never runs. The E1 plain-callable slot decision removes the
   borrowing. Strict xfail
-  `tests/public/test_pipeline.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
+  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
 annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers
@@ -1207,7 +1206,7 @@ STABLE signature accepts. Attribute chaining now accepts only built-in module id
 (`BUILTIN_MODULE_IDS` in the generated `riko/types/_module_ids.py`; other names raise
 `AttributeError`, 2026-10-21 triage), so R4E can type it with generated per-module signatures under
 `TYPE_CHECKING` rather than `Pipeline[Any]`. (2) The generated `*RawConf` types are asserted private
-(`tests/public/test_modules.py::test_raw_module_confs_are_private`) while generated workflow modules
+(`tests/internal/test_codegen.py::TestImportSurface::test_raw_module_confs_are_private`) while generated workflow modules
 import them from `riko.types.modules`; the contract decision here must give generated code a supported
 conf type (shared with the R9 note on generated-module imports). (3) There is no public route from a
 module *name* to its conf type: `describe_module` reports no conf, `get_conf_type` takes a parser
@@ -1242,7 +1241,7 @@ these go.
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
   `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read`
   (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes. `@processor async def
-  pipe` wraps as async; `tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises`
+  pipe` wraps as async; `tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises`
   (which pins today's `TypeError`) is replaced by a test that it wraps.
 - **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees,
   including the per-item `TypeError`s for a missing `extract` key (`build_conf` in
@@ -1351,7 +1350,7 @@ Deliver:
 - node semantic fingerprints using R2A encoding and the R2B best-effort/version contract;
 - custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference is ambiguous,
   including which modes a one-to-one `map` accepts (R4C carries all three inert; strict xfail
-  `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`);
+  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`);
 - node `version=` override plumbing;
 - declared resource bindings included in semantic fingerprints by resolved definition, not Context
   lookup name.
@@ -1453,7 +1452,7 @@ Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
 
 Audit note (2026-10-10 structural audit): `riko/runtime/_write_session.py` (sync/async write sessions,
 incremental/framed delivery, finalize/abort/teardown) has no runtime importer; only
-`tests/internal/test_definitions.py` exercises it since the v1 collections write verbs went at
+`tests/internal/test_io.py` exercises it since the v1 collections write verbs went at
 v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/finalize state machine
 (`file_write_session` vs `async_file_write_session` differ only by `await`; the
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
@@ -1757,7 +1756,7 @@ the tag survives, it, `build_workflow_pipes`, and the `dispatcher` instance need
 planned as `riko.ext.workflows`: hand-written workflow modules import the decorator, and generated ones
 `build_workflow_pipes` and `dispatcher`, from private `riko.runtime._workflow_pipes` and
 `riko.runtime._resolver` today (2026-10-10 terminology audit; tripwire
-`tests/internal/test_codegen.py::TestCompileWorkflow::test_generated_source_imports_no_private_module`).
+`tests/public/test_workflow.py::TestCompileWorkflow::test_generated_source_imports_no_private_module`).
 If the tag survives as its own marker (see the type tag below), name the marker and its guard after
 the decorator, but not a bare `.workflow` attribute: `pipeline.workflow` is a `Workflow`. A tagged pipe's `.name` is still the function's `__name__` (`pipe`/`async_pipe`), not the
 `pipe_<id>` the resolver knows, so the keep/delete decision should also say what `.name` a stored
@@ -1862,7 +1861,7 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
   `tests/internal/test_execution_plan.py`);
 - lazy resources acquire on first use rather than at run start, and declared resource-to-resource
   dependencies acquire dependency-first and tear down dependent-first (moved from R4B; tripwire
-  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
 - factories declared `(ctx, resources)` receive a `ResourceView` (`execution-semantics.md` §
   Execution-bound resource view). `ResourceView` lives in `riko/execution/_resource_view.py` today;
   factory definitions sit in `definitions`, which cannot import `execution`, so move it to a layer

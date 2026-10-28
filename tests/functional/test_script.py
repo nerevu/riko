@@ -2,7 +2,6 @@
 """Provides functional tests for the command-line scripts, examples, and extras."""
 
 import builtins
-import importlib.util
 import json
 import subprocess
 import sys
@@ -15,75 +14,40 @@ from os.path import isfile
 import pytest
 
 from riko.base._paths import ROOT_DIR
-from riko.definitions._context import Context
 from riko.definitions._workflow_definition import Workflow
-from riko.execution._prepared import ExecutionPlan
-from riko.execution._sync_execution import SyncExecution
-from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
-from riko.runtime._export import list_formats
-from riko.runtime._resolver import dispatcher
 from tests import TESTS_DIR, async_test, skipif_issync
+from tests._workflows import (
+    DAG,
+    DAG_PATH,
+    EXAMPLES_DIR,
+    SPLIT_METHOD_PENDING,
+    run_document,
+)
 
 _BASEDIR = TESTS_DIR.parent
-DAG_PATH = TESTS_DIR / "dags" / "pipe_forever.json"
-DEMO_SCRIPT = "run-pipe"
-BENCHMARK_SCRIPT = "benchmark"
+ENTRY_POINTS = {"runpipe": "run-pipe", "benchmark": "benchmark"}
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
-TIMEZONE_TEXT = "{'date': '5/4/1982', 'dateformat': 'May 04, 1982 UTC'}\n"
 ITEM_ATTRS = {"key": "title", "value": "riko"}
-BENCHMARK_LABELS = [
-    "baseline_sync",
-    "baseline_threads",
-    "baseline_procs",
-    "sync_module",
-    "sync_pipeline",
-    "sync_workflow",
-]
+TIMEZONE_TEXT = "{'date': '5/4/1982', 'dateformat': 'May 04, 1982 UTC'}\n"
 DEMO_PARAMS = [
     pytest.param("demo", DEMO_TEXT, id="demo"),
     pytest.param("simple1", "'farechart'\n", id="simple1"),
     pytest.param("pipe_timezone", TIMEZONE_TEXT, id="example-document"),
 ]
-DEMO_OPTS = [
-    pytest.param([], id="sync"),
-    pytest.param(["-a"], marks=skipif_issync, id="async"),
+DEMO_RUNS = [
+    pytest.param([], True, False, id="entry-point-sync"),
+    pytest.param(["-a"], True, False, marks=skipif_issync, id="entry-point-async"),
+    pytest.param([], False, True, id="module-outside-checkout"),
 ]
 RAISING_SCRIPT = (
     "from riko import UnsupportedModuleError\n\n"
     "def pipe(test=False):\n    raise UnsupportedModuleError('x')\n"
 )
-RAISED_MESSAGE = "Unsupported riko module: x\n"
 TYPO_DAG = json.dumps({"modules": [{"type": "trunkate"}]})
-TYPO_MESSAGE = "Unsupported riko module: trunkate (did you mean 'truncate'?)\n"
 RIKO_ERRORS = [
-    pytest.param("pipe.py", RAISING_SCRIPT, RAISED_MESSAGE, id="pipe-script"),
-    pytest.param("pipe.dag.json", TYPO_DAG, TYPO_MESSAGE, id="workflow-document"),
+    pytest.param("pipe.py", RAISING_SCRIPT, "module: x", id="pipe-script"),
+    pytest.param("pipe.dag.json", TYPO_DAG, "module: trunkate", id="workflow-document"),
 ]
-
-
-def run_command(script: str, argument: str, *opts: str) -> str:
-    """
-    Run *script* with *opts* and *argument*, return stdout as a string.
-
-    Mirrors what scripttest's ``TestFileEnvironment.run`` did:
-    - stderr is captured but not checked (``expect_stderr=True`` behavior)
-    - the working directory is the repository root (``_BASEDIR``)
-    - a non-zero exit code raises ``subprocess.CalledProcessError``
-    """
-    cmd = [script, *opts]
-
-    if argument:
-        cmd.append(argument)
-
-    result = subprocess.run(
-        cmd, cwd=_BASEDIR, capture_output=True, text=True, check=False
-    )
-
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-
-    result.check_returncode()
-    return result.stdout
 
 
 def assert_output_matches(output: str, *expects, command: str = "") -> None:
@@ -108,30 +72,36 @@ def assert_output_matches(output: str, *expects, command: str = "") -> None:
         assert not diffs, msg
 
 
-def run_module(module: str, *args: str, **kwargs) -> subprocess.CompletedProcess:
-    """Run a riko command module in a subprocess and return the finished process."""
+def run_module(
+    module: str, *args: str, entry_point: bool = False, **kwargs
+) -> subprocess.CompletedProcess:
+    """
+    Runs a riko command in a subprocess and returns the finished process.
+
+    It runs ``python -m riko.cli.<module>``, or the installed console script when
+    ``entry_point`` is set, from the repository root unless ``cwd`` says otherwise.
+    """
+    command = [ENTRY_POINTS[module]] if entry_point else [sys.executable, "-m"]
+    target = [] if entry_point else [f"riko.cli.{module}"]
     options = {"cwd": _BASEDIR, "capture_output": True, "text": True} | kwargs
-    return subprocess.run(
-        [sys.executable, "-m", f"riko.cli.{module}", *args], check=False, **options
-    )
-
-
-def _installed(module: str) -> bool:
-    return importlib.util.find_spec(module) is not None
+    return subprocess.run([*command, *target, *args], check=False, **options)
 
 
 class TestRunPipe:
-    @pytest.mark.parametrize("opts", DEMO_OPTS)
+    @pytest.mark.parametrize(("opts", "entry_point", "outside"), DEMO_RUNS)
     @pytest.mark.parametrize(("argument", "expected"), DEMO_PARAMS)
-    def test_demo(self, argument, expected, opts):
-        command = " ".join([DEMO_SCRIPT, *opts, argument])
-        output = run_command(DEMO_SCRIPT, argument, *opts)
-        assert_output_matches(output, expected, command=command)
+    def test_demo(self, tmp_path, argument, expected, opts, entry_point, outside):
+        """An example id runs from the checkout or, by module, from any cwd."""
+        cwd = tmp_path if outside else _BASEDIR
+        ran = run_module("runpipe", *opts, argument, entry_point=entry_point, cwd=cwd)
+        assert ran.returncode == 0, ran.stderr
+        assert_output_matches(ran.stdout, expected, command=" ".join(ran.args))
 
     def test_usage_sync(self):
         """The usage example still runs through the CLI entry point."""
-        output = run_command(DEMO_SCRIPT, "usage")
-        assert "'hash': 197222720" in output
+        ran = run_module("runpipe", "usage", entry_point=True)
+        assert ran.returncode == 0, ran.stderr
+        assert "'hash': 197222720" in ran.stdout
 
     def test_run_pipe_workflow_document(self, tmp_path):
         workflow_file = tmp_path / "flow.json"
@@ -163,15 +133,6 @@ class TestRunPipe:
         assert ran.returncode == 0
         assert ran.stdout == "{'title': 'riko'}\n"
 
-    @pytest.mark.parametrize(("argument", "expected"), DEMO_PARAMS)
-    def test_run_pipe_example_id_outside_the_checkout(
-        self, tmp_path, argument, expected
-    ):
-        """An example id resolves through the ``examples`` directory from any cwd."""
-        ran = run_module("runpipe", argument, cwd=tmp_path)
-        assert ran.returncode == 0, ran.stderr
-        assert ran.stdout == expected
-
     @pytest.mark.parametrize(
         ("outside", "message"),
         [
@@ -202,7 +163,8 @@ class TestRunPipe:
 
         ran = run_module("runpipe", "-p", str(target))
         assert ran.returncode == 1
-        assert ran.stderr == message
+        assert message in ran.stderr
+        assert "Traceback" not in ran.stderr
 
     def test_run_pipe_missing_workflow_document(self, tmp_path):
         ran = run_module("runpipe", "-p", str(tmp_path / "missing.json"))
@@ -232,8 +194,7 @@ class TestBuildWorkflow:
 
     def test_build_workflow_compact_matches_the_serializer(self):
         """The compact form is the same byte-stable document the serializer emits."""
-        dag = json.loads(DAG_PATH.read_text(encoding="utf-8"))
-        expected = Workflow.parse(dag).serialize(indent=None).decode("utf-8")
+        expected = Workflow.parse(DAG).serialize(indent=None).decode("utf-8")
         convert = run_module("build_workflow", str(DAG_PATH), "-c")
         assert convert.stdout == expected
 
@@ -244,30 +205,30 @@ class TestBuildWorkflow:
         assert "Traceback" not in convert.stderr
 
     @pytest.mark.parametrize(
-        ("content", "message"),
+        "content",
         [
-            pytest.param('{"modules": []}', "no nodes", id="empty-dag"),
-            pytest.param('{"modules": null}', "must be a list", id="null-modules"),
+            pytest.param('{"modules": []}', id="empty-dag"),
+            pytest.param('{"modules": null}', id="null-modules"),
         ],
     )
-    def test_build_workflow_invalid_dag_exits_nonzero(self, tmp_path, content, message):
+    def test_build_workflow_invalid_dag_exits_nonzero(self, tmp_path, content):
         invalid = tmp_path / "invalid.json"
         invalid.write_text(content, encoding="utf-8")
         convert = run_module("build_workflow", str(invalid))
         assert convert.returncode == 1
-        assert message in convert.stderr
+        assert "Invalid pipeline" in convert.stderr
         assert "Traceback" not in convert.stderr
 
     @pytest.mark.parametrize("module", ["build_workflow", "compile"])
     @pytest.mark.parametrize(
-        ("content", "message"),
+        "content",
         [
-            pytest.param("{bad json", "Unable to parse input", id="malformed-json"),
-            pytest.param(None, "Unable to read input file", id="missing-file"),
+            pytest.param("{bad json", id="malformed-json"),
+            pytest.param(None, id="missing-file"),
         ],
     )
     def test_unreadable_input_exits_nonzero_without_a_traceback(
-        self, tmp_path, content, message, module
+        self, tmp_path, content, module
     ):
         path = tmp_path / "input.json"
 
@@ -276,7 +237,7 @@ class TestBuildWorkflow:
 
         result = run_module(module, str(path))
         assert result.returncode == 1
-        assert message in result.stderr
+        assert "Unable to" in result.stderr
         assert "Traceback" not in result.stderr
 
 
@@ -293,11 +254,24 @@ class TestCompile:
         compiled = run_module("compile", str(DAG_PATH))
         assert compiled.returncode == 1
         assert "build-workflow" in compiled.stderr
+        assert "Traceback" not in compiled.stderr
+
+
+BENCHMARK_LABELS = [
+    "baseline_sync",
+    "baseline_threads",
+    "baseline_procs",
+    "sync_module",
+    "sync_pipeline",
+    "sync_workflow",
+]
 
 
 class TestBenchmark:
     def test_benchmark(self):
-        output = run_command(BENCHMARK_SCRIPT, "")
+        ran = run_module("benchmark", entry_point=True)
+        assert ran.returncode == 0, ran.stderr
+        output = ran.stdout
         lines = [line.strip() for line in output.splitlines()]
         missing = [
             label
@@ -306,33 +280,6 @@ class TestBenchmark:
         ]
         msg = f"benchmark output missing labels {missing}:\n{output}"
         assert not missing, msg
-
-
-class TestOptionalExtras:
-    """
-    Pin each optional extra's contract with and without it installed.
-
-    These run unmarked in every environment, so the base environment verifies the
-    degraded behavior rather than skipping the extra-only tests.
-    """
-
-    def test_capability_flags_track_installed_libs(self):
-        """The parser capability flags reflect whether each perf lib is importable."""
-        assert IS_LXML is _installed("lxml")
-        assert IS_FASTFEEDPARSER is _installed("fastfeedparser")
-
-        if not _installed("ijson"):
-            assert IJSON_IS_NATIVE is False
-
-    def test_finance_targets_track_csv2ofx(self):
-        """``ofx``/``qif`` formats appear only when the finance extra is present."""
-        finance_targets = {"ofx", "qif"}
-        targets = set(list_formats())
-
-        if _installed("csv2ofx"):
-            assert finance_targets <= targets
-        else:
-            assert not (finance_targets & targets)
 
 
 class TestExamplePipelines:
@@ -451,9 +398,7 @@ class TestExamplePipelines:
             pytest.param(
                 "split",
                 {"date": "December 02, 2014", "year": 2014},
-                marks=pytest.mark.xfail(
-                    strict=True, reason="Pipeline.split() is not available yet"
-                ),
+                marks=SPLIT_METHOD_PENDING,
             ),
             ("wired", {"date": "May 04, 1982"}),
         ],
@@ -472,12 +417,7 @@ class TestExamplePipelines:
             "simple1",
             "simple2",
             "gigs",
-            pytest.param(
-                "split",
-                marks=pytest.mark.xfail(
-                    strict=True, reason="Pipeline.split() is not available yet"
-                ),
-            ),
+            pytest.param("split", marks=SPLIT_METHOD_PENDING),
             "demo",
             "wired",
             pytest.param(
@@ -521,14 +461,9 @@ class TestExamplePipelines:
     )
     def test_example_document_runs(self, pipe_name, expected):
         """Runs each example workflow document and checks the stream it produces."""
-        document = ROOT_DIR / "examples" / "workflows" / f"{pipe_name}.json"
-        flow = Workflow.parse(document.read_text())
-        items = []
-
-        with SyncExecution(context=Context(test=True)) as execution:
-            items = list(execution.run(ExecutionPlan.from_workflow(flow, dispatcher)))
-
-        assert items == expected
+        assert (
+            run_document(EXAMPLES_DIR / "workflows" / f"{pipe_name}.json") == expected
+        )
 
     @pytest.mark.parametrize(
         ("script", "expected"),

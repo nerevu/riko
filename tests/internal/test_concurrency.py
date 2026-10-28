@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides internal tests for worker pools, mapping policy, and concurrency."""
+"""Provides internal tests for worker pools, mapping policy, and thread budgets."""
 
 from __future__ import annotations
 
@@ -41,36 +41,80 @@ from riko.runtime._resolver import dispatcher
 from riko.types._enums import Executor
 from riko.types._workflow import Endpoint
 from tests import async_test
-from tests._execution import build_chain, build_dispatcher, build_workflow, tag_source
+from tests._execution import (
+    arun_plan,
+    build_chain,
+    build_chain_plan,
+    build_dispatcher,
+    build_workflow,
+    mark_async_loopable,
+    mark_loopable,
+    run_plan,
+    tag_source,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import Generator
 
-    from riko.types._events import EventSink
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
 ITEMS = [{"x": x} for x in range(20)]
 
 
-def _loopable(func) -> Any:
-    func.loopable = True
-    func.type = "processor"
-    return func
-
-
-def _hash_plan(*names):
-    nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
-
-
 def _key(item):
     return tuple(sorted(item.items()))
 
 
-class _Sink:
-    def emit(self, event: object) -> None:
-        pass
+INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
+
+
+THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
+
+
+LIMIT = config.concurrency_limit
+
+
+def _pair(item: str) -> list[str]:
+    return [item, item]
+
+
+ITEM_CALLS = [
+    pytest.param(THREAD, run_item, (_pair,), id="thread"),
+    pytest.param(PROCESS, run_shipped_item, (pickle.dumps(_pair),), id="process"),
+]
+
+
+class TestBuildItemCall:
+    @pytest.mark.parametrize(("executor", "func", "args"), ITEM_CALLS)
+    def test_item_call_binds_the_pipe_for_its_executor(self, executor, func, args):
+        call = build_item_call(_pair, executor)
+        assert isinstance(call, partial)
+        assert (call.func, call.args) == (func, args)
+        assert call("a") == ["a", "a"]
+
+    def test_shipped_call_is_unpickled_once_per_worker(self) -> None:
+        _load_call.cache_clear()
+        func = build_item_call(_pair, Executor.PROCESS)
+        assert (func("a"), func("b")) == (["a", "a"], ["b", "b"])
+        assert _load_call.cache_info()[:2] == (1, 1)
+
+
+@pytest.fixture
+def opened(monkeypatch):
+    calls: list[tuple[Executor, int]] = []
+
+    def record(pool, window):
+        executor = (
+            Executor.THREAD
+            if isinstance(pool, ThreadPoolExecutor)
+            else Executor.PROCESS
+        )
+        calls.append((executor, window))
+        return _PoolLifetime(pool, window)
+
+    monkeypatch.setattr(_sync_execution, "_PoolLifetime", record)
+    return calls
 
 
 class _Unpicklable:
@@ -83,24 +127,76 @@ class _Unpicklable:
         raise RuntimeError("no pickling here")
 
 
-class TestExecutionSettings:
-    def test_unknown_executor_lists_the_known_executors(self) -> None:
-        message = "ExecutionSettings 'executor': 'bogus'. Expected one of auto, inline"
+def _loop_dispatcher():
+    def fakeloop(item, **_):
+        return iter([item])
 
-        with pytest.raises(ValueError, match=message):
-            ExecutionSettings(executor="bogus")
-
-    def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
-        sink, explicit = cast("EventSink", _Sink()), cast("EventSink", _Sink())
-        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
-        assert SyncExecution(settings=settings).events is sink
-        assert SyncExecution(events=explicit, settings=settings).events is explicit
-        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
+    up = cast("AsyncModuleWrapper", lambda item, **_: item)
+    return build_dispatcher(
+        ModuleDefinition(name="fakeloop", sync_pipe=mark_loopable(fakeloop)),
+        ModuleDefinition(name="up", async_pipe=up),
+    )
 
 
-INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
-THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
-LIMIT = config.concurrency_limit
+def _resource_refusal() -> tuple[ExecutionPlan, Context | None]:
+    # Of two unsafe nodes, the upstream one is reported however ids hash.
+    binding = {"slot": "primary"}
+    nodes = [ModuleNode(id=id_, name="hash", resources=binding) for id_ in "za"]
+    edge = StreamEdge(Endpoint("z", "out"), Endpoint("a", "in"))
+    flow = build_workflow(nodes, edges=(edge,), resources=("primary",))
+    context = Context().with_resource("primary", Resource.from_external(object()))
+    return ExecutionPlan.from_workflow(flow, dispatcher), context
+
+
+def _embed_refusal() -> tuple[ExecutionPlan, Context | None]:
+    node = ModuleNode(id="loop", name="fakeloop", embed={"name": "up", "conf": {}})
+    flow = build_workflow([node])
+    return ExecutionPlan.from_workflow(flow, dispatcher=_loop_dispatcher()), None
+
+
+def _local_pipe_refusal(pipe=None) -> tuple[ExecutionPlan, Context | None]:
+    def local(item, **_):
+        return iter([item])
+
+    definition = ModuleDefinition(name="local", sync_pipe=mark_loopable(pipe or local))
+    flow = build_workflow([ModuleNode(id="n", name="local")])
+    plan = ExecutionPlan.from_workflow(flow, dispatcher=build_dispatcher(definition))
+    return plan, None
+
+
+PROCESS_REFUSALS = [
+    pytest.param(_resource_refusal, "z", None, id="resource-node"),
+    pytest.param(_embed_refusal, "loop", None, id="async-only-embed"),
+    pytest.param(_local_pipe_refusal, "n", Exception, id="unpicklable-pipe"),
+    pytest.param(
+        lambda: _local_pipe_refusal(_Unpicklable()),
+        "n",
+        RuntimeError,
+        id="any-pickling-failure",
+    ),
+]
+
+
+class TestRequireProcessSafe:
+    @pytest.mark.parametrize(("build", "node", "cause"), PROCESS_REFUSALS)
+    def test_process_executor_refuses_an_unsafe_node(
+        self, opened, build, node, cause
+    ) -> None:
+        plan, context = build()
+        settings = ExecutionSettings(executor="process", concurrency=2)
+        execution = SyncExecution(context, settings=settings)
+
+        with (
+            execution,
+            pytest.raises(
+                InvalidPipelineError, match=f"node '{node}' cannot run"
+            ) as info,
+        ):
+            execution.run(plan, seed=ITEMS)
+
+        assert cause is None or isinstance(info.value.__cause__, cause)
+        assert opened == []
+
 
 SYNC_POLICIES = [
     pytest.param({"concurrency": 1}, SyncPolicy(INLINE, None), id="one"),
@@ -138,109 +234,6 @@ SYNC_POLICIES = [
     ),
 ]
 
-ASYNC_POLICIES = [
-    pytest.param({}, AsyncPolicy(None, False), id="default"),
-    pytest.param({"executor": "inline"}, AsyncPolicy(1, True), id="inline"),
-    pytest.param({"executor": "thread"}, AsyncPolicy(1, False), id="thread"),
-    pytest.param({"concurrency": "auto"}, AsyncPolicy(LIMIT, False), id="auto"),
-    pytest.param(
-        {"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"
-    ),
-    pytest.param(
-        {"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"
-    ),
-    pytest.param(
-        {"executor": "inline", "concurrency": "auto"},
-        AsyncPolicy(LIMIT, True),
-        id="inline-auto",
-    ),
-]
-
-
-def _pair(item: str) -> list[str]:
-    return [item, item]
-
-
-ITEM_CALLS = [
-    pytest.param(THREAD, run_item, (_pair,), id="thread"),
-    pytest.param(PROCESS, run_shipped_item, (pickle.dumps(_pair),), id="process"),
-]
-
-
-class TestMappingPolicy:
-    @pytest.mark.parametrize(("kwargs", "expected"), SYNC_POLICIES)
-    def test_sync_policy_table(self, kwargs, expected) -> None:
-        assert ExecutionSettings(**kwargs).sync_policy == expected
-
-    @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
-    def test_async_policy_table(self, kwargs, expected) -> None:
-        assert ExecutionSettings(**kwargs).async_policy == expected
-
-    @pytest.mark.parametrize(("executor", "func", "args"), ITEM_CALLS)
-    def test_item_call_binds_the_pipe_for_its_executor(self, executor, func, args):
-        call = build_item_call(_pair, executor)
-        assert isinstance(call, partial)
-        assert (call.func, call.args) == (func, args)
-        assert call("a") == ["a", "a"]
-
-    def test_shipped_call_is_unpickled_once_per_worker(self) -> None:
-        _load_call.cache_clear()
-        func = build_item_call(_pair, Executor.PROCESS)
-        assert (func("a"), func("b")) == (["a", "a"], ["b", "b"])
-        assert _load_call.cache_info()[:2] == (1, 1)
-
-    def test_prepared_node_reports_loopable(self) -> None:
-        plan = _hash_plan("hash", "count")
-        assert plan.nodes["n0"].loopable is True
-        assert plan.nodes["n1"].loopable is False
-
-    @pytest.mark.parametrize("port", ["in:1", "in:side"])
-    def test_secondary_input_stream_makes_a_node_unmappable(self, port) -> None:
-        def echo(item, **_):
-            return iter([item])
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="echo", sync_pipe=_loopable(echo))
-        )
-        nodes = [ModuleNode(id=id_, name="echo") for id_ in ("a", "b", "c")]
-        edges = (
-            StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("c", port)),
-        )
-        plan = ExecutionPlan.from_workflow(
-            build_workflow(nodes, edges=edges), dispatcher
-        )
-        assert plan.nodes["a"].is_mappable is True
-        assert plan.nodes["c"].is_mappable is False
-
-
-def _run_sync(plan, settings=None, seed=ITEMS):
-    kwargs = {} if settings is None else {"settings": settings}
-    execution = SyncExecution(**kwargs)
-    result: list = []
-
-    with execution:
-        result = list(execution.run(plan, seed=seed))
-
-    return result
-
-
-@pytest.fixture
-def opened(monkeypatch):
-    calls: list[tuple[Executor, int]] = []
-
-    def record(pool, window):
-        executor = (
-            Executor.THREAD
-            if isinstance(pool, ThreadPoolExecutor)
-            else Executor.PROCESS
-        )
-        calls.append((executor, window))
-        return _PoolLifetime(pool, window)
-
-    monkeypatch.setattr(_sync_execution, "_PoolLifetime", record)
-    return calls
-
 
 @pytest.fixture
 def released(monkeypatch):
@@ -260,21 +253,14 @@ def released(monkeypatch):
     return calls
 
 
-def _loop_dispatcher():
-    def fakeloop(item, **_):
-        return iter([item])
+class TestSyncPolicy:
+    @pytest.mark.parametrize(("kwargs", "expected"), SYNC_POLICIES)
+    def test_sync_policy_table(self, kwargs, expected) -> None:
+        assert ExecutionSettings(**kwargs).sync_policy == expected
 
-    up = cast("AsyncModuleWrapper", lambda item, **_: item)
-    return build_dispatcher(
-        ModuleDefinition(name="fakeloop", sync_pipe=_loopable(fakeloop)),
-        ModuleDefinition(name="up", async_pipe=up),
-    )
-
-
-class TestSyncConcurrency:
     def test_sync_run_without_settings_opens_no_pool(self, opened) -> None:
-        plan = _hash_plan("hash")
-        assert len(_run_sync(plan)) == len(ITEMS)
+        plan = build_chain_plan("hash")
+        assert len(run_plan(plan, seed=ITEMS)) == len(ITEMS)
         assert opened == []
 
     def test_sync_sequential_run_has_no_worker_pool(self) -> None:
@@ -283,32 +269,38 @@ class TestSyncConcurrency:
 
     @pytest.mark.slow
     def test_sync_concurrency_maps_on_a_thread_pool(self, opened, released) -> None:
-        plan = _hash_plan("hash", "hash")
-        expected = _run_sync(plan)
-        result = _run_sync(plan, ExecutionSettings(concurrency=4))
+        plan = build_chain_plan("hash", "hash")
+        expected = run_plan(plan, seed=ITEMS)
+        result = run_plan(plan, settings=ExecutionSettings(concurrency=4), seed=ITEMS)
 
         assert Counter(map(_key, result)) == Counter(map(_key, expected))
         assert opened == [(Executor.THREAD, 4)]
         assert released == ["close"]
 
     def test_sync_inline_executor_never_opens_a_pool(self, opened) -> None:
-        plan = _hash_plan("hash")
+        plan = build_chain_plan("hash")
         settings = ExecutionSettings(executor="inline", concurrency=4)
-        assert _run_sync(plan, settings) == _run_sync(plan)
+        assert run_plan(plan, settings=settings, seed=ITEMS) == run_plan(
+            plan, seed=ITEMS
+        )
         assert opened == []
 
     @pytest.mark.slow
     def test_sync_process_executor_maps_items(self, opened) -> None:
-        plan = _hash_plan("hash")
+        plan = build_chain_plan("hash")
         settings = ExecutionSettings(executor="process", concurrency=2)
-        result = _run_sync(plan, settings)
+        result = run_plan(plan, settings=settings, seed=ITEMS)
 
-        assert Counter(map(_key, result)) == Counter(map(_key, _run_sync(plan)))
+        assert Counter(map(_key, result)) == Counter(
+            map(_key, run_plan(plan, seed=ITEMS))
+        )
         assert opened == [(Executor.PROCESS, 2)]
 
     def test_sync_non_loopable_node_is_never_mapped(self, opened) -> None:
-        plan = _hash_plan("count")
-        assert _run_sync(plan, ExecutionSettings(concurrency=4)) == [{"count": 20}]
+        plan = build_chain_plan("count")
+        assert run_plan(
+            plan, settings=ExecutionSettings(concurrency=4), seed=ITEMS
+        ) == [{"count": 20}]
         assert opened == []
 
     @pytest.mark.parametrize("executor", ["thread", "process"])
@@ -329,7 +321,7 @@ class TestSyncConcurrency:
 
         dispatcher = build_dispatcher(
             ModuleDefinition(name="side", sync_pipe=cast("SyncModuleWrapper", source)),
-            ModuleDefinition(name="joiner", sync_pipe=_loopable(joiner)),
+            ModuleDefinition(name="joiner", sync_pipe=mark_loopable(joiner)),
         )
         side = ModuleNode(id="s", name="side")
         joined = ModuleNode(id="j", name="joiner", resources={"slot": "primary"})
@@ -347,32 +339,10 @@ class TestSyncConcurrency:
         assert opened == []
 
     @pytest.mark.slow
-    @pytest.mark.parametrize("ordered", [False, True])
-    def test_sync_pool_terminates_when_a_mapped_item_fails(
-        self, released, ordered
-    ) -> None:
-        def explode(item, **_):
-            if item["x"] == 3:
-                raise ValueError("boom")
-
-            return iter([item])
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="explode", sync_pipe=_loopable(explode))
-        )
-        flow = build_workflow([ModuleNode(id="n", name="explode")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-
-        with pytest.raises(ValueError, match="boom"):
-            _run_sync(plan, ExecutionSettings(concurrency=2, ordered=ordered))
-
-        assert released == ["terminate"]
-
-    @pytest.mark.slow
     def test_sync_pool_terminates_when_the_stream_is_closed_early(
         self, released
     ) -> None:
-        plan = _hash_plan("hash")
+        plan = build_chain_plan("hash")
 
         with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
             stream = cast("Generator", execution.run(plan, seed=ITEMS))
@@ -425,7 +395,7 @@ class TestSyncConcurrency:
                 pulled.append(x)
                 yield {"x": x}
 
-        plan = _hash_plan("hash", "hash")
+        plan = build_chain_plan("hash", "hash")
         settings = ExecutionSettings(concurrency=concurrency, ordered=ordered)
 
         def consume() -> None:
@@ -444,104 +414,57 @@ class TestSyncConcurrency:
         assert len(pulled) <= 2 * concurrency + 1
 
     def test_sync_mapping_waits_for_the_first_pull(self, opened) -> None:
-        plan = _hash_plan("hash")
+        plan = build_chain_plan("hash")
 
         with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
             execution.run(plan, seed=ITEMS)
 
         assert opened == []
 
-    def test_process_executor_refuses_a_resource_node(self, opened) -> None:
-        # Of two unsafe nodes, the upstream one is reported however ids hash.
-        binding = {"slot": "primary"}
-        nodes = [ModuleNode(id=id_, name="hash", resources=binding) for id_ in "za"]
-        edge = StreamEdge(Endpoint("z", "out"), Endpoint("a", "in"))
-        flow = build_workflow(nodes, edges=(edge,), resources=("primary",))
-        plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        context = Context().with_resource("primary", Resource.from_external(object()))
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(context, settings=settings)
+    @pytest.mark.slow
+    @pytest.mark.parametrize("ordered", [False, True])
+    def test_sync_pool_terminates_when_a_mapped_item_fails(
+        self, released, ordered
+    ) -> None:
+        def explode(item, **_):
+            if item["x"] == 3:
+                raise ValueError("boom")
 
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'z' cannot run"),
-        ):
-            execution.run(plan, seed=ITEMS)
-
-        assert opened == []
-
-    def test_process_executor_refuses_an_async_only_embed(self, opened) -> None:
-        node = ModuleNode(id="loop", name="fakeloop", embed={"name": "up", "conf": {}})
-        plan = ExecutionPlan.from_workflow(
-            build_workflow([node]), dispatcher=_loop_dispatcher()
-        )
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(settings=settings)
-
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'loop' cannot run"),
-        ):
-            execution.run(plan, seed=ITEMS)
-
-        assert opened == []
-
-    def test_process_executor_refuses_an_unpicklable_pipe(self, opened) -> None:
-        def local(item, **_):
             return iter([item])
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="local", sync_pipe=_loopable(local))
+            ModuleDefinition(name="explode", sync_pipe=mark_loopable(explode))
         )
-        flow = build_workflow([ModuleNode(id="n", name="local")])
+        flow = build_workflow([ModuleNode(id="n", name="explode")])
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(settings=settings)
 
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'n' cannot run") as info,
-        ):
-            execution.run(plan, seed=ITEMS)
+        with pytest.raises(ValueError, match="boom"):
+            run_plan(
+                plan,
+                settings=ExecutionSettings(concurrency=2, ordered=ordered),
+                seed=ITEMS,
+            )
 
-        assert info.value.__cause__ is not None
-        assert opened == []
-
-    def test_process_executor_wraps_any_pickling_failure(self, opened) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="local", sync_pipe=_loopable(_Unpicklable()))
-        )
-        flow = build_workflow([ModuleNode(id="n", name="local")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-        settings = ExecutionSettings(executor="process", concurrency=2)
-        execution = SyncExecution(settings=settings)
-
-        with (
-            execution,
-            pytest.raises(InvalidPipelineError, match="node 'n' cannot run") as info,
-        ):
-            execution.run(plan, seed=ITEMS)
-
-        assert isinstance(info.value.__cause__, RuntimeError)
-        assert opened == []
+        assert released == ["terminate"]
 
 
-def _passthru(stream, **_):
-    yield from stream
-
-
-_passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
-
-
-async def _arun(plan, settings, seed=ITEMS):
-    execution = AsyncExecution(settings=settings)
-    result: list = []
-
-    async with execution:
-        stream = await execution.arun(plan, seed=seed)
-        result = [item async for item in stream]
-
-    return result
+ASYNC_POLICIES = [
+    pytest.param({}, AsyncPolicy(None, False), id="default"),
+    pytest.param({"executor": "inline"}, AsyncPolicy(1, True), id="inline"),
+    pytest.param({"executor": "thread"}, AsyncPolicy(1, False), id="thread"),
+    pytest.param({"concurrency": "auto"}, AsyncPolicy(LIMIT, False), id="auto"),
+    pytest.param(
+        {"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"
+    ),
+    pytest.param(
+        {"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"
+    ),
+    pytest.param(
+        {"executor": "inline", "concurrency": "auto"},
+        AsyncPolicy(LIMIT, True),
+        id="inline-auto",
+    ),
+]
 
 
 def _thread_probe():
@@ -551,11 +474,100 @@ def _thread_probe():
         threads.append(get_ident())
         return iter([item])
 
-    definition = ModuleDefinition(name="probe", sync_pipe=_loopable(probe))
+    definition = ModuleDefinition(name="probe", sync_pipe=mark_loopable(probe))
     flow = build_workflow([ModuleNode(id="n", name="probe")])
     return threads, ExecutionPlan.from_workflow(
         flow, dispatcher=build_dispatcher(definition)
     )
+
+
+class TestAsyncPolicy:
+    @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
+    def test_async_policy_table(self, kwargs, expected) -> None:
+        assert ExecutionSettings(**kwargs).async_policy == expected
+
+    @async_test
+    async def test_async_concurrency_collects_async_iterable_results(self) -> None:
+        async def twice(item, **_):
+            yield item
+            yield item
+
+        definition = ModuleDefinition(
+            name="twice", async_pipe=mark_async_loopable(twice)
+        )
+        flow = build_workflow([ModuleNode(id="n", name="twice")])
+        plan = ExecutionPlan.from_workflow(
+            flow, dispatcher=build_dispatcher(definition)
+        )
+        result = await arun_plan(
+            plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS
+        )
+
+        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS * 2))
+
+    @async_test
+    async def test_async_concurrency_is_one_ceiling_across_nodes(self) -> None:
+        active = peak = 0
+
+        async def slow(item, **_):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await async_sleep(0.01)
+            active -= 1
+            return [item]
+
+        definition = ModuleDefinition(name="slow", async_pipe=mark_async_loopable(slow))
+        nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
+        plan = ExecutionPlan.from_workflow(
+            build_chain(*nodes), dispatcher=build_dispatcher(definition)
+        )
+        result = await arun_plan(
+            plan, settings=ExecutionSettings(concurrency=3), seed=ITEMS
+        )
+
+        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
+        assert 1 < peak <= 3
+
+    @async_test
+    async def test_async_concurrency_runs_sync_pipes_on_worker_threads(self) -> None:
+        threads, plan = _thread_probe()
+        result = await arun_plan(
+            plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS
+        )
+
+        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
+        assert len(threads) == len(ITEMS)
+        assert get_ident() not in threads
+
+    @async_test
+    async def test_async_inline_executor_runs_sync_pipes_on_the_loop_thread(
+        self,
+    ) -> None:
+        threads, plan = _thread_probe()
+        settings = ExecutionSettings(executor="inline", concurrency=2)
+        result = await arun_plan(plan, settings=settings, seed=ITEMS)
+
+        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
+        assert set(threads) == {get_ident()}
+
+    @async_test
+    async def test_async_run_refuses_the_process_executor(self) -> None:
+        threads, plan = _thread_probe()
+        settings = ExecutionSettings(executor="process", concurrency=2)
+
+        async with AsyncExecution(settings=settings) as execution:
+            with pytest.raises(InvalidPipelineError, match="synchronous execution"):
+                await execution.arun(plan, seed=ITEMS)
+
+        assert threads == []
+
+
+def _passthru(stream, **_):
+    yield from stream
+
+
+_passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
 
 
 @dataclass
@@ -626,19 +638,14 @@ THREAD_BUDGET_OVERFLOWS = [
     pytest.param(4, 5, id="small-budget"),
 ]
 
+
 SEQUENTIAL_FAN_INS = [
     pytest.param(union, "in:1", 6, id="union"),
     pytest.param(join, "in:other", 9, id="join"),
 ]
 
 
-class TestAsyncConcurrency:
-    def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
-        monkeypatch.setattr(_async_execution, "_budgets", None)
-
-        with pytest.raises(RuntimeError, match="anyio is required"):
-            _async_execution._resolve_thread_budget()
-
+class TestThreadBudget:
     @async_test
     async def test_async_long_sync_only_chain_completes(self, node_threads) -> None:
         # Each sync-only node holds a worker thread while it pulls its upstream, so
@@ -654,25 +661,6 @@ class TestAsyncConcurrency:
 
         assert result == ITEMS[:2]
 
-    @pytest.mark.parametrize(("budget", "depth"), THREAD_BUDGET_OVERFLOWS)
-    @async_test
-    async def test_async_chain_over_thread_budget_raises_before_reading(
-        self, node_threads, budget, depth
-    ) -> None:
-        node_threads(budget)
-        read: list = []
-
-        def source():
-            read.append(True)
-            yield from ITEMS[:2]
-
-        with fail_after(20):
-            async with AsyncExecution() as execution:
-                with pytest.raises(InvalidPipelineError, match="RIKO_NODE_THREADS"):
-                    await execution.arun(_passthru_plan(depth), seed=source())
-
-        assert read == []
-
     @async_test
     async def test_async_mapped_sync_chain_holds_no_node_threads(
         self, node_threads
@@ -682,14 +670,16 @@ class TestAsyncConcurrency:
         def echo(item, **_):
             return iter([item])
 
-        definition = ModuleDefinition(name="echo", sync_pipe=_loopable(echo))
+        definition = ModuleDefinition(name="echo", sync_pipe=mark_loopable(echo))
         nodes = [ModuleNode(id=f"n{i}", name="echo") for i in range(3)]
         plan = ExecutionPlan.from_workflow(
             build_chain(*nodes), dispatcher=build_dispatcher(definition)
         )
 
         with fail_after(20):
-            result = await _arun(plan, ExecutionSettings(concurrency=2), ITEMS[:2])
+            result = await arun_plan(
+                plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS[:2]
+            )
 
         assert Counter(map(_key, result)) == Counter(map(_key, ITEMS[:2]))
 
@@ -701,7 +691,9 @@ class TestAsyncConcurrency:
         results: list[list] = []
 
         async def consume() -> None:
-            results.append(await _arun(plan, ExecutionSettings(), ITEMS[:5]))
+            results.append(
+                await arun_plan(plan, settings=ExecutionSettings(), seed=ITEMS[:5])
+            )
 
         with fail_after(20):
             async with create_task_group() as tg:
@@ -761,26 +753,6 @@ class TestAsyncConcurrency:
         assert _async_execution._resolve_thread_budget().available == 1
 
     @async_test
-    async def test_async_run_beside_own_open_stream_over_budget_raises(
-        self, node_threads
-    ) -> None:
-        node_threads(3)
-        plan = _passthru_plan(2)
-        rest: list = []
-
-        with fail_after(20):
-            async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, seed=ITEMS[:2])
-                await anext(stream)
-
-                with pytest.raises(InvalidPipelineError, match="open output streams"):
-                    await execution.arun(plan, seed=ITEMS[:2])
-
-                rest = [item async for item in stream]
-
-        assert rest == ITEMS[1:2]
-
-    @async_test
     async def test_async_interleaved_fan_in_fits_its_thread_budget(
         self, node_threads
     ) -> None:
@@ -815,7 +787,7 @@ class TestAsyncConcurrency:
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
         with fail_after(10):
-            result = await _arun(plan, ExecutionSettings(), None)
+            result = await arun_plan(plan, settings=ExecutionSettings())
 
         assert result == list(
             chain.from_iterable(zip(ITEMS[:3], ITEMS[:3], strict=True))
@@ -864,97 +836,52 @@ class TestAsyncConcurrency:
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
         with fail_after(20):
-            result = await _arun(plan, ExecutionSettings(), None)
+            result = await arun_plan(plan, settings=ExecutionSettings())
 
         assert plan.get_thread_demand("default", mapped=False) == 25
         assert len(result) == count
 
+    def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
+        monkeypatch.setattr(_async_execution, "_budgets", None)
+
+        with pytest.raises(RuntimeError, match="anyio is required"):
+            _async_execution._resolve_thread_budget()
+
+    @pytest.mark.parametrize(("budget", "depth"), THREAD_BUDGET_OVERFLOWS)
     @async_test
-    async def test_async_concurrency_collects_async_iterable_results(self) -> None:
-        async def twice(item, **_):
-            yield item
-            yield item
-
-        definition = ModuleDefinition(name="twice", async_pipe=_loopable(twice))
-        flow = build_workflow([ModuleNode(id="n", name="twice")])
-        plan = ExecutionPlan.from_workflow(
-            flow, dispatcher=build_dispatcher(definition)
-        )
-        result = await _arun(plan, ExecutionSettings(concurrency=2))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS * 2))
-
-    @async_test
-    async def test_async_concurrency_is_one_ceiling_across_nodes(self) -> None:
-        active = peak = 0
-
-        async def slow(item, **_):
-            nonlocal active, peak
-            active += 1
-            peak = max(peak, active)
-            await async_sleep(0.01)
-            active -= 1
-            return [item]
-
-        definition = ModuleDefinition(name="slow", async_pipe=_loopable(slow))
-        nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
-        plan = ExecutionPlan.from_workflow(
-            build_chain(*nodes), dispatcher=build_dispatcher(definition)
-        )
-        result = await _arun(plan, ExecutionSettings(concurrency=3))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert 1 < peak <= 3
-
-    @async_test
-    async def test_async_concurrency_runs_sync_pipes_on_worker_threads(self) -> None:
-        threads, plan = _thread_probe()
-        result = await _arun(plan, ExecutionSettings(concurrency=2))
-
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert len(threads) == len(ITEMS)
-        assert get_ident() not in threads
-
-    @async_test
-    async def test_async_inline_executor_runs_sync_pipes_on_the_loop_thread(
-        self,
+    async def test_async_chain_over_thread_budget_raises_before_reading(
+        self, node_threads, budget, depth
     ) -> None:
-        threads, plan = _thread_probe()
-        settings = ExecutionSettings(executor="inline", concurrency=2)
-        result = await _arun(plan, settings)
+        node_threads(budget)
+        read: list = []
 
-        assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
-        assert set(threads) == {get_ident()}
+        def source():
+            read.append(True)
+            yield from ITEMS[:2]
+
+        with fail_after(20):
+            async with AsyncExecution() as execution:
+                with pytest.raises(InvalidPipelineError, match="RIKO_NODE_THREADS"):
+                    await execution.arun(_passthru_plan(depth), seed=source())
+
+        assert read == []
 
     @async_test
-    async def test_async_run_refuses_the_process_executor(self) -> None:
-        threads, plan = _thread_probe()
-        settings = ExecutionSettings(executor="process", concurrency=2)
+    async def test_async_run_beside_own_open_stream_over_budget_raises(
+        self, node_threads
+    ) -> None:
+        node_threads(3)
+        plan = _passthru_plan(2)
+        rest: list = []
 
-        async with AsyncExecution(settings=settings) as execution:
-            with pytest.raises(InvalidPipelineError, match="synchronous execution"):
-                await execution.arun(plan, seed=ITEMS)
+        with fail_after(20):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(plan, seed=ITEMS[:2])
+                await anext(stream)
 
-        assert threads == []
+                with pytest.raises(InvalidPipelineError, match="open output streams"):
+                    await execution.arun(plan, seed=ITEMS[:2])
 
-    @pytest.mark.parametrize("ordered", [False, True])
-    @async_test
-    async def test_async_early_close_stops_pulling_the_source(self, ordered) -> None:
-        pulled: list[int] = []
+                rest = [item async for item in stream]
 
-        async def tracked():
-            for item in ITEMS:
-                pulled.append(item["x"])
-                yield item
-
-        plan = _hash_plan("hash", "hash")
-        settings = ExecutionSettings(concurrency=2, ordered=ordered)
-        first: dict = {}
-
-        async with AsyncExecution(settings=settings) as execution:
-            stream = cast("AsyncGenerator", await execution.arun(plan, seed=tracked()))
-            first = await anext(stream)
-            await stream.aclose()
-
-        assert first["x"] in pulled
-        assert len(pulled) < len(ITEMS)
+        assert rest == ITEMS[1:2]

@@ -424,8 +424,8 @@ edge-less nodes; normalization counts stream edges only). It
 is the one topology interpretation: `Workflow.validate()` rejects a non-empty `cyclic`, and
 `ExecutionPlan.from_workflow` (`riko/execution/_prepared.py`) and the sync/async executions read the same
 index instead of rescanning edges. Structure pinned by
-`tests/internal/test_values.py::TestGraphIndex::test_workflow_index_orders_and_indexes` and
-`test_graph_index_derives_and_freezes_from_its_inputs`.
+`tests/public/test_workflow.py::TestWorkflow::test_workflow_index_orders_and_indexes` and
+`tests/internal/test_values.py::TestGraphIndex::test_graph_index_derives_and_freezes_from_its_inputs`.
 
 > The index's v1 indexer (`parse_pipe_def`/`_index_pipe_def`, with `_OUTPUT` as a node, verbatim
 > legacy ports, and dropped orphans) was deleted at cutover step 5 (2026-10-03); those deltas are
@@ -1055,7 +1055,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `StopIteration` never leaks into an enclosing iterator. A bare `break` out of `async for` over a
   `Pipeline` is safe but releases the run only when the abandoned generator is garbage collected
   (regression
-  `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`)
+  `tests/public/test_pipeline.py::TestPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`)
   and warns with a `ResourceWarning`; `async with pipeline.open()` is the prompt-release form.
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
   normalize/runtime import: the canonical constructor takes `(workflow)` — it accepts a
@@ -1211,8 +1211,8 @@ tuple and a dict as a `FrozenDict`.
 - **Typing.** `map[R]` takes `Callable[[T_co], R] | Callable[Concatenate[T_co, ...], R]` and builds a
   `PipelineDefinition[R]` directly (no cast); `Pipeline.map` builds a `Pipeline[R]` the same way.
 
-Regressions: `tests/public/test_pipeline.py::TestCallableNodes`,
-`tests/internal/test_definitions.py::TestCallableNode`, and
+Regressions: `tests/public/test_callable_nodes.py::TestCallableNodes`,
+`tests/public/test_workflow.py::TestCallableNode`, and
 `tests/public/test_workflow.py::TestCallableNodeDocuments`.
 
 ## Write sessions — private seam awaiting `WriteNode`

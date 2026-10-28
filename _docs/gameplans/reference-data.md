@@ -20,7 +20,7 @@ consumer:
 
 | File | Shape | Live consumer |
 |---|---|---|
-| `riko/data/countries.csv` | `continent,code_2,code_3,num,name` (countries only; **no continent rows**) | test input only: `tests/internal/test_io.py::TestFetch::test_csv_headerless_closes_original_source` |
+| `riko/data/countries.csv` | `continent,code_2,code_3,num,name` (countries only; **no continent rows**) | test input only: `tests/internal/test_modules.py::TestCsvParser::test_csv_headerless_closes_original_source` |
 | `riko/data/currencies.csv` | `code,location` | none |
 | `riko/data/currencies.json` | rich metadata incl. `decimal_digits`/`rounding`; **no `location`, no `locale`** | none |
 

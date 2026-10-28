@@ -10,26 +10,31 @@ import pickle  # noqa: S403
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
+from time import monotonic
 from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 
 import attrs
 import pytest
 
+from riko.bado._backend import async_sleep, create_task_group
 from riko.bado.itertools import as_async
 from riko.base._exceptions import (
     InvalidPipelineError,
+    ReceiverUnavailableError,
     UnsupportedModuleError,
     UnsupportedWorkflowError,
 )
 from riko.base._guards import is_mapping
-from riko.base._paths import TESTS_DIR
+from riko.base._paths import TESTS_DIR, get_path
 from riko.base._sentinels import MISSING
+from riko.coercion._configs import CsvObjconf
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
-from riko.modules import _metadata
+from riko.execution._resource_view import ResourceView
+from riko.modules import _metadata, csv, describe_module
 from riko.modules import count as count_module
 from riko.modules import exchangerate as exchangerate_module
 from riko.modules import regex as regex_module
@@ -40,12 +45,11 @@ from riko.modules._metadata import get_module_metadata, list_modules
 from riko.modules._prepare import build_conf, resolve_and_cast
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
-from riko.modules.regex import pipe as regex
-from riko.modules.rename import pipe as rename
+from riko.modules.send import async_pipe as async_send
 from riko.modules.split import async_pipe as async_split
 from riko.modules.split import pipe as split
 from riko.modules.strconcat import pipe as strconcat
-from riko.modules.timeout import async_pipe as timeout_async_pipe
+from riko.modules.timeout import AsyncTimeoutIterator
 from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.truncate import async_pipe as async_truncate
@@ -58,6 +62,7 @@ from riko.runtime._module_registry import (
     reset_module_registry,
 )
 from riko.runtime._pipeline import Pipeline
+from riko.runtime._pubsub import async_hub
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
 from riko.runtime._workflow_resolver import WorkflowResolver
@@ -67,13 +72,13 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
+from riko.types._enums import ExecutionMode
 from riko.types._options import ItemDispatch, ValueDispatch
 from riko.types._wrappers import (
     WRAPPER_META,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
     AsyncSubPipe,
-    ProcessorWrapper,
     SyncProcessorWrapper,
     require_async_wrapper,
     require_sync_wrapper,
@@ -82,20 +87,18 @@ from riko.types.modules import (
     Conf,
     InferenceSource,
     OperatorReturnKind,
-    RegexConf,
-    RegexConfRule,
-    RegexRawConf,
-    RegexRawRule,
-    RenameConf,
-    RenameConfRule,
+    SendConf,
     StrconcatRawConf,
     TokenizerRawConf,
 )
 from tests import async_test, pyworkflows, skipif_issync
-from tests._execution import module_workflow
+from tests._execution import module_workflow, registered_modules
+from tests._lifecycle import LOOKAHEAD
+from tests._resources import Connection
+from tests._workflows import EXCLAIMED, PARENT, register_documents
 
 if TYPE_CHECKING:
-    from riko.types._streams import Cascade, Item, Stream
+    from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
     from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
 
 
@@ -103,33 +106,8 @@ def shout(item: Item, *args, **kwargs) -> str:
     return str(item.get("content", "")).upper()
 
 
-def _create_wrapper(name: str, *, iscoro: bool, isasync: bool) -> ProcessorWrapper:
-    """Decorate a fresh function with the given name/awaitability/explicit flag."""
-
-    async def _coro(item, extraction, objconf, **kwargs) -> str:
-        return str(item["content"]).upper()
-
-    def _sync(item, extraction, objconf, **kwargs) -> str:
-        return str(item["content"]).upper()
-
-    fn = _coro if iscoro else _sync
-    fn.__name__ = name
-    decorate = processor(isasync=True) if isasync else processor()
-    return decorate(fn)
-
-
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
-
-
-def _tokenizer_loop(
-    source: Stream, field="title", **kwargs
-) -> SyncOperatorWrapperOutput:
-    return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field=field, **kwargs)
-
-
-def _custom_embed(item=None, **_):
-    return iter([{"content": "x"}])
 
 
 _NAME = "acme.mod"
@@ -138,255 +116,12 @@ _MISSING_NAME = "nope"
 
 @pytest.fixture
 def fixed_registry():
-    module_registry.reset()
-    yield module_registry
-    module_registry.reset()
+    with registered_modules() as registry:
+        yield registry
 
 
 marker = cast("SyncModuleWrapper", lambda source, **_: source)
 MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=marker)
-
-
-class _FalsyPipe:
-    """A pipe callable whose truthiness is ``False`` but which still has a name."""
-
-    __name__ = "double"
-
-    def __bool__(self) -> bool:
-        return False
-
-    def __call__(self, source, **kwargs):
-        return source
-
-
-class TestIsasyncInferenceValid:
-    """
-    Every non-contradictory combination and its resolved ``isasync``.
-
-    ``isasync`` marks which interface a pipe is (``pipe`` or ``async_pipe``), not
-    whether the function is a coroutine. It resolves to explicit ``isasync`` OR
-    ``async def`` OR name == ``async_pipe``, so it is only needed explicitly for a
-    sync callable that is the async interface under another name.
-    """
-
-    @pytest.mark.parametrize(
-        ("name", "iscoro", "isasync", "expected"),
-        [
-            pytest.param("pipe", False, False, False, id="sync-pipe"),
-            pytest.param("async_pipe", False, False, True, id="sync-async_pipe-name"),
-            pytest.param("async_pipe", True, False, True, id="async_def-async_pipe"),
-            pytest.param("shout", True, False, True, id="async_def-other-name"),
-            pytest.param("shout", False, False, False, id="sync-other-name"),
-            pytest.param("shout", False, True, True, id="explicit-required"),
-            pytest.param("async_pipe", False, True, True, id="explicit-redundant-name"),
-            pytest.param("shout", True, True, True, id="explicit-redundant-async"),
-        ],
-    )
-    def test_resolved_isasync(self, name, iscoro, isasync, expected):
-        assert _create_wrapper(name, iscoro=iscoro, isasync=isasync).isasync is expected
-
-
-class TestInvalidCombinations:
-    """A function named ``pipe`` that resolves async — always a contradiction."""
-
-    @pytest.mark.parametrize(
-        ("iscoro", "isasync", "reason"),
-        [
-            pytest.param(True, False, "an async def", id="async_def"),
-            pytest.param(False, True, "marked isasync=True", id="isasync=True"),
-            pytest.param(True, True, "an async def", id="async_def+isasync=True"),
-        ],
-    )
-    def test_async_named_pipe_raises(self, iscoro, isasync, reason):
-        with pytest.raises(TypeError) as excinfo:
-            _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
-
-        message = str(excinfo.value)
-        assert "'pipe' is the synchronous interface" in message
-        assert "async_pipe" in message
-        assert reason in message
-
-    @pytest.mark.parametrize(
-        ("decorator", "option", "value"),
-        [
-            pytest.param(processor, "embed", True, id="processor+embed"),
-            pytest.param(operator, "skip_if", True, id="operator+skip_if"),
-            pytest.param(splitter, "pollable", True, id="splitter+pollable"),
-            pytest.param(splitter, "emit", True, id="splitter+emit"),
-            pytest.param(splitter, "count", True, id="splitter+count"),
-            pytest.param(splitter, "skip_if", True, id="splitter+skip_if"),
-            pytest.param(splitter, "embed", True, id="splitter+embed"),
-            pytest.param(processor, "count", "first", id="processor+count"),
-            pytest.param(processor, "conf", "first", id="processor+conf"),
-            pytest.param(processor, "bogus", "first", id="processor+bogus"),
-            pytest.param(operator, "bogus", "first", id="operator+bogus"),
-            pytest.param(operator, "resources", "first", id="operator+resources"),
-            pytest.param(operator, "count", "first", id="operator+count"),
-            pytest.param(operator, "embed", "first", id="operator+embed"),
-            pytest.param(splitter, "bogus", "first", id="splitter+bogus"),
-        ],
-    )
-    def test_unsupported_option_raises(self, decorator, option, value):
-        kwargs: dict[str, object] = {option: value}
-        name = decorator.__name__
-
-        with pytest.raises(
-            TypeError, match=f"{name} modules do not support the '{option}'"
-        ):
-            decorator(**kwargs)
-
-
-class TestAsyncGeneratorSource:
-    """An async-generator (Feed) source flows through an async operator wrapper."""
-
-    @async_test
-    async def test_feed_source_through_timeout(self):
-        async def feed():
-            for x in range(3):
-                yield {"x": x}
-
-        result = timeout_async_pipe(feed(), conf={})
-        assert [item async for item in result] == [{"x": 0}, {"x": 1}, {"x": 2}]
-
-    @async_test
-    async def test_feed_reaches_parser_as_async_iterator(self):
-        received = {}
-
-        @operator(isasync=True)
-        async def async_pipe(stream, objconf, tuples, **kwargs):
-            received["is_async"] = isinstance(stream, AsyncIterator)
-            collected = [item async for item in stream]
-            return iter(collected)
-
-        async def feed():
-            for x in range(3):
-                yield {"content": x}
-
-        result = async_pipe(feed())
-        expected = [{"content": 0}, {"content": 1}, {"content": 2}]
-        assert [item async for item in result] == expected
-        assert received["is_async"] is True
-
-
-class TestAsyncOperatorReturnsStreamDirectly:
-    """
-    A decorated async operator returns an ``AsyncIterator`` without awaiting.
-
-    The wrapper call boundary must never expose ``Awaitable[AsyncIterator]``. The
-    parser's own implementation style (sync generator vs legacy coroutine that
-    returns a completed iterable) stays behind the decorator and must not leak
-    into the outer call contract.
-    """
-
-    @async_test
-    async def test_sync_parser_operator_returns_async_iterator(self):
-        items = [{"content": "a"}, {"content": "b"}]
-
-        @operator(isasync=True)
-        def async_pipe(stream, objconf, tuples, **kwargs):
-            yield from stream
-
-        stream = async_pipe(items)
-        assert isinstance(stream, AsyncIterator)
-        assert not isawaitable(stream)
-        assert await anext(stream) == {"content": "a"}
-
-    @async_test
-    async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):
-        items = [{"content": "a"}, {"content": "b"}]
-
-        @operator(isasync=True)
-        async def async_pipe(stream, objconf, tuples, **kwargs):
-            return iter(items)
-
-        stream = async_pipe(items)
-        assert isinstance(stream, AsyncIterator)
-        assert not isawaitable(stream)
-        assert [item async for item in stream] == items
-
-
-class TestAsyncProcessorDualProtocol:
-    """
-    A decorated async processor call is both async-iterable and awaitable.
-
-    The default path is ``async for item in async_pipe(...)`` with no outer await;
-    awaiting the same call is the advanced path that returns the whole stream. Both
-    must hold at once — the call must never collapse to a bare coroutine, which is
-    what a ``Generator``-style ``async def`` wrapper stub would produce and what
-    breaks ``async for`` under a type checker.
-    """
-
-    @async_test
-    async def test_call_is_async_iterable_without_outer_await(self):
-        async_shout = processor(isasync=True)(shout)
-        stream = async_shout({"content": "hi"}, assign="content")
-        assert isinstance(stream, AsyncIterator)
-        assert [item async for item in stream] == [{"content": "HI"}]
-
-    @async_test
-    async def test_awaiting_the_call_returns_the_whole_stream(self):
-        async_shout = processor(isasync=True)(shout)
-        result = async_shout({"content": "hi"}, assign="content")
-        assert isinstance(result, Awaitable)
-        assert list(await result) == [{"content": "HI"}]
-
-    def test_wrapper_stubs_are_not_coroutine_functions(self):
-        """
-        Keep these stubs synchronous for async-iterator typing.
-
-        Changing them to ``async def`` makes the call a bare coroutine, drops
-        ``__aiter__``, and restores the ``async for`` type error.
-        """
-        assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
-        assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)
-        assert not iscoroutinefunction(AsyncSubPipe.__call__)
-
-
-class TestProcessorListKeepsTestFlag:
-    """A processor called on a list runs each item with the caller's ``test`` flag."""
-
-    @staticmethod
-    def _record(seen: list[object]):
-        def record(item: Item, *args, **kwargs) -> str:
-            seen.append(kwargs.get("test"))
-            return "seen"
-
-        return record
-
-    def test_sync_list(self):
-        seen: list[object] = []
-        pipe = processor()(self._record(seen))
-        list(pipe([{"a": 1}, {"a": 2}], test=True))
-        assert seen == [True, True]
-
-    @async_test
-    async def test_async_list(self):
-        seen: list[object] = []
-        async_pipe = processor(isasync=True)(self._record(seen))
-        _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
-        assert seen == [True, True]
-
-
-def _skip_marked(item: Item, *args, **kwargs) -> str:
-    return "processed"
-
-
-class TestProcessorSkipIf:
-    """A processor's ``skip_if`` passes matching items through untouched."""
-
-    def test_sync(self):
-        pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
-        result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
-        assert result == [{"x": 1}, {"y": "processed"}]
-
-    @async_test
-    async def test_async(self):
-        async_pipe = processor(isasync=True, skip_if=lambda item: "x" in item)(
-            _skip_marked
-        )
-        stream = async_pipe([{"x": 1}, {"y": 2}], assign="y")
-        result = [item async for item in stream]
-        assert result == [{"x": 1}, {"y": "processed"}]
 
 
 async def _async_shout(item: Item, *args, **kwargs) -> str:
@@ -455,11 +190,6 @@ class TestBareDecorator:
     async def test_bare_output_matches_called(self, decorator, parser, kwargs) -> None:
         bare = await _drain(decorator(parser)(BARE_ROWS, **kwargs))
         assert bare == await _drain(decorator()(parser)(BARE_ROWS, **kwargs))
-
-    def test_bare_processor_wraps_an_unconfigured_pipe(self) -> None:
-        pipe = processor(shout)
-        stream = pipe({"content": "hi"}, assign="content")
-        assert next(stream) == {"content": "HI"}
 
     def test_bare_and_called_forms_type_check(self) -> None:
         assert_type(processor(shout), SyncProcessorWrapper)
@@ -783,44 +513,6 @@ class TestReturnInference:
 class TestModuleMetadata:
     """Derived module metadata and its classification."""
 
-    def test_operator_metadata(self):
-        metadata = get_module_metadata("count", strict=True)
-        assert metadata.type == "operator"
-        assert metadata.subtype == "aggregator"
-        assert metadata.subtypes == {"aggregator", "composer"}
-        assert metadata.has_sync
-        assert metadata.has_async
-
-    def test_processor_metadata(self):
-        source = get_module_metadata("fetch", strict=True)
-        transformer = get_module_metadata("dateformat", strict=True)
-
-        assert source.type == "processor"
-        assert source.subtype == "source"
-        assert source.subtypes == {"source"}
-
-        assert transformer.type == "processor"
-        assert transformer.subtype == "transformer"
-        assert transformer.subtypes == {"transformer"}
-
-    def test_splitter_metadata(self):
-        metadata = get_module_metadata("split", strict=True)
-        assert metadata.type == "splitter"
-        assert metadata.subtype == "splitter"
-        assert metadata.subtypes == {"splitter"}
-
-    def test_loopable_metadata(self):
-        # processors are loopable (they transform a single item) ...
-        assert get_module_metadata("dateformat", strict=True).loopable
-        assert get_module_metadata("itembuilder", strict=True).loopable
-
-        # ... except input, which prompts for interactive user input
-        assert not get_module_metadata("input", strict=True).loopable
-
-        # operators and splitters cannot be embedded in a loop
-        assert not get_module_metadata("count", strict=True).loopable
-        assert not get_module_metadata("split", strict=True).loopable
-
     def test_undecorated_pipe_is_named_in_the_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -830,50 +522,6 @@ class TestModuleMetadata:
 
         with pytest.raises(TypeError, match=r"riko\.modules\.bare pipe has no module"):
             get_module_metadata("bare")
-
-    def test_operator_metadata_is_derived(self):
-        @operator()
-        def value_pipe(*args: Any, **kwargs: object) -> int:
-            return 1
-
-        @operator()
-        def mapping_pipe(*args: Any, **kwargs: object) -> dict[str, int]:
-            return {"count": 1}
-
-        @operator()
-        def stream_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, int]]:
-            yield {"count": 1}
-
-        @operator()
-        def composition_key_pipe(
-            *args, count_key=None, **kwargs
-        ) -> dict[str, int] | Iterator[dict[str, int]]:
-            return iter([{"count": 1}]) if count_key else {"count": 1}
-
-        assert value_pipe.subtype == "aggregator"
-        assert value_pipe.subtypes == {"aggregator"}
-
-        assert mapping_pipe.subtype == "aggregator"
-        assert mapping_pipe.subtypes == {"aggregator"}
-
-        assert stream_pipe.subtype == "composer"
-        assert stream_pipe.subtypes == {"composer"}
-
-        assert composition_key_pipe.subtype == "aggregator"
-        assert composition_key_pipe.subtypes == {"aggregator", "composer"}
-
-    def test_builtin_metadata_provider(self):
-        assert get_module_metadata("fetch", strict=True).provider == "riko"
-
-    def test_metadata_subtypes_are_frozen(self):
-        metadata = get_module_metadata("fetch", strict=True)
-
-        assert isinstance(metadata.subtypes, frozenset)
-        assert metadata.subtypes == {"source"}
-
-    def test_unknown_module_metadata_raises_when_strict(self):
-        with pytest.raises(ValueError, match="has no metadata"):
-            get_module_metadata("not_a_builtin_module", strict=True)
 
 
 def _carries_wrapper_meta(func: object) -> bool:
@@ -956,12 +604,24 @@ class TestWorkflowDecorator:
         with pytest.raises(TypeError, match="Pipeline"):
             workflow(object())  # pyright: ignore[reportCallIssue]
 
-    def test_an_unseeded_stored_workflow_pipe_requires_a_seed(self):
+
+class TestBuildWorkflowPipes:
+    def test_an_unseeded_pipe_requires_a_seed(self):
         flow = module_workflow("reverse")
         pipes = build_workflow_pipes(flow, dispatcher, subtype="transformer")
 
         with pytest.raises(InvalidPipelineError, match="requires a seed"):
             list(pipes.sync_pipe())
+
+
+def _tokenizer_loop(
+    source: Stream, field="title", **kwargs
+) -> SyncOperatorWrapperOutput:
+    return loop(source, embed=tokenizer, conf=TOKENIZER_CONF, field=field, **kwargs)
+
+
+def _custom_embed(item=None, **_):
+    return iter([{"content": "x"}])
 
 
 LOOP_FOLD_CASES = [
@@ -995,42 +655,10 @@ LOOP_FOLD_CASES = [
     ),
 ]
 
-PROCESSOR_FOLD_CASES = [
-    pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
-    pytest.param(
-        {"count": "all", "emit": True},
-        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
-        id="all",
-    ),
-    pytest.param(
-        {"count": "first", "assign": "w", "emit": False},
-        [{"title": "a b c", "w": {"content": "a"}}],
-        id="assign-first",
-    ),
-]
-
-IMPLICIT_FOLD_CASES = [
-    pytest.param(
-        {"emit": True},
-        [{"content": "a"}, {"content": "b"}, {"content": "c"}, {"content": "d"}],
-        id="all",
-    ),
-    pytest.param(
-        {"count": "first", "emit": True},
-        [{"content": "a"}, {"content": "c"}],
-        id="first-per-item",
-    ),
-    pytest.param(
-        {"count": "first", "assign": "w", "emit": False},
-        [
-            {"title": "a b", "w": {"content": "a"}},
-            {"title": "c d", "w": {"content": "c"}},
-        ],
-        id="assign-first",
-    ),
-]
 
 SUBPIPE_PARENTS = [{"title": "ab"}, {"title": "cd"}]
+
+
 SUBPIPE_FOLD_CASES = [
     pytest.param(
         {"count": "all", "emit": True},
@@ -1052,6 +680,7 @@ SUBPIPE_FOLD_CASES = [
     ),
 ]
 
+
 ASYNC_SUBPIPE_FOLD_CASES = [SUBPIPE_FOLD_CASES[0], SUBPIPE_FOLD_CASES[2]]
 
 
@@ -1066,10 +695,19 @@ def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
 
 
 _SYNC_SUBPIPE = workflow()(_sync_subpipe)
+
+
 _ASYNC_SUBPIPE = workflow()(_async_subpipe)
 
 
-class TestLoopCharacterization:
+UNEMBEDDABLE = [
+    pytest.param(_custom_embed, "Custom embedded modules", id="custom"),
+    pytest.param(count_module.pipe, "count is not loopable", id="not-loopable"),
+    pytest.param("count", "No embedded module provided", id="not-a-module"),
+]
+
+
+class TestLoop:
     """
     The explicit loop runs its embed once per parent and folds against that parent.
 
@@ -1078,24 +716,6 @@ class TestLoopCharacterization:
     least two parents, since one parent cannot expose a global-vs-per-parent
     ``count`` gap.
     """
-
-    def test_loop_maps_embed_once_per_parent(self):
-        rule = RegexRawRule(
-            {
-                "field": {"type": "text", "value": "title"},
-                "match": {"type": "text", "value": " "},
-                "replace": {"type": "text", "value": "_"},
-            }
-        )
-        result = loop(
-            iter(PARENTS),
-            embed=regex,
-            conf=RegexRawConf({"rule": rule}),
-            count="all",
-            emit=True,
-        )
-
-        assert list(result) == [{"title": "a_b"}, {"title": "c_d"}]
 
     def test_loop_prepares_embed_once_per_stream(self, monkeypatch):
         prepares: list[object] = []
@@ -1148,40 +768,12 @@ class TestLoopCharacterization:
         result = loop(parents, embed=strconcat, conf=conf, count="all", emit=True)
         assert list(result) == ["aa!", "bb!"]
 
-
-class TestProcessorTopLevelCount:
-    """Direct processors honor first-class top-level fold kwargs."""
-
-    @pytest.mark.parametrize(("kwargs", "expected"), PROCESSOR_FOLD_CASES)
-    def test_fold(self, kwargs, expected):
-        item = {"title": "a b c"}
-        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", **kwargs)
-        assert list(result) == expected
-
-
-class TestImplicitLooping:
-    """A processor fed a stream maps itself over each item like explicit loop."""
-
-    @pytest.mark.parametrize(("kwargs", "expected"), IMPLICIT_FOLD_CASES)
-    def test_fold_per_item(self, kwargs, expected):
-        result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
-        assert list(result) == expected
-
-    def test_single_item_is_not_double_mapped(self):
-        item = {"title": "a b"}
-        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
-        assert list(result) == [{"content": "a"}, {"content": "b"}]
-
-
-class TestSubpipeLoop:
-    """Stored workflows use the same per-parent fold without sharing execution."""
-
     @pytest.mark.parametrize(("kwargs", "expected"), SUBPIPE_FOLD_CASES)
-    def test_fold_per_parent(self, kwargs, expected):
+    def test_subpipe_fold_per_parent(self, kwargs, expected):
         result = loop(iter(SUBPIPE_PARENTS), embed=_SYNC_SUBPIPE, **kwargs)
         assert list(result) == expected
 
-    def test_count_first_is_lazy_and_closes_child(self):
+    def test_subpipe_count_first_is_lazy_and_closes_child(self):
         produced: list[int] = []
         closed: list[str] = []
 
@@ -1202,6 +794,13 @@ class TestSubpipeLoop:
         assert list(result) == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
+
+    @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
+    def test_unembeddable_embed_passes_parents_through(self, embed, message, caplog):
+        result = loop(iter(PARENTS), embed=embed)
+
+        assert list(result) == PARENTS
+        assert any(message in r.message for r in caplog.records)
 
 
 @skipif_issync
@@ -1256,20 +855,15 @@ class TestAsyncLoop:
         assert first == {"content": "a"}
         assert list(consumed) == ["a b"]
 
-
-@skipif_issync
-class TestAsyncSubpipeLoop:
-    """Async stored workflows preserve the local per-parent fold contract."""
-
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_SUBPIPE_FOLD_CASES)
     @pytest.mark.anyio
-    async def test_fold_per_parent(self, kwargs, expected):
+    async def test_subpipe_fold_per_parent(self, kwargs, expected):
         stream = async_loop(iter(SUBPIPE_PARENTS), embed=_ASYNC_SUBPIPE, **kwargs)
         result = [item async for item in stream]
         assert result == expected
 
     @pytest.mark.anyio
-    async def test_count_first_is_lazy_and_closes_child(self):
+    async def test_subpipe_count_first_is_lazy_and_closes_child(self):
         produced: list[int] = []
         closed: list[str] = []
 
@@ -1296,36 +890,119 @@ class TestAsyncSubpipeLoop:
         assert produced == [0, 0]
         assert closed == ["a", "b"]
 
-
-UNEMBEDDABLE = [
-    pytest.param(_custom_embed, "Custom embedded modules", id="custom"),
-    pytest.param(count_module.pipe, "count is not loopable", id="not-loopable"),
-    pytest.param("count", "No embedded module provided", id="not-a-module"),
-]
-
-
-class TestCustomEmbed:
-    """An unembeddable embed is reported and leaves parents untouched."""
-
-    @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
-    def test_passes_parents_through(self, embed, message, caplog):
-        result = loop(iter(PARENTS), embed=embed)
-
-        assert list(result) == PARENTS
-        assert any(message in r.message for r in caplog.records)
-
-
-@skipif_issync
-class TestAsyncCustomEmbed:
-    """The async loop treats an unembeddable embed the same way as the sync loop."""
-
     @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
     @pytest.mark.anyio
-    async def test_passes_parents_through(self, embed, message, caplog):
+    async def test_unembeddable_embed_passes_parents_through(
+        self, embed, message, caplog
+    ):
         stream = async_loop(iter(PARENTS), embed=embed)
 
         assert [item async for item in stream] == PARENTS
         assert any(message in r.message for r in caplog.records)
+
+
+PROCESSOR_FOLD_CASES = [
+    pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
+    pytest.param(
+        {"count": "all", "emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [{"title": "a b c", "w": {"content": "a"}}],
+        id="assign-first",
+    ),
+]
+
+
+IMPLICIT_FOLD_CASES = [
+    pytest.param(
+        {"emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}, {"content": "d"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "emit": True},
+        [{"content": "a"}, {"content": "c"}],
+        id="first-per-item",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [
+            {"title": "a b", "w": {"content": "a"}},
+            {"title": "c d", "w": {"content": "c"}},
+        ],
+        id="assign-first",
+    ),
+]
+
+
+class TestProcessor:
+    @pytest.mark.parametrize(("kwargs", "expected"), PROCESSOR_FOLD_CASES)
+    def test_top_level_fold(self, kwargs, expected):
+        item = {"title": "a b c"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    @pytest.mark.parametrize(("kwargs", "expected"), IMPLICIT_FOLD_CASES)
+    def test_stream_fold_per_item(self, kwargs, expected):
+        result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    def test_single_item_is_not_double_mapped(self):
+        item = {"title": "a b"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
+        assert list(result) == [{"content": "a"}, {"content": "b"}]
+
+
+class TestAsyncProcessor:
+    """
+    A decorated async processor call is both async-iterable and awaitable.
+
+    The default path is ``async for item in async_pipe(...)`` with no outer await;
+    awaiting the same call is the advanced path that returns the whole stream. Both
+    must hold at once — the call must never collapse to a bare coroutine, which is
+    what a ``Generator``-style ``async def`` wrapper stub would produce and what
+    breaks ``async for`` under a type checker.
+    """
+
+    @async_test
+    async def test_call_is_async_iterable_without_outer_await(self):
+        async_shout = processor(isasync=True)(shout)
+        stream = async_shout({"content": "hi"}, assign="content")
+        assert isinstance(stream, AsyncIterator)
+        assert [item async for item in stream] == [{"content": "HI"}]
+
+    @async_test
+    async def test_awaiting_the_call_returns_the_whole_stream(self):
+        async_shout = processor(isasync=True)(shout)
+        result = async_shout({"content": "hi"}, assign="content")
+        assert isinstance(result, Awaitable)
+        assert list(await result) == [{"content": "HI"}]
+
+    def test_wrapper_stubs_are_not_coroutine_functions(self):
+        """
+        Keep these stubs synchronous for async-iterator typing.
+
+        Changing them to ``async def`` makes the call a bare coroutine, drops
+        ``__aiter__``, and restores the ``async for`` type error.
+        """
+        assert not iscoroutinefunction(AsyncProcessorWrapper.__call__)
+        assert not iscoroutinefunction(AsyncSplitterWrapper.__call__)
+        assert not iscoroutinefunction(AsyncSubPipe.__call__)
+
+
+class _FalsyPipe:
+    """A pipe callable whose truthiness is ``False`` but which still has a name."""
+
+    __name__ = "double"
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __call__(self, source, **kwargs):
+        return source
 
 
 class TestModuleRegistry:
@@ -1449,6 +1126,36 @@ class TestModuleRegistry:
         assert fixed_registry.require(_NAME, True) is other  # from module
 
 
+class TestDescribeModule:
+    @pytest.mark.parametrize(
+        ("error", "match"),
+        [
+            pytest.param(
+                ModuleNotFoundError(
+                    "No module named 'phantom_dep'", name="phantom_dep"
+                ),
+                "phantom_dep",
+                id="nested-dependency",
+            ),
+            pytest.param(
+                ModuleNotFoundError("broken import with no module name"),
+                "no module name",
+                id="unnamed",
+            ),
+        ],
+    )
+    def test_describe_module_reraises_import_error(
+        self, monkeypatch, error: ModuleNotFoundError, match: str
+    ):
+        def boom(target):
+            raise error
+
+        monkeypatch.setattr("riko.base._typing.import_module", boom)
+
+        with pytest.raises(ModuleNotFoundError, match=match):
+            describe_module("hash")
+
+
 class TestPublicRegister:
     """Exercise ``register_module`` against the process-global registry."""
 
@@ -1485,10 +1192,6 @@ class TestResolverDispatcher:
             dispatcher.require("pipe_missing")
 
         assert err.value.pipe_id == "pipe_missing"
-
-    def test_missing_stored_workflow_interfaces_raise(self):
-        with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
-            WorkflowResolver().require_interfaces("pipe_missing")
 
     def test_stored_workflow_without_interfaces_fails_validation_as_a_workflow(self):
         store = MappingStore({"pipe_empty": ModuleType("pipe_empty")})
@@ -1727,12 +1430,6 @@ class TestWorkflowResolver:
         assert resolver.require("pipe:demo", is_async=True).isasync
         assert not resolver.require("pipe:demo").isasync
 
-    def test_second_document_store_requires_replace(self, tmp_path):
-        resolver = WorkflowResolver(document_store=DirectoryStore(tmp_path))
-
-        with pytest.raises(ValueError, match="document store already registered"):
-            resolver.register(document_store=DirectoryStore(tmp_path))
-
     def test_load_workflow_accepts_the_colon_alias(self):
         directory = TESTS_DIR / "workflows"
         resolver = WorkflowResolver(document_store=DirectoryStore(directory))
@@ -1740,14 +1437,28 @@ class TestWorkflowResolver:
             "pipe_gigs"
         )
 
-    def test_mistyped_package_path_raises_when_built(self):
-        with pytest.raises(ModuleNotFoundError, match="no_such_package"):
-            PackageStore("tests.no_such_package")
+    def test_second_document_store_requires_replace(self, tmp_path):
+        resolver = WorkflowResolver(document_store=DirectoryStore(tmp_path))
 
+        with pytest.raises(ValueError, match="document store already registered"):
+            resolver.register(document_store=DirectoryStore(tmp_path))
+
+    def test_missing_stored_workflow_interfaces_raise(self):
+        with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
+            WorkflowResolver().require_interfaces("pipe_missing")
+
+
+class TestPackageStore:
     def test_a_plain_module_is_not_a_package(self):
         with pytest.raises(ValueError, match="is a module, not a package"):
             PackageStore(tokenizer_module)
 
+    def test_mistyped_package_path_raises_when_built(self):
+        with pytest.raises(ModuleNotFoundError, match="no_such_package"):
+            PackageStore("tests.no_such_package")
+
+
+class TestDirectoryStore:
     def test_directory_store_parses_workflow(self):
         directory = TESTS_DIR / "workflows"
         resolver = WorkflowResolver(document_store=DirectoryStore(directory))
@@ -1769,7 +1480,9 @@ class TestWorkflowResolver:
         with pytest.raises(OSError, match=r"pipe_dir\.json"):
             store.load("pipe_dir")
 
-    def test_composite_store_first_hit_wins(self):
+
+class TestCompositeStore:
+    def test_first_hit_wins(self):
         store = CompositeStore(
             MappingStore({"pipe_x": tokenizer_module}),
             MappingStore({"pipe_x": regex_module}),
@@ -1866,6 +1579,24 @@ class TestResolvedDocuments:
         resolver = _document_resolver(self.workflows, module_store=store)
         assert resolver.load("pipe_gigs") is tokenizer_module
 
+    def test_document_exposes_both_interfaces(self, tmp_path):
+        register_documents(tmp_path)
+        interfaces = dispatcher.require_interfaces("pipe_exclaim")
+        assert interfaces == frozenset({"pipe", "async_pipe"})
+
+    def test_document_describes_dependencies(self, tmp_path):
+        register_documents(tmp_path)
+        context = Context(ExecutionMode.DESCRIBE_DEPENDENCIES)
+        pipe = dispatcher.require("pipe_exclaim")
+        assert pipe(context=context) == ["strconcat"]
+
+    @async_test
+    async def test_document_runs_async(self, tmp_path):
+        register_documents(tmp_path)
+        pipe = dispatcher.require("pipe_exclaim", is_async=True)
+        items = [item async for item in pipe(as_async(PARENT))]
+        assert items == EXCLAIMED
+
     def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
         (tmp_path / "pipe_bad.json").write_text("{bad")
         resolver = _document_resolver(tmp_path)
@@ -1888,25 +1619,6 @@ class TestResolvedDocuments:
 
         assert second is not None
         assert second is not first
-
-
-class TestModules:
-    def test_rename_skips_absent_field(self):
-        """A rename rule naming an absent field leaves the item untouched."""
-        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
-        assert next(rename({"title": "hi"}, conf=conf)) == {"title": "hi"}
-
-    def test_rename_renames_present_falsy_field(self):
-        """A present-but-falsy value is still renamed (absent ≠ present-``None``)."""
-        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
-        assert next(rename({"content": ""}, conf=conf)) == {"greeting": ""}
-
-    def test_regex_skips_absent_field(self):
-        """A regex rule naming an absent field leaves the item untouched."""
-        conf = RegexConf(
-            {"rule": RegexConfRule(field="content", match="l", replace="L")}
-        )
-        assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
 
 
 DECORATION_OPTION_CALLS = [
@@ -1978,7 +1690,7 @@ class TestPrepare:
         with pytest.raises(TypeError, match=f"module fixes '{option}' when it is"):
             list(pipe([{"x": 1}], conf={}, **kwargs))
 
-    @pytest.mark.parametrize("extra", ["resources", "embed", "others", "label"])
+    @pytest.mark.parametrize("extra", ["embed", "others", "label"])
     def test_prepare_rejects_a_per_item_argument(self, extra):
         kwargs: dict[str, Any] = {extra: None}
 
@@ -2003,8 +1715,231 @@ class TestPrepare:
         items = cast("Any", [None])
         assert next(operator().normalize_input(items)) == {"content": None}
 
+    def test_operator_passes_the_supplied_view_through(self):
+        captured = {}
+
+        @operator()
+        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
+            captured["view"] = kwargs.get("resources")
+            return stream
+
+        view = ResourceView({"resource": Connection()})
+        list(pipe([{"a": 1}], resources=view))
+        assert captured["view"] is view
+
+
+class TestCsvParser:
+    def test_csv_headerless_closes_original_source(self, monkeypatch):
+        """
+        Ensure ``auto_close`` closes the original fetch after header buffering.
+
+        With ``has_header=False``, ``seekable`` uses a spooled copy while leaving the
+        original fetch open.
+        """
+        closed: list[bool] = []
+        real_fetch = csv.Fetch
+
+        class _SpyFetch(real_fetch):
+            def close(self) -> None:
+                closed.append(True)
+                super().close()
+
+        monkeypatch.setattr(csv, "Fetch", _SpyFetch)
+        conf = CsvObjconf(
+            {
+                "url": get_path("countries.csv"),
+                "has_header": False,
+                "skip_rows": 0,
+                "col_names": None,
+                "encoding": "utf-8",
+                "sanitize": False,
+                "dedupe": True,
+            }
+        )
+
+        list(csv.parser({}, None, conf))
+        assert closed
+
 
 class TestExchangeRate:
     def test_a_non_numeric_rate_raises(self):
         with pytest.raises(TypeError, match="invalid rate"):
             exchangerate_module.build_rates({"USD": [1]})
+
+
+_SOURCE_LEN = 5
+
+
+def _finite_source(consumed: list[int]) -> Stream:
+    for i in range(_SOURCE_LEN):
+        consumed.append(i)
+        yield {"x": "foo", "i": i}
+
+
+async def _afinite_source(consumed: list[int]) -> AsyncStream:
+    for i in range(_SOURCE_LEN):
+        consumed.append(i)
+        yield {"x": "foo", "i": i}
+
+
+async def _drain_receiver(receive_stream: Any, into: list[Item] | None = None) -> None:
+    async for item in receive_stream:
+        if into is not None:
+            into.append(item)
+
+
+async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+    first: ItemOrValue = {}
+    seen = 0
+
+    async with (
+        async_hub.subscribe("r4-lazy") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_drain_receiver, receive_stream)
+        stream = async_send(_finite_source(consumed), others=["r4-lazy"])
+        first = await anext(stream)
+        seen = len(consumed)
+
+    return (first, seen)
+
+
+async def _send_missing_target(received: list[Item]) -> None:
+    async with (
+        async_hub.subscribe("r4-good") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_drain_receiver, receive_stream, received)
+
+        with pytest.raises(ReceiverUnavailableError):
+            async for _ in async_send(
+                _finite_source([]),
+                conf=SendConf(max_wait=0.05),
+                others=["r4-good", "r4-missing"],
+            ):
+                pass
+
+
+async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
+    out: list[ItemOrValue] = []
+
+    async with (
+        async_hub.subscribe("r4-feed") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_drain_receiver, receive_stream, received)
+        stream = async_send(_afinite_source(consumed), others=["r4-feed"])
+        out = [item async for item in stream]
+
+    return out
+
+
+class TestAsyncSend:
+    @pytest.mark.timeout(10)
+    @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
+    @async_test
+    async def test_async_send_does_not_buffer_its_source(self):
+        """Keep unbounded async sends from returning before completion."""
+        consumed: list[int] = []
+        first, seen = await _send_first(consumed)
+
+        assert first == {"x": "foo", "i": 0}
+        assert seen <= LOOKAHEAD
+
+    @pytest.mark.timeout(10)
+    @async_test
+    async def test_async_send_completes_targets_when_publish_fails(self):
+        """
+        A failed publish must still close the targets that did subscribe.
+
+        ``publish`` raises ``ReceiverUnavailableError`` once an unsubscribed target
+        outlasts ``max_wait``.
+        """
+        received: list[Item] = []
+        await _send_missing_target(received)
+        assert received == [{"x": "foo", "i": 0}]
+
+    @pytest.mark.timeout(10)
+    @async_test
+    async def test_async_send_accepts_a_feed_source(self):
+        """
+        An async source reaches the parser as an ``AsyncIterator``, not a list.
+
+        ``operator.anormalize_input``/``setup`` hand the parser an async ``orig_stream``
+        when the caller passes a ``Feed``. So a sync ``for`` over it raises
+        ``TypeError``.
+        """
+        consumed: list[int] = []
+        received: list[Item] = []
+        expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
+        out = await _send_feed(consumed, received)
+
+        assert out == expected
+        assert received == expected
+
+
+async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+    first: ItemOrValue = {}
+    seen = 0
+
+    async def _snapshot(receive_stream: Any) -> None:
+        nonlocal first, seen
+        idx = 0
+
+        async for item in receive_stream:
+            if idx == 0:
+                first, seen = item, len(consumed)
+
+            idx += 1
+
+    async with (
+        async_hub.subscribe("r-recv-lazy") as receive_stream,
+        create_task_group() as tg,
+    ):
+        tg.start_soon(_snapshot, receive_stream)
+        async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
+            pass
+
+    return (first, seen)
+
+
+class TestAsyncReceive:
+    @pytest.mark.timeout(10)
+    @async_test
+    async def test_async_receive_does_not_materialize(self):
+        """
+        Deliver each item before pulling the next one from the source.
+
+        The zero-buffer channel lets subscribers observe items without materializing
+        the source. ``send`` still eagerly collects its own passthrough return; see
+        ``test_async_send_does_not_buffer_its_source``.
+        """
+        consumed: list[int] = []
+        first, seen = await _receive_first(consumed)
+
+        assert first == {"x": "foo", "i": 0}
+        assert seen <= LOOKAHEAD
+
+
+class TestAsyncTimeoutIterator:
+    @pytest.mark.timeout(5)
+    @pytest.mark.xfail(
+        strict=True,
+        reason="AsyncTimeoutIterator only checks its deadline between anexts. A "
+        "source that stalls past the deadline is awaited to completion rather than "
+        "interrupted.",
+    )
+    @async_test
+    async def test_timeout_interrupts_a_stalled_source(self):
+        """A stalled source is abandoned after timeout, not awaited to completion."""
+
+        async def source():
+            yield {"x": 0}
+            await async_sleep(1.0)
+            yield {"x": 1}
+
+        it = AsyncTimeoutIterator(source(), timeout_ms=50)
+        start = monotonic()
+        [item async for item in it]
+        run_time = monotonic() - start
+        assert run_time < 0.5

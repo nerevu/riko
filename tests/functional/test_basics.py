@@ -2,44 +2,30 @@
 
 from __future__ import annotations
 
-import gc
-import sqlite3
 from datetime import date, datetime
 from decimal import Decimal
-from importlib import import_module
-from itertools import chain, islice
+from itertools import islice
 from time import struct_time
 from typing import TYPE_CHECKING, cast
-from urllib.request import urlopen
 
 import pytest
 
 from riko.base._dateutils import get_tzname
-from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.base._exceptions import UnsupportedModuleError
 from riko.base._guards import is_mapping
 from riko.coercion._sequences import listize, truncate_content
 from riko.definitions._context import Context
-from riko.definitions._nodes import ModuleNode
-from riko.definitions._resource_definition import Resource
-from riko.definitions._workflow_definition import Workflow
-from riko.execution._async_execution import AsyncExecution
-from riko.execution._prepared import ExecutionPlan
-from riko.execution._sync_execution import SyncExecution
-from riko.io import async_url_open
-from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from tests import TESTS_DIR, async_test
-from tests._loopback import loopback_url
-from tests._workflows import SPLIT_PENDING
+from tests._workflows import SPLIT_PENDING, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from riko.definitions._nodes import Node
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -100,55 +86,9 @@ def _document(pipe_name: str) -> Path | None:
     return path if path.exists() else None
 
 
-def _node_names(node: Node) -> set[str]:
-    """Collects the module names one node runs, counting a loop's embedded one."""
-    names: set[str] = set()
-
-    if isinstance(node, ModuleNode):
-        names.add(node.name)
-
-        if node.embed is not None:
-            names.add(node.embed["name"])
-
-    return names
-
-
-def _workflow_dependencies(flow: Workflow) -> list[str]:
-    """Collects the built-in module names a workflow depends on."""
-    named = (_node_names(node) for node in flow.nodes.values())
-    names = set(chain.from_iterable(named))
-    return sorted(name for name in names if not name.startswith("pipe"))
-
-
-def _declared_input(name: str, schema: object) -> tuple[str, str, str, str, str]:
-    """Renders one declared input as the prompt tuple a caller is shown."""
-    fields = schema if is_mapping(schema) else {}
-    prompt = str(fields.get("title", name))
-    kind = str(fields.get("format", ""))
-    default = str(fields.get("default", ""))
-    return ("", name, prompt, kind, default)
-
-
-def _declared_inputs(flow: Workflow) -> list[tuple[str, str, str, str, str]]:
-    """Renders a workflow's declared inputs as the prompt tuples a caller is shown."""
-    properties = flow.inputs.get("properties")
-    schemas = properties if is_mapping(properties) else {}
-    return [_declared_input(name, schema) for name, schema in sorted(schemas.items())]
-
-
-def _load_workflow(pipe_name: str) -> Workflow:
-    """Parses the workflow document committed for a ``pipe_<id>`` name."""
-    document = _document(pipe_name)
-    assert document is not None, f"{pipe_name} has no workflow document"
-    return Workflow.parse(document.read_text())
-
-
-def _check_results(
-    pydeps: Sequence[str], items: Sequence[Items], pipe_name, value=0, check=1
-):
+def _check_results(items: Sequence[Items], value=0, check=1):
     _check = Decimal(check)
     compared = Decimal(len(items)).compare(Decimal(value))
-    assert pydeps, f"Expected to find dependencies for {pipe_name}, but got none."
     actual, desired = COMPARISONS[compared], COMPARISONS[_check]
     msg = f"output length {actual} {value}, but expected {desired} {value}. Got "
 
@@ -226,6 +166,100 @@ FIRST_TITLE_PREFIXES = [
         id="split",
         marks=SPLIT_PENDING,
     ),
+    pytest.param(
+        "pipe_06c4c44316efb0f5f16e4e7fa4589ba2",
+        5,
+        "American woman is being held hostage",
+        id="tail",
+    ),
+    pytest.param(
+        "pipe_e519dd393f943315f7e4128d19db2eac",
+        63,
+        "The 6 Best Enterprise Data Modeling Tools",
+        id="urlbuilder",
+    ),
+]
+KAZEEKI = [
+    pytest.param("kazeeki1", 5, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT, id="fetchdata"),
+    pytest.param("kazeeki2", 1, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT, id="itembuilder"),
+]
+CSV_DESCRIPTION = (
+    "Total allowances claimed, inc travel: "
+    "151619<br>Total basic allowances claimed, ex travel: "
+    "146282<br>Total Travel claimed: 5337<br>MP Mileage: "
+    "3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>"
+    "Cost of staying away from main home: 22541<br>London "
+    "Supplement: 0<br>Office Running Costs: 19848<br>"
+    "Staffing Costs: 88283"
+)
+CSV_ITEM = {
+    "FamilyNumOfJourneys": "0",
+    "Member": "Lancaster",
+    "MPOtherEuropean": "0",
+    "FamilyTotal": "0",
+    "OfficeRunningCosts": "19848",
+    "MPOtherRail": "233",
+    "CostofStayingAwayFromMainHome": "22541",
+    "StationeryAssocdPostageCosts": "3471",
+    "CommsAllowance": "9767",
+    "Mileage": "3358",
+    "MPMisc": "20",
+    "title": "Mr Mark Lancaster",
+    "description": CSV_DESCRIPTION,
+    "TotalAllowancesClaimedIncTravel": "151619",
+    "SpouseTotal": "31",
+    "EmployeeTotal": "222",
+    "MPRail": "1473",
+    "LondonSupplement": "0",
+    "StaffingCosts": "88283",
+    "EmployeeNumOfJourneys": "21",
+    "CentrallyPurchasedStationery": "1149",
+    "TotalBasicAllowancesExcTravel": "146282",
+    "CentralITProvision": "1223",
+    "StaffCoverAndOtherCosts": "0",
+    "firstName": "Mr Mark",
+    "MPOtherAir": "0",
+    "MPOtherMileage": "0",
+    "TotalTravelClaimed": "5337",
+    "MPAir": "0",
+    "SpouseNumOfJourneys": "1",
+}
+ITEMBUILDER_ITEMS = [
+    {
+        "attr1": "val1",
+        "attrpath": {"attr2": "val2", "attr3": "extVal"},
+        "longpath": {"attrpath": {"attr3": "val3"}},
+    },
+    {"attr1": "VAL1", "attrpath": {"attr2": "VAL2"}},
+]
+ASSIGNED = [{"title": "a b c", "tokens": {"content": c}} for c in "abc"]
+EMBEDDED = [{"title": "hello", "strconcat": "hello!"}]
+WHOLE_STREAMS = [
+    pytest.param(
+        "pipe_b96287458de001ad62a637095df33ad5",
+        ITEMBUILDER_ITEMS,
+        None,
+        id="itembuilder",
+    ),
+    pytest.param("pipe_UuvYtuMe3hGDsmRgPm7D0g", [CSV_ITEM], None, id="csv"),
+    pytest.param("pipe_loop_subpipe", EMBEDDED, None, id="loop-subpipe-embed"),
+    pytest.param("pipe_loop_assign", ASSIGNED, None, id="loop-count-all-assign"),
+    pytest.param(
+        "pipe_1LNyRuNS3BGdkTKaAsqenA",
+        [{"symbol": "IBM"}],
+        {"textinput1": "IBM"},
+        id="input-override",
+    ),
+]
+
+
+UNSUPPORTED_MODULES = [
+    pytest.param(
+        "pipe_b3d43c00f9e1145ff522fb71ea743e99", "locationbuilder", id="locationbuilder"
+    ),
+    pytest.param(
+        "pipe_93abb8500bd41d56a37e8885094c8d10", "termextractor", id="simpletagger"
+    ),
 ]
 
 
@@ -243,11 +277,7 @@ class TestStoredWorkflows:
             items = cast("ParserMaterializedOutput", list(listize(stream)))
         else:
             flow = workflow_resolver.load_workflow(pipe_name, directory=file_path)
-
-            with SyncExecution(context=self.context) as execution:
-                items = list(
-                    execution.run(ExecutionPlan.from_workflow(flow, dispatcher))
-                )
+            items = [*run_workflow(flow, context=self.context)]
 
         return items
 
@@ -255,15 +285,6 @@ class TestStoredWorkflows:
         pipe = dispatcher.require(pipe_name, True)
         assert is_subpipe(pipe)
         return pipe(context=self.context)
-
-    def _load(self, items: Sequence[Items], pipe_name, value=0, check=1):
-        if _document(pipe_name) is None:
-            module = import_module(f"tests.pyworkflows.{pipe_name}")
-            pydeps = _workflow_dependencies(module.build().workflow)
-        else:
-            pydeps = _workflow_dependencies(_load_workflow(pipe_name))
-
-        _check_results(pydeps, items, pipe_name, value=value, check=check)
 
     def setup_method(self):
         """Creates the shared test ``Context``."""
@@ -275,7 +296,7 @@ class TestStoredWorkflows:
     def test_first_item_field(self, pipe_name, count, field, expected):
         """Runs a stored workflow and checks one field of its first item."""
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, count, 0)
+        _check_results(items, count, 0)
         item = items[0]
         assert is_mapping(item)
         assert item.get(field) == expected
@@ -284,16 +305,44 @@ class TestStoredWorkflows:
     def test_first_item_title_prefix(self, pipe_name, count, prefix):
         """Runs a stored workflow and checks how its first item's title begins."""
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, count, 0)
+        _check_results(items, count, 0)
         item = items[0]
         assert is_mapping(item)
         assert str(item.get("title")).startswith(prefix)
+
+    @pytest.mark.parametrize(("pipe_name", "expected", "inputs"), WHOLE_STREAMS)
+    def test_whole_stream(self, pipe_name, expected, inputs):
+        """Runs a stored workflow, optionally with inputs, and checks every item."""
+        if inputs is not None:
+            self.context = self.context.replace(inputs=inputs)
+
+        assert self._run_example(pipe_name) == expected
+
+    @pytest.mark.parametrize(("name", "count", "example", "content"), KAZEEKI)
+    def test_kazeeki(self, name, count, example, content):
+        """Loads a kazeeki simple test workflow and checks its first item."""
+        items = self._run_example(f"pipe_{name}")
+        _check_results(items, count, 0)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, example, content)
+
+    @async_test
+    @pytest.mark.parametrize(("name", "count", "example", "content"), KAZEEKI)
+    async def test_async_kazeeki(self, name, count, example, content):
+        """Loads an async kazeeki simple test workflow and checks its first item."""
+        stream = self._async_run_example(f"pipe_async_{name}")
+        items = [item async for item in stream]
+        _check_results(items, count, 0)
+        item = items[0]
+        assert is_mapping(item)
+        _assert_kazeeki(item, example, content)
 
     def test_fetchsitefeed(self):
         """Loads a workflow containing a fetchsitefeed module."""
         pipe_name = "pipe_551507461cbcb19a828165daad5fe007"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 1)
+        _check_results(items, 1, 1)
         item = items[0]
         assert is_mapping(item)
         assert item.get("title")
@@ -303,7 +352,7 @@ class TestStoredWorkflows:
         """Loads a workflow containing a loop."""
         pipe_name = "pipe_125e9fe8bb5f84526d21bebfec3ad116"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 0)
+        _check_results(items, 1, 0)
 
         item = items[0]
         assert is_mapping(item)
@@ -314,68 +363,11 @@ class TestStoredWorkflows:
         assert info.get("login") == "defunkt"
         assert info.get("user_view_type") == "public"
 
-    def test_urlbuilder(self):
-        """Loads the RTW URL Builder test workflow."""
-        pipe_name = "pipe_e519dd393f943315f7e4128d19db2eac"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 63, 0)
-        item = items[0]
-        assert is_mapping(item)
-        assert "The 6 Best Enterprise Data Modeling Tools" in str(item.get("title"))
-
-    def test_input_override(self):
-        """Overrides an offline input->itembuilder workflow via Context.inputs."""
-        self.context = self.context.replace(inputs={"textinput1": "IBM"})
-        pipe_name = "pipe_1LNyRuNS3BGdkTKaAsqenA"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 0)
-        assert items == [{"symbol": "IBM"}]
-
-    def test_kazeeki1(self):
-        """Loads the kazeeki simple test fetchdata workflow."""
-        pipe_name = "pipe_kazeeki1"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 5, 0)
-        item = items[0]
-        assert is_mapping(item)
-        _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
-
-    def test_kazeeki2(self):
-        """Loads the kazeeki simple test itembuilder workflow."""
-        pipe_name = "pipe_kazeeki2"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 0)
-        item = items[0]
-        assert is_mapping(item)
-        _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
-
-    @async_test
-    async def test_async_kazeeki1(self):
-        """Loads the async kazeeki simple test fetchdata workflow."""
-        pipe_name = "pipe_async_kazeeki1"
-        stream = self._async_run_example(pipe_name)
-        items = [item async for item in stream]
-        self._load(items, pipe_name, 5, 0)
-        item = items[0]
-        assert is_mapping(item)
-        _assert_kazeeki(item, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT)
-
-    @async_test
-    async def test_async_kazeeki2(self):
-        """Loads the async kazeeki simple test itembuilder workflow."""
-        pipe_name = "pipe_async_kazeeki2"
-        stream = self._async_run_example(pipe_name)
-        items = [item async for item in stream]
-        self._load(items, pipe_name, 1, 0)
-        item = items[0]
-        assert is_mapping(item)
-        _assert_kazeeki(item, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT)
-
     def test_kazeeki_full(self):
         """Loads the kazeeki simple test workflow."""
         pipe_name = "pipe_kazeeki_full"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 5, 0)
+        _check_results(items, 5, 0)
 
         example = {
             "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
@@ -451,7 +443,7 @@ class TestStoredWorkflows:
         """Loads a simple test workflow."""
         pipe_name = "pipe_testpipe1"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 4, 0)
+        _check_results(items, 4, 0)
 
         for item in items:
             assert is_mapping(item)
@@ -459,21 +451,12 @@ class TestStoredWorkflows:
             summary = str(item.get("summary"))
             assert "the" in summary
 
-    def test_forever(self):
-        """Loads a workflow that uses forever driver source, bounded by truncate."""
-        pipe_name = "pipe_forever"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 3, 0)
-
-        for item in items:
-            assert item == {"forever": True}
-
     @pytest.mark.perf
     def test_european_performance_cars(self):
         """Loads a workflow containing a sort."""
         pipe_name = "pipe_8NMkiTW32xGvMbDKruymrA"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 36, 0)
+        _check_results(items, 36, 0)
         first, last = items[0], items[-1]
         assert is_mapping(first)
         assert is_mapping(last)
@@ -507,7 +490,7 @@ class TestStoredWorkflows:
         """Loads a workflow containing a reverse and truncate."""
         pipe_name = "pipe_58a53262da5a095fe7a0d6d905cc4db6"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 3, 0)
+        _check_results(items, 3, 0)
         prev_title = None
 
         for item in items:
@@ -517,40 +500,11 @@ class TestStoredWorkflows:
             assert not prev_title or title < prev_title
             prev_title = title
 
-    def test_tail(self):
-        """Loads a workflow containing a tail."""
-        pipe_name = "pipe_06c4c44316efb0f5f16e4e7fa4589ba2"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 5, 0)
-        item = items[0]
-        assert is_mapping(item)
-
-        title = str(item.get("title"))
-        assert "American woman is being held hostage" in title
-
-    def test_itembuilder(self):
-        """Loads a workflow containing an itembuilder."""
-        pipe_name = "pipe_b96287458de001ad62a637095df33ad5"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 2, 0)
-
-        expected = [
-            {
-                "attr1": "val1",
-                "attrpath": {"attr2": "val2", "attr3": "extVal"},
-                "longpath": {"attrpath": {"attr3": "val3"}},
-            },
-            {"attrpath": {"attr2": "VAL2"}, "ATTR1": "VAL1"},
-        ]
-
-        for pos, item in enumerate(items):
-            assert item == expected[pos]
-
     def test_rssitembuilder(self):
         """Loads a workflow containing an rssitembuilder."""
         pipe_name = "pipe_1166de33b0ea6936d96808717355beaa"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 3, 0)
+        _check_results(items, 3, 0)
 
         expected = [
             {
@@ -587,88 +541,6 @@ class TestStoredWorkflows:
             for k, v in expected[pos].items():
                 assert item.get(k) == v, f"expected {v=} at {pos=}, {k=}. Got\n{item=}"
 
-    def test_csv(self):
-        """Loads a workflow containing a csv source."""
-        pipe_name = "pipe_UuvYtuMe3hGDsmRgPm7D0g"
-        items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 0)
-
-        description = (
-            "Total allowances claimed, inc travel: "
-            "151619<br>Total basic allowances claimed, ex travel: "
-            "146282<br>Total Travel claimed: 5337<br>MP Mileage: "
-            "3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>"
-            "Cost of staying away from main home: 22541<br>London "
-            "Supplement: 0<br>Office Running Costs: 19848<br>"
-            "Staffing Costs: 88283"
-        )
-
-        expected = {
-            "FamilyNumOfJourneys": "0",
-            "Member": "Lancaster",
-            "MPOtherEuropean": "0",
-            "FamilyTotal": "0",
-            "OfficeRunningCosts": "19848",
-            "MPOtherRail": "233",
-            "CostofStayingAwayFromMainHome": "22541",
-            "StationeryAssocdPostageCosts": "3471",
-            "CommsAllowance": "9767",
-            "Mileage": "3358",
-            "MPMisc": "20",
-            "title": "Mr Mark Lancaster",
-            "description": description,
-            "TotalAllowancesClaimedIncTravel": "151619",
-            "SpouseTotal": "31",
-            "EmployeeTotal": "222",
-            "MPRail": "1473",
-            "LondonSupplement": "0",
-            "StaffingCosts": "88283",
-            "EmployeeNumOfJourneys": "21",
-            "CentrallyPurchasedStationery": "1149",
-            "TotalBasicAllowancesExcTravel": "146282",
-            "CentralITProvision": "1223",
-            "StaffCoverAndOtherCosts": "0",
-            "firstName": "Mr Mark",
-            "MPOtherAir": "0",
-            "MPOtherMileage": "0",
-            "TotalTravelClaimed": "5337",
-            "MPAir": "0",
-            "SpouseNumOfJourneys": "1",
-        }
-
-        for item in items:
-            assert item == expected
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason="the migrated workflow declares no inputs, so describing what a "
-        "workflow asks for is still pending",
-    )
-    def test_describe_input(self):
-        """Reads a workflow's input declarations from what it declares."""
-        flow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
-        expected = [
-            ("", "dateinput1", "dateinput1", "datetime", "10/14/2010"),
-            ("", "locationinput1", "locationinput1", "location", "isle of wight, uk"),
-            ("", "numberinput1", "numberinput1", "float", "12121"),
-            ("", "privateinput1", "privateinput1", "text", ""),
-            (
-                "",
-                "textinput1",
-                "textinput1",
-                "text",
-                "This is default text - is there debug text too?",
-            ),
-            ("", "urlinput1", "urlinput1", "url", "file://riko/data/example.html"),
-        ]
-
-        assert _declared_inputs(flow) == expected
-
-    def test_describe_dependencies(self):
-        """Reads a workflow's module dependencies from its workflow document."""
-        flow = _load_workflow("pipe_5fabfc509a8e44342941060c7c7d0340")
-        assert _workflow_dependencies(flow) == ["input", "rssitembuilder"]
-
     def test_union_just_other(self):
         """
         Loads a workflow containing a union with the first input unconnected.
@@ -677,7 +549,7 @@ class TestStoredWorkflows:
         """
         pipe_name = "pipe_6e30c269a69baf92cd420900b0645f88"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 24, 0)
+        _check_results(items, 24, 0)
 
         first, last = items[0], items[-1]
         assert is_mapping(first)
@@ -697,7 +569,7 @@ class TestStoredWorkflows:
         """Loads a workflow containing a stringtokenizer."""
         pipe_name = "pipe_975789b47f17690a21e89b10a702bcbd"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 2, 0)
+        _check_results(items, 2, 0)
         contains = [{"title": "#hashtags"}, {"title": "#with"}]
 
         for item in contains:
@@ -713,7 +585,7 @@ class TestStoredWorkflows:
     def test_fetchpage(self, pipe_name):
         """Loads a workflow containing a fetchpage module (plain and within a loop)."""
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 8, 0)
+        _check_results(items, 8, 0)
         item = items[2]
         assert is_mapping(item)
         assert item.get("content") == "$3.00</td>"
@@ -722,7 +594,7 @@ class TestStoredWorkflows:
         """Loads the loop example workflow."""
         pipe_name = "pipe_dAI_R_FS3BG6fTKsAsqenA"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 1, 0)
+        _check_results(items, 1, 0)
         expected = (
             "THIS TSUNAMI ADVISORY IS FOR ALASKA/ BRITISH COLUMBIA/ "
             "WASHINGTON/ OREGON\n     AND CALIFORNIA ONLY (Severe)"
@@ -733,25 +605,11 @@ class TestStoredWorkflows:
         assert item.get("title") == expected
         assert item.get("pubDate")
 
-    def test_loop_subpipe_embed(self):
-        """Runs a stored workflow embedded in a loop once per parent item."""
-        items = self._run_example("pipe_loop_subpipe")
-        assert items == [{"title": "hello", "strconcat": "hello!"}]
-
-    def test_loop_count_all_assign(self):
-        """Keeps one copy of the parent per embed result when assigning all."""
-        items = self._run_example("pipe_loop_assign")
-        assert items == [
-            {"title": "a b c", "tokens": {"content": "a"}},
-            {"title": "a b c", "tokens": {"content": "b"}},
-            {"title": "a b c", "tokens": {"content": "c"}},
-        ]
-
     def test_namespaceless_xml_input(self):
         """Loads a workflow containing deep xml source with no namespace."""
         pipe_name = "pipe_402e244d09a4146cd80421c6628eb6d9"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 5, 1)
+        _check_results(items, 5, 1)
         contains = [
             "Gower to Anglesey",
             "The Riddle of the Tides",
@@ -768,7 +626,7 @@ class TestStoredWorkflows:
         """Loads a workflow containing a URL builder in a loop (offline)."""
         pipe_name = "pipe_e65397e116d7754da0dd23425f1f0af1"
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 2, 0)
+        _check_results(items, 2, 0)
 
         chart_url = (
             "https://example.invalid/chart?cht=qr&chs=200x200"
@@ -791,7 +649,7 @@ class TestStoredWorkflows:
         pipe_name = "pipe_a08134746e30a6dd3a7cb3c0cf098692"
 
         items = self._run_example(pipe_name)
-        self._load(items, pipe_name, 94, 0)
+        _check_results(items, 94, 0)
         url = "i.cdn.turner.com/cnn/.e/img/3.0/global/header/intl/CNNi_Logo_new.png"
 
         item = items[0]
@@ -815,189 +673,7 @@ class TestStoredWorkflows:
     #######################
     # Unimplemented modules
     #######################
-    def test_locationbuilder_reports_unsupported_module(self):
-        """
-        Exercise nested loops, inputs, assignments, and references.
-
-        The workflow covers a location builder, embedded-module inputs, nested JSON
-        lists, partial loop assignment, and multi-part-reference regexes.
-        """
-        pipe_name = "pipe_b3d43c00f9e1145ff522fb71ea743e99"
-
-        with pytest.raises(UnsupportedModuleError, match=r"\blocationbuilder\b"):
+    @pytest.mark.parametrize(("pipe_name", "module"), UNSUPPORTED_MODULES)
+    def test_an_unimplemented_module_is_reported_by_name(self, pipe_name, module):
+        with pytest.raises(UnsupportedModuleError, match=rf"\b{module}\b"):
             self._run_example(pipe_name)
-
-    def test_simpletagger_reports_unsupported_module(self):
-        """Term extraction (used by the simple tagger) is not implemented."""
-        pipe_name = "pipe_93abb8500bd41d56a37e8885094c8d10"
-
-        with pytest.raises(UnsupportedModuleError, match=r"\btermextractor\b"):
-            self._run_example(pipe_name)
-
-
-@pytest.fixture
-def sqlite_path(tmp_path: Path) -> Path:
-    path = tmp_path / "cars.sqlite"
-    connection = sqlite3.connect(path)
-
-    try:
-        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
-        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
-        connection.commit()
-    finally:
-        connection.close()
-
-    return path
-
-
-class TestFetchtable:
-    @pytest.mark.xfail(
-        strict=True,
-        raises=(TypeError, UnicodeDecodeError),
-        reason="owned by the connectors work: fetchtable forwards the csv-only"
-        " delimiter option to the sqlite reader (TypeError) and opens the binary"
-        " source as text (UnicodeDecodeError); xlsx follows the same path",
-    )
-    @pytest.mark.filterwarnings("ignore::ResourceWarning")
-    def test_fetchtable_reads_sqlite_fixture(self, sqlite_path: Path):
-        """Ensure binary tabular sources open in binary mode and yield rows."""
-        pipeline = Pipeline.from_module("fetchtable", conf={"url": str(sqlite_path)})
-        item, failure = None, None
-
-        try:
-            item = pipeline.first()
-        except (TypeError, UnicodeDecodeError) as error:
-            failure = type(error)(*error.args)
-
-        # The failed read leaks its file handle; drop the traceback that pins it and
-        # collect here so the warning fires under this test's filter, not at teardown.
-        if failure is not None:
-            gc.collect()
-            raise failure
-
-        assert is_mapping(item)
-        assert item.get("make") == "ford"
-
-
-_BODY = "<rss><channel><item><title>hi</title></item></channel></rss>"
-
-
-_CONTENT_TYPE = "application/xml"
-
-
-def _sync_http_client(url: str, events: list[str]):
-    def connect():
-        response = urlopen(url)  # noqa: S310
-        try:
-            yield response
-        finally:
-            response.close()
-            events.append("closed")
-
-    return connect
-
-
-def _async_http_client(url: str, events: list[str]):
-    async def connect():
-        try:
-            async with async_url_open(url) as stream:
-                yield stream
-        finally:
-            events.append("closed")
-
-    return connect
-
-
-class TestResourceLifecycle:
-    @pytest.mark.simulated_network
-    def test_sync_external_http_client_under_sync_execution(self) -> None:
-        events: list[str] = []
-
-        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-            with SyncExecution() as execution:
-                response = execution.acquire(
-                    Resource.from_lifecycle(_sync_http_client(url, events))
-                )
-                assert b"<item>" in response.read()
-                assert events == []
-
-            assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    @async_test
-    async def test_sync_external_http_client_under_async_execution(self) -> None:
-        events: list[str] = []
-
-        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-            async with AsyncExecution() as execution:
-                response = await execution.aacquire(
-                    Resource.from_lifecycle(_sync_http_client(url, events))
-                )
-                assert b"<item>" in response.read()
-                assert events == []
-
-            assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    @async_test
-    async def test_async_external_http_client_under_async_execution(self) -> None:
-        events: list[str] = []
-
-        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-            async with AsyncExecution() as execution:
-                stream = await execution.aacquire(
-                    Resource.from_lifecycle(_async_http_client(url, events))
-                )
-                assert "<item>" in stream.read()
-                assert events == []
-
-            assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    def test_sync_external_async_http_client_rejected(self) -> None:
-        with (
-            loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="async-native"),
-        ):
-            execution.acquire(Resource.from_lifecycle(_async_http_client(url, [])))
-
-    @pytest.mark.simulated_network
-    def test_sync_external_http_client_torn_down_on_failure(self) -> None:
-        events: list[str] = []
-
-        def failing() -> object:
-            raise RuntimeError("boom")
-
-        def run() -> None:
-            with (
-                loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
-                SyncExecution() as execution,
-            ):
-                execution.acquire(
-                    Resource.from_lifecycle(_sync_http_client(url, events))
-                )
-                execution.acquire(Resource.from_factory(failing, cleanup=False))
-
-        with pytest.raises(RuntimeError, match="boom"):
-            run()
-
-        assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    @async_test
-    async def test_async_external_http_client_torn_down_on_failure(self) -> None:
-        events: list[str] = []
-
-        async def fail() -> None:
-            with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-                async with AsyncExecution() as execution:
-                    await execution.aacquire(
-                        Resource.from_lifecycle(_async_http_client(url, events))
-                    )
-                    raise ValueError("boom")
-
-        with pytest.raises(ValueError, match="boom"):
-            await fail()
-
-        assert events == ["closed"]

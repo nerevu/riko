@@ -3,56 +3,29 @@
 
 from __future__ import annotations
 
+import gc
+import sqlite3
+from collections.abc import AsyncIterator, Iterator, Mapping
 from datetime import datetime, timedelta, timezone
-from importlib import import_module
-from importlib.resources import files
+from inspect import isawaitable
 from itertools import count
 from time import struct_time
-from types import BuiltinFunctionType, FunctionType, SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
-import riko
-import riko.bado
-import riko.base.exceptions
-import riko.definitions._workflow_definition
-import riko.ext
-import riko.ext.codegen
-import riko.ext.modules
-import riko.ext.targets
-import riko.ext.workflows
-import riko.modules
-import riko.modules._names
-import riko.runtime._compile
-import riko.runtime._export
-import riko.runtime._resolver
-import riko.runtime._workflow_pipes
-import riko.runtime._workflow_resolver
-import riko.runtime._workflow_stores
-import riko.types
-from riko.bado._backend import create_task_group
 from riko.bado.itertools import alist
-from riko.base._api_surface import (
-    BADO,
-    COMPILE,
-    EXPORT,
-    EXT_CODEGEN,
-    EXT_MODULES,
-    EXT_TARGETS,
-    EXT_WORKFLOWS,
-    EXTENSION,
-    MODULES,
-    PRIVATE_RESOLUTION,
-    ROOT_EXCEPTIONS,
-    STABLE,
-    TYPES,
-)
-from riko.base._exceptions import ReceiverUnavailableError
+from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
 from riko.definitions._context import Context
-from riko.modules import describe_module
-from riko.modules._metadata import list_modules
+from riko.ext.codegen import (
+    NameEntry,
+    enum_member_name,
+    gen_catalog_entries,
+    generate_module_names,
+)
+from riko.modules._decorators import operator, processor, splitter
+from riko.modules._metadata import get_module_metadata, list_modules
 from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
@@ -61,33 +34,38 @@ from riko.modules.filter import pipe as filter_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
 from riko.modules.receive import pipe as receive_pipe
-from riko.modules.send import async_pipe as async_send
+from riko.modules.regex import pipe as regex
+from riko.modules.rename import pipe as rename
 from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
+from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.udf import pipe as udf_pipe
+from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
-from riko.runtime._pubsub import async_hub
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
     FilterConf,
     FilterConfRule,
     InputConf,
     JoinConf,
-    SendConf,
+    RegexConf,
+    RegexConfRule,
+    RenameConf,
+    RenameConfRule,
     SortConf,
     SortConfRule,
+    XpathFetchPageConf,
 )
 from tests import async_test
+from tests._lifecycle import LOOKAHEAD
+from tests._loopback import URL, stub_async_get
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable, AsyncIterator
+    from collections.abc import AsyncIterable
+    from pathlib import Path
 
-    from riko.types._streams import AsyncStream, Item, ItemOrValue, Stream
-
-
-_LOOKAHEAD = 2
-_SOURCE_LEN = 5
+    from riko.types._streams import Item
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -128,23 +106,6 @@ class TestInput:
         assert next(input_pipe(conf=conf)) == 0
 
 
-URL = "https://example.test/data"
-JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
-XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
-
-
-def _async_get(content, content_type):
-    async def async_get(url, **_):
-        return SimpleNamespace(content=content, headers={"content-type": content_type})
-
-    return async_get
-
-
-async def _titles(conf):
-    stream = async_fetchdata_pipe(conf=conf)
-    return [item.get("title") async for item in stream]
-
-
 FETCH_MODULES = [
     "fetch",
     "fetchdata",
@@ -173,6 +134,16 @@ class TestFetchModules:
             await alist(pipeline)
 
 
+JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
+
+XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
+
+
+async def _titles(conf):
+    stream = async_fetchdata_pipe(conf=conf)
+    return [item.get("title") async for item in stream]
+
+
 class TestFetchdata:
     """``fetchdata`` infers the parser for extensionless URLs and local documents."""
 
@@ -182,7 +153,7 @@ class TestFetchdata:
     @async_test
     async def test_file_contents(self, monkeypatch, content, content_type):
         monkeypatch.setattr(
-            "riko.io._async.async_get", _async_get(content, content_type)
+            "riko.io._async.async_get", stub_async_get(content, content_type)
         )
         result = await _titles({"url": URL, "path": "items"})
         assert result == ["A", "B"]
@@ -211,7 +182,7 @@ class TestFetchdata:
     async def test_query_string_does_not_defeat_extension(self, monkeypatch):
         """Detect URL formats from extensions even when queries are present."""
         monkeypatch.setattr(
-            "riko.io._async.async_get", _async_get(JSON, "application/json")
+            "riko.io._async.async_get", stub_async_get(JSON, "application/json")
         )
         url = "https://example.test/export.json?token=abc"
         result = await _titles({"url": url, "path": "items"})
@@ -230,6 +201,62 @@ class TestFetchdata:
         path.write_bytes(text.encode("latin-1"))
         items = fetchdata_pipe(conf={"url": path.as_uri(), "path": "items"})
         assert [item.get("t") for item in items] == ["café"]
+
+
+@pytest.fixture
+def sqlite_path(tmp_path: Path) -> Path:
+    path = tmp_path / "cars.sqlite"
+    connection = sqlite3.connect(path)
+
+    try:
+        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    return path
+
+
+class TestFetchtable:
+    @pytest.mark.xfail(
+        strict=True,
+        raises=(TypeError, UnicodeDecodeError),
+        reason="owned by the connectors work: fetchtable forwards the csv-only"
+        " delimiter option to the sqlite reader (TypeError) and opens the binary"
+        " source as text (UnicodeDecodeError); xlsx follows the same path",
+    )
+    @pytest.mark.filterwarnings("ignore::ResourceWarning")
+    def test_fetchtable_reads_sqlite_fixture(self, sqlite_path: Path):
+        """Ensure binary tabular sources open in binary mode and yield rows."""
+        pipeline = Pipeline.from_module("fetchtable", conf={"url": str(sqlite_path)})
+        item, failure = None, None
+
+        try:
+            item = pipeline.first()
+        except (TypeError, UnicodeDecodeError) as error:
+            failure = type(error)(*error.args)
+
+        # The failed read leaks its file handle; drop the traceback that pins it and
+        # collect here so the warning fires under this test's filter, not at teardown.
+        if failure is not None:
+            gc.collect()
+            raise failure
+
+        assert isinstance(item, Mapping)
+        assert item.get("make") == "ford"
+
+
+class TestXpathfetchpage:
+    def test_xpathfetchpage_strips_xhtml_namespace_from_nested_keys(self):
+        conf = XpathFetchPageConf(
+            {"url": get_path("users.jyu.fi.html"), "xpath": "/html/body/p/a"}
+        )
+
+        assert next(xpathfetchpage(conf=conf)) == {
+            "href": "http://www.w3.org/",
+            "img": {"src": "http://www.w3.org/Icons/w3c_home", "alt": "W3C"},
+        }
 
 
 class TestFilter:
@@ -302,10 +329,25 @@ class TestFilter:
         assert _values(filter_pipe(nan_items, conf=nan_conf), "x") == ["nan"]
 
 
-def _counting_source(consumed: list[int]) -> Any:
-    for i in count():
-        consumed.append(i)
-        yield {"x": "foo", "i": i}
+class TestRename:
+    def test_rename_skips_absent_field(self):
+        """A rename rule naming an absent field leaves the item untouched."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
+        assert next(rename({"title": "hi"}, conf=conf)) == {"title": "hi"}
+
+    def test_rename_renames_present_falsy_field(self):
+        """A present-but-falsy value is still renamed (absent ≠ present-``None``)."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
+        assert next(rename({"content": ""}, conf=conf)) == {"greeting": ""}
+
+
+class TestRegex:
+    def test_regex_skips_absent_field(self):
+        """A regex rule naming an absent field leaves the item untouched."""
+        conf = RegexConf(
+            {"rule": RegexConfRule(field="content", match="l", replace="L")}
+        )
+        assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
 
 
 SLUGIFY_CASES = [
@@ -320,6 +362,12 @@ class TestSlugify:
         assert _values(slugify_pipe({"content": content}), "slugify") == [slug]
 
 
+def _counting_source(consumed: list[int]) -> Any:
+    for i in count():
+        consumed.append(i)
+        yield {"x": "foo", "i": i}
+
+
 class TestJoin:
     def test_keyed_join_does_not_materialize_its_primary(self):
         """``other`` is the replayed side, so an unbounded primary must still emit."""
@@ -329,9 +377,9 @@ class TestJoin:
         joined = join_pipe(_counting_source(consumed), conf=conf, other=other)
 
         assert next(joined) == {"x": "foo", "i": 0, "c": 5}
-        assert len(consumed) <= _LOOKAHEAD
+        assert len(consumed) <= LOOKAHEAD
         assert next(joined) == {"x": "foo", "i": 1, "c": 5}
-        assert len(consumed) <= 1 + _LOOKAHEAD
+        assert len(consumed) <= 1 + LOOKAHEAD
 
     def test_natural_join_does_not_materialize_its_primary(self):
         """The keyless natural join is lazy in its primary stream too."""
@@ -339,7 +387,7 @@ class TestJoin:
         joined = join_pipe(_counting_source(consumed), other=[{"c": 5}])
 
         assert next(joined) == {"x": "foo", "i": 0, "c": 5}
-        assert len(consumed) <= _LOOKAHEAD
+        assert len(consumed) <= LOOKAHEAD
 
 
 class TestSort:
@@ -438,157 +486,6 @@ class TestSend:
         assert isinstance(ids.get("id-target"), int)
 
 
-def _finite_source(consumed: list[int]) -> Stream:
-    for i in range(_SOURCE_LEN):
-        consumed.append(i)
-        yield {"x": "foo", "i": i}
-
-
-async def _afinite_source(consumed: list[int]) -> AsyncStream:
-    for i in range(_SOURCE_LEN):
-        consumed.append(i)
-        yield {"x": "foo", "i": i}
-
-
-async def _drain(receive_stream: Any, into: list[Item] | None = None) -> None:
-    async for item in receive_stream:
-        if into is not None:
-            into.append(item)
-
-
-async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
-    first: ItemOrValue = {}
-    seen = 0
-
-    async with (
-        async_hub.subscribe("r4-lazy") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain, receive_stream)
-        stream = async_send(_finite_source(consumed), others=["r4-lazy"])
-        first = await anext(stream)
-        seen = len(consumed)
-
-    return (first, seen)
-
-
-async def _send_missing_target(received: list[Item]) -> None:
-    async with (
-        async_hub.subscribe("r4-good") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain, receive_stream, received)
-
-        with pytest.raises(ReceiverUnavailableError):
-            async for _ in async_send(
-                _finite_source([]),
-                conf=SendConf(max_wait=0.05),
-                others=["r4-good", "r4-missing"],
-            ):
-                pass
-
-
-async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
-    out: list[ItemOrValue] = []
-
-    async with (
-        async_hub.subscribe("r4-feed") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain, receive_stream, received)
-        stream = async_send(_afinite_source(consumed), others=["r4-feed"])
-        out = [item async for item in stream]
-
-    return out
-
-
-class TestAsyncSend:
-    @pytest.mark.timeout(10)
-    @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
-    @async_test
-    async def test_async_send_does_not_buffer_its_source(self):
-        """Keep unbounded async sends from returning before completion."""
-        consumed: list[int] = []
-        first, seen = await _send_first(consumed)
-
-        assert first == {"x": "foo", "i": 0}
-        assert seen <= _LOOKAHEAD
-
-    @pytest.mark.timeout(10)
-    @async_test
-    async def test_async_send_completes_targets_when_publish_fails(self):
-        """
-        A failed publish must still close the targets that did subscribe.
-
-        ``publish`` raises ``ReceiverUnavailableError`` once an unsubscribed target
-        outlasts ``max_wait``.
-        """
-        received: list[Item] = []
-        await _send_missing_target(received)
-        assert received == [{"x": "foo", "i": 0}]
-
-    @pytest.mark.timeout(10)
-    @async_test
-    async def test_async_send_accepts_a_feed_source(self):
-        """
-        An async source reaches the parser as an ``AsyncIterator``, not a list.
-
-        ``operator.anormalize_input``/``setup`` hand the parser an async ``orig_stream``
-        when the caller passes a ``Feed``. So a sync ``for`` over it raises
-        ``TypeError``.
-        """
-        consumed: list[int] = []
-        received: list[Item] = []
-        expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
-        out = await _send_feed(consumed, received)
-
-        assert out == expected
-        assert received == expected
-
-
-async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
-    first: ItemOrValue = {}
-    seen = 0
-
-    async def _snapshot(receive_stream: Any) -> None:
-        nonlocal first, seen
-        idx = 0
-
-        async for item in receive_stream:
-            if idx == 0:
-                first, seen = item, len(consumed)
-
-            idx += 1
-
-    async with (
-        async_hub.subscribe("r-recv-lazy") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_snapshot, receive_stream)
-        async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
-            pass
-
-    return (first, seen)
-
-
-class TestAsyncReceive:
-    @pytest.mark.timeout(10)
-    @async_test
-    async def test_async_receive_does_not_materialize(self):
-        """
-        Deliver each item before pulling the next one from the source.
-
-        The zero-buffer channel lets subscribers observe items without materializing
-        the source. ``send`` still eagerly collects its own passthrough return; see
-        ``test_async_send_does_not_buffer_its_source``.
-        """
-        consumed: list[int] = []
-        first, seen = await _receive_first(consumed)
-
-        assert first == {"x": "foo", "i": 0}
-        assert seen <= _LOOKAHEAD
-
-
 async def _agen_xs() -> AsyncIterator[Item]:
     for x in range(2):
         yield {"x": x}
@@ -670,241 +567,353 @@ class TestListModules:
             list_modules(primary=True)
 
 
-class TestDescribeModule:
+class TestModuleMetadata:
+    """Derived module metadata and its classification."""
+
+    def test_operator_metadata(self):
+        metadata = get_module_metadata("count", strict=True)
+        assert metadata.subtypes == {"aggregator", "composer"}
+        assert metadata.has_sync
+        assert metadata.has_async
+
+    def test_processor_metadata(self):
+        source = get_module_metadata("fetch", strict=True)
+        transformer = get_module_metadata("dateformat", strict=True)
+
+        assert source.type == "processor"
+        assert source.subtype == "source"
+        assert source.subtypes == {"source"}
+
+        assert transformer.type == "processor"
+        assert transformer.subtype == "transformer"
+        assert transformer.subtypes == {"transformer"}
+
+    def test_splitter_metadata(self):
+        metadata = get_module_metadata("split", strict=True)
+        assert metadata.type == "splitter"
+        assert metadata.subtype == "splitter"
+        assert metadata.subtypes == {"splitter"}
+
+    def test_loopable_metadata(self):
+        # processors are loopable (they transform a single item) ...
+        assert get_module_metadata("dateformat", strict=True).loopable
+        assert get_module_metadata("itembuilder", strict=True).loopable
+
+        # ... except input, which prompts for interactive user input
+        assert not get_module_metadata("input", strict=True).loopable
+
+        # operators and splitters cannot be embedded in a loop
+        assert not get_module_metadata("count", strict=True).loopable
+        assert not get_module_metadata("split", strict=True).loopable
+
+    def test_operator_metadata_is_derived(self):
+        @operator()
+        def value_pipe(*args: Any, **kwargs: object) -> int:
+            return 1
+
+        @operator()
+        def mapping_pipe(*args: Any, **kwargs: object) -> dict[str, int]:
+            return {"count": 1}
+
+        @operator()
+        def stream_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, int]]:
+            yield {"count": 1}
+
+        @operator()
+        def composition_key_pipe(
+            *args, count_key=None, **kwargs
+        ) -> dict[str, int] | Iterator[dict[str, int]]:
+            return iter([{"count": 1}]) if count_key else {"count": 1}
+
+        assert value_pipe.subtype == "aggregator"
+        assert value_pipe.subtypes == {"aggregator"}
+
+        assert mapping_pipe.subtype == "aggregator"
+        assert mapping_pipe.subtypes == {"aggregator"}
+
+        assert stream_pipe.subtype == "composer"
+        assert stream_pipe.subtypes == {"composer"}
+
+        assert composition_key_pipe.subtype == "aggregator"
+        assert composition_key_pipe.subtypes == {"aggregator", "composer"}
+
+    def test_builtin_metadata_provider(self):
+        assert get_module_metadata("fetch", strict=True).provider == "riko"
+
+    def test_metadata_subtypes_are_frozen(self):
+        metadata = get_module_metadata("fetch", strict=True)
+
+        assert isinstance(metadata.subtypes, frozenset)
+        assert metadata.subtypes == {"source"}
+
+    def test_unknown_module_metadata_raises_when_strict(self):
+        with pytest.raises(ValueError, match="has no metadata"):
+            get_module_metadata("not_a_builtin_module", strict=True)
+
+
+def _create_wrapper(name: str, *, iscoro: bool, isasync: bool):
+    """Decorate a fresh function with the given name/awaitability/explicit flag."""
+
+    async def _coro(item, extraction, objconf, **kwargs) -> str:
+        return str(item["content"]).upper()
+
+    def _sync(item, extraction, objconf, **kwargs) -> str:
+        return str(item["content"]).upper()
+
+    fn = _coro if iscoro else _sync
+    fn.__name__ = name
+    decorate = processor(isasync=True) if isasync else processor()
+    return decorate(fn)
+
+
+def _record_test_flag(seen: list[object]):
+    def record(item: Item, *args, **kwargs) -> str:
+        seen.append(kwargs.get("test"))
+        return "seen"
+
+    return record
+
+
+def _skip_marked(item: Item, *args, **kwargs) -> str:
+    return "processed"
+
+
+class TestProcessor:
+    """A ``processor`` resolves its interface, keeps call flags, and skips items."""
+
     @pytest.mark.parametrize(
-        ("error", "match"),
+        ("name", "iscoro", "isasync", "expected"),
         [
-            pytest.param(
-                ModuleNotFoundError(
-                    "No module named 'phantom_dep'", name="phantom_dep"
-                ),
-                "phantom_dep",
-                id="nested-dependency",
-            ),
-            pytest.param(
-                ModuleNotFoundError("broken import with no module name"),
-                "no module name",
-                id="unnamed",
-            ),
+            pytest.param("pipe", False, False, False, id="sync-pipe"),
+            pytest.param("async_pipe", False, False, True, id="sync-async_pipe-name"),
+            pytest.param("async_pipe", True, False, True, id="async_def-async_pipe"),
+            pytest.param("shout", True, False, True, id="async_def-other-name"),
+            pytest.param("shout", False, False, False, id="sync-other-name"),
+            pytest.param("shout", False, True, True, id="explicit-required"),
+            pytest.param("async_pipe", False, True, True, id="explicit-redundant-name"),
+            pytest.param("shout", True, True, True, id="explicit-redundant-async"),
         ],
     )
-    def test_describe_module_reraises_import_error(
-        self, monkeypatch, error: ModuleNotFoundError, match: str
-    ):
-        def boom(target):
-            raise error
+    def test_resolved_isasync(self, name, iscoro, isasync, expected):
+        """
+        Resolve ``isasync`` from the explicit flag, ``async def``, or the name.
 
-        monkeypatch.setattr("riko.base._typing.import_module", boom)
+        ``isasync`` marks which interface a pipe is (``pipe`` or ``async_pipe``),
+        not whether the function is a coroutine, so it is only needed explicitly
+        for a sync callable that is the async interface under another name.
+        """
+        assert _create_wrapper(name, iscoro=iscoro, isasync=isasync).isasync is expected
 
-        with pytest.raises(ModuleNotFoundError, match=match):
-            describe_module("hash")
+    def test_sync_list(self):
+        seen: list[object] = []
+        pipe = processor()(_record_test_flag(seen))
+        list(pipe([{"a": 1}, {"a": 2}], test=True))
+        assert seen == [True, True]
 
-
-SURFACE_MODULES = (
-    riko.bado,
-    riko.runtime._export,
-    riko.runtime._compile,
-    riko.definitions._workflow_definition,
-    riko.ext,
-    riko.modules,
-    riko.base.exceptions,
-    riko,
-    riko.types,
-)
-PARTIAL_SURFACES = (
-    (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
-)
-CONF_TYPES = riko.types.modules.__all__
-
-
-CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
-
-EQUAL_SURFACES = (
-    (riko.bado, BADO),
-    (riko.runtime._export, EXPORT),
-    (riko.runtime._compile, CODEGEN),
-    (
-        riko.definitions._workflow_definition,
-        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
-    ),
-    (riko.ext, EXTENSION),
-    (riko.ext.codegen, EXT_CODEGEN),
-    (riko.ext.modules, EXT_MODULES),
-    (riko.ext.targets, EXT_TARGETS),
-    (riko.ext.workflows, EXT_WORKFLOWS),
-    (riko, STABLE),
-    (riko.types, TYPES),
-)
-PUBLIC_EXTENSION_MODULES = (
-    "riko.ext.codegen",
-    "riko.ext.modules",
-    "riko.ext.targets",
-    "riko.ext.workflows",
-)
-REMOVED_PUBLIC_PATHS = tuple(
-    f"riko.ext.{name}" for name in ("config", "decorators", "protocols", "registry")
-)
-RESOLUTION_MODULES = (
-    riko.runtime._resolver,
-    riko.runtime._workflow_pipes,
-    riko.runtime._workflow_stores,
-    riko.runtime._workflow_resolver,
-)
-
-
-def id_func(val):
-    if hasattr(val, "__name__"):
-        return val.__name__
-    else:
-        return "vs-set"
-
-
-def _gen_subclasses(cls):
-    for subclass in cls.__subclasses__():
-        yield subclass
-        yield from _gen_subclasses(subclass)
-
-
-class TestImportSurface:
-    """
-    Check the public API boundary.
-
-    ``riko`` define the stable application API. ``riko.ext`` defines the
-    extension-author API. ``riko.bado`` is a supported async-runtime namespace; the
-    BADO subset is promoted into the stable application surface. These tests exercise
-    public imports rather than implementation details.
-    """
-
-    @pytest.mark.smoke
-    def test_package_ships_py_typed(self):
-        assert files("riko").joinpath("py.typed").is_file()
-
-    @pytest.mark.smoke
-    @pytest.mark.parametrize(("module", "surface"), EQUAL_SURFACES, ids=id_func)
-    def test_equal_surface_matches_expected(self, module, surface):
-        assert sorted(set(module.__all__)) == sorted(surface)
-
-    @pytest.mark.parametrize(("names", "surface"), PARTIAL_SURFACES, ids=id_func)
-    def test_partial_surface_matches_expected(self, names, surface):
-        assert surface.issubset(names)
-        assert not any(name.startswith("_") for name in names)
-
-    def test_normal_module_confs_are_public(self):
-        assert "FetchConf" in CONF_TYPES
-        assert "RegexConf" in CONF_TYPES
-        assert "ItemBuilderConf" in CONF_TYPES
-
-    def test_raw_module_confs_are_private(self):
-        leaked = sorted(
-            name for name in CONF_TYPES if name.endswith(("RawConf", "RawRule"))
-        )
-        assert not leaked, f"Raw module confs leaked into riko.types.modules: {leaked}"
-
-    def test_module_metadas_are_same(self):
-        assert riko.ext.ModuleMetadata is riko.types.modules.ModuleMetadata
+    def test_sync(self):
+        pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
+        result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
+        assert result == [{"x": 1}, {"y": "processed"}]
 
     @pytest.mark.parametrize(
-        ("module", "surface"), [(riko, STABLE), (riko.ext, EXTENSION)]
+        ("iscoro", "isasync", "reason"),
+        [
+            pytest.param(True, False, "an async def", id="async_def"),
+            pytest.param(False, True, "marked isasync=True", id="isasync=True"),
+            pytest.param(True, True, "an async def", id="async_def+isasync=True"),
+        ],
     )
-    def test_stable_names_importable(self, module, surface):
-        """Every declared stable names actually resolves on ``riko``."""
-        assert all(hasattr(module, name) for name in surface)
+    def test_async_named_pipe_raises(self, iscoro, isasync, reason):
+        """A function named ``pipe`` that resolves async is a contradiction."""
+        with pytest.raises(TypeError) as excinfo:
+            _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
 
-    def test_bado_reexports_are_same_object(self):
-        mismatches = sorted(
-            name
-            for name in riko.bado.__all__
-            if getattr(riko, name) is not getattr(riko.bado, name)
-        )
-        assert not mismatches, f"Bado reexports differ from riko: {mismatches}"
-
-    def test_exception_reexports_are_same_object(self):
-        mismatches = sorted(
-            name
-            for name in ROOT_EXCEPTIONS
-            if getattr(riko, name) is not getattr(riko.base.exceptions, name)
-        )
-        assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
-
-    def test_exceptions_naming_the_public_module_are_importable_from_it(self):
-        public = riko.base.exceptions
-        roots = (public.RikoError, public.RikoWarning)
-        unexported = sorted(
-            cls.__name__
-            for root in roots
-            for cls in (root, *_gen_subclasses(root))
-            if cls.__module__ == public.__name__ and cls.__name__ not in public.__all__
-        )
-        assert not unexported, f"Not importable from {public.__name__}: {unexported}"
-
-    def test_private_resolution_names_exist(self):
-        """Every declared private resolution name is defined by a resolution module."""
-        missing = sorted(
-            name
-            for name in PRIVATE_RESOLUTION
-            if not any(hasattr(module, name) for module in RESOLUTION_MODULES)
-        )
-        assert not missing, f"Declared resolution internals do not exist: {missing}"
+        message = str(excinfo.value)
+        assert "'pipe' is the synchronous interface" in message
+        assert "async_pipe" in message
+        assert reason in message
 
     @pytest.mark.parametrize(
-        "module",
-        [*SURFACE_MODULES, *map(import_module, PUBLIC_EXTENSION_MODULES)],
-        ids=lambda module: module.__name__,
+        ("decorator", "option", "value"),
+        [
+            pytest.param(processor, "embed", True, id="processor+embed"),
+            pytest.param(operator, "skip_if", True, id="operator+skip_if"),
+            pytest.param(splitter, "pollable", True, id="splitter+pollable"),
+            pytest.param(splitter, "emit", True, id="splitter+emit"),
+            pytest.param(splitter, "count", True, id="splitter+count"),
+            pytest.param(splitter, "skip_if", True, id="splitter+skip_if"),
+            pytest.param(splitter, "embed", True, id="splitter+embed"),
+            pytest.param(processor, "count", "first", id="processor+count"),
+            pytest.param(processor, "conf", "first", id="processor+conf"),
+            pytest.param(processor, "bogus", "first", id="processor+bogus"),
+            pytest.param(operator, "bogus", "first", id="operator+bogus"),
+            pytest.param(operator, "resources", "first", id="operator+resources"),
+            pytest.param(operator, "count", "first", id="operator+count"),
+            pytest.param(operator, "embed", "first", id="operator+embed"),
+            pytest.param(splitter, "bogus", "first", id="splitter+bogus"),
+        ],
     )
-    def test_no_accidental_internal_exports(self, module):
-        """Private resolution internals are neither exported nor reachable publicly."""
-        exported = PRIVATE_RESOLUTION.intersection(getattr(module, "__all__", ()))
-        reachable = {name for name in PRIVATE_RESOLUTION if hasattr(module, name)}
-        leaked = sorted(exported | reachable)
-        assert not leaked, f"Private resolution internals exposed: {leaked}"
+    def test_unsupported_option_raises(self, decorator, option, value):
+        kwargs: dict[str, object] = {option: value}
+        name = decorator.__name__
 
-    @pytest.mark.parametrize("module", RESOLUTION_MODULES, ids=lambda m: m.__name__)
-    def test_resolution_internals_have_no_public_path(self, module):
-        """Resolution internals live only behind ``_``-prefixed modules."""
-        package, _, private_name = module.__name__.rpartition(".")
-        public_path = f"{package}.{private_name.lstrip('_')}"
-        assert private_name.startswith("_")
+        with pytest.raises(
+            TypeError, match=f"{name} modules do not support the '{option}'"
+        ):
+            decorator(**kwargs)
 
-        with pytest.raises(ModuleNotFoundError):
-            import_module(public_path)
 
-    def test_no_leaked_public_functions(self):
-        """
-        No bare function leaks into the top-level namespace outside ``__all__``.
+class TestAsyncProcessor:
+    """An async ``processor`` keeps call flags and skips items."""
 
-        Scoped to *functions* on purpose: classes and constants (e.g. ``Context``,
-        ``ENCODING``, ``objectify``) are intentionally importable while absent from
-        ``__all__``, so this guards callables rather than the whole attribute surface
-        (that surface is pinned by ``test_equal_surface_matches_expected``).
-        """
-        leaked = sorted(
-            name
-            for name, val in vars(riko).items()
-            if not (name.startswith("_") or name in STABLE)
-            and isinstance(val, (FunctionType, BuiltinFunctionType))
+    @async_test
+    async def test_async_list(self):
+        seen: list[object] = []
+        async_pipe = processor(isasync=True)(_record_test_flag(seen))
+        _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
+        assert seen == [True, True]
+
+    @async_test
+    async def test_async(self):
+        async_pipe = processor(isasync=True, skip_if=lambda item: "x" in item)(
+            _skip_marked
         )
-        assert not leaked, f"Top-level functions leaked outside STABLE: {leaked}"
+        stream = async_pipe([{"x": 1}, {"y": 2}], assign="y")
+        result = [item async for item in stream]
+        assert result == [{"x": 1}, {"y": "processed"}]
 
-    @pytest.mark.parametrize("path", REMOVED_PUBLIC_PATHS)
-    def test_removed_public_paths_are_gone(self, path):
-        with pytest.raises(ModuleNotFoundError):
-            import_module(path)
 
-    def test_modules_package_drops_decorators(self):
-        names = ("operator", "processor", "splitter")
-        assert not any(hasattr(riko.modules, name) for name in names)
+class TestAsyncOperator:
+    """
+    A decorated async operator returns an ``AsyncIterator`` without awaiting.
 
-    def test_stable_and_extension_do_not_intersect(self):
-        common = STABLE & EXTENSION
-        assert not common, f"Stable and extension surfaces intersect: {common}"
+    The wrapper call boundary must never expose ``Awaitable[AsyncIterator]``,
+    whatever the parser's implementation style, and an async-generator source
+    flows through it.
+    """
 
-    def test_all_has_no_duplicates(self):
-        duplicates = {
-            module.__name__: sorted(
-                {name for name in module.__all__ if module.__all__.count(name) > 1}
-            )
-            for module in SURFACE_MODULES
-            if len(module.__all__) != len(set(module.__all__))
-        }
-        assert not duplicates, f"Duplicate __all__ entries: {duplicates}"
+    @async_test
+    async def test_feed_source_through_timeout(self):
+        async def feed():
+            for x in range(3):
+                yield {"x": x}
+
+        result = timeout_async_pipe(feed(), conf={})
+        assert [item async for item in result] == [{"x": 0}, {"x": 1}, {"x": 2}]
+
+    @async_test
+    async def test_feed_reaches_parser_as_async_iterator(self):
+        received = {}
+
+        @operator(isasync=True)
+        async def async_pipe(stream, objconf, tuples, **kwargs):
+            received["is_async"] = isinstance(stream, AsyncIterator)
+            collected = [item async for item in stream]
+            return iter(collected)
+
+        async def feed():
+            for x in range(3):
+                yield {"content": x}
+
+        result = async_pipe(feed())
+        expected = [{"content": 0}, {"content": 1}, {"content": 2}]
+        assert [item async for item in result] == expected
+        assert received["is_async"] is True
+
+    @async_test
+    async def test_sync_parser_operator_returns_async_iterator(self):
+        items = [{"content": "a"}, {"content": "b"}]
+
+        @operator(isasync=True)
+        def async_pipe(stream, objconf, tuples, **kwargs):
+            yield from stream
+
+        stream = async_pipe(items)
+        assert isinstance(stream, AsyncIterator)
+        assert not isawaitable(stream)
+        assert await anext(stream) == {"content": "a"}
+
+    @async_test
+    async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):
+        items = [{"content": "a"}, {"content": "b"}]
+
+        @operator(isasync=True)
+        async def async_pipe(stream, objconf, tuples, **kwargs):
+            return iter(items)
+
+        stream = async_pipe(items)
+        assert isinstance(stream, AsyncIterator)
+        assert not isawaitable(stream)
+        assert [item async for item in stream] == items
+
+
+class TestEnumMemberName:
+    @pytest.mark.parametrize(
+        ("name", "override", "expected"),
+        [
+            ("fetch-page", None, "FETCH_PAGE"),
+            ("microsoft.autopilot.ensure", None, "MICROSOFT_AUTOPILOT_ENSURE"),
+            ("a--b..c", None, "A_B_C"),
+            ("fetch", "grab", "GRAB"),
+        ],
+    )
+    def test_enum_member_name(self, name, override, expected):
+        assert enum_member_name(name, override=override) == expected
+
+
+MEMBER_COLLISIONS = (
+    pytest.param("my_mod", "my-mod", id="builtin"),
+    pytest.param("example.my_mod", "example.my-mod", id="provider"),
+)
+
+
+def _exec_generated_names(*entries: NameEntry) -> dict:
+    namespace: dict = {}
+    exec(generate_module_names(*entries), namespace)
+    return namespace
+
+
+class TestGenerateModuleNames:
+    def test_generation_is_order_independent(self):
+        entries = list(gen_catalog_entries())
+        assert generate_module_names(*entries) == generate_module_names(
+            *reversed(entries)
+        )
+
+    def test_enum_name_override_resolves_collision(self):
+        entries = [
+            NameEntry(name="my_mod", category="transform"),
+            NameEntry(name="my-mod", category="transform", enum_name="my_mod_alt"),
+        ]
+        transforms = _exec_generated_names(*entries)["Transforms"]
+
+        assert transforms.MY_MOD_ALT.value == "my-mod"
+        assert transforms.MY_MOD.value == "my_mod"
+
+    def test_provider_namespace_flattens(self):
+        builtin = NameEntry(name="fetch", category="source")
+        entry = NameEntry(name="microsoft.autopilot.ensure", category="transform")
+        namespace = _exec_generated_names(builtin, entry)
+        provider = namespace["Microsoft"]
+        modules = namespace["Modules"]
+
+        assert entry.provider == "microsoft"
+        assert entry.class_name == "Microsoft"
+        assert entry.member == "AUTOPILOT_ENSURE"
+        assert entry.alias == "MICROSOFT_AUTOPILOT_ENSURE"
+        assert provider.AUTOPILOT_ENSURE.value == "microsoft.autopilot.ensure"
+        assert modules.MICROSOFT_AUTOPILOT_ENSURE is provider.AUTOPILOT_ENSURE
+        assert "AUTOPILOT_ENSURE" not in namespace["Transforms"].__members__
+
+    @pytest.mark.parametrize(("first", "second"), MEMBER_COLLISIONS)
+    def test_member_collision_fails_with_diagnostic(self, first, second):
+        entries = [
+            NameEntry(name=first, category="transform"),
+            NameEntry(name=second, category="transform"),
+        ]
+
+        with pytest.raises(ValueError, match="enum_name") as excinfo:
+            generate_module_names(*entries)
+
+        assert repr(first) in str(excinfo.value)
+        assert repr(second) in str(excinfo.value)

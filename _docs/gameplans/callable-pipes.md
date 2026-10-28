@@ -230,7 +230,7 @@ async def pipe(item, **kwargs): ...
 `@processor async def async_pipe`, but `@processor async def pipe` keeps raising `TypeError`
 until interfaces are classified by `isasync` rather than by attribute name. That change is
 scheduled in R4E ([implementation-sequence.md](implementation-sequence.md), 2026-10-22 triage);
-`tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises` pins the
+`tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises` pins the
 current `TypeError` until then.
 
 A single async implementation need not be renamed `async_pipe`. `isasync=True` remains the
@@ -349,7 +349,7 @@ identity: IdentityMode  # "preserve" | "derive" | "combine"
 The values are an `IdentityMode` `StrEnum` (`PRESERVE`/`DERIVE`/`COMBINE`, bare strings
 accepted), since callers supply them at a Python call site (decided 2026-10-22). R4C's `map`
 accepts and carries all three without semantics; R5A decides which apply to a one-to-one node
-(strict xfail `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`).
+(strict xfail `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
 
 * `preserve`: 1 -> 1 identity/generation preservation;
 * `derive`: deterministic child identity/generation;

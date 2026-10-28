@@ -21,6 +21,7 @@ from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_codegen_note
 from riko.cli import (
     _codegen,
     _docs,
@@ -37,7 +38,8 @@ from riko.cli._docstyle import (
     summary_leads_with_output,
 )
 from riko.cli._document import read_document, require_workflow
-from riko.cli._gen_tier_index import INDEX_HEADER, generate_tier_index
+from riko.cli._gen_api_surface import generate_api_surface
+from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
@@ -388,7 +390,6 @@ class TestLintCommand:
 
 
 PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
-SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
 
 
 def _coverage_report(root: Path, uncovered: int) -> Path:
@@ -562,6 +563,9 @@ class TestCeilingRatchet:
         assert capsys.readouterr().out == f"{report}\n"
 
 
+SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
+
+
 class TestConsoleScripts:
     """Every console script names an importable callable."""
 
@@ -677,7 +681,19 @@ class TestVerbTables:
     ) -> None:
         generated = generate_verb_tables(text, fmt)
         assert row in generated
+        assert get_codegen_note("--verbs") in generated.splitlines()[0]
         assert generate_verb_tables(generated, fmt) == generated
+
+
+class TestGenerateApiSurface:
+    """The generated name blocks in the API-surface reference."""
+
+    def test_generation_names_its_command_and_is_idempotent(self) -> None:
+        text = "<!-- api-surface:export -->\n\n<!-- /api-surface:export -->"
+        generated = generate_api_surface(text)
+        assert get_codegen_note("--api") in generated.splitlines()[0]
+        assert "'export'" in generated
+        assert generate_api_surface(generated) == generated
 
 
 CITATION_SCANS = [
@@ -957,41 +973,11 @@ lint = ["types-requests"]
 """
 
 
-def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
-    package = tmp_path / "pkg"
-    package.mkdir(exist_ok=True)
-    (package / "mod.py").write_text(source, encoding="utf-8")
-    config = tmp_path / "pyproject.toml"
-    config.write_text(PYPROJECT_TOML, encoding="utf-8")
-    issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
-    required = [issue.message for issue in issues if issue.where == str(config)]
-    lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
-    return required, lines
-
-
-_INIT = f'"""\nProvides tests.\n\n{INDEX_HEADER}\n\n"""\n'
-NO_INDEX = f"the docstring has no {INDEX_HEADER!r} block"
-
-_ALPHA = """
-class TestAlpha:
-    def test_one(self): ...
-
-
-class TestAsyncAlpha:
-    def test_one(self): ...
-
-
-class TestBeta:
-    def test_two(self): ...
-"""
-
-
 def _write_suite(root: Path, **files: str) -> Path:
     tests_dir = root / "tests"
     tier = tests_dir / "public"
     tier.mkdir(parents=True)
     init = tier / "__init__.py"
-    init.write_text(_INIT, encoding="utf-8")
     (tier / "test_alpha.py").write_text(_ALPHA + "\n" * MERGE_LINES, encoding="utf-8")
     init.write_text(generate_tier_index(tier), encoding="utf-8")
 
@@ -1001,10 +987,6 @@ def _write_suite(root: Path, **files: str) -> Path:
         path.write_text(text, encoding="utf-8")
 
     return tests_dir
-
-
-def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
-    return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
 
 
 STALE = "the index is stale; run `manage codegen --tests`"
@@ -1048,21 +1030,38 @@ class TestTierIndexCodegen:
         text = (tier / "__init__.py").read_text(encoding="utf-8")
         assert generate_tier_index(tier) == text
 
-    def test_a_docstring_without_an_index_header_is_refused(
-        self, tmp_path: Path
-    ) -> None:
-        tier = _write_suite(tmp_path) / "public"
-        (tier / "__init__.py").write_text('"""Provides tests."""\n')
+    def test_a_folder_outside_the_tiers_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="'other' is not a test tier"):
+            generate_tier_index(tmp_path / "other")
 
-        with pytest.raises(ValueError, match="has no 'Index"):
-            generate_tier_index(tier)
+    def test_the_file_starts_with_the_generated_header(self, tmp_path: Path) -> None:
+        tier = _write_suite(tmp_path) / "public"
+        assert generate_tier_index(tier).startswith(f'{GENERATED_HEADER}\n\n"""\n')
 
 
 INDEX_FORMS = [
-    pytest.param(None, [NO_INDEX], id="no-index"),
-    pytest.param("    test_alpha.py    Alpha\n", [STALE], id="hand-edited"),
-    pytest.param("    test_alpha.py    Alpha, Beta\n", [], id="current"),
+    pytest.param(f"{GENERATED_HEADER}\n", "", [STALE], id="header-removed"),
+    pytest.param("Alpha, Beta\n", "Alpha\n", [STALE], id="hand-edited"),
+    pytest.param("", "", [], id="current"),
 ]
+
+
+_ALPHA = """
+class TestAlpha:
+    def test_one(self): ...
+
+
+class TestAsyncAlpha:
+    def test_one(self): ...
+
+
+class TestBeta:
+    def test_two(self): ...
+"""
+
+
+def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
+    return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
 
 
 class TestLayoutLint:
@@ -1135,13 +1134,13 @@ class TestLayoutLint:
         path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
         assert (message, True) in _messages(tests_dir)
 
-    @pytest.mark.parametrize(("rows", "expected"), INDEX_FORMS)
+    @pytest.mark.parametrize(("old", "new", "expected"), INDEX_FORMS)
     def test_the_index_must_match_its_generated_form(
-        self, tmp_path: Path, rows: str | None, expected: list[str]
+        self, tmp_path: Path, old: str, new: str, expected: list[str]
     ) -> None:
         tests_dir = _write_suite(tmp_path)
-        index = "Provides tests.\n" if rows is None else f"{INDEX_HEADER}\n\n{rows}"
-        (tests_dir / "public" / "__init__.py").write_text(f'"""\n{index}"""\n')
+        init = tests_dir / "public" / "__init__.py"
+        init.write_text(init.read_text(encoding="utf-8").replace(old, new, 1))
         assert [message for message, _ in _messages(tests_dir)] == expected
 
     def test_long_files_get_advice_to_split(self, tmp_path: Path) -> None:
@@ -1246,47 +1245,16 @@ LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
 ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
 TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
 REQUESTS = "import requests\n"
-RUNTIME_NAME_CASES = [
-    pytest.param(ABSOLUTE, ["a", "c"], id="absolute-only"),
-    pytest.param(_if(TC) + "import b\n", ["b"], id="type-checking-body"),
-    pytest.param(_if("typing.TYPE_CHECKING"), [], id="typing-attribute"),
-    pytest.param(_if(TC, "pass", "import a"), ["a"], id="type-checking-else"),
-    pytest.param(_if(NOT_TC), ["a"], id="not-type-checking-body"),
-    pytest.param(_if(NOT_TC, "pass", "import a"), [], id="not-type-checking-else"),
-    pytest.param(_if(f"{TC} and flag"), ["a"], id="compound-test"),
-    pytest.param(ELIF, ["a"], id="elif-branch"),
-    pytest.param(LOCAL, ["b"], id="function-local"),
-    pytest.param(TRY, ["a"], id="try-block"),
-]
 ONLY = (
     "'python-dateutil' is a [project] dependency that nothing imports at run time; "
     "import it outside TYPE_CHECKING or move it to a dependency group"
 )
-REQUIREMENT_CASES = [
-    pytest.param(f"{REQUESTS}import dateutil\n", [], id="both-used"),
-    pytest.param(REQUESTS + _if(TC, "import dateutil"), [ONLY], id="typing-only"),
-    pytest.param(REQUESTS + _if(NOT_TC, "import dateutil"), [], id="not-type-checking"),
-]
 
 LXML = "import lxml\n"
 
 
 def _try(body: str, caught: str = "ImportError", handler: str = "pass") -> str:
     return f"try:\n    {body}\nexcept {caught}:\n    {handler}\n"
-
-
-OPTIONAL_CASES = [
-    pytest.param(LXML, [1], id="unguarded"),
-    pytest.param(_try("import lxml"), [], id="import-error"),
-    pytest.param(_try("import lxml", "ModuleNotFoundError"), [], id="not-found"),
-    pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
-    pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
-    pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
-    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
-    pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
-    pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
-    pytest.param(REQUESTS, [], id="also-required"),
-]
 
 
 ESCAPE_CASES = [
@@ -1343,6 +1311,51 @@ class TestEscapeLint:
         typing = tomllib.loads(pyproject.read_text())["tool"]["riko"]["typing"]
         recorded = {k: v for k, v in typing.items() if not k.endswith("-lowered")}
         assert recorded == tomllib.loads(ceilings)
+
+
+def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
+    package = tmp_path / "pkg"
+    package.mkdir(exist_ok=True)
+    (package / "mod.py").write_text(source, encoding="utf-8")
+    config = tmp_path / "pyproject.toml"
+    config.write_text(PYPROJECT_TOML, encoding="utf-8")
+    issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
+    required = [issue.message for issue in issues if issue.where == str(config)]
+    lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
+    return required, lines
+
+
+RUNTIME_NAME_CASES = [
+    pytest.param(ABSOLUTE, ["a", "c"], id="absolute-only"),
+    pytest.param(_if(TC) + "import b\n", ["b"], id="type-checking-body"),
+    pytest.param(_if("typing.TYPE_CHECKING"), [], id="typing-attribute"),
+    pytest.param(_if(TC, "pass", "import a"), ["a"], id="type-checking-else"),
+    pytest.param(_if(NOT_TC), ["a"], id="not-type-checking-body"),
+    pytest.param(_if(NOT_TC, "pass", "import a"), [], id="not-type-checking-else"),
+    pytest.param(_if(f"{TC} and flag"), ["a"], id="compound-test"),
+    pytest.param(ELIF, ["a"], id="elif-branch"),
+    pytest.param(LOCAL, ["b"], id="function-local"),
+    pytest.param(TRY, ["a"], id="try-block"),
+]
+
+REQUIREMENT_CASES = [
+    pytest.param(f"{REQUESTS}import dateutil\n", [], id="both-used"),
+    pytest.param(REQUESTS + _if(TC, "import dateutil"), [ONLY], id="typing-only"),
+    pytest.param(REQUESTS + _if(NOT_TC, "import dateutil"), [], id="not-type-checking"),
+]
+
+OPTIONAL_CASES = [
+    pytest.param(LXML, [1], id="unguarded"),
+    pytest.param(_try("import lxml"), [], id="import-error"),
+    pytest.param(_try("import lxml", "ModuleNotFoundError"), [], id="not-found"),
+    pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
+    pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
+    pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
+    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
+    pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
+    pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
+    pytest.param(REQUESTS, [], id="also-required"),
+]
 
 
 class TestDependencyLint:
@@ -1457,52 +1470,33 @@ class TestRelativeImportLint:
         assert issues[0].suggestion == "from .b import thing"
 
 
+_UPWARD = "from riko.runtime.b import thing\n"
+_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+ARCHITECTURE_IMPORTS = [
+    pytest.param(_UPWARD, ["runtime"], id="upward"),
+    pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
+    pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
+]
+
+
 class TestImportArchitectureLint:
     """The import-architecture lint check."""
 
-    def test_architecture(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(("source", "targets"), ARCHITECTURE_IMPORTS)
+    def test_architecture(self, tmp_path: Path, source, targets) -> None:
         root = tmp_path / "riko"
         write(root, "__init__.py", "")
         write(root, "types/__init__.py", "")
-        write(root, "types/a.py", "from riko.runtime.b import thing\n")
+        write(root, "types/a.py", source)
         write(root, "runtime/__init__.py", "")
         write(root, "runtime/b.py", "thing = 1\n")
         report = load_architecture_report(root)
         assert not report.unclassified
-        assert len(report.violations) == 1
-        assert "types > {runtime}" in render_architecture(report)
-
-    def test_type_checking_is_exempt(self, tmp_path: Path) -> None:
-        root = tmp_path / "riko"
-        write(root, "__init__.py", "")
-        write(root, "types/__init__.py", "")
-        write(
-            root,
-            "types/a.py",
-            (
-                "from typing import TYPE_CHECKING\n"
-                "if TYPE_CHECKING:\n"
-                "    from riko.runtime.b import thing\n"
-            ),
+        assert [v.target_label for v in report.violations] == targets
+        assert ("architecture violations:" in render_architecture(report)) == bool(
+            targets
         )
-        write(root, "runtime/__init__.py", "")
-        write(root, "runtime/b.py", "thing = 1\n")
-        assert not load_architecture_report(root).violations
-
-    def test_function_local_upward_import_fails(self, tmp_path: Path) -> None:
-        root = tmp_path / "riko"
-        write(root, "__init__.py", "")
-        write(root, "types/__init__.py", "")
-        write(
-            root,
-            "types/a.py",
-            "def load():\n    from riko.runtime.b import thing\n\n    return thing\n",
-        )
-        write(root, "runtime/__init__.py", "")
-        write(root, "runtime/b.py", "thing = 1\n")
-        report = load_architecture_report(root)
-        assert len(report.violations) == 1
-        assert report.violations[0].target_label == "runtime"
 
     def test_unclassified_fails(self, tmp_path: Path) -> None:
         root = tmp_path / "riko"
@@ -1511,8 +1505,6 @@ class TestImportArchitectureLint:
         report = load_architecture_report(root)
         assert report.unclassified[0].module == "riko.mystery"
 
-
-class TestValidateGraph:
     def test_layer_graph_validation_accepts_a_reduced_dag(self):
         _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
 
