@@ -4,8 +4,8 @@ Provides public API tests: tests that use only supported names.
 Index (file, then the subjects it owns, in file order):
 
     test_modules.py     Input, FetchModules, Fetchdata, Filter, Slugify, Join, Sort,
-                        Send, AsyncReceive, RequiredOperands, ListModules,
-                        DescribeModule, ImportSurface
+                        Send, AsyncReceive, AsyncAggregate, RequiredOperands,
+                        ListModules, DescribeModule, ImportSurface
     test_pipeline.py    PipelineConstruction, PipelineChaining, ModuleNameEnum,
                         PipelineIteration, OutputParity, Reiteration, Close, Failure,
                         AsyncSourceAdapter, Alist, AsyncMap, FanIn, WithExecution,

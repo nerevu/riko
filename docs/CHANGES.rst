@@ -314,6 +314,10 @@ Fixes
   ``union``'s ``others``) before parsing. It yields the same items as ``pipe`` instead
   of raising a not-iterable error.
 
+- The ``write`` and ``aggregate`` modules' ``async_pipe`` now accept an async source
+  instead of raising a not-iterable error. A sync ``aggregate`` ``func`` receives the
+  collected items. An async one receives the async stream.
+
 - Concurrent async fetches no longer drop a legitimate ``None`` result, so results stay
   aligned with the requests that produced them.
 
@@ -335,6 +339,9 @@ Fixes
 
 - The ``write`` module can now write nested objects using the ``json`` export format
   instead of raising "Object of type DotDict is not JSON serializable".
+
+- The ``write`` module's ``async_pipe`` now writes ``ofx`` and ``qif`` output instead of
+  raising ``TypeError``, and neither interface warns "produced unwritable content".
 
 - ``async_write`` accepts a list or iterator of ``str`` or ``bytes`` chunks, as
   documented, instead of raising ``AttributeError``.
