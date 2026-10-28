@@ -72,10 +72,9 @@ def conf_is_dynamic(conf: object, **kwargs: object) -> bool:
         if "subkey" in conf or is_sentinel(conf, **kwargs):
             is_dynamic = True
         else:
-            values = conf.values()
-            is_dynamic = any(conf_is_dynamic(v, **kwargs) for v in values)
+            is_dynamic = any(map(partial(conf_is_dynamic, **kwargs), conf.values()))
     elif isinstance(conf, Sequence) and not isinstance(conf, str):
-        is_dynamic = any(conf_is_dynamic(c, **kwargs) for c in conf)
+        is_dynamic = any(map(partial(conf_is_dynamic, **kwargs), conf))
 
     return is_dynamic
 

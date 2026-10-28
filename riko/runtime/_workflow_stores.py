@@ -14,6 +14,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
+from riko.base._iterutils import map_values
 from riko.base._typing import import_or_else
 from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
@@ -149,7 +150,7 @@ class MappingStore:
     """
 
     def __init__(self, modules: Mapping[str, ModuleType]) -> None:
-        self._modules = {k: ResolvedWorkflow(v) for k, v in modules.items()}
+        self._modules = map_values(ResolvedWorkflow, modules)
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """

@@ -27,6 +27,7 @@ from attrs import define, field
 from riko.bado._backend import start_blocking_portal
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._guards import is_awaitable
+from riko.base._iterutils import map_values
 from riko.types._enums import Executor
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -286,8 +287,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         return async_drain(source, self.run_async)
 
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
-        pairs = self._require_bindings(binding).items()
-        return ResourceView({slot: self.acquire(resource) for slot, resource in pairs})
+        return ResourceView(map_values(self.acquire, self._require_bindings(binding)))
 
     def _map_stream(
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]

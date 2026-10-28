@@ -167,10 +167,10 @@ class LinkParser(HTMLParser):
         entry = dict(attrs)
         link = entry.get("href")
         type_ = entry.get("type") or ""
-        type_match = any(type_.endswith(t) for t in self.link_type)
+        type_match = any(map(type_.endswith, self.link_type))
 
         if link and not self.strict:
-            type_match = type_match or any(link.endswith(t) for t in self.link_type)
+            type_match = type_match or any(map(link.endswith, self.link_type))
 
         source_match = link and not (self.external_only and link.startswith("/"))
 

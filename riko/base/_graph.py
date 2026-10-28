@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Hashable, Iterable, Iterator, Mapping
 from graphlib import CycleError, TopologicalSorter
+from itertools import chain
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -232,7 +233,7 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     """
     _groups = topological_sort(graph) if groups is None else groups
     is_cyclic = lambda group: len(group) > 1 or group[0] in graph.get(group[0], ())
-    return [node for group in _groups if is_cyclic(group) for node in group]
+    return list(chain.from_iterable(filter(is_cyclic, _groups)))
 
 
 def edges_to_graph[T: Hashable](
@@ -339,12 +340,8 @@ def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]
 def freeze_graph[T: Hashable](
     graph: AnyGraph[T], key: SortKey[T] = None
 ) -> FrozenGraph[T]:
-    if key is None:
-        items = graph.items()
-    else:
-        items = [(k, graph[k]) for k in sorted(graph, key=key)]
-
-    return MappingProxyType({k: frozenset(v) for k, v in items})
+    ordered = graph if key is None else {k: graph[k] for k in sorted(graph, key=key)}
+    return MappingProxyType(map_values(frozenset, ordered))
 
 
 def descendants[T: Hashable](

@@ -23,7 +23,7 @@ from riko.base._guards import (
     is_mapping,
     require_mapping,
 )
-from riko.base._iterutils import map_values
+from riko.base._iterutils import map_keys_and_values, map_values, noop
 from riko.base._require_guards import require_finite, require_instances, require_str
 
 if TYPE_CHECKING:
@@ -88,10 +88,11 @@ def _freeze_items[K, V](
     data: Mapping[K, V] | Iterable[tuple[K, V]], json_native: bool = False
 ) -> dict[K | str, object]:
     """Freezes each value of a mapping or of key/value pairs into a new dict."""
-    items = (data if is_mapping(data) else dict(data)).items()
-    check = partial(require_str, what="mapping key") if json_native else None
-    keyed = ((key if check is None else check(key), item) for key, item in items)
-    return {key: _freeze_value(item, json_native) for key, item in keyed}
+    item = data if is_mapping(data) else dict(data)
+    require = partial(require_str, what="mapping key")
+    check: Callable[[K], K | str] = require if json_native else noop
+    freeze_item = partial(_freeze_value, json_native=json_native)
+    return map_keys_and_values(check, freeze_item, item)
 
 
 @final
