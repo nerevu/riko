@@ -74,14 +74,9 @@ def _gen_file_issues(
 def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
     init = tier / "__init__.py"
 
-    try:
-        generated = generate_tier_index(tier)
-    except ValueError as error:
-        yield LayoutIssue(init, 1, str(error))
-    else:
-        if generated != init.read_text(encoding="utf-8"):
-            message = "the index is stale; run `manage codegen --tests`"
-            yield LayoutIssue(init, 1, message)
+    if generate_tier_index(tier) != init.read_text(encoding="utf-8"):
+        message = "the index is stale; run `manage codegen --tests`"
+        yield LayoutIssue(init, 1, message)
 
 
 def _gen_tier_issues(tier: Path) -> Iterator[LayoutIssue]:
