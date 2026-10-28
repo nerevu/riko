@@ -24,7 +24,7 @@ from riko.bado.itertools import (
 )
 from riko.base._paths import get_path
 from riko.coercion._configs import CsvObjconf
-from riko.io._async import async_url_open
+from riko.io._async import _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
 from riko.io._sync import Fetch
@@ -384,6 +384,23 @@ class TestConversionFuncs:
 
     def test_every_converter_has_a_member(self):
         assert set(CONVERSION_FUNCS) <= set(Formats)
+
+
+FILE_CHUNKS = [
+    pytest.param("w+", "abcdef\nxy\n", ["abc", "def", "\nxy", "\n"], id="text"),
+    pytest.param("wb+", b"abcdef", [b"abc", b"def"], id="binary"),
+]
+
+
+class TestChunkContent:
+    """``_chunk_content`` splits a real file by ``chunksize``, like an in-memory one."""
+
+    @pytest.mark.parametrize(("mode", "data", "expected"), FILE_CHUNKS)
+    def test_real_file_honors_chunksize(self, tmp_path, mode, data, expected):
+        with (tmp_path / "in").open(mode) as f:
+            f.write(data)
+            f.seek(0)
+            assert list(_chunk_content(f, 3)) == expected
 
 
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:

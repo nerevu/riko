@@ -336,6 +336,9 @@ Fixes
 - The ``write`` module can now write nested objects using the ``json`` export format
   instead of raising "Object of type DotDict is not JSON serializable".
 
+- ``async_write`` accepts a list or iterator of ``str`` or ``bytes`` chunks, as
+  documented, instead of raising ``AttributeError``.
+
 - ``json`` output writes sets as deterministic sorted arrays.
 
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of
