@@ -181,6 +181,14 @@ session that starts before the user runs it knows to.
 End with a short manifest: tidy's fixes and open findings, each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
-is safe to clear. When fixups are pending, the manifest's last line is the
+is safe to clear, and any **script candidates**: a subagent this session whose
+completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) spent on
+mechanical, repeatable work (slicing or replaying diffs, rebuilding tables, bulk
+renames, rehearsing commits), or that wrote its own helper scripts into the
+scratchpad. Name each one's task, duration, and tool count, and the script it
+suggests (name, inputs, outputs, and home, such as beside the skill that launched
+the agent). Propose them only; build one when the user agrees.
+Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Judgment work
+(design, review, triage) is never a candidate. When fixups are pending, the manifest's last line is the
 rebase step: the user runs the clipboard line (shown for reference) only now,
 after wrapup has finished. `/land` deliberately leaves this step to wrapup.

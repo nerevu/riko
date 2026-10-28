@@ -71,6 +71,7 @@ build/*
 *.pstats
 .claude/*
 !.claude/skills/
+.claude/skills/drafts/
 .serena/memories
 .vscode
 callgraph.svg
