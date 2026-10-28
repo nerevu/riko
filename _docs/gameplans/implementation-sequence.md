@@ -1041,7 +1041,10 @@ Deliver:
   root takes an input stream but declares no inputs counts as a source and starts itself as a node of
   another pipeline, while one that declares inputs over a source root counts as a transformer.
   Routed here from R4C's per-run seed work (2026-10-24) because the fix belongs with the input
-  declarations it reads.
+  declarations it reads. Since R4C's self-starting check, the second case fails outright: run
+  unseeded, it raises "requires a seed" instead of starting its source root (triaged 2026-10-28).
+  Strict xfail
+  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
 - an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule starts any
   non-output node whose outgoing edges all enter named ports, inferred from graph position alone,
   so an ordinary transform there runs on the internal placeholder seed (`hash` feeding
