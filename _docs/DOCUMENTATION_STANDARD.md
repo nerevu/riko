@@ -476,7 +476,16 @@ When removing executable examples:
 4. If an example is later restored as an executable doctest, remove any pytest
    test that was added solely to preserve that identical happy path.
 5. Keep edge/error/non-deterministic/integration behavior in pytest even when a
-   related happy path appears in a doctest.
+   related happy path appears in a doctest. When a doctest grows past basic usage,
+   move its extra cases into the subject's pytest table.
+6. An edge or error case shown in both a doctest and pytest leaves the doctest
+   when the doctest already shows several other basic use cases. When it does
+   not, prefer rewriting the doctest to show basic usage and keep the edge case
+   in pytest. Basic usage lives in its most appropriate doctest: when it is shown
+   elsewhere, move it into this doctest only if this is the better home (and let
+   the move trickle down to the doctest it leaves); never duplicate it just to
+   give a doctest something to run. Only when no basic usage belongs in this
+   doctest does it keep the edge case and the pytest copy go.
 
 Removing prose that merely taught an external/library concept does not require a
 replacement test. Removing a concrete user-visible Riko behavior does.
@@ -687,8 +696,18 @@ code block without interpreter prompts.
   example *from* that test and delete the now-redundant test — the doctest is the
   single source. Reserve unit tests for what a doctest should not carry: exception
   and edge paths, unstable-`repr`/non-deterministic cases, and multi-step
-  integration. Before adding a doctest, grep the suite for an equivalent assertion;
-  before deleting a test, confirm the doctest actually runs it (`--doctest-modules`).
+  integration. A doctest shows basic usage; once it grows past that, its extra
+  cases move into pytest. An edge or error case in both places leaves the doctest
+  when the doctest already shows several other basic use cases. When it does not,
+  prefer rewriting the doctest to show basic usage and keeping the edge case in
+  pytest. Basic usage lives in its most appropriate doctest, so it may move into
+  this doctest from elsewhere when this is the better home, with the move
+  trickling down to the doctest it leaves; never duplicate it just to give a
+  doctest something to run. Only when no basic usage belongs in this doctest does
+  it keep the edge case and the pytest copy go. One row of a parametrized table
+  counts as a test here. Before adding a doctest, grep the suite for an
+  equivalent assertion; before deleting a test, confirm the doctest actually runs
+  it (`--doctest-modules`).
 
 ## Python syntax baseline
 
