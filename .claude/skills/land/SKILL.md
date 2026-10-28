@@ -8,8 +8,8 @@ description: Run riko's full pre-commit gate and get the working tree ready for 
 Get the working tree to a state the user can commit with confidence. Run every
 gate, fix what the gates find, and report honestly. **Do not run `git commit`,
 `git add`, or any other git write operation** on the user's branch, index, or
-working tree — the user owns the commit. The only exception is the throwaway
-fixup rehearsal worktree described under "Commit plan".
+working tree — the user owns the commit. The only exceptions are the private
+index and throwaway worktree `rehearse_plan.py` uses (see "Commit plan").
 
 ## Idempotency
 
@@ -97,105 +97,84 @@ on your own judgment.
 
 ## Commit plan
 
-Once the gates are clean, split the change into `fixup!` commits for the
-branch commits it amends, plus at most one new commit for the rest.
+Once the gates are clean, split the change by concept: `fixup!` commits for the
+branch commits it amends, then one focused new commit per remaining concept
+(rename, feature, test move, docs sweep, lockfile, ...), never one catch-all.
+Staging is the user's approval, not a grouping hint: user-facing code ends up
+staged, tests and internal docs stay unstaged, so never infer concepts from it.
+Write and rehearse the plan in the main loop with the scripts below; don't hand it
+to an agent, which repeats their work by hand for many minutes.
 
 1. **Branch range**: every commit past the branch's merge point, pushed or
    not: the nearest merge-base with `next` or `main` (the mapper finds it;
    `--base REF` overrides). Only these commits can be fixup targets; a commit
    at or before the merge point never is. A pushed target is still a target:
    the autosquash then rewrites published history, so `/wrapup`'s handover
-   ends with a force push (`git push --force-with-lease`). If the range is
-   empty, skip to the single new-commit suggestion.
-2. **Map hunks to targets**: run the mapper instead of blaming by hand; it
-   prints a short table however large the diff is:
+   ends with a force push (`git push --force-with-lease`).
+2. **Map hunks to targets**: run the mapper instead of blaming by hand:
 
    ```bash
-   python .claude/skills/land/fixup_map.py --patches "$(mktemp -d)"
+   python .claude/skills/land/fixup_map.py --blame-only
    ```
 
-   (`--cached` maps only the staged diff.) It blames each hunk of
-   `git diff -U3 HEAD`, follows `fixup!` chains, and keeps in the new commit
-   every new or deleted file, every untracked file, and every hunk whose added
-   lines name something absent from its target's tree (an import of a module
-   the change adds, a call to a name it introduces): squashed into an older
-   commit, those would leave it unable to build. A hunk whose blame predates the
-   branch or is spread over several commits falls back to its file's **latest touch**,
-   the newest branch commit editing that file, and is marked `*`. Blame
-   doesn't vouch for a `*` hunk, so offer it only when the target's subject
-   fits the hunk (a follow-up to that commit's work); otherwise drop it to the
-   new commit. What remains are **fixup candidates**, listed per target with
-   `file:line`, and one `<sha>.patch` per target in the patches folder.
-
-   The check is by name only, so read each candidate hunk (and only those)
-   before offering it: drop one whose meaning still depends on the change,
-   such as an import used only by code the change adds, or a doc line
-   describing the new behavior. Decide per hunk, never per target or for the
-   change as a whole; offer every self-contained one, even inside a large
-   structural change. Edit a target's patch to drop a hunk you rejected.
-   The mapper always sends new and untracked files to the new commit; move
-   one into a fixup when that fixup's hunks reference it (a script a skill
-   edit tells the reader to run), so the target never names a missing file.
-3. **Rehearse each target**: confirm the grouped hunks rebase cleanly in a
-   throwaway detached worktree in a fresh temp folder — never on the user's
-   branch:
+   It blames each hunk of `git diff -U3 HEAD`, follows `fixup!` chains, and
+   keeps out of fixups every new, deleted, or untracked file and every hunk
+   whose added lines name something absent from its target's tree. With
+   `--blame-only` it offers only hunks whose blame points at one branch commit;
+   drop the flag to also see `*` latest-touch guesses, worth offering only when
+   the target's subject fits. Read each candidate hunk (and only those) before
+   offering it, and drop one whose meaning still depends on the change (an
+   import used only by new code, a doc line describing new behavior).
+3. **Write the plan**: list the change's hunks by id with
 
    ```bash
-   wt="$(mktemp -d)/fixup"                       # new folder every run; never reused
-   git worktree add --detach "$wt" HEAD
-   cd "$wt"
-   git apply --index <patches>/<sha>.patch       # from fixup_map.py --patches
-   git commit -q --no-verify --fixup=<target>   # hooks already ran as gates
-   GIT_SEQUENCE_EDITOR=: git rebase -q -i --autosquash <oldest-target>~1
-   cd -
+   python .claude/skills/land/split_hunks.py list
    ```
 
-   Rehearse all fixup targets together in one worktree (one patch and
-   `--fixup` commit per target, one rebase), since squashing one can shift
-   another. A rebase that refuses to start (unstaged changes, an empty fixup)
-   means the rehearsal itself is broken: fix it, don't call that a conflict. If
-   the rebase stops on a conflict, run `git rebase --abort`, move
-   the conflicting target's hunks to the new commit, and rehearse again with the
-   remaining targets. Leave the worktree where it is: never delete it; the OS clears
-   its temp folder (git prunes the stale entry once the folder is gone). Afterwards
-   `git status` on the user's tree must be unchanged.
-4. **Hand over the commands**: check `git diff --cached --name-status` first.
-   The user often stages the change before landing, and the fixup patches
-   apply to an index at `HEAD`, so when anything is staged the first line
-   starts with `git reset -q` (index only; the working tree keeps every edit).
-   Copy the rehearsed patches from the temp folder into the scratchpad so the
-   lines name files that outlive the run. Give the commands in this order:
-   - **Each fixup first.** Stage exactly its rehearsed hunks from the patch,
-     never by `git add -p`, and commit it as a fixup of its target:
+   (`-U0` by default, so mixed-concept regions split finely; `path:N` is the
+   hunk starting on new-side line `N`; new, deleted, untracked, and binary
+   files are whole-file ids). Write a plan file in the scratchpad: a `fixup
+   <sha>` or `commit <msg-file>` header per step, oldest fixup target first
+   and then the new commits in dependency order, each followed by its ids
+   (`path` takes every hunk of a file, `path:N-M` a range, `*` the rest,
+   `skip` a step of ids left uncommitted such as untracked scratch docs).
+   Group by file first and split a file only when its hunks are different
+   concepts. A hunk that names something another hunk introduces goes in or
+   after that hunk's step. Generated files (tier indexes, API-surface blocks,
+   verb tables) go with the step whose source change regenerates them; the
+   coverage-ratchet line in `pyproject.toml` goes in the last step. Message
+   files: subject at most 50 characters, house tag included; at most five
+   `-` bullets, one concept each, under 72 characters, never prose.
+4. **Rehearse it**:
 
-     ```bash
-     git apply --cached <scratchpad>/fixup-<sha>.patch && git commit --fixup=<sha>
-     ```
+   ```bash
+   python .claude/skills/land/rehearse_plan.py <plan> --out <scratchpad>/plan-out --copy
+   ```
 
-     One line per target, oldest target first.
-   - **Then the new commit.** With only its hunks left, stage everything
-     except the untracked scratch docs in one `git add`, using long-form
-     exclude pathspecs on one line (the short `:!` form misreads a path
-     starting with `_` or `.` as magic), and commit from the message file:
-
-     ```bash
-     git add -A -- . ':(exclude)_docs/<scratch>.md' && git commit -F <scratchpad>/commit-new.txt
-     ```
-
-   - **No rebase.** Leave the `fixup!` commits pending: the autosquash
-     rebase is handed over by `/wrapup` as its very last step, after its doc
-     and memory edits, so it runs once over everything the session amends.
-     Say so in the report.
-
-   Before each commit, say what `git status --short` should show. A commit
-   subject is at most 50 characters, house tag included; the body is at most
-   five `-` bullets, one concept each (not one per file or helper), under 72
-   characters, never prose.
-   The terminal indents and wraps reply text, so never make the user copy
-   commands from the reply: write each commit message to a scratchpad file,
-   join the step's commands with `&&` into one line using `git commit -F
-   <file>`, put that line on the clipboard with `pbcopy`, and show it in the
-   reply only for reference. No heredocs, no scripts to run.
+   It builds every step as a commit in a private index (never touching the
+   user's index or tree), refuses a plan where any id is in no step or in two,
+   confirms the last tree equals the working tree, runs build checks on each
+   step (ruff's undefined/unused names and `import riko`; `--full-checks` adds
+   pyright and the import contracts for bisect-safe commits), and replays the
+   autosquash in a throwaway worktree. It writes `NN.patch`/`NN.msg`,
+   `commands.txt` (always led by `git reset -q`),
+   `chain.txt`, and each step's files with `+added/-removed` line counts (plus
+   hunk start lines when a step takes only part of a file). Fix the plan and rerun
+   until every check and the autosquash pass. Leave its temp folders and
+   worktrees where they are; never delete them.
+5. **Hand over the commands**: put `chain.txt` on the clipboard (`--copy`)
+   and show the step table for reference; the chain stops at the first step
+   that fails. Offer step-by-step lines from `commands.txt` instead only when
+   asked, and never leave a single step on the clipboard while also handing
+   over a chain that starts with it (the chain would re-apply it and fail).
+   Say what `git status --short` should show afterwards. Name any unstaged
+   user-facing file as not yet reviewed. The chain never depends on the index:
+   its patches come from `git diff HEAD` (working tree against `HEAD`) and it
+   always starts with `git reset -q`, so the user may stage or unstage files at
+   any time after handover. Only a working-tree edit or a new `HEAD` makes the
+   chain stale; staging alone never calls for a re-rehearsal. **No rebase**: the
+   `fixup!` commits stay pending; `/wrapup` hands over the autosquash as its very
+   last step.
 
 ## Report
 
@@ -204,10 +183,16 @@ End with:
 - **Verdict**: ready to commit, or not — and if not, exactly what blocks it.
 - **What changed**: files touched and the shape of the change, briefly.
 - **Gate results**: which gates ran and their outcomes, failures verbatim.
-- **Commit plan**: each rehearsed `fixup!` target (sha, subject, and the
-  hunks it takes) with its commands, then any remaining hunks under one
-  suggested commit message using the house tags seen in `git log` (`[NEW]`,
-  `[DEV]`, `[DOCS]`, …), its subject at most 50 characters. Mention any hunks
-  dropped from a fixup because the rehearsal conflicted, and that the
-  autosquash waits for `/wrapup`. These are commands for the user to run, never
-  executed on their branch.
+- **Commit plan**: the rehearsed step table (each `fixup!` target's sha and
+  subject, each new commit's subject from the house tags seen in `git log`,
+  `[NEW]`, `[DEV]`, `[DOCS]`, …, and the files each step touches with their line
+  counts and partial-hunk lines), the check and
+  autosquash results, which chain is on the clipboard, any hunk dropped from a
+  fixup and why, and that the autosquash waits for `/wrapup`. These are
+  commands for the user to run, never executed on their branch.
+- **Script candidates**: a subagent whose completion notice shows a long run (roughly 10+ minutes or 50+
+  tool calls) on mechanical, repeatable work, or that wrote its own helper scripts
+  into the scratchpad (the tidy
+  agent included). Name the task, its duration and tool count, and the script it
+  suggests (name, inputs, outputs, home); propose it, never build it unasked.
+  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff.
