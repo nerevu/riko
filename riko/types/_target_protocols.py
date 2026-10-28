@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
+from typing_extensions import TypeIs
+
 if TYPE_CHECKING:
     from riko.definitions._write import WriteCapabilities
 
@@ -28,6 +30,30 @@ class Target(Protocol):
     """An endpoint identified by its backend."""
 
     backend: ClassVar[Backends]
+
+
+def is_target_class(value: object) -> TypeIs[type[Target]]:
+    """
+    Reports whether ``value`` is a class that declares a target ``backend``.
+
+    Args:
+
+        value: The object to check, e.g. what a target entry point loads.
+
+    Returns:
+
+        Whether ``value`` is a class with a ``backend`` attribute.
+
+    Examples:
+
+        >>> class Bucket:
+        ...     backend = "file"
+        >>>
+        >>> is_target_class(Bucket), is_target_class(Bucket()), is_target_class(len)
+        (True, False, False)
+
+    """
+    return isinstance(value, type) and hasattr(value, "backend")
 
 
 class SupportsRead(Target, Protocol):

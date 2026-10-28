@@ -10,14 +10,7 @@ execution acquires and tears down a resource, independent of how it was declared
 
 from __future__ import annotations
 
-from collections.abc import (
-    AsyncGenerator,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Generator,
-    Iterator,
-)
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Iterator
 from contextlib import (
     AbstractAsyncContextManager,
     AbstractContextManager,
@@ -27,7 +20,7 @@ from contextlib import (
 from enum import Enum, auto
 from functools import partial
 from inspect import isasyncgenfunction, isgeneratorfunction, unwrap
-from typing import TYPE_CHECKING, Literal, TypeGuard, cast
+from typing import TYPE_CHECKING, Literal, TypeGuard
 
 from attrs import define, field
 from typing_extensions import TypeIs
@@ -69,9 +62,7 @@ class ResourceStrategy(Enum):
 # Every function the decorators build shares their helper's code object, so any
 # callable decorated once yields it.
 _SYNC_CM_CODE: CodeType = contextmanager(iter).__code__
-_ASYNC_CM_CODE: CodeType = asynccontextmanager(
-    cast("Callable[..., AsyncIterator[None]]", aiter)
-).__code__
+_ASYNC_CM_CODE: CodeType = asynccontextmanager(aiter).__code__  # pyright: ignore[reportArgumentType, reportCallIssue]
 
 
 def _gen_wrapper_chain(val: object) -> Iterator[object]:

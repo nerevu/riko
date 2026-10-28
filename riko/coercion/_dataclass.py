@@ -86,7 +86,7 @@ def fromdict(
                 origin = get_origin(ftype)
 
         if origin is Literal:
-            val = require_from_form(ftype, f.name, error=ValueError)(val)
+            require_from_form(ftype, f.name, error=ValueError)(val)
         elif is_dataclass(ftype) and isinstance(ftype, type) and is_mapping(val):
             val = fromdict(ftype, **val)
 

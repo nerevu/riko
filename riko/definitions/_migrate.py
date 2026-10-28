@@ -143,11 +143,10 @@ def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModu
     return value
 
 
-def _require_v1_loop_fields(value: PipeModule, what: str = "loop module") -> PipeModule:
+def _require_v1_loop_embed(value: PipeModule, what: str = "loop module") -> EmbedRef:
     """Requires a ``loop`` ``PipeModule``'s embed to be well-formed."""
     embed = require_mapping(value.get("embed"), f"{what} 'embed'")
-    _require_embed_ref_fields(_require_embed_ref(embed))
-    return value
+    return _require_embed_ref_fields(_require_embed_ref(embed))
 
 
 def _build_embed(embed: EmbedRef, conf: Conf | None = None) -> Embed:
@@ -177,10 +176,8 @@ def _migrate_pipe_module(module: PipeModule) -> RawNode:
             node["mode"] = mode
 
     elif name == _LOOP:
-        loop = _require_v1_loop_fields(module, "module")
-        _embed = cast("EmbedRef", loop.get("embed", {}))
-        embed = _build_embed(_embed, conf)
-        node = RawNode({"id": loop["id"], "name": name, "embed": embed})
+        embed = _build_embed(_require_v1_loop_embed(module, "module"), conf)
+        node = RawNode({"id": module_id, "name": name, "embed": embed})
     else:
         node = RawNode({"id": module_id, "name": name, "conf": conf})
 

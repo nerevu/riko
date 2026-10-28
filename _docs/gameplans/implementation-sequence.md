@@ -1212,15 +1212,27 @@ callable and answers `DynamicConf` for any other object (a name included) withou
 only name-to-conf map is the private `RAW_CONFS` in `riko/runtime/_compile.py`. The per-module
 configuration schema that `describe_module()` consumes (above) is that route.
 
-Typing note (2026-10-27 `Any`/`cast` audit): every module's `pipe`/`async_pipe` takes `*args: Any`
-(106 of the package's `Any` uses, two per module) because the processor/operator protocols in
-`riko/types/_wrappers.py` type the parser's `objconf` as `DynamicConf` while each parser annotates its
-generated `<Name>Objconf`, which pyright rejects for a callback parameter (`*args: object` gives 265
-errors). Making the protocols generic over the conf type removes them, but it presumes the
-`get_conf_type` decision above, so it lands with that decision. Likewise the 27 sync/async union casts
-in `riko/modules/_decorators.py` exist because a runtime `isasync` flag picks the output type;
-`isasync` interface classification here should type that split instead. `manage lint --escapes`
-lowers its ceilings as these go.
+Typing note (2026-10-27 `Any`/`cast` audit, re-measured in the follow-up triage): every module's
+`pipe`/`async_pipe` takes `*args: Any` (106 of the package's `Any` uses, two per module). The
+decorators run the stub itself per item (`_PreparedCall.parser` is the stub's `__wrapped__`), and its
+overloads check it against the processor/operator parser protocols in `riko/types/_wrappers.py`, which
+type `objconf` as `DynamicConf` while each parser annotates its generated `<Name>Objconf`. `*args:
+object` alone gives 4 errors per module, all in the stub's forwarding body. Measured removal chain
+(103 of the 106; pyright clean and the full suite passing on a scratch copy): (1) make the
+processor/operator parser protocols and the `processor` `__new__`/`__call__` overloads generic over
+`C: DynamicConf` with `objconf: C`; (2) drop `**kwargs` from the six parser protocols, or keep
+`**kwargs: object` and narrow in the eight stubs whose parsers take typed keywords; (3) give each stub
+its parser's exact signature and forward explicitly; (4) make `_inference.gen_return_inferences`
+resolve only the return hint, because explicit stub parameters name `TYPE_CHECKING`-only imports and
+`resolve_type_hints(pipe)` then raises `NameError` at import. The generic `C` does not depend on the
+`get_conf_type` decision (it has no runtime callers; runtime `objconf` is always a plain
+`DynamicConf`), but the user kept it here (2026-10-27 triage) so the stubs are rewritten once, with
+the conf contract. The last three (`aggregate`/`receive`/`write` `async_pipe`) also need their async
+parsers annotated `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
+sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2 `embed` casts on
+the same split, and the untyped `_PreparedCall.parser` behind 3 more); `isasync` interface
+classification here should type that split instead. `manage lint --escapes` lowers its ceilings as
+these go.
 
 **Exit:**
 
@@ -1345,6 +1357,13 @@ Normal parser APIs still receive values and their prepared arguments, not `_Feed
 
 Once R5A lands, ordinary Feed-native transforms whose semantics depend only on the final execution
 envelope may migrate immediately rather than waiting for R10.
+
+Open typing question (2026-10-27 `Any`/`cast` triage, no owner yet): `Item` is a union that includes
+TypedDicts (`RSSEntry`, `StatefulItem`, `AnyLocation`, `StringyDict`), so `{**item, key: value}` and
+`DotDict(item)` infer `object` values and need a `cast("Item", ...)` (`riko/modules/_loop.py`, `join`,
+`rename`, `regex`, `subelement`, `riko/coercion/cast.py` location merge). Annotating the spread as
+`dict[str, ItemValue]` still fails. Decide the `Item` shape when this phase retypes values for the
+`_FeedItem` envelope; until then the casts stay.
 
 **Exit:**
 
@@ -1611,7 +1630,21 @@ constraint (`_BaseExecution._resolve_node_inputs`) and the pipe-output casts in 
 and `_async_execution.py` go when port-keyed dispatch retypes the router on port streams (the
 splitter-union exit below). The `Acquisitions` map (`dict[Resource[Any], Acquisition[Any]]`) stays
 existential: `Resource` is invariant, so `Resource[object]` rejects the typed call sites until
-`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry.
+`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry. Two typing
+unsoundnesses ride on this (2026-10-27 triage, typing only, so no runtime tripwire): the router hands
+`DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded `T`, and the
+acquisition entries hold `Acquisition[ResolvedValue[R]]` (`R | Closeable`) while `acquire`/`aacquire`
+return `R`; retyping the router on `Stream`/`AsyncStream` port streams and dropping `| Closeable` from
+`ResolvedValue` (the `Resource(value: Closeable)` overload must bind `T`) remove both.
+
+Typing note (2026-10-30): the splitter exit retypes call outputs by module type, not by color.
+`PreparedInterface` (`riko/execution/_prepared.py`) is one record for both colors: its `pipe` is
+`AnyModuleWrapper`, its `native` flag is relative to the running execution, and `NodeCall.__call__`
+returns the sync/async output union. So a single-output call site still needs a color narrowing
+after this phase. Split the interface into sync and async variants (a tagged union that
+`isinstance` narrows, each with a color-typed call protocol) in the same rewrite of node dispatch.
+`_run_sync_node` (`riko/execution/_async_execution.py`) then takes the sync variant by type rather
+than by docstring.
 
 **Exit:**
 

@@ -18,7 +18,6 @@ from types import ModuleType, UnionType
 from typing import (
     TYPE_CHECKING,
     Annotated,
-    Any,
     Literal,
     TypeAliasType,
     Union,
@@ -28,6 +27,8 @@ from typing import (
     overload,
 )
 from uuid import UUID
+
+from typing_extensions import TypeForm
 
 from ._exceptions import InvalidPipelineError
 
@@ -104,7 +105,7 @@ def resolve_type_hints(
     obj: object,
     *namespaces: ModuleType | Mapping[str, object],
     include_extras: bool = False,
-) -> dict[str, Any]:
+) -> dict[str, TypeForm[object]]:
     """
     Resolves an object's type hints, supplementing the lookup namespace.
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from functools import cached_property, partial
 from itertools import filterfalse
-from typing import TYPE_CHECKING, NamedTuple, Self, cast
+from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
 
 from attrs import define, evolve, field
 from typing_extensions import TypeIs
@@ -71,9 +71,21 @@ if TYPE_CHECKING:
         Dispatcher,
         ExtraNames,
         ModuleWrapper,
-        PreparedCall,
+        SplitterWrapperOutput,
         SyncModuleWrapper,
+        WrapperOutput,
     )
+
+
+class NodeCall(Protocol):
+    """A node's call that is prepared once with its configuration and call options."""
+
+    def __call__(
+        self, item: object = None, *, context: Context | None = None, **extra: object
+    ) -> (
+        WrapperOutput | SplitterWrapperOutput | Iterator[object] | AsyncIterator[object]
+    ): ...
+
 
 type PreparedNodes = FrozenDict[NodeId, PreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
@@ -346,8 +358,8 @@ class PreparedInterface(NamedTuple):
     """
 
     pipe: AnyModuleWrapper
-    call: PreparedCall
-    item_call: PreparedCall
+    call: NodeCall
+    item_call: NodeCall
     native: bool
 
 
@@ -509,8 +521,8 @@ class PreparedNode:
             else:
                 stream, one = _gen_stream_results, _gen_item_result
 
-            call = cast("PreparedCall", partial(stream, node.fn, **node.kwargs))
-            item_call = cast("PreparedCall", partial(one, node.fn, **node.kwargs))
+            call: NodeCall = partial(stream, node.fn, **node.kwargs)
+            item_call: NodeCall = partial(one, node.fn, **node.kwargs)
         else:
             conf, options = self.embed_or_self_conf, self.options.kwargs
             call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
