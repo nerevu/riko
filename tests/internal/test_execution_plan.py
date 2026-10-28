@@ -37,10 +37,15 @@ from riko.modules.split import pipe as split_pipe
 from riko.modules.strreplace import pipe as strreplace_pipe
 from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union_pipe
-from riko.runtime._module_registry import ModuleRegistry
+from riko.runtime._module_registry import ModuleRegistry, module_registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import workflow
-from riko.runtime._workflow_resolver import workflow_resolver
+from riko.runtime._workflow_resolver import (
+    WorkflowResolver,
+    _build_resolved_workflow,
+    workflow_resolver,
+)
+from riko.runtime._workflow_stores import MappingStore
 from riko.types._enums import BasicCastType
 from riko.types._workflow import Endpoint, GraphIndex
 from tests import async_test, skipif_issync
@@ -813,6 +818,23 @@ class TestPlanRun:
             pytest.raises(InvalidPipelineError, match="requires a seed"),
         ):
             execution.run(plan)
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=InvalidPipelineError,
+        reason="root-derived stored-workflow subtypes are not yet implemented",
+    )
+    def test_run_starts_a_stored_source_workflow_that_declares_inputs(self) -> None:
+        raw = '{"inputs": {"q": {"type": "string"}}, "nodes": [{"name": "forever"}]}'
+        resolved = _build_resolved_workflow(
+            "pipe_demo", Workflow.parse(raw), dispatcher
+        )
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        stored = ResolverDispatcher(module_registry, resolver)
+        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
+
+        with SyncExecution() as execution:
+            assert next(iter(execution.run(plan))) == {"forever": True}
 
     def test_run_never_starts_a_workflow_output_node_unseeded(self) -> None:
         dispatcher = build_dispatcher(
