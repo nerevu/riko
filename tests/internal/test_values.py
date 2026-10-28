@@ -631,6 +631,11 @@ DOTDICT_CONTAINS = [
     pytest.param("missing", False, id="missing"),
     pytest.param({"subkey": "title"}, True, id="subkey-mapping"),
     pytest.param("AUTHOR.NAME", True, id="dotted-case-insensitive"),
+    pytest.param(None, False, id="none"),
+    pytest.param(("title",), False, id="tuple"),
+    pytest.param({}, False, id="empty-mapping"),
+    pytest.param({"subkey": 5}, False, id="non-str-subkey"),
+    pytest.param({"subkey": ""}, False, id="empty-subkey"),
 ]
 
 MATCH_KEYS = [

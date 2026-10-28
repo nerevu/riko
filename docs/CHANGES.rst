@@ -302,6 +302,8 @@ Fixes
 - A dotted ``item["a.b.c"]`` on a ``DotDict`` now walks nested mappings
   case-insensitively and fully resolves, like ``item.get("a.b.c")`` already does.
 
+- ``key in item`` on a ``DotDict`` returns False for non-string keys instead of raising.
+
 - A decorator's ``extract`` option now finds its conf key case-insensitively.
 
 - A conf ``type`` or decorator ``ftype``/``ptype`` that is not a ``CastType`` now logs
