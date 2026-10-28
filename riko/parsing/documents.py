@@ -550,5 +550,4 @@ def any2dict(
     elif isinstance(content, str):
         yield {"content": content}
     else:
-        print(f"{content=}, {ext=}, {html5=}, {path=}")
         raise TypeError("No file type provided!")
