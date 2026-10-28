@@ -27,7 +27,9 @@ from riko.types.modules import ItemBuilderConf, ParsedParam, WriteConf
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
-    from riko.types._streams import Items
+    from collections.abc import AsyncIterator
+
+    from riko.types._streams import Item, Items
 
 WRITE_NODE_PENDING = pytest.mark.xfail(
     strict=True, reason="write nodes do not execute yet"
@@ -59,6 +61,17 @@ class TestWritePassthrough:
         conf = WriteConf({"dest": str(tmp_path / "out.json")})
         result = async_pipe(ITEMS, conf=conf)
         assert [item async for item in result] == ITEMS
+
+    @async_test
+    async def test_async_source_is_written(self, tmp_path):
+        async def source() -> AsyncIterator[Item]:
+            for item in ITEMS:
+                yield item
+
+        path = tmp_path / "out.json"
+        result = async_pipe(source(), conf=WriteConf({"dest": path, "fmt": "json"}))
+        assert [item async for item in result] == ITEMS
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
 
 @skipif_issync
@@ -401,6 +414,12 @@ TRANSACTIONS = [
 ]
 
 
+FINANCE_WRITES = [
+    pytest.param("ofx", b"<OFX>", id="ofx"),
+    pytest.param("qif", b"!Account", id="qif"),
+]
+
+
 @pytest.mark.finance
 class TestExportFinance:
     """The ``ofx``/``qif`` formats, available only with the ``finance`` extra."""
@@ -416,6 +435,20 @@ class TestExportFinance:
         qif = "".join(export(TRANSACTIONS, Formats.QIF))
         assert qif.startswith("!Account")
         assert "Checking" in qif
+
+    @pytest.mark.parametrize(("fmt", "marker"), FINANCE_WRITES)
+    def test_write_module_writes_transactions(self, tmp_path, fmt, marker):
+        path = tmp_path / f"out.{fmt}"
+        list(pipe(TRANSACTIONS, conf=WriteConf({"dest": path, "fmt": fmt})))
+        assert marker in path.read_bytes()
+
+    @pytest.mark.parametrize(("fmt", "marker"), FINANCE_WRITES)
+    @async_test
+    async def test_async_write_module_writes_transactions(self, tmp_path, fmt, marker):
+        path = tmp_path / f"out.{fmt}"
+        result = async_pipe(TRANSACTIONS, conf=WriteConf({"dest": path, "fmt": fmt}))
+        _ = [item async for item in result]
+        assert marker in path.read_bytes()
 
 
 ASYNC_WRITE_ITERABLES = [

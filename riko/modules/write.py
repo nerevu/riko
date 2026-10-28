@@ -30,15 +30,14 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from meza import io
 
+from riko.bado.itertools import alist
 from riko.base._logging import get_logger
-from riko.base._typing import AnyStrType
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
-from riko.io._filelike import IOFileLike, IOFileLikeType
 from riko.io._serialization import serialize_items
 from riko.types._options import DecorationOptions, Defaults
 
@@ -48,17 +47,15 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import WriteObjconf
-    from riko.types._scalars import AnyStr
-    from riko.types._streams import Items, Stream
-    from riko.types._wrappers import PipeTuples
+    from riko.types._streams import Feed, Items, Stream
+    from riko.types._wrappers import ConversionOutput, PipeTuples
 
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
 logger: Logger = get_logger(__name__)
 
 
-def _prepare_content(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike | None:
-    items = list(items)
+def _prepare_content(items: Items, objconf: WriteObjconf) -> ConversionOutput | None:
     content = None
 
     try:
@@ -68,24 +65,22 @@ def _prepare_content(items: Items, objconf: WriteObjconf) -> AnyStr | IOFileLike
     else:
         if not objconf.dest:
             logger.warning("The destination is not set. Skipping writing.")
-        elif (content := serialize_items(items, fmt)) is None:
-            logger.warning(f"The {fmt} converter produced no content")
-        elif not isinstance(content, (AnyStrType, IOFileLikeType)):
-            logger.warning(f"The {fmt} converter produced unwritable content")
+        else:
+            content = serialize_items(items, fmt)
 
-    return cast("AnyStr | IOFileLike", content)
+    return content
 
 
 async def async_parser(
-    stream: Stream, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
+    stream: Feed, objconf: WriteObjconf, tuples: PipeTuples, **kwargs: object
 ) -> Stream:
     """
     Asynchronously serializes the stream and writes it to ``objconf.dest``.
 
     Args:
 
-        stream: The input stream. Note: this shares the ``tuples`` iterator, so
-            consuming it will consume ``tuples`` as well.
+        stream: The input stream, either sync or async. Note: this shares the
+            ``tuples`` iterator, so consuming it will consume ``tuples`` as well.
 
         objconf: The item independent configuration: ``dest``, ``fmt``, and ``mode``.
 
@@ -118,9 +113,9 @@ async def async_parser(
         b'[{"x": 0}, {"x": 1}]'
 
     """
-    items = list(stream)
+    items = await alist(stream)
 
-    if content := _prepare_content(items, objconf):
+    if (content := _prepare_content(items, objconf)) is not None:
         await async_write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)
@@ -165,7 +160,7 @@ def parser(
     """
     items = list(stream)
 
-    if content := _prepare_content(items, objconf):
+    if (content := _prepare_content(items, objconf)) is not None:
         io.write(objconf.dest, content, mode=objconf.mode)
 
     return iter(items)

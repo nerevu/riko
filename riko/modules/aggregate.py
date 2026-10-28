@@ -2,11 +2,10 @@
 """
 Applies an arbitrary (user-defined) function to a whole stream.
 
-``func`` receives the entire stream and returns the replacement. Contrast this
-with the udf module, which applies a function to each item individually.
-
-Adds no buffering of its own, so laziness is inherited from ``func``: a
-generator stays lazy, a list is already materialized.
+``func`` receives the entire stream and returns the replacement, unlike the udf module,
+which applies a function to each item individually. Adds no buffering of its own.
+Laziness is inherited from ``func``. A generator stays lazy. The one exception is a
+sync ``func``, which receives the collected items of an async stream.
 
 Examples:
 
@@ -27,14 +26,17 @@ Attributes:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterable
 from typing import TYPE_CHECKING, Any
 
 from riko.bado._util import maybe_async
+from riko.bado.itertools import materialize
+from riko.base._guards import is_async_callable
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_arg
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
-from riko.types._streams import Item, Items, Stream
+from riko.types._streams import Feed, Item, Items, Stream
 
 from ._decorators import operator
 
@@ -52,11 +54,12 @@ type AggregateResult = Item | Items
 
 
 async def async_parser(
-    stream: Stream,
+    stream: Feed,
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], AggregateResult | Awaitable[AggregateResult]]
+    func: Callable[[Stream], AggregateResult]
+    | Callable[[Feed], Awaitable[AggregateResult]]
     | None = None,
     **kwargs: object,
 ) -> Stream:
@@ -68,8 +71,8 @@ async def async_parser(
 
     Args:
 
-        stream: The input stream. Note: this shares the `tuples` iterator, so consuming
-            it will consume `tuples` as well.
+        stream: The input stream, either sync or async. Note: this shares the
+            `tuples` iterator, so consuming it will consume `tuples` as well.
 
         objconf: the item independent configuration. Unused.
 
@@ -77,8 +80,9 @@ async def async_parser(
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
-        func: The function to apply to the stream. Awaited when it is an async
-            function. Required.
+        func: The function to apply to the stream. An async function is awaited and
+            receives ``stream`` as is. A sync function given an async stream receives
+            its collected items. Required.
 
     Returns:
 
@@ -105,7 +109,13 @@ async def async_parser(
 
     """
     func = require_arg(func, "func", "aggregate", strict=True)
-    result = await maybe_async(func, stream)
+
+    if isinstance(stream, AsyncIterable) and not is_async_callable(func):
+        source: Feed = await materialize(stream)
+    else:
+        source = stream
+
+    result = await maybe_async(func, source)
     return iter(listize(result))
 
 
@@ -176,9 +186,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Kwargs:
 
-        func (callable): The function to apply to the stream. A result that is
-            not iterable becomes a single item stream. Can be either a sync or async
-            function. Required.
+        func (callable): The function to apply to the stream. Can be either sync or
+            async. An async function receives the stream as is. A sync function given an
+            async stream receives its collected items. A non-iterable result becomes a
+            single item stream. Required.
 
         assign (str): Field each item is nested under. Ignored when ``emit`` is
             True (default: "aggregate").

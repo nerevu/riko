@@ -53,6 +53,7 @@ from riko.coercion import cast as cast_module
 from riko.definitions._context import Context
 from riko.modules import describe_module
 from riko.modules._metadata import list_modules
+from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
@@ -80,6 +81,8 @@ from riko.types.modules import (
 from tests import async_test
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterable, AsyncIterator
+
     from riko.types._streams import AsyncStream, Item, ItemOrValue, Stream
 
 
@@ -584,6 +587,30 @@ class TestAsyncReceive:
 
         assert first == {"x": "foo", "i": 0}
         assert seen <= _LOOKAHEAD
+
+
+async def _agen_xs() -> AsyncIterator[Item]:
+    for x in range(2):
+        yield {"x": x}
+
+
+async def _async_count(stream: AsyncIterable[Item]) -> list[Item]:
+    return [{"n": len([item async for item in stream])}]
+
+
+ASYNC_AGGREGATE_FUNCS = [
+    pytest.param(lambda stream: [{"n": len(list(stream))}], id="sync-func-drained"),
+    pytest.param(_async_count, id="async-func-async-stream"),
+]
+
+
+class TestAsyncAggregate:
+    @pytest.mark.parametrize("func", ASYNC_AGGREGATE_FUNCS)
+    @async_test
+    async def test_async_source(self, func: object):
+        """A sync func gets the collected items; an async func gets the async stream."""
+        result = async_aggregate_pipe(_agen_xs(), func=func)
+        assert [item async for item in result] == [{"n": 2}]
 
 
 _OMITTED = object()
