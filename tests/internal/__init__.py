@@ -35,8 +35,8 @@ Index (file, then the subjects it owns, in file order):
                               Embed, PreparedCall
     test_io.py                Fetch, LoopbackServer, AsyncUrlOpen,
                               ExtensionlessAsyncUrlOpen, Reencode, ConversionFuncs,
-                              AsyncMapStream, AsyncMap, AsyncMerge, GatherResults,
-                              AsyncTimeoutIterator
+                              ChunkContent, AsyncMapStream, AsyncMap, AsyncMerge,
+                              GatherResults, AsyncTimeoutIterator
     test_modules.py           IsasyncInferenceValid, InvalidCombinations,
                               AsyncGeneratorSource, AsyncOperatorReturnsStreamDirectly,
                               AsyncProcessorDualProtocol, ProcessorListKeepsTestFlag,

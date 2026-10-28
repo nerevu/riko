@@ -18,5 +18,6 @@ Index (file, then the subjects it owns, in file order):
                         Validate, Migrate, Serialize, WorkflowDocumentResolution
     test_write.py       WritePassthrough, WriteParity, WriteNestedItems, WriteSetValues,
                         WriteSkips, WriteTargetFromExtension, PipelineWriteDefinition,
-                        PipelineWrite, ExportFormats, ExportPipeline, ExportFinance
+                        PipelineWrite, ExportFormats, ExportPipeline, ExportFinance,
+                        AsyncWriteIterables
 """

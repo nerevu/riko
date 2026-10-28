@@ -16,6 +16,7 @@ from riko.base._exceptions import UnsupportedTargetError
 from riko.base._paths import ROOT_DIR
 from riko.definitions._nodes import WriteNode
 from riko.definitions._write import WriteCapabilities, WriteMode
+from riko.io._async import async_write
 from riko.modules.write import async_pipe, pipe
 from riko.parsing._dotdict import DotDict
 from riko.runtime._pipeline import Pipeline
@@ -361,3 +362,27 @@ class TestExportFinance:
         qif = "".join(export(TRANSACTIONS, Formats.QIF))
         assert qif.startswith("!Account")
         assert "Checking" in qif
+
+
+ASYNC_WRITE_ITERABLES = [
+    pytest.param(["a", "b"], "w", 2, b"ab", id="str-list"),
+    pytest.param(iter(["a", "b"]), "w", 2, b"ab", id="str-iterator"),
+    pytest.param([b"a", b"b"], "wb", 2, b"ab", id="bytes-list"),
+    pytest.param(iter(["a", "é"]), "wb", 3, "aé".encode(), id="str-iterator-binary"),
+    pytest.param(iter([b"a", b"b"]), "w", 2, b"ab", id="bytes-iterator-text"),
+]
+
+
+class TestAsyncWriteIterables:
+    """``async_write`` writes each ``str``/``bytes`` element of an iterable."""
+
+    @pytest.mark.parametrize(
+        ("content", "mode", "written", "expected"), ASYNC_WRITE_ITERABLES
+    )
+    @async_test
+    async def test_async_write_writes_every_element(
+        self, tmp_path, content, mode, written, expected
+    ):
+        path = tmp_path / "out.txt"
+        assert await async_write(path, content, mode=mode) == written
+        assert path.read_bytes() == expected

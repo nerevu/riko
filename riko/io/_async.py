@@ -19,8 +19,8 @@ Examples:
 
 from __future__ import annotations
 
-from io import BytesIO, StringIO, TextIOWrapper
-from typing import TYPE_CHECKING, Literal, cast, overload
+from io import BufferedIOBase, BytesIO, StringIO, TextIOBase, TextIOWrapper
+from typing import TYPE_CHECKING, Literal, overload
 
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
@@ -34,7 +34,7 @@ from riko.base._paths import normalize_url
 from ._sync import ext_from_content_type
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Generator, Iterator
+    from collections.abc import Awaitable, Callable, Generator, Iterable, Iterator
     from logging import Logger
 
     from _typeshed import OpenBinaryMode, OpenTextMode
@@ -49,6 +49,7 @@ logger: Logger = get_logger(__name__)
 type TextChunk = str | list[str]
 type BinaryChunk = bytes | list[int]
 type Chunk = TextChunk | BinaryChunk
+type WriteContent = AnyStr | IOFileLike | Iterable[str] | Iterable[bytes]
 
 
 _MODE_KINDS = frozenset("rwxa")
@@ -72,7 +73,7 @@ def chunk(
 ) -> Iterator[list[str]]: ...
 @overload
 def chunk(
-    content: StringIO, chunksize: int | None = None, *args: int, **kwargs: int
+    content: TextIOBase, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[str]: ...
 @overload
 def chunk(
@@ -80,7 +81,7 @@ def chunk(
 ) -> Iterator[list[int]]: ...
 @overload
 def chunk(
-    content: BytesIO, chunksize: int | None = None, *args: int, **kwargs: int
+    content: BufferedIOBase, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[bytes]: ...
 def chunk(
     content: AnyStr | IOFileLike,
@@ -115,28 +116,22 @@ def chunk(
         [[97, 98, 99], [100, 101, 102]]
 
     """
-    result = _chunk(content, chunksize, *args, **kwargs)
-    return cast("Iterator[Chunk]", result)
+    return _chunk(content, chunksize, *args, **kwargs)
 
 
 @overload
 def _chunk_content(
-    content: str | StringIO, chunksize: int | None = None
+    content: str | StringIO | Iterable[str], chunksize: int | None = None
 ) -> Iterator[str]: ...
 @overload
 def _chunk_content(
-    content: bytes | BytesIO, chunksize: int | None = None
+    content: bytes | BytesIO | Iterable[bytes], chunksize: int | None = None
 ) -> Iterator[bytes]: ...
 def _chunk_content(
-    content: AnyStr | IOFileLike, chunksize: int | None = None
+    content: WriteContent, chunksize: int | None = None
 ) -> Iterator[AnyStr]:
     """
-    Splits content into whole ``str`` or ``bytes`` chunks for the write path.
-
-    Dispatches on the ``content`` type. :func:`chunk` yields a ``list`` of characters
-    or ints for a ``str``/``bytes`` source, but a bare ``str``/``bytes`` for a file-like
-    one. Joins the former into a scalar and passes the latter through. The caller always
-    receives a whole ``str``/``bytes`` per chunk.
+    Splits content into whole ``str`` or ``bytes`` chunks.
 
     Args:
 
@@ -153,18 +148,22 @@ def _chunk_content(
         ['abc', 'def']
         >>> list(_chunk_content(b"abcdef", 3))
         [b'abc', b'def']
+        >>> list(_chunk_content(iter(["ab", "cd"])))
+        ['ab', 'cd']
 
     """
     if isinstance(content, str):
         for raw in chunk(content, chunksize):
             yield "".join(raw)
-    elif isinstance(content, StringIO):
+    elif isinstance(content, TextIOBase):
         yield from chunk(content, chunksize)
     elif isinstance(content, bytes):
         for raw in chunk(content, chunksize):
             yield bytes(raw)
-    else:
+    elif isinstance(content, BufferedIOBase):
         yield from chunk(content, chunksize)
+    else:
+        yield from content
 
 
 def _normalize_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
@@ -378,17 +377,14 @@ async def async_url_read(
 
 async def async_write(
     dest: PathLike,
-    content: AnyStr | IOFileLike,
+    content: WriteContent,
     mode: str = "wb+",
     encoding: str = ENCODING,
     chunksize: int | None = None,
     **_: object,
 ) -> int:
     """
-    Writes content to a file using anyio's async file I/O.
-
-    Accepts a file-like object, iterable, ``str`` or ``bytes``, which mirrors
-    :func:`meza.io.write` chunking, mode, and encoding semantics.
+    Asynchronously writes content to a file.
 
     Args:
 
@@ -396,7 +392,9 @@ async def async_write(
         content: The data to write.
         mode: The file mode; a ``"b"`` in it selects binary I/O.
         encoding: The text encoding used when ``mode`` is not binary.
-        chunksize: The units written per chunk, or ``None`` for a single chunk.
+        chunksize: The units to write per ``content`` chunk, or ``None`` for a single
+            chunk (ignored for content that isn't a ``str``, ``bytes``, or file-like
+            object).
 
     Returns:
 

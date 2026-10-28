@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from json import JSONEncoder
 from typing import Protocol, overload
 
@@ -21,19 +21,16 @@ def chunk[T](
     stop: int | None = None,
 ) -> Iterator[T]: ...
 @overload
-def chunk[T](
-    content: Callable[..., Iterable[T]],
-    chunksize: int | None = None,
-    start: int = 0,
-    stop: int | None = None,
-) -> Iterator[T | bytearray]: ...
+def chunk(
+    content: str, chunksize: int | None = None, start: int = 0, stop: int | None = None
+) -> Iterator[list[str]]: ...
 @overload
-def chunk[T](
-    content: Iterable[T],
+def chunk(
+    content: bytes,
     chunksize: int | None = None,
     start: int = 0,
     stop: int | None = None,
-) -> Iterator[list[T]]: ...
+) -> Iterator[list[int]]: ...
 def remove_keys[V](
     record: Mapping[str, V], *args: str, whitelist: bool = False
 ) -> dict[str, V]: ...

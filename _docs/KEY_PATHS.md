@@ -85,7 +85,7 @@ internals stay in `_docs/INTERNALS.md`.
 | `riko/io/_sync.py` | synchronous URL/file open/read helpers |
 | `riko/io/_serialization.py` | stream serialization/export conversion helpers; records are `thaw`ed to plain dicts first, and `json`/`jsonl` use riko's `records2json` (meza's `CustomEncoder` subclassed so sets serialize as sorted arrays, the `_reencode.py` patching pattern) |
 | `riko/io/_reencode.py` | byte/text re-encoding utilities |
-| `riko/io/_filelike.py` | file-like and opener aliases (`IOFileLike`, `BinaryFileLike`, `StringFileLike`, `FileLike`, `Opener`, `IOFileLikeType`); they name `riko.io` handle classes, so they live with the I/O layer rather than in `riko/types` |
+| `riko/io/_filelike.py` | file-like and opener aliases (`IOFileLike`, the `io` base classes `async_write` reads in chunks, `BinaryFileLike`, `StringFileLike`, `FileLike`, `Opener`); they name `riko.io` handle classes, so they live with the I/O layer rather than in `riko/types` |
 | `riko/io/__init__.py` | narrow I/O facade; stable async I/O names are promoted through `riko` |
 
 `async_url_open` remains an awaitable/async-context-manager handle. Call sites that

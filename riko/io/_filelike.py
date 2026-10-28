@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from codecs import StreamReader
 from collections.abc import Callable
-from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from io import BufferedIOBase, BytesIO, RawIOBase, StringIO, TextIOBase
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ._sync import Fetch
 
 
-type IOFileLike = BytesIO | StringIO
+type IOFileLike = BufferedIOBase | TextIOBase
 type BinaryFileLike = (
     BytesIO | RawIOBase | Fetch[Literal[True]] | SpooledTemporaryFile[bytes]
 )
@@ -34,5 +34,3 @@ type StringFileLike = (
 )
 type FileLike = BinaryFileLike | StringFileLike
 type Opener = Callable[[str], tuple[FileLike, str | None]]
-
-IOFileLikeType: tuple[type[BytesIO], type[StringIO]] = (BytesIO, StringIO)
