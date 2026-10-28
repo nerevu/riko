@@ -14,7 +14,7 @@ from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
-from io import BytesIO
+from io import BytesIO, StringIO
 from logging import ERROR, WARNING
 from operator import methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
@@ -729,6 +729,14 @@ class TestParsers:
     def test_any2dict_yields_list_entries(self, content, ext, path):
         result = list(any2dict(content, ext=ext, path=path))
         assert result == [{"a": 1}, {"b": 0}]
+
+    def test_any2dict_wraps_leaf_xml_root(self):
+        assert list(any2dict(StringIO("<a>hi</a>"), ext="xml")) == [{"content": "hi"}]
+
+    def test_any2dict_yields_a_dotdict_as_a_plain_dict(self):
+        result = list(any2dict(DotDict({"a": {"b": 1}})))
+        assert result == [{"a": {"b": 1}}]
+        assert type(result[0]) is dict
 
     def test_xpathfetchpage_strips_xhtml_namespace_from_nested_keys(self):
         conf = XpathFetchPageConf(
