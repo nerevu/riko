@@ -452,8 +452,7 @@ def opener(
             r.close()
         else:
             encoding = r.encoding or encoding
-            reencoded = reencode(r.raw, encoding, decode=True, owner=r)
-            response = cast("StreamReader", reencoded)
+            response = reencode(r.raw, encoding, decode=True, owner=r)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
@@ -470,8 +469,7 @@ def opener(
             elif memoize:
                 response = buffer(r, binary=False)
             elif encoding:
-                reencoded = reencode(r.fp, encoding, decode=True, owner=r)
-                response = cast("StreamReader", reencoded)
+                response = reencode(r.fp, encoding, decode=True, owner=r)
             else:
                 response = r
         else:

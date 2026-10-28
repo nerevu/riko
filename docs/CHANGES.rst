@@ -334,8 +334,9 @@ Fixes
   first line, and sync fetching an empty text source returns empty content instead of
   raising ``RuntimeError``.
 
-- A decoded response now treats ``read(n)`` as a count of characters rather than of
-  lines, and ``readlines`` accepts ``keepends`` instead of raising ``TypeError``.
+- A decoded response now treats ``read(n)`` as a count of characters instead of lines,
+  and ``readlines`` accepts ``keepends`` instead of raising ``TypeError``. Iterating it
+  after ``read(n)`` returns the rest of the line instead of dropping it.
 
 - The ``write`` module can now write nested objects using the ``json`` export format
   instead of raising "Object of type DotDict is not JSON serializable".
