@@ -72,7 +72,12 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    when the run leaves more statements uncovered than the ceiling in
    `pyproject.toml` (`[tool.riko.coverage] uncovered`): cover the new or
    newly-unexecuted lines rather than raising the ceiling (raising it is a
-   judgment call for the user). When it lowers the ceiling, that `pyproject.toml`
+   judgment call for the user). To find them, run
+   `python .claude/skills/land/diff_uncovered.py --baseline-ref HEAD` (alone, like
+   the suite): it lists the change's uncovered lines and each file whose missing
+   count moved, which catches a line outside the diff that lost coverage. It exits
+   non-zero when any changed line is uncovered. Never read
+   the repo-root `.coverage`; it can be stale. When it lowers the ceiling, that `pyproject.toml`
    diff is part of the change — keep it. The ceiling is measured in the full dev
    environment (`--group dev --all-extras`, Python 3.12).
 6. **Types**: `manage lint --check-types` and `manage lint --verify-types`
