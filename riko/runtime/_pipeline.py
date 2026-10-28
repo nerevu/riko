@@ -206,7 +206,7 @@ class Pipeline(PipelineDefinition[T_co]):
             [{'x': 3}]
             >>> "hash" | pipeline
             Traceback (most recent call last):
-            TypeError: a string before | is ambiguous: ...
+            TypeError: ...ambiguous: ...pipeline('hash')...from_module('hash')...
 
         """
         if isinstance(other, str):
