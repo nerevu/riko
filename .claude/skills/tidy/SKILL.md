@@ -109,15 +109,23 @@ neighborhood it affects:
    (functional if it runs a CLI command, `examples` pipeline, or stored fixture end
    to end; public if it uses only supported names; else internal) and in the file
    whose index row names its subject? Does a collected doctest or an existing test
-   already assert the same input and outcome? A public symbol's doctest wins over a
-   pytest copy; for a private symbol, trim whichever side the module has more of.
+   already assert the same input and outcome? Doctests show basic usage. An edge or
+   error case in both places leaves the doctest when the doctest already shows
+   several other basic use cases. When it does not, prefer rewriting the doctest to
+   show basic usage and keeping the edge case in pytest. Basic usage lives in its
+   most appropriate doctest: move it into this doctest from elsewhere when this is
+   the better home (and follow the move down to the doctest it leaves), but never
+   duplicate it just to give a doctest something to run. Only when no basic usage
+   belongs in this doctest does the pytest copy go. When you add a doctest, grep
+   the tests for each of its inputs and remove a matching test or table row in the
+   same pass.
    A new test with the same setup and assertion as an existing one (two is
    enough) is a row in that test's table, and a regression test goes in its
    subject's class, never a history-named file. Tables follow the
    `tests/__init__.py` layout: module-level constant, one-line `pytest.param`
    rows with ids (an `ids=[...]` list only when values and ids share one line);
-   a fold that grows the file needs its rows compacted. A doctest grown past one
-   example per idea moves its extra cases into its subject's test table. If
+   a fold that grows the file needs its rows compacted. A doctest grown past basic
+   usage moves its extra cases into its subject's test table. If
    `manage test --ratchet` reports more uncovered lines, find the lines the
    change stopped executing before anything else.
 

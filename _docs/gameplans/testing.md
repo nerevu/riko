@@ -168,20 +168,19 @@ pipe boundary with a deterministic module rather than comparing `.name`; keep th
 
 ## 4. Doctest audit
 
-Different deletion rule from pytest, because doctests are executable documentation:
+Different deletion rule from pytest, because doctests are executable documentation. Which side
+keeps a case shown in both a doctest and pytest is settled once, for public and private symbols
+alike, by [DOCUMENTATION_STANDARD.md](../DOCUMENTATION_STANDARD.md) (removing-examples rule 6 and
+"Doctests and unit tests share coverage"); this section adds only what that rule does not say:
 
-- **Public/built-in doctests stay** when they demonstrate a useful API behavior — overlap between a
-  README journey and a module example is not inherently wasteful. One module-level example is a
-  soft default, not a cap: keep a second example when it demonstrates a distinct first-class mode
-  or completes the module's primary workflow.
+- **Doctests stay** when they demonstrate a useful API behavior — overlap between a README journey
+  and a module example is not inherently wasteful. One module-level example is a soft default, not
+  a cap: keep a second example when it demonstrates a distinct first-class mode or completes the
+  module's primary workflow.
 - **Deleting a module example requires an ownership check.** First look for equivalent function/class
   doctests and pytest coverage. Move genuinely uncovered behavior to the appropriate test before
   deleting the example; do not create a duplicate pytest test when another doctest already owns it.
   If the example is later restored, remove a pytest test that exists only as its duplicate.
-- **Private doctests need stronger justification.** If `_inference`/`_iterutils`/`_objectify` already
-  have focused pytest coverage, move edge cases to pytest and leave at most a tiny descriptive
-  example. `_inference.infer_from_source()` is the clearest candidate — its doctests repeat pytest
-  cases.
 - **The root `riko/__init__.py` doctest should go.** It re-teaches a normal `SyncPipe` workflow the
   README/module docs already own. The package initializer should describe the namespace's purpose,
   audience, stability, and package-wide semantics instead. This exception removes the requirement
