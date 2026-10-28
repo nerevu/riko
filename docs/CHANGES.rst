@@ -339,6 +339,13 @@ Fixes
 - ``async_write`` accepts a list or iterator of ``str`` or ``bytes`` chunks, as
   documented, instead of raising ``AttributeError``.
 
+- ``export`` now takes writer options as keyword-only arguments and passes the rest to
+  the format's converter. Before, keywords went to both and could raise ``TypeError``.
+  A writer option given without ``f`` now raises ``TypeError`` instead of being ignored.
+
+- Writing or exporting an empty stream as ``geojson`` produces a ``FeatureCollection``
+  with no features instead of raising ``ValueError``.
+
 - ``json`` output writes sets as deterministic sorted arrays.
 
 - ``skip_if`` now treats a missing ``text`` as a presence check on ``field`` instead of

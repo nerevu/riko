@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -302,14 +304,66 @@ class TestPipelineWrite:
         assert through == list(hashed(ITEMS))
 
 
+EXPORT_OPTIONS = [
+    pytest.param("csv", {"mode": "w"}, "x,y\n1,2\n", id="csv-writer-mode"),
+    pytest.param("csv", {"chunksize": 1}, "x,y\n1,2\n", id="csv-chunksize"),
+    pytest.param("csv", {"skip_header": True}, "1,2\n", id="csv-converter"),
+    pytest.param("json", {"encoding": "utf8"}, '[{"x": 1, "y": 2}]', id="json"),
+]
+
+WRITER_OPTIONS = [
+    pytest.param("csv", {"encoding": "utf8"}, id="encoding"),
+    pytest.param("csv", {"chunksize": None}, id="chunksize"),
+    pytest.param("csv", {"length": 0}, id="length"),
+    pytest.param("csv", {"bar_len": 50}, id="bar_len"),
+    pytest.param("list", {"mode": "w"}, id="list"),
+]
+
+
 class TestExportFormats:
-    """``Formats`` members mirror the ``export`` converters."""
+    """``export`` serializes each format and routes its writer and converter options."""
 
     def test_member_and_string_export_identically(self):
         items = [{"a": 1}]
         assert (
             export(items, Formats.JSON).getvalue() == export(items, "json").getvalue()
         )
+
+    @pytest.mark.parametrize(("type_", "kwargs", "expected"), EXPORT_OPTIONS)
+    def test_routes_writer_and_converter_options(
+        self, tmp_path, type_, kwargs, expected
+    ):
+        path = tmp_path / f"out.{type_}"
+        export([{"x": 1, "y": 2}], type_, str(path), **kwargs)
+        assert path.read_text() == expected
+
+    @pytest.mark.parametrize(("type_", "kwargs"), WRITER_OPTIONS)
+    def test_writer_option_without_a_destination_raises(self, type_, kwargs):
+        with pytest.raises(TypeError, match=next(iter(kwargs))):
+            export([{"x": 1}], type_, **kwargs)
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=TypeError,
+        reason="meza's records2csv writes the BOM as bytes into a text buffer",
+    )
+    def test_csv_bom_is_written_in_the_given_encoding(self, tmp_path):
+        path = tmp_path / "out.csv"
+        export([{"x": 1}], "csv", str(path), encoding="utf-16", bom=True)
+        assert path.read_bytes().startswith("\ufeff".encode("utf-16"))
+
+    def test_rejects_unknown_format(self):
+        msg = "Invalid export type: 'xml'. Expected one of list, tuple, csv"
+
+        with pytest.raises(ValueError, match=re.escape(msg)):
+            export([{"x": 1}], "xml")
+
+    def test_empty_geojson_is_a_featureless_collection(self, tmp_path):
+        path = tmp_path / "out.geojson"
+        export([], "geojson", str(path))
+        collection = json.loads(path.read_text())
+        assert collection["type"] == "FeatureCollection"
+        assert collection["features"] == []
 
 
 class TestExportPipeline:

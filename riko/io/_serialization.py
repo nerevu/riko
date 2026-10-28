@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from functools import partial
+from inspect import signature
 from io import StringIO
 from itertools import chain
 from json import dumps
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from meza import convert as cv
 from meza import fntools as ft
 
 from riko.base._guards import require_mapping
 from riko.base._iterutils import sort_stably
+from riko.base._typing import resolve_enum
 from riko.types._enums import Formats
 from riko.types._frozendict import thaw
 
@@ -125,17 +127,128 @@ if OFX is not None:
     CONVERSION_FUNCS[Formats.QIF] = records2qif
 
 
-def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionOutput:
-    """Serializes ``items`` with the resolved ``Formats`` converter."""
-    thawed = (thaw(require_mapping(item, "item", error=TypeError)) for item in items)
+ENCODING_FORMATS: Final[frozenset[Formats]] = frozenset(
+    fmt
+    for fmt, convert in CONVERSION_FUNCS.items()
+    if "encoding" in signature(convert).parameters
+)
 
-    try:
-        result = CONVERSION_FUNCS[fmt](thawed, **kwargs)
-    except StopIteration:
-        result = iter("")
-    except KeyError as e:
-        valid = ", ".join([*map(str, CONVERSION_FUNCS), "list", "tuple"])
-        msg = f"Unsupported export format: {fmt}. Must be one of: {valid}."
-        raise ValueError(msg) from e
+
+GEOJSON_CRS = "urn:ogc:def:crs:OGC:1.3:CRS84"
+
+
+def _require_converter(fmt: Formats) -> ConversionFunc:
+    """Requires a converter to be registered for ``fmt``."""
+    if (convert := CONVERSION_FUNCS.get(fmt)) is None:
+        raise ValueError(f"the {fmt} format requires the finance extra")
+
+    return convert
+
+
+def require_conversion_format(fmt: str, what: str = "conversion format") -> Formats:
+    """
+    Requires ``fmt`` to name a format with a registered converter.
+
+    Args:
+
+        fmt: A format name or ``Formats`` member.
+        what: How error messages name the value.
+
+    Returns:
+
+        The matching ``Formats`` member.
+
+    Raises:
+
+        ValueError: If ``fmt`` names no format, or its converter needs an extra that
+            is not installed.
+
+    Examples:
+
+        >>> require_conversion_format("csv")
+        <Formats.CSV: 'csv'>
+        >>> require_conversion_format("xml")
+        Traceback (most recent call last):
+        ValueError: Invalid conversion format: 'xml'. Expected one of ...
+
+    """
+    member = resolve_enum(Formats, fmt, what, error=ValueError)
+    _require_converter(member)
+    return member
+
+
+def build_empty_geojson(*, crs: object = GEOJSON_CRS, **_: object) -> StringIO:
+    """
+    Builds a GeoJSON feature collection with no features.
+
+    Kwargs:
+
+        crs: The coordinate reference system name.
+
+    Returns:
+
+        A buffer holding the serialized, featureless collection.
+
+    Examples:
+
+        >>> from json import loads
+        >>>
+        >>> collection = loads(build_empty_geojson().read())
+        >>> collection["features"]
+        []
+        >>> collection["crs"]["properties"]["name"]
+        'urn:ogc:def:crs:OGC:1.3:CRS84'
+
+    """
+    crs_name = {"type": "name", "properties": {"name": crs}}
+    output = {"type": "FeatureCollection", "features": [], "crs": crs_name}
+    return StringIO(dumps(output))
+
+
+def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionOutput:
+    """
+    Serializes ``items`` with the converter registered for ``fmt``.
+
+    An empty stream serializes as nothing, except GeoJSON, which becomes a collection
+    with no features.
+
+    Args:
+
+        items: The items to serialize.
+        fmt: The output format.
+        **kwargs: Extra keyword arguments forwarded to the converter.
+
+    Returns:
+
+        The serialized items.
+
+    Raises:
+
+        ValueError: If no converter is registered for ``fmt``.
+
+    Examples:
+
+        >>> from json import loads
+        >>>
+        >>> serialize_items([{"x": 1}], Formats.JSON).read()
+        '[{"x": 1}]'
+        >>> loads(serialize_items([], Formats.GEOJSON).read())["features"]
+        []
+
+    """
+    convert = _require_converter(fmt)
+    require = partial(require_mapping, what="item", error=TypeError)
+    thawed = map(thaw, map(require, items))
+    first = next(thawed, None)
+
+    if first is None and fmt == Formats.GEOJSON:
+        result = build_empty_geojson(**kwargs)
+    else:
+        stream = thawed if first is None else chain([first], thawed)
+
+        try:
+            result = convert(stream, **kwargs)
+        except StopIteration:
+            result = iter("")
 
     return result

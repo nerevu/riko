@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from io import BytesIO
+from io import BytesIO, StringIO
 from os import linesep
 from time import monotonic
 from types import SimpleNamespace
@@ -30,12 +30,15 @@ from riko.io._serialization import CONVERSION_FUNCS
 from riko.io._sync import Fetch
 from riko.modules import csv
 from riko.modules.timeout import AsyncTimeoutIterator
+from riko.runtime._export import export
 from riko.types._enums import Formats
 from tests import aresolve, async_test, skipif_issync
 from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from riko.types._streams import Items
 
 
 async def _double(x: int) -> int:
@@ -380,10 +383,27 @@ class TestReencode:
 
 
 class TestConversionFuncs:
-    """``Formats`` members mirror the ``export`` converters."""
+    """The ``export`` converter registry mirrors ``Formats`` and drives ``export``."""
 
     def test_every_converter_has_a_member(self):
         assert set(CONVERSION_FUNCS) <= set(Formats)
+
+    def test_encoding_reaches_a_converter_that_takes_it(self, monkeypatch, tmp_path):
+        encodings = []
+
+        def records2csv(items: Items, encoding: str = "utf-8") -> StringIO:
+            encodings.append(encoding)
+            return StringIO("x\n")
+
+        monkeypatch.setitem(CONVERSION_FUNCS, Formats.CSV, records2csv)
+        export([{"x": 1}], "csv", str(tmp_path / "out.csv"), encoding="utf-16")
+        assert encodings == ["utf-16"]
+
+    def test_names_the_missing_extra(self, monkeypatch):
+        monkeypatch.delitem(CONVERSION_FUNCS, Formats.OFX, raising=False)
+
+        with pytest.raises(ValueError, match="requires the finance extra"):
+            export([{"x": 1}], "ofx")
 
 
 FILE_CHUNKS = [
