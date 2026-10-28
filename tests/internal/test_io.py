@@ -212,6 +212,13 @@ class TestExtensionlessAsyncUrlOpen:
         assert f.content_type == content_type
 
 
+PARTIAL_READS = [
+    pytest.param(b"abc\nde\n", False, list, [b"c\n", b"de\n"], id="bytes-iter"),
+    pytest.param(b"abc\nde\n", False, bytes, b"c\nde\n", id="bytes-buffer"),
+    pytest.param("abc\nde\n", True, list, ["c\n", "de\n"], id="text-iter"),
+]
+
+
 class TestReencode:
     @pytest.mark.parametrize("method", ["read", "chunks", "readlines"])
     def test_line_without_trailing_newline_round_trips(self, method):
@@ -265,6 +272,14 @@ class TestReencode:
         assert full == linesep.join(expected)
         assert "".join(lines) == full
         assert list(reencode(BytesIO(data), decode=True)) == lines
+
+    @pytest.mark.parametrize(("source", "decode", "consume", "expected"), PARTIAL_READS)
+    def test_partial_read_keeps_the_rest(self, source, decode, consume, expected):
+        """Iterating or buffering after a sized read resumes where the read stopped."""
+        f = BytesIO(source) if isinstance(source, bytes) else StringIO(source)
+        reader = reencode(f, decode=decode)
+        reader.read(2)
+        assert consume(reader) == expected
 
     @pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le"])
     def test_wide_encoding_keeps_every_line(self, encoding):
