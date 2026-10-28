@@ -197,4 +197,4 @@ End with:
   into the scratchpad (the tidy
   agent included). Name the task, its duration and tool count, and the script it
   suggests (name, inputs, outputs, home); propose it, never build it unasked.
-  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff.
+  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.

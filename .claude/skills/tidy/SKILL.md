@@ -165,5 +165,8 @@ tree as tidy left it. An untouched tree then skips the next run; any later
 edit re-opens the whole range since that sha.
 
 Report: the scope resolved, each fix applied (file:line, rule), findings sent
-to `/triage`, questions asked and their answers, lint promotions proposed, and
-the verification run. Never commit; the user commits.
+to `/triage`, questions asked and their answers, lint promotions proposed, script
+candidates (a check you repeated by hand, or a helper script you wrote into the
+scratchpad, that a checked-in script could run next time: name, inputs, outputs;
+its draft saved in `.claude/skills/drafts/`),
+and the verification run. Never commit; the user commits.
