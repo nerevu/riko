@@ -87,8 +87,7 @@ New
   (a)sync iterable into a list, ``materialize`` to collect one into an iterator, and a
   ``cooperative`` option to ``as_async`` to yield control before each item of a source.
 
-- Added the ``jsonl`` export format (one JSON object per line), accepted anywhere a
-  ``riko.Formats`` member is.
+- Added ``jsonl`` (newline-delimited JSON) to ``riko.Formats``.
 
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``,

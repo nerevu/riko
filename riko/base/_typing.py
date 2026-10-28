@@ -235,7 +235,7 @@ def resolve_enum[E: StrEnum](
 
         enum: The string enum to resolve into.
         value: A member or member value, or ``None`` when absent.
-        what: How error messages name the value; defaults to the enum's name.
+        what: How error messages name the value (default: the enum's name).
         default: The member a missing ``value`` resolves to.
         strict: Whether a missing ``value`` with no ``default`` raises.
         error: The exception class raised for a missing or invalid ``value``.
