@@ -10,6 +10,7 @@ from textwrap import wrap
 from typing import TYPE_CHECKING, Literal
 
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_codegen_note
 from riko.base._verbs import VERB_PAIRS, VERBS
 
 if TYPE_CHECKING:
@@ -31,13 +32,18 @@ _RST_WIDTHS: dict[str, tuple[int, ...]] = {
 }
 _NBSP = "\x00"
 
+_NOTE = get_codegen_note("--verbs")
 VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
     "md": compile(
-        rf"(?P<begin><!-- {_KEY} -->\n).*?(?P<end><!-- /(?P=key) -->)", DOTALL
+        rf"<!-- {_KEY}(?:: [^>\n]*)? -->\n.*?(?P<end><!-- /(?P=key) -->)", DOTALL
     ),
     "rst": compile(
-        rf"(?P<begin>\.\. begin {_KEY}\n).*?(?P<end>\.\. end (?P=key))", DOTALL
+        rf"\.\. begin {_KEY}(?:: [^\n]*)?\n.*?(?P<end>\.\. end (?P=key))", DOTALL
     ),
+}
+_BEGINS: dict[TableFormat, str] = {
+    "md": "<!-- {key}: {note} -->\n",
+    "rst": ".. begin {key}: {note}\n",
 }
 
 _sub = partial(_CODE.sub, r"``\1``")
@@ -150,7 +156,8 @@ def generate_verb_tables(text: str, fmt: TableFormat) -> str:
         else:
             body = f"\n{_render_rst(table, _RST_WIDTHS[key])}\n\n"
 
-        return f"{match['begin']}{body}{match['end']}"
+        begin = _BEGINS[fmt].format(key=key, note=_NOTE)
+        return f"{begin}{body}{match['end']}"
 
     return VERB_PATTERNS[fmt].sub(_replace, text)
 

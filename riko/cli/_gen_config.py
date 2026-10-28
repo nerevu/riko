@@ -6,7 +6,7 @@ from __future__ import annotations
 import ast
 
 from riko.base._paths import PACKAGE_DIR
-from riko.base._strutils import ruff_format
+from riko.base._strutils import get_codegen_note, ruff_format
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
@@ -16,12 +16,12 @@ _NAMES = {"CastType", "FmtLike", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
 _ABC_TYPES = {"Callable", "Sequence"}
 _BUILTINS = {"str", "int", "float", "bool", "list", "dict", "tuple", "set", "None"}
-_DOCSTRING = '''# vim: sw=4:ts=4:expandtab
+_DOCSTRING = f'''# {get_codegen_note("--config")}
+
 """
 Generated parse-time module configuration classes.
 
-Edit ``riko.types.modules`` and regenerate with ``manage codegen --config``;
-**DO NOT edit this module directly!**.
+Edit ``riko.types.modules``, then regenerate this module.
 """'''
 
 

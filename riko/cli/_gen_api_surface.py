@@ -8,13 +8,15 @@ from typing import TYPE_CHECKING
 
 from riko.base import _api_surface
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_codegen_note
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _DOC = ROOT_DIR / "_docs" / "API_SURFACE.md"
+_NOTE = get_codegen_note("--api")
 _BLOCK = re.compile(
-    r"(?P<begin><!-- api-surface:(?P<key>[a-z-]+) -->\n).*?"
+    r"<!-- api-surface:(?P<key>[a-z-]+)(?:: [^>\n]*)? -->\n.*?"
     r"(?P<end>\n<!-- /api-surface:(?P=key) -->)",
     re.DOTALL,
 )
@@ -52,7 +54,9 @@ def _render_block(key: str) -> str:
 
 
 def _replace(match: re.Match[str]) -> str:
-    return f"{match['begin']}{_render_block(match['key'])}{match['end']}"
+    key = match["key"]
+    begin = f"<!-- api-surface:{key}: {_NOTE} -->\n"
+    return f"{begin}{_render_block(key)}{match['end']}"
 
 
 def generate_api_surface(text: str) -> str:
