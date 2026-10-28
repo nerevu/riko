@@ -210,6 +210,9 @@ sync when source is moved between package groups.
   `README.rst`, or `CONTRIBUTING.rst`; gameplans, `MILESTONES.md`, and `docs/` keep history) that names no
   current file. A line saying the file was deleted, retired, removed, dropped, merged, or
   superseded is exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
+  The same documents' `path::Class[::test]` and `Class::test` citations must name a current
+  test class or test (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file
+  is missing is left to the file check, and a citation must sit on one line to be checked.
 - **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
   written to a fresh temp folder. That folder also holds the run's coverage data
   (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.

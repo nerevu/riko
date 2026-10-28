@@ -142,8 +142,8 @@ Notes:
   UTF-16 document raises `UnicodeDecodeError` in both modes; reading those formats as bytes
   lets the parser honor the declaration. That needs an explicit `encoding` to be
   distinguishable from the `ENCODING` default first (the `Defaults` merge erases the
-  difference today). Tripwire: `tests/public/test_modules.py::TestLocalDocuments::
-  test_declared_encoding_is_honored`.
+  difference today). Tripwire:
+  `tests/public/test_modules.py::TestFetchdata::test_declared_encoding_is_honored`.
 * Line-ending translation is part of decode parity. `async_url_open` decodes through
   `TextIOWrapper` with universal newlines (`\r` and `\r\n` become `\n`); the sync
   `Reencoder` translates only when the source contains no `\n` at all, so `b"abc\rdef\n"`

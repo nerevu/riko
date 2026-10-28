@@ -130,7 +130,9 @@ Enforcement:
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no
   current file; a line saying the file was deleted, retired, removed, dropped, merged, or
-  superseded records history and is exempt. Repoint a moved test's citations when moving it.
+  superseded records history and is exempt. Its `path::Class[::test]` and `Class::test`
+  citations must also name a current test class or test. `.claude/skills/tidy/move_tests.py`
+  repoints both forms when it moves or renames a test; keep each citation on one line.
 - The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root doc,
   `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source file; gameplans,
   `MILESTONES.md`, and `docs/*.rst` keep historical paths and are exempt.
