@@ -529,17 +529,24 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             True
             >>> 'b' in r
             False
+            >>> 5 in r
+            False
 
         """
-        if isinstance(key, str) and "." not in key:
-            contained = key.lower() in self._store
-        else:
-            try:
-                self[cast("Key", key)]
-            except KeyError:
-                contained = False
+        if isinstance(key, str):
+            if "." in key:
+                try:
+                    self[key]
+                except KeyError:
+                    contained = False
+                else:
+                    contained = True
             else:
-                contained = True
+                contained = key.lower() in self._store
+        elif is_mapping(key) and isinstance(subkey := key.get("subkey"), str):
+            contained = subkey.lower() in self._store
+        else:
+            contained = False
 
         return contained
 
