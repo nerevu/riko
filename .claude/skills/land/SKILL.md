@@ -48,7 +48,10 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    already succeeded today, so always run it; never skip it by recollection.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
    subagent (`model: "opus"`, so it never inherits a Fable session's model)
-   given the skill text, never as an in-loop grep pass (it skips
+   given the skill text plus the mid-run self-check (past about 10 minutes or
+   100k tokens with mechanical work left: pause, report, and name the helper
+   script; afterwards inspect any scripts it wrote for itself and promote, fold,
+   or drop each), never as an in-loop grep pass (it skips
    itself when its marker says the tree is already tidy). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.

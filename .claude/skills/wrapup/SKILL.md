@@ -31,6 +31,16 @@ each phase is one response:
 
 ## 0. Tidy (one subagent)
 
+Every agent brief ends with the mid-run self-check: past about 10 minutes or
+100k tokens with mechanical, repeated work left, stop at a consistent point, run
+the gates, and report what is done, what is left, and the helper script that
+would speed up the rest (run `date` at the start and between items). About 10
+minutes in, send it a non-stopping status ping; pause one that is grinding,
+build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
+`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
+fold it into an existing one,
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+
 Launch one fresh `general-purpose` agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow
