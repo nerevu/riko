@@ -31,6 +31,15 @@ is everything changed since that sha:
 If the scope is empty, write the marker and stop. A
 wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.
+Every agent brief ends with the mid-run self-check: past about 10 minutes or
+100k tokens with mechanical, repeated work left, stop at a consistent point, run
+the gates, and report what is done, what is left, and the helper script that
+would speed up the rest (run `date` at the start and between items). About 10
+minutes in, send it a non-stopping status ping; pause one that is grinding,
+build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
+`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
+fold it into an existing one,
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
 diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
@@ -128,6 +137,24 @@ neighborhood it affects:
    usage moves its extra cases into its subject's test table. If
    `manage test --ratchet` reports more uncovered lines, find the lines the
    change stopped executing before anything else.
+   When the change splits or merges a test file (a new or deleted
+   `tests/<tier>/test_*.py`, or classes moved between files), run this check over
+   every test in the files it touched, not only the moved ones: overlaps (same
+   input and outcome in either file, another tier, or a doctest), misfits (a class
+   asserting a subject another row owns, or a test in the wrong tier), move
+   candidates left behind in the source file, and helpers whose users changed
+   (now used by one file → beside its class; by several → `tests/_*.py`).
+   Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
+   file>` (static, about 2s). It lists candidates (unused or single-user helpers,
+   copied definitions, same-shape tests, shared literals, same-named tests,
+   unsupported names in public, functional classes with no end-to-end marker).
+   Read and verify only those, never whole files. Make the moves with
+   `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
+   `--merge` to fold one class into another, `--sort` for in-class order,
+   `--delete`/`--drop-row` for trims, `--place` to put helpers above their user;
+   moves repoint doc citations), and find a test's current home with
+   `overlap_scan.py --where NAME`. After editing either script, run its smoke
+   test: `uv run --active pytest .claude/skills/tidy/test_move_tests.py`.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.
