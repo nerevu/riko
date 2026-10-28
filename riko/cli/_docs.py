@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 import tomllib
 from collections import Counter
@@ -81,6 +82,10 @@ _COMPLETION = re.compile(
 _TEST_CITATION = re.compile(
     r"`((?:tests/)?(?:public|internal|functional)/test_\w+\.py)"
 )
+_SYMBOL_CITATION = re.compile(
+    r"`(?:(?P<path>(?:tests/)?(?:public|internal|functional)/test_\w+\.py)::)?"
+    r"(?P<cls>Test\w+)(?:::(?P<method>test_\w+))?"
+)
 _HISTORY_WORDS = re.compile(
     r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
 )
@@ -91,6 +96,8 @@ _TODO = re.compile(r"^\s*TODO\b")
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
+
+get_posix_root = lambda path: path.relative_to(ROOT_DIR).as_posix()
 
 
 def _read(path: Path) -> str:
@@ -242,6 +249,91 @@ def gen_stale_test_citations(
                     yield (lineno, cited)
 
 
+def gen_stale_test_symbol_citations(
+    text: str, known: Iterable[str]
+) -> Iterator[tuple[int, str]]:
+    """
+    Finds test-class and test-method citations in ``text`` that name nothing current.
+
+    A citation is ``path::Class``, ``path::Class::test``, or ``Class::test``, where
+    ``path`` is a ``tests/<tier>/test_<name>.py`` file (the ``tests/`` prefix may be
+    omitted). A citation whose file is missing is left to the test-file check, and a
+    line that records history (deleted, retired, removed, dropped, merged,
+    superseded) is not checked.
+
+    Args:
+
+        text: The document text.
+        known: The current symbols, each as ``tests/<tier>/test_x.py::Class``,
+            ``tests/<tier>/test_x.py::Class::test``, or ``Class::test``, plus the
+            current test files as plain paths.
+
+    Yields:
+
+        Each stale citation's line number and the citation as written.
+
+    Examples:
+
+        >>> from riko.cli._docs import gen_stale_test_symbol_citations
+        >>>
+        >>> path = "tests/public/test_pipeline.py"
+        >>> known = (path, f"{path}::TestClose", "TestClose::test_twice")
+        >>> text = "`public/test_pipeline.py::TestClose` and `TestClose::test_once`"
+        >>> list(gen_stale_test_symbol_citations(text, known))
+        [(1, 'TestClose::test_once')]
+        >>> text = "`public/test_pipeline.py::TestGone` was removed."
+        >>> list(gen_stale_test_symbol_citations(text, known))
+        []
+
+    """
+    _known = frozenset(known)
+
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if _HISTORY_WORDS.search(line):
+            continue
+
+        for match in _SYMBOL_CITATION.finditer(line):
+            cited, method = match["path"], match["method"]
+            path = None if cited is None else f"tests/{cited.removeprefix('tests/')}"
+            symbol = match["cls"] if method is None else f"{match['cls']}::{method}"
+            key = symbol if path is None else f"{path}::{symbol}"
+            checked = method is not None or path is not None
+            present = path is None or path in _known
+
+            if checked and present and key not in _known:
+                yield (lineno, match[0].lstrip("`"))
+
+
+def gen_test_symbols(*paths: Path) -> Iterator[str]:
+    """
+    Walks test files for the citable symbols ``gen_stale_test_symbol_citations`` reads.
+
+    Args:
+
+        paths: The test files to index.
+
+    Yields:
+
+        Each file's path, then ``path::Class``, ``path::Class::test``, and
+        ``Class::test`` for every top-level ``Test<Subject>`` class and its tests.
+
+    """
+    for path in paths:
+        rel = get_posix_root(path)
+        yield rel
+        tree = ast.parse(_read(path))
+
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+                yield f"{rel}::{node.name}"
+
+                for member in node.body:
+                    is_func = isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef)
+                    if is_func and member.name.startswith("test"):
+                        yield f"{rel}::{node.name}::{member.name}"
+                        yield f"{node.name}::{member.name}"
+
+
 def gen_stale_path_citations(
     text: str, known: Iterable[str]
 ) -> Iterator[tuple[int, str]]:
@@ -313,7 +405,7 @@ def _gen_todo_offenders() -> Iterator[str]:
 
     for path in (*docs, *sorted(DOCS_DIR.glob("*.rst"))):
         for lineno in gen_todo_lines(_read(path)):
-            yield f"{path.relative_to(ROOT_DIR)}:{lineno}"
+            yield f"{get_posix_root(path)}:{lineno}"
 
 
 def _gen_citation_offenders(
@@ -326,21 +418,31 @@ def _gen_citation_offenders(
 
     for path in paths:
         for lineno, cited in scan(_read(path), _known):
-            yield f"{path.relative_to(ROOT_DIR)}:{lineno}: {cited}"
+            yield f"{get_posix_root(path)}:{lineno}: {cited}"
 
 
-def _gen_stale_test_citation_offenders() -> Iterator[str]:
-    """Finds tracked docs citing test files that no longer exist."""
-    known = (
-        path.relative_to(ROOT_DIR).as_posix() for path in TESTS_DIR.glob("*/test_*.py")
-    )
-    docs = chain(
+def _gen_test_citing_doc_paths() -> Iterator[Path]:
+    """Finds the tracked docs whose test-file and test-symbol citations are checked."""
+    yield from chain(
         _root_doc_paths(),
         _gameplan_paths(),
         _CITING_DOCS,
         sorted(DOCS_DIR.glob("*.rst")),
     )
+
+
+def _gen_stale_test_citation_offenders() -> Iterator[str]:
+    """Finds tracked docs citing test files that no longer exist."""
+    known = map(get_posix_root, TESTS_DIR.glob("*/test_*.py"))
+    docs = _gen_test_citing_doc_paths()
     yield from _gen_citation_offenders(gen_stale_test_citations, known, *docs)
+
+
+def _gen_stale_test_symbol_offenders() -> Iterator[str]:
+    """Finds tracked docs citing test classes or tests that no longer exist."""
+    known = gen_test_symbols(*sorted(TESTS_DIR.glob("*/test_*.py")))
+    docs = _gen_test_citing_doc_paths()
+    yield from _gen_citation_offenders(gen_stale_test_symbol_citations, known, *docs)
 
 
 def _gen_stale_path_citation_offenders() -> Iterator[str]:
@@ -350,7 +452,7 @@ def _gen_stale_path_citation_offenders() -> Iterator[str]:
     ``MILESTONES.md`` records history, so it is not scanned.
     """
     py_paths = PACKAGE_DIR.rglob("*.py")
-    known = (path.relative_to(ROOT_DIR).as_posix() for path in py_paths)
+    known = map(get_posix_root, py_paths)
     internal = (path for path in _root_doc_paths() if path.name != "MILESTONES.md")
     docs = chain(internal, _CURRENT_STATE_DOCS)
     yield from _gen_citation_offenders(gen_stale_path_citations, known, *docs)
@@ -469,6 +571,9 @@ def lint_docs() -> int:
 
     if offenders := list(_gen_stale_test_citation_offenders()):
         problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")
+
+    if offenders := list(_gen_stale_test_symbol_offenders()):
+        problems.append(f"cited tests no longer exist: {'; '.join(offenders)}")
 
     if offenders := list(_gen_stale_path_citation_offenders()):
         problems.append(f"cited source files no longer exist: {'; '.join(offenders)}")

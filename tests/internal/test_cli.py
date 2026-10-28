@@ -31,7 +31,11 @@ from riko.cli import (
     _test,
     _upgrade,
 )
-from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
+from riko.cli._docs import (
+    gen_stale_path_citations,
+    gen_stale_test_citations,
+    gen_stale_test_symbol_citations,
+)
 from riko.cli._docstyle import (
     gen_docstring_issues,
     gen_example_prose,
@@ -704,6 +708,12 @@ CITATION_SCANS = [
         id="tests",
     ),
     pytest.param(gen_stale_path_citations, "riko/{}.py", "riko/kept.py", id="paths"),
+    pytest.param(
+        gen_stale_test_symbol_citations,
+        "TestKept::test_{}",
+        "TestKept::test_kept",
+        id="symbols",
+    ),
 ]
 
 
@@ -730,6 +740,17 @@ class TestCitationLint:
         known = (name for name in (kept,))
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
         assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
+
+    def test_test_symbols_cover_files_classes_and_tests(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        path = tmp_path / "tests" / "public" / "test_alpha.py"
+        path.parent.mkdir(parents=True)
+        path.write_text("class TestAlpha:\n    def test_one(self): ...\n")
+        rel = "tests/public/test_alpha.py"
+        expected = [rel, f"{rel}::TestAlpha", f"{rel}::TestAlpha::test_one"]
+        assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
 
 
 STANDARD = ROOT_DIR / "_docs" / "DOCUMENTATION_STANDARD.md"
