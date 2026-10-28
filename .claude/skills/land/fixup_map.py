@@ -2,6 +2,7 @@
 Maps a working-tree change onto fixup targets among the branch's own commits.
 
 Usage: python .claude/skills/land/fixup_map.py [--cached] [--patches DIR] [--base REF]
+       [--blame-only]
 
 The branch's own commits are those past its merge point: ``REF..HEAD`` where REF
 defaults to the nearest merge-base with ``next`` or ``main`` (local, else ``origin/``).
@@ -18,7 +19,8 @@ A hunk with mixed or pre-branch blame falls back to its file's *latest touch*: t
 newest branch commit (after following ``fixup!`` chains) that edits the file. Squashed
 there, the hunk sees the file exactly as HEAD has it. Blame cannot vouch that the
 hunk belongs to that commit, so these print marked ``*`` and the caller judges
-each by subject.
+each by subject. ``--blame-only`` keeps them in the new commit instead, so only
+hunks blame vouches for are offered.
 
 Prints a short table, never the hunks themselves. ``--patches DIR`` also writes
 one ``<sha>.patch`` per candidate target, ready for the rehearsal worktree.
@@ -337,6 +339,9 @@ def main() -> None:
     parser.add_argument(
         "--base", help="merge point (default: nearest merge-base with next or main)"
     )
+    parser.add_argument(
+        "--blame-only", action="store_true", help="offer only single-blame hunks"
+    )
     args = parser.parse_args()
 
     base = args.base or merge_point()
@@ -366,6 +371,8 @@ def main() -> None:
     for kind, target, hunk, missing in results:
         if target is None:
             kept[kind] += 1
+        elif args.blame_only and id(hunk) in latest:
+            kept["latest touch only (--blame-only)"] += 1
         elif missing:
             dependent[target].append((hunk, missing))
         else:
