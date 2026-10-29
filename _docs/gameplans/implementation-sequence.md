@@ -1439,6 +1439,12 @@ Deliver:
   `TypeError` (tripwire `tests/public/test_write.py::TestPipelineWriteDefinition::test_requires_a_destination`;
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
+- a write node that feeds no workflow output still runs: execution today plans only each output's
+  upstream subgraph (`GraphIndex.required`), so an effect branch hanging off the main path would be
+  skipped. Pure off-output branches stay skipped (their values are discarded, per
+  [fanout-topology.md](fanout-topology.md)), so validation does not reject unreachable nodes
+  (repo-audit triage 2026-10-29). Tripwire:
+  `tests/public/test_write.py::TestPipelineWrite::test_a_write_node_off_every_output_path_still_writes`.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
 position determines whether the user continues chaining. There is no public `sink()`
@@ -1809,6 +1815,11 @@ R10 therefore owns:
   aliases (async **operators** already return an `AsyncIterator` directly);
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
+- the operator/splitter parser input contract: `setup()` hands a parser two lazy views (`tuples` and
+  the item stream) over one shared iterator, and a parser that reads both interleaves or drops items.
+  Select the one view a parser needs before invoking it and share the view-building between
+  operator and splitter; this changes the `riko.ext` parser protocols, so it needs a compatibility
+  boundary (repo-audit triage 2026-10-29, design note, no tripwire).
 - a sync-only loop embed under an async host honors `count="first"` lazily instead of running the
   child to completion on its worker (strict-xfail tripwire
   `tests/internal/test_execution_plan.py::TestAsyncEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;

@@ -15,7 +15,8 @@ import pytest
 from riko import export
 from riko.base._exceptions import UnsupportedTargetError
 from riko.base._paths import ROOT_DIR
-from riko.definitions._nodes import WriteNode
+from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
+from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
 from riko.io._async import async_write
 from riko.modules.write import async_pipe, pipe
@@ -23,6 +24,7 @@ from riko.parsing._dotdict import DotDict
 from riko.runtime._export import list_formats
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Formats
+from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
 from tests import async_test, is_installed
 from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
@@ -309,6 +311,23 @@ class TestPipelineWrite:
         hashed = Pipeline().hash(options={"assign": "h"})
         through = list(hashed.write(tmp_path / "out.json")(ITEMS))
         assert through == list(hashed(ITEMS))
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="a write node that feeds no workflow output does not execute yet",
+    )
+    def test_a_write_node_off_every_output_path_still_writes(self, tmp_path):
+        path = tmp_path / "out.json"
+        nodes = [
+            ModuleNode(id="a", name="sort"),
+            WriteNode(id="w", name="write", backend="file", dest=str(path)),
+        ]
+        edge = StreamEdge(Endpoint("a", "out"), Endpoint("w", "in"))
+        outputs = {"default": Endpoint("a", "out")}
+        flow = Workflow(nodes=nodes, edges=[edge], outputs=outputs)
+        flow.validate()
+        assert list(Pipeline(flow)(ITEMS)) == ITEMS
+        assert path.read_bytes() == JSON_BYTES
 
 
 EXPORT_OPTIONS = [
