@@ -367,13 +367,28 @@ class Pipeline(PipelineDefinition[T_co]):
         """
         Chains a module name or another pipeline using ``|``.
 
+        A pipeline on the right may have any number of nodes. Its nodes get fresh ids
+        where needed. ``(a | b) | c`` and ``a | (b | c)`` build the same pipeline. Its
+        resources join this pipeline's context. To chain a function, use ``.map``
+        instead. To configure a module, use attribute chaining or
+        ``.pipe(name, conf=...)``.
+
         Args:
 
-            other: A module name or a pipeline.
+            other: Module name (string or a ``Sources``/``Transforms``/``Sinks`` member)
+                or a pipeline.
 
         Returns:
 
             A new pipeline whose default output is ``other``'s.
+
+        Raises:
+
+            TypeError: If ``other`` is a function.
+
+            InvalidPipelineError: If ``other`` carries execution settings; a context
+                with a mode, inputs, or test flag; duplicates a resource name; or its
+                workflow cannot be appended (see ``Workflow.with_workflow``).
 
         Examples:
 

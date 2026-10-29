@@ -598,38 +598,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Chains ``fn`` as its own node and calls it with each item.
 
-        ``fn`` receives each item as is and its return value becomes the next item. It
-        is called with the item, then the keyword arguments, then each bound resource as
-        a keyword named after its alias. Keyword arguments must be JSON-native, so use
-        ``functools.partial`` to pass a non-JSON-native value.
-
-        Args:
-
-            fn: The callable to apply to each item.
-
-        Kwargs:
-
-            resources: The Context resources ``fn`` receives as keywords.
-            version: The durable identity of ``fn``'s behavior, if declared.
-
-            identity: How each result's identity relates to its input item
-                (``"preserve"``, ``"derive"``, or ``"combine"``), if declared. Not yet
-                implemented.
-
-            kwargs (JSONValue): The JSON-native keywords ``fn`` receives with each item.
-
-        Returns:
-
-            A new pipeline whose default output is the callable node.
-
-        Raises:
-
-            InvalidPipelineError: If a resource alias is not a Python identifier, a
-                keyword argument shares its name with a resource alias, a keyword
-                argument is not JSON-native, or ``identity`` is not an identity mode.
-
-            TypeError: If ``fn`` is not callable, or ``version`` is ``None`` or
-                unhashable.
+        ``Pipeline.map`` documents the call contract and its errors.
 
         Examples:
 
@@ -741,28 +710,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Chains a module name or another pipeline using ``|``.
 
-        A pipeline on the right may have any number of nodes. Its nodes get fresh ids
-        where needed, so ``(a | b) | c`` and ``a | (b | c)`` build the same pipeline.
-        Its resources join this pipeline's context. To chain a function, use ``.map``
-        instead. To configure a module, use ``.pipe(name, conf=...)`` or attribute
-        chaining.
-
-        Args:
-
-            other: A module name (a plain string or a ``Sources``/``Transforms``/
-                ``Sinks`` member) or a pipeline.
-
-        Returns:
-
-            A new pipeline whose default output is ``other``'s.
-
-        Raises:
-
-            TypeError: If ``other`` is a function.
-
-            InvalidPipelineError: If ``other`` carries execution settings; a context
-                with a mode, inputs, or test flag; duplicates a resource name; or its
-                workflow cannot be appended (see ``Workflow.with_workflow``).
+        ``Pipeline.__or__`` documents the composition contract and its errors.
 
         Examples:
 
