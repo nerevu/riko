@@ -102,20 +102,13 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     def _load(self, ep: EntryPoint) -> ModuleDefinition:
         loaded = ep.load()
         obj = loaded() if callable(loaded) else loaded
-        definition = _resolve_definition(obj, ep.name)
 
-        if definition is None:
-            raise TypeError(
-                f"entry point {ep.name!r} returned {type(obj).__name__}, expected a"
-                " ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
-            )
+        if (definition := _resolve_definition(obj, ep.name)) is None:
+            msg = f"entry point {ep.name!r} returned {type(obj).__name__}, expected a "
+            msg += "ModuleDefinition or a module exposing 'pipe'/'async_pipe'"
+            raise TypeError(msg)
         elif not definition.declared_name:
             definition = evolve(definition, name=ep.name)
-        elif definition.declared_name != ep.name:
-            raise ValueError(
-                f"entry point {ep.name!r} declares a module named "
-                f"{definition.declared_name!r}; the two must match"
-            )
 
         return definition
 
@@ -145,9 +138,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             ('count',)
 
         """
-        name = self._key(entry)
-
-        if name and not replace:
+        if (name := self._key(entry)) and not replace:
             if name in self._discover_entry_points():
                 tier = "an entry-point"
             elif name in BUILTIN_MODULE_IDS:

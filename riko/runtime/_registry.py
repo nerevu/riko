@@ -39,9 +39,18 @@ class Registry[T]:
 
         return self._entry_points
 
+    def _load_entry_point(self, ep: EntryPoint) -> T:
+        loaded = self._load(ep)
+
+        if (key := self._key(loaded)) != ep.name:
+            msg = f"entry point {ep.name!r} declares a {self.label} named {key!r}; "
+            raise ValueError(msg + "the two must match")
+
+        return loaded
+
     def _entry_point(self, name: str) -> T | None:
         if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
-            self._loaded[name] = self._load(ep)
+            self._loaded[name] = self._load_entry_point(ep)
 
         return self._loaded.get(name)
 
