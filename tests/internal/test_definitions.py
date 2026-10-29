@@ -269,10 +269,10 @@ class TestResource:
 
         for restored in (pickled, deepcopy(resource)):
             assert isinstance(restored, ReusableResource)
-            assert isinstance(restored.plan, SyncLifecyclePlan)
-            assert restored.plan.source is gen_client
+            assert isinstance(restored._plan, SyncLifecyclePlan)
+            assert restored._plan.source is gen_client
             assert restored.lazy
-            assert restored.plan.kwargs["retries"] == (1, 2)
+            assert restored._plan.kwargs["retries"] == (1, 2)
 
     @pytest.mark.parametrize(
         ("factory", "classification"),
@@ -406,10 +406,10 @@ class TestResourceFreezing:
         resource = Resource.from_factory(
             gen_client, ["arg"], headers={"accept": ["json"]}
         )
-        assert isinstance(resource.plan, SyncLifecyclePlan)
-        headers = resource.plan.kwargs["headers"]
+        assert isinstance(resource._plan, SyncLifecyclePlan)
+        headers = resource._plan.kwargs["headers"]
 
-        assert resource.plan.args == (("arg",),)
+        assert resource._plan.args == (("arg",),)
         assert isinstance(headers, FrozenDict)
         assert headers["accept"] == ("json",)
 
@@ -417,11 +417,11 @@ class TestResourceFreezing:
         client = _Client()
         resource = Resource.from_factory(gen_client, client, session=client)
 
-        assert isinstance(resource.plan, SyncLifecyclePlan)
-        assert resource.plan.args[0] is client
-        assert resource.plan.kwargs["session"] is client
+        assert isinstance(resource._plan, SyncLifecyclePlan)
+        assert resource._plan.args[0] is client
+        assert resource._plan.kwargs["session"] is client
 
-    @pytest.mark.parametrize("name", ["plan", "credential", "lazy", "extra"])
+    @pytest.mark.parametrize("name", ["_plan", "credential", "lazy", "extra"])
     def test_fields_cannot_be_set(self, name: str):
         resource = Resource.from_factory(gen_client)
 
@@ -430,6 +430,12 @@ class TestResourceFreezing:
 
         with pytest.raises(AttributeError):
             delattr(resource, name)
+
+    def test_plan_fields_are_read_only(self):
+        resource = Resource.from_factory(sync_gen_factory)
+
+        with pytest.raises(AttributeError):
+            resource._plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class TestResourceBinding:

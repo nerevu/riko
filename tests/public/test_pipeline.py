@@ -1450,15 +1450,6 @@ class TestResource:
         if isinstance(resource.value, Connection):
             assert resource.value.closed
 
-    def test_factory_fields_and_containers_are_read_only(self):
-        resource = Resource.from_factory(sync_gen_factory)
-
-        with pytest.raises(AttributeError):
-            resource.plan = resource.plan  # pyright: ignore[reportAttributeAccessIssue]
-
-        with pytest.raises(AttributeError):
-            resource.plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
-
     @pytest.mark.parametrize(
         "factory",
         [sync_gen_factory, async_gen_factory, sync_cm_factory, async_cm_factory],

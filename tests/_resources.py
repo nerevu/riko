@@ -120,7 +120,7 @@ def check_metadata(
     assert resource.reusable == reusable
 
     if classification is not None:
-        assert isinstance(resource.plan, classification)
+        assert isinstance(resource._plan, classification)
 
 
 VALUE_FACTORIES = [

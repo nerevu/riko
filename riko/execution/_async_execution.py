@@ -513,7 +513,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self, resource: Resource[R]
     ) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = await self._aopen(resource.plan)
+            value = await self._aopen(resource._plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:

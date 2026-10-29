@@ -708,8 +708,8 @@ def build_write_resource(
         False
         >>> resource.external
         False
-        >>> type(resource.plan).__name__
-        'SyncLifecyclePlan'
+        >>> resource.strategy
+        <ResourceStrategy.LIFECYCLE: 4>
 
     """
     prepared = build_write(dest, mode, fmt=fmt, keys=keys)

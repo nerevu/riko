@@ -48,13 +48,12 @@ class Resource[T]:
 
     A resource is a resolved value, a caller-owned value, a value-producing factory, or
     a generator/context-manager lifecycle. Each constructor classifies its declaration
-    once into ``plan``. ``Resource(value, cleanup=...)`` owns ``value`` and closes it
-    after the run: with ``cleanup`` when given, never when ``cleanup`` is ``False``,
+    once (see ``strategy``). ``Resource(value, cleanup=...)`` owns ``value`` and closes
+    it after the run: with ``cleanup`` when given, never when ``cleanup`` is ``False``,
     and otherwise with the value's own ``aclose``/``close``.
 
     Attributes:
 
-        plan: How an execution acquires and tears down the resource.
         credential: A credential reference resolved by the connector layer.
         lazy: Whether entry should defer until first use (not yet implemented).
 
@@ -83,7 +82,7 @@ class Resource[T]:
 
     """
 
-    plan: ResourcePlan[T]
+    _plan: ResourcePlan[T]
     credential: str | None = field(default=None, kw_only=True)
     lazy: bool = field(default=False, kw_only=True)
 
@@ -140,7 +139,7 @@ class Resource[T]:
     def _set_fields(
         self, plan: ResourcePlan[T], credential: str | None, lazy: bool
     ) -> None:
-        object.__setattr__(self, "plan", plan)  # noqa: PLC2801
+        object.__setattr__(self, "_plan", plan)  # noqa: PLC2801
         object.__setattr__(self, "credential", credential)  # noqa: PLC2801
         object.__setattr__(self, "lazy", lazy)  # noqa: PLC2801
 
@@ -157,7 +156,7 @@ class Resource[T]:
 
         if cleanup is None and started:
             msg = "A generator object is not a resolved resource value. To run "
-            msg += "a generator as setup and teardown, pass the generator "
+            msg += "a generator as setup and cleanup, pass the generator "
             msg += "function to Resource.from_lifecycle(...) instead."
             raise TypeError(msg)
         elif cleanup is None and not is_closeable(value):
@@ -204,7 +203,7 @@ class Resource[T]:
     @property
     def external(self) -> bool:
         """Whether the caller owns the lifecycle (Riko never closes it)."""
-        return isinstance(self.plan, ExternalPlan)
+        return isinstance(self._plan, ExternalPlan)
 
     @property
     def value(self) -> ResolvedValue[T]:
@@ -217,7 +216,7 @@ class Resource[T]:
                 acquisition instead.
 
         """
-        match self.plan:
+        match self._plan:
             case ExternalPlan(value=value) | OwnedPlan(value=value):
                 pass
             case _:
@@ -228,8 +227,8 @@ class Resource[T]:
 
     @property
     def strategy(self) -> ResourceStrategy:
-        """How an execution acquires and tears down this resource."""
-        match self.plan:
+        """How an execution acquires and cleans up this resource."""
+        match self._plan:
             case ExternalPlan():
                 strategy = ResourceStrategy.EXTERNAL
             case OwnedPlan():
@@ -244,11 +243,11 @@ class Resource[T]:
     @property
     def async_native(self) -> bool:
         """Whether an execution produces or enters this resource natively async."""
-        match self.plan:
+        match self._plan:
             case AsyncLifecyclePlan():
                 is_async = True
             case ValueFactoryPlan():
-                is_async = self.plan.is_async
+                is_async = self._plan.is_async
             case _:
                 is_async = False
 
@@ -397,8 +396,8 @@ class Resource[T]:
             >>> resource = Resource.from_lifecycle(db, credential="microsoft/cif")
             >>> isinstance(resource, OneShotResource)
             True
-            >>> type(resource.plan).__name__
-            'SyncLifecyclePlan'
+            >>> resource.strategy
+            <ResourceStrategy.LIFECYCLE: 4>
             >>> resource.external
             False
             >>> resource.reusable
