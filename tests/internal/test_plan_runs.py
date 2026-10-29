@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from threading import get_ident
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 
@@ -773,6 +773,40 @@ def _doubler_dispatcher():
     return build_dispatcher(definition, adefinition)
 
 
+def _gen_counting(closed: list[bool]) -> Iterator[Item]:
+    index = 0
+
+    try:
+        while True:
+            yield {"x": index}
+            index += 1
+    finally:
+        closed.append(True)
+
+
+class _CountingIterator:
+    """An endless closeable item iterator that is not a generator."""
+
+    def __init__(self, closed: list[bool]) -> None:
+        self.closed, self.index = closed, -1
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Item:
+        self.index += 1
+        return {"x": self.index}
+
+    def close(self) -> None:
+        self.closed.append(True)
+
+
+COUNTING_SOURCES = [
+    pytest.param(_gen_counting, id="generator"),
+    pytest.param(_CountingIterator, id="closeable-iterator"),
+]
+
+
 class TestAsyncPlanRun:
     @async_test
     async def test_arun_executes_async_native_source(self) -> None:
@@ -1003,21 +1037,11 @@ class TestAsyncPlanRun:
 
         assert seen == [{"x": 1}, {"x": 2}]
 
+    @pytest.mark.parametrize("build", COUNTING_SOURCES)
     @async_test
-    async def test_arun_sync_only_source_closes_on_early_exit(self) -> None:
+    async def test_arun_sync_only_source_closes_on_early_exit(self, build) -> None:
         closed = []
-
-        @tag_source
-        def src(_items=None, **_):
-            index = 0
-
-            try:
-                while True:
-                    yield {"x": index}
-                    index += 1
-            finally:
-                closed.append(True)
-
+        src = tag_source(lambda _items=None, **_: build(closed))
         sync_pipe = cast("SyncModuleWrapper", src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
         plan = ExecutionPlan.from_workflow(

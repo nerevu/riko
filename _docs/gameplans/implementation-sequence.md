@@ -1773,7 +1773,7 @@ the tag moves to its own marker read by its own guard, rather than a fourth `.ty
 Audit note (2026-10-10 structural audit): `riko/modules/_loop.py` carries twin sync/async bodies
 (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_parent`, `_run_loop`/`_arun_loop`) and
 one copy has already drifted (`module_name` vs `op_module_name`); `_take_first` re-implements
-`_close_generator` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
+`_maybe_close` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
 iterator adapter (as the execution split did for `_resolve_inputs`) when this phase settles the embed
 shape, since the names change then anyway.
 

@@ -972,7 +972,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   from the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
   `run_from_thread`). There are no background tasks and no channels, so backpressure is pure demand, an
   error raises at the pull that hits it after every earlier item has been yielded, and abandoning or
-  closing the async stream closes the sync pipe's generator off-loop through the unguarded `_asyncify_call`
+  closing the async stream closes the sync pipe's returned iterator (any with a `close`) off-loop through the unguarded `_asyncify_call`
   seam (which still works while the execution is shutting down). Async input streams are typed
   `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`.
   *Design note:* the earlier plan's "bounded channel" was replaced by this demand-driven pull because
