@@ -62,7 +62,7 @@ diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
   the touched area — to tell an owned gap from a defect.
 
 Settled exceptions are **not findings**: identifiers the Reserved terms rows
-say are kept (`catalog_names`, callable-sense "pipe",
+say are kept (callable-sense "pipe",
 the `*_key` conf names, `ModuleStore`), wording a pending phase replaces (the
 `Sinks` category, send/receive "target"), and gameplans keeping older wording
 until touched.

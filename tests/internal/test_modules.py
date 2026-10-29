@@ -64,6 +64,7 @@ from riko.runtime._module_registry import (
 )
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._pubsub import async_hub
+from riko.runtime._registry import Registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
 from riko.runtime._workflow_resolver import WorkflowResolver
@@ -1023,6 +1024,17 @@ class _FalsyPipe:
 
 
 class TestModuleRegistry:
+    @pytest.mark.parametrize(
+        ("method", "arg"),
+        [
+            pytest.param("_key", "entry", id="key"),
+            pytest.param("_load", SimpleNamespace(name="entry"), id="load"),
+        ],
+    )
+    def test_base_registry_requires_subclass_hooks(self, method, arg):
+        with pytest.raises(NotImplementedError, match=rf"Registry\.{method} must"):
+            getattr(Registry(), method)(arg)
+
     def test_builtin_resolves_lazily(self, fixed_registry):
         assert fixed_registry.require("tokenizer").__name__ == "pipe"
 
@@ -1079,12 +1091,12 @@ class TestModuleRegistry:
         with pytest.raises(ValueError, match="shadows a built-in module"):
             fixed_registry.register(ModuleDefinition(name="count", sync_pipe=marker))
 
-        assert fixed_registry.registered_names() == ()
+        assert fixed_registry.registered_names == ()
 
     def test_registered_names_are_sorted(self, fixed_registry):
         fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=marker))
         fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=marker))
-        assert fixed_registry.registered_names() == ("alpha", "zeta")
+        assert fixed_registry.registered_names == ("alpha", "zeta")
 
     def test_register_rejects_duplicate_without_replace(self, fixed_registry):
         fixed_registry.register(MOD_DEFN)
@@ -1274,9 +1286,19 @@ def _patch_entry_points(monkeypatch, *eps):
 
 
 class _FakeEntryPoint:
-    def __init__(self, name, definition):
+    """Mimics ``EntryPoint``: equal when name and value agree, whatever the dist."""
+
+    def __init__(self, name, definition, dist=None):
         self.name = name
+        self.value = f"fake:{id(definition)}"
+        self.dist = None if dist is None else SimpleNamespace(name=dist)
         self._definition = definition
+
+    def __eq__(self, other):
+        return (self.name, self.value) == (other.name, other.value)
+
+    def __hash__(self):
+        return hash((self.name, self.value))
 
     def load(self):
         return self._definition
@@ -1296,7 +1318,7 @@ class TestEntryPointModules:
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
         assert fixed_registry.require(_NAME) is marker
-        assert fixed_registry._entry_point(_NAME).name == _NAME
+        assert fixed_registry._load_entry_point(_NAME).name == _NAME
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
         defn = ModuleDefinition(name="acme.other", sync_pipe=marker)
@@ -1364,6 +1386,21 @@ class TestEntryPointModules:
 
         with pytest.raises(ValueError, match="shadows an entry-point module"):
             fixed_registry.register(MOD_DEFN)
+
+    def test_duplicate_entry_point_names_raise(self, monkeypatch, fixed_registry):
+        other = ModuleDefinition(name=_NAME, sync_pipe=marker)
+        acme = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
+        globex = _FakeEntryPoint(_NAME, other, dist="globex")
+        _patch_entry_points(monkeypatch, acme, globex)
+
+        with pytest.raises(ValueError, match="acme, globex"):
+            fixed_registry.require(_NAME)
+
+    def test_an_entry_point_listed_twice_resolves(self, monkeypatch, fixed_registry):
+        twice = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
+        _patch_entry_points(monkeypatch, twice, twice)
+
+        assert fixed_registry.require(_NAME) is marker
 
     def test_entry_points_discovered_lazily_once(self, monkeypatch, fixed_registry):
         calls = {"n": 0}

@@ -8,7 +8,7 @@ contracts; and registry interfaces.
 
 The names are grouped by extension point in the ``modules``, ``targets``, and
 ``workflows`` submodules and re-exported here. ``codegen`` generates typed
-discovery names for an extension package.
+discovery names for a plugin.
 """
 
 from riko.coercion._dynamic_conf import DynamicConf

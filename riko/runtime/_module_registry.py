@@ -86,7 +86,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         >>>
         >>> registry = ModuleRegistry()
         >>> registry.register(ModuleDefinition(name="example", sync_pipe=pipe))
-        >>> registry.registered_names()
+        >>> registry.registered_names
         ('example',)
         >>> registry.require("example") is pipe
         True
@@ -134,12 +134,12 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             >>> registry.register(
             ...     ModuleDefinition(name="count", sync_pipe=list), replace=True
             ... )
-            >>> registry.registered_names()
+            >>> registry.registered_names
             ('count',)
 
         """
         if (name := self._key(entry)) and not replace:
-            if name in self._discover_entry_points():
+            if name in self._entry_points:
                 tier = "an entry-point"
             elif name in BUILTIN_MODULE_IDS:
                 tier = "a built-in"
@@ -155,7 +155,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     def _require_builtin_name(self, name: str) -> None:
         if name not in BUILTIN_MODULE_IDS:
-            candidates = BUILTIN_MODULE_IDS.union(self.catalog_names())
+            candidates = BUILTIN_MODULE_IDS.union(self.discovered_names)
             raise UnsupportedModuleError(name, candidates=candidates)
 
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
@@ -200,7 +200,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             True
 
         """
-        if (definition := self._registered(name)) is None:
+        if (definition := self._load_entry(name)) is None:
             self._require_builtin_name(name)
             pipe = self._resolve_builtin(name, is_async)
         elif (pipe := definition.get_pipe(is_async)) is None:
@@ -234,7 +234,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             ['pipe']
 
         """
-        if (definition := self._registered(name)) is None:
+        if (definition := self._load_entry(name)) is None:
             self._require_builtin_name(name)
             interfaces = load_interfaces(name)
         else:
@@ -263,7 +263,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             True
 
         """
-        return self._registered(name)
+        return self._load_entry(name)
 
 
 module_registry: ModuleRegistry = ModuleRegistry()
@@ -310,7 +310,7 @@ def reset_module_registry() -> None:
         ...     ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
         ... )
         >>> reset_module_registry()
-        >>> module_registry.registered_names()
+        >>> module_registry.registered_names
         ()
 
     """

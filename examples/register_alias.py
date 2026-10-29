@@ -7,7 +7,7 @@ both. Here we give the built-in ``count`` a second, namespaced name without touc
 riko core.
 
 For explicit interface callables, see ``register_module.py``. For the installable
-extension package, see ``riko-example-ext/``.
+plugin, see ``riko-example-ext/``.
 
 Examples:
 

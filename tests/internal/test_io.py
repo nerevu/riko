@@ -710,7 +710,7 @@ class TestRegisterTarget:
         monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
 
         with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
-            TargetRegistry()._entry_point("s3")
+            TargetRegistry()._load_entry_point("s3")
 
 
 class TestConverterPath:

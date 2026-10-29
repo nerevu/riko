@@ -48,8 +48,8 @@ Pipeline().pipe("example.shout").first([{"content": "hi"}])
 
 ## No packaging? Register at runtime instead
 
-When you don't need a discoverable, installable extension package, skip the entry
-point and call `riko.ext.register_module` directly:
+When you don't need a discoverable, installable plugin, skip the entry point and call
+`riko.ext.register_module` directly:
 
 - [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=` callables.
 - [`../register_alias.py`](../register_alias.py): aliasing a built-in with `ModuleDefinition.from_module`.

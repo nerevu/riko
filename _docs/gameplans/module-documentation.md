@@ -478,7 +478,7 @@ appear automatically as runtime-only rows through `list_modules()` unless a real
 Pipes identity exists in the historical manifest.
 
 Protocol, storage, SQL, dbt, orchestration, and optional enrichment modules installed
-from extension packages are documented through:
+from plugins are documented through:
 
 ```text
 riko modules list

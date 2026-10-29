@@ -718,7 +718,7 @@ Project Structure
     │   ├── *.py              (runnable pipe scripts)
     │   ├── workflows/*       (example WorkflowDocuments)
     │   ├── pyworkflows/*     (hand-written Python equivalents)
-    │   └── riko-example-ext/ (example extension package)
+    │   └── riko-example-ext/ (example plugin)
     ├── riko
     │   ├── __init__.py       (stable public API)
     │   ├── base/             (constants, paths, logging, helpers, exceptions)

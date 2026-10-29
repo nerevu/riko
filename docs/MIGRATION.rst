@@ -39,7 +39,7 @@ Extension API: ``riko.ext``
 ``riko.ext`` is the supported API for module and integration authors. Its current
 membership is defined by ``riko.ext.__all__``, the union of the extension-point
 submodules ``riko.ext.modules``, ``riko.ext.targets``, and ``riko.ext.workflows``.
-``riko.ext.codegen`` generates discovery names for extension packages. Non-underscored
+``riko.ext.codegen`` generates discovery names for plugins. Non-underscored
 submodules beneath ``riko.ext`` are part of the extension surface. Underscore-prefixed
 modules are private. The export list is intentionally not duplicated here.
 
