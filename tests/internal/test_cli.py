@@ -35,6 +35,7 @@ from riko.cli._docs import (
     gen_stale_path_citations,
     gen_stale_test_citations,
     gen_stale_test_symbol_citations,
+    gen_unruled_terms,
 )
 from riko.cli._docstyle import (
     gen_docstring_issues,
@@ -62,7 +63,7 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
+from riko.cli._lint_terms import BannedTerm, gen_term_issues
 from riko.cli._lint_tests import (
     MERGE_LINES,
     SPLIT_LINES,
@@ -761,14 +762,6 @@ class TestCitationLint:
         assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
 
 
-STANDARD = ROOT_DIR / "_docs" / "DOCUMENTATION_STANDARD.md"
-
-
-def _reserved_terms_section() -> str:
-    text = STANDARD.read_text(encoding="utf-8")
-    return text.split("## Reserved terms", 1)[1].split("\n## ", 1)[0].lower()
-
-
 TERM_PATTERNS = [
     pytest.param(
         'REASON = "owned by R5C: write is still a sink module"\n'
@@ -800,11 +793,10 @@ TERM_PATTERNS = [
 class TestTermLint:
     """The reserved-terms lint check."""
 
-    @pytest.mark.parametrize("term", BANNED_TERMS, ids=lambda term: term.phrase)
-    def test_every_banned_phrase_has_a_reserved_terms_ruling(
-        self, term: BannedTerm
-    ) -> None:
-        assert term.phrase.lower() in _reserved_terms_section()
+    def test_a_missing_reserved_terms_section_rules_on_nothing(self) -> None:
+        text = "## Voice\n\nSay sync for `Other Mode`.\n"
+        terms = (BannedTerm("other mode", "sync"), BannedTerm("cross-mode", "sync"))
+        assert list(gen_unruled_terms(text, *terms)) == ["other mode", "cross-mode"]
 
     def test_python_strings_and_comments_are_checked_but_code_is_not(
         self, tmp_path: Path

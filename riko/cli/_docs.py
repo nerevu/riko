@@ -8,6 +8,7 @@ import ast
 import re
 import tomllib
 from collections import Counter
+from functools import partial
 from itertools import chain
 from shutil import which
 from subprocess import run
@@ -17,18 +18,28 @@ from riko.base._paths import DOCS_DIR, PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
+from ._lint_terms import BANNED_TERMS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
+    from ._lint_terms import BannedTerm
+
 _INTERNAL_DOCS = ROOT_DIR / "_docs"
+_STANDARD = _INTERNAL_DOCS / "DOCUMENTATION_STANDARD.md"
+_RESERVED_TERMS = re.compile(
+    r"^## Reserved terms$(.*?)(?=^## |\Z)", re.DOTALL | re.MULTILINE
+)
 _ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
 _TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
 _GAMEPLANS = _INTERNAL_DOCS / "gameplans"
 _SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
 _PYPROJECT = ROOT_DIR / "pyproject.toml"
 _EXPECTED_SECTIONS = 28
+_SECTION_INDEX_RULE = (
+    f"section index must contain each §0-{_EXPECTED_SECTIONS - 1} once"
+)
 _ROOT_MARKDOWN = frozenset(
     {
         "API_SURFACE.md",
@@ -55,6 +66,7 @@ AS_BUILT_DOCS: tuple[Path, ...] = tuple(
     )
 )
 _LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
+_INSPIRATION_RULE = "prior-art material belongs under research/inspiration/"
 _API_SURFACE_GROUPS = frozenset(
     {"export", "compile", "bado", "modules", "root-exceptions", "other", "extension"}
 )
@@ -399,6 +411,40 @@ def gen_todo_lines(text: str) -> Iterator[int]:
             yield lineno
 
 
+def gen_unruled_terms(text: str, *terms: BannedTerm) -> Iterator[str]:
+    """
+    Finds banned phrases the reserved-terms section gives no ruling for.
+
+    Args:
+
+        text: The documentation standard's Markdown text.
+
+        terms: The banned terms each needing a ruling.
+
+    Yields:
+
+        Each banned phrase missing from the ``## Reserved terms`` section, which ends at
+        the next level-two heading; a missing section rules on nothing.
+
+    Example:
+
+        >>> from riko.cli._lint_terms import BannedTerm
+        >>> text = "## Reserved terms\\nNot `Fast Lane`.\\n## Voice\\nslow lane\\n"
+        >>> terms = (BannedTerm("fast lane", "run"), BannedTerm("slow lane", "run"))
+        >>> list(gen_unruled_terms(text, *terms))
+        ['slow lane']
+
+    """
+    match = _RESERVED_TERMS.search(text)
+    section = "" if match is None else match[1].lower()
+    yield from (term.phrase for term in terms if term.phrase.lower() not in section)
+
+
+def _gen_unruled_term_offenders() -> Iterator[str]:
+    """Finds banned phrases the tracked documentation standard gives no ruling for."""
+    yield from gen_unruled_terms(_read(_STANDARD), *BANNED_TERMS)
+
+
 def _gen_todo_offenders() -> Iterator[str]:
     """Names each ``TODO`` line left in the shipped user docs."""
     docs = (ROOT_DIR / "README.rst", ROOT_DIR / "CONTRIBUTING.rst")
@@ -501,85 +547,80 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     ]
 
 
-def lint_docs() -> int:
-    """Validates static internal-document consistency and authority rules."""
-    problems: list[str] = []
-    roadmap = _read(_ROADMAP)
+def _section_index_offenders(roadmap: str) -> list[int]:
+    """Finds section numbers the roadmap index lists other than exactly once."""
     counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
     expected = Counter(range(_EXPECTED_SECTIONS))
+    return sorted((counts - expected) | (expected - counts))
 
-    if counts != expected:
-        problems.append(
-            f"{_ROADMAP}: section index must contain each "
-            f"§0-{_EXPECTED_SECTIONS - 1} once"
-        )
 
+def _unindexed_gameplan_offenders(roadmap: str) -> list[str]:
+    """Finds authoritative gameplans the roadmap never links."""
     linked = set(_GAMEPLAN_LINK.findall(roadmap))
-    gameplans = {path.name for path in _gameplan_paths()}
+    return sorted({path.name for path in _gameplan_paths()} - linked)
 
-    if missing := sorted(gameplans - linked):
-        problems.append(f"{_ROADMAP}: unindexed authoritative gameplans: {missing}")
 
-    if stale := sorted(linked - gameplans):
-        problems.append(f"{_ROADMAP}: links to missing gameplans: {stale}")
+def _missing_gameplan_offenders(roadmap: str) -> list[str]:
+    """Finds roadmap gameplan links that name no tracked gameplan."""
+    linked = set(_GAMEPLAN_LINK.findall(roadmap))
+    return sorted(linked - {path.name for path in _gameplan_paths()})
 
-    if offenders := _root_markdown_offenders():
-        problems.append(
-            f"{_INTERNAL_DOCS}: root Markdown docs require explicit "
-            f"authority: {offenders}"
-        )
 
-    if _LEGACY_INSPIRATION.exists():
-        problems.append(
-            f"{_LEGACY_INSPIRATION}: prior-art material belongs under "
-            "research/inspiration/"
-        )
+def _legacy_inspiration_offenders() -> list[str]:
+    """Finds the retired prior-art folder when it still exists."""
+    return [_LEGACY_INSPIRATION.name] if _LEGACY_INSPIRATION.exists() else []
 
-    if offenders := _authority_namespace_offenders():
-        problems.append(
-            f"{_GAMEPLANS}: archive/research material must leave "
-            f"gameplans/: {offenders}"
-        )
 
-    if offenders := _non_authoritative_listing_offenders(roadmap):
-        problems.append(
-            f"{_ROADMAP}: archive/research documents cannot appear in "
-            f"authority tables: {offenders}"
-        )
+_ROADMAP_CHECKS: dict[str, Callable[[str], Iterable[object]]] = {
+    _SECTION_INDEX_RULE: _section_index_offenders,
+    "unindexed authoritative gameplans": _unindexed_gameplan_offenders,
+    "links to missing gameplans": _missing_gameplan_offenders,
+    "archive/research documents cannot appear in authority tables": (
+        _non_authoritative_listing_offenders
+    ),
+}
 
-    if offenders := _status_banner_offenders():
-        problems.append(
-            f"{_GAMEPLANS}: status banners belong only in "
-            f"PHASE_CHECKLISTS.md: {offenders}"
-        )
 
-    if offenders := _phase_closure_offenders():
-        problems.append(
-            f"{_SEQUENCE}: R-phase exits must contain ADD/MIGRATE/DELETE: {offenders}"
-        )
-
-    if offenders := _version_claim_offenders(_packaged_version()):
-        problems.append(
-            f"{_INTERNAL_DOCS}: completion claimed above packaged version: {offenders}"
-        )
-
-    if offenders := _api_surface_offenders():
-        problems.append(f"{_DOC}: {'; '.join(offenders)}")
-
-    if offenders := list(_gen_verb_table_offenders()):
-        problems.append(f"verb tables drift: {'; '.join(offenders)}")
-
-    if offenders := list(_gen_stale_test_citation_offenders()):
-        problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")
-
-    if offenders := list(_gen_stale_test_symbol_offenders()):
-        problems.append(f"cited tests no longer exist: {'; '.join(offenders)}")
-
-    if offenders := list(_gen_stale_path_citation_offenders()):
-        problems.append(f"cited source files no longer exist: {'; '.join(offenders)}")
-
-    if offenders := list(_gen_todo_offenders()):
-        problems.append(f"user docs carry TODO lines: {'; '.join(offenders)}")
+def lint_docs() -> int:
+    """Validates static internal-document consistency and authority rules."""
+    roadmap = _read(_ROADMAP)
+    roadmap_items = _ROADMAP_CHECKS.items()
+    roadmap_checks = {
+        f"{_ROADMAP}: {rule}": partial(check, roadmap) for rule, check in roadmap_items
+    }
+    checks: dict[str, Callable[[], Iterable[object]]] = {
+        **roadmap_checks,
+        f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority": (
+            _root_markdown_offenders
+        ),
+        f"{_LEGACY_INSPIRATION}: {_INSPIRATION_RULE}": _legacy_inspiration_offenders,
+        f"{_GAMEPLANS}: archive/research material must leave gameplans/": (
+            _authority_namespace_offenders
+        ),
+        f"{_GAMEPLANS}: status banners belong only in PHASE_CHECKLISTS.md": (
+            _status_banner_offenders
+        ),
+        f"{_SEQUENCE}: R-phase exits must contain ADD/MIGRATE/DELETE": (
+            _phase_closure_offenders
+        ),
+        f"{_INTERNAL_DOCS}: completion claimed above packaged version": partial(
+            _version_claim_offenders, _packaged_version()
+        ),
+        str(_DOC): _api_surface_offenders,
+        "verb tables drift": _gen_verb_table_offenders,
+        "cited test files no longer exist": _gen_stale_test_citation_offenders,
+        "cited tests no longer exist": _gen_stale_test_symbol_offenders,
+        "cited source files no longer exist": _gen_stale_path_citation_offenders,
+        f"{_STANDARD}: banned phrases without a reserved-terms ruling": (
+            _gen_unruled_term_offenders
+        ),
+        "user docs carry TODO lines": _gen_todo_offenders,
+    }
+    problems = [
+        f"{label}: {'; '.join(map(str, found))}"
+        for label, check in checks.items()
+        if (found := list(check()))
+    ]
 
     for problem in problems:
         print(problem)
