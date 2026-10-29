@@ -10,7 +10,7 @@ private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Generator, Iterable, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Protocol, cast
 
@@ -18,6 +18,7 @@ from riko.bado._util import maybe_aclosing
 from riko.base._guards import is_listlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.types._io import is_sync_closeable
 from riko.types._wrappers import (
     require_async_wrapper,
     require_single_output,
@@ -140,9 +141,9 @@ def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
     return value if is_listlike(value) else [cast("T", value)]
 
 
-def _close_generator(value: object) -> None:
-    """Closes ``value`` when it is a generator, releasing anything it holds."""
-    if isinstance(value, Generator):
+def _maybe_close(value: object) -> None:
+    """Closes closeable ``value``s so they release anything they hold."""
+    if is_sync_closeable(value):
         value.close()
 
 
@@ -216,7 +217,7 @@ async def pull_stream[T](
             ):
                 yield item
         finally:
-            await close(_close_generator, closeable)
+            await close(_maybe_close, closeable)
 
 
 def _copy_wrapper_meta(
