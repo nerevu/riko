@@ -56,7 +56,7 @@ from ._execution import (
 )
 from ._pools import _PoolLifetime
 from ._resource_acquisition import build_context_manager, call_factory
-from ._resource_teardown import close_resource
+from ._resource_cleanup import close_resource, close_with
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -206,13 +206,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return result
 
-    def _validate_sync_teardown[R](
+    def _validate_sync_cleanup[R](
         self, plan: OwnedPlan[R] | ValueFactoryPlan[R]
     ) -> None:
-        if plan.is_teardown_async:
+        if plan.requires_async_cleanup:
             match plan:
                 case OwnedPlan(cleanup=None):
-                    msg = "async-native resource teardown requires async execution"
+                    msg = "closing an async-only resource requires async execution"
                 case _:
                     msg = "async resource cleanup requires async execution"
 
@@ -223,7 +223,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         value = self.run_async(raw) if is_awaitable(raw) else raw
 
         if (cleanup := plan.cleanup) is not False:
-            self.callback(cleanup, value)
+            self.callback(close_with, cleanup, value)
 
         return value
 
@@ -235,11 +235,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             case ExternalPlan():
                 value = plan.value
             case OwnedPlan():
-                self._validate_sync_teardown(plan)
+                self._validate_sync_cleanup(plan)
                 value = plan.value
-                self.callback(close_resource, plan.cleanup, value)
+                self.callback(close_with, partial(close_resource, plan.cleanup), value)
             case ValueFactoryPlan():
-                self._validate_sync_teardown(plan)
+                self._validate_sync_cleanup(plan)
                 value = self._call_factory(plan)
             case SyncLifecyclePlan():
                 value = self._enter_lifecycle(plan)
@@ -409,7 +409,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds the item stream for one of the plan's workflow outputs.
 
         Only the selected workflow output's upstream subgraph runs. The returned stream
-        is lazy. Consume it inside this execution's ``with`` block so its teardown stays
+        is lazy. Consume it inside this execution's ``with`` block so its cleanup stays
         owned.
 
         Args:

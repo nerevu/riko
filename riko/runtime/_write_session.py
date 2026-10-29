@@ -170,7 +170,7 @@ class _SyncFileWriteSession(_FileWriteSession):
 
     Acquires the destination once, receives items (``Item``/``Items``) via
     :meth:`write`, then commits with :meth:`finalize` or abandons with :meth:`abort`
-    before :meth:`teardown` releases the file. An incremental format (csv/jsonl) emits
+    before :meth:`close` releases the file. An incremental format (csv/jsonl) emits
     each converted chunk as it arrives. A framed format (json/geojson/…) stages the
     logical document and publishes it once at finalize.
 
@@ -192,7 +192,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         ...     session.acquire()
         ...     session.write([{"x": 0}, {"x": 1}])
         ...     _ = session.finalize()
-        ...     session.teardown()
+        ...     session.close()
         ...
         ...     with open(fp.name, mode="rb") as f:
         ...         f.read()
@@ -265,7 +265,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
-            ...     session.teardown()
+            ...     session.close()
 
         """
         if self._incremental:
@@ -332,7 +332,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             ...     session.acquire()
             ...     session.write({"x": 0})
             ...     _ = session.finalize()
-            ...     session.teardown()
+            ...     session.close()
             ...
             ...     with open(fp.name, mode="rb") as f:
             ...         f.read()
@@ -384,7 +384,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             ...     session.write([{"x": 1}])
             ...     result = session.finalize()
             ...     same = result is session.finalize()
-            ...     session.teardown()
+            ...     session.close()
             ...     same
             True
 
@@ -399,7 +399,7 @@ class _SyncFileWriteSession(_FileWriteSession):
 
         return result
 
-    def teardown(self) -> None:
+    def close(self) -> None:
         """
         Releases the file handle; never commits (idempotent).
 
@@ -412,7 +412,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             ...     prepare = build_write(fp.name, fmt="csv")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
-            ...     session.teardown()
+            ...     session.close()
 
         """
         if self._state is not _SessionState.CLOSED:
@@ -543,7 +543,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             ...         await session.aacquire()
             ...         await session.awrite({"x": 0})
             ...         _ = await session.afinalize()
-            ...         await session.ateardown()
+            ...         await session.aclose()
             ...
             ...         with open(fp.name, mode="rb") as f:
             ...             print(f.read())
@@ -602,7 +602,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             ...         await session.awrite([{"x": 1}])
             ...         result = await session.afinalize()
             ...         same = await session.afinalize()
-            ...         await session.ateardown()
+            ...         await session.aclose()
             ...         print(result is same)
             >>>
             >>> run(main)
@@ -619,7 +619,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         return result
 
-    async def ateardown(self) -> None:
+    async def aclose(self) -> None:
         if self._state is not _SessionState.CLOSED:
             if self._ahandle is not None and not self._ahandle.closed:
                 await self._ahandle.aclose()
@@ -670,7 +670,7 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     try:
         yield session
     finally:
-        session.teardown()
+        session.close()
 
 
 def build_write_resource(
@@ -684,7 +684,7 @@ def build_write_resource(
     Mints an anonymous, execution-local write-session resource from a destination.
 
     The destination is prepared and validated eagerly, then wrapped as a OneShotResource
-    the execution layer opens before the write and tears down after.
+    the execution layer opens before the write and closes after.
 
     Args:
 
@@ -730,7 +730,7 @@ async def async_file_write_session(
     try:
         yield session
     finally:
-        await session.ateardown()
+        await session.aclose()
 
 
 def write_through(

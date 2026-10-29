@@ -238,7 +238,7 @@ class TestFetchtable:
             failure = type(error)(*error.args)
 
         # The failed read leaks its file handle; drop the traceback that pins it and
-        # collect here so the warning fires under this test's filter, not at teardown.
+        # collect here so the warning fires under this test's filter, not after it ends.
         if failure is not None:
             gc.collect()
             raise failure

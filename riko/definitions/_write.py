@@ -166,14 +166,14 @@ class SyncWriteSession(Protocol):
     A live, execution-owned synchronous write session.
 
     A :class:`PreparedWrite` says *what* to write; a session performs *how this
-    execution* writes it, as three distinct operations plus resource teardown:
+    execution* writes it, as three distinct operations plus resource cleanup:
 
     * ``finalize`` commits successful logical delivery.
     * ``abort`` abandons the logical delivery.
-    * ``teardown`` releases runtime resources and never commits.
+    * ``close`` releases runtime resources and never commits.
 
     A session is never constructed by the caller: the execution host acquires it,
-    drives ``write``, then chooses ``finalize`` or ``abort`` before ``teardown``.
+    drives ``write``, then chooses ``finalize`` or ``abort`` before ``close``.
     One session type serves every write, whatever consumes the pipeline.
     """
 
@@ -193,7 +193,7 @@ class SyncWriteSession(Protocol):
         """Abandons the delivery, discarding any staged, unpublished content."""
         ...
 
-    def teardown(self) -> None:
+    def close(self) -> None:
         """Releases runtime resources; never commits."""
         ...
 
@@ -205,4 +205,4 @@ class AsyncWriteSession(Protocol):
     async def aacquire(self) -> None: ...
     async def afinalize(self) -> WriteResult: ...
     def abort(self) -> None: ...
-    async def ateardown(self) -> None: ...
+    async def aclose(self) -> None: ...

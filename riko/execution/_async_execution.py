@@ -72,7 +72,7 @@ from ._execution import (
     _require_seed,
 )
 from ._resource_acquisition import build_context_manager, call_factory
-from ._resource_teardown import aclose_resource, close_resource
+from ._resource_cleanup import aclose_resource, aclose_with, close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -459,14 +459,14 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self._require_open("run work in")
         return await asyncify(func, limiter=limiter)(*args)
 
-    def _register_teardown(
-        self, teardown: Callable, value: object, *, is_async: bool
+    def _register_cleanup(
+        self, cleanup: Callable, value: object, *, is_async: bool
     ) -> None:
-        """Registers ``teardown(value)`` on unwind: on the loop, or a worker if sync."""
+        """Registers ``cleanup(value)`` on unwind: on the loop, or a worker if sync."""
         if is_async:
-            self.push_async_callback(teardown, value)
+            self.push_async_callback(cleanup, value)
         else:
-            self.push_async_callback(_asyncify_call, teardown, value)
+            self.push_async_callback(aclose_with, cleanup, value)
 
     async def _acall_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         if plan.is_async:
@@ -477,7 +477,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         value = await as_awaitable(raw)
 
         if (cleanup := plan.cleanup) is not False:
-            self._register_teardown(cleanup, value, is_async=plan.is_teardown_async)
+            self._register_cleanup(cleanup, value, is_async=plan.requires_async_cleanup)
 
         return value
 
@@ -498,10 +498,10 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 value = plan.value
             case OwnedPlan():
                 value = plan.value
-                is_async = plan.is_teardown_async
+                is_async = plan.has_async_cleanup
                 close = aclose_resource if is_async else close_resource
-                teardown = partial(close, plan.cleanup)
-                self._register_teardown(teardown, value, is_async=is_async)
+                cleanup = partial(close, plan.cleanup)
+                self._register_cleanup(cleanup, value, is_async=is_async)
             case ValueFactoryPlan():
                 value = await self._acall_factory(plan)
             case SyncLifecyclePlan() | AsyncLifecyclePlan():
@@ -793,7 +793,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Builds the async item stream for one of the plan's workflow outputs.
 
         Only the selected workflow output's upstream subgraph runs. The returned stream
-        is lazy. Consume it inside this execution's ``async with`` block so its teardown
+        is lazy. Consume it inside this execution's ``async with`` block so its cleanup
         stays owned.
 
         A module without an async implementation runs on a thread it holds while it

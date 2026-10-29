@@ -319,7 +319,7 @@ Required contracts:
 6. idempotency key remains stable across retries;
 7. unsupported target mode/resource/action fails before source consumption when knowable;
 8. sync-only and async-only target/action implementations adapt through the common execution bridge;
-9. cancellation tears down resources without detached tasks;
+9. cancellation cleans up resources without detached tasks;
 10. Workflow v2 contains serializable Target/Format/resource references, never live handles;
 11. the unreleased `sink()` surface has no compatibility alias or serialized loader form;
 12. the legacy Python `write` module is absent after R5C while v1 serialized `write` migrates through

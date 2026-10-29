@@ -804,13 +804,13 @@ class TestSessionLifecycle:
         session.write(ITEMS)
         session.finalize()
         assert session._state is _SessionState.FINALIZED
-        session.teardown()
+        session.close()
 
     def test_open_to_aborted(self, tmp_path):
         session = self._session(tmp_path)
         session.abort()
         assert session._state is _SessionState.ABORTED
-        session.teardown()
+        session.close()
 
     def test_write_after_finalize_rejected(self, tmp_path):
         session = self._session(tmp_path)
@@ -822,7 +822,7 @@ class TestSessionLifecycle:
         ):
             session.write(ITEMS)
 
-        session.teardown()
+        session.close()
 
     def test_write_after_abort_rejected(self, tmp_path):
         session = self._session(tmp_path)
@@ -831,19 +831,19 @@ class TestSessionLifecycle:
         with pytest.raises(PipelineStateError, match="aborted"):
             session.write(ITEMS)
 
-        session.teardown()
+        session.close()
 
-    def test_teardown_twice_is_safe(self, tmp_path):
+    def test_close_twice_is_safe(self, tmp_path):
         session = self._session(tmp_path)
-        session.teardown()
-        session.teardown()
+        session.close()
+        session.close()
 
-    def test_teardown_never_commits(self, tmp_path):
+    def test_close_never_commits(self, tmp_path):
         path = tmp_path / "out.json"
         session = _SyncFileWriteSession(build_write(path))
         session.acquire()
         session.write(ITEMS)
-        session.teardown()
+        session.close()
         assert not path.exists()
 
     def test_incremental_abort_keeps_written_bytes(self, tmp_path):
@@ -852,7 +852,7 @@ class TestSessionLifecycle:
         session.acquire()
         session.write({"x": 1})
         session.abort()
-        session.teardown()
+        session.close()
         assert path.read_bytes() == b'{"x": 1}\n'
 
     def test_stream_then_item_rejected(self, tmp_path):
@@ -862,7 +862,7 @@ class TestSessionLifecycle:
         with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
             session.write({"x": 0})
 
-        session.teardown()
+        session.close()
 
     def test_item_then_stream_rejected(self, tmp_path):
         session = self._session(tmp_path)
@@ -871,7 +871,7 @@ class TestSessionLifecycle:
         with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
             session.write(ITEMS)
 
-        session.teardown()
+        session.close()
 
     def test_two_whole_streams_rejected(self, tmp_path):
         session = self._session(tmp_path)
@@ -880,7 +880,7 @@ class TestSessionLifecycle:
         with pytest.raises(PipelineStateError, match="cannot attempt multiple stream"):
             session.write(ITEMS)
 
-        session.teardown()
+        session.close()
 
 
 async def _asink(

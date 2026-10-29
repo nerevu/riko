@@ -86,7 +86,7 @@ def loopback_url(
     Serve *body* from an ephemeral loopback server and yield its URL.
 
     The server binds an OS-assigned port on ``127.0.0.1``, runs on a daemon
-    thread, and is torn down on exit. *body* is served for any GET path.
+    thread, and is shut down on exit. *body* is served for any GET path.
     """
     payload = body.encode() if isinstance(body, str) else body
     server = _Server(("127.0.0.1", 0), _make_handler(payload, content_type, status))

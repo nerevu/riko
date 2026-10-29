@@ -40,7 +40,7 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._resource_teardown import aclose_resource
+from riko.execution._resource_cleanup import aclose_resource
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
@@ -405,7 +405,7 @@ class TestAsyncExecution:
     async def test_async_shutdown_timeout_expiry_is_grouped_with_primary_error(
         self,
     ) -> None:
-        # Exhausting the shutdown timeout during teardown is a cleanup failure
+        # Exhausting the shutdown timeout during cleanup is a cleanup failure
         # reported beside the execution's own error, not a replacement for it.
         async def slow() -> None:
             await async_sleep(3600)
@@ -648,8 +648,42 @@ SYNC_ASYNC_REJECTIONS = [
         "async",
         id="async-cleanup-before-producer",
     ),
-    pytest.param(lambda _: Resource(_AsyncClient()), "async", id="async-only-value"),
+    pytest.param(
+        lambda _: Resource(_AsyncClient()),
+        "closing an async-only",
+        id="async-only-value",
+    ),
 ]
+
+
+def _awaitable_cleanup(events: list[str]):
+    async def acleanup(_value: object) -> None:
+        events.append("cleanup")
+
+    def cleanup(value: object) -> Awaitable[None]:
+        return acleanup(value)
+
+    return cleanup
+
+
+AWAITABLE_CLEANUPS = [
+    pytest.param(lambda cleanup: Resource(_SyncClient(), cleanup=cleanup), id="owned"),
+    pytest.param(
+        lambda cleanup: Resource.from_factory(lambda: "value", cleanup=cleanup),
+        id="value-factory",
+    ),
+]
+
+
+class _DualClient:
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    def close(self) -> None:
+        self.events.append("close")
+
+    async def aclose(self) -> None:
+        self.events.append("aclose")
 
 
 LIFECYCLE_FACTORIES = [
@@ -677,6 +711,26 @@ class TestResourceAcquisition:
                 execution.acquire(resource)
 
         assert produced == []
+
+    @pytest.mark.parametrize("build", AWAITABLE_CLEANUPS)
+    def test_sync_cleanup_rejects_an_awaitable_cleanup_result(self, build) -> None:
+        events: list[str] = []
+
+        with (
+            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
+            SyncExecution() as execution,
+        ):
+            execution.acquire(build(_awaitable_cleanup(events)))
+
+        assert events == []
+
+    def test_sync_cleanup_closes_a_dual_client_with_close(self) -> None:
+        client = _DualClient()
+
+        with SyncExecution() as execution:
+            execution.acquire(Resource(client))
+
+        assert client.events == ["close"]
 
     @pytest.mark.parametrize(("build", "error"), FAILED_ACQUISITIONS)
     def test_failed_acquisition_is_memoized(self, build, error) -> None:
@@ -913,7 +967,7 @@ class TestResourceAcquisition:
             execution.close()
 
     @pytest.mark.simulated_network
-    def test_sync_external_http_client_torn_down_on_failure(self) -> None:
+    def test_sync_external_http_client_cleaned_up_on_failure(self) -> None:
         events: list[str] = []
 
         def failing() -> object:
@@ -945,6 +999,25 @@ class TestResourceAcquisition:
 
 
 class TestAsyncResourceAcquisition:
+    @pytest.mark.parametrize("build", AWAITABLE_CLEANUPS)
+    @async_test
+    async def test_async_cleanup_awaits_an_awaitable_cleanup_result(self, build):
+        events: list[str] = []
+
+        async with AsyncExecution() as execution:
+            await execution.aacquire(build(_awaitable_cleanup(events)))
+
+        assert events == ["cleanup"]
+
+    @async_test
+    async def test_async_cleanup_closes_a_dual_client_with_aclose(self) -> None:
+        client = _DualClient()
+
+        async with AsyncExecution() as execution:
+            await execution.aacquire(Resource(client))
+
+        assert client.events == ["aclose"]
+
     @pytest.mark.parametrize(("build", "error"), AFAILED_ACQUISITIONS)
     @async_test
     async def test_async_failed_acquisition_is_memoized(self, build, error) -> None:
@@ -1216,7 +1289,7 @@ class TestAsyncResourceAcquisition:
             )
 
     @async_test
-    async def test_async_acquire_teardown_on_failure(self) -> None:
+    async def test_async_acquire_cleanup_on_failure(self) -> None:
         events: list[str] = []
 
         async def db():

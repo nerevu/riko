@@ -28,7 +28,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 | `riko/io/` | sync/async URL/file I/O, serialization, re-encoding |
 | `riko/parsing/` | config parsing, `DotDict`, XML/HTML/document parsing |
 | `riko/rss/` | feed discovery, parsing, entry normalization |
-| `riko/execution/` | explicit execution layer: execution planning, one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource teardown, event sink |
+| `riko/execution/` | explicit execution layer: execution planning, one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource cleanup, event sink |
 | `riko/runtime/` | executable orchestration: export, resolver/registry, pipelines, pub/sub, write sessions, codegen |
 | `riko/modules/` | built-in pipe implementations; private decorator/preparation/metadata/looping internals; generated discovery names |
 | `riko/ext/` | supported extension-author facade + extension codegen/name helpers; shares the `modules` architecture layer |
@@ -44,7 +44,7 @@ Important concrete locations:
 - executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
 - stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
 - pipelines: composition on `PipelineDefinition` in `riko/definitions/_pipeline_definition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
-- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource.plan`; owned-value teardown: `riko/execution/_resource_teardown.py`
+- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource._plan`; owned-value cleanup: `riko/execution/_resource_cleanup.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/_exceptions.py` (public facade `riko/base/exceptions.py`) + `_api_surface.py`

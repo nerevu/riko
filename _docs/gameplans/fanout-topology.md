@@ -271,7 +271,7 @@ explicit integer publisher-count protocol in user-visible data.
 Per-subscription delivery order is guaranteed. When multiple publishers run concurrently, observed
 order is actual delivery order; Riko does not invent a global source ordering.
 
-A publisher completing or failing must not strand subscriber tasks or channels. Execution teardown
+A publisher completing or failing must not strand subscriber tasks or channels. Execution cleanup
 owns final cleanup.
 
 ## 7. `split()` is streaming fan-out
@@ -523,7 +523,7 @@ mechanisms. In particular:
 
 - no PENDING/DONE records on the final data stream;
 - completion is subscription/channel lifecycle, not a user-visible sentinel;
-- registration/teardown belongs to execution-owned handles;
+- registration/cleanup belongs to execution-owned handles;
 - cleanup does not depend on draining ignored output;
 - async delivery is incremental;
 - `func` timing and return-discard/pass-through semantics match in sync and async.

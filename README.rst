@@ -729,7 +729,7 @@ Project Structure
     │   ├── io/               (sync/async URL and file I/O, serialization)
     │   ├── parsing/          (config, XML/HTML, and document parsing)
     │   ├── rss/              (feed discovery and parsing)
-    │   ├── execution/        (sync/async executions, resource acquisition and teardown)
+    │   ├── execution/        (sync/async executions, resource acquisition and cleanup)
     │   ├── runtime/          (export, compiler, registries, pipelines, pub/sub)
     │   ├── modules/          (the built-in modules)
     │   ├── ext/              (extension API: decorators, protocols)
