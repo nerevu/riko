@@ -137,7 +137,7 @@ class FileTarget:
 
         >>> from riko.ext import FileTarget
         >>>
-        >>> FileTarget("out.jsonl").capabilities().incremental
+        >>> FileTarget("out.jsonl").get_capabilities().incremental
         True
 
     """
@@ -146,7 +146,7 @@ class FileTarget:
     dest: PathLike
     fmt: FmtLike | None = None
 
-    def capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
+    def get_capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
         """
         Reports format-aware file capabilities.
 
@@ -168,10 +168,10 @@ class FileTarget:
             >>> from riko.ext import FileTarget
             >>> from riko.definitions._write import WriteMode
             >>>
-            >>> capabilities = FileTarget("out.jsonl").capabilities()
+            >>> capabilities = FileTarget("out.jsonl").get_capabilities()
             >>> capabilities.serializes, capabilities.appendable
             (True, True)
-            >>> WriteMode.APPEND in FileTarget("out.json").capabilities().modes
+            >>> WriteMode.APPEND in FileTarget("out.json").get_capabilities().modes
             False
 
         """
@@ -272,7 +272,7 @@ def build_write(
     """
     target = normalize_target(dest)
     resolved_mode = resolve_enum(WriteMode, mode, error=ValueError)
-    capabilities = target.capabilities(fmt)
+    capabilities = target.get_capabilities(fmt)
     normalized_keys = normalize_strs(keys, type_error=TypeError, value_error=ValueError)
 
     validate_target_mode(target, resolved_mode, capabilities, keys=normalized_keys)

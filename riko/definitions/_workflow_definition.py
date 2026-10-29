@@ -359,11 +359,17 @@ class Workflow:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.summary})"
 
-    def family_sources(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+    def get_family_sources(
+        self, family: EdgeFamily = "stream"
+    ) -> Counter[tuple[str, str]]:
+        """Gets how many ``family`` edges each ``(node, port)`` source feeds."""
         edges = get_family_edges(self.edges, family)
         return Counter((edge.source.node, edge.source.port) for edge in edges)
 
-    def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+    def get_family_ports(
+        self, family: EdgeFamily = "stream"
+    ) -> Counter[tuple[str, str]]:
+        """Gets how many ``family`` edges each ``(node, port)`` target receives."""
         edges = get_family_edges(self.edges, family)
         return Counter((edge.target.node, edge.target.port) for edge in edges)
 
@@ -631,7 +637,7 @@ class Workflow:
 
         """
         endpoints = {endpoint.node for endpoint in self.endpoints}
-        family_ports = self.family_ports().items()
+        family_ports = self.get_family_ports().items()
 
         if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
@@ -694,7 +700,7 @@ class Workflow:
             InvalidPipelineError: If a source port feeds more than one stream edge.
 
         """
-        family_sources = self.family_sources().items()
+        family_sources = self.get_family_sources().items()
 
         if fan_out := sorted(source for source, count in family_sources if count > 1):
             msg = f"un-supported fan-out from source(s): {fan_out}"

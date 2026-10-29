@@ -927,7 +927,7 @@ class TestFileCapabilities:
         [("out.csv", True, True), ("out.geojson", False, False)],
     )
     def test_target_owns_format_behavior(self, dest, appendable, incremental):
-        capabilities = FileTarget(dest).capabilities()
+        capabilities = FileTarget(dest).get_capabilities()
 
         assert capabilities.serializes is True
         assert capabilities.appendable is appendable
@@ -938,7 +938,7 @@ class TestFileCapabilities:
 
 class TestValidateTargetMode:
     def test_match_keyed_without_keys_rejected(self):
-        capabilities = RecordStore().capabilities()
+        capabilities = RecordStore().get_capabilities()
         with pytest.raises(ValueError, match="requires 'keys'"):
             validate_target_mode(RecordStore(), WriteMode.MERGE, capabilities)
 
@@ -951,11 +951,11 @@ class TestValidateTargetMode:
         ],
     )
     def test_supported_key_combinations(self, mode, keys):
-        capabilities = RecordStore().capabilities()
+        capabilities = RecordStore().get_capabilities()
         validate_target_mode(RecordStore(), mode, capabilities, keys=keys)
 
     def test_unkeyed_mode_with_keys_rejected(self):
-        capabilities = FileTarget("out.csv").capabilities()
+        capabilities = FileTarget("out.csv").get_capabilities()
         target = FileTarget("out.csv")
 
         with pytest.raises(ValueError, match="forbids 'keys'"):
