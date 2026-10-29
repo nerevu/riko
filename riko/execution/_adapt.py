@@ -181,7 +181,7 @@ def _next_or_missing[T](iterator: Iterator[T]) -> T | MissingType:
 async def pull_stream[T](
     closeable: object,
     iterator: Iterator[T],
-    *upstreams: AsyncIterator[object],
+    *node_streams: AsyncIterator[object],
     pull: WorkerCall,
     close: WorkerCall,
 ) -> AsyncIterator[T]:
@@ -194,7 +194,7 @@ async def pull_stream[T](
 
         iterator: The synchronous item stream to read.
 
-        upstreams: The async streams ``iterator`` reads. Closed once ``closeable`` is
+        node_streams: The async streams ``iterator`` reads. Closed once ``closeable`` is
             closed (even when closing it fails).
 
         pull: Runs a blocking callable off the event loop.
@@ -208,8 +208,8 @@ async def pull_stream[T](
 
     """
     async with AsyncExitStack() as stack:
-        for upstream in upstreams:
-            await stack.enter_async_context(maybe_aclosing(upstream))
+        for stream in node_streams:
+            await stack.enter_async_context(maybe_aclosing(stream))
 
         try:
             while not isinstance(

@@ -28,6 +28,7 @@ from riko.runtime._workflow_stores import MappingStore
 from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
 from tests._execution import (
+    ClosingAsyncIterator,
     agen_source,
     arun_plan,
     awaitable_source,
@@ -187,6 +188,7 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 CLOSING_SEEDS = [
     pytest.param(_gen_closing_seed, id="generator"),
     pytest.param(_agen_closing_seed, id="async-generator"),
+    pytest.param(ClosingAsyncIterator, id="closeable-async-iterator"),
 ]
 
 
@@ -594,15 +596,36 @@ class TestPlanRun:
         with SyncExecution() as execution:
             assert list(execution.run(plan, seed=_DualSeed())) == [{"x": 2}]
 
-    def test_run_closes_an_unfinished_generator_seed_on_exit(self) -> None:
+    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
+    def test_run_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
         closed: list[str] = []
         plan = ExecutionPlan.from_workflow(
             module_workflow("double"), _doubler_dispatcher()
         )
 
         with SyncExecution() as execution:
-            stream = execution.run(plan, seed=_gen_closing_seed(closed))
+            stream = execution.run(plan, seed=make_seed(closed))
             assert next(stream) == {"x": 2}
+            assert closed == []
+
+        assert closed == ["closed"]
+
+    def test_run_closes_an_async_native_source_on_exit(self) -> None:
+        # Not an async generator, so only an explicit aclose can end it.
+        closed: list[str] = []
+
+        @tag_source
+        def src(_items=None, **_):
+            return ClosingAsyncIterator(closed)
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src))
+        )
+        plan = ExecutionPlan.from_workflow(module_workflow("asrc"), dispatcher)
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan)
+            assert next(stream) == {"x": 1}
             assert closed == []
 
         assert closed == ["closed"]
@@ -972,9 +995,7 @@ class TestAsyncPlanRun:
 
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     @async_test
-    async def test_arun_closes_an_unfinished_generator_seed_on_exit(
-        self, make_seed
-    ) -> None:
+    async def test_arun_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
         closed: list[str] = []
         plan = ExecutionPlan.from_workflow(
             module_workflow("adouble"), _doubler_dispatcher()
@@ -1120,6 +1141,52 @@ class TestAsyncPlanRun:
                 upstream_closed = sorted(closed)
 
         assert upstream_closed == ["a", "b"]
+
+    @async_test
+    async def test_arun_native_async_node_closes_its_input_stream_on_early_exit(
+        self,
+    ) -> None:
+        # The source stays referenced, so only the run's own close can end it.
+        closed, sources = [], []
+
+        async def gen():
+            try:
+                while True:
+                    yield {"t": "a"}
+            finally:
+                closed.append("a")
+
+        @tag_source
+        def src(_items=None, **_):
+            sources.append(gen())
+            return sources[-1]
+
+        async def passthrough(items, **_):
+            async for item in items:
+                yield item
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(
+                name="apass", async_pipe=cast("AsyncModuleWrapper", passthrough)
+            ),
+        )
+        nodes = [ModuleNode(id="a", name="asrc"), ModuleNode(id="p", name="apass")]
+        edges = (StreamEdge(Endpoint("a", "out"), Endpoint("p", "in")),)
+        flow = build_workflow(
+            nodes, edges=edges, outputs={"default": Endpoint("p", "out")}
+        )
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        upstream_closed = []
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                await anext(stream)
+                await stream.aclose()
+                upstream_closed = list(closed)
+
+        assert upstream_closed == ["a"]
 
     @async_test
     async def test_arun_unconsumed_sync_only_source_does_not_block_exit(self) -> None:
