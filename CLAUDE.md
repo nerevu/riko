@@ -293,7 +293,8 @@ is a fallback, so it is a `resolve`.
   modern union syntax.
 - **Doctests are tests** — configured pytest testpaths include source/docs/examples.
   Before deleting a doc example, confirm its behavior still has an executable owner;
-  before adding a replacement pytest test, check function/class doctests first.
+  before adding any pytest test, search every tier and the doctests for the behavior
+  it asserts (the overlap rule in `tests/__init__.py`).
   When async support is unavailable, Async/Bado doctests are skipped whole and any
   other doctest's `run(...)` examples are skipped individually, so do not add `issync`
   fallback branches solely for doctest collection.
