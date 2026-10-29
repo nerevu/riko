@@ -43,7 +43,7 @@ rather than inventing parallel models.
    executable code.
 7. **Evidence before optimization.** Optional execution drivers/per-node optimizations require
    measurable benefit without semantic drift.
-8. **Extensions specialize owners.** Operation packs, provider packages, and CLIs register
+8. **Extensions specialize owners.** Operation packs, integrations, and CLIs register
    implementations/references; they do not redefine `OperationSpec`, capability policy, provider
    waiting, or Core execution.
 
@@ -599,9 +599,9 @@ state semantics. They do not introduce a parallel checkpoint type or change reco
 Backpressure/buffering boundaries and bounded concurrency should be inspectable in execution plans.
 Finite windows may be ordinary operators where useful; distributed stream processing is not implied.
 
-## E5. Adapter and connector packages
+## E5. Integrations and connectors
 
-Connector/package design follows [connectors.md](connectors.md): protocols and dependencies live in
+Integration and connector design follows [connectors.md](connectors.md): protocols and dependencies live in
 optional packages unless they are broadly useful, small, and deterministic enough for core.
 
 Useful adapter categories:
@@ -853,8 +853,8 @@ Requirements:
   discovery/policy;
 - external operation packs require no edit to `nerevu/riko` Core.
 
-Provider importer/deployer implementations register through their provider package's extension
-mechanism; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
+Provider importer/deployer implementations register through the plugin that ships their
+integration; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
 register through `riko.commands`; `cli.md` owns that adapter surface.
 
 Before freezing `riko.operations` as public, prove it with at least one external pack and one

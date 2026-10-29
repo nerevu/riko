@@ -40,12 +40,12 @@ This gameplan extends `connectors.md`.
 
 `connectors.md` remains authoritative for:
 
-* connector package boundaries;
+* integration boundaries;
 * credential references and secret resolution;
 * HTTP session lifecycle;
 * source resolver contracts;
 * response metadata and size/redirect limits;
-* optional protocol/provider packages.
+* optional protocol and SaaS integrations.
 
 This plan owns higher-level **REST collection semantics** built on top of that transport.
 

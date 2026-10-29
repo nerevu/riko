@@ -307,7 +307,7 @@ After the application vertical slice is stable, adopt common facilities when jus
 - `FeedResult` / `FeedState` / `StateStore` for durable source progress;
 - single-Pipeline batch mode and negotiated tabular backends;
 - RDP schema/transport/manifests for interchange;
-- connector/provider packages for reusable external-system semantics.
+- integrations for reusable external-system semantics.
 
 Do not reintroduce RDP-owned generic checkpoint/state semantics.
 

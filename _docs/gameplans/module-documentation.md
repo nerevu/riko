@@ -487,6 +487,6 @@ package-owned generated reference pages
 ```
 
 The status generator should support an explicit `builtins_only=True` catalog query so an
-installed connector extra cannot make the checked-in `status.csv` nondeterministic.
+installed plugin cannot make the checked-in `status.csv` nondeterministic.
 Tests must verify that entry-point modules are excluded from this historical report while
 remaining visible in the public module registry.
