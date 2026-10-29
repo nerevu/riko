@@ -28,13 +28,15 @@ Skills prepare the tree and suggest a commit message; you run `git commit`.
 
 Repo-shipped skills live in `.claude/skills/` and come with the clone:
 
-- [ ] /riko — codebase expert mode; loads the architecture/API/typing context for `next`. Invoke at the start of any non-trivial session.
 - [ ] /land — runs the full pre-commit gate (prettify, codegen drift, `lint --all`, tests, type check) and reports ready/not-ready with a suggested commit message. Never commits.
 - [ ] /triage — decides who owns a defect *before* fixing it: local fix (regression test + CHANGES line) or a strict-xfail tripwire for the gameplan phase that owns it.
 - [ ] /wrapup — syncs `_docs/IMPLEMENTED.md`, `PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`, and Claude memory so you can `/clear` without losing state.
+- [ ] /tidy — checks everything changed since the last tidy against the written rules, fixes the mechanical slips, and asks about judgment calls. /land and /wrapup run it for you.
+- [ ] /audit-tests — read-only sweep of the test suite for tests that can't fail, duplicates across tiers and doctests, same-shape tests that belong in one table, misfits, and loose timeouts. Feed its findings to /triage.
 
 User-level skills (copy from a teammate's `~/.claude/skills/` and `~/.claude/commands/`):
 
+- [ ] /riko — codebase expert mode; loads the architecture/API/typing context for `next`. Invoke at the start of any non-trivial session.
 - [ ] /go — implement a feature end-to-end against project conventions and gates. The workhorse.
 - [ ] /architect — for multi-component or design-sensitive work: plan first, delegate build, verify.
 - [ ] /diagnose — root-cause a bug with evidence, fix the cause, lock it with a regression test.
