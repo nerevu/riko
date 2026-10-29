@@ -30,7 +30,7 @@ from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
 from riko.base._config import ENCODING, STREAMING_THRESHOLD
-from riko.base._paths import normalize_url
+from riko.base._paths import is_http_url, normalize_url
 
 from ._reencode import reencode
 
@@ -437,7 +437,7 @@ def opener(
     url = normalize_url(url, offline=offline)
     r = None
 
-    if url.startswith("http"):
+    if is_http_url(url):
         r = requests.get(url, params=params, stream=not memoize, timeout=timeout)
         r.raise_for_status()
         r.raw.decode_content = True

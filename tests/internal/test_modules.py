@@ -19,6 +19,7 @@ import pytest
 
 from riko.bado._backend import async_sleep, create_task_group
 from riko.bado.itertools import as_async
+from riko.base import _paths as paths_module
 from riko.base._exceptions import (
     InvalidPipelineError,
     ReceiverUnavailableError,
@@ -26,9 +27,9 @@ from riko.base._exceptions import (
     UnsupportedWorkflowError,
 )
 from riko.base._guards import is_mapping
-from riko.base._paths import TESTS_DIR, get_path
+from riko.base._paths import PACKAGE_DIR, TESTS_DIR, get_path
 from riko.base._sentinels import MISSING
-from riko.coercion._configs import CsvObjconf
+from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._workflow_definition import Workflow
@@ -1765,6 +1766,22 @@ class TestExchangeRate:
     def test_a_non_numeric_rate_raises(self):
         with pytest.raises(TypeError, match="invalid rate"):
             exchangerate_module.build_rates({"USD": [1]})
+
+    @async_test
+    async def test_data_file_starting_with_http_is_read_locally(
+        self, tmp_path, monkeypatch
+    ):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "http_quote.json").write_bytes(
+            (PACKAGE_DIR / "data" / "quote.json").read_bytes()
+        )
+        monkeypatch.setattr(paths_module, "PACKAGE_DIR", tmp_path)
+        conf = {"url": "http_quote.json", "currency": "USD", "precision": 6}
+        rate = await exchangerate_module.async_parser(
+            "GBP", None, ExchangeRateObjconf(conf)
+        )
+        assert str(rate) == "1.275201"
 
 
 _SOURCE_LEN = 5

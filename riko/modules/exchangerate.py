@@ -38,6 +38,7 @@ from riko.bado._util import async_get, async_json
 from riko.base._config import ENCODING, settings
 from riko.base._guards import require_mapping
 from riko.base._logging import get_logger
+from riko.base._paths import is_http_url
 from riko.io._async import async_url_read
 from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
@@ -156,7 +157,7 @@ async def async_parser(
 
     if same_currency:
         rate = Decimal(1)
-    elif objconf.url.startswith("http"):
+    elif is_http_url(objconf.url):
         r = await async_get(objconf.url, params=objconf.param)
         rates = await async_json(r)
     else:
