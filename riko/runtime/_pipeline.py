@@ -312,7 +312,7 @@ class Pipeline(PipelineDefinition[T_co]):
             [1, 2]
 
         """
-        flow = self._callable_workflow(
+        flow = self._build_callable_workflow(
             fn, resources=resources, version=version, identity=identity, **kwargs
         )
         return Pipeline[R](flow, context=self.context, settings=self.settings)
@@ -346,7 +346,9 @@ class Pipeline(PipelineDefinition[T_co]):
             [{'count': 2}]
 
         """
-        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = self._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return Pipeline[Item](flow, context=self.context, settings=self.settings)
 
     def __getattr__(self, name: str) -> Callable[..., Pipeline[Item]]:
@@ -355,7 +357,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
     def _compose[R](self, other: PipelineDefinition[R]) -> Pipeline[R]:
         """Chains ``other`` after this pipeline and combines their resources."""
-        flow = self._composed_workflow(other)
+        flow = self._build_composed_workflow(other)
         context = self._combine_context(other.context)
         return Pipeline[R](flow, context=context, settings=self.settings)
 

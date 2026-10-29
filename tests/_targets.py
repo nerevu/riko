@@ -16,7 +16,7 @@ class RecordStore:
 
     backend: ClassVar[Backends] = Backends.AIRTABLE
 
-    def capabilities(self, fmt=None) -> WriteCapabilities:
+    def get_capabilities(self, fmt=None) -> WriteCapabilities:
         return WriteCapabilities(
             modes=frozenset(WriteMode),
             match_keyed_modes=frozenset({WriteMode.MERGE, WriteMode.DELETE}),

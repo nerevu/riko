@@ -1464,7 +1464,7 @@ v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/fin
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
 decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
 with its tests). Likewise `resolve_format` (`riko/definitions/_targets.py`), whose only consumer outside
-`_targets.py` (where `FileTarget.capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
+`_targets.py` (where `FileTarget.get_capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
 audit): reuse it for `WriteNode` format inference from a locator; it stays either way because
 `FileTarget` needs it.
 Coverage triage (2026-10-15): the async twin's incremental stream write, append-mode trailing-newline

@@ -68,7 +68,7 @@ class SupportsRead(Target, Protocol):
 class SupportsWrite(Target, Protocol):
     """A destination that reports its write capabilities."""
 
-    def capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
+    def get_capabilities(self, fmt: FmtLike | None = None) -> WriteCapabilities:
         """
         Reports the modes and serialization behavior the target supports.
 

@@ -205,7 +205,9 @@ class PipelineDefinition(Generic[T_co]):
             Endpoint(node='sort-1', port='out')
 
         """
-        flow = cls()._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = cls()._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return cls(workflow=flow)
 
     def replace(self, *, workflow: Workflow | None = None) -> Self:
@@ -278,12 +280,14 @@ class PipelineDefinition(Generic[T_co]):
             CallOptions(emit=True)
 
         """
-        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = self._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return PipelineDefinition[Item](
             flow, context=self.context, settings=self.settings
         )
 
-    def _module_workflow(
+    def _build_module_workflow(
         self,
         name: ModuleNameLike,
         *,
@@ -353,7 +357,7 @@ class PipelineDefinition(Generic[T_co]):
 
         """
         if dest is None:
-            flow = self._module_workflow(
+            flow = self._build_module_workflow(
                 "write", conf=conf, options=options, embed=embed
             )
             written = self.replace(workflow=flow)
@@ -612,12 +616,12 @@ class PipelineDefinition(Generic[T_co]):
             Endpoint(node='map-1', port='out')
 
         """
-        flow = self._callable_workflow(
+        flow = self._build_callable_workflow(
             fn, resources=resources, version=version, identity=identity, **kwargs
         )
         return PipelineDefinition[R](flow, context=self.context, settings=self.settings)
 
-    def _callable_workflow(
+    def _build_callable_workflow(
         self,
         fn: Callable[..., object],
         *,
@@ -672,7 +676,7 @@ class PipelineDefinition(Generic[T_co]):
 
         return context
 
-    def _composed_workflow(self, other: PipelineDefinition[object]) -> Workflow:
+    def _build_composed_workflow(self, other: PipelineDefinition[object]) -> Workflow:
         """Appends ``other``'s workflow unless it carries execution settings."""
         if other.settings != DEF_EXECUTION_SETTINGS:
             msg = "a pipeline on the right of '|' may not carry execution settings; "
@@ -683,7 +687,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _compose[R](self, other: PipelineDefinition[R]) -> PipelineDefinition[R]:
         """Chains ``other`` after this pipeline and combines their resources."""
-        flow = self._composed_workflow(other)
+        flow = self._build_composed_workflow(other)
         context = self._combine_context(other.context)
         return PipelineDefinition[R](flow, context=context, settings=self.settings)
 
