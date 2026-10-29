@@ -54,6 +54,7 @@ from riko.types.modules import (
 )
 from tests import aresolve, async_test, skipif_issync
 from tests._execution import (
+    ClosingAsyncIterator,
     RecordingSink,
     agen_source,
     awaitable_source,
@@ -714,6 +715,16 @@ class TestClose:
 
         assert closed == [True]
 
+    @skipif_issync
+    def test_leaving_open_closes_a_closeable_async_iterator_seed(self):
+        closed: list[str] = []
+
+        with Pipeline.from_module("hash").open(ClosingAsyncIterator(closed)) as stream:
+            assert next(stream)
+            assert closed == []
+
+        assert closed == ["closed"]
+
     def test_concurrent_open_runs_are_independent(self):
         pipeline = Pipeline.from_module("hash")
 
@@ -885,7 +896,7 @@ class TestAsyncSourceAdapter:
 
     @pytest.mark.parametrize("make_source", GOOD_SOURCES)
     @async_test
-    async def test_source_iterates_and_closes(self, make_source):
+    async def test_source_iterates_and_acloses_without_error(self, make_source):
         stream = make_source() | Pipeline.from_module("hash")
         items = [item async for item in stream]
         await stream.aclose()
@@ -1207,14 +1218,18 @@ class TestAsyncBoundedParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_early_close_is_clean(self, ordered):
-        """Ensure early closure cleans up a bounded pipeline."""
+        """Ensure early closure cleans up a bounded pipeline and its seed."""
+        closed: list[bool] = []
 
         async def unbounded():
             index = 0
 
-            while True:
-                yield {"content": str(index)}
-                index += 1
+            try:
+                while True:
+                    yield {"content": str(index)}
+                    index += 1
+            finally:
+                closed.append(True)
 
         hashed = Pipeline.from_module("hash")
         pipeline = hashed.with_execution(concurrency=2, ordered=ordered)
@@ -1223,6 +1238,7 @@ class TestAsyncBoundedParallel:
         await stream.aclose()
         assert is_mapping(first)
         assert first.get("content")
+        assert closed == [True]
 
 
 BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")

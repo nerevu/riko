@@ -10,7 +10,6 @@ across the run's loopable nodes.
 from __future__ import annotations
 
 from collections.abc import (
-    AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
     Callable,
@@ -43,6 +42,7 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
+from riko.types._io import is_async_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -234,10 +234,16 @@ def _resolve_thread_budget() -> _ThreadBudget:
 
 
 @define(eq=False)
-class _ReleasingStream[T]:
-    """Wraps an output stream so its node threads return when it ends or closes."""
+class _RunStream[T]:
+    """
+    Wraps a run's output stream so closing it closes every stream the run built.
+
+    The node streams close in reverse build order, output first, and the run's node
+    threads return once they have.
+    """
 
     _stream: AsyncIterator[T]
+    _node_streams: tuple[AsyncIterator[T], ...]
     _reservation: _Reservation
 
     def __aiter__(self) -> Self:
@@ -253,10 +259,12 @@ class _ReleasingStream[T]:
         return item
 
     async def aclose(self) -> None:
-        """Closes the output stream and returns the run's node threads."""
-        with self._reservation:
-            async with maybe_aclosing(self._stream):
-                pass
+        """Closes the output stream and its node streams, and releases the threads."""
+        async with AsyncExitStack() as stack:
+            stack.callback(self._reservation.release)
+
+            for stream in (*self._node_streams, self._stream):
+                await stack.enter_async_context(maybe_aclosing(stream))
 
 
 _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
@@ -571,8 +579,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             seed: Items for the workflow output's open input: one item, an item stream,
                 an async item stream, or an awaitable resolving to one of those. An
                 awaitable is resolved when the run starts. A seed that is both sync- and
-                async-iterable is read asynchronously. A generator or async generator
-                seed is closed when the execution exits.
+                async-iterable is read asynchronously. A generator seed, or any seed
+                with ``aclose``, is closed when the execution exits.
 
         """
         resolved = await as_awaitable(seed)
@@ -582,7 +590,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         else:
             stream = as_async(normalize_items(resolved))
 
-        if isinstance(resolved, AsyncGenerator):
+        if is_async_closeable(resolved):
             self.push_async_callback(resolved.aclose)
         elif isinstance(resolved, Generator):
             self.callback(resolved.close)
@@ -681,12 +689,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             The async item stream produced by the node.
 
         """
-        upstreams: list[AsyncIterator[T]] = []
+        node_streams: list[AsyncIterator[T]] = []
 
         def drain(stream: AsyncIterable[T]) -> Iterator[T]:
-            upstream = aiter(stream)
-            upstreams.append(upstream)
-            return _worker_drain(upstream)
+            node_stream = aiter(stream)
+            node_streams.append(node_stream)
+            return _worker_drain(node_stream)
 
         bridged = _bridge_inputs(extra, drain)
         worker_source = drain(source)
@@ -698,7 +706,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         run = partial(self._run_node_call, limiter)
         raw, iterator = await run(start)
-        return pull_stream(raw, iterator, *upstreams, pull=run, close=_asyncify_call)
+        return pull_stream(raw, iterator, *node_streams, pull=run, close=_asyncify_call)
 
     async def _abuild_stream(
         self,
@@ -779,8 +787,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             reservation.release()
             raise
 
-        stream = steps[endpoint.node]
-        return stream if demand == 0 else _ReleasingStream(stream, reservation)
+        node_streams = tuple(s for nid, s in steps.items() if nid != endpoint.node)
+        return _RunStream(steps[endpoint.node], node_streams, reservation)
 
     async def arun(
         self,

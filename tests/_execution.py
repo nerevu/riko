@@ -6,7 +6,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from inspect import isasyncgenfunction, iscoroutinefunction
 from itertools import pairwise
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Self, cast
 
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._module_definition import ModuleDefinition
     from riko.definitions._settings import ExecutionSettings
+    from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 OUTPUT_A = {"default": Endpoint("a", "out")}
@@ -196,6 +197,26 @@ async def arun_plan(
 
 
 passthrough_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
+
+
+class ClosingAsyncIterator:
+    """A two-item async iterator with ``aclose`` that is not an async generator."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.index = closed, 0
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> Item:
+        if self.index == 2:
+            raise StopAsyncIteration
+
+        self.index += 1
+        return {"x": self.index}
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
 
 
 def tagged_source(tag):

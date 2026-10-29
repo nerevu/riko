@@ -1016,8 +1016,8 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   resources into the `Pipeline` surface itself is deferred.
 - `run_pipeline` / `arun_pipeline(definition, dispatcher, *, seed=None)` (`riko/runtime/_run.py`, plain
   generators) own the execution lifetime (`with SyncExecution() as e: yield from e.run(plan, seed=seed)` /
-  the `async with AsyncExecution()` analogue), so early close, exhaustion, or failure unwinds upstream
-  feeds and the exit stack.
+  the `async with AsyncExecution()` analogue), so early close, exhaustion, or failure unwinds the
+  input streams and the exit stack.
 - **Per-run seeds and `Pipeline.open()` (R4C, 2026-10-24).** `pipeline(seed=None, /)` and
   `seed | pipeline` return a private `_PipelineStream` (`riko/runtime/_run.py`) behind the public
   `riko.types.PipelineStream[T]` protocol: single-use, sync- *and* async-iterable, and its own iterator
@@ -1117,8 +1117,12 @@ input holds; a node whose module reads its inputs one at a time (`sequential_inp
 most any one input holds; other nodes the sum of their inputs) before reading anything, so runs never hold part of
 a chain while waiting for the rest. A run needing more than the budget, or more than this execution's
 own open output streams leave free, raises `InvalidPipelineError`; other executions' runs wait.
-`_ReleasingStream` returns the threads when the output stream ends, fails, or is closed (even before its
-first item), and the execution's exit stack returns any it still holds.
+`_RunStream` wraps every run's output: closing it closes the node streams the run built in reverse
+build order (so a native async chain never relies on garbage collection to reach a suspended
+node stream), then returns the threads; they also return when the output stream ends or fails (even
+before its first item), and the execution's exit stack returns any it still holds. `SyncExecution`
+registers an `aclose` through its portal for every async stream it drains (an async-native node's
+output, or an async seed with `aclose`), so they close at exit whether or not they are generators.
 
 **Process executor ships each call once** (2026-10-16). `build_item_call`
 (`riko/execution/_concurrency.py`) pickles a mapped node's prepared call once on first pull; each task

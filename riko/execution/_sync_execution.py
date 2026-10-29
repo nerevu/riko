@@ -30,6 +30,7 @@ from riko.base._guards import is_awaitable
 from riko.base._iterutils import map_values
 from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
+from riko.types._io import is_async_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -287,6 +288,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """Pulls an async stream item by item through the execution portal."""
         return async_drain(source, self.run_async)
 
+    def _drain_owned(self, source: AsyncIterable[T]) -> Iterator[T]:
+        """Drains an async stream this execution owns and closes it at exit."""
+        if is_async_closeable(source):
+            self.callback(self.portal.call, source.aclose)
+
+        return self._async_drain(source)
+
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
         return ResourceView(map_values(self.acquire, self._require_bindings(binding)))
 
@@ -353,7 +361,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         else:
             _stream = call(source, context=self.context, **extra)
             avalue = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = self._async_drain(require_async_stream(avalue, pipe))
+            stream = self._drain_owned(require_async_stream(avalue, pipe))
 
         return stream
 
@@ -366,14 +374,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         A seed is one item, an item stream, an async item stream, or an awaitable
         resolving to one of those. An awaitable is awaited when the run starts; the
         stream itself stays lazy. A seed that is both sync- and async-iterable is
-        read synchronously. The execution closes a generator seed when it exits.
+        read synchronously. The execution closes a generator seed, or any async seed
+        with ``aclose``, when it exits.
         """
         resolved = self.run_async(seed) if is_awaitable(seed) else seed
 
         if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
             stream = iter(normalize_items(resolved))
         else:
-            stream = self._async_drain(resolved)
+            stream = self._drain_owned(resolved)
 
         if isinstance(resolved, Generator):
             self.callback(resolved.close)
