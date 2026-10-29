@@ -199,8 +199,10 @@ sync when source is moved between package groups.
   `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
   annotations.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
-  imports a public name through a private `riko` module path, and a module example in an
-  underscore-prefixed module that defines no public name. Both read the public names
+  imports a public name through a private `riko` module path, a module example in an
+  underscore-prefixed module that defines no public name, and a missing one in an
+  underscore-prefixed module whose public names include a function or a class other
+  than a `Protocol`, `TypedDict`, or exception. All three read the public names
   from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION` to `riko.ext`,
   `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`, first match winning
   (`resolve_public_path` in `riko/cli/_docstyle.py`).

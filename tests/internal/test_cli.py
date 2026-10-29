@@ -603,6 +603,8 @@ def _doctest(source: str) -> str:
 
 _MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
 _PRIVATE_MODULE = ["private module without a public API carries a module example"]
+_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
 EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
@@ -623,6 +625,12 @@ EXAMPLE_RULES = [
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
+    pytest.param(
+        "_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="no-example"
+    ),
+    pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
+    pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
+    pytest.param("mod.py", "def export(): ...\n", [], id="public-no-example"),
     pytest.param(
         "mod.py",
         'def _build_x():\n    """Resolves x."""\n',

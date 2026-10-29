@@ -165,10 +165,11 @@ new permanent bullet here.
   errors and raise; `require_arg` in `riko/base/_require_guards.py` owns that pattern.
 - Docstrings follow `_docs/DOCUMENTATION_STANDARD.md`: annotations own types except
   the documented pipe conventions; summaries use third-person present. Public
-  modules (including private files that define re-exported public APIs) keep a useful
-  entry-point example; one example is a soft default, not a cap when distinct modes
-  or a complete workflow need more. Public package docstrings preserve namespace
-  purpose/audience/stability rather than collapsing to generic one-liners.
+  modules (and private files whose re-exported API includes a function, or any class
+  other than a type-only or exception class, enums and records included) keep a
+  useful entry-point example; one example is a soft default, not a cap when distinct
+  modes or a complete workflow need more. Public package docstrings preserve
+  namespace purpose/audience/stability rather than collapsing to generic one-liners.
 - No internal jargon in shipped text. Phase codes (`R4B`/`P10`), gameplan/section
   refs, `_docs/` paths, and ticket ids never appear in docstrings, comments, test
   names/`xfail` reasons, `docs/*.rst`, or runtime messages — say what the behavior or

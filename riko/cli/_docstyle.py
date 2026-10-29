@@ -8,12 +8,15 @@ from ast import (
     AnnAssign,
     Assign,
     AsyncFunctionDef,
+    Attribute,
     ClassDef,
     FunctionDef,
     ImportFrom,
     Module,
     Name,
+    Subscript,
     TypeAlias,
+    expr,
     get_docstring,
     parse,
     walk,
@@ -40,6 +43,8 @@ COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
+_TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
+_EXCEPTION_SUFFIXES: tuple[str, ...] = ("Error", "Exception", "Warning")
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
 _PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
     ("riko", STABLE),
@@ -301,6 +306,19 @@ def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
                     yield lines[node.lineno - 1].strip(), alias.name, public
 
 
+def _get_base_name(base: expr) -> str:
+    """Gets the bare class name of a base expression such as ``typing.Protocol[T]``."""
+    node = base.value if isinstance(base, Subscript) else base
+    name = ""
+
+    if isinstance(node, Attribute):
+        name = node.attr
+    elif isinstance(node, Name):
+        name = node.id
+
+    return name
+
+
 def _gen_defined_names(tree: Module) -> Iterator[str]:
     """Lists the names a module's top-level statements define."""
     for node in tree.body:
@@ -316,16 +334,49 @@ def _gen_defined_names(tree: Module) -> Iterator[str]:
                 yield target.id
 
 
+def _gen_runtime_names(tree: Module) -> Iterator[str]:
+    """
+    Lists the functions and classes a module defines that do something when used.
+
+    Type-only classes (protocols and typed dicts, directly or through a base defined in
+    the same module) and exceptions do not count.
+
+    """
+    type_only: set[str] = set(_TYPE_ONLY_BASES)
+
+    for node in tree.body:
+        if isinstance(node, (FunctionDef, AsyncFunctionDef)):
+            yield node.name
+        elif isinstance(node, ClassDef):
+            bases = set(map(_get_base_name, node.bases))
+
+            if not type_only.isdisjoint(bases):
+                type_only.add(node.name)
+            elif not node.name.endswith(_EXCEPTION_SUFFIXES):
+                yield node.name
+
+
 def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIssue]:
-    """Flags a module example in a private module that defines no public name."""
+    """
+    Flags a private module whose module example does not match its public API.
+
+    A private module that defines no public name carries no module example, and one
+    whose public names include a runtime function or class must carry one.
+
+    """
     doc = get_docstring(tree) or ""
     private = path.name.startswith("_") and path.name != "__init__.py"
     exported = not _PUBLIC_NAMES.isdisjoint(_gen_defined_names(tree))
+    runtime = sorted(_PUBLIC_NAMES.intersection(_gen_runtime_names(tree)))
+    has_example = bool(DocTestParser().get_examples(doc))
 
-    if private and not exported and DocTestParser().get_examples(doc):
+    if private and not exported and has_example:
         problem = "private module without a public API carries a module example"
         first = next(line.strip() for line in doc.splitlines() if ">>>" in line)
         yield DocstringIssue(path, 1, "<module>", problem, first)
+    elif private and runtime and not has_example:
+        problem = "private module with a public runtime API has no module example"
+        yield DocstringIssue(path, 1, "<module>", problem, ", ".join(runtime))
 
 
 def _iter_python_files(root: Path) -> Iterator[Path]:
@@ -341,7 +392,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     Function summaries must not lead with the output or with a different general-purpose
     verb than the function name. No docstring may narrate between its doctest examples
     or import a public name through a private module. A private module without a public
-    API carries no module example.
+    API carries no module example, and one with a public runtime API carries one.
 
     Args:
 
