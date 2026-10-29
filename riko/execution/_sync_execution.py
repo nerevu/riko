@@ -251,7 +251,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
     def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = self._open(resource.plan)
+            value = self._open(resource._plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:
