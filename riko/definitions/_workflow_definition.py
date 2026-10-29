@@ -805,10 +805,10 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
     """
     Migrates a ``PipeDef`` into a ``Workflow``.
 
-    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy
-    ports, the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
-    translated to their ``Workflow`` equivalents. Orphan and empty-graph rejection is
-    left to validation.
+    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy ports,
+    the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
+    translated to their ``Workflow`` equivalents. Orphan nodes are kept, and run only
+    when a workflow output needs them. Empty-graph rejection is left to validation.
 
     A module's call options become the node's ``options``, a loop's embedded module and
     its configuration become the node's ``embed``, and a ``write`` module's file-open

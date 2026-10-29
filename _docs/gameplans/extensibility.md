@@ -539,7 +539,9 @@ walking the edges itself (folded in 2026-10-05; the earlier separate `cyclic_nod
 The v1 legacy artifacts the index once carried (`_OUTPUT` as a real node, verbatim
 `_INPUT`/`_OTHER`/`_OUTPUT` ports, dropped orphan nodes) left with the v1 builder: the index now
 indexes only canonical `Workflow`s, keeps every declared node, and stores canonical ports, so
-disconnection stays a validation question (E3.9).
+disconnection stays a validation question (E3.9). Validation does not reject a node no output
+needs: a pure off-output branch is skipped, and an off-output write node is owned by R5C
+(implementation-sequence.md § R5C, repo-audit triage 2026-10-29).
 
 R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
