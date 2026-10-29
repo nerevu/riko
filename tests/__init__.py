@@ -15,6 +15,13 @@ Placing a test takes two lookups.
    to the closest file. Each tier's ``__init__.py`` is generated whole from those
    classes, so run ``manage codegen --tests`` and never edit it by hand.
 
+Before adding a test, search every tier and the doctests for the behavior it
+asserts (the setting, error, or outcome, not just the subject's name); the tidy
+overlap scanner finds a test's current home. Add a test only for a behavior no
+existing test asserts; a behavior already asserted at another level (say, end to
+end through ``Pipeline``) needs no lower-level twin unless that twin checks
+something the other cannot reach.
+
 Inside a file, every test belongs to a ``Test<Subject>`` class (its async twin,
 ``TestAsync<Subject>``, follows it). Helpers sit directly above the one class that
 uses them, at the top of the file when several classes do, or in a ``tests/_*.py``
