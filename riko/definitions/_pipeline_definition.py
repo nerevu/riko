@@ -404,7 +404,10 @@ class PipelineDefinition(Generic[T_co]):
                 events are discarded).
 
             shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
-                iteration (default: None, no bound).
+                iteration, and on how long stopped worker processes get, together,
+                before any still running are killed. ``math.inf`` means no bound
+                (default: None, i.e., 30 seconds unless ``RIKO_SHUTDOWN_TIMEOUT`` is
+                set).
 
         Returns:
 

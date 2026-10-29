@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import pickle  # noqa: S403
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import partial
 from itertools import chain, pairwise
+from math import inf
+from os import getpid, kill
+from pathlib import Path
+from signal import SIG_IGN, SIGTERM, signal
 from threading import Event, Lock, Thread, Timer, get_ident
-from time import sleep
+from time import perf_counter, sleep
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -75,6 +79,13 @@ THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
 LIMIT = config.concurrency_limit
 
 
+def _mark_and_block(directory: str) -> None:
+    staged = Path(directory, f"{getpid()}.tmp")
+    staged.write_text("")
+    staged.replace(staged.with_suffix(".pid"))
+    sleep(60)
+
+
 def _pair(item: str) -> list[str]:
     return [item, item]
 
@@ -104,14 +115,14 @@ class TestBuildItemCall:
 def opened(monkeypatch):
     calls: list[tuple[Executor, int]] = []
 
-    def record(pool, window):
+    def record(pool, window, *, grace=inf):
         executor = (
             Executor.THREAD
             if isinstance(pool, ThreadPoolExecutor)
             else Executor.PROCESS
         )
         calls.append((executor, window))
-        return _PoolLifetime(pool, window)
+        return _PoolLifetime(pool, window, grace=grace)
 
     monkeypatch.setattr(_sync_execution, "_PoolLifetime", record)
     return calls
@@ -446,6 +457,43 @@ class TestSyncPolicy:
             )
 
         assert released == ["terminate"]
+
+    @pytest.mark.slow
+    @pytest.mark.timeout(3)
+    def test_terminate_with_infinite_grace_waits_for_the_worker_to_exit(self) -> None:
+        pool = ProcessPoolExecutor(1)
+        lifetime = _PoolLifetime(pool, 1, grace=inf)
+        pool.submit(int).result(timeout=2)
+        (worker,) = pool._processes.values()
+        pool.submit(sleep, 60)
+        sleep(0.2)
+        lifetime.terminate()
+        assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
+
+    @pytest.mark.slow
+    @pytest.mark.timeout(15)
+    def test_terminate_kills_every_stuck_worker_within_one_grace(
+        self, tmp_path: Path
+    ) -> None:
+        workers, grace = 3, 0.5
+        pool = ProcessPoolExecutor(
+            workers, initializer=signal, initargs=(SIGTERM, SIG_IGN)
+        )
+        lifetime = _PoolLifetime(pool, workers, grace=grace)
+
+        for _ in range(workers):
+            pool.submit(_mark_and_block, str(tmp_path))
+
+        while len(list(tmp_path.glob("*.pid"))) < workers:
+            sleep(0.01)
+
+        start = perf_counter()
+        lifetime.terminate()
+        assert perf_counter() - start < 2 * grace
+
+        for marker in tmp_path.glob("*.pid"):
+            with pytest.raises(ProcessLookupError):
+                kill(int(marker.stem), 0)
 
 
 ASYNC_POLICIES = [

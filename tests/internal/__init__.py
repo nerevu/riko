@@ -23,9 +23,9 @@ Index (file, then the subjects it owns, in file order):
     test_definitions.py       FrozenDict, Context, Resource, ResourceFreezing,
                               ResourceBinding, WorkflowFields, NormalizeInternals,
                               ParsePort, RawWorkflowFields, PipelineDefinitionFields,
-                              WriteMode, Formats, WriteOperation, WriteCapabilities,
-                              NormalizeTarget, ResolveFormat, FileCapabilities,
-                              ValidateTargetMode, BuildWrite
+                              ExecutionSettings, WriteMode, Formats, WriteOperation,
+                              WriteCapabilities, NormalizeTarget, ResolveFormat,
+                              FileCapabilities, ValidateTargetMode, BuildWrite
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, EmbedAdaptation, Embed,
                               PreparedCall, PreparedNode
@@ -47,7 +47,7 @@ Index (file, then the subjects it owns, in file order):
                               CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
                               ParseDateString, ResolveAwareDatetime, TtToDatedict,
                               DotDict, Parsers, RSSUtils, Graph, GraphIndex,
-                              RequireHelpers, RequireFromForm, ResolveEnum,
-                              NormalizeStrs, FieldNames, TypedDictKeys, Logging,
-                              RikoError
+                              LoadSettings, RequireHelpers, RequireFromForm,
+                              ResolveEnum, NormalizeStrs, FieldNames, TypedDictKeys,
+                              Logging, RikoError
 """

@@ -11,10 +11,13 @@ from __future__ import annotations
 
 from collections import deque
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
+from math import inf
 from queue import SimpleQueue
 from typing import TYPE_CHECKING, Self
 
 from attrs import define, field
+
+from riko.base._dateutils import Deadline
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -67,7 +70,9 @@ class _PoolLifetime:
 
     The pool waits out its pending work only when every mapped stream ran to exhaustion
     and no error is propagating. Otherwise read-ahead work is cancelled and busy worker
-    processes are stopped. Busy threads cannot be stopped, only waited on.
+    processes are stopped. Any still running ``grace`` seconds after the first is
+    stopped are killed. An infinite ``grace`` waits for them. Busy threads cannot be
+    stopped, only waited on.
 
     Examples:
 
@@ -84,6 +89,7 @@ class _PoolLifetime:
 
     pool: AnyPool
     window: int
+    grace: float = field(default=inf, kw_only=True)
     abandoned: bool = field(default=False, init=False)
     _active: int = field(default=0, init=False)
 
@@ -117,8 +123,14 @@ class _PoolLifetime:
         for worker in workers:
             worker.terminate()
 
+        deadline = Deadline.from_timeout(self.grace)
+
         for worker in workers:
-            worker.join()
+            worker.join(deadline.remaining)
+
+            if worker.is_alive():
+                worker.kill()
+                worker.join()
 
     def flat_map[T](
         self, func: Callable[[T], list[T]], source: Iterable[T], *, ordered: bool

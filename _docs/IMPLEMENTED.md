@@ -810,7 +810,8 @@ serializes the same `Formats` at a destination. Meza owns conversion work. The B
 > sync maps loopable nodes over one shared pool (`_PoolLifetime.flat_map` in `riko/execution/_pools.py`) with
 > sliding `submit` windows on a `concurrent.futures` executor that pull the source no further ahead
 > than the pool width (a worker process that dies fails the run with `BrokenProcessPool`; an early close or a
-> failure terminates and joins every still-busy worker process, read from the executor's `_processes`,
+> failure terminates every still-busy worker process, read from the executor's `_processes`, and kills
+> any still running when one shared shutdown-timeout deadline passes (an infinite timeout joins them unbounded),
 > since `cancel_futures` stops only queued work, and waits out busy threads, which cannot be stopped; the
 > execution releases the pool before unwinding its exit stack, so no worker outlives a resource); async maps through
 > `async_map_stream`/`async_map_ordered_stream` (fixed ordered batches; the sliding window waits on
@@ -842,8 +843,9 @@ portal drain and the worker-side upstream reader are the same function with a di
   This is sound because sync execution rejects async-native cleanup, so no owned cleanup ever needs
   the portal alive.
 - **`AsyncExecution`** runs behind an `AsyncExitStack`; blocking sync components run on a worker
-  thread. Shutdown unwinds the stack behind a cancellation shield within the optional shutdown timeout,
-  so ambient cancellation of the shutdown task can never skip cleanup.
+  thread. Shutdown unwinds the stack behind a cancellation shield within the shutdown timeout
+  (30 s by default, `RIKO_SHUTDOWN_TIMEOUT`, `math.inf` for none), so ambient cancellation of the
+  shutdown task can never skip cleanup.
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic exit-stack
   LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
   resource context manager observes, replaces, or suppresses it under normal Python semantics and the

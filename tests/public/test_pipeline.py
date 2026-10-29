@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gc
 import os
+import signal
 import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
@@ -975,7 +976,7 @@ class TestWithExecution:
         assert pipeline.settings.concurrency is None
         assert pipeline.settings.ordered is False
         assert pipeline.settings.event_sink is None
-        assert pipeline.settings.shutdown_timeout is None
+        assert pipeline.settings.shutdown_timeout == pytest.approx(30)
         assert pipeline.context is None
 
     def test_derives_without_changing_the_original(self):
@@ -1054,6 +1055,7 @@ class TestWithExecution:
             ({"concurrency": 0}, ValueError, None),
             ({"concurrency": "4"}, TypeError, None),
             ({"concurrency": "max"}, TypeError, None),
+            ({"concurrency": True}, TypeError, "must be an int"),
             ({"ordered": "yes"}, TypeError, None),
             ({"shutdown_timeout": -1}, ValueError, None),
             ({"shutdown_timeout": float("nan")}, ValueError, None),
@@ -1068,14 +1070,22 @@ def _exit_worker(item):
     os._exit(1)
 
 
+# A stopped run must end well before a blocked worker would finish on its own.
+_BLOCK_SECONDS = 10
+_STOP_BOUND = 8
+
+
 def _wait_or_block(item):
     marker = Path(item["dir"], "blocked.pid")
 
-    if item["role"] == "block":
+    if item["role"] in {"block", "ignore"}:
+        if item["role"] == "ignore":
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
         staged = marker.with_suffix(".tmp")
         staged.write_text(str(os.getpid()))
         staged.replace(marker)
-        sleep(60)
+        sleep(_BLOCK_SECONDS)
 
     while not marker.exists():
         sleep(0.01)
@@ -1086,9 +1096,11 @@ def _wait_or_block(item):
     return item
 
 
+_BOOM = pytest.raises(ValueError, match="boom")
 _STOPPED_RUNS = [
-    pytest.param("pass", nullcontext(), id="early-close"),
-    pytest.param("fail", pytest.raises(ValueError, match="boom"), id="failing-sibling"),
+    pytest.param("block", "pass", None, nullcontext(), id="early-close"),
+    pytest.param("block", "fail", None, _BOOM, id="failing-sibling"),
+    pytest.param("ignore", "pass", 0.2, nullcontext(), id="ignores-termination"),
 ]
 
 
@@ -1140,28 +1152,35 @@ class TestExecutionSettings:
         assert _by_content(executed) == _by_content(pipeline(SRC))
 
     @pytest.mark.slow
-    @pytest.mark.timeout(60)
-    @pytest.mark.parametrize(("role", "expectation"), _STOPPED_RUNS)
+    @pytest.mark.timeout(15)
+    @pytest.mark.parametrize(
+        ("blocker", "role", "shutdown_timeout", "expectation"), _STOPPED_RUNS
+    )
     def test_stopping_the_run_kills_a_busy_worker_process(
-        self, tmp_path, role, expectation
+        self, tmp_path, blocker, role, shutdown_timeout, expectation
     ) -> None:
         mapped = Pipeline().map(_wait_or_block)
-        pipeline = mapped.with_execution(executor="process", concurrency=2)
+        pipeline = mapped.with_execution(
+            executor="process", concurrency=2, shutdown_timeout=shutdown_timeout
+        )
         items = [
-            {"dir": str(tmp_path), "role": "block"},
+            {"dir": str(tmp_path), "role": blocker},
             {"dir": str(tmp_path), "role": role},
         ]
+
+        start = perf_counter()
 
         with expectation:
             pipeline.first(items)
 
+        assert perf_counter() - start < _STOP_BOUND
         pid = int(Path(tmp_path, "blocked.pid").read_text())
 
         with pytest.raises(ProcessLookupError):
             os.kill(pid, 0)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(60)
+    @pytest.mark.timeout(8)
     def test_a_dead_worker_process_fails_the_run(self) -> None:
         mapped = Pipeline().map(_exit_worker)
         pipeline = mapped.with_execution(executor="process", concurrency=2)

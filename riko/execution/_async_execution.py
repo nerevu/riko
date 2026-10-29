@@ -17,7 +17,7 @@ from collections.abc import (
     Iterable,
     Mapping,
 )
-from contextlib import AsyncExitStack, aclosing, nullcontext
+from contextlib import AsyncExitStack, aclosing
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -280,7 +280,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     under one in-flight ceiling shared by the whole run.
     """
 
-    shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
+    shutdown_timeout: float = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _inflight: dict[Resource[object], Event] = field(factory=dict, init=False)
     _reservations: list[_Reservation] = field(factory=list, init=False)
@@ -313,11 +313,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         raised: BaseException | None = None
         suppressed = False
-        missing_timeout = self.shutdown_timeout is None
-        bound = nullcontext() if missing_timeout else fail_after(self.shutdown_timeout)
-
         try:
-            with CancelScope(shield=True), bound:
+            with CancelScope(shield=True), fail_after(self.shutdown_timeout):
                 try:
                     unwound = await self._stack.__aexit__(exc_type, exc, traceback)
                     suppressed = bool(unwound)

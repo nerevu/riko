@@ -19,6 +19,8 @@ New
   applies a callable to each item. ``pipeline.with_context`` sets the ``Context``,
   ``.with_resource`` provides a resource, and ``.replace(…)`` swaps the workflow. For
   parallel runs, set ``pipeline.with_execution(concurrency=…`` to ``"auto"`` or > 1.
+  ``shutdown_timeout=`` bounds a run's cleanup and how long stopped worker processes
+  get before being killed.
 
 - Added ``riko.Resource`` for use with ``pipeline.with_resource``. ``Resource(…)`` owns
   an existing value and closes it with ``cleanup`` or the value's own ``close``.
@@ -90,8 +92,8 @@ New
 
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``,
-  ``RIKO_EXCHANGE_API``, ``RIKO_NODE_THREADS``, ``RIKO_PARSED_DATE_CACHE_SIZE``, and
-  ``RIKO_SHIPPED_CALL_CACHE_SIZE``.
+  ``RIKO_EXCHANGE_API``, ``RIKO_NODE_THREADS``, ``RIKO_PARSED_DATE_CACHE_SIZE``,
+  ``RIKO_SHIPPED_CALL_CACHE_SIZE``, and ``RIKO_SHUTDOWN_TIMEOUT``.
 
 Changes
 ~~~~~~~

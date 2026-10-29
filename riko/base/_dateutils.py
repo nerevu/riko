@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Date and timezone normalization helpers.
+Date, timezone, and deadline helpers.
 
 Attributes:
 
@@ -17,11 +17,13 @@ from __future__ import annotations
 
 from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
-from time import struct_time
-from typing import TYPE_CHECKING, Annotated
+from math import isfinite
+from time import monotonic, struct_time
+from typing import TYPE_CHECKING, Annotated, Self
 from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
+from attrs import frozen
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -236,3 +238,47 @@ def resolve_tzinfo(
         _tzinfo = _date.tzinfo or def_tzinfo
 
     return _tzinfo
+
+
+@frozen
+class Deadline:
+    """
+    A point in monotonic time that a series of bounded waits shares.
+
+    Attributes:
+
+        at: The ``time.monotonic`` reading the waits must not pass, or ``math.inf`` for
+            no bound.
+
+    Examples:
+
+        Basic usage::
+
+            >>> from math import inf
+            >>> from riko.base._dateutils import Deadline
+            >>>
+            >>> deadline = Deadline.from_timeout(60)
+            >>> deadline.expired, 0 < deadline.remaining <= 60
+            (False, True)
+            >>> Deadline.from_timeout(0).expired
+            True
+            >>> Deadline.from_timeout(inf).remaining
+
+    """
+
+    at: float
+
+    @classmethod
+    def from_timeout(cls, seconds: float) -> Self:
+        """Builds the deadline ``seconds`` from now (``math.inf`` means no bound)."""
+        return cls(monotonic() + seconds)
+
+    @property
+    def remaining(self) -> float | None:
+        """The seconds left, never below zero, or ``None`` when unbounded."""
+        return max(self.at - monotonic(), 0) if isfinite(self.at) else None
+
+    @property
+    def expired(self) -> bool:
+        """Whether the deadline has passed."""
+        return monotonic() >= self.at
