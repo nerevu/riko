@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
@@ -772,6 +773,26 @@ class TestAsyncProcessor:
         async_pipe = processor(isasync=True)(_record_test_flag(seen))
         _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
         assert seen == [True, True]
+
+    @pytest.mark.timeout(1)
+    @async_test
+    async def test_async_sync_iterable_streams_before_exhaustion(self):
+        """Keep an unbounded sync iterable from being read whole up front."""
+        pulled: list[int] = []
+
+        def unbounded():
+            for index in count():
+                if index > 1000:
+                    raise RuntimeError("the source was read past 1000 items")
+
+                pulled.append(index)
+                yield {"a": index}
+
+        async_pipe = processor(isasync=True)(_record_test_flag([]))
+
+        async with maybe_aclosing(async_pipe(unbounded(), test=True)) as stream:
+            assert await anext(stream)
+            assert len(pulled) <= 1000
 
     @async_test
     async def test_async(self):

@@ -1839,6 +1839,12 @@ the Feed-native path. The collapsed table-reader body also owns the one narrowin
 (`read`), which the invariant `Item` dict union rejects, so `csv.py` and `fetchtable.py` each carry two
 `cast("Stream", ...)` today (2026-10-27 typed-boundary triage).
 
+Audit note (2026-10-29 repo audit): `_AsyncWrapperStream` (`riko/modules/_decorators.py`) runs the
+parser again when one result is awaited twice or awaited and then iterated, and its `aclose()` cannot
+reach a stream obtained by awaiting. This phase deletes the awaitable processor-wrapper shape rather
+than memoizing it. Tripwire:
+`tests/internal/test_modules.py::TestAsyncProcessor::test_awaiting_the_call_twice_runs_the_parser_once`.
+
 Audit note (2026-10-23 file-split audit): `riko/modules/_decorators.py` (~2050 lines) has three clean
 seams — the `Module` base with its option sets and terminal materialization, the `_Prepared*` call
 records, and the `processor`/`operator`/`splitter` classes, which never reference each other. Split it

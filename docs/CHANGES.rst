@@ -314,6 +314,9 @@ Fixes
 - The result of an async processor or splitter is now typed as both awaitable and async-
   iterable. ``async for item in async_pipe(...)`` no longer fails type checking.
 
+- An async processor called on a sync iterable (``async_pipe(items)``) now reads it
+  lazily. An unbounded iterable yields its first item instead of hanging forever.
+
 - ``key in conf`` on a parsed module configuration now reports False for missing keys.
 
 - A dotted ``item["a.b.c"]`` on a ``DotDict`` now walks nested mappings

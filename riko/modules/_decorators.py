@@ -43,7 +43,6 @@ from riko.bado._util import as_awaitable
 from riko.bado.itertools import (
     as_async,
     async_iter,
-    async_map,
     async_map_ordered_stream,
     materialize,
 )
@@ -194,15 +193,15 @@ class _AsyncWrapperStream[T]:
     """
     Dual-protocol result of an async ``processor``/``splitter`` wrapper.
 
-    Async-iterating or ``anext``-ing it consumes the wrapped parser's stream item
-    by item with no outer await (the default ``async for item in async_pipe(...)``
-    path); awaiting it runs the parser and returns the whole stream (the advanced
-    ``await async_pipe(...)`` path). The parser runs once, on first consumption.
+    Async-iterating or ``anext``-ing it consumes the wrapped parser's stream item by
+    item with no outer await (the default ``async for item in async_pipe(...)`` path).
+    Awaiting it runs the parser and returns the whole stream (the advanced
+    ``await async_pipe(...)`` path). Iteration runs the parser once. Each ``await`` runs
+    it again.
 
     Attributes:
 
-        make: A thunk that invokes the wrapped parser and returns its awaitable
-            stream.
+        make: A thunk that invokes the wrapped parser and returns its awaitable stream.
 
     """
 
@@ -844,12 +843,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         if is_streamlike(item):
             _run = partial(self._arun, context=context, extra=extra)
             run = cast("AsyncItemProcessor", _run)
-
-            if isinstance(item, AsyncIterable):
-                processed = _aprocess_stream(run, item)
-            else:
-                mapped = await async_map(run, item)
-                processed = chain.from_iterable(mapped)
+            processed = _aprocess_stream(run, as_async(item))
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
 

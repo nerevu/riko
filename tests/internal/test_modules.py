@@ -999,6 +999,25 @@ class TestAsyncProcessor:
         assert isinstance(result, Awaitable)
         assert list(await result) == [{"content": "HI"}]
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a run-once awaitable async processor result is not yet implemented",
+    )
+    @async_test
+    async def test_awaiting_the_call_twice_runs_the_parser_once(self):
+        calls: list[Item] = []
+
+        def counting(item: Item, *args, **kwargs) -> str:
+            calls.append(item)
+            return "x"
+
+        async_count = processor(isasync=True)(counting)
+        result = async_count({"content": "hi"}, assign="content")
+        await result
+        await result
+        assert len(calls) == 1
+
     def test_wrapper_stubs_are_not_coroutine_functions(self):
         """
         Keep these stubs synchronous for async-iterator typing.
