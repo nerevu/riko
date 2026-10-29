@@ -13,6 +13,7 @@ from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter, sleep
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
 
 import pytest
@@ -1156,6 +1157,14 @@ class TestExecutionSettings:
 
         with pytest.raises(BrokenProcessPool):
             list(pipeline([{"x": 1}, {"x": 2}]))
+
+    @pytest.mark.slow
+    def test_a_process_mapped_callable_ignores_unused_context_resources(self) -> None:
+        unpicklable = Resource.from_external(SimpleNamespace(fn=lambda: None))
+        mapped = Pipeline().map(dict).with_resource("lock", unpicklable)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+        items = [{"x": 1}, {"x": 2}]
+        assert sorted(pipeline(items), key=itemgetter("x")) == items
 
 
 @pytest.mark.slow

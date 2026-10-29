@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, cast
 
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
+from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
 
 if TYPE_CHECKING:
@@ -117,6 +118,7 @@ def _get_process_unsafe_reason(
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
     embed_pipe = None if embed is None else embed.sync_pipe
+    shipped = None if isinstance(node.node, CallableNode) else context
     reason: str | None = None
     cause: BaseException | None = None
 
@@ -126,7 +128,7 @@ def _get_process_unsafe_reason(
         reason = "its embedded module has no synchronous implementation"
     else:
         try:
-            pickle.dumps((node.sync_interface.item_call, context, embed_pipe))
+            pickle.dumps((node.sync_interface.item_call, shipped, embed_pipe))
         except Exception as error:  # noqa: BLE001
             reason, cause = f"it cannot be pickled ({error})", error
 
