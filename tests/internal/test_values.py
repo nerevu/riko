@@ -18,6 +18,7 @@ from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO, StringIO
 from logging import ERROR, WARNING
+from math import inf
 from operator import methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
@@ -40,6 +41,7 @@ from dateutil.relativedelta import relativedelta
 from feedparser import FeedParserDict
 
 from riko.base import _exceptions as errors
+from riko.base._config import load_settings
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import (
@@ -983,6 +985,26 @@ _INVALID: list[tuple[Callable[..., object], object]] = [
     (require_mapping, "abc"),
     (require_sequence, "abc"),
 ]
+
+
+ENV_OVERRIDES = [
+    pytest.param("RIKO_NODE_THREADS", "-1", "node_threads", 40, id="int-below-min"),
+    pytest.param(
+        "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
+    ),
+    pytest.param("RIKO_SHUTDOWN_TIMEOUT", "inf", "shutdown_timeout", inf, id="inf"),
+    pytest.param("RIKO_SHUTDOWN_TIMEOUT", "-1", "shutdown_timeout", 30.0, id="neg"),
+    pytest.param("RIKO_SHUTDOWN_TIMEOUT", "nan", "shutdown_timeout", 30.0, id="nan"),
+    pytest.param(
+        "RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="malformed"
+    ),
+]
+
+
+class TestLoadSettings:
+    @pytest.mark.parametrize(("key", "raw", "name", "expected"), ENV_OVERRIDES)
+    def test_env_override_or_default(self, key, raw, name, expected) -> None:
+        assert getattr(load_settings({key: raw}), name) == expected
 
 
 class TestRequireHelpers:

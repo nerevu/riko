@@ -33,6 +33,7 @@ from riko.definitions._resource_definition import (
     ReusableResource,
 )
 from riko.definitions._serialize import WorkflowEncoder
+from riko.definitions._settings import ExecutionSettings
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -810,6 +811,14 @@ class TestPipelineDefinitionFields:
     def test_a_context_is_accepted(self):
         context = Context()
         assert PipelineDefinition(context=context).context is context
+
+
+class TestExecutionSettings:
+    def test_a_none_shutdown_timeout_raises(self) -> None:
+        # ``with_execution`` turns ``None`` into the default, so only direct
+        # construction can pass it through.
+        with pytest.raises(TypeError, match="a number"):
+            ExecutionSettings(shutdown_timeout=None)  # pyright: ignore[reportArgumentType]
 
 
 class TestWriteMode:

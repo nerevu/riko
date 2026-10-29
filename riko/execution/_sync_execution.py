@@ -125,7 +125,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             ThreadPoolExecutor if executor is Executor.THREAD else ProcessPoolExecutor
         )
         pool = pool_type(workers)
-        return self._pools.enter_context(_PoolLifetime(pool, workers))
+        grace = self.settings.shutdown_timeout
+        return self._pools.enter_context(_PoolLifetime(pool, workers, grace=grace))
 
     def close(
         self,

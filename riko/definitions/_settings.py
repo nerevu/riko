@@ -76,7 +76,7 @@ def _require_concurrency(
 
 def _require_timeout(value: object, what: str | None = "value", **_) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
-        raise TypeError(f"{what} must be a number or None")
+        raise TypeError(f"{what} must be a number")
     elif isnan(value) or value < 0:
         raise ValueError(f"{what} must not be negative or NaN, got {value}")
 
@@ -90,7 +90,7 @@ _executor = partial(
     resolve_enum, Executor, what="ExecutionSettings 'executor'", error=ValueError
 )
 _is_bool = validator_from_require(require_instance, bool, error=TypeError)
-_is_timeout = validator_from_require(_require_timeout, optional=True)
+_is_timeout = validator_from_require(_require_timeout)
 
 
 @define(frozen=True, slots=True)
@@ -100,11 +100,10 @@ class ExecutionSettings:
 
     Attributes:
 
-        executor: Where per-item work runs; a string such as ``"thread"`` is accepted
-            and an unknown one raises ``ValueError`` listing the known executors.
+        executor: Where per-item work runs, as an ``Executor`` or its string value.
 
-        concurrency: The per-run ceiling on items in flight, ``"auto"`` to size
-            it for the machine, or ``None`` to run items sequentially.
+        concurrency: The per-run ceiling on items in flight, ``"auto"`` to size it for
+            the machine, or ``None`` to run items sequentially.
 
         ordered: Whether mapped results keep source order.
 
@@ -112,35 +111,27 @@ class ExecutionSettings:
             discard them.
 
         shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
-            iteration, or ``None`` for no bound.
+            iteration, and on how long stopped worker processes get, together, before
+            any still running are killed under synchronous iteration. ``math.inf`` means
+            no bound. The default is 30 seconds, or ``RIKO_SHUTDOWN_TIMEOUT`` when set.
 
     Raises:
 
-        ValueError: If ``concurrency`` is below one, ``shutdown_timeout`` is
-            negative or NaN, or ``executor`` names no known executor.
+        ValueError: If ``concurrency`` is below one, ``shutdown_timeout`` is negative or
+            NaN, or ``executor`` names no known executor.
 
-        TypeError: If ``concurrency``, ``ordered``, or ``shutdown_timeout`` has
-            the wrong type.
+        TypeError: If ``concurrency``, ``ordered``, or ``shutdown_timeout`` has the
+            wrong type.
 
     Examples:
 
         Basic usage::
 
-            >>> from attrs import evolve
-            >>> from riko import Executor
             >>> from riko.definitions._settings import ExecutionSettings
             >>>
-            >>> settings = ExecutionSettings(concurrency=4, ordered=True)
-            >>> settings.executor.value, settings.concurrency, settings.ordered
-            ('auto', 4, True)
-            >>> threaded = ExecutionSettings(executor="thread")
-            >>> threaded.executor is Executor.THREAD, threaded.concurrency
-            (True, None)
-            >>> evolve(threaded, concurrency="auto").concurrency
-            'auto'
-            >>> ExecutionSettings(concurrency=0)
-            Traceback (most recent call last):
-            ValueError: ExecutionSettings 'concurrency' must be at least 1, got 0
+            >>> settings = ExecutionSettings(executor="thread", concurrency=4)
+            >>> settings.executor, settings.concurrency
+            (<Executor.THREAD: 'thread'>, 4)
 
     """
 
@@ -150,7 +141,9 @@ class ExecutionSettings:
     )
     ordered: bool = field(default=False, validator=_is_bool)
     event_sink: EventSink | None = field(default=None, repr=False)
-    shutdown_timeout: float | None = field(default=None, validator=_is_timeout)
+    shutdown_timeout: float = field(
+        default=config.shutdown_timeout, validator=_is_timeout
+    )
 
     @cached_property
     def sync_policy(self) -> SyncPolicy:

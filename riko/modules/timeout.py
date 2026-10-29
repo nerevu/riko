@@ -18,7 +18,7 @@ Examples:
         ...         sleep(0.1)
         ...         yield {"x": x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "250"})))
+        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "290"})))
         2
 
 Attributes:
@@ -32,10 +32,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Generator, Iterable, Iterator
 from datetime import timedelta
-from time import monotonic_ns
 from typing import TYPE_CHECKING, Any, Self
 
 from riko.bado.itertools import as_async, materialize
+from riko.base._dateutils import Deadline
 from riko.base._logging import get_logger
 from riko.types._enums import BasicCastType
 
@@ -54,28 +54,25 @@ DEFAULTS: Defaults = {}
 logger: Logger = get_logger(__name__)
 
 MS_PER_SECOND = 1_000
-NS_PER_MS = 1_000_000
 
 
 class AsyncTimeoutIterator[T](AsyncIterator[T]):
     aiter: AsyncIterator[T]
-    timeout_ns: int
+    timeout: float
 
     def __init__(self, elements: AnyIterable[T], timeout_ms: int = 0) -> None:
         self.aiter = as_async(elements, cooperative=True)
-        self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
-        self.deadline: int | None = None
+        self.timeout = max(timeout_ms, 0) / MS_PER_SECOND
+        self.deadline: Deadline | None = None
 
     async def _collect(self) -> Iterator[T]:
         return await materialize(self)
 
     def _raise_if_expired(self) -> None:
-        if self.timeout_ns:
-            now = monotonic_ns()
-
+        if self.timeout:
             if self.deadline is None:
-                self.deadline = now + self.timeout_ns
-            elif now >= self.deadline:
+                self.deadline = Deadline.from_timeout(self.timeout)
+            elif self.deadline.expired:
                 raise StopAsyncIteration
 
     def __await__(self) -> Generator[None, None, Iterator[T]]:
@@ -92,20 +89,18 @@ class AsyncTimeoutIterator[T](AsyncIterator[T]):
 
 
 class TimeoutIterator[T](Iterator[T]):
-    timeout_ns: int
+    timeout: float
 
     def __init__(self, elements: Iterable[T], timeout_ms: int = 0) -> None:
         self.iter: Iterator[T] = iter(elements)
-        self.timeout_ns = max(timeout_ms, 0) * NS_PER_MS
-        self.deadline: int | None = None
+        self.timeout = max(timeout_ms, 0) / MS_PER_SECOND
+        self.deadline: Deadline | None = None
 
     def _raise_if_expired(self) -> None:
-        if self.timeout_ns:
-            now = monotonic_ns()
-
+        if self.timeout:
             if self.deadline is None:
-                self.deadline = now + self.timeout_ns
-            elif now >= self.deadline:
+                self.deadline = Deadline.from_timeout(self.timeout)
+            elif self.deadline.expired:
                 raise StopIteration
 
     def __iter__(self) -> Self:
@@ -148,7 +143,7 @@ async def async_parser(
         >>> from riko import async_sleep, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> objconf = Objectify({"milliseconds": 250})
+        >>> objconf = Objectify({"milliseconds": 290})
         >>>
         >>> async def paginated_api():
         ...     # Paginated API — collect items until timeout:
@@ -197,7 +192,7 @@ def parser(
         >>> from meza.fntools import Objectify
         >>> from itertools import count
         >>>
-        >>> objconf = Objectify({"milliseconds": 250})
+        >>> objconf = Objectify({"milliseconds": 290})
         >>>
         >>> def gen_stream():
         ...     for x in count():
@@ -267,7 +262,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
         ...         yield {"page": page}
         >>>
         >>> async def main():
-        ...     result = async_pipe(paginated_api(), conf={"milliseconds": 250})
+        ...     result = async_pipe(paginated_api(), conf={"milliseconds": 290})
         ...     print(len([item async for item in result]))
         >>>
         >>> run(main)
@@ -327,7 +322,7 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         ...         sleep(0.1)
         ...         yield {"x": x}
         >>>
-        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "250"})))
+        >>> len(list(pipe(gen_stream(), conf={"milliseconds": "290"})))
         2
 
     """

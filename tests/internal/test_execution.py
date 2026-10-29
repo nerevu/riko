@@ -13,6 +13,7 @@ from contextlib import (
     nullcontext,
 )
 from functools import partial
+from math import inf
 from threading import Event as ThreadEvent
 from threading import get_ident
 from typing import TYPE_CHECKING, Any, cast
@@ -421,6 +422,20 @@ class TestAsyncExecution:
         primary, expired = info.value.exceptions
         assert isinstance(primary, ValueError)
         assert isinstance(expired, TimeoutError)
+
+    @async_test
+    async def test_async_infinite_shutdown_timeout_waits_out_cleanup(self) -> None:
+        done: list[bool] = []
+
+        async def slow() -> None:
+            await async_sleep(0.1)
+            done.append(True)
+
+        with fail_after(1):
+            async with AsyncExecution(shutdown_timeout=inf) as execution:
+                execution.push_async_callback(slow)
+
+        assert done == [True]
 
     @async_test
     async def test_async_run_sync_bridges_to_worker(self) -> None:
