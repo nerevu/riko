@@ -141,7 +141,7 @@ and extension authors.
 
 ## Extension API
 
-`riko.ext` is the supported API for module authors and integration packages.
+`riko.ext` is the supported API for module, plugin, and integration authors.
 
 This surface is SemVer-guaranteed but is intended for extension and integration
 authors rather than ordinary application code.

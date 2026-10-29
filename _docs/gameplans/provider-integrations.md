@@ -7,7 +7,7 @@ webhooks, caching, idempotent writes, identity mapping, browser fallback, asynch
 operations, and provider-specific import/export/deployment hooks without recreating the monolithic
 API gateways found in earlier Nerevu projects.
 
-This plan exists so provider packages can expose authoritative platform facts and target-specific
+This plan exists so integrations can expose authoritative platform facts and target-specific
 mechanics through one adapter model while Riko Core remains provider-neutral and higher layers can
 reuse those facts for capability discovery, Operations as Code, migration, and orchestration.
 
@@ -89,7 +89,7 @@ CompatibilityReport / automation drift     operations-as-code.md
 scheduling / durable runner boundaries     orchestration.md
 ```
 
-A provider package supplies facts and mechanics. Higher layers own the cross-provider models that
+An integration supplies facts and mechanics. Higher layers own the cross-provider models that
 consume them.
 
 ## 4. Architectural rule
@@ -123,7 +123,7 @@ source/deployment identity facts
     ↓ operations-as-code drift comparison
 ```
 
-Provider packages describe semantics. Core Riko continues to process records.
+Integrations describe semantics. Core Riko continues to process records.
 
 Do not introduce:
 
@@ -563,7 +563,7 @@ operation capability registry.
 Provider integrations own target-specific mechanics needed to get operational knowledge into or out
 of proprietary platforms. The common normalized models remain in `operations-as-code.md`.
 
-A provider package may expose reusable services shaped around:
+An integration may expose reusable services shaped around:
 
 ```text
 discover operation assets
@@ -581,7 +581,7 @@ policies, monitor/remediation rules, scheduled jobs, runbooks, and provider vari
 Rules:
 
 * extraction preserves original source bytes/text and stable provider identity when available;
-* provider packages may report **mapping facts and constraints**, not a provider-local
+* integrations may report **mapping facts and constraints**, not a provider-local
   `CompatibilityReport`;
 * `operations-as-code.md` owns normalization confidence/lossiness, `CompatibilityReport`, and the
   decision that a mapping is exact/partial/manual/unsupported;
@@ -682,7 +682,7 @@ P13 target compatibility-facts + export/deployment/inspection hook
 10. Long-running actions use one `OperationHandle`/`wait_operation` contract.
 11. CLI, MCP, docs, agents, and Operations as Code discover provider operations through the shared
     capability catalog rather than a second provider registry.
-12. Provider packages can expose import/export/deployment/inspection hooks without owning
+12. Integrations can expose import/export/deployment/inspection hooks without owning
     `OperationSpec`, `OperationPlan`, `CompatibilityReport`, or automation-drift semantics.
 13. A provider-specific migration/deployment adapter reports semantic loss and unsupported target
     facts rather than silently rewriting the canonical operation.

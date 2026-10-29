@@ -452,7 +452,7 @@ Tests follow the contract owner rather than being copied into every package that
 | Concern | Test owner |
 |---|---|
 | `OperationSpec`, `OperationPlan`, reproducibility, overlays, import provenance/lossiness, `CompatibilityReport`, deployment drift | `operations-as-code.md` / `riko-ops` |
-| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / provider package |
+| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / the integration |
 | common capability discovery/catalog/policy/approval | `mcp.md` / `riko-mcp` |
 | provider `OperationHandle` waiting | `provider-integrations.md` |
 | Microsoft `ChangePlan`/desired-state/apply/verify | `microsoft-administration.md` / `riko-microsoft` |

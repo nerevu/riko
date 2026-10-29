@@ -63,7 +63,7 @@ nerevu/riko-ops
     deployment/export
     compatibility and automation-drift analysis
 
-provider packages
+integrations
     source/target-specific importers and deployers
     capability implementations
     provider-native plan/verification adapters
@@ -401,7 +401,7 @@ provider-native job runner
 
 `orchestration.md` remains authoritative for scheduling and durable run boundaries.
 Provider-specific import/export/deployment/inspection hooks and target capability facts belong in
-`provider-integrations.md` and provider packages.
+`provider-integrations.md` and the integrations.
 
 A deployment adapter should record at least:
 
@@ -499,7 +499,7 @@ compatibility analysis for target
 ```
 
 Provider-specific discovery/acquisition/export hooks belong to `provider-integrations.md` and the
-provider package. The operations package owns the common normalized import/provenance/lossiness and
+integration. The operations package owns the common normalized import/provenance/lossiness and
 compatibility model.
 
 ## 14. Import provenance and lossiness
