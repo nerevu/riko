@@ -163,8 +163,8 @@ class TestWorkflowModule:
     """
     A workflow module produces exactly what running its workflow document produces.
 
-    The equivalence holds over every committed fixture in both the sync and async
-    interface.
+    The equivalence holds over every committed fixture under both sync and async
+    iteration.
     """
 
     @pytest.mark.parametrize("path", _compile_fixtures())
@@ -293,7 +293,7 @@ class TestWorkflowModuleDescribe:
     async def test_generated_async_pipe_describes_inputs(
         self, mode, expected, tmp_path: Path
     ):
-        """The async interface yields the same description as one item."""
+        """The ``async_pipe`` yields the same description as one item."""
         module = _build(_inputs_workflow(), "pipe_ainputs", tmp_path, is_async=True)
         stream = module.async_pipe(context=Context(mode=mode))
         assert [item async for item in stream] == [expected]
@@ -551,7 +551,7 @@ class TestWorkflowProbes:
     @pytest.mark.parametrize("name", _describing_probes("def async_pipe("))
     @async_test
     async def test_async_probe_describes_inputs_and_dependencies(self, name: str):
-        """The async interface yields the full description as one item."""
+        """The ``async_pipe`` yields the full description as one item."""
         probe = import_module(name)
         mode = ExecutionMode.DESCRIBE_DEPENDENCIES
         dependencies = [

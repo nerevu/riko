@@ -41,9 +41,9 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("other mode", "sync or async"),
     BannedTerm("both sides", "sync and async"),
     BannedTerm("other side", "the sync or async counterpart"),
-    BannedTerm("chosen side", "the sync or async interface"),
+    BannedTerm("chosen side", "the sync or async run"),
     BannedTerm("each side", "sync and async"),
-    BannedTerm("missing side", "the missing sync or async interface"),
+    BannedTerm("missing side", "the missing `pipe` or `async_pipe`"),
     BannedTerm("terminal sub-source", "secondary input stream"),
     BannedTerm("upstream stream", "input stream"),
     BannedTerm("scoped run", "context manager (`pipeline.open(items)` returns one)"),
@@ -64,6 +64,11 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("pipe file", "pipe script"),
     BannedTerm("wrapper options", "decoration options"),
     BannedTerm("decorator options", "decoration options"),
+    BannedTerm("module wrapper", "pipe callable"),
+    BannedTerm("decorated pipe", "pipe callable"),
+    BannedTerm("sync interface", "a sync run, or `pipe`"),
+    BannedTerm("async interface", "an async run, or `async_pipe`"),
+    BannedTerm("async source", "async input stream or async iterable"),
     BannedTerm("call-time options", "call options or keyword arguments"),
     BannedTerm("export target", "export format"),
     BannedTerm("destination type", "cast type"),
@@ -78,9 +83,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("torn down", "cleaned up or closed"),
 )
 
-_EXCLUDED_NAMES = frozenset(
-    {"CHANGES.rst", "MIGRATION.rst", "_lint_terms.py", "test_cli.py"}
-)
+_EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
 
 
 def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
@@ -171,9 +174,9 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
 
     Args:
 
-        roots: Files or directories to scan; the changelog and migration guide
-            are skipped because they quote released wording, and the banned list
-            and its tests because they spell out every phrase.
+        roots: Files or directories to scan. Skips the migration guide because it quotes
+            released wording. Skips the banned list and its tests because they spell out
+            every phrase.
 
     Yields:
 

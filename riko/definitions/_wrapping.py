@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Prepares module wrapper calls and stamps wrapper discovery metadata.
+Prepares pipe callables' calls and stamps their discovery metadata.
 
 Shared by the execution layer and the module decorators, which both build calls from
 plain wrappers.
@@ -91,7 +91,7 @@ def build_call(
     """
     Prepares ``pipe``'s configuration and call options once for reuse over many items.
 
-    A module wrapper prepares its own call. A plain callable registered as a module
+    A pipe callable prepares its own call. A plain callable registered as a module
     carries no ``prepare``, so its configuration and call options are prepared with
     ``prepare_call``.
 
@@ -156,7 +156,7 @@ def stamp_wrapper_meta(
     prepare: Preparer | None = None,
 ) -> None:
     """
-    Stamps the discovery metadata every module wrapper carries onto ``target``.
+    Stamps the discovery metadata every pipe callable carries onto ``target``.
 
     Afterwards ``target`` carries every attribute named in ``WRAPPER_META``, and a
     ``prepare`` that applies configuration and call options for reuse.
@@ -170,7 +170,7 @@ def stamp_wrapper_meta(
         subtypes: Every subtype the module supports.
         pollable: Whether the module can be polled.
         loopable: Whether ``loop`` can embed the module.
-        isasync: Whether ``target`` is the async interface.
+        isasync: Whether ``target`` is an ``async_pipe``.
 
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).

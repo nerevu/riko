@@ -203,7 +203,7 @@ def compile_workflow(
 
         flow: The ``Workflow``, or a ``RawWorkflow`` describing one.
         name: The name the module documents itself by.
-        is_async: Whether to generate the asynchronous interface.
+        is_async: Whether to generate the ``async_pipe``.
 
     Returns:
 

@@ -95,7 +95,7 @@ class ResolverDispatcher:
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Reports which sync and async interfaces a module or stored workflow defines.
+        Reports which of ``pipe``/``async_pipe`` a module or stored workflow defines.
 
         Args:
 
@@ -148,7 +148,7 @@ class ResolverDispatcher:
         Args:
 
             name: Module name or ``pipe_<id>`` name to inspect.
-            is_async: Whether to check the async interface.
+            is_async: Whether to check the ``async_pipe``.
 
         Returns:
 
@@ -180,7 +180,7 @@ class ResolverDispatcher:
         Args:
 
             name: Module name or ``pipe_<id>`` name to inspect.
-            is_async: Whether to check the async interface.
+            is_async: Whether to check the ``async_pipe``.
 
         Returns:
 

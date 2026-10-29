@@ -65,7 +65,7 @@ def _resolve_definition(obj: object, name: str) -> ModuleDefinition | None:
 
 class ModuleRegistry(Registry[ModuleDefinition]):
     """
-    Resolves module names to their sync/async interface callables.
+    Resolves module names to their ``pipe``/``async_pipe`` callables.
 
     Precedence is runtime registration, entry point
     (``[project.entry-points."riko.modules"]``), built-in. A runtime registration
@@ -186,7 +186,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         Args:
 
             name: Canonical module name to resolve.
-            is_async: Whether to resolve the async interface.
+            is_async: Whether to resolve the ``async_pipe``.
 
         Returns:
 
@@ -220,7 +220,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Finds which of a module's sync and async interfaces are defined.
+        Finds which of ``pipe`` and ``async_pipe`` a module defines.
 
         Args:
 

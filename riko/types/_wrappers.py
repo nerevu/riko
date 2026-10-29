@@ -197,7 +197,7 @@ class Preparer(Protocol):
     """
     Prepares a call's configuration and call options once for reuse over many items.
 
-    Every module wrapper carries one as its ``prepare``. The ``context`` and any
+    Every pipe callable carries one as its ``prepare``. The ``context`` and any
     secondary input streams, resources, or embed are supplied with each item call
     rather than fixed here.
     """
@@ -211,7 +211,7 @@ class Preparer(Protocol):
 
 
 class WrapperMeta(Protocol):
-    """A callable stamped with the discovery metadata every module wrapper carries."""
+    """A callable stamped with the discovery metadata every pipe callable carries."""
 
     __name__: str
     __qualname__: str
@@ -231,7 +231,7 @@ class WrapperMeta(Protocol):
 
 
 class ModuleWrapper(WrapperMeta, Protocol):
-    """A module wrapper: the discovery metadata plus a ``prepare`` for its calls."""
+    """A pipe callable: the discovery metadata plus a ``prepare`` for its calls."""
 
     prepare: Preparer
 
@@ -580,7 +580,7 @@ def require_subpipe(value: object) -> SubPipe:
 
 def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
     """
-    Reports whether ``value`` is a synchronous module wrapper.
+    Reports whether ``value`` is a sync pipe callable.
 
     Args:
 
@@ -588,7 +588,7 @@ def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
 
     Returns:
 
-        Whether ``value`` is a module's sync interface (its ``pipe``).
+        Whether ``value`` is a module's ``pipe``.
 
     Examples:
 
@@ -603,7 +603,7 @@ def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
 
 def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
     """
-    Reports whether ``value`` is an asynchronous module wrapper.
+    Reports whether ``value`` is an async pipe callable.
 
     Args:
 
@@ -611,7 +611,7 @@ def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
 
     Returns:
 
-        Whether ``value`` is a module's async interface (its ``async_pipe``).
+        Whether ``value`` is a module's ``async_pipe``.
 
     Examples:
 
@@ -626,7 +626,7 @@ def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
 
 def require_sync_wrapper(value: object) -> SyncModuleWrapper:
     """
-    Requires ``value`` to be a synchronous module wrapper.
+    Requires ``value`` to be a sync pipe callable.
 
     Args:
 
@@ -634,11 +634,11 @@ def require_sync_wrapper(value: object) -> SyncModuleWrapper:
 
     Returns:
 
-        ``value`` narrowed to a sync module wrapper.
+        ``value`` narrowed to a sync pipe callable.
 
     Raises:
 
-        TypeError: If ``value`` is not a synchronous module wrapper.
+        TypeError: If ``value`` is not a sync pipe callable.
 
     Examples:
 
@@ -649,18 +649,18 @@ def require_sync_wrapper(value: object) -> SyncModuleWrapper:
         >>> require_sync_wrapper(async_pipe)
         Traceback (most recent call last):
             ...
-        TypeError: <function async_pipe at 0x...> is not a synchronous module wrapper
+        TypeError: <function async_pipe at 0x...> is not a sync pipe callable
 
     """
     if not is_sync_wrapper(value):
-        raise TypeError(f"{value!r} is not a synchronous module wrapper")
+        raise TypeError(f"{value!r} is not a sync pipe callable")
 
     return value
 
 
 def require_async_wrapper(value: object) -> AsyncModuleWrapper:
     """
-    Requires ``value`` to be an asynchronous module wrapper.
+    Requires ``value`` to be an async pipe callable.
 
     Args:
 
@@ -668,11 +668,11 @@ def require_async_wrapper(value: object) -> AsyncModuleWrapper:
 
     Returns:
 
-        ``value`` narrowed to an async module wrapper.
+        ``value`` narrowed to an async pipe callable.
 
     Raises:
 
-        TypeError: If ``value`` is not an asynchronous module wrapper.
+        TypeError: If ``value`` is not an async pipe callable.
 
     Examples:
 
@@ -683,11 +683,11 @@ def require_async_wrapper(value: object) -> AsyncModuleWrapper:
         >>> require_async_wrapper(pipe)
         Traceback (most recent call last):
             ...
-        TypeError: <function pipe at 0x...> is not an asynchronous module wrapper
+        TypeError: <function pipe at 0x...> is not an async pipe callable
 
     """
     if not is_async_wrapper(value):
-        raise TypeError(f"{value!r} is not an asynchronous module wrapper")
+        raise TypeError(f"{value!r} is not an async pipe callable")
 
     return value
 
