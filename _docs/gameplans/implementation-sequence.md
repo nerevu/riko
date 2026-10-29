@@ -1471,6 +1471,22 @@ Coverage triage (2026-10-15): the async twin's incremental stream write, append-
 probe (`aends_with_newline`/`ainitial_file_size`/`aneeds_newline`), and unsupported-target guard in
 `async_file_write_session` run in no test; they were left untested rather than mirrored, so whichever
 shape this phase picks must cover them.
+Shape audit (2026-10-29): the same accessors mix shapes — `initial_file_size`/`ainitial_file_size`
+memoize by hand into a `None` field instead of a `cached_property` (the async one is a `property`
+returning a coroutine), `needs_newline`/`skip_header` and their `a*` twins are properties that
+change state when read, `ends_with_newline`/`aends_with_newline` are zero-argument methods beside
+those properties, `_framed_content`/`_aframed_content` build the framed document behind a noun
+name, and the `input_shape` setter performs a one-shot state transition that can raise. Whichever
+shape this phase picks replaces them (explicit state-transition methods, a cached size, a
+`_build_framed_content`), so they were left as they are rather than reshaped ahead of it.
+Atomic publication (shutdown-timeout triage 2026-10-29): a replace write must leave the old content
+in place until it publishes ([effects.md § 12](effects.md#12-fileserialized-writes): "temp artifact
+before atomic publication"). Today the framed commit (`_commit`/`_acommit`) opens the destination
+with `"wb"` and only then writes, so anything that interrupts it in between — including the
+30-second shutdown timeout cutting off an early-close finalize, which this phase makes reachable —
+leaves an empty file. Streaming replace writes open the destination up front, so a failed run
+destroys it too. Tripwires: `tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
+and `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`.
 
 **Exit:**
 

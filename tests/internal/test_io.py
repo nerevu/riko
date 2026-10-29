@@ -829,6 +829,28 @@ class TestFramed:
 
         assert not path.exists()
 
+    @pytest.mark.xfail(
+        strict=True, reason="atomic framed write publication is not yet implemented"
+    )
+    def test_interrupted_finalize_keeps_original_content(self, tmp_path, monkeypatch):
+        # The commit empties the destination on open, so an interruption before the
+        # document is written loses the old content instead of leaving it in place.
+        path = tmp_path / "out.json"
+        path.write_bytes(b'[{"x": 9}]')
+
+        def interrupt(_content):
+            raise RuntimeError("interrupted")
+
+        monkeypatch.setattr(_write_session, "_cast_bytes", interrupt)
+
+        with file_write_session(build_write(path)) as session:
+            session.write(ITEMS)
+
+            with pytest.raises(RuntimeError, match="interrupted"):
+                session.finalize()
+
+        assert path.read_bytes() == b'[{"x": 9}]'
+
 
 class TestSessionLifecycle:
     def _session(self, tmp_path, name="out.json"):
