@@ -46,6 +46,8 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("missing side", "the missing `pipe` or `async_pipe`"),
     BannedTerm("terminal sub-source", "secondary input stream"),
     BannedTerm("upstream stream", "input stream"),
+    BannedTerm("upstreams", "input streams or node streams"),
+    BannedTerm("downstreams", "output streams or downstream nodes"),
     BannedTerm("scoped run", "context manager (`pipeline.open(items)` returns one)"),
     BannedTerm("input requirements", "input declarations"),
     BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
@@ -97,6 +99,7 @@ PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work
 RUN_SCOPING = BannedTerm(
     "scoping a run", "context manager (`pipeline.open(items)` returns one)"
 )
+UPSTREAM_NOUN = BannedTerm("upstream as a noun", "input stream or node stream")
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
@@ -118,6 +121,14 @@ _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     (
         REMOVED_EXT_PATH,
         re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
+    ),
+    (
+        UPSTREAM_NOUN,
+        re.compile(
+            r"\b(?:its|their|the whole|a suspended)\s+(?:up|down)streams?\b"
+            r"(?!\s+(?:nodes?|subgraph|reads?|reader)\b)",
+            re.IGNORECASE,
+        ),
     ),
 )
 
@@ -211,6 +222,7 @@ __all__ = [
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
     "RUN_SCOPING",
+    "UPSTREAM_NOUN",
     "BannedTerm",
     "TermIssue",
     "gen_phrase_issues",

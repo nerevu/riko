@@ -648,7 +648,7 @@ SEQUENTIAL_FAN_INS = [
 class TestThreadBudget:
     @async_test
     async def test_async_long_sync_only_chain_completes(self, node_threads) -> None:
-        # Each sync-only node holds a worker thread while it pulls its upstream, so
+        # Each sync-only node holds a worker thread while it pulls its input stream, so
         # a chain within the node-thread budget must still get a thread each.
         node_threads(45)
         plan = _passthru_plan(45)

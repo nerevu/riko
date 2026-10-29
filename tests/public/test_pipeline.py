@@ -670,7 +670,7 @@ class TestClose:
         assert len(consumed) < 20
         assert closed == [True]
 
-    def test_early_close_closes_an_upstream_module(self) -> None:
+    def test_early_close_closes_an_upstream_node(self) -> None:
         closed: list[bool] = []
 
         @tag_source
@@ -1672,7 +1672,7 @@ class TestSplit:
         assert next(iter(left)) == EXPECTED[0]
         assert next(iter(right)) == EXPECTED[0]
 
-    def test_upstream_runs_once_for_every_branch(self):
+    def test_upstream_node_runs_once_for_every_branch(self):
         consumed: list[int] = []
 
         def source():
