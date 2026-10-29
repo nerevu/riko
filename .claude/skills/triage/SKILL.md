@@ -1,5 +1,6 @@
 ---
 name: triage
+model: fable
 description: Decide the disposition of a riko defect or audit finding BEFORE fixing it — find the gameplan phase that owns the behavior, then either fix locally (regression test + CHANGES line) or leave a strict-xfail tripwire for the owning phase. Use when the user asks to triage findings, process an audit, asks "should we fix this now?", "who owns this?", or proposes fixing something that might be owned by planned work.
 ---
 

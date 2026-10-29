@@ -14,21 +14,28 @@ needs is the diff and the rule files named below.
 
 ## 1. Resolve the scope
 
-The marker `.claude/tidy-marker` (untracked, survives `/clear`) holds two
-lines from the last tidy: the `HEAD` sha and the working-tree fingerprint
-`(git diff HEAD; git ls-files --others --exclude-standard; git ls-files -z --others --exclude-standard | xargs -0 git hash-object) | git hash-object --stdin`
-(hashes untracked file names and contents, so a new, renamed, or edited scratch doc re-triggers tidy).
-If both still match, report "nothing to tidy" and stop. Otherwise the scope
-is everything changed since that sha:
+Tidy's marker is the `tidy` entry of `.claude/gate-markers.json` (untracked,
+per worktree, survives `/clear`, shared by every session), written by
+`python .claude/skills/land/gates.py`. Run `gates.py check tidy` first: exit 0
+means tidy already ran on this exact content, so report "nothing to tidy" and
+stop. The marker is the working tree's content tree id, so committing, staging,
+an autosquash, or another session's earlier tidy keeps it valid; only a content
+edit invalidates it. Otherwise the scope is what changed since the last pass:
 
-- marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
-  `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
-- marker missing or not an ancestor (after an autosquash rebase): the unpushed
-  commits (`git log HEAD --not --remotes`) diffed from
-  the parent of the oldest one, plus the working tree and untracked files; with
-  no unpushed commits, the working tree alone.
+- `check` printed a `changed since: git diff <tidied tree> <current tree>` line
+  (the tidied tree still exists): that diff plus untracked files. It holds only
+  the content edited since the pass, so work the pass already covered stays out,
+  including commits made after it;
+- otherwise, everything changed since the marker's `head` sha (printed by
+  `check`):
+  - marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
+    `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
+  - marker missing or not an ancestor (after an autosquash rebase): the unpushed
+    commits (`git log HEAD --not --remotes`) diffed from
+    the parent of the oldest one, plus the working tree and untracked files; with
+    no unpushed commits, the working tree alone.
 
-If the scope is empty, write the marker and stop. A
+If the scope is empty, run `gates.py record tidy` and stop. A
 wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.
 Every agent brief ends with the mid-run self-check: past about 10 minutes or
@@ -195,9 +202,9 @@ it to the next `/land`.
 
 ## 6. Mark and report
 
-After the fixes, write the marker: `HEAD`'s sha and the fingerprint of the
-tree as tidy left it. An untouched tree then skips the next run; any later
-edit re-opens the whole range since that sha.
+After the fixes, run `python .claude/skills/land/gates.py record tidy`. It
+records the tree as tidy left it, so an untouched tree skips the next run from
+any session, and any later edit reopens the range since that `head`.
 
 Report: the scope resolved, each fix applied (file:line, rule), findings sent
 to `/triage`, questions asked and their answers, lint promotions proposed, script

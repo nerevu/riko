@@ -11,34 +11,44 @@ gate, fix what the gates find, and report honestly. **Do not run `git commit`,
 working tree — the user owns the commit. The only exceptions are the private
 index and throwaway worktree `rehearse_plan.py` uses (see "Commit plan").
 
-## Idempotency
+## Idempotency and multiple sessions
 
-Landing may be invoked mid-session after some gates already ran — never redo
-work, and never trust that earlier work still holds:
+Landing may run mid-session after some gates already ran, or in several
+sessions on the same tree. Gate passes are recorded per tree, not per session,
+by `.claude/skills/land/gates.py` (`G` below):
 
-- Every gate is safe to rerun (prettify, codegen, lint,
-  and tests are all stateless checks; `manage upgrade --daily` is a no-op after
-  today's upgrade), so rerunning is never wrong — only sometimes wasteful.
-- Skip a gate only when BOTH hold: it passed earlier **in this session**, and
-  nothing in its scope has changed since that run (confirm against `git
-  status`/`git diff`, not recollection). A gate that passed before subsequent
-  edits proves nothing.
+- **Markers.** A pass is stored in `.claude/gate-markers.json` against the
+  working tree's content tree id. Staging, committing, an autosquash, `/clear`,
+  or another session leaves it valid; any content edit invalidates it. Run each
+  gate through `python $G run <gate> [--mutates] [--lock] -- <command>`: it
+  prints `skip <gate>` and exits 0 when the gate already passed on this tree
+  (from any session), otherwise runs the command and records a pass only when
+  it succeeds and the tree did not change during the run. Mutating gates
+  (prettify, codegen) pass `--mutates`, which records the tree they left. Every
+  fix changes the tree id, so the gates after it rerun on their own.
+- **No waiting, no deadlocks.** Only the full suite and `diff_uncovered.py` take
+  `--lock`, a non-blocking OS lock on `riko-gate.lock` in the git common
+  directory (shared by every worktree), which the OS drops when the process exits. When
+  another session holds it, `run` exits 75 at once (`busy <gate>`): do not
+  wait or retry in a loop; finish the other gates and report the suite as
+  "busy in another session, rerun `/land`". Nothing else is locked; two
+  sessions running other gates at once only duplicate work.
+- **Never trust recollection.** A pass you remember but `gates.py` does not
+  record (for example one that ran while the tree changed) is not a pass.
 - Before applying any fix (regenerating a file, adding a missing entry,
-  correcting a failure), check the current state first — the fix may already
-  be in place from earlier in the session. Re-applying blindly can duplicate
+  correcting a failure), check the current state first: the fix may already
+  be in place from this or another session. Re-applying blindly can duplicate
   entries or clobber newer work.
-- When in doubt, rerun the gate: a redundant gate costs seconds; a skipped
-  failing gate costs a bad commit. The expensive full test suite is the only
-  gate worth a genuine skip decision.
-- Note skipped gates in the report with the reason ("passed at <point>, no
-  changes since").
+- Note skipped gates in the report with the marker's time and `HEAD`.
 
 ## Gate sequence
 
-Order matters. Run from the repo root with `uv run --active python -m
-riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
+Order matters. Run from the repo root; `<manage>` is `uv run --active python -m
+riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
+`$G` is `.claude/skills/land/gates.py`.
 
-0. **Upgrade dependencies**: `manage upgrade --daily`. It re-resolves `uv.lock` to the
+0. **Upgrade dependencies**: `manage upgrade --daily` (not wrapped: `--daily`
+   is its own once-a-day marker). It re-resolves `uv.lock` to the
    newest allowed versions and syncs the active environment, so a new ruff,
    pyright, or runtime release breaks here instead of in CI (CI installs the
    lock with `--locked` and never upgrades). A `uv.lock` diff is part of the
@@ -51,23 +61,25 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    given the skill text plus the mid-run self-check (past about 10 minutes or
    100k tokens with mechanical work left: pause, report, and name the helper
    script; afterwards inspect any scripts it wrote for itself and promote, fold,
-   or drop each), never as an in-loop grep pass (it skips
-   itself when its marker says the tree is already tidy). Its mechanical fixes
+   or drop each), never as an in-loop grep pass. Run `python $G check tidy` first and skip
+   the agent when it exits 0 (tidy already ran on this tree, in any session). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
-2. **Prettify first, always**: `manage prettify`. Never hand-fix
+2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify`. Never hand-fix
    formatting-class lint errors — formatting is prettify's job, before any
    linter runs.
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), run
-   `manage codegen --all` and check `git diff` on the generated files. A diff
+   `python $G run codegen --mutates -- <manage> codegen --all` and check `git diff`
+   on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
-4. **Lint**: `manage lint --all`. It already runs Ruff, the RST/docs/docstring/
+4. **Lint**: `python $G run lint -- <manage> lint --all`. It already runs Ruff, the RST/docs/docstring/
    terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and every import contract, so do not rerun
    `--docs`, `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes` separately. It does **not** run the type gate.
 5. **Tests**: targeted tests for the touched area first while iterating, then
-   the full suite `manage test --ratchet --quiet` before declaring ready —
+   the full suite `python $G run test --lock -- <manage> test --ratchet --quiet`
+   before declaring ready —
    in the foreground and alone: no other pytest or `manage` gate may run
    beside it: its thread/pool timing tests and the ~70s run degrade under CPU
    contention, and its own data folder isolates only the coverage file.
@@ -76,14 +88,15 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's).
    `pyproject.toml` (`[tool.riko.coverage] uncovered`): cover the new or
    newly-unexecuted lines rather than raising the ceiling (raising it is a
    judgment call for the user). To find them, run
-   `python .claude/skills/land/diff_uncovered.py --baseline-ref HEAD` (alone, like
-   the suite): it lists the change's uncovered lines and each file whose missing
+   `python $G run uncovered --lock -- python .claude/skills/land/diff_uncovered.py
+   --baseline-ref HEAD` (alone, like the suite): it lists the change's uncovered lines and each file whose missing
    count moved, which catches a line outside the diff that lost coverage. It exits
    non-zero when any changed line is uncovered. Never read
    the repo-root `.coverage`; it can be stale. When it lowers the ceiling, that `pyproject.toml`
    diff is part of the change — keep it. The ceiling is measured in the full dev
    environment (`--group dev --all-extras`, Python 3.12).
-6. **Types**: `manage lint --check-types` and `manage lint --verify-types`
+6. **Types**: `python $G run check-types -- <manage> lint --check-types` and
+   `python $G run verify-types -- <manage> lint --verify-types`
    (neither is part of `--all`). Always run both: an internal change (for
    example a base class whose types come only from local `typings/` stubs) can
    drop downstream type completeness without touching an exported surface.
@@ -190,7 +203,9 @@ End with:
 
 - **Verdict**: ready to commit, or not — and if not, exactly what blocks it.
 - **What changed**: files touched and the shape of the change, briefly.
-- **Gate results**: which gates ran and their outcomes, failures verbatim.
+- **Gate results**: which gates ran and their outcomes, failures verbatim,
+  and the suite count (`python $G summary test`, recorded even when this
+  session skipped the suite).
 - **Commit plan**: the rehearsed step table (each `fixup!` target's sha and
   subject, each new commit's subject from the house tags seen in `git log`,
   `[NEW]`, `[DEV]`, `[DOCS]`, …, and the files each step touches with their line
