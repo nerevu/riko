@@ -91,7 +91,7 @@ pipeline resolver — the v2 execution's own subpipe path — loads them.
 - Either way, retire the serialized-`PipeDef` half of the pipeline resolver: `DirectoryStore` /
   `load_definition` in `riko/runtime/_pipelines.py` are the only in-tree `parse_pipe_def`
   consumers outside the compiler — delete them or re-point them at v2 `parse_document`.
-- Update conftest store wiring and `PIPELINE_DIRS` (`riko/base/_config.py`).
+- Update conftest store wiring.
 - Guards: `manage codegen --pipes` drift, full test gate.
 - As-built (2026-09-29, `b4850983`): neither (a) nor (b) — a third path chosen at the design
   checkpoint. `tests/pipelines/*.json` and `examples/pipelines/*.json` were rewritten as

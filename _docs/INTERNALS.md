@@ -215,6 +215,12 @@ sync when source is moved between package groups.
   The same documents' `path::Class[::test]` and `Class::test` citations must name a current
   test class or test (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file
   is missing is left to the file check, and a citation must sit on one line to be checked.
+  Likewise, a `` `name` (`riko/…py`) `` or `` `Class.member` (`riko/…py`) `` pair in the `riko/*.py`
+  citation documents must name something that file binds at top level, imports included, or
+  that its top-level class binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`).
+  To cite a location rather than a definition, write `` `name` in `riko/…py` ``.
+  An `` `a`/`b` (`riko/…py`) `` pair checks both names, and a bare `b` after a dotted `a` takes
+  `a`'s class (`` `C.x()`/`y()` `` cites `C.y`).
 - **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS` phrase
   (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
   `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the section
