@@ -788,6 +788,12 @@ TERM_PATTERNS = [
         [(1, "riko.ext.registry"), (2, "riko.ext.names")],
         id="removed-ext-paths",
     ),
+    pytest.param(
+        "# it pulls its upstream, then its upstream node runs\n"
+        "# a suspended upstream; their upstream reader reads upstream\n",
+        [(1, "its upstream"), (2, "a suspended upstream")],
+        id="upstream-nouns",
+    ),
 ]
 
 

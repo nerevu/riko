@@ -1108,7 +1108,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   coverage in `tests/internal/test_execution_plan.py`.
 
 **Node-thread budget** (2026-10-16). Under `AsyncExecution` a node without an async implementation
-holds a worker thread while it pulls its upstream, so a sync-only chain needs threads at once. All
+holds a worker thread while it pulls its input stream, so a sync-only chain needs threads at once. All
 async executions on one event loop share one budget (`RIKO_NODE_THREADS`, default 40; an AnyIO
 `RunVar` in `riko/execution/_async_execution.py`). Each run reserves its whole demand
 (`ExecutionPlan.get_thread_demand(output, mapped=)`: a thread holder scores one plus the most any one
