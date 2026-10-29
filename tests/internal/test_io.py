@@ -705,6 +705,13 @@ class TestRegisterTarget:
         with pytest.raises(TypeError, match="must load a target class"):
             TargetRegistry()._load(ep)
 
+    def test_entry_point_key_must_match_the_backend(self, monkeypatch) -> None:
+        ep = EntryPoint("s3", "riko.definitions._targets:FileTarget", "riko.targets")
+        monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
+
+        with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
+            TargetRegistry()._entry_point("s3")
+
 
 class TestConverterPath:
     """The native whole-stream path and the temporary singleton path."""
