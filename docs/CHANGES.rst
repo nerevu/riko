@@ -161,6 +161,12 @@ Changes
 - Registering a module under the name of a built-in or entry-point module raises
   ``ValueError`` unless you pass ``replace=True``.
 
+- Made ``ModuleRegistry.registered_names()`` a property (drop the parentheses). Moved
+  ``catalog_names()`` to ``discovered_names`` (also a property).
+
+- Declaring the same ``riko.modules`` entry-point name in two plugins now raises
+  ``ValueError`` on module resolution instead of picking the last-discovered module.
+
 - ``get_module_metadata(name)`` returns ``None`` for an unknown module instead of
   raising ``ModuleNotFoundError``. With ``strict=True`` it raises ``ValueError``.
 

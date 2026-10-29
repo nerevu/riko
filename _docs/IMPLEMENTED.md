@@ -318,7 +318,7 @@ A module's **provider** is its namespace, derived from the name (`ModuleMetadata
 `member`/`alias` from its name and category: built-ins group by category into the bucket classes;
 a provider's modules form one class per provider whose members drop the prefix (`Example.LOOKUP`),
 and the flat `Modules` alias keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`).
-Provider classes come from the extension package's own codegen run, never riko's `_names.py`;
+Provider classes come from the plugin's own codegen run, never riko's `_names.py`;
 `list_modules(provider=)` filters by provider.
 
 ## Module registry & pipe resolution (P8, shipped)
@@ -367,7 +367,11 @@ declared name unless `name` is given), and its docstring summary once, so the re
 module and mutating it afterwards never changes a definition; the registry builds a bare entry-point module
 with `from_module(obj, name=ep.name)`. An entry-point definition with no declared name
 takes the entry-point key; a declared one must match it. A runtime `register` of a built-in or
-entry-point name raises unless `replace=True`. A registered `WorkflowDocument` directory resolves by
+entry-point name raises unless `replace=True`. Entry-point discovery is cached per `reset()`
+(`_scanned` → `_entry_points`/`_collisions` cached properties); two distinct entry points declaring
+one name in a group raise `ValueError` naming both distributions when that name is resolved
+(`_require_unique`), while an identical entry point listed twice (an editable install) dedupes and
+other names stay resolvable. A registered `WorkflowDocument` directory resolves by
 name: `WorkflowResolver` (given the dispatcher via `register_dispatcher` in `_resolver.py`) builds the document's
 `pipe`/`async_pipe` with `build_workflow_pipes`, after the module store. The target registry stores target
 classes keyed by `backend` and resolves a `Backends` to its target class. The target vocabulary (base

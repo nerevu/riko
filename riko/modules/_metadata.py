@@ -205,7 +205,7 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     """
     is_async = (True, False)
 
-    for name in module_registry.catalog_names():
+    for name in module_registry.discovered_names:
         definition = module_registry.load_definition(name)
         pipes = map(definition.get_pipe, is_async) if definition else ()
         targets = tuple(pipe for pipe in pipes if callable(pipe))

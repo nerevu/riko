@@ -37,7 +37,7 @@ P8/P11/P12); it appears here only as the fake in-repo example extension that pro
   name's first dotted segment (`"riko"` when unqualified). A provider's modules form one class
   per provider whose members drop the prefix (`Example.LOOKUP`); the flat `Modules` alias keeps
   the full name (`Modules.EXAMPLE_LOOKUP`), and `list_modules(provider=)` filters by it. Provider
-  classes ship from the extension package's own `riko.ext.codegen` run, not riko's `_names.py`
+  classes ship from the plugin's own `riko.ext.codegen` run, not riko's `_names.py`
   (built-ins only).
 - **No `.then()` — decision: Option C + `__or__`.** `.then()` is **rejected** (avoids a second
   chaining idiom and the `then`-means-callable semantic collision with §4 callable pipes). Instead:

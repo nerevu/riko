@@ -1971,7 +1971,7 @@ not block proving ownership boundaries.
 
 ### R12 — external proof and release gate
 
-Prove the architecture with at least one external extension package before freezing 1.0:
+Prove the architecture with at least one external plugin before freezing 1.0:
 
 - entry-point module registration through retained P8 seam;
 - declared Resource dependency;
@@ -1990,7 +1990,7 @@ v1-cutoff gates.
 
 **Exit:**
 
-- **ADD:** an external extension package proves the frozen resource/state/pubsub/target/action seams,
+- **ADD:** an external plugin proves the frozen resource/state/pubsub/target/action seams,
   and the 1.0 release-readiness gates pass.
 - **MIGRATE:** generated discovery, release docs, wheels, and public-surface checks describe only the
   final architecture.

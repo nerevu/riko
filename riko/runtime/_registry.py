@@ -1,7 +1,13 @@
 """Generic registry for runtime, entry-point, and built-in named entries."""
 
+from functools import cached_property
 from importlib.metadata import EntryPoint, entry_points
 from typing import ClassVar
+
+
+def _get_dist_name(ep: EntryPoint) -> str:
+    """Gets the name of the plugin declaring ``ep``, or a placeholder."""
+    return "an unknown plugin" if ep.dist is None else ep.dist.name
 
 
 class Registry[T]:
@@ -19,43 +25,70 @@ class Registry[T]:
 
     def __init__(self) -> None:
         self._runtime: dict[str, T] = {}
-        self._entry_points: dict[str, EntryPoint] | None = None
         self._loaded: dict[str, T] = {}
 
     def _key(self, entry: T) -> str:
-        raise NotImplementedError(
-            f"{type(self).__name__}._key must derive a registry key for {entry!r}"
-        )
+        msg = f"{type(self).__name__}._key must derive a registry key for {entry!r}"
+        raise NotImplementedError(msg)
 
     def _load(self, ep: EntryPoint) -> T:
-        raise NotImplementedError(
-            f"{type(self).__name__}._load must handle entry point {ep.name!r}"
-        )
+        msg = f"{type(self).__name__}._load must handle entry point {ep.name!r}"
+        raise NotImplementedError(msg)
 
-    def _discover_entry_points(self) -> dict[str, EntryPoint]:
-        if self._entry_points is None:
-            eps = entry_points(group=self.entry_point_group)
-            self._entry_points = {ep.name: ep for ep in eps}
+    @cached_property
+    def _scanned(self) -> tuple[EntryPoint, ...]:
+        """Loads the group's entry points once per discovery cache."""
+        return tuple(entry_points(group=self.entry_point_group))
 
-        return self._entry_points
+    @cached_property
+    def _entry_points(self) -> dict[str, EntryPoint]:
+        """Maps each entry-point name to the first entry point declaring it."""
+        found: dict[str, EntryPoint] = {}
 
-    def _load_entry_point(self, ep: EntryPoint) -> T:
-        loaded = self._load(ep)
+        for ep in self._scanned:
+            found.setdefault(ep.name, ep)
 
-        if (key := self._key(loaded)) != ep.name:
-            msg = f"entry point {ep.name!r} declares a {self.label} named {key!r}; "
-            raise ValueError(msg + "the two must match")
+        return found
 
-        return loaded
+    @cached_property
+    def _collisions(self) -> dict[str, list[EntryPoint]]:
+        """Groups the distinct entry points that share one name."""
+        grouped: dict[str, list[EntryPoint]] = {}
 
-    def _entry_point(self, name: str) -> T | None:
-        if name not in self._loaded and (ep := self._discover_entry_points().get(name)):
-            self._loaded[name] = self._load_entry_point(ep)
+        for ep in self._scanned:
+            known = self._entry_points[ep.name]
+
+            if known != ep:
+                grouped.setdefault(ep.name, [known]).append(ep)
+
+        return grouped
+
+    def _require_unique(self, name: str) -> None:
+        if name in self._collisions:
+            dists = sorted(set(map(_get_dist_name, self._collisions[name])))
+            msg = f"{self.label} entry point {name!r} is declared by more than one "
+            raise ValueError(msg + f"plugin ({', '.join(dists)}); keep one")
+
+    def _load_entry_point(self, name: str) -> T | None:
+        """Loads the entry-point tier's entry for ``name`` once, if one declares it."""
+        ep = self._entry_points.get(name)
+
+        if name not in self._loaded and ep is not None:
+            self._require_unique(name)
+            loaded = self._load(ep)
+
+            if (key := self._key(loaded)) != name:
+                msg = f"entry point {name!r} declares a {self.label} named {key!r}; "
+                raise ValueError(msg + "the two must match")
+
+            self._loaded[name] = loaded
 
         return self._loaded.get(name)
 
-    def _registered(self, name: str) -> T | None:
-        return self._runtime.get(name) or self._entry_point(name)
+    def _load_entry(self, name: str) -> T | None:
+        """Loads the runtime entry for ``name``, else its entry-point entry."""
+        entry = self._runtime.get(name)
+        return self._load_entry_point(name) if entry is None else entry
 
     def register(self, entry: T, *, replace: bool = False) -> None:
         """
@@ -76,9 +109,7 @@ class Registry[T]:
                 registered and ``replace`` is False.
 
         """
-        name = self._key(entry)
-
-        if not name:
+        if not (name := self._key(entry)):
             raise ValueError(f"a runtime-registered {self.label} needs a name")
 
         if name in self._runtime and not replace:
@@ -86,24 +117,28 @@ class Registry[T]:
 
         self._runtime[name] = entry
 
+    @property
     def registered_names(self) -> tuple[str, ...]:
-        """Collects the sorted runtime-registered names."""
+        """The sorted runtime-registered names."""
         return tuple(sorted(self._runtime))
 
-    def catalog_names(self) -> tuple[str, ...]:
+    @property
+    def discovered_names(self) -> tuple[str, ...]:
         """
-        Collects the sorted runtime-registered and entry-point names.
+        The sorted runtime-registered and entry-point names.
 
-        Built-ins are excluded since they are enumerated separately.
+        Excludes built-ins since they are enumerated separately.
 
         """
-        return tuple(sorted({*self._runtime, *self._discover_entry_points()}))
+        return tuple(sorted({*self._runtime, *self._entry_points}))
 
     def reset(self) -> None:
         """Drops runtime registrations and the entry-point discovery cache."""
         self._runtime.clear()
         self._loaded.clear()
-        self._entry_points = None
+
+        for cached in ("_scanned", "_entry_points", "_collisions"):
+            self.__dict__.pop(cached, None)
 
 
 __all__ = ["Registry"]
