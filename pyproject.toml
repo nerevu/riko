@@ -260,9 +260,9 @@ exclude = [
 addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
 testpaths = ["tests", "riko", "examples", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
-timeout = 120
+timeout = 30
 timeout_method = "thread"
-faulthandler_timeout = 60
+faulthandler_timeout = 15
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
     "smoke: fast install-validation subset run against the built wheel/sdist",

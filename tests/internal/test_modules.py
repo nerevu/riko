@@ -1924,7 +1924,7 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
 
 
 class TestAsyncSend:
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(1)
     @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
     @async_test
     async def test_async_send_does_not_buffer_its_source(self):
@@ -1935,7 +1935,7 @@ class TestAsyncSend:
         assert first == {"x": "foo", "i": 0}
         assert seen <= LOOKAHEAD
 
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(1)
     @async_test
     async def test_async_send_completes_targets_when_publish_fails(self):
         """
@@ -1948,7 +1948,7 @@ class TestAsyncSend:
         await _send_missing_target(received)
         assert received == [{"x": "foo", "i": 0}]
 
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(1)
     @async_test
     async def test_async_send_accepts_a_feed_source(self):
         """
@@ -1993,7 +1993,7 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
 
 
 class TestAsyncReceive:
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(1)
     @async_test
     async def test_async_receive_does_not_materialize(self):
         """

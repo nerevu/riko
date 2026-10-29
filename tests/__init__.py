@@ -34,6 +34,17 @@ test whose name states a distinct rule stays its own test, as do sync and async
 twins. Folding tests should leave the file shorter; if it grows, compact the
 rows.
 
+Every bound a test sets (``mark.timeout``, ``fail_after``, a ``wait``/``join``/
+``result`` timeout, and the ``timeout``/``faulthandler_timeout`` globals in
+``pyproject.toml``) is the smallest feasible value, never a round guess: measure
+the worst ``call`` time over three ``pytest -n auto --durations=0`` runs and take
+the smallest of 1, 2, 3, 5, 8, 10, 15, 20, 30 seconds that is at least five
+times it, with a floor of 1 second. An inner bound stays below its outer one. A
+value that is the test's subject (``shutdown_timeout=0.05``) is not a bound. A
+``timeout`` marker is a backstop for a true hang (``tests/_timeouts.py``): a test
+guarding "this stops promptly" blocks for longer than its elapsed-time assertion
+but shorter than the backstop, so a regression fails the assertion instead.
+
 Files start coarse. Before splitting one past about 2000 lines, move out what
 belongs elsewhere and trim its overlaps; if it is still over, move its largest
 subject row, with the rows that share its concept, into a file named for that

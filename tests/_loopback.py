@@ -98,4 +98,4 @@ def loopback_url(
     finally:
         server.shutdown()
         server.server_close()
-        thread.join(timeout=5)
+        thread.join(timeout=1)

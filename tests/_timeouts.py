@@ -7,7 +7,8 @@ meant to end. A test whose ``xfail`` is satisfied only because pytest-timeout
 interrupted it would hide that hang. And a timeout raised as a signal can land
 inside coverage's tracer and deadlock the worker. So this plugin reports such a
 test as failed. Bound the test's own work instead (e.g. a long finite source
-plus an assertion on how much of it was pulled).
+plus an assertion on how much of it was pulled). How tight each bound is set is
+in the ``tests/__init__.py`` docstring.
 """
 
 from __future__ import annotations

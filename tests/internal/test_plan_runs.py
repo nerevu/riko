@@ -1070,7 +1070,7 @@ class TestAsyncPlanRun:
         )
         seen = []
 
-        with fail_after(5):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 stream = cast("AsyncItemGenerator", await execution.arun(plan))
 
@@ -1133,7 +1133,7 @@ class TestAsyncPlanRun:
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         upstream_closed = []
 
-        with fail_after(5):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 stream = cast("AsyncItemGenerator", await execution.arun(plan))
                 await anext(stream)
@@ -1204,7 +1204,7 @@ class TestAsyncPlanRun:
             module_workflow("src"), dispatcher=dispatcher
         )
 
-        with fail_after(5):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan)
                 assert stream is not None
