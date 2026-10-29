@@ -384,6 +384,12 @@ worker pools
 Planning fails before workers start when required configuration cannot be safely serialized.
 No process-only public Context type is introduced.
 
+Shipped (R4C, repo-audit triage 2026-10-29): a callable node never reads the run's `Context`, so
+the process executor ships its calls without one, and an
+unpicklable resource it does not declare no longer refuses the run. Module nodes still ship the
+`Context`, because wrappers read its `inputs`/`test`/`mode`. Regression:
+`tests/public/test_pipeline.py::TestExecutionSettings::test_a_process_mapped_callable_ignores_unused_context_resources`.
+
 ### Side effects and idempotency
 
 Pure callables need no idempotency contract. A side-effecting callable declares the

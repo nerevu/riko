@@ -28,6 +28,7 @@ from riko.bado._backend import start_blocking_portal
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._guards import is_awaitable
 from riko.base._iterutils import map_values
+from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -341,7 +342,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
             item_call = node.sync_interface.item_call
-            _mapped = partial(item_call, context=self.context, **extra)
+            context = None if isinstance(node.node, CallableNode) else self.context
+            _mapped = partial(item_call, context=context, **extra)
             mapped = cast("Callable[[T], Iterable[T]]", _mapped)
             stream = self._map_stream(mapped, source)
         elif sync_native:
