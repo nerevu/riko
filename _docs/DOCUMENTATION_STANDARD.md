@@ -303,9 +303,9 @@ These rules apply to Python modules across the entire `riko/` package, not only
 `riko/modules/`.
 
 Every module keeps a user-facing description. Every public module, and every
-private module that defines a re-exported public API, also keeps at least one
-basic usage example. Pure private implementation/type modules with no public
-entry point follow the private-module exception below.
+private module whose re-exported public API includes something that runs, also
+keeps at least one basic usage example. Private implementation modules and
+type-only or exception-only modules follow the private-module rule below.
 
 A module example is an **entry point**, not a comprehensive test suite — prefer
 *one* representative public workflow, exercising the module's public surface
@@ -497,23 +497,32 @@ in the generator. Never patch only the generated file.
 
 An underscore-prefixed module gets a module-level example **only when it has a
 public API** — a name it defines that is re-exported from `riko`, `riko.bado`,
-`riko.ext` (including `riko.ext.codegen`), `riko.modules`, or `riko.types`. When it
-does, the example imports through that public path, never the private one:
+`riko.ext` (including `riko.ext.codegen`), `riko.modules`, or `riko.types`. It
+**must** have one when that public API includes something that runs: a function,
+or any class other than a type-only or exception class (enums and records
+included). A module whose public names are only type aliases, `TypedDict`s,
+`Protocol`s, or exceptions has none, because the best example it could give is an
+annotation that tests nothing (and raising or catching an exception is generic
+Python). The example imports through the public path, never the private one:
 
 | Module | Public surface | Module example |
 |---|---|---|
-| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | yes — `from riko.ext import processor` |
+| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | required — `from riko.ext import processor` |
+| `riko/types/_options.py` | `CallOptions` | required — `from riko.types import CallOptions` |
+| `riko/types/_streams.py` | type aliases and `Protocol`s only | no |
+| `riko/base/_exceptions.py` | exceptions only | no |
 | `riko/modules/_inference.py` | none | no |
 | `riko/cli/_coverage.py` | none | no |
 
-Otherwise the module keeps its description (and `Attributes:` for module-level
-constants) and stops there. A module-level example is the reader's entry point
-into a supported surface; a private module with no public surface has no entry
-point to advertise, and demonstrating one would contradict the "public examples
-exercise the public object" rule under Doctest rules. This bounds only the
-*module* docstring — a private function may still carry a local doctest where a
-compact executable example clarifies non-obvious behavior. `manage lint --docstrings`
-enforces both this rule and the public-path rule for example imports.
+A private module without a module example keeps its description (and
+`Attributes:` for module-level constants) and stops there. A module-level example
+is the reader's entry point into a supported surface; a private module with no
+public surface has no entry point to advertise, and demonstrating one would
+contradict the "public examples exercise the public object" rule under Doctest
+rules. This bounds only the *module* docstring — a private function may still
+carry a local doctest where a compact executable example clarifies non-obvious
+behavior. `manage lint --docstrings` enforces both directions of this rule and the
+public-path rule for example imports.
 
 ## General docstring rules
 
