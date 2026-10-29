@@ -177,6 +177,36 @@ class TestAsyncUrlOpen:
         assert f.ext == expected
         assert f.content_type == content_type
 
+    @async_test
+    async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
+        path = tmp_path / "data.txt"
+        path.write_text("data")
+        handle = async_url_open(str(path))
+
+        async with handle as first:
+            assert first.read() == "data"
+
+            with pytest.raises(RuntimeError, match="not reentrant"):
+                async with handle:
+                    pass
+
+        assert first.closed
+
+        async with handle as second:
+            assert second.read() == "data"
+
+        assert second.closed
+
+    @async_test
+    async def test_relative_path_starting_with_http_is_local(
+        self, tmp_path, monkeypatch
+    ):
+        (tmp_path / "http_fixture.csv").write_text("a,b")
+        monkeypatch.chdir(tmp_path)
+
+        async with async_url_open("http_fixture.csv") as f:
+            assert f.read() == "a,b"
+
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
