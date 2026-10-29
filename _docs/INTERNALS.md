@@ -270,6 +270,21 @@ sync when source is moved between package groups.
 - **Define once, in reading order.** A term the release introduces gets its gloss (and
   its `riko.` prefix) at its first mention anywhere in the release section, and the bare
   ``name`` after that. The leading bullet is written so it needs no term defined later.
+- **Released sections keep shipped names.** A released section describes what that
+  release shipped: it never borrows a later concept's name (`WorkflowModule`, stored
+  workflow) for an earlier artifact. Where the shipped term is now banned
+  (`BANNED_TERMS` in `riko/cli/_lint_terms.py`), name the artifact by its identifier or
+  command instead (a ``pipe_<id>`` name, a Python module ``compile-pipe`` generated).
+  "Define once" applies per release section, so each section glosses its own first
+  ``PipeDef`` as "pipe definition (``PipeDef``)".
+- **One citation form per name.** A name importable from two places is cited by its
+  stable path (``riko.async_map``, not ``riko.bado.itertools.async_map``) unless the
+  change is specific to the other location (a re-export removal). A method carries its
+  receiver, spelled by the variable-naming rule (``pipeline.open(items)``,
+  ``flow.serialize``, ``resource.strategy``); a classmethod or constructor carries its
+  class (``Pipeline.from_module``, ``Workflow.parse``). A dot-led ``.method`` appears
+  only in a run of methods on a receiver the same sentence just named. The verb names
+  what the method acts on: attribute chaining "chains a module", never "a workflow".
 - **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
   maps old to new names. Other bullets, **New** included, use the new name bare, with no
   "(formerly …)", so **New** preceding **Changes** needs no forward reference.
