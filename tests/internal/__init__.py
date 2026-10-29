@@ -33,7 +33,7 @@ Index (file, then the subjects it owns, in file order):
                               ChunkContent, AsyncMapStream, AsyncMerge, GatherResults,
                               CapabilityFlags, RegisterTarget, ConverterPath, Csv,
                               Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
-    test_modules.py           BareDecorator, ParserSignature, Splitter,
+    test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, ReturnInference, ModuleMetadata,
                               WrapperMeta, WorkflowDecorator, BuildWorkflowPipes, Loop,
                               Processor, ModuleRegistry, DescribeModule, PublicRegister,

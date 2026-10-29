@@ -264,6 +264,22 @@ class TestParserSignature:
             next(pipe(source, **kwargs))
 
 
+class _FalsyRows:
+    """An iterable of rows whose truth value is ``False``."""
+
+    def __iter__(self) -> Iterator[Item]:
+        return iter(FIXED_ROWS)
+
+    def __bool__(self) -> bool:
+        return False
+
+
+class TestNormalizeInput:
+    @pytest.mark.parametrize("decorator", [operator, splitter])
+    def test_reads_a_falsy_iterable(self, decorator) -> None:
+        assert list(decorator().normalize_input(_FalsyRows())) == FIXED_ROWS
+
+
 class TestSplitter:
     """The splitter wrapper over async input and context."""
 
