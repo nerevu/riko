@@ -6,6 +6,16 @@ A lifecycle factory is a generator function or context manager factory whose val
 lives between setup and cleanup; a value factory is a plain callable that returns
 the value. Classifying either produces a resource plan: one record per way an
 execution acquires and cleans up a resource, independent of how it was declared.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.types import ResourceStrategy
+        >>>
+        >>> [strategy.name for strategy in ResourceStrategy]
+        ['EXTERNAL', 'OWNED', 'VALUE_FACTORY', 'LIFECYCLE']
+
 """
 
 from __future__ import annotations

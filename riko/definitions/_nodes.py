@@ -11,6 +11,16 @@ Nodes carry declarative intent, never execution state, and no node runs here.
 ``WriteNode`` and ``ActionNode`` carry a ``backend`` and serialization ``fmt`` rather
 than a live resource or write session.
 
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import ModuleNode
+        >>>
+        >>> node = ModuleNode(id="fetch-1", name="fetch", conf={"url": "feed.xml"})
+        >>> node.family, node.name, dict(node.conf)
+        ('module', 'fetch', {'url': 'feed.xml'})
+
 """
 
 from __future__ import annotations

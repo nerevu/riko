@@ -1,4 +1,17 @@
-"""Declarative write modes, capabilities, results, and session contracts."""
+"""
+Declarative write modes, capabilities, results, and session contracts.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import WriteCapabilities
+        >>>
+        >>> capabilities = WriteCapabilities(modes=frozenset())
+        >>> capabilities.appendable, capabilities.serializes, capabilities.keyed_modes
+        (False, False, frozenset())
+
+"""
 
 from __future__ import annotations
 
