@@ -21,7 +21,7 @@ from riko.bado.itertools import async_map_ordered_stream, async_map_stream, asyn
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import WriteResult
-from riko.io._async import _chunk_content, async_url_open
+from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
 from riko.io._sync import Fetch
@@ -176,6 +176,61 @@ class TestAsyncUrlOpen:
         f = await async_url_open(URL)
         assert f.ext == expected
         assert f.content_type == content_type
+
+    @async_test
+    async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
+        path = tmp_path / "data.txt"
+        path.write_text("data")
+        handle = async_url_open(str(path))
+
+        async with handle as first:
+            assert first.read() == "data"
+
+            with pytest.raises(RuntimeError, match="not reentrant"):
+                async with handle:
+                    pass
+
+        assert first.closed
+
+        async with handle as second:
+            assert second.read() == "data"
+
+        assert second.closed
+
+    @async_test
+    async def test_overlapping_entries_open_one_buffer(self):
+        opened: list[BytesIO] = []
+        outcomes: list[str] = []
+
+        async def opener() -> BytesIO:
+            await async_sleep(0.01)
+            opened.append(buffer := BytesIO(b"data"))
+            return buffer
+
+        handle = _AsyncURLStream(opener)
+
+        async def enter() -> None:
+            try:
+                async with handle:
+                    await async_sleep(0.01)
+            except RuntimeError:
+                outcomes.append("refused")
+            else:
+                outcomes.append("entered")
+
+        await gather_results([enter(), enter()])
+        assert sorted(outcomes) == ["entered", "refused"]
+        assert [buffer.closed for buffer in opened] == [True]
+
+    @async_test
+    async def test_relative_path_starting_with_http_is_local(
+        self, tmp_path, monkeypatch
+    ):
+        (tmp_path / "http_fixture.csv").write_text("a,b")
+        monkeypatch.chdir(tmp_path)
+
+        async with async_url_open("http_fixture.csv") as f:
+            assert f.read() == "a,b"
 
     @pytest.mark.simulated_network
     @pytest.mark.xfail(

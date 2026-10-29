@@ -232,27 +232,41 @@ class _AsyncURLStream[T: BytesIO | NamedTextIOWrapper]:
     """
     An awaitable, async-context-manager handle over a lazily opened buffer.
 
-    ``await``-ing it returns the opened buffer (the caller then owns closing
-    it), while ``async with`` yields the buffer and closes it on exit. Both
-    paths open a fresh buffer, so the handle is reusable.
+    ``await``-ing it returns the opened buffer (the caller then owns closing it), while
+    ``async with`` yields the buffer and closes it on exit. Both paths open a fresh
+    buffer. The handle is reusable, but not reentrant: entering it before the previous
+    ``async with`` exits raises ``RuntimeError``.
     """
 
     def __init__(self, opener: Callable[[], Awaitable[T]]) -> None:
         self._open = opener
         self._stream: BytesIO | NamedTextIOWrapper | None = None
+        self._entered = False
 
     def __await__(self) -> Generator[object, None, T]:
         return self._open().__await__()
 
     async def __aenter__(self) -> T:
-        opened = await self._open()
+        if self._entered:
+            raise RuntimeError("an async_url_open handle is not reentrant")
+
+        self._entered = True
+
+        try:
+            opened = await self._open()
+        except BaseException:
+            self._entered = False
+            raise
+
         self._stream = opened
         return opened
 
     async def __aexit__(self, *_: object) -> bool:
         if self._stream is not None:
             self._stream.close()
+            self._stream = None
 
+        self._entered = False
         return False
 
 
@@ -288,7 +302,8 @@ def async_url_open(
     there is no read-time backpressure. Only downstream parsing stays lazy.
 
     The handle may be ``await``-ed for the buffer (the caller then closes it) or
-    used with ``async with`` to auto-close it on exit. Use ``async with`` only when
+    used with ``async with`` to auto-close it on exit. Entering it again before the
+    previous ``async with`` exits raises ``RuntimeError``. Use ``async with`` only when
     the buffer is consumed inside the block. When returning a lazy iterator that
     outlives the block, keep the ``await`` form and release the handle on iteration
     end with :func:`riko.io._sync.auto_close` (an ``async with`` would close it
