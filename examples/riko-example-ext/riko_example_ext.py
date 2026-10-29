@@ -53,9 +53,9 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     """
     Uppercases each item's ``content`` field.
 
-    ``isasync=True`` is not needed here: the ``@operator`` decorator infers the async
-    interface from the ``async_pipe`` name. See ``register_module.py`` for the explicit
-    ``isasync=True`` form.
+    ``isasync=True`` is not needed here: the ``@operator`` decorator infers it from the
+    ``async_pipe`` name. See ``register_module.py`` for the explicit ``isasync=True``
+    form.
 
     Yields:
 

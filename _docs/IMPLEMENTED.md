@@ -79,7 +79,7 @@ live.
 * `AsyncStream` is asynchronous iteration.
 * Boundedness is **not** a declared `DecorationOptions` field yet (`DecorationOptions.boundedness` / `require_bounded` are planned — [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics)); the bound that ships is behavioral, in the §6 async primitives.
 
-The public sync-or-async source union is:
+The public `Feed` union (sync or async items) is:
 
 ```python
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
@@ -164,7 +164,7 @@ flag) behaves like an exhausted Python generator (2026-10-26): another `for` yie
 ### Feed reuse
 
 The asynchronous half of `Feed` (`AsyncItems`) behaves like ordinary async iterators. Riko
-does **not** detect consumed async sources, recreate them automatically, or raise a custom
+does **not** detect consumed async iterables, recreate them automatically, or raise a custom
 consumed-state exception — the underlying `StopAsyncIteration` behavior is authoritative.
 Synchronous `Items` retain their ordinary iterable semantics.
 
@@ -270,8 +270,8 @@ are `None`.
 AnyIO is the **sole** async runtime (`riko/bado/__init__.py`); backend selection is purely
 "does `anyio` import?" (`backend = "empty" if run is None else "anyio"`). There is **no
 Twisted** anywhere in the code and **no `RIKO_ASYNC_BACKEND` env var**. `AsyncItems` is
-the asynchronous iterable source type, while `Feed = Items | AsyncItems` is the sync-or-async
-source union. Async iteration is pull-based (`__anext__` awaited by the consumer).
+the async items type, while `Feed = Items | AsyncItems` is the sync-or-async items
+union. Async iteration is pull-based (`__anext__` awaited by the consumer).
 
 Runtime and protocol layers are orthogonal: network protocol support is a read/write
 adapter concern, not a core-runtime concern. That adapter design (asyncio-native libraries;
@@ -973,7 +973,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `run_from_thread`). There are no background tasks and no channels, so backpressure is pure demand, an
   error raises at the pull that hits it after every earlier item has been yielded, and abandoning or
   closing the async stream closes the sync pipe's generator off-loop through the unguarded `_asyncify_call`
-  seam (which still works while the execution is shutting down). Async source/inputs are typed
+  seam (which still works while the execution is shutting down). Async input streams are typed
   `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`.
   *Design note:* the earlier plan's "bounded channel" was replaced by this demand-driven pull because
   asyncer offers no iterator bridge and the pull shape needs no task-lifetime management; what it gives

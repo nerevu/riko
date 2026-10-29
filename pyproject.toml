@@ -313,7 +313,7 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 398
+uncovered = 397
 uncovered-lowered = 2026-10-28
 
 [tool.riko.typing]

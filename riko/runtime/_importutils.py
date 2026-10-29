@@ -50,7 +50,7 @@ def load_interfaces(
     name: str, builtin: bool = True, loader: Loader | None = None
 ) -> frozenset[Interface]:
     """
-    Loads which of a module's sync and async interfaces are defined.
+    Loads which of ``pipe`` and ``async_pipe`` a module defines.
 
     Args:
 

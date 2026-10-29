@@ -450,7 +450,7 @@ class WorkflowResolver:
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Finds which of a stored workflow's sync and async interfaces are defined.
+        Finds which of ``pipe`` and ``async_pipe`` a stored workflow defines.
 
         Args:
 

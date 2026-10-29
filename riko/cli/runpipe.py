@@ -84,7 +84,7 @@ def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
     """
     Builds the keyword arguments that pass ``test`` to a run target's pipe.
 
-    The ``workflow``-decorated pipe of a ``WorkflowModule`` (Python source defining
+    The ``workflow``-decorated ``pipe`` of a ``WorkflowModule`` (Python source defining
     ``pipe``/``async_pipe`` over an item, a stream, or nothing, plus a ``context``)
     reads ``test`` from its ``Context``, while a pipe script (a Python file defining
     ``pipe(test=False)``) or an undecorated pipe takes it directly.

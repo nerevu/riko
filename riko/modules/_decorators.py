@@ -315,7 +315,7 @@ class Module[B: bool]:
 
     @property
     def isasync(self) -> B:
-        """Whether this decorator builds the async interface (``async_pipe``)."""
+        """Whether this decorator builds an ``async_pipe``."""
         return self._isasync
 
     def _resolve_isasync(self, pipe: ModuleParser) -> bool:
@@ -347,8 +347,8 @@ class Module[B: bool]:
             reason = "an async def" if awaitable else "marked isasync=True"
             qualified = f"{pipe.__module__}.{name}"
             raise TypeError(
-                f"{qualified}: 'pipe' is the synchronous interface but is "
-                f"{reason}; name the async interface 'async_pipe' instead."
+                f"{qualified}: 'pipe' must be synchronous but is {reason}; "
+                "name it 'async_pipe' instead."
             )
 
         return isasync
@@ -366,7 +366,7 @@ class Module[B: bool]:
 
             wrapper: The wrapper function to annotate.
             pipe: The undecorated parser it wraps.
-            isasync: Whether the wrapper is the async interface.
+            isasync: Whether the wrapper is an ``async_pipe``.
 
         """
         module_type = self.module_type
@@ -399,7 +399,7 @@ class Module[B: bool]:
 
         Args:
 
-            wrapper: The module wrapper being called.
+            wrapper: The pipe callable being called.
             names: The keyword argument names the call supplied.
 
         Raises:
@@ -508,13 +508,13 @@ class Module[B: bool]:
         """
         Prepares ``wrapper``'s configuration and call options for reuse over many items.
 
-        Every module wrapper exposes this as its ``prepare``. The configuration and call
+        Every pipe callable exposes this as its ``prepare``. The configuration and call
         options are resolved here. Each item call supplies the ``context`` and any
         secondary input streams, resources, or embed.
 
         Args:
 
-            wrapper: The module wrapper this decorator built.
+            wrapper: The pipe callable this decorator built.
 
             extras: The names of the extra inputs delivered with each item: a named
                 input stream under its port name, positional streams as ``others``,
@@ -734,7 +734,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     Attributes:
 
         module: The decorator that built the wrapper.
-        wrapper: The module wrapper being called.
+        wrapper: The pipe callable being called.
         prepared: The module's prepared call-time state.
         options: The prepared call options.
 
@@ -747,7 +747,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
 
     @property
     def parser(self) -> Callable[..., Any]:
-        """The undecorated parser the module wrapper wraps."""
+        """The undecorated parser the pipe callable wraps."""
         return vars(self.wrapper)["__wrapped__"]
 
     @property

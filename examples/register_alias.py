@@ -3,8 +3,8 @@
 Registers a built-in module under a second name with ``ModuleDefinition.from_module``.
 
 Point ``from_module`` at any object exposing ``pipe``/``async_pipe`` and it registers
-both interfaces. Here we give the built-in ``count`` a second, namespaced name without
-touching riko core.
+both. Here we give the built-in ``count`` a second, namespaced name without touching
+riko core.
 
 For explicit interface callables, see ``register_module.py``. For the installable
 extension package, see ``riko-example-ext/``.

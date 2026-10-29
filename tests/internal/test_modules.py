@@ -530,8 +530,8 @@ def _carries_wrapper_meta(func: object) -> bool:
 
 
 WRAPPER_REQUIRES = [
-    pytest.param(require_sync_wrapper, "synchronous", id="sync"),
-    pytest.param(require_async_wrapper, "asynchronous", id="async"),
+    pytest.param(require_sync_wrapper, "not a sync pipe callable", id="sync"),
+    pytest.param(require_async_wrapper, "not an async pipe callable", id="async"),
 ]
 
 
@@ -1418,8 +1418,8 @@ class TestWorkflowResolver:
 
         assert resolver.require("pipe_demo") is tagged
 
-    def test_async_interface_is_tagged_async_whatever_its_name(self):
-        """An async interface not named ``async_pipe`` is still tagged async."""
+    def test_async_pipe_callable_is_tagged_async_whatever_its_name(self):
+        """An async pipe callable not named ``async_pipe`` is still tagged async."""
 
         async def gen_items(item=None, **kwargs):
             yield {"x": 1}
@@ -1880,7 +1880,7 @@ class TestAsyncSend:
     @async_test
     async def test_async_send_accepts_a_feed_source(self):
         """
-        An async source reaches the parser as an ``AsyncIterator``, not a list.
+        An async input stream reaches the parser as an ``AsyncIterator``, not a list.
 
         ``operator.anormalize_input``/``setup`` hand the parser an async ``orig_stream``
         when the caller passes a ``Feed``. So a sync ``for`` over it raises

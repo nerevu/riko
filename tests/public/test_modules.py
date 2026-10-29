@@ -698,9 +698,9 @@ class TestProcessor:
         """
         Resolve ``isasync`` from the explicit flag, ``async def``, or the name.
 
-        ``isasync`` marks which interface a pipe is (``pipe`` or ``async_pipe``),
+        ``isasync`` marks which callable a pipe is (``pipe`` or ``async_pipe``),
         not whether the function is a coroutine, so it is only needed explicitly
-        for a sync callable that is the async interface under another name.
+        for a sync callable that serves as the ``async_pipe`` under another name.
         """
         assert _create_wrapper(name, iscoro=iscoro, isasync=isasync).isasync is expected
 
@@ -729,7 +729,7 @@ class TestProcessor:
             _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
 
         message = str(excinfo.value)
-        assert "'pipe' is the synchronous interface" in message
+        assert "'pipe' must be synchronous" in message
         assert "async_pipe" in message
         assert reason in message
 

@@ -232,8 +232,8 @@ def _copy_wrapper_meta(
     Args:
 
         target: The adapter function to annotate.
-        source: The wrapped pipe whose metadata is copied.
-        isasync: Whether the adapter presents the asynchronous interface.
+        source: The pipe callable whose metadata is copied.
+        isasync: Whether the adapter is an ``async_pipe``.
 
     """
     stamp_wrapper_meta(
