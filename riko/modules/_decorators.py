@@ -1556,7 +1556,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        for item in items or []:
+        for item in [] if items is None else items:
             yield _wrap_item(item)
 
     async def anormalize_input(self, items: AsyncItemsOrValues) -> AsyncStream:
@@ -1933,7 +1933,7 @@ class splitter[B: bool](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        if items:
+        if items is not None:
             for item in items:
                 data = item if is_mapping(item) else {"content": item}
                 yield DotDict(data)
