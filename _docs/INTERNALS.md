@@ -215,6 +215,11 @@ sync when source is moved between package groups.
   The same documents' `path::Class[::test]` and `Class::test` citations must name a current
   test class or test (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file
   is missing is left to the file check, and a citation must sit on one line to be checked.
+- **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS` phrase
+  (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
+  `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the section
+  ends at the next level-two heading. The check reads a tracked Markdown document, so it is a
+  lint rather than a pytest test (`_docs/gameplans/testing.md` §1).
 - **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
   written to a fresh temp folder. That folder also holds the run's coverage data
   (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.
