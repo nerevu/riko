@@ -29,7 +29,7 @@ from riko.bado._backend import NamedTemporaryFile, async_open
 from riko.bado._util import async_get, async_read
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
-from riko.base._paths import normalize_url
+from riko.base._paths import is_http_url, normalize_url
 
 from ._sync import ext_from_content_type
 
@@ -217,7 +217,7 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
         path locally), and the content type (populated only for HTTP).
 
     """
-    if url.startswith("http"):
+    if is_http_url(url):
         response = await async_get(url, timeout=timeout)
         content_type = response.headers.get("content-type")
         result = (response.content, url, content_type)
@@ -366,7 +366,7 @@ async def async_url_read(
     """
     url = normalize_url(url, offline=True)
 
-    if url.startswith("http"):
+    if is_http_url(url):
         response = await async_get(url, timeout=timeout)
         content = response.text
     else:

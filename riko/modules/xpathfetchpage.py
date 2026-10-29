@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
+from riko.base._paths import is_http_url
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
@@ -104,7 +105,7 @@ async def async_parser(
     url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
-    if url.startswith("http") and not ext:
+    if is_http_url(url) and not ext:
         ext = "html"
 
     # TODO: centralize error handling and retry logic
@@ -153,7 +154,7 @@ def parser(
     url: str = require_conf_key(objconf, "url", "xpathfetchpage")
     ext = splitext(url)[1].lstrip(".")
 
-    if url.startswith("http") and not ext:
+    if is_http_url(url) and not ext:
         ext = "html"
 
     with Fetch(url, encoding=objconf.encoding) as f:

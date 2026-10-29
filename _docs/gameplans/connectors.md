@@ -364,6 +364,13 @@ These surfaces share service/resource implementations rather than duplicating ex
 - FTP/SFTP;
 - directory limits/artifactization.
 
+Note (triage 2026-10-28): the async URL readers (`async_url_open`/`async_url_read`) dispatch only
+`http(s)://` to the network and open every other scheme as a local path, so `ftp://` fails async
+while sync `Fetch` reaches it through `urllib`. No tripwire: FTP/SFTP is expected to arrive as a
+Target adapter that need not route through `async_url_open`. When C2 lands, either route
+non-file schemes in the async readers to the adapter or make them raise a clear unsupported-scheme
+error.
+
 ### C3 — Mail/brokers
 
 - IMAP/SMTP;
