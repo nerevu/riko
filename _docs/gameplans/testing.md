@@ -22,6 +22,13 @@ Consolidate aggressively, but **not by chasing test count**. One test owner per 
 > cases. **Internal tests** own generator mechanics, drift guards, and failure modes.
 > **Functional tests** own cross-layer fixture and CLI integration.
 
+The boundary with `manage lint` is just as fixed: pytest input is Python, runtime, and API
+behavior plus the generators' and linters' own mechanics over fixture text, while `manage lint`
+owns repository consistency (doc and Markdown freshness, citation checks, import architecture).
+A tracked Markdown or prose file is never pytest input: a check that a doc edit would fail
+belongs in `manage lint --docs`, so the suite cannot go red over documentation. Generated
+Python compared against its generator stays a pytest drift guard.
+
 Because pytest executes doctests in Python modules, `README.rst`, and `docs/*.rst`, the
 README/FAQ already exercise string-based `SyncPipe` construction and `list_modules()` filtering —
 so new tests do not re-prove those string paths. The biggest net improvement is **making each
@@ -152,6 +159,18 @@ Pending: `manage lint --tests` bans only `_private` names in `public/`. The full
 — a public test uses only supported names — would check `public/` imports against
 `riko/base/_api_surface.py`; the `public/` files' imports of non-surface modules need moving or an
 allowlist first.
+
+Pending tooling, recorded 2026-10-29 and built on the next audit that finds a miss it would have
+caught (`.claude/skills/audit-tests/SKILL.md` reports such misses under "Tool gaps"):
+
+- `overlap_scan.py` matching doctest call arguments against `pytest.param` rows, since its literal
+  threshold let `"8"`/`"many"` doctest copies through;
+- `overlap_scan.py` matching a doctest `Traceback` case against a `pytest.raises` row for the same
+  call;
+- a `manage lint --tests` check of the bound ladder in `tests/__init__.py` and of a test that can
+  end only by its `timeout` backstop;
+- a `manage lint --tests` check for a test file that reads a tracked `_docs/` or `.md` path, the
+  grep-able half of the §1 rule that Markdown is never pytest input.
 
 ### Import-linter coverage gap
 

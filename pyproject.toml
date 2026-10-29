@@ -119,7 +119,6 @@ malware-check = true
 extend-exclude = [
     "**/pycache",
     ".cache",
-    ".claude",
     ".ruff_cache",
     ".tox/*",
     "tmp",
