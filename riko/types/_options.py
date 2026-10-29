@@ -1,4 +1,16 @@
-"""Module defaults, decoration options, call options, and dispatch typing contracts."""
+"""
+Module defaults, decoration options, call options, and dispatch typing contracts.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko.types import CallOptions
+        >>>
+        >>> CallOptions(emit=True).kwargs
+        {'emit': True}
+
+"""
 
 from __future__ import annotations
 

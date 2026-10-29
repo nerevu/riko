@@ -1,4 +1,17 @@
-"""Declares owned, external, one-shot, and reusable resource definitions."""
+"""
+Declares owned, external, one-shot, and reusable resource definitions.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import Resource
+        >>>
+        >>> resource = Resource({"connected": True}, cleanup=False)
+        >>> resource.value, resource.external, resource.reusable
+        ({'connected': True}, False, False)
+
+"""
 
 from __future__ import annotations
 
