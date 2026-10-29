@@ -399,7 +399,7 @@ class PipelineDefinition(Generic[T_co]):
             event_sink: The sink that receives the run's events (default: None, events
                 are discarded).
 
-            shutdown_timeout: The bound, in seconds, on teardown under asynchronous
+            shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
                 iteration (default: None, no bound).
 
         Returns:

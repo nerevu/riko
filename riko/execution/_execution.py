@@ -66,7 +66,7 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     """
     Runs a blocking callable on a worker thread from the current event loop.
 
-    No execution's open check applies, so resource teardown and stream closing can
+    No execution's open check applies, so resource cleanup and stream closing can
     still offload work while an execution is shutting down.
 
     Args:

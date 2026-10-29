@@ -111,7 +111,7 @@ class ExecutionSettings:
         event_sink: The sink that receives events emitted during a run, or ``None`` to
             discard them.
 
-        shutdown_timeout: The bound, in seconds, on teardown under asynchronous
+        shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
             iteration, or ``None`` for no bound.
 
     Raises:

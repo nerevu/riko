@@ -390,7 +390,7 @@ cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.
 Two internal drift guards accompany it:
 
 - no execution-spawned task escapes the execution's task group (assert no surviving tasks after
-  teardown, including on the cancellation and abandonment paths);
+  cleanup, including on the cancellation and abandonment paths);
 - no module, parser, factory, or extension code constructs an event loop, portal, executor, worker
   thread, or task group. A grep-style guard over `riko/` outside `riko/_execution/` is adequate and
   cheap.

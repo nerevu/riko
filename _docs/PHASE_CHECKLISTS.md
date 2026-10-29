@@ -213,7 +213,7 @@ classes were deleted at v1-cutover step 4; `AsyncExecution` now owns async itera
   close via `async with`/`aclose`.
 
 **Landed since the original deferral list.**
-- Cancel-scope teardown of streaming pipes (`aclosing` + benign `GeneratorExit`-group unwrap) — a
+- Cancel-scope cleanup of streaming pipes (`aclosing` + benign `GeneratorExit`-group unwrap) — a
   supported early close (`async with`/`aclose`) is clean while as-complete delivery is kept.
 - Child-level `count="first"` early-exit + close via `_take_first` (`riko/modules/_loop.py`) — yields
   the first result per parent then closes the child iterator in a `finally`; shared by sync + async loops.
@@ -433,7 +433,7 @@ definitions. Final F5/R7 moves live subscription/channel/task ownership into eac
 changes sync and async together from transformation-shaped `func` to a receive-time `func` whose
 return is discarded and whose received item passes through, removes hidden
 PENDING/DONE/id lifecycle bookkeeping, and makes cleanup independent of draining ignored branch
-output. The current idle-drain teardown bug remains characterized rather than being repaired by
+output. The current idle-drain cleanup bug remains characterized rather than being repaired by
 extending the old DONE/`ids` machinery.
 
 ## Guiding & resolved decisions

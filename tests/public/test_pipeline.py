@@ -1198,7 +1198,7 @@ class TestAsyncBoundedParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_early_close_is_clean(self, ordered):
-        """Ensure early closure tears down a bounded pipeline cleanly."""
+        """Ensure early closure cleans up a bounded pipeline."""
 
         async def unbounded():
             index = 0

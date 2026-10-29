@@ -449,7 +449,7 @@ the type/normalization boundary, not the execution lifecycle:
 R3 classifies and normalizes what can be known from the definition. It must **not** inspect a
 not-yet-created factory result to guess its runtime lifecycle. Context construction also does not open,
 await, enter, close, or serialize execution-created resource values. Runtime factory-result
-validation, single-flight lazy acquisition, sync/async adaptation, rollback, and teardown belong to
+validation, single-flight lazy acquisition, sync/async adaptation, rollback, and cleanup belong to
 R4B.
 
 Caller-owned `Resource.from_external(...)` values are the explicit exception to "no live values in a
@@ -753,7 +753,7 @@ Deliver:
   ordering moved to R11, whose provider sessions are their first consumer; R4B ships `lazy=` as a
   recorded but not yet honored flag);
 - transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
-- bounded cancellation-shielded resource teardown;
+- bounded cancellation-shielded resource cleanup;
 - one R4B resource-model cleanup that normalizes user resource declarations into an executable
   lifecycle plan and stops carrying generator/context-manager/instance distinctions past that
   boundary;
@@ -772,13 +772,13 @@ and other consumers remain ecosystem/observability work.
    `asyncio.create_task()` exists only in explicitly characterized transitional code scheduled for
    removal;
 2. every context-managed component is entered on the execution exit stack, and rollback is that
-   stack unwinding rather than a separate teardown path;
+   stack unwinding rather than a separate cleanup path;
 3. lifecycle composition is not execution-mode adaptation: potentially blocking sync entry/exit is
    adapted to a worker before it reaches an async stack;
 4. cross-mode adaptation happens only at an execution boundary chosen during preparation. Parser,
    module, factory, and extension code never creates event loops, portals, executors, worker
    threads, or task groups;
-5. resource teardown is shielded from ambient cancellation only within the shared execution shutdown
+5. resource cleanup is shielded from ambient cancellation only within the shared execution shutdown
    budget; cancellation remains the primary outcome and no per-resource timeout exists initially;
 6. event delivery is execution-owned and must not create a parallel callback/lifecycle framework.
 
@@ -786,13 +786,13 @@ and other consumers remain ecosystem/observability work.
 
 Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
 tests prove a real sync lifecycle under **both** sync and async execution, a real async lifecycle
-under native async execution, and deterministic rejection of async-native teardown under sync
-execution. The fourth quadrant — async-native teardown on `SyncExecution` — is an explicit
+under native async execution, and deterministic rejection of async-native cleanup under sync
+execution. The fourth quadrant — async-native cleanup on `SyncExecution` — is an explicit
 `InvalidPipelineError` raised before acquisition, not a bridged run, so async resources are never
 smuggled through the sync portal for cleanup.
 
 Covered cases: eager open, mid-execution failure rollback, failure-induced task cancellation,
-ambient-cancellation-safe teardown, exception-aware `__exit__`/`__aexit__` teardown, and
+ambient-cancellation-safe cleanup, exception-aware `__exit__`/`__aexit__` cleanup, and
 lone-versus-grouped cleanup-error reporting. Lazy open and early consumer abandonment are deferred
 past this foundation commit. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
@@ -804,13 +804,13 @@ rather than twice. R4B collapses the two resource-model concerns into a single c
 carrying them forward as separate hotspots.
 
 Classify and validate each user declaration once, then prepare it into an executable lifecycle plan
-carrying `acquire`, native mode, `enter`, `teardown`, ownership, and cleanup policy. After that
+carrying `acquire`, native mode, `enter`, `close`, ownership, and cleanup policy. After that
 boundary the runtime consumes the plan; it does not re-inspect the original generator-vs-context-
 manager-vs-instance syntax.
 
 As built (user ruling 2026-10-16, reshaped twice on 2026-10-21): the plan is the definition's stored
-data, not a separate prepared object. `Resource` stores `plan`, `credential`, and `lazy`; `plan` is a
-tagged union defined in `riko/types/_resource.py` and exported from `riko.types` — `ExternalPlan` /
+data, not a separate prepared object. `Resource` stores `_plan`, `credential`, and `lazy`; `_plan` is a
+private tagged union defined in `riko/types/_resource.py` (only `ResourceStrategy` is exported, 2026-10-28) — `ExternalPlan` /
 `OwnedPlan` / `ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan`. Each constructor
 classifies its declaration once (`build_factory_plan` / `build_lifecycle_plan`, where the generic
 factory guards narrow), so no field-pair validator or cast exists. Lifecycle records split on
@@ -820,17 +820,17 @@ picklable `enter` (a generator function is wrapped through a module-level partia
 given). `strategy`, `async_native`, `external`, and `value` are derived properties. Both executions
 `match` on the plan; `FactoryKind` no longer exists. The records are passive: calling a value factory
 and building a lifecycle's context manager live in `riko/execution/_resource_acquisition.py` (where
-the `(ctx, resources)` invocation extends them), and owned-value teardown stays in
-`riko/execution/_resource_teardown.py`.
+the `(ctx, resources)` invocation extends them), and owned-value cleanup stays in
+`riko/execution/_resource_cleanup.py`.
 
 1. Classification is input machinery and not the runtime ontology. The normalization boundary
    preserves the distinctions required to acquire and adapt a resource — value factory vs
-   lifecycle, explicit cleanup vs intrinsic teardown, native sync vs async — and drops the ones that
+   lifecycle, an explicit cleanup callable vs intrinsic cleanup, native sync vs async — and drops the ones that
    only described the user's original syntax (generator function vs context-manager factory vs
    instance survives only as the `source` a lifecycle record keeps for identity).
 2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types (on
    the stable `riko` surface with `Resource`); `Context` admission is their only `isinstance` reader.
-   Reuse, ownership, and no-op-vs-real teardown are carried into execution by the plan variant, not
+   Reuse, ownership, and no-op-vs-real cleanup are carried into execution by the plan variant, not
    by subclass bodies; the private variants (`_OwnedResource`, `_LifecycleResource`,
    `_ExternalResource`, `_FactoryResource`) are absent.
 
@@ -944,12 +944,12 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
   shutdown (the async task group arrives with R7's spawned tasks).
 - **MIGRATE:** P10 bounded/executor mechanics and R3 resource acquisition run under the common
   execution lifetime; resource declarations normalize once into the executable lifecycle plan
-  (`Resource.plan`). The
+  (`Resource._plan`). The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
   until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/public/test_write.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
-  private resource-variant subclass hierarchy is absent, replaced by the `Resource.plan` tagged union.
+  private resource-variant subclass hierarchy is absent, replaced by the `Resource._plan` tagged union.
 
 ### R4C — Callable nodes (pure one-to-one `map`)
 
@@ -1451,7 +1451,7 @@ reconciliation/mutation. Provider commands that do not naturally mean data write
 Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
 
 Audit note (2026-10-10 structural audit): `riko/runtime/_write_session.py` (sync/async write sessions,
-incremental/framed delivery, finalize/abort/teardown) has no runtime importer; only
+incremental/framed delivery, finalize/abort/close) has no runtime importer; only
 `tests/internal/test_io.py` exercises it since the v1 collections write verbs went at
 v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/finalize state machine
 (`file_write_session` vs `async_file_write_session` differ only by `await`; the
@@ -1860,7 +1860,7 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
   thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire in
   `tests/internal/test_execution_plan.py`);
 - lazy resources acquire on first use rather than at run start, and declared resource-to-resource
-  dependencies acquire dependency-first and tear down dependent-first (moved from R4B; tripwire
+  dependencies acquire dependency-first and clean up dependent-first (moved from R4B; tripwire
   `tests/internal/test_plan_runs.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
 - factories declared `(ctx, resources)` receive a `ResourceView` (`execution-semantics.md` §
   Execution-bound resource view). `ResourceView` lives in `riko/execution/_resource_view.py` today;
@@ -2056,7 +2056,7 @@ The implementation reconciliation is complete when:
    semantics rest on explicit `version=` rather than on automatic callable introspection being
    complete;
 7. reusable owned resource lifecycle is definition/factory based, and every execution-owned
-   acquisition, context manager, task, rollback, bridge, and teardown is attached to the execution's
+   acquisition, context manager, task, rollback, bridge, and cleanup is attached to the execution's
    lifetime primitives;
 8. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
    incomplete fill;

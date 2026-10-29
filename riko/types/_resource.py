@@ -3,9 +3,9 @@
 Resource factory contracts, factory guards, and the lifecycle plans an execution drives.
 
 A lifecycle factory is a generator function or context manager factory whose value
-lives between setup and teardown; a value factory is a plain callable that returns
+lives between setup and cleanup; a value factory is a plain callable that returns
 the value. Classifying either produces a resource plan: one record per way an
-execution acquires and tears down a resource, independent of how it was declared.
+execution acquires and cleans up a resource, independent of how it was declared.
 """
 
 from __future__ import annotations
@@ -184,8 +184,8 @@ class ExternalPlan[T]:
     value: ResolvedValue[T]
 
     @property
-    def is_teardown_async(self) -> bool:
-        """Whether tearing the resource down needs the event loop. Never."""
+    def requires_async_cleanup(self) -> bool:
+        """Whether cleaning up the resource needs the event loop. Never."""
         return False
 
 
@@ -197,7 +197,7 @@ class OwnedPlan[T]:
     Attributes:
 
         value: The resolved value.
-        cleanup: The teardown override: a callable, ``False`` for none, or ``None``
+        cleanup: The cleanup override: a callable, ``False`` for none, or ``None``
             for the value's own ``close()``/``aclose()``.
 
     """
@@ -206,12 +206,22 @@ class OwnedPlan[T]:
     cleanup: Cleanup[T] | Literal[False] | None = None
 
     @property
-    def is_teardown_async(self) -> bool:
-        """Whether tearing the resource down needs the event loop."""
+    def requires_async_cleanup(self) -> bool:
+        """Whether cleaning up the resource needs the event loop."""
         value = self.value
 
         if self.cleanup is None:
             is_async = is_async_closeable(value) and not is_sync_closeable(value)
+        else:
+            is_async = is_async_callable(self.cleanup)
+
+        return is_async
+
+    @property
+    def has_async_cleanup(self) -> bool:
+        """Whether the resource can clean up natively async."""
+        if self.cleanup is None:
+            is_async = is_async_closeable(self.value)
         else:
             is_async = is_async_callable(self.cleanup)
 
@@ -226,7 +236,7 @@ class ValueFactoryPlan[T]:
     Attributes:
 
         func: The callable that produces the value.
-        cleanup: The teardown callback, or ``False`` for none.
+        cleanup: The cleanup callback, or ``False`` for none.
         args: Frozen positional arguments for ``func``.
         kwargs: Frozen keyword arguments for ``func``.
 
@@ -243,8 +253,8 @@ class ValueFactoryPlan[T]:
         return is_async_callable(self.func)
 
     @property
-    def is_teardown_async(self) -> bool:
-        """Whether tearing the resource down needs the event loop."""
+    def requires_async_cleanup(self) -> bool:
+        """Whether cleaning up the resource needs the event loop."""
         return is_async_callable(self.cleanup)
 
 
@@ -270,8 +280,8 @@ class SyncLifecyclePlan[T]:
     kwargs: FrozenDict[str, object] = field(factory=FrozenDict, converter=FrozenDict)
 
     @property
-    def is_teardown_async(self) -> bool:
-        """Whether tearing the resource down needs the event loop. Never."""
+    def requires_async_cleanup(self) -> bool:
+        """Whether cleaning up the resource needs the event loop. Never."""
         return False
 
 
@@ -297,8 +307,8 @@ class AsyncLifecyclePlan[T]:
     kwargs: FrozenDict[str, object] = field(factory=FrozenDict, converter=FrozenDict)
 
     @property
-    def is_teardown_async(self) -> bool:
-        """Whether tearing the resource down needs the event loop. Always."""
+    def requires_async_cleanup(self) -> bool:
+        """Whether cleaning up the resource needs the event loop. Always."""
         return True
 
 
@@ -387,7 +397,7 @@ def build_factory_plan[T](
 
         factory: The lifecycle or value factory.
         args: Positional arguments for ``factory``.
-        cleanup: The value factory's teardown callback, or ``False`` for none.
+        cleanup: The value factory's cleanup callback, or ``False`` for none.
         kwargs: Keyword arguments for ``factory``.
 
     Returns:

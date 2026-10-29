@@ -191,7 +191,7 @@ The exact file split may evolve, but responsibilities must stay separated:
 | `riko/_execution/__init__.py` NEW | private execution package |
 | `riko/_execution/base.py` NEW | shared execution scaffolding/options/preparation state |
 | `riko/_execution/lifetime.py` NEW | task group, exit stack, portal/worker bridge |
-| `riko/_execution/sync.py` NEW | SyncExecution, portal/resource ownership, teardown |
+| `riko/_execution/sync.py` NEW | SyncExecution, portal/resource ownership, cleanup |
 | `riko/_execution/async_.py` NEW | AsyncExecution, native async, structured concurrency |
 | `riko/_execution/adapters.py` NEW | private sync/async adaptation |
 | `riko/_execution/streams.py` NEW | one source-normalization boundary |

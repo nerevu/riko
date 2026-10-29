@@ -113,7 +113,7 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
 | bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution | async-only components under sync execution (one persistent portal, pulled item by item), blocking sync work under async execution (a worker thread whose output is pulled on demand) |
 
-The write-session lifecycle behind `write()` is one of these context-managed components: R4B owns its acquisition and teardown by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
+The write-session lifecycle behind `write()` is one of these context-managed components: R4B owns its acquisition and cleanup by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
 
 A write session exposes three **distinct** operations, and neither R4B execution nor R5C `WriteNode` may collapse them:
 
@@ -121,9 +121,9 @@ A write session exposes three **distinct** operations, and neither R4B execution
 |---|---|
 | `finalize` | commit successful logical delivery and return the `WriteResult`; idempotent (a second call returns the cached result) |
 | `abort` | abandon the logical delivery; for framed/buffered targets, discard the staged/unpublished document |
-| `teardown` | release runtime resources (close handles/staging); **never commits** |
+| `close` | release runtime resources (close handles/staging); **never commits** |
 
-The governing invariant is **`teardown` never chooses commit semantics** — semantic completion belongs to the execution host, not to resource release. The exit-stack context manager only *acquires* the session on entry and *tears it down* on exit; it does not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and graceful close → `finalize` (the consumed prefix), `terminate()` and any failure → `abort`, always followed by `teardown`. Abort promises no rollback of bytes/items already emitted by an incremental target (CSV/JSONL); it only discards staged content for framed targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy are execution-time facts and must not leak into the R4A workflow IR (see `implementation-sequence.md` R4A) — the IR carries declarative Target/Format/`WriteOperation` intent only.
+The governing invariant is **`close` never chooses commit semantics** — semantic completion belongs to the execution host, not to resource release. The exit-stack context manager only *acquires* the session on entry and *closes it* on exit; it does not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and graceful close → `finalize` (the consumed prefix), `terminate()` and any failure → `abort`, always followed by `close`. Abort promises no rollback of bytes/items already emitted by an incremental target (CSV/JSONL); it only discards staged content for framed targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy are execution-time facts and must not leak into the R4A workflow IR (see `implementation-sequence.md` R4A) — the IR carries declarative Target/Format/`WriteOperation` intent only.
 
 Two invariants govern their use.
 
@@ -145,7 +145,7 @@ clients such as `sqlite3` connections work under async execution. Today entry an
 different worker threads; R11 (provider sessions) owns the fix, and a strict xfail in
 `tests/internal/test_execution_plan.py` marks it.
 
-The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *teardown* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async teardown.
+The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *cleanup* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async cleanup.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
 
@@ -182,18 +182,18 @@ Conceptually:
 
 ```text
 Resource[T]                   # variant carried as data, not a subclass:
-├── OneShotResource[T]        #   the `plan` record marks the variant
+├── OneShotResource[T]        #   the `_plan` record marks the variant
 └── ReusableResource[T]       # Context-storable definition
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is the record `Resource.plan` holds — `ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`, classified once by the constructor — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type, and the markers are declaration types only: calling one, or a `from_*` constructor through one, raises `TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review); `external`, `strategy`, and `async_native` derive from the plan. The execution layer consumes the plan and never re-inspects the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is the record `Resource._plan` holds — `ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`, classified once by the constructor — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type, and the markers are declaration types only: calling one, or a `from_*` constructor through one, raises `TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review); `external`, `strategy`, and `async_native` derive from the plan. The execution layer consumes the plan and never re-inspects the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|
 | `Resource(value)` | Existing resolved value | Use this existing value | `value` | Riko owns the value; uses explicit `cleanup=` when supplied, otherwise the value's native close | `OneShotResource[T]` | No |
 | `Resource.from_external(value)` | Existing caller-owned value | Borrow this existing value | `value` | Caller owns lifecycle; Riko never closes it | `ReusableResource[T]` | Yes |
-| `Resource.from_lifecycle(x)` | Generator/context-manager lifecycle, or supported lifecycle object | Enter this lifecycle | Yielded / entered value | Lifecycle defines teardown; Riko drives entry/exit | `OneShotResource[T]` | No |
-| `Resource.from_factory(f, ...)` | Value-producing callable | Call this producer | Result of `f(...)` | Riko manages the produced value's teardown; `cleanup=` is required (callable or `False`) | `ReusableResource[T]` | Yes |
+| `Resource.from_lifecycle(x)` | Generator/context-manager lifecycle, or supported lifecycle object | Enter this lifecycle | Yielded / entered value | Lifecycle defines cleanup; Riko drives entry/exit | `OneShotResource[T]` | No |
+| `Resource.from_factory(f, ...)` | Value-producing callable | Call this producer | Result of `f(...)` | Riko manages the produced value's cleanup; `cleanup=` is required (callable or `False`) | `ReusableResource[T]` | Yes |
 | `context.with_resource(name, definition)` | Reusable resource definition | Bind a named definition to a new `Context` | Nothing yet; resolved during execution | Opens/closes nothing at bind time; lifecycle stays as defined | `Context` holding the resource | Context-safe definitions only |
 
 The one-line mental model:
@@ -201,7 +201,7 @@ The one-line mental model:
 ```text
 Resource(value)               → use     (existing value; Riko owns it)
 Resource.from_external(value) → borrow  (existing value; caller owns it)
-Resource.from_lifecycle(x)    → enter   (a lifecycle; it defines teardown)
+Resource.from_lifecycle(x)    → enter   (a lifecycle; it defines cleanup)
 Resource.from_factory(f, ...) → call    (a producer; Riko manages the result)
 context.with_resource(...)    → bind    (a definition to a new Context; resolved later)
 ```
@@ -234,18 +234,18 @@ Arbitrary callable objects are **not** inferred to be factories merely because `
 ctx.with_resource("client", Resource.from_factory(Client, base_url=url))
 ```
 
-**`ValueFactory` cleanup is mandatory; `LifecycleFactory` teardown is intrinsic.** The two factory shapes carry teardown differently, and `from_factory` encodes that split statically:
+**`ValueFactory` cleanup is mandatory; `LifecycleFactory` cleanup is intrinsic.** The two factory shapes carry cleanup differently, and `from_factory` encodes that split statically:
 
 ```text
-Resource.from_factory(value_factory, cleanup=fn)     # accepted — explicit teardown callable
-Resource.from_factory(value_factory, cleanup=False)  # accepted — explicitly no teardown
-Resource.from_factory(value_factory)                 # rejected — a ValueFactory has no intrinsic teardown
-Resource.from_factory(lifecycle_factory)             # accepted — teardown lives in the generator/CM
+Resource.from_factory(value_factory, cleanup=fn)     # accepted — explicit cleanup callable
+Resource.from_factory(value_factory, cleanup=False)  # accepted — explicitly no cleanup
+Resource.from_factory(value_factory)                 # rejected — a ValueFactory has no intrinsic cleanup
+Resource.from_factory(lifecycle_factory)             # accepted — cleanup lives in the generator/CM
 Resource.from_factory(lifecycle_factory, cleanup=fn) # rejected — use from_lifecycle for CM/gen semantics
 Resource(value_factory)                              # rejected statically — a producer is not a resolved value
 ```
 
-An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no inherent teardown, so Riko refuses to guess: it requires either `cleanup=<callable>` (Riko runs it at teardown) or `cleanup=False` (the produced value is deliberately not closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own teardown, so supplying `cleanup=` there is an error — reach for `Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield` semantics. This keeps "who tears this down" an explicit declaration rather than a runtime inference.
+An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no inherent cleanup, so Riko refuses to guess: it requires either `cleanup=<callable>` (Riko runs it at cleanup) or `cleanup=False` (the produced value is deliberately not closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own cleanup, so supplying `cleanup=` there is an error — reach for `Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield` semantics. This keeps "who tears this down" an explicit declaration rather than a runtime inference.
 
 `Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments using normal partial-like semantics, then validates the remaining invocation contract. The only valid remaining signatures are exactly:
 
@@ -279,7 +279,7 @@ otherwise
     -> ResourceError
 ```
 
-When a value supports both context-manager and close/aclose protocols, context-manager semantics win because they can encode setup, exception-aware teardown, transactions, and suppression. If both sync and async context-manager protocols exist, the protocol matching sync or async execution wins; bridging is used only when the matching native protocol is unavailable. The same native-mode preference applies to close/aclose capability fallback.
+When a value supports both context-manager and close/aclose protocols, context-manager semantics win because they can encode setup, exception-aware cleanup, transactions, and suppression. If both sync and async context-manager protocols exist, the protocol matching sync or async execution wins; bridging is used only when the matching native protocol is unavailable. The same native-mode preference applies to close/aclose capability fallback.
 
 Closeability is a runtime capability, not a bound on `T`. Internal structural protocols may be modeled permissively because Riko ignores their return values:
 
@@ -298,7 +298,7 @@ Riko-owned explicit cleanup is a stricter callback contract:
 type Cleanup[T] = Callable[[T], None | Awaitable[None]]
 ```
 
-It receives only the resolved resource value. Callers that need exception-aware teardown or richer lifecycle state use a generator/context manager instead of expanding the cleanup callback signature.
+It receives only the resolved resource value. Callers that need exception-aware cleanup or richer lifecycle state use a generator/context manager instead of expanding the cleanup callback signature.
 
 ### Dependency graph, eager validation, and laziness
 
@@ -308,19 +308,19 @@ Resource dependency graphs are validated completely during preparation, regardle
 
 Dependency bindings stay symbolic until preparation and resolve against the effective Context. Only directly declared resource dependencies appear in a factory/parser `ResourceView`; transitive dependencies affect lifecycle and semantic identity but are not automatically exposed. A factory may read immutable Context configuration or Context-local module definitions through `ctx`, but only `resources=` creates managed lifecycle dependency edges.
 
-Acquisition is dependency-first and teardown is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. A failed acquisition is memoized as failed for the remainder of that execution rather than silently retried on each subsequent use; the shared single-flight waiters observe the same failure. Re-executing the same Pipeline starts a fresh execution that acquires again, producing fresh owned factory resource values while external resources resolve to their caller-supplied object.
+Acquisition is dependency-first and cleanup is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. A failed acquisition is memoized as failed for the remainder of that execution rather than silently retried on each subsequent use; the shared single-flight waiters observe the same failure. Re-executing the same Pipeline starts a fresh execution that acquires again, producing fresh owned factory resource values while external resources resolve to their caller-supplied object.
 
 Opening/resolution is transactional with respect to established ownership. If acquisition or post-acquisition validation fails, the execution unwinds every successfully established lifecycle, including the partially acquired current resource when Riko has a valid cleanup path. Riko never invents cleanup for an arbitrary object merely because validation failed.
 
-### Teardown, errors, and cancellation
+### Cleanup, errors, and cancellation
 
-The single execution exit stack owns resource unwind. Native generator/context-manager exception semantics are preserved: a real `__exit__`/`__aexit__` or generator teardown may observe, replace, or suppress an execution exception according to normal Python semantics. Riko itself never suppresses an error on a resource's behalf. A simple `cleanup=` callback cannot suppress the primary execution error.
+The single execution exit stack owns resource unwind. Native generator/context-manager exception semantics are preserved: a real `__exit__`/`__aexit__` or generator cleanup may observe, replace, or suppress an execution exception according to normal Python semantics. Riko itself never suppresses an error on a resource's behalf. A simple `cleanup=` callback cannot suppress the primary execution error.
 
 All required cleanup is attempted. A single cleanup error is raised directly when no primary error exists; multiple independent cleanup failures use `ExceptionGroup`. When execution already failed or was cancelled, that primary outcome remains primary while cleanup failures are retained/reported alongside it according to the common error-grouping policy.
 
-Cancellation does not make the cleanup guarantee vacuous. Required async teardown runs inside a bounded cancellation-shielded unwind so ambient execution cancellation does not immediately abort `await`-based cleanup. The bound is one execution-level configurable shutdown/cleanup budget shared by the unwind, not a separate timeout on every resource. No per-resource timeout is part of the initial contract.
+Cancellation does not make the cleanup guarantee vacuous. Required async cleanup runs inside a bounded cancellation-shielded unwind so ambient execution cancellation does not immediately abort `await`-based cleanup. The bound is one execution-level configurable shutdown/cleanup budget shared by the unwind, not a separate timeout on every resource. No per-resource timeout is part of the initial contract.
 
-The currently shipped `riko/resources.py` is a thin migration slice, not the target abstraction. Its public-looking `open()`/`aopen()`/`close()`/`aclose()` helpers and direct lifecycle discovery on resolved values are implementation scaffolding for the current migration and must not define the R3/R4 design. In the target runtime, execution owns acquisition, entry, adaptation, rollback, and teardown.
+The currently shipped `riko/resources.py` is a thin migration slice, not the target abstraction. Its public-looking `open()`/`aopen()`/`close()`/`aclose()` helpers and direct lifecycle discovery on resolved values are implementation scaffolding for the current migration and must not define the R3/R4 design. In the target runtime, execution owns acquisition, entry, adaptation, rollback, and cleanup.
 
 ### Resource identity
 
@@ -925,7 +925,7 @@ Final async execution uses structured concurrency:
 
 This is what makes the ownership rule enforceable rather than aspirational: children share the owning cancellation scope, and the scope cannot exit while a child is still running.
 
-The final execution owns cancellation and teardown. On cancellation it stops accepting new work, cancels queued work where supported, allows unavoidable running threads to finish, and deterministically tears down execution-owned resources/channels/portal state. Required resource teardown follows the bounded shielded-unwind rule above so ambient cancellation does not immediately cancel cleanup itself.
+The final execution owns cancellation and cleanup. On cancellation it stops accepting new work, cancels queued work where supported, allows unavoidable running threads to finish, and deterministically cleans up execution-owned resources/channels/portal state. Required resource cleanup follows the bounded shielded-unwind rule above so ambient cancellation does not immediately cancel cleanup itself.
 
 A future explicit cancellation policy may distinguish draining from cancelling pending work, but cancellation correctness must not depend on users draining published subscription branches.
 

@@ -835,16 +835,16 @@ portal drain and the worker-side upstream reader are the same function with a di
 - **`SyncExecution`** runs synchronously behind an `ExitStack`; async-only components run through a
   lazily started `BlockingPortal` (memoized via `functools.cached_property`) that is entered onto the
   exit stack, so shutdown stops the portal (joining its tasks) as part of the stack's LIFO unwind.
-  This is sound because sync execution rejects async-native teardown, so no owned cleanup ever needs
+  This is sound because sync execution rejects async-native cleanup, so no owned cleanup ever needs
   the portal alive.
 - **`AsyncExecution`** runs behind an `AsyncExitStack`; blocking sync components run on a worker
   thread. Shutdown unwinds the stack behind a cancellation shield within the optional shutdown timeout,
-  so ambient cancellation of the shutdown task can never skip teardown.
+  so ambient cancellation of the shutdown task can never skip cleanup.
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic exit-stack
   LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
   resource context manager observes, replaces, or suppresses it under normal Python semantics and the
   execution surfaces the returned suppression. Plain cleanup callbacks (`callback`,
-  `push_async_callback`, and every Riko-registered teardown built on them) are wrapped so a failure
+  `push_async_callback`, and every Riko-registered cleanup built on them) are wrapped so a failure
   is recorded rather than raised, which is what keeps a callback from replacing the primary error;
   an exhausted shutdown timeout (`TimeoutError`) is recorded the same way. `_report_shutdown` then raises: a lone cleanup failure with no primary error bare; several
   with no primary as an `ExceptionGroup`; and any cleanup failures beside an unsuppressed primary
@@ -856,45 +856,46 @@ keyed by resource identity); a repeat returns the first value or replays the fir
 Concurrent first-use of one lazy resource under `aacquire` is single-flight too — a per-resource
 in-flight gate makes waiters await and replay the leader's outcome rather than resolving twice.
 A `Resource` stores the plan its constructor classified: `ExternalPlan` / `OwnedPlan` /
-`ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan` (`riko/types/_resource.py`, exported
-from `riko.types`), built by `build_factory_plan`/`build_lifecycle_plan`. `strategy`
+`ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan` (`riko/types/_resource.py`, private;
+`Resource._plan`), built by `build_factory_plan`/`build_lifecycle_plan`. `strategy`
 (`ResourceStrategy`), `async_native`, `external`, and `value` derive from it. The executions `match`
-on `resource.plan` inside the recorded acquisition (so a failing factory is replayed like any other
+on `resource._plan` inside the recorded acquisition (so a failing factory is replayed like any other
 outcome); the records are passive data, and `call_factory`/`build_context_manager`
-(`riko/execution/_resource_acquisition.py`) thaw fresh argument copies each time. A generator function's `enter` is a module-level partial, so the plan pickles. Teardown rides the exit stack: owned → `close`/`aclose`,
+(`riko/execution/_resource_acquisition.py`) thaw fresh argument copies each time. A generator function's `enter` is a module-level partial, so the plan pickles. Cleanup rides the exit stack: owned → `close`/`aclose`,
 value-factory → cleanup callback, lifecycle → context-manager entry. Explicit `cleanup` is
 authoritative. The two executions adapt work across sync/async as mirror images, classifying async-vs-sync
-with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`, read through the plan records' `is_async`/`is_teardown_async`).
+with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`, read through the plan records' `is_async`/`requires_async_cleanup`).
 Under `SyncExecution`, async value *production* bridges through the portal, but async-native
-*teardown* — an async cleanup callable, an async-native lifecycle, or an `aclose()`-only owned value —
+*cleanup* — an async cleanup callable, an async-native lifecycle, or an `aclose()`-only owned value —
 is a permanent boundary: it raises `InvalidPipelineError` before the resource is acquired, so no value
 is produced and no lifecycle entered behind the rejection. Under `AsyncExecution`, blocking sync work
 is instead offloaded to a worker thread: a sync value factory, a sync cleanup callback, and an owned
-sync `close()` run through `_asyncify_call` (an unguarded worker seam, because teardown runs while the
-execution is closing, when the guarded `run_sync` would refuse), and a sync context-manager lifecycle
+sync `close()` run through `aclose_with` over `_asyncify_call` (an unguarded worker seam, because cleanup runs while the
+execution is closing, when the guarded `run_sync` would refuse; an awaitable the sync cleanup returns is then
+awaited on the loop, while `SyncExecution`'s `close_with` refuses one with `InvalidPipelineError`), and a sync context-manager lifecycle
 is entered through a `_WorkerContext` async wrapper so both `__enter__` and `__exit__` run off-loop with
 exception info preserved.
 
-**Resource-model shape.** `Resource` stores `plan`, `credential`, and `lazy` — no private subclass
+**Resource-model shape.** `Resource` stores `_plan`, `credential`, and `lazy` — no private subclass
 hierarchy and no field-pair invariants. `OneShotResource` / `ReusableResource` remain as user-facing
 marker types (`reusable` is `isinstance`); `Resource(value, cleanup=)` builds an `OwnedPlan` in its own
 `__init__` and the alternate constructors set fields through a private builder. `Resource` itself has
-no open/close behavior: the execution's `acquire`/`aacquire` drive its `plan` and tear it down (owned
-values through `close_resource`/`aclose_resource` in `riko/execution/_resource_teardown.py`).
-`Resource`, `ReusableResource`, and `OneShotResource` are on the stable `riko` surface; the plan
-records and `ResourceStrategy` are on `riko.types`. A `contextmanager`/`asynccontextmanager` factory is
+no open/close behavior: the execution's `acquire`/`aacquire` drive its `_plan` and clean up (owned
+values through `close_resource`/`aclose_resource` in `riko/execution/_resource_cleanup.py`).
+`Resource`, `ReusableResource`, and `OneShotResource` are on the stable `riko` surface; `ResourceStrategy`
+is on `riko.types`, and the plan records are private (2026-10-28 ruling). A `contextmanager`/`asynccontextmanager` factory is
 recognized by the decorator's shared helper code anywhere in its `__wrapped__` chain, so another
 `functools.wraps` decorator around a generator function leaves it a generator lifecycle.
 
 **External-resource proof.** `tests/internal/test_execution.py` proves the lifetime holds a
 genuinely external resource — a real HTTP client against the loopback server
 (`@pytest.mark.simulated_network`), not a synthetic object — under both sync and async execution,
-across eager open + teardown, the async-under-sync rejection boundary, and mid-run failure rollback;
+across eager open + cleanup, the async-under-sync rejection boundary, and mid-run failure rollback;
 failure-induced cancellation of execution-spawned tasks moves to R7 with the task hosting it needs.
 The foundation semantics are proven directly: ambient cancellation
 of the shutdown task still unwinds resources, a resource context manager receives and can suppress the
 primary error, a lone cleanup failure raises bare, concurrent first-use is single-flight, and
-async-native teardown is rejected before any value is produced. Deferred to R11
+async-native cleanup is rejected before any value is produced. Deferred to R11
 (provider sessions): true lazy-open-on-first-use — `lazy=` is recorded but every bound resource is
 acquired, used or not — and resource-to-resource dependency ordering.
 
@@ -916,7 +917,7 @@ run:
   `Context.replace`/`with_resource` re-freezes nothing. Set-only-internally fields use private init
   aliases (`Context(_resources=...)`) while staying public attributes. `Resource` has a hand-written
   `__init__` that validates the owned-value path and stores an `OwnedPlan`; the alternate
-  constructors set `plan`/`credential`/`lazy` through `_from_plan`; `Context` accepts only
+  constructors set `_plan`/`credential`/`lazy` through `_from_plan`; `Context` accepts only
   `ReusableResource` values in `_resources`.
 - One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_run.py`) back
   `Pipeline` iteration, and `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`) builds on them
@@ -1006,7 +1007,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
 - Each node's incoming edges are wired by port grammar: bare `in` is the positional source, `in:N` ports
   become the ordered `others=[...]` list, and `in:<name>` ports pass as the named stream kwarg.
 - A node's declared `{slot: name}` resource binding is injected as a `resources` view whose values come
-  from execution-owned `acquire`/`aacquire` (single-flight + exit-stack teardown), resolved against the
+  from execution-owned `acquire`/`aacquire` (single-flight + exit-stack cleanup), resolved against the
   execution's `Context`; a name absent from the Context raises before any sibling is acquired. Providing
   resources into the `Pipeline` surface itself is deferred.
 - `run_pipeline` / `arun_pipeline(definition, dispatcher, *, seed=None)` (`riko/runtime/_run.py`, plain
@@ -1241,10 +1242,10 @@ v1-cutover step 4 (2026-10-02). What remains is four durable layers:
   dedicated helper, *not* a widened `_iterutils.listize`). `Pipeline.write(dest)` calls `build_write`
   to validate the destination when it declares the `WriteNode`.
 - **runtime** — the `SyncWriteSession`/`AsyncWriteSession` protocols (`write` / `finalize` / `abort` /
-  `teardown`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,
+  `close`) and the `_FileWriteSession` state machine (`_SessionState` OPEN/FINALIZED/ABORTED/CLOSED,
   acquire-once) in `riko/runtime/_write_session.py`. `finalize` commits (idempotent), `abort` abandons,
-  `teardown` **never commits**; the `file_write_session`/`async_file_write_session` CMs only acquire +
-  tear down, and `build_write_resource` wraps the sync one as a one-shot `Resource`.
+  `close` **never commits**; the `file_write_session`/`async_file_write_session` CMs only acquire +
+  clean up, and `build_write_resource` wraps the sync one as a one-shot `Resource`.
 - **host adapters** — `write_through`/`awrite_through` map full-exhaust/graceful-close →
   `finalize` and terminate/failure → `abort`; they are exercised by tests only until `WriteNode`
   execution uses them.
