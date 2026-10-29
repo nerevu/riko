@@ -217,7 +217,7 @@ class _SyncFileWriteSession(_FileWriteSession):
 
     @property
     def initial_file_size(self) -> int:
-        """Whether ``path`` exists and is non-empty."""
+        """The size of ``path`` in bytes before this session writes, or 0 if absent."""
         if self._initial_file_size is None:
             try:
                 self._initial_file_size = self.path.stat().st_size
@@ -441,7 +441,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
     @property
     async def ainitial_file_size(self) -> int:
-        """Whether ``path`` exists and is non-empty."""
+        """The size of ``path`` in bytes before this session writes, or 0 if absent."""
         if self._initial_file_size is None:
             path = AsyncPath(self.path)
 

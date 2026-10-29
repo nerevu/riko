@@ -395,13 +395,13 @@ class PipelineDefinition(Generic[T_co]):
 
             concurrency: Max number of items that item-wise modules can work on at once
                 across the whole run. ``"auto"`` selects a size based on the machine.
-                (default: None, sequential processing).
+                (default: None, i.e., sequential processing).
 
-            ordered: Whether results keep source order (default: False, completion
+            ordered: Whether results keep source order (default: False, i.e., completion
                 order).
 
-            event_sink: The sink that receives the run's events (default: None, events
-                are discarded).
+            event_sink: The sink that receives the run's events (default: None, i.e.,
+                events are discarded).
 
             shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
                 iteration (default: None, no bound).
