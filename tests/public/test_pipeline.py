@@ -786,7 +786,7 @@ class TestAsyncClose:
                 consumed.append(index)
                 yield {"content": str(index)}
 
-        with fail_after(5):
+        with fail_after(1):
             hashed = Pipeline[dict[str, object]].from_module("hash")
             first = await hashed.afirst(source())
             gc.collect()
@@ -806,7 +806,7 @@ class TestAsyncClose:
             finally:
                 closed.append(True)
 
-        with fail_after(5):
+        with fail_after(1):
             async with Pipeline.from_module("hash").open(seed()) as stream:
                 async for _ in stream:
                     break
@@ -1180,7 +1180,7 @@ class TestExecutionSettings:
             os.kill(pid, 0)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(8)
+    @pytest.mark.timeout(5)
     def test_a_dead_worker_process_fails_the_run(self) -> None:
         mapped = Pipeline().map(_exit_worker)
         pipeline = mapped.with_execution(executor="process", concurrency=2)
@@ -1832,7 +1832,7 @@ class TestPipelineStream:
     async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
         source = [{"content": str(index)} for index in range(5)]
 
-        with fail_after(5), warnings.catch_warnings(record=True) as caught:
+        with fail_after(1), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
             async for _ in source | Pipeline.from_module("hash"):

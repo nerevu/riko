@@ -1351,7 +1351,7 @@ class TestAsyncResourceAcquisition:
         async def aoccupy() -> None:
             await asyncify(occupy)()
 
-        with fail_after(10):
+        with fail_after(1):
             async with create_task_group() as tg:
                 try:
                     async with AsyncExecution() as execution:

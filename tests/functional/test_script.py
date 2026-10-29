@@ -290,7 +290,7 @@ class TestExamplePipelines:
         items = module.pipe(test=True)
         return items
 
-    @pytest.mark.timeout(150)
+    @pytest.mark.timeout(5)
     def test_kazeeki(self):
         """Tests the kazeeki pipeline."""
         pipe_name = "kazeeki"
@@ -423,7 +423,7 @@ class TestExamplePipelines:
             pytest.param(
                 "kazeeki",
                 marks=[
-                    pytest.mark.timeout(150),
+                    pytest.mark.timeout(30),
                     pytest.mark.xfail(
                         strict=True,
                         reason=(

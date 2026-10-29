@@ -370,7 +370,7 @@ class TestSyncPolicy:
         def slow(item, resources=None, **_):
             if item["x"] == 1:
                 started.set()
-                gate.wait(timeout=5)
+                gate.wait(timeout=2)
                 events.append("worker done")
 
             return iter([item])
@@ -389,7 +389,7 @@ class TestSyncPolicy:
         with SyncExecution(context, settings=settings) as execution:
             stream = cast("Generator", execution.run(plan, seed=ITEMS))
             next(stream)
-            assert started.wait(timeout=5)
+            assert started.wait(timeout=2)
             Timer(0.2, gate.set).start()
             stream.close()
 
@@ -417,7 +417,7 @@ class TestSyncPolicy:
 
         worker = Thread(target=consume, daemon=True)
         worker.start()
-        worker.join(timeout=10)
+        worker.join(timeout=1)
 
         assert not worker.is_alive(), (
             "chained mapped nodes deadlocked on the shared pool"
@@ -702,7 +702,7 @@ class TestThreadBudget:
         plan = _passthru_plan(45)
         result: list = []
 
-        with fail_after(20):
+        with fail_after(2):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan, seed=ITEMS[:2])
                 result = [item async for item in stream]
@@ -724,7 +724,7 @@ class TestThreadBudget:
             build_chain(*nodes), dispatcher=build_dispatcher(definition)
         )
 
-        with fail_after(20):
+        with fail_after(1):
             result = await arun_plan(
                 plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS[:2]
             )
@@ -743,7 +743,7 @@ class TestThreadBudget:
                 await arun_plan(plan, settings=ExecutionSettings(), seed=ITEMS[:5])
             )
 
-        with fail_after(20):
+        with fail_after(1):
             async with create_task_group() as tg:
                 for _ in range(4):
                     tg.start_soon(consume)
@@ -760,7 +760,7 @@ class TestThreadBudget:
         plan = _passthru_plan(3)
         result: list = []
 
-        with fail_after(20):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan, seed=ITEMS[:2])
 
@@ -788,7 +788,7 @@ class TestThreadBudget:
             except PipelineStateError as error:
                 errors.append(type(error))
 
-        with fail_after(20):
+        with fail_after(1):
             async with AsyncExecution() as holder, create_task_group() as tg:
                 held = await holder.arun(plan, seed=ITEMS[:2])
                 await anext(held)
@@ -834,7 +834,7 @@ class TestThreadBudget:
         flow = build_workflow(nodes, edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
-        with fail_after(10):
+        with fail_after(1):
             result = await arun_plan(plan, settings=ExecutionSettings())
 
         assert result == list(
@@ -883,7 +883,7 @@ class TestThreadBudget:
         flow = build_workflow([*chains[0], *chains[1], fan_in], edges=tuple(edges))
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
-        with fail_after(20):
+        with fail_after(2):
             result = await arun_plan(plan, settings=ExecutionSettings())
 
         assert plan.get_thread_demand("default", mapped=False) == 25
@@ -907,7 +907,7 @@ class TestThreadBudget:
             read.append(True)
             yield from ITEMS[:2]
 
-        with fail_after(20):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 with pytest.raises(InvalidPipelineError, match="RIKO_NODE_THREADS"):
                     await execution.arun(_passthru_plan(depth), seed=source())
@@ -922,7 +922,7 @@ class TestThreadBudget:
         plan = _passthru_plan(2)
         rest: list = []
 
-        with fail_after(20):
+        with fail_after(1):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan, seed=ITEMS[:2])
                 await anext(stream)
