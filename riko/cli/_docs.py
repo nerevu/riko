@@ -103,6 +103,11 @@ _HISTORY_WORDS = re.compile(
 )
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
+_SOURCE_SYMBOL_CITATION = re.compile(
+    r"(?:`(?P<first>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)(?=[`(\[])[^`]*`/)?"
+    r"`(?P<name>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)(?=[`(\[])[^`]*`"
+    r" \(`(?P<path>riko/[A-Za-z0-9_./-]+\.py)`"
+)
 _CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
 _TODO = re.compile(r"^\s*TODO\b")
 _TARGET = re.compile(
@@ -385,6 +390,119 @@ def gen_stale_path_citations(
                     yield (lineno, cited)
 
 
+def gen_stale_source_symbol_citations(
+    text: str, known: Iterable[str]
+) -> Iterator[tuple[int, str]]:
+    """
+    Finds ``name`` (``riko/...py``) citations whose file no longer binds the name.
+
+    The name is an identifier or ``Class.member``, optionally followed by a call or
+    subscript (``name(...)``, ``Name[T]``). A ``first``/``name`` pair checks both, and
+    a bare ``name`` after a dotted ``first`` takes its class (``C.x()``/``y()`` cites
+    ``C.y``). A citation whose file is missing is left to the source-file check. A line
+    that records history (deleted, retired, removed, dropped, merged, superseded) is not
+    checked.
+
+    Args:
+
+        text: The document text.
+        known: The current source files as ``riko/...py`` paths, plus their symbols
+            as ``path::name`` and ``path::Class.member``.
+
+    Yields:
+
+        Each stale citation's line number and the citation as ``path::name``.
+
+    Examples:
+
+        >>> from riko.cli._docs import gen_stale_source_symbol_citations
+        >>>
+        >>> path = "riko/runtime/_export.py"
+        >>> known = (path, f"{path}::export", f"{path}::Formats.JSON")
+        >>> text = f"`export(...)` (`{path}`) and `list_formats` (`{path}`)"
+        >>> list(gen_stale_source_symbol_citations(text, known))
+        [(1, 'riko/runtime/_export.py::list_formats')]
+        >>> text = f"`Formats.CSV`/`JSON` (`{path}`) and `gone`/`export` (`{path}`)"
+        >>> for _, key in gen_stale_source_symbol_citations(text, known):
+        ...     print(key)
+        riko/runtime/_export.py::Formats.CSV
+        riko/runtime/_export.py::gone
+        >>> text = f"`Formats.CSV` (`{path}`) was removed."
+        >>> list(gen_stale_source_symbol_citations(text, known))
+        []
+
+    """
+    _known = frozenset(known)
+
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not _HISTORY_WORDS.search(line):
+            for match in _SOURCE_SYMBOL_CITATION.finditer(line):
+                path, first, name = match["path"], match["first"], match["name"]
+
+                if first is not None and "." in first and "." not in name:
+                    name = f"{first.rpartition('.')[0]}.{name}"
+
+                for cited in (first, name):
+                    key = f"{path}::{cited}"
+
+                    if cited is not None and path in _known and key not in _known:
+                        yield (lineno, key)
+
+
+def _gen_bound_names(*body: ast.stmt) -> Iterator[tuple[str, ast.stmt]]:
+    """Walks a scope's statements, into conditional blocks, for the names bound."""
+    for node in body:
+        match node:
+            case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
+                yield (node.name, node)
+            case ast.Assign(targets=targets):
+                for target in targets:
+                    for name in ast.walk(target):
+                        if isinstance(name, ast.Name):
+                            yield (name.id, node)
+            case (
+                ast.AnnAssign(target=ast.Name(id=name))
+                | ast.TypeAlias(name=ast.Name(id=name))
+            ):
+                yield (name, node)
+            case ast.Import(names=aliases) | ast.ImportFrom(names=aliases):
+                for alias in aliases:
+                    yield (alias.asname or alias.name.partition(".")[0], node)
+            case ast.If() | ast.Try() | ast.With():
+                handlers = getattr(node, "handlers", ())
+                nested = (*node.body, *getattr(node, "orelse", ()))
+                final = (*getattr(node, "finalbody", ()),)
+                handled = (stmt for handler in handlers for stmt in handler.body)
+                yield from _gen_bound_names(*nested, *handled, *final)
+
+
+def gen_source_symbols(*paths: Path) -> Iterator[str]:
+    """
+    Walks source files for the symbols ``gen_stale_source_symbol_citations`` reads.
+
+    Args:
+
+        paths: The source files to index.
+
+    Yields:
+
+        Each file's path, then ``path::name`` for every name the module binds at top
+        level (imports included) and ``path::Class.member`` for every name a top-level
+        class binds.
+
+    """
+    for path in paths:
+        rel = get_posix_root(path)
+        yield rel
+
+        for name, node in _gen_bound_names(*ast.parse(_read(path)).body):
+            yield f"{rel}::{name}"
+
+            if isinstance(node, ast.ClassDef):
+                for member, _ in _gen_bound_names(*node.body):
+                    yield f"{rel}::{name}.{member}"
+
+
 def gen_todo_lines(text: str) -> Iterator[int]:
     """
     Finds lines that start with a ``TODO`` marker.
@@ -504,6 +622,14 @@ def _gen_stale_path_citation_offenders() -> Iterator[str]:
     yield from _gen_citation_offenders(gen_stale_path_citations, known, *docs)
 
 
+def _gen_stale_source_symbol_offenders() -> Iterator[str]:
+    """Finds current-state docs citing names their cited source file no longer binds."""
+    known = gen_source_symbols(*sorted(PACKAGE_DIR.rglob("*.py")))
+    internal = (path for path in _root_doc_paths() if path.name != "MILESTONES.md")
+    docs = chain(internal, _CURRENT_STATE_DOCS)
+    yield from _gen_citation_offenders(gen_stale_source_symbol_citations, known, *docs)
+
+
 def _api_surface_offenders() -> list[str]:
     """Finds API-surface blocks that drift from the contract declaration."""
     offenders: list[str] = []
@@ -611,6 +737,7 @@ def lint_docs() -> int:
         "cited test files no longer exist": _gen_stale_test_citation_offenders,
         "cited tests no longer exist": _gen_stale_test_symbol_offenders,
         "cited source files no longer exist": _gen_stale_path_citation_offenders,
+        "cited source names no longer exist": _gen_stale_source_symbol_offenders,
         f"{_STANDARD}: banned phrases without a reserved-terms ruling": (
             _gen_unruled_term_offenders
         ),

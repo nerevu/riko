@@ -1178,7 +1178,7 @@ accelerated encoder lands, and a conf-identity key goes stale under mutation). `
 supported way to amortize repeated calls meanwhile. No tripwire: only a timing test could probe it.
 
 Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not describe
-their callables. `_build_casters` (`riko/modules/_prepare.py`) hides behind
+their callables. `_build_caster` (`riko/modules/_prepare.py`) hides behind
 `cast("SyncConfCastFunc", ...)` that its `cast_pass` branch returns the conf unchanged rather than a
 `DynamicConf`, and `ArgCaster` (`riko/types/_wrappers.py`) is `Callable[..., T]` although `dispatch`
 calls every caster with exactly one positional argument. Retype them with the typed config object

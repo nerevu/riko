@@ -33,6 +33,7 @@ from riko.cli import (
 )
 from riko.cli._docs import (
     gen_stale_path_citations,
+    gen_stale_source_symbol_citations,
     gen_stale_test_citations,
     gen_stale_test_symbol_citations,
     gen_unruled_terms,
@@ -760,6 +761,35 @@ class TestCitationLint:
         rel = "tests/public/test_alpha.py"
         expected = [rel, f"{rel}::TestAlpha", f"{rel}::TestAlpha::test_one"]
         assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
+
+    def test_source_symbol_pairs_check_both_names_with_the_class_prefix(self) -> None:
+        path = "riko/x.py"
+        known = (path, f"{path}::C", f"{path}::C.y")
+        text = f"`C.x()`/`y()` (`{path}`), `C.y`/`z` (`{path}`)"
+        stale = [f"{path}::C.x", f"{path}::C.z"]
+        assert [
+            key for _, key in gen_stale_source_symbol_citations(text, known)
+        ] == stale
+
+    def test_source_symbols_cover_bindings_in_every_scope_shape(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        path = tmp_path / "riko" / "alpha.py"
+        path.parent.mkdir()
+        source = (
+            "import os.path as osp\n"
+            "if TYPE:\n    from x import Y\n"
+            "try:\n    import z\nexcept ImportError:\n    w = None\n"
+            "type Alias = int\nCONST: int = 1\na, b = 1, 2\n"
+            "class C:\n    attr = 1\n    def method(self): ...\n"
+            "def func():\n    local = 1\n"
+        )
+        path.write_text(source)
+        names = ("osp", "Y", "z", "w", "Alias", "CONST", "a", "b", "C", "func")
+        members = ("C.attr", "C.method")
+        expected = {"riko/alpha.py", *(f"riko/alpha.py::{n}" for n in names + members)}
+        assert set(_docs.gen_source_symbols(path)) == expected
 
 
 TERM_PATTERNS = [
