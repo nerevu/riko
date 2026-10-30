@@ -9,24 +9,54 @@ check fails when an index is stale, a test sits outside a ``Test<Subject>`` clas
 subject is owned by two files in one tier, a file or folder is misplaced, or a
 public test imports a private name. File sizes outside the split/merge bounds are
 reported as advice rather than failures.
+
+Every test bound (a ``timeout`` marker, a ``fail_after``/``move_on_after`` bound, or a
+``wait``/``join``/``result`` timeout, by keyword or position) must sit on the bound
+ladder (1, 2, 3, 5, 8, 10, 15, 20, 30 seconds). An inner bound must stay below the
+test's outer one, which is its smallest ``timeout`` marker or else the
+``pyproject.toml`` backstop. A ``sleep`` on the test's own path (outside nested
+functions) must never last as long as that outer bound.
+
+The ``timeout`` and ``faulthandler_timeout`` globals sit on the ladder too.
+``faulthandler_timeout`` must be below ``timeout``. A test must never read a tracked
+Markdown or prose file. A check a doc edit would fail belongs in ``manage lint --docs``.
+
+The checks read each file's syntax tree. Markers inside string fixtures are not seen,
+bounds that are neither literals nor module-level constants are skipped, and a
+module-level ``pytestmark`` is not read. A doc path built with ``os.path.join`` or
+held in a variable is missed.
 """
 
 from __future__ import annotations
 
 import ast
 import re
-from typing import TYPE_CHECKING, NamedTuple
+import tomllib
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
+from ._import_graph import FUNCTION_NODES, FunctionNode
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
 FIXTURE_DIRS = frozenset({"workflows", "pyworkflows", "dags", "typing"})
 SPLIT_LINES = 2000
 MERGE_LINES = 300
 HISTORY_NAMES = re.compile(r"^test_(regressions?|fixes|bugs?|misc)\b")
+TIMEOUT_LADDER: Final[frozenset[int]] = frozenset({1, 2, 3, 5, 8, 10, 15, 20, 30})
+LADDER_TEXT: Final = f"{', '.join(map(str, sorted(TIMEOUT_LADDER)))} s"
+BOUND_CALLS: Final[frozenset[str]] = frozenset({"fail_after", "move_on_after"})
+TIMEOUT_CALLS: Final[frozenset[str]] = frozenset({"wait", "join", "result"})
+BLOCKING_CALLS: Final[frozenset[str]] = frozenset({"sleep", "async_sleep"})
+GLOBAL_BOUNDS: Final = ("timeout", "faulthandler_timeout")
+DOC_SUFFIXES: Final = (".md", ".rst")
+DOC_DIRS: Final[frozenset[str]] = frozenset({"_docs", "docs"})
+DOC_OPENERS: Final[frozenset[str]] = frozenset({"Path", "open"})
+REPO_ROOTS: Final[frozenset[str]] = frozenset(
+    {"ROOT_DIR", "DOCS_DIR", "PACKAGE_DIR", "TESTS_DIR", "__file__"}
+)
 
 
 class LayoutIssue(NamedTuple):
@@ -43,13 +73,343 @@ class LayoutIssue(NamedTuple):
         return f"{self.path}:{self.lineno}: {kind}: {self.message}"
 
 
-def _gen_file_issues(
-    path: Path, tree: ast.Module, lines: int, public: bool
+type Seconds = int | float
+
+
+def _get_number(value: object) -> Seconds | None:
+    """Gets ``value`` when it is a number, never a ``bool``."""
+    is_bool = isinstance(value, bool)
+    return value if isinstance(value, (int, float)) and not is_bool else None
+
+
+def _get_pytest_options(text: str) -> dict[str, object]:
+    """Gets the ``[tool.pytest.ini_options]`` table from ``pyproject.toml`` text."""
+    tool = tomllib.loads(text).get("tool", {})
+    return tool.get("pytest", {}).get("ini_options", {})
+
+
+def get_backstop(text: str) -> Seconds | None:
+    """
+    Gets the pytest ``timeout`` backstop recorded in ``pyproject.toml`` text.
+
+    Args:
+
+        text: The contents of ``pyproject.toml``.
+
+    Returns:
+
+        The backstop in seconds, or ``None`` when none is recorded.
+
+    """
+    return _get_number(_get_pytest_options(text).get("timeout"))
+
+
+def _get_key_line(text: str, key: str) -> int:
+    """Gets the line that sets ``key``, or the first line when none does."""
+    pattern = re.compile(rf"^{re.escape(key)}\s*=")
+    lines = enumerate(text.splitlines(), 1)
+    return next((lineno for lineno, line in lines if pattern.match(line)), 1)
+
+
+def gen_global_bound_issues(text: str, pyproject: Path) -> Iterator[LayoutIssue]:
+    """
+    Finds the pytest ``timeout`` globals that leave the bound ladder or misnest.
+
+    Args:
+
+        text: The contents of ``pyproject.toml``.
+        pyproject: The file ``text`` came from, named in each finding.
+
+    Yields:
+
+        One failing finding per global off the bound ladder, and one when
+        ``faulthandler_timeout`` is not below ``timeout``.
+
+    """
+    options = _get_pytest_options(text)
+    values = {key: _get_number(options.get(key)) for key in GLOBAL_BOUNDS}
+
+    for key, seconds in values.items():
+        if seconds is not None and seconds not in TIMEOUT_LADDER:
+            message = f"{key} = {seconds} is not on the bound ladder: {LADDER_TEXT}"
+            yield LayoutIssue(pyproject, _get_key_line(text, key), message)
+
+    timeout, faulthandler = values["timeout"], values["faulthandler_timeout"]
+
+    if timeout is not None and faulthandler is not None and faulthandler >= timeout:
+        message = (
+            f"faulthandler_timeout = {faulthandler} "
+            f"must stay below timeout ({timeout} s)"
+        )
+        line = _get_key_line(text, "faulthandler_timeout")
+        yield LayoutIssue(pyproject, line, message)
+
+
+def _get_assignment(node: ast.stmt) -> tuple[ast.expr, ast.expr] | None:
+    """Gets the single target and value a statement assigns, if it assigns one."""
+    if isinstance(node, ast.Assign) and len(node.targets) == 1:
+        assignment = (node.targets[0], node.value)
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+        assignment = (node.target, node.value)
+    else:
+        assignment = None
+
+    return assignment
+
+
+def _gen_module_constants(tree: ast.Module) -> Iterator[tuple[str, Seconds]]:
+    """Gets the module-level names bound to a number literal."""
+    for assignment in map(_get_assignment, tree.body):
+        target, value = (None, None) if assignment is None else assignment
+        is_literal = isinstance(value, ast.Constant)
+        number = _get_number(value.value) if is_literal else None
+
+        if isinstance(target, ast.Name) and number is not None:
+            yield target.id, number
+
+
+def _get_seconds(node: ast.expr, constants: dict[str, Seconds]) -> Seconds | None:
+    """Gets the seconds a bound expression holds, or ``None`` when it is not known."""
+    if isinstance(node, ast.Constant):
+        seconds = _get_number(node.value)
+    elif isinstance(node, ast.Name):
+        seconds = constants.get(node.id)
+    else:
+        seconds = None
+
+    return seconds
+
+
+def _get_leaf(func: ast.expr) -> str | None:
+    """Gets the final name of a called expression (``sleep`` in ``time.sleep``)."""
+    if isinstance(func, ast.Attribute):
+        leaf = func.attr
+    elif isinstance(func, ast.Name):
+        leaf = func.id
+    else:
+        leaf = None
+
+    return leaf
+
+
+class _Bound(NamedTuple):
+    """A bound found in a test: where it is, how it reads, and its seconds."""
+
+    lineno: int
+    text: str
+    seconds: Seconds
+
+    @classmethod
+    def from_arg(
+        cls,
+        node: ast.Call,
+        arg: ast.expr | None,
+        constants: dict[str, Seconds],
+        keyword: str | None = None,
+    ) -> _Bound | None:
+        """Builds the bound ``arg`` sets on ``node``, or ``None`` when it is unknown."""
+        bound = None
+
+        if arg is not None and (seconds := _get_seconds(arg, constants)) is not None:
+            prefix = "" if keyword is None else f"{keyword}="
+            text = f"{_get_leaf(node.func)}({prefix}{ast.unparse(arg)})"
+            bound = cls(node.lineno, text, seconds)
+
+        return bound
+
+
+def _gen_timeouts(
+    decorators: Iterable[ast.expr], constants: dict[str, Seconds]
+) -> Iterator[tuple[_Bound, bool]]:
+    """Generates each ``timeout`` marker with whether it is a plain decorator."""
+    for decorator in decorators:
+        for node in ast.walk(decorator):
+            is_marker = isinstance(node, ast.Call) and _get_leaf(node.func) == "timeout"
+
+            if is_marker and isinstance(node, ast.Call):
+                bound = _Bound.from_arg(node, next(iter(node.args), None), constants)
+
+                if bound is not None:
+                    yield bound, node is decorator
+
+
+def _gen_own_path(node: ast.AST) -> Iterator[ast.AST]:
+    """Generates the nodes below ``node`` outside any nested function or lambda."""
+    for child in ast.iter_child_nodes(node):
+        if not isinstance(child, (*FUNCTION_NODES, ast.Lambda)):
+            yield child
+            yield from _gen_own_path(child)
+
+
+def _get_inner_bound(node: ast.AST, constants: dict[str, Seconds]) -> _Bound | None:
+    """Gets the bound a call sets, or ``None`` when it sets no known one."""
+    leaf = _get_leaf(node.func) if isinstance(node, ast.Call) else None
+    bound = None
+
+    if isinstance(node, ast.Call) and leaf in BOUND_CALLS | TIMEOUT_CALLS:
+        keywords = (k.value for k in node.keywords if k.arg == "timeout")
+        timeout = next(keywords, None) if leaf in TIMEOUT_CALLS else None
+
+        if timeout is None:
+            bound = _Bound.from_arg(node, next(iter(node.args), None), constants)
+        else:
+            bound = _Bound.from_arg(node, timeout, constants, keyword="timeout")
+
+    return bound
+
+
+def _get_blocking_call(node: ast.AST, constants: dict[str, Seconds]) -> _Bound | None:
+    """Gets the blocking ``sleep`` a call makes, or ``None`` when it makes none."""
+    bound = None
+
+    if isinstance(node, ast.Call) and _get_leaf(node.func) in BLOCKING_CALLS:
+        bound = _Bound.from_arg(node, next(iter(node.args), None), constants)
+
+    return bound
+
+
+def _build_ladder_issue(path: Path, bound: _Bound) -> LayoutIssue:
+    """Builds the finding for a bound off the bound ladder."""
+    message = f"{bound.text} is not on the bound ladder: {LADDER_TEXT}"
+    return LayoutIssue(path, bound.lineno, message)
+
+
+def _gen_method_bound_issues(
+    path: Path,
+    method: FunctionNode,
+    constants: dict[str, Seconds],
+    outer: tuple[Seconds, str],
 ) -> Iterator[LayoutIssue]:
+    """Finds the bounds in one test that leave the ladder or outlast its outer bound."""
+    markers = list(_gen_timeouts(method.decorator_list, constants))
+    plain = [bound.seconds for bound, is_plain in markers if is_plain]
+    seconds, label = (min(plain), "timeout marker") if plain else outer
+    limit = f"its {label} ({seconds} s)"
+
+    for bound, _ in markers:
+        if bound.seconds not in TIMEOUT_LADDER:
+            yield _build_ladder_issue(path, bound)
+
+    for node in ast.walk(method):
+        inner = _get_inner_bound(node, constants)
+
+        if inner is not None and inner.seconds not in TIMEOUT_LADDER:
+            yield _build_ladder_issue(path, inner)
+        elif inner is not None and inner.seconds >= seconds:
+            message = f"{inner.text} must stay below {limit}"
+            yield LayoutIssue(path, inner.lineno, message)
+
+    for node in _gen_own_path(method):
+        blocking = _get_blocking_call(node, constants)
+
+        if blocking is not None and blocking.seconds >= seconds:
+            message = (
+                f"{blocking.text} outlasts {limit}; "
+                "the test can end only by its backstop"
+            )
+            yield LayoutIssue(path, blocking.lineno, message)
+
+
+def _gen_bound_issues(
+    path: Path, tree: ast.Module, backstop: Seconds
+) -> Iterator[LayoutIssue]:
+    """Finds the test bounds in one file that leave the ladder or misnest."""
+    constants = dict(_gen_module_constants(tree))
+
     for node in tree.body:
-        if isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef)
-        ) and node.name.startswith("test_"):
+        if isinstance(node, ast.ClassDef):
+            markers = list(_gen_timeouts(node.decorator_list, constants))
+
+            if plain := [bound.seconds for bound, is_plain in markers if is_plain]:
+                outer = (min(plain), "timeout marker")
+            else:
+                outer = (backstop, "pyproject timeout")
+
+            methods = (
+                method
+                for method in node.body
+                if isinstance(method, FUNCTION_NODES) and method.name.startswith("test")
+            )
+
+            for bound, _ in markers:
+                if bound.seconds not in TIMEOUT_LADDER:
+                    yield _build_ladder_issue(path, bound)
+
+            for method in methods:
+                yield from _gen_method_bound_issues(path, method, constants, outer)
+
+
+def _gen_chain_parts(node: ast.expr) -> Iterator[ast.expr]:
+    """Generates the operands of a ``/`` path chain, left to right."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        yield from _gen_chain_parts(node.left)
+        yield from _gen_chain_parts(node.right)
+    else:
+        yield node
+
+
+def _is_doc_name(name: str) -> bool:
+    """Checks whether a path string names a tracked doc or doc folder."""
+    folder = name.partition("/")[0]
+
+    return (
+        name.endswith(DOC_SUFFIXES)
+        or name in DOC_DIRS
+        or ("/" in name and folder in DOC_DIRS)
+    )
+
+
+def _is_doc_chain(node: ast.BinOp) -> bool:
+    """Checks whether a ``/`` path chain reaches a tracked doc from the repository."""
+    names = {name.id for name in ast.walk(node) if isinstance(name, ast.Name)}
+    strings = (
+        part.value
+        for part in _gen_chain_parts(node)
+        if isinstance(part, ast.Constant) and isinstance(part.value, str)
+    )
+    has_doc = "DOCS_DIR" in names or any(map(_is_doc_name, strings))
+    return bool(names & REPO_ROOTS) and has_doc
+
+
+def _is_doc_open(node: ast.Call) -> bool:
+    """Checks whether a ``Path``/``open`` call names a doc in the working folder."""
+    first = node.args[0] if node.args else None
+    value = first.value if isinstance(first, ast.Constant) else None
+    names_doc = isinstance(value, str) and value.endswith(DOC_SUFFIXES)
+    return _get_leaf(node.func) in DOC_OPENERS and names_doc
+
+
+def _gen_doc_read_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
+    """Finds the places a test file reads a tracked doc."""
+    seen: set[int] = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.expr):
+            is_chain = isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+
+            found = id(node) not in seen and (
+                (is_chain and isinstance(node, ast.BinOp) and _is_doc_chain(node))
+                or (isinstance(node, ast.Call) and _is_doc_open(node))
+                or (isinstance(node, ast.Name) and node.id == "DOCS_DIR")
+            )
+
+            if is_chain or found:
+                seen.update(map(id, ast.walk(node)))
+
+            if found:
+                msg = f"tests never read tracked docs: {ast.unparse(node)}; "
+                msg += "check it in manage lint --docs"
+                yield LayoutIssue(path, node.lineno, msg)
+
+
+def _gen_file_issues(
+    path: Path, tree: ast.Module, lines: int, public: bool, backstop: Seconds
+) -> Iterator[LayoutIssue]:
+    yield from _gen_bound_issues(path, tree, backstop)
+    yield from _gen_doc_read_issues(path, tree)
+
+    for node in tree.body:
+        if isinstance(node, FUNCTION_NODES) and node.name.startswith("test_"):
             message = f"{node.name} must live in a Test<Subject> class"
             yield LayoutIssue(path, node.lineno, message)
 
@@ -80,7 +440,7 @@ def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
         yield LayoutIssue(init, 1, message)
 
 
-def _gen_tier_issues(tier: Path) -> Iterator[LayoutIssue]:
+def _gen_tier_issues(tier: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     yield from _gen_index_issues(tier)
     owners: dict[str, str] = {}
     modules = (path for path in sorted(tier.glob("*.py")) if path.name != "__init__.py")
@@ -104,16 +464,23 @@ def _gen_tier_issues(tier: Path) -> Iterator[LayoutIssue]:
                     yield LayoutIssue(path, node.lineno, message)
 
             lines = len(text.splitlines())
-            yield from _gen_file_issues(path, tree, lines, tier.name == "public")
+            public = tier.name == "public"
+            yield from _gen_file_issues(path, tree, lines, public, backstop)
 
 
-def gen_layout_issues(tests_dir: Path) -> Iterator[LayoutIssue]:
+def gen_layout_issues(tests_dir: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     """
-    Finds every way ``tests_dir`` departs from the tier test layout.
+    Finds every way ``tests_dir`` departs from the tier test layout and its bounds.
+
+    Beyond the layout, each test's bounds must sit on the bound ladder and nest
+    inside the test's outer bound, and no test may read a tracked doc.
 
     Args:
 
         tests_dir: The suite's root folder (``tests``).
+
+        backstop: The ``pyproject.toml`` ``timeout`` in seconds (the outer bound of a
+            test that sets no ``timeout`` marker).
 
     Yields:
 
@@ -131,4 +498,4 @@ def gen_layout_issues(tests_dir: Path) -> Iterator[LayoutIssue]:
 
     for tier in TIERS:
         if (tests_dir / tier).is_dir():
-            yield from _gen_tier_issues(tests_dir / tier)
+            yield from _gen_tier_issues(tests_dir / tier, backstop)

@@ -69,7 +69,9 @@ from riko.cli._lint_tests import (
     MERGE_LINES,
     SPLIT_LINES,
     LayoutIssue,
+    gen_global_bound_issues,
     gen_layout_issues,
+    get_backstop,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -1122,8 +1124,119 @@ class TestBeta:
 """
 
 
+_BACKSTOP = 30
+_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
+_MARK = "@pytest.mark.timeout(5)"
+_ROW_MARK = (
+    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
+)
+_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
+_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
+_OPTIONS = "[tool.pytest.ini_options]\n"
+
+
 def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
-    return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
+    issues = gen_layout_issues(tests_dir, _BACKSTOP)
+    return [(issue.message, issue.fatal) for issue in issues]
+
+
+def _case(body: str, marker: str = "", prefix: str = "") -> str:
+    method = f"    {marker}\n    def test_one(self):\n        {body}\n"
+    return f"\n{prefix}\nclass TestGamma:\n{method}"
+
+
+BOUND_CASES = [
+    pytest.param(
+        _case("...", "@pytest.mark.timeout(4)"),
+        f"timeout(4) {_LADDER}",
+        id="off-ladder-marker",
+    ),
+    pytest.param(
+        _case("with fail_after(0.5): ..."),
+        f"fail_after(0.5) {_LADDER}",
+        id="off-ladder-inner",
+    ),
+    pytest.param(
+        _case("with fail_after(5): ...", _MARK),
+        "fail_after(5) must stay below its timeout marker (5 s)",
+        id="inner-at-marker",
+    ),
+    pytest.param(
+        _case("with fail_after(30): ..."),
+        "fail_after(30) must stay below its pyproject timeout (30 s)",
+        id="inner-at-global",
+    ),
+    pytest.param(
+        _case("event.wait(timeout=0.5)"),
+        f"wait(timeout=0.5) {_LADDER}",
+        id="keyword-bound",
+    ),
+    pytest.param(
+        _case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional-bound"
+    ),
+    pytest.param(_case("...", _ROW_MARK), f"timeout(4) {_LADDER}", id="row-marker"),
+    pytest.param(
+        _case("with fail_after(_BOUND): ...", prefix="_BOUND = 4"),
+        f"fail_after(_BOUND) {_LADDER}",
+        id="module-constant",
+    ),
+    pytest.param(
+        _case("sleep(5)", _MARK),
+        "sleep(5) outlasts its timeout marker (5 s); "
+        "the test can end only by its backstop",
+        id="own-path-sleep",
+    ),
+    pytest.param(
+        _case('ROOT_DIR / "_docs" / "X.md"'),
+        _DOC_READ.format("ROOT_DIR / '_docs' / 'X.md'"),
+        id="docs-chain",
+    ),
+    pytest.param(
+        _case('DOCS_DIR / "FAQ.rst"'),
+        _DOC_READ.format("DOCS_DIR / 'FAQ.rst'"),
+        id="docs-dir",
+    ),
+    pytest.param(
+        _case('Path("README.rst")'),
+        _DOC_READ.format("Path('README.rst')"),
+        id="cwd-doc",
+    ),
+]
+CLEAN_BOUND_CASES = [
+    pytest.param(
+        _case("async def block(): await async_sleep(3600)", _MARK), id="nested-sleep"
+    ),
+    pytest.param(_case("AsyncExecution(shutdown_timeout=0.05)"), id="subject-timeout"),
+    pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
+    pytest.param(_case("event.wait()"), id="no-argument"),
+    pytest.param(_case("thread.join(x)"), id="non-literal-positional"),
+    pytest.param(_case("...", "@pytest.mark.timeout(T)"), id="non-literal-marker"),
+    pytest.param(_case("with fail_after(1): ...", _MARK), id="inner-below-marker"),
+    pytest.param(_case('text = "@pytest.mark.timeout(0.5)"'), id="string-marker"),
+    pytest.param(
+        _case("def block(): sleep(_BLOCK)", _MARK, "_BLOCK = 10"),
+        id="nested-constant-sleep",
+    ),
+    pytest.param(_case('tmp_path / "GUIDE.md"'), id="tmp-doc"),
+]
+BACKSTOP_CASES = [
+    pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),
+    pytest.param(f"{_OPTIONS}timeout = 30.0\n", 30.0, id="float"),
+    pytest.param("", None, id="missing"),
+]
+GLOBAL_BOUND_CASES = [
+    pytest.param("timeout = 30\nfaulthandler_timeout = 15\n", [], id="clean"),
+    pytest.param(
+        "timeout = 25\nfaulthandler_timeout = 15\n",
+        [f"timeout = 25 {_LADDER}"],
+        id="off-ladder",
+    ),
+    pytest.param(
+        "timeout = 30\nfaulthandler_timeout = 30\n",
+        ["faulthandler_timeout = 30 must stay below timeout (30 s)"],
+        id="faulthandler-at-timeout",
+    ),
+]
 
 
 class TestLayoutLint:
@@ -1186,6 +1299,7 @@ class TestLayoutLint:
                 "public tests import supported names: _hidden",
                 id="private-import",
             ),
+            *BOUND_CASES,
         ],
     )
     def test_in_file_departures_fail(
@@ -1195,6 +1309,29 @@ class TestLayoutLint:
         path = tests_dir / "public" / "test_alpha.py"
         path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
         assert (message, True) in _messages(tests_dir)
+
+    @pytest.mark.parametrize("addition", CLEAN_BOUND_CASES)
+    def test_bounds_and_doc_reads_outside_the_rules_pass(
+        self, tmp_path: Path, addition: str
+    ) -> None:
+        tests_dir = _write_suite(tmp_path)
+        path = tests_dir / "public" / "test_alpha.py"
+        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+        messages = [message for message, _ in _messages(tests_dir)]
+        assert not [m for m in messages if any(f in m for f in _BOUND_FRAGMENTS)]
+
+    @pytest.mark.parametrize(("text", "expected"), BACKSTOP_CASES)
+    def test_backstop_comes_from_the_pytest_timeout(
+        self, text: str, expected: int | None
+    ) -> None:
+        assert get_backstop(text) == expected
+
+    @pytest.mark.parametrize(("options", "expected"), GLOBAL_BOUND_CASES)
+    def test_pytest_timeout_globals_sit_on_the_ladder(
+        self, options: str, expected: list[str]
+    ) -> None:
+        issues = gen_global_bound_issues(f"{_OPTIONS}{options}", Path("pyproject.toml"))
+        assert [issue.message for issue in issues] == expected
 
     @pytest.mark.parametrize(("old", "new", "expected"), INDEX_FORMS)
     def test_the_index_must_match_its_generated_form(
@@ -1228,7 +1365,7 @@ class TestLayoutLint:
         code: int,
     ) -> None:
         issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
-        monkeypatch.setattr(_lint, "gen_layout_issues", lambda _: [issue])
+        monkeypatch.setattr(_lint, "gen_layout_issues", lambda *_: [issue])
 
         assert str(issue) == line
         assert _lint._lint_tests() == code
