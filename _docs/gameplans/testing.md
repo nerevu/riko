@@ -422,8 +422,12 @@ twins and helper placement. It moved supported-name tests to the public tier and
 public `test_workflow.py`. It also put module constants at the top of every test file
 (`.claude/skills/tidy/lift_constants.py`). The dedup slice cut duplicate tests and rows after a
 per-test coverage diff, trimmed doctests to basic usage, and folded same-shape tests into
-module-level tables. The speed slice (in-process CLI rows, a settable benchmark delay, bound
-refits) remains.
+module-level tables. The speed slice runs the CLI commands in-process (`run_command` in
+`tests/functional/test_script.py`); subprocesses remain only for one entry-point row per console
+script, one outside-checkout row, two `python -m` rows that run each command's `__main__` block,
+and the example scripts that register modules. It also cut the
+`test_demo` matrix to a four-row diagonal, set the benchmark's simulated I/O wait from
+`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations.
 
 ## 5b. Execution lifetime proofs (R4)
 
