@@ -21,6 +21,7 @@ import pytest
 
 from riko.bado._backend import async_sleep, checkpoint, fail_after
 from riko.bado.itertools import alist, async_iter, async_map
+from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import (
     EmptyPipelineError,
     InvalidPipelineError,
@@ -922,6 +923,13 @@ async def _fail(value):
     raise ValueError(f"bad {value}")
 
 
+_IN_FLIGHT = DEF_CONCURRENCY_LIMIT + 4
+IN_FLIGHT_LIMITS = [
+    pytest.param(None, DEF_CONCURRENCY_LIMIT, id="default"),
+    pytest.param(0, _IN_FLIGHT, id="unbounded"),
+]
+
+
 class TestAsyncMap:
     @async_test
     async def test_a_lone_failure_raises_as_itself(self):
@@ -934,6 +942,26 @@ class TestAsyncMap:
             await async_map(_fail, [1, 2])
 
         assert len(caught.value.exceptions) == 2
+
+    @pytest.mark.parametrize(("limit", "expected"), IN_FLIGHT_LIMITS)
+    @async_test
+    async def test_limit_bounds_in_flight_calls(self, limit, expected):
+        """The default limit caps calls in flight; ``limit=0`` runs them all at once."""
+        active = peak = 0
+
+        async def track(value):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await async_sleep(0.01)
+            active -= 1
+            return value
+
+        kwargs = {} if limit is None else {"limit": limit}
+        assert await async_map(track, range(_IN_FLIGHT), **kwargs) == list(
+            range(_IN_FLIGHT)
+        )
+        assert peak == expected
 
     @async_test
     async def test_async_map_rejects_negative_limit(self):

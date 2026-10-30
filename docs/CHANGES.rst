@@ -109,6 +109,13 @@ Changes
   ``fetchsitefeed``) now raise when a URL can't be opened, e.g., a ``URLError`` for a
   missing file, instead of logging an error and yielding empty content.
 
+- Fetching a URL in a sync or async run, or via ``riko.async_url_open``, now gives up
+  after ``RIKO_FETCH_TIMEOUT`` seconds instead of waiting forever. Pass ``timeout=0``
+  for the old behavior.
+
+- ``riko.async_map`` now runs at most ``RIKO_CONCURRENCY_LIMIT`` calls at once by
+  default instead of all of them. Pass ``limit=0`` for the old behavior.
+
 - ``Context().inputs`` is now ``None`` when no input values are given, rather than an
   empty mapping. An ``input`` module still prompts when no input values are given, but
   an explicit ``inputs={}`` now uses each input's default instead of prompting.
