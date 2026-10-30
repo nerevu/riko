@@ -443,10 +443,10 @@ def get_family_edges(
 type RunnableNode = ModuleNode | CallableNode[object]
 
 
-def require_runnable_node(value: Node, what: str | None = None, **_) -> RunnableNode:
+def require_runnable_node(value: Node) -> RunnableNode:
     if not isinstance(value, (ModuleNode, CallableNode)):
         msg = f"{value.family} node execution is not yet supported"
-        raise InvalidPipelineError(msg if what is None else f"{what}: {msg}")
+        raise InvalidPipelineError(msg)
 
     return value
 

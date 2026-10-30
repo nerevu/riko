@@ -14,13 +14,7 @@ from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions import _workflow_definition as workflow_definitions
 from riko.definitions._module_definition import ModuleDefinition
-from riko.definitions._nodes import (
-    CallableNode,
-    ModuleNode,
-    StreamEdge,
-    WriteNode,
-    require_runnable_node,
-)
+from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._adapt import (
@@ -876,13 +870,6 @@ class TestPreparedNode:
 
         with pytest.raises(InvalidPipelineError, match="write node execution"):
             PreparedNode(node, _HASH)
-
-    def test_module_node_label_prefixes_the_family(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-        match = ": PreparedNode 'node': write node execution"
-
-        with pytest.raises(InvalidPipelineError, match=match):
-            require_runnable_node(node, "PreparedNode 'node'")
 
     def test_prepared_node_reports_loopable(self) -> None:
         plan = build_chain_plan("hash", "count")
