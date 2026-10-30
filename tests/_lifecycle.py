@@ -7,11 +7,13 @@ from riko.runtime._pipeline import Pipeline
 from riko.types.modules import ItemBuilderConf
 
 VALUE = "once is 1x,twice is 2x,thrice is 3x"
+
 EXPECTED = [
     {"content": "once is 1x"},
     {"content": "twice is 2x"},
     {"content": "thrice is 3x"},
 ]
+
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 LOOKAHEAD = 2
 

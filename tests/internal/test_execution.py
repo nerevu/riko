@@ -50,7 +50,6 @@ from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
     CREDENTIAL,
-    SCALAR,
     VALUE_FACTORIES,
     AsyncConnection,
     Connection,
@@ -59,7 +58,6 @@ from tests._resources import (
     async_gen_factory,
     check_credential_and_lazy,
     check_metadata,
-    sync_callable_factory,
     sync_cm_factory,
     sync_gen_factory,
     wrapped_async_cm_factory,
@@ -72,6 +70,21 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Generator
 
     from riko.types._resource import LifecycleFactory, ValueFactory
+
+
+_BODY = "<rss><channel><item><title>hi</title></item></channel></rss>"
+_CONTENT_TYPE = "application/xml"
+
+LIFECYCLE_FACTORIES = [
+    sync_gen_factory,
+    async_gen_factory,
+    sync_cm_factory,
+    async_cm_factory,
+    wrapped_sync_gen_factory,
+    wrapped_async_gen_factory,
+    wrapped_sync_cm_factory,
+    wrapped_async_cm_factory,
+]
 
 
 class _SyncClient:
@@ -107,9 +120,6 @@ CLIENT_CLASSES = [
     pytest.param(_SyncClient, id="sync-client"),
     pytest.param(_AsyncClient, id="async-client"),
 ]
-
-
-connection = pytest.fixture(sync_callable_factory)
 
 
 def _check_opened(acquired: object, value: object | None) -> None:
@@ -251,8 +261,8 @@ class TestSyncExecution:
 
         assert isinstance(info.value.__cause__, ValueError)
 
-    @async_test
-    async def test_sync_portal_bridges_to_async(self) -> None:
+    @skipif_issync
+    def test_sync_portal_bridges_to_async(self) -> None:
         result = None
 
         async def double(value: int) -> int:
@@ -472,44 +482,9 @@ def cleanup_contextmanager(_: AbstractContextManager[Connection]):
 async_connection = pytest.fixture(async_callable_factory)
 
 
-sync_contextmanager = pytest.fixture(sync_cm_factory)
-
-
 async_contextmanager = pytest.fixture(async_cm_factory)
 
 
-scalar = pytest.fixture(lambda: SCALAR)
-
-
-@pytest.fixture
-def one_shot_resource(connection: Connection) -> Resource[Connection]:
-    return Resource(connection)
-
-
-@pytest.fixture
-def external_resource(connection: Connection):
-    return Resource.from_external(connection)
-
-
-_RESOLVED = "Expected a resolved resource value"
-CONTEXT_FACTORY_REJECTIONS = [
-    pytest.param("scalar", id="scalar"),
-    pytest.param("connection", id="connection"),
-    pytest.param("sync_contextmanager", id="sync-context-manager"),
-    pytest.param("one_shot_resource", id="one-shot"),
-]
-RESOLVED_VALUE_REJECTIONS = [
-    pytest.param("scalar", "Must provide a Closeable value", id="scalar"),
-    pytest.param("sync_contextmanager", _RESOLVED, id="sync-context-manager"),
-    pytest.param("one_shot_resource", _RESOLVED, id="one-shot"),
-    pytest.param("external_resource", _RESOLVED, id="external"),
-]
-NON_FACTORY_VALUES = [
-    pytest.param("scalar", id="scalar"),
-    pytest.param("connection", id="connection"),
-    pytest.param("one_shot_resource", id="one-shot"),
-    pytest.param("external_resource", id="external"),
-]
 WRAPPED_VALUES = [
     pytest.param("scalar", {"cleanup": lambda _: None}, id="scalar-with-cleanup"),
     pytest.param("connection", {}, id="closeable"),
@@ -560,12 +535,6 @@ def _build_awaitable() -> Awaitable[str]:
 @contextmanager
 def _needs_arg(ctx: object) -> Generator[object]:
     yield ctx
-
-
-_BODY = "<rss><channel><item><title>hi</title></item></channel></rss>"
-
-
-_CONTENT_TYPE = "application/xml"
 
 
 def _sync_http_client(url: str, events: list[str]):
@@ -704,44 +673,7 @@ class _DualClient:
         self.events.append("aclose")
 
 
-LIFECYCLE_FACTORIES = [
-    sync_gen_factory,
-    async_gen_factory,
-    sync_cm_factory,
-    async_cm_factory,
-    wrapped_sync_gen_factory,
-    wrapped_async_gen_factory,
-    wrapped_sync_cm_factory,
-    wrapped_async_cm_factory,
-]
-
-
 class TestResourceAcquisition:
-    @pytest.mark.parametrize(("build", "match"), SYNC_ASYNC_REJECTIONS)
-    def test_sync_acquire_rejects_an_async_resource(self, build, match) -> None:
-        """A sync execution refuses async-only resources before producing a value."""
-        produced: list[int] = []
-
-        with SyncExecution() as execution:
-            resource = build(produced)
-
-            with pytest.raises(InvalidPipelineError, match=match):
-                execution.acquire(resource)
-
-        assert produced == []
-
-    @pytest.mark.parametrize("build", AWAITABLE_CLEANUPS)
-    def test_sync_cleanup_rejects_an_awaitable_cleanup_result(self, build) -> None:
-        events: list[str] = []
-
-        with (
-            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
-            SyncExecution() as execution,
-        ):
-            execution.acquire(build(_awaitable_cleanup(events)))
-
-        assert events == []
-
     def test_sync_cleanup_closes_a_dual_client_with_close(self) -> None:
         client = _DualClient()
 
@@ -847,8 +779,8 @@ class TestResourceAcquisition:
 
         assert cleanup.events == ["value"]
 
-    @async_test
-    async def test_sync_acquire_async_value_factory_bridges(self) -> None:
+    @skipif_issync
+    def test_sync_acquire_async_value_factory_bridges(self) -> None:
         acquired = None
 
         async def make() -> str:
@@ -912,26 +844,6 @@ class TestResourceAcquisition:
         assert passed_client is client
         assert isinstance(headers, dict)
         assert headers["accept"] == ["json"]
-
-    @pytest.mark.parametrize("fixture", CONTEXT_FACTORY_REJECTIONS)
-    def test_context_rejects_a_non_factory_value(self, fixture, request):
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Context().with_resource("value", request.getfixturevalue(fixture))
-
-    @pytest.mark.parametrize(("fixture", "match"), RESOLVED_VALUE_REJECTIONS)
-    def test_resource_rejects_an_unresolved_value(self, fixture, match, request):
-        with pytest.raises(TypeError, match=match):
-            Resource(request.getfixturevalue(fixture))
-
-    @pytest.mark.parametrize("fixture", NON_FACTORY_VALUES)
-    def test_factories_reject_a_non_factory_value(self, fixture, request):
-        value = request.getfixturevalue(fixture)
-
-        with pytest.raises(TypeError, match="Invalid lifecycle factory"):
-            Resource.from_lifecycle(value)
-
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Resource.from_factory(value)
 
     @pytest.mark.parametrize(("fixture", "kwargs"), WRAPPED_VALUES)
     def test_owned_and_external_resources_wrap_a_value(self, fixture, kwargs, request):
@@ -1005,6 +917,31 @@ class TestResourceAcquisition:
             run()
 
         assert events == ["closed"]
+
+    @pytest.mark.parametrize(("build", "match"), SYNC_ASYNC_REJECTIONS)
+    def test_sync_acquire_rejects_an_async_resource(self, build, match) -> None:
+        """A sync execution refuses async-only resources before producing a value."""
+        produced: list[int] = []
+
+        with SyncExecution() as execution:
+            resource = build(produced)
+
+            with pytest.raises(InvalidPipelineError, match=match):
+                execution.acquire(resource)
+
+        assert produced == []
+
+    @pytest.mark.parametrize("build", AWAITABLE_CLEANUPS)
+    def test_sync_cleanup_rejects_an_awaitable_cleanup_result(self, build) -> None:
+        events: list[str] = []
+
+        with (
+            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
+            SyncExecution() as execution,
+        ):
+            execution.acquire(build(_awaitable_cleanup(events)))
+
+        assert events == []
 
     @pytest.mark.simulated_network
     def test_sync_external_async_http_client_rejected(self) -> None:

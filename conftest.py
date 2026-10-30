@@ -18,7 +18,7 @@ from riko.runtime._workflow_resolver import (
     reset_workflow_resolver,
 )
 
-pytest_plugins = ["pytester", "tests._timeouts"]
+pytest_plugins = ["pytester", "tests._resources", "tests._timeouts"]
 
 WORKFLOW_DIR = TESTS_DIR / "workflows"
 RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)

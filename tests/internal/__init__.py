@@ -15,17 +15,17 @@ Index (file, then the subjects it owns, in file order):
                               RequireWorkflow, RunTarget, ReadDocument, Timeouts,
                               SubprocessImports, LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
-                              Pythonise, ModuleCategory, GenerateModuleNames,
+                              Pythonise, ModuleCategory, GeneratedNamesDrift,
                               GenerateModuleIds, ConfigCodegen, WorkflowFixtures,
                               WorkflowProbes, ImportSurface
     test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
-                              ThreadBudget
-    test_definitions.py       FrozenDict, Context, Resource, ResourceFreezing,
-                              ResourceBinding, WorkflowFields, NormalizeInternals,
-                              ParsePort, RawWorkflowFields, PipelineDefinitionFields,
-                              ExecutionSettings, WriteMode, Formats, WriteOperation,
-                              WriteCapabilities, NormalizeTarget, ResolveFormat,
-                              FileCapabilities, ValidateTargetMode, BuildWrite
+                              PoolLifetime, ThreadBudget
+    test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
+                              NormalizeInternals, ParsePort, RawWorkflowFields,
+                              PipelineDefinitionFields, ExecutionSettings, WriteMode,
+                              WriteOperation, WriteCapabilities, NormalizeTarget,
+                              ResolveFormat, FileCapabilities, ValidateTargetMode,
+                              BuildWrite
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, EmbedAdaptation, Embed,
                               PreparedCall, PreparedNode
@@ -35,19 +35,21 @@ Index (file, then the subjects it owns, in file order):
                               Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, ReturnInference, ModuleMetadata,
-                              WrapperMeta, WorkflowDecorator, BuildWorkflowPipes, Loop,
-                              Processor, ModuleRegistry, DescribeModule, PublicRegister,
-                              ResolverDispatcher, RequireInterface, EntryPointModules,
-                              WorkflowResolver, PackageStore, DirectoryStore,
-                              CompositeStore, Catalog, ResolvedDocuments, Prepare,
-                              CsvParser, ExchangeRate, AsyncSend, AsyncReceive,
+                              WrapperMeta, Loop, Processor, Prepare, CsvParser,
+                              ExchangeRate, AsyncSend, AsyncReceive,
                               AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
+    test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
+                              DescribeModule, PublicRegister, ResolverDispatcher,
+                              RequireInterface, EntryPointModules, WorkflowResolver,
+                              PackageStore, DirectoryStore, CompositeStore, Catalog,
+                              ResolvedDocuments
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
                               ParseDateString, ResolveAwareDatetime, TtToDatedict,
-                              DotDict, Parsers, RSSUtils, Graph, GraphIndex,
-                              LoadSettings, RequireHelpers, RequireFromForm,
-                              ResolveEnum, NormalizeStrs, FieldNames, TypedDictKeys,
-                              Logging, RikoError
+                              DotDict, GetSkip, Any2dict, XmlParser, AugmentEntries,
+                              ResolveDate, Graph, GraphIndex, LoadSettings,
+                              RequireGuards, RequireFromForm, ResolveEnum,
+                              NormalizeStrs, FieldNames, TypedDictKeys, Logging,
+                              RikoError
 """

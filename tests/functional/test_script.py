@@ -5,6 +5,7 @@ import builtins
 import json
 import subprocess
 import sys
+from collections.abc import Mapping
 from decimal import Decimal
 from difflib import unified_diff
 from importlib import import_module
@@ -13,6 +14,7 @@ from os.path import isfile
 
 import pytest
 
+from riko.base._paths import ROOT_DIR
 from riko.definitions._workflow_definition import Workflow
 from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_issync
 from tests._workflows import (
@@ -23,11 +25,28 @@ from tests._workflows import (
     run_document,
 )
 
-_BASEDIR = TESTS_DIR.parent
 ENTRY_POINTS = {"runpipe": "run-pipe", "benchmark": "benchmark"}
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
 ITEM_ATTRS = {"key": "title", "value": "riko"}
 TIMEZONE_TEXT = "{'date': '5/4/1982', 'dateformat': 'May 04, 1982 UTC'}\n"
+
+RAISING_SCRIPT = (
+    "from riko import UnsupportedModuleError\n\n"
+    "def pipe(test=False):\n    raise UnsupportedModuleError('x')\n"
+)
+
+TYPO_DAG = json.dumps({"modules": [{"type": "trunkate"}]})
+
+BENCHMARK_LABELS = [
+    "baseline_sync",
+    "baseline_threads",
+    "baseline_procs",
+    "sync_module",
+    "sync_pipeline",
+    "sync_workflow",
+]
+
+
 DEMO_PARAMS = [
     pytest.param("demo", DEMO_TEXT, id="demo"),
     pytest.param("simple1", "'farechart'\n", id="simple1"),
@@ -38,11 +57,6 @@ DEMO_RUNS = [
     pytest.param(["-a"], True, False, marks=skipif_issync, id="entry-point-async"),
     pytest.param([], False, True, id="module-outside-checkout"),
 ]
-RAISING_SCRIPT = (
-    "from riko import UnsupportedModuleError\n\n"
-    "def pipe(test=False):\n    raise UnsupportedModuleError('x')\n"
-)
-TYPO_DAG = json.dumps({"modules": [{"type": "trunkate"}]})
 RIKO_ERRORS = [
     pytest.param("pipe.py", RAISING_SCRIPT, "module: x", id="pipe-script"),
     pytest.param("pipe.dag.json", TYPO_DAG, "module: trunkate", id="workflow-document"),
@@ -82,7 +96,7 @@ def run_module(
     """
     command = [ENTRY_POINTS[module]] if entry_point else [sys.executable, "-m"]
     target = [] if entry_point else [f"riko.cli.{module}"]
-    options = {"cwd": _BASEDIR, "capture_output": True, "text": True}
+    options = {"cwd": ROOT_DIR, "capture_output": True, "text": True}
     options |= {"timeout": SCRIPT_TIMEOUT} | kwargs
     return subprocess.run([*command, *target, *args], check=False, **options)
 
@@ -92,7 +106,7 @@ class TestRunPipe:
     @pytest.mark.parametrize(("argument", "expected"), DEMO_PARAMS)
     def test_demo(self, tmp_path, argument, expected, opts, entry_point, outside):
         """An example id runs from the checkout or, by module, from any cwd."""
-        cwd = tmp_path if outside else _BASEDIR
+        cwd = tmp_path if outside else ROOT_DIR
         ran = run_module("runpipe", *opts, argument, entry_point=entry_point, cwd=cwd)
         assert ran.returncode == 0, ran.stderr
         assert_output_matches(ran.stdout, expected, command=" ".join(ran.args))
@@ -257,16 +271,6 @@ class TestCompile:
         assert "Traceback" not in compiled.stderr
 
 
-BENCHMARK_LABELS = [
-    "baseline_sync",
-    "baseline_threads",
-    "baseline_procs",
-    "sync_module",
-    "sync_pipeline",
-    "sync_workflow",
-]
-
-
 class TestBenchmark:
     def test_benchmark(self):
         ran = run_module("benchmark", entry_point=True, timeout=20)
@@ -280,6 +284,20 @@ class TestBenchmark:
         ]
         msg = f"benchmark output missing labels {missing}:\n{output}"
         assert not missing, msg
+
+
+def _without_nan(value: object) -> object:
+    """Replaces each NaN with a marker so equal outputs compare equal."""
+    if isinstance(value, Mapping):
+        result = {key: _without_nan(item) for key, item in value.items()}
+    elif isinstance(value, list):
+        result = [_without_nan(item) for item in value]
+    elif isinstance(value, (Decimal, float)) and value != value:  # noqa: PLR0124
+        result = "NaN"
+    else:
+        result = value
+
+    return result
 
 
 class TestExamplePipelines:
@@ -420,20 +438,7 @@ class TestExamplePipelines:
             pytest.param("split", marks=SPLIT_METHOD_PENDING),
             "demo",
             "wired",
-            pytest.param(
-                "kazeeki",
-                marks=[
-                    pytest.mark.timeout(30),
-                    pytest.mark.xfail(
-                        strict=True,
-                        reason=(
-                            "gating a node on a per-item predicate is not available "
-                            "yet, so the ungated budget math yields NaN values that "
-                            "never compare equal"
-                        ),
-                    ),
-                ],
-            ),
+            "kazeeki",
         ],
     )
     async def test_async_matches_sync(self, pipe_name):
@@ -442,7 +447,7 @@ class TestExamplePipelines:
         sync_result = list(module.pipe(test=True))
         async_stream = module.async_pipe(test=True)
         async_result = [item async for item in async_stream]
-        assert async_result == sync_result
+        assert _without_nan(async_result) == _without_nan(sync_result)
 
     @pytest.mark.parametrize(
         ("pipe_name", "expected"),

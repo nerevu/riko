@@ -85,6 +85,29 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types.modules import ModuleCategory
 
+
+_SOURCES = {
+    "csv",
+    "feedautodiscovery",
+    "fetch",
+    "fetchdata",
+    "fetchpage",
+    "fetchsitefeed",
+    "fetchtable",
+    "fetchtext",
+    "forever",
+    "input",
+    "itembuilder",
+    "rssitembuilder",
+    "urlbuilder",
+    "xpathfetchpage",
+}
+
+_SINKS = {"write"}
+_NAMES = PACKAGE_DIR / "modules" / "_names.py"
+_MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
+_CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"
+
 RENAME_CONF = RenameRawConf(
     {
         "rule": RenameRawRule(
@@ -93,12 +116,6 @@ RENAME_CONF = RenameRawConf(
         )
     }
 )
-
-
-def _build(flow: Workflow, name: str, directory: Path, **kwargs) -> ModuleType:
-    """Generates and imports the module for ``flow``."""
-    return _load(compile_workflow(flow, name, **kwargs), name, directory)
-
 
 # These documents cannot run on their own: two name modules riko does not
 # implement, and the third is a stored workflow that is only meaningful when another
@@ -117,6 +134,99 @@ FIXTURE_MARKS = {
 }
 
 ASYNC_FIXTURES = ("pipe_gigs", "pipe_loop_assign", "pipe_loop_subpipe")
+FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
+DESCRIBED_INPUTS = {"limit": {"type": "integer"}}
+
+SORT_CONF = SortRawConf(
+    {"rule": SortRawRule(field=ConfArg(type="text", value="title"))}
+)
+
+PROBE_PACKAGES = {
+    TESTS_DIR / "pyworkflows": "tests.pyworkflows",
+    EXAMPLES_DIR / "pyworkflows": "examples.pyworkflows",
+}
+
+# A stored-workflow fixture: it is only meaningful when another workflow embeds it.
+SUBPIPE_ONLY = frozenset({"pipe_bd0834cfe6cdacb0bea5569505d330b8"})
+PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
+
+SURFACE_MODULES = (
+    riko.bado,
+    riko.runtime._export,
+    riko.runtime._compile,
+    riko.definitions._workflow_definition,
+    riko.ext,
+    riko.modules,
+    riko.base.exceptions,
+    riko,
+    riko.types,
+)
+
+PARTIAL_SURFACES = (
+    (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
+    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
+)
+
+CONF_TYPES = riko.types.modules.__all__
+CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
+
+EQUAL_SURFACES = (
+    (riko.bado, BADO),
+    (riko.runtime._export, EXPORT),
+    (riko.runtime._compile, CODEGEN),
+    (
+        riko.definitions._workflow_definition,
+        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
+    ),
+    (riko.ext, EXTENSION),
+    (riko.ext.codegen, EXT_CODEGEN),
+    (riko.ext.modules, EXT_MODULES),
+    (riko.ext.targets, EXT_TARGETS),
+    (riko.ext.workflows, EXT_WORKFLOWS),
+    (riko, STABLE),
+    (riko.types, TYPES),
+)
+
+PUBLIC_EXTENSION_MODULES = (
+    "riko.ext.codegen",
+    "riko.ext.modules",
+    "riko.ext.targets",
+    "riko.ext.workflows",
+)
+
+REMOVED_PUBLIC_PATHS = tuple(
+    f"riko.ext.{name}" for name in ("config", "decorators", "protocols", "registry")
+)
+
+RESOLUTION_MODULES = (
+    riko.runtime._resolver,
+    riko.runtime._workflow_pipes,
+    riko.runtime._workflow_stores,
+    riko.runtime._workflow_resolver,
+)
+
+
+def _load(source: str, name: str, directory: Path) -> ModuleType:
+    """Imports generated ``source`` as a module named ``name`` under a directory."""
+    path = directory / f"{name}.py"
+    path.write_text(source)
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _build(flow: Workflow, name: str, directory: Path, **kwargs) -> ModuleType:
+    """Generates and imports the module for ``flow``."""
+    return _load(compile_workflow(flow, name, **kwargs), name, directory)
+
+
+def gen_fixture_paths() -> Iterator[Path]:
+    """Finds every committed ``pipe_*.json`` workflow document, sorted per directory."""
+    for directory in FIXTURE_DIRS:
+        yield from sorted(directory.glob("pipe_*.json"))
 
 
 def _compile_fixtures(unrunnable: bool = False) -> list[Any]:
@@ -148,15 +258,6 @@ def _failure(call) -> tuple[str, str]:
         call()
 
     return type(info.value).__name__, str(info.value)
-
-
-FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
-
-
-def gen_fixture_paths() -> Iterator[Path]:
-    """Finds every committed ``pipe_*.json`` workflow document, sorted per directory."""
-    for directory in FIXTURE_DIRS:
-        yield from sorted(directory.glob("pipe_*.json"))
 
 
 class TestWorkflowModule:
@@ -247,7 +348,6 @@ class TestWorkflowModule:
         assert log == ["execution exit", "after close"]
 
 
-DESCRIBED_INPUTS = {"limit": {"type": "integer"}}
 DESCRIBE_INPUT_CASES = [
     pytest.param(ExecutionMode.DESCRIBE_INPUTS, DESCRIBED_INPUTS, id="inputs"),
     pytest.param(
@@ -313,23 +413,6 @@ class TestWorkflowModuleDescribe:
         assert [item async for item in stream] == [expected]
 
 
-SORT_CONF = SortRawConf(
-    {"rule": SortRawRule(field=ConfArg(type="text", value="title"))}
-)
-
-
-def _load(source: str, name: str, directory: Path) -> ModuleType:
-    """Imports generated ``source`` as a module named ``name`` under a directory."""
-    path = directory / f"{name}.py"
-    path.write_text(source)
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 class TestCompileWorkflow:
     def test_conf_is_typed_by_its_module(self):
         """A configured node is rendered through its module's raw config class."""
@@ -391,27 +474,6 @@ class TestPythonise:
         assert all(r.isidentifier() and not iskeyword(r) for r in results)
 
 
-_SOURCES = {
-    "csv",
-    "feedautodiscovery",
-    "fetch",
-    "fetchdata",
-    "fetchpage",
-    "fetchsitefeed",
-    "fetchtable",
-    "fetchtext",
-    "forever",
-    "input",
-    "itembuilder",
-    "rssitembuilder",
-    "urlbuilder",
-    "xpathfetchpage",
-}
-
-
-_SINKS = {"write"}
-
-
 @pytest.fixture
 def categories() -> dict[str, ModuleCategory]:
     return {md.name: get_module_category(md) for md in gen_module_catalog()}
@@ -445,10 +507,7 @@ class TestModuleCategory:
         assert list_modules(category="sink") == []
 
 
-_NAMES = PACKAGE_DIR / "modules" / "_names.py"
-
-
-class TestGenerateModuleNames:
+class TestGeneratedNamesDrift:
     def test_generated_names_match(self):
         entries = gen_catalog_entries()
         name_lines = _NAMES.read_text().splitlines()
@@ -458,15 +517,9 @@ class TestGenerateModuleNames:
             assert actual == expected
 
 
-_MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
-
-
 class TestGenerateModuleIds:
     def test_generated_module_ids_match(self):
         assert _MODULE_IDS.read_text() == generate_module_ids()
-
-
-_CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"
 
 
 class TestConfigCodegen:
@@ -495,17 +548,6 @@ class TestWorkflowFixtures:
         flow = Workflow.parse(path.read_text())
         flow.validate()
         assert path.read_text() == _render(flow)
-
-
-PROBE_PACKAGES = {
-    TESTS_DIR / "pyworkflows": "tests.pyworkflows",
-    EXAMPLES_DIR / "pyworkflows": "examples.pyworkflows",
-}
-
-# A stored-workflow fixture: it is only meaningful when another workflow embeds it.
-SUBPIPE_ONLY = frozenset({"pipe_bd0834cfe6cdacb0bea5569505d330b8"})
-
-PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
 
 
 def _probes() -> list[Any]:
@@ -588,71 +630,9 @@ class TestWorkflowProbes:
         generated = _build_resolved_workflow(name, flow, dispatcher)
         probe = import_module(f"tests.pyworkflows.{name}")
         context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
-        assert probe.pipe(context=context) == generated.pipe(context=context)
-
-
-SURFACE_MODULES = (
-    riko.bado,
-    riko.runtime._export,
-    riko.runtime._compile,
-    riko.definitions._workflow_definition,
-    riko.ext,
-    riko.modules,
-    riko.base.exceptions,
-    riko,
-    riko.types,
-)
-
-
-PARTIAL_SURFACES = (
-    (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
-)
-
-
-CONF_TYPES = riko.types.modules.__all__
-
-
-CODEGEN = (COMPILE & {"compile_workflow"}) | {"RAW_CONFS", "render_value"}
-
-
-EQUAL_SURFACES = (
-    (riko.bado, BADO),
-    (riko.runtime._export, EXPORT),
-    (riko.runtime._compile, CODEGEN),
-    (
-        riko.definitions._workflow_definition,
-        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
-    ),
-    (riko.ext, EXTENSION),
-    (riko.ext.codegen, EXT_CODEGEN),
-    (riko.ext.modules, EXT_MODULES),
-    (riko.ext.targets, EXT_TARGETS),
-    (riko.ext.workflows, EXT_WORKFLOWS),
-    (riko, STABLE),
-    (riko.types, TYPES),
-)
-
-
-PUBLIC_EXTENSION_MODULES = (
-    "riko.ext.codegen",
-    "riko.ext.modules",
-    "riko.ext.targets",
-    "riko.ext.workflows",
-)
-
-
-REMOVED_PUBLIC_PATHS = tuple(
-    f"riko.ext.{name}" for name in ("config", "decorators", "protocols", "registry")
-)
-
-
-RESOLUTION_MODULES = (
-    riko.runtime._resolver,
-    riko.runtime._workflow_pipes,
-    riko.runtime._workflow_stores,
-    riko.runtime._workflow_resolver,
-)
+        declared = generated.pipe(context=context)
+        assert declared == dict(flow.inputs)
+        assert probe.pipe(context=context) == declared
 
 
 def id_func(val):

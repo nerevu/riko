@@ -15,8 +15,8 @@ from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
 from riko.io._async import async_write
+from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.write import async_pipe, pipe
-from riko.parsing._dotdict import DotDict
 from riko.runtime._export import list_formats
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Formats
@@ -29,14 +29,21 @@ from tests._targets import RecordStore
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from riko.types._streams import Item, Items
+    from riko.types._streams import Item
+
+
+_SEEDED_SET_WRITE = """
+import sys
+from riko.modules.write import pipe
+items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
+list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
+"""
 
 WRITE_NODE_PENDING = pytest.mark.xfail(
     strict=True, reason="write nodes do not execute yet"
 )
 
 JSON_BYTES = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
-
 
 TRANSACTIONS = [
     {
@@ -62,14 +69,6 @@ PARITY_WRITES = [
     pytest.param("json", JSON_BYTES, id="json"),
     pytest.param("csv", b"x\r\n0\r\n1\r\n2\r\n", id="csv"),
 ]
-
-
-_SEEDED_SET_WRITE = """
-import sys
-from riko.modules.write import pipe
-items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
-list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
-"""
 
 
 SKIPPED_TARGETS = [
@@ -148,7 +147,9 @@ class TestWrite:
         ],
     )
     def test_nested_dotdict_items(self, tmp_path, fmt, expected):
-        items: Items = [DotDict({"a": {"b": [1, {"c": 2}]}})]
+        source = tmp_path / "nested.json"
+        source.write_text('[{"a": {"b": [1, {"c": 2}]}}]')
+        items = list(fetchdata_pipe(conf={"url": source.as_uri()}))
         path = tmp_path / f"out.{fmt}"
         list(pipe(items, conf=WriteConf({"dest": path, "fmt": fmt})))
         assert path.read_bytes().strip() == expected
@@ -203,6 +204,12 @@ class TestWrite:
 class TestPipelineWriteDefinition:
     """The ``write`` verb validates its destination when the node is declared."""
 
+    def test_declares_the_resolved_format_and_mode(self, tmp_path):
+        pipeline = Pipeline().write(tmp_path / "out.csv", mode="append")
+        node = pipeline.workflow.nodes["write-1"]
+        assert isinstance(node, WriteNode)
+        assert (node.fmt, node.mode, node.keys) == (Formats.CSV, WriteMode.APPEND, ())
+
     def test_file_rejects_keys(self, tmp_path):
         with pytest.raises(ValueError, match="forbids 'keys'"):
             Pipeline().write(tmp_path / "out.csv", keys="x")
@@ -210,12 +217,6 @@ class TestPipelineWriteDefinition:
     def test_destination_rejects_module_arguments(self, tmp_path):
         with pytest.raises(TypeError, match="not both"):
             Pipeline().write(tmp_path / "out.csv", conf=WriteConf({}))
-
-    def test_declares_the_resolved_format_and_mode(self, tmp_path):
-        pipeline = Pipeline().write(tmp_path / "out.csv", mode="append")
-        node = pipeline.workflow.nodes["write-1"]
-        assert isinstance(node, WriteNode)
-        assert (node.fmt, node.mode, node.keys) == (Formats.CSV, WriteMode.APPEND, ())
 
     @pytest.mark.xfail(
         strict=True,
@@ -337,6 +338,18 @@ WRITER_OPTIONS = [
     pytest.param("csv", {"bar_len": 50}, id="bar_len"),
     pytest.param("list", {"mode": "w"}, id="list"),
 ]
+
+
+class TestFormats:
+    def test_format_values(self):
+        assert [f.value for f in Formats] == [
+            "csv",
+            "geojson",
+            "json",
+            "jsonl",
+            "ofx",
+            "qif",
+        ]
 
 
 class TestExportFormats:

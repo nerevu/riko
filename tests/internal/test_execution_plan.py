@@ -64,7 +64,31 @@ if TYPE_CHECKING:
     from riko.types.modules import Conf
 
 
-_async_pipe = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
+def _flagged(func, flag: str) -> Any:
+    setattr(func, flag, True)
+    return func
+
+
+_ASYNC_PIPE = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
+_BOTH = {"sync_pipe": passthrough_pipe, "async_pipe": _ASYNC_PIPE}
+_HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
+_COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
+_NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
+_LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
+
+_SEQUENTIAL_ASYNC = _flagged(
+    lambda source, **_: as_async(source or {}), "sequential_inputs"
+)
+
+_REPLACE_ITEMS = [{"content": "abc"}, {"content": "aa"}]
+_STATIC_REPLACE = cast("Conf", {"rule": [{"find": "a", "replace": "Z"}]})
+
+_DYNAMIC_REPLACE = cast(
+    "Conf", {"rule": [{"find": "a", "replace": {"terminal": "rep", "type": "text"}}]}
+)
+
+_UPPER = cast("Conf", {"rule": {"transform": "upper"}})
+_SYNC, _ASYNC = "sync_interface", "async_interface"
 
 
 def _stamp_embed(up, *, isasync: bool) -> None:
@@ -101,20 +125,16 @@ def _real_loop_workflow(embed_name="child"):
     return _loop(loop_name="loop", embed_name=embed_name)
 
 
-_BOTH = {"sync_pipe": passthrough_pipe, "async_pipe": _async_pipe}
 SELECTIONS = [
     pytest.param(_BOTH, "sync", passthrough_pipe, id="native-sync"),
-    pytest.param(_BOTH, "async", _async_pipe, id="native-async"),
+    pytest.param(_BOTH, "async", _ASYNC_PIPE, id="native-async"),
     pytest.param(
         {"sync_pipe": passthrough_pipe}, "async", passthrough_pipe, id="sync-only"
     ),
-    pytest.param({"async_pipe": _async_pipe}, "sync", _async_pipe, id="async-only"),
+    pytest.param({"async_pipe": _ASYNC_PIPE}, "sync", _ASYNC_PIPE, id="async-only"),
 ]
 
 
-_HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
-_COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
-_NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
 BUILD_REJECTIONS = [
     pytest.param(_COUNT_NO_OUTPUT, "output", id="validates-the-graph"),
     pytest.param(_NODELESS, "no nodes", id="nodeless-with-outputs"),
@@ -190,6 +210,21 @@ class TestExecutionPlan:
         assert prepared.module.conf == {"url": "x"}
         assert set(prepared.resources.values()) == {"db"}
         assert plan.index.outputs["default"].node == "n"
+
+    def test_nodes_pair_workflow_nodes_with_their_modules(self):
+        node = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
+        flow = Workflow(nodes=[node], outputs=OUTPUT_A)
+        plan = ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds={"a": _HASH})
+        prepared = plan.nodes["a"]
+        assert (prepared.node, prepared.module, prepared.embed) == (node, _HASH, _HASH)
+
+    def test_a_lone_source_is_the_seed_target(self) -> None:
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
+        )
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        assert plan.require_seed_target("default") == "n"
 
     @pytest.mark.parametrize(("flow", "match"), BUILD_REJECTIONS)
     def test_build_rejects_an_invalid_graph(self, flow, match) -> None:
@@ -290,13 +325,6 @@ class TestExecutionPlan:
         with pytest.raises(InvalidPipelineError, match="not yet supported"):
             ExecutionPlan(workflow=flow, modules={"a": _HASH})
 
-    def test_nodes_pair_workflow_nodes_with_their_modules(self):
-        node = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
-        flow = Workflow(nodes=[node], outputs=OUTPUT_A)
-        plan = ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds={"a": _HASH})
-        prepared = plan.nodes["a"]
-        assert (prepared.node, prepared.module, prepared.embed) == (node, _HASH, _HASH)
-
     @pytest.mark.xfail(
         strict=True,
         reason="owned by the module port contracts: a positional input into a module "
@@ -320,17 +348,6 @@ class TestExecutionPlan:
             ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
 
-def _flagged(func, flag: str) -> Any:
-    setattr(func, flag, True)
-    return func
-
-
-_LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
-_SEQUENTIAL_ASYNC = _flagged(
-    lambda source, **_: as_async(source or {}), "sequential_inputs"
-)
-
-
 # The invariants live on the resolved module itself, so every construction path
 # (plan build, embeds, direct construction) is covered.
 INVALID_MODULES = [
@@ -348,7 +365,7 @@ INVALID_MODULES = [
     ),
     pytest.param({}, "neither a sync nor an async", id="no-callable"),
     pytest.param(
-        {"sync_pipe": _LOOPABLE_SYNC, "async_pipe": _async_pipe},
+        {"sync_pipe": _LOOPABLE_SYNC, "async_pipe": _ASYNC_PIPE},
         "disagree on 'loopable'",
         id="mismatched-loopable",
     ),
@@ -369,10 +386,10 @@ class TestResolvedModule:
     def test_resolved_module_reads_mode_from_the_slot(self) -> None:
         # Plain undecorated callables carry no mode marker, so the slot decides.
         module = ResolvedModule(
-            "m", {}, sync_pipe=passthrough_pipe, async_pipe=_async_pipe
+            "m", {}, sync_pipe=passthrough_pipe, async_pipe=_ASYNC_PIPE
         )
         sync_only = ResolvedModule("m", {}, sync_pipe=passthrough_pipe)
-        async_only = ResolvedModule("m", {}, async_pipe=_async_pipe)
+        async_only = ResolvedModule("m", {}, async_pipe=_ASYNC_PIPE)
 
         assert not module.is_async_pipe(module.select_sync())
         assert module.is_async_pipe(module.select_async())
@@ -494,34 +511,19 @@ def _async_child(produced: list[int], closed: list[str]):
 EMBED_ADAPTATIONS = [
     pytest.param(
         {"sync_pipe": passthrough_pipe},
-        {"async_pipe": _async_pipe},
+        {"async_pipe": _ASYNC_PIPE},
         "select_sync",
-        _async_pipe,
+        _ASYNC_PIPE,
         id="async-only-under-sync",
     ),
     pytest.param(
-        {"async_pipe": _async_pipe},
+        {"async_pipe": _ASYNC_PIPE},
         {"sync_pipe": passthrough_pipe},
         "select_async",
         passthrough_pipe,
         id="sync-only-under-async",
     ),
 ]
-
-
-def _sync_child(produced: list[int], closed: list[str]):
-    def child(tag: str):
-        try:
-            for index in range(50):
-                produced.append(index)
-                yield {"content": f"{tag}{index}"}
-        finally:
-            closed.append(tag)
-
-    def _sub(item, context=None, **_):
-        return child(str(item["title"]))
-
-    return workflow()(_sub)
 
 
 class TestEmbed:
@@ -625,6 +627,21 @@ class TestEmbed:
         assert closed == ["a", "b"]
 
 
+def _sync_child(produced: list[int], closed: list[str]):
+    def child(tag: str):
+        try:
+            for index in range(50):
+                produced.append(index)
+                yield {"content": f"{tag}{index}"}
+        finally:
+            closed.append(tag)
+
+    def _sub(item, context=None, **_):
+        return child(str(item["title"]))
+
+    return workflow()(_sub)
+
+
 class TestAsyncEmbed:
     @async_test
     async def test_arun_runs_sync_only_embed_off_the_event_loop(self) -> None:
@@ -720,14 +737,6 @@ def _replace_source(_items=None, **_):
     yield from _REPLACE_ITEMS
 
 
-_REPLACE_ITEMS = [{"content": "abc"}, {"content": "aa"}]
-_STATIC_REPLACE = cast("Conf", {"rule": [{"find": "a", "replace": "Z"}]})
-_DYNAMIC_REPLACE = cast(
-    "Conf", {"rule": [{"find": "a", "replace": {"terminal": "rep", "type": "text"}}]}
-)
-_UPPER = cast("Conf", {"rule": {"transform": "upper"}})
-
-
 def _replace_workflow(conf, *edges, extra_nodes=()):
     node = ModuleNode(
         id="r", name="strreplace", conf=conf, options={"field": "content"}
@@ -736,10 +745,9 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
     return build_workflow(nodes, edges=edges, outputs={"default": Endpoint("r", "out")})
 
 
-_SYNC, _ASYNC = "sync_interface", "async_interface"
 FALLBACKS = [
     pytest.param({"sync_pipe": passthrough_pipe}, _ASYNC, _SYNC, id="sync-only"),
-    pytest.param({"async_pipe": _async_pipe}, _SYNC, _ASYNC, id="async-only"),
+    pytest.param({"async_pipe": _ASYNC_PIPE}, _SYNC, _ASYNC, id="async-only"),
 ]
 
 
@@ -860,16 +868,6 @@ class TestPreparedNode:
         prepared = PreparedNode(node, _HASH)
         assert (prepared.options, prepared.extras) == (CallOptions(), ("resources",))
 
-    def test_prepared_module_must_be_resolved(self):
-        with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):
-            PreparedNode(ModuleNode(id="a", name="hash"), "hash")  # pyright: ignore[reportArgumentType]
-
-    def test_prepared_node_must_wrap_a_module_node(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-
-        with pytest.raises(InvalidPipelineError, match="write node execution"):
-            PreparedNode(node, _HASH)
-
     def test_prepared_node_reports_loopable(self) -> None:
         plan = build_chain_plan("hash", "count")
         assert plan.nodes["n0"].loopable is True
@@ -893,3 +891,13 @@ class TestPreparedNode:
         )
         assert plan.nodes["a"].is_mappable is True
         assert plan.nodes["c"].is_mappable is False
+
+    def test_prepared_module_must_be_resolved(self):
+        with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):
+            PreparedNode(ModuleNode(id="a", name="hash"), "hash")  # pyright: ignore[reportArgumentType]
+
+    def test_prepared_node_must_wrap_a_module_node(self):
+        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
+
+        with pytest.raises(InvalidPipelineError, match="write node execution"):
+            PreparedNode(node, _HASH)

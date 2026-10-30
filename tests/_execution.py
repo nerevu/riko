@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
+
 OUTPUT_A = {"default": Endpoint("a", "out")}
 
 

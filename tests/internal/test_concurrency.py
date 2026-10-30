@@ -64,26 +64,13 @@ if TYPE_CHECKING:
 
 
 ITEMS = [{"x": x} for x in range(20)]
+LIMIT = config.concurrency_limit
+INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
+THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
 
 
 def _key(item):
     return tuple(sorted(item.items()))
-
-
-INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
-
-
-THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
-
-
-LIMIT = config.concurrency_limit
-
-
-def _mark_and_block(directory: str) -> None:
-    staged = Path(directory, f"{getpid()}.tmp")
-    staged.write_text("")
-    staged.replace(staged.with_suffix(".pid"))
-    sleep(5)
 
 
 def _pair(item: str) -> list[str]:
@@ -457,6 +444,17 @@ class TestSyncPolicy:
             )
 
         assert released == ["terminate"]
+
+
+def _mark_and_block(directory: str) -> None:
+    staged = Path(directory, f"{getpid()}.tmp")
+    staged.write_text("")
+    staged.replace(staged.with_suffix(".pid"))
+    sleep(5)
+
+
+class TestPoolLifetime:
+    """``_PoolLifetime`` stops its worker processes within its grace period."""
 
     @pytest.mark.slow
     @pytest.mark.timeout(2)
