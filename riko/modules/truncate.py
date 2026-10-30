@@ -90,7 +90,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously returns a specified number of items from a stream.
 
-    Lazy: the source is read only until ``count`` items have been yielded.
+    Not lazy: the whole source is read upfront, so an endless source will never return.
+    Bound one with ``timeout`` instead.
 
     Args:
 

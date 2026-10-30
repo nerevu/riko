@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 import attrs
 import pytest
 
-from riko.bado._backend import async_sleep, create_task_group
+from riko.bado._backend import Event, async_sleep, create_task_group
 from riko.bado.itertools import as_async
 from riko.base import _paths as paths_module
 from riko.base._exceptions import (
@@ -345,6 +345,39 @@ class TestAsyncOperatorLaziness:
         stream = async_truncate(as_async(source()), conf={"count": 3})
         assert await anext(stream) == {"i": 0}
         assert len(pulled) <= 3
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="owned by the pending Feed-native streaming migration of truncate and "
+        "the final legacy-seam cleanup: the whole-source read never yields to the "
+        "event loop, so an endless source cannot be cancelled",
+    )
+    @async_test
+    async def test_async_truncate_yields_to_the_event_loop_while_draining(self) -> None:
+        """
+        Truncate lets other tasks run while it reads a long source.
+
+        The source is long but finite so the test ends on its own. It records whether
+        a task started beside it ever ran; a read that never checkpoints finishes the
+        whole source first, which is why an endless source hangs uncancellably.
+        """
+        ran = Event()
+        saw_loop: list[bool] = []
+
+        async def tick() -> None:
+            ran.set()
+
+        def source() -> Iterator[Item]:
+            for i in range(2000):
+                saw_loop.append(ran.is_set())
+                yield {"i": i}
+
+        async with create_task_group() as tg:
+            tg.start_soon(tick)
+            stream = async_truncate(as_async(source()), conf={"count": 1})
+            assert await anext(stream) == {"i": 0}
+
+        assert any(saw_loop)
 
     @pytest.mark.xfail(
         strict=True,
