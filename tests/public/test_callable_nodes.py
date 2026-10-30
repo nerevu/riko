@@ -323,7 +323,7 @@ class TestCallableNodes:
         ),
     )
     def test_map_rejects_combine_identity(self):
-        with pytest.raises(InvalidPipelineError):
+        with pytest.raises(InvalidPipelineError, match="combine"):
             Pipeline().map(len, identity="combine")
 
     @pytest.mark.xfail(

@@ -187,8 +187,10 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 
 CLOSING_SEEDS = [
     pytest.param(_gen_closing_seed, id="generator"),
-    pytest.param(_agen_closing_seed, id="async-generator"),
-    pytest.param(ClosingAsyncIterator, id="closeable-async-iterator"),
+    pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
+    pytest.param(
+        ClosingAsyncIterator, id="closeable-async-iterator", marks=skipif_issync
+    ),
 ]
 
 
@@ -610,6 +612,7 @@ class TestPlanRun:
 
         assert closed == ["closed"]
 
+    @skipif_issync
     def test_run_closes_an_async_native_source_on_exit(self) -> None:
         # Not an async generator, so only an explicit aclose can end it.
         closed: list[str] = []

@@ -344,7 +344,7 @@ class TestPipelineChaining:
             pytest.param(
                 lambda p: p | p.with_context(Context(inputs={"a": 1})),
                 InvalidPipelineError,
-                "inputs",
+                "not a mode, inputs, or test flag",
                 id="context",
             ),
         ],

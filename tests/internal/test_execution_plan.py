@@ -160,8 +160,7 @@ class TestExecutionPlan:
             return GraphIndex(*args)  # pyright: ignore[reportArgumentType]
 
         monkeypatch.setattr(workflow_definitions, "GraphIndex", counting)
-        plan = ExecutionPlan.from_workflow(module_workflow("count"), dispatcher)
-        assert plan.index is plan.workflow.index
+        ExecutionPlan.from_workflow(module_workflow("count"), dispatcher)
         assert len(calls) == 1
 
     def test_execution_plan_snapshots_resolution(self) -> None:

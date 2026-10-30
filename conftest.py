@@ -29,6 +29,8 @@ def pytest_configure(config):
     # venv's editable install, which points at whichever checkout installed it.
     paths = [str(ROOT_DIR), os.environ.get("PYTHONPATH")]
     os.environ["PYTHONPATH"] = os.pathsep.join(path for path in paths if path)
+    # Test bounds are measured without asyncio debug mode, which slows every task.
+    os.environ.pop("PYTHONASYNCIODEBUG", None)
 
 
 @pytest.fixture(autouse=True)

@@ -64,7 +64,9 @@ def ext_from_content_type(content_type: str | None) -> str | None:
 
     Examples:
 
-        >>> ext_from_content_type("application/json; charset=utf-8")
+        >>> ext_from_content_type("application/rss+xml; charset=utf-8")
+        'xml'
+        >>> ext_from_content_type("application/vnd.api+json")
         'json'
         >>> ext_from_content_type("text/html")
         'html'

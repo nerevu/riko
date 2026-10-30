@@ -280,13 +280,15 @@ class TestSyncExecution:
         first = RecordingSink()
         second = RecordingSink()
 
-        with SyncExecution(events=first) as execution:
-            execution.emit("one")
+        with (
+            SyncExecution(events=first) as outer,
+            SyncExecution(events=second) as inner,
+        ):
+            outer.emit("one")
+            inner.emit("two")
+            outer.emit("three")
 
-        with SyncExecution(events=second) as execution:
-            execution.emit("two")
-
-        assert (first.events, second.events) == (["one"], ["two"])
+        assert (first.events, second.events) == (["one", "three"], ["two"])
 
     def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
         sink, explicit = RecordingSink(), RecordingSink()
@@ -350,10 +352,11 @@ class TestAsyncExecution:
                 ready.set()
                 await async_sleep(3600)
 
-        async with create_task_group() as tg:
-            tg.start_soon(body)
-            await ready.wait()
-            tg.cancel_scope.cancel()
+        with fail_after(1):
+            async with create_task_group() as tg:
+                tg.start_soon(body)
+                await ready.wait()
+                tg.cancel_scope.cancel()
 
         assert events == ["resource-closed"]
 
@@ -409,7 +412,7 @@ class TestAsyncExecution:
         # Exhausting the shutdown timeout during cleanup is a cleanup failure
         # reported beside the execution's own error, not a replacement for it.
         async def slow() -> None:
-            await async_sleep(3600)
+            await async_sleep(1)
 
         async def run() -> None:
             async with AsyncExecution(shutdown_timeout=0.05) as execution:
