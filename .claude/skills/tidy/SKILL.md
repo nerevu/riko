@@ -190,9 +190,11 @@ neighborhood it affects:
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
    `--with-helpers` so a moved method carries the helpers only it used;
    moves repoint doc citations), and find a test's current home with
-   `overlap_scan.py --where NAME`. After editing either script, run the smoke
-   tests: `uv run --active pytest .claude/skills/tidy/test_move_tests.py
-   .claude/skills/tidy/test_overlap_scan.py`.
+   `overlap_scan.py --where NAME`. Module constants that a move strands below
+   code go back to the top with `python .claude/skills/tidy/lift_constants.py
+   FILE...` (logger, then `type` aliases, then constants private first, each helper
+   a constant calls just above it; it reports what it cannot move). After editing any of these scripts, run the smoke tests:
+   `uv run --active pytest .claude/skills/tidy/ --no-cov`.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.
