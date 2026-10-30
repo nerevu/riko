@@ -3,8 +3,9 @@ Moves test classes or methods between test files, with their helpers and imports
 
 Usage:
     python .claude/skills/tidy/move_tests.py DEST SPEC [SPEC ...] [--before CLASS]
-        [--rename NEW] [--dry-run]
-    python .claude/skills/tidy/move_tests.py --merge DEST_CLASS SPEC [...] [--dry-run]
+        [--rename NEW] [--with-helpers] [--dry-run]
+    python .claude/skills/tidy/move_tests.py --merge DEST_CLASS SPEC [...]
+        [--with-helpers] [--dry-run]
     python .claude/skills/tidy/move_tests.py --check SPEC [SPEC ...]
     python .claude/skills/tidy/move_tests.py --sort SPEC [SPEC ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --delete SPEC [SPEC ...] [--dry-run]
@@ -25,7 +26,10 @@ What moves with a spec:
   moved code uses, transitively, when nothing left in the source still uses them.
   They land directly above the moved class (or above the destination class).
   A helper the source still needs is reported, not copied: import it, or lift it
-  into ``tests/_*.py`` when three or more copies would share it;
+  into ``tests/_*.py`` when three or more copies would share it. A moved method
+  carries its helpers only with ``--with-helpers`` (judged with the method left
+  out of its class); they land directly above the destination class. Without it,
+  every helper the method uses is reported and stays put;
 - the imports the moved code needs, copied from the source's import statements.
 
 Modes:
@@ -123,10 +127,18 @@ def get_defined(stmt: ast.stmt) -> list[str]:
     return names
 
 
-def get_used(node: ast.AST) -> set[str]:
-    used = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+def get_used(node: ast.AST, skip: ast.AST | None = None) -> set[str]:
+    nodes, stack = [], [node]
 
-    for child in ast.walk(node):
+    while stack:
+        current = stack.pop()
+        if current is not skip:
+            nodes.append(current)
+            stack.extend(ast.iter_child_nodes(current))
+
+    used = {n.id for n in nodes if isinstance(n, ast.Name)}
+
+    for child in nodes:
         text = child.value if isinstance(child, ast.Constant) else None
         if isinstance(text, str) and STRING_TYPE.fullmatch(text):
             try:
@@ -175,11 +187,13 @@ def find_method(cls: ast.ClassDef, name: str) -> ast.FunctionDef | ast.AsyncFunc
     return found
 
 
-def get_helpers(tree: ast.Module, moved: ast.stmt) -> tuple[list[ast.stmt], set[str]]:
+def get_helpers(
+    tree: ast.Module, moved: ast.stmt, owner: ast.stmt | None = None
+) -> tuple[list[ast.stmt], set[str]]:
     defs = {}
 
     for stmt in tree.body:
-        if stmt is not moved:
+        if stmt is not moved and stmt is not owner:
             for name in get_defined(stmt):
                 defs[name] = stmt
 
@@ -199,7 +213,7 @@ def get_helpers(tree: ast.Module, moved: ast.stmt) -> tuple[list[ast.stmt], set[
 
     for stmt in tree.body:
         if is_kept(stmt) and not isinstance(stmt, ast.Import | ast.ImportFrom):
-            left |= get_used(stmt)
+            left |= get_used(stmt, moved)
 
     movable, shared = [], set()
 
@@ -214,9 +228,17 @@ def get_helpers(tree: ast.Module, moved: ast.stmt) -> tuple[list[ast.stmt], set[
     return movable, shared
 
 
-def move(dest: str, spec: Spec, before: str | None, rename: str | None, dry: bool):
+def move(
+    dest: str,
+    spec: Spec,
+    before: str | None,
+    rename: str | None,
+    dry: bool,
+    with_helpers: bool,
+):
     dest_path, *dest_cls = dest.split("::")
     dest_file = Path(dest_path)
+    same = dest_file.resolve() == spec.path.resolve()
     src_lines = spec.path.read_text().splitlines(keepends=True)
     src_tree = ast.parse("".join(src_lines))
     cls = find_class(src_tree, spec.cls)
@@ -230,6 +252,8 @@ def move(dest: str, spec: Spec, before: str | None, rename: str | None, dry: boo
 
     if method is None:
         helpers, shared = get_helpers(src_tree, cls)
+    elif with_helpers and not same:
+        helpers, shared = get_helpers(src_tree, method, cls)
     else:
         helpers = []
         outside = get_used(method) - {s for st in cls.body for s in get_defined(st)}
@@ -252,7 +276,6 @@ def move(dest: str, spec: Spec, before: str | None, rename: str | None, dry: boo
         body = body.replace(f"def {old}(", f"def {rename}(", 1)
     helper_text = "\n\n".join(t.rstrip("\n") + "\n" for t in moved_text.values())
 
-    same = dest_file.resolve() == spec.path.resolve()
     dest_text = "".join(src_lines) if same else _read(dest_file)
     dest_tree = ast.parse(dest_text)
     dest_lines = dest_text.splitlines(keepends=True)
@@ -304,7 +327,8 @@ def move(dest: str, spec: Spec, before: str | None, rename: str | None, dry: boo
             index = get_start(find_class(dest_tree, before), dest_lines)
             insert_text += "\n\n"
     else:
-        index = find_class(dest_tree, dest_cls[0]).end_lineno or 0
+        dest_node = find_class(dest_tree, dest_cls[0])
+        index = dest_node.end_lineno or 0
         insert_text = "\n" + body
 
     import_at = max(
@@ -320,6 +344,8 @@ def move(dest: str, spec: Spec, before: str | None, rename: str | None, dry: boo
         removed |= set(range(*whole))
         print(f"  removed emptied class {spec.cls}")
     inserts = {index: insert_text}
+    if method is not None and helper_text:
+        inserts[get_start(dest_node, dest_lines)] = helper_text + "\n\n"
     if adds:
         imports = "".join(f"{line}\n" for line in adds)
         inserts[import_at] = imports + inserts.get(import_at, "")
@@ -513,7 +539,7 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
     return [spec.path]
 
 
-def merge(dest: str, spec: Spec, dry: bool) -> list[Path]:
+def merge(dest: str, spec: Spec, dry: bool, with_helpers: bool) -> list[Path]:
     tree = ast.parse(spec.path.read_text())
     cls = find_class(tree, spec.cls)
     methods = [st.name for st in cls.body if isinstance(st, FUNCTION_NODES)]
@@ -533,7 +559,7 @@ def merge(dest: str, spec: Spec, dry: bool) -> list[Path]:
 
     for method in methods:
         part = Spec(spec.path, spec.cls, method)
-        touched |= set(move(dest, part, None, None, dry))
+        touched |= set(move(dest, part, None, None, dry, with_helpers))
 
     if not dry:
         lines = spec.path.read_text().splitlines(keepends=True)
@@ -725,6 +751,11 @@ def main() -> int:
     )
     parser.add_argument("--before", help="place moved classes above this class")
     parser.add_argument("--rename", help="rename the single moved class or method")
+    parser.add_argument(
+        "--with-helpers",
+        action="store_true",
+        help="carry helpers only moved methods use",
+    )
     parser.add_argument("--dry-run", action="store_true", help="print the plan only")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -801,9 +832,18 @@ def main() -> int:
         elif args.sort:
             touched |= set(sort_class(spec, args.dry_run))
         elif args.merge:
-            touched |= set(merge(dest, spec, args.dry_run))
+            touched |= set(merge(dest, spec, args.dry_run, args.with_helpers))
         else:
-            touched |= set(move(dest, spec, args.before, args.rename, args.dry_run))
+            touched |= set(
+                move(
+                    dest,
+                    spec,
+                    args.before,
+                    args.rename,
+                    args.dry_run,
+                    args.with_helpers,
+                )
+            )
 
     return _fix(touched) or status
 

@@ -160,7 +160,8 @@ neighborhood it affects:
    Read and verify only those, never whole files. Make the moves with
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
-   `--delete`/`--drop-row` for trims, `--place` to put helpers above their user;
+   `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
+   `--with-helpers` so a moved method carries the helpers only it used;
    moves repoint doc citations), and find a test's current home with
    `overlap_scan.py --where NAME`. After editing either script, run the smoke
    tests: `uv run --active pytest .claude/skills/tidy/test_move_tests.py
