@@ -73,10 +73,15 @@ if TYPE_CHECKING:
     from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
     from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
 
+type _AliasStream = Iterator[int]
+
 
 def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
     title = str(item.get("title", ""))
     return iter([{"content": title.upper()}, {"content": title[::-1]}])
+
+
+_SYNC_SUBPIPE = workflow()(_sync_subpipe)
 
 
 async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
@@ -84,7 +89,6 @@ async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Str
     return iter([{"content": title.upper()}, {"content": title[::-1]}])
 
 
-_SYNC_SUBPIPE = workflow()(_sync_subpipe)
 _ASYNC_SUBPIPE = workflow()(_async_subpipe)
 _SOURCE_LEN = 5
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
@@ -383,9 +387,6 @@ class TestAsyncOperatorLaziness:
         stream = async_union(primary, others=[as_async(secondary())])
         assert await anext(stream) == {"i": 0}
         assert len(pulled) <= 1
-
-
-type _AliasStream = Iterator[int]
 
 
 def _broad(items) -> Any:

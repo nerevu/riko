@@ -29,6 +29,8 @@ from riko.types.modules import (
 )
 
 DEF_CUR_CODE = "USD"
+INPUTS: list = []
+DEPENDENCIES = ["rename", "regex"]
 
 
 def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
@@ -365,10 +367,6 @@ def print_content(output):
     pipe = list(output)
     pprint(pipe[0])
     print("count", len(pipe))
-
-
-INPUTS: list = []
-DEPENDENCIES = ["rename", "regex"]
 
 
 def pipe(context: Context | None = None, **_):

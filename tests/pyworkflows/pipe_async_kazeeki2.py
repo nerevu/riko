@@ -15,15 +15,14 @@ from tests.pyworkflows._pipe_kazeeki import itembuilder_conf, regex_conf, rename
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+INPUTS: list = []
+DEPENDENCIES = ["itembuilder", "rename", "regex"]
+
 
 def build() -> Pipeline:
     """Builds the itembuilder variant of the simple kazeeki chain."""
     source = Pipeline.from_module("itembuilder", conf=itembuilder_conf)
     return source.rename(conf=rename_conf).regex(conf=regex_conf)
-
-
-INPUTS: list = []
-DEPENDENCIES = ["itembuilder", "rename", "regex"]
 
 
 def async_pipe(context: Context | None = None, **_) -> AsyncIterator:

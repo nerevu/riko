@@ -84,12 +84,6 @@ from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
-
-def _if(test: str, body: str = "import a", orelse: str = "") -> str:
-    tail = f"else:\n    {orelse}\n" if orelse else ""
-    return f"if {test}:\n    {body}\n{tail}"
-
-
 _TYPING = "[tool.riko.typing]\n"
 _TODAY = date(2026, 10, 27)
 _WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
@@ -137,6 +131,7 @@ _ROW_MARK = (
 
 _DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
 _PARAMETRIZE = '@pytest.mark.parametrize("v", {})'
+
 _BOUND_FRAGMENTS = (
     "bound ladder",
     "must stay below",
@@ -146,6 +141,7 @@ _BOUND_FRAGMENTS = (
     "equals the pyproject",
     "awaits nothing",
 )
+
 _OPTIONS = "[tool.pytest.ini_options]\n"
 _SHARED = "basename is shared; rename one or allowlist the pair"
 _STALE_BASENAME = "allowlisted basename is no longer duplicated; remove it"
@@ -230,6 +226,13 @@ repos:
 
 WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
 TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
+
+
+def _if(test: str, body: str = "import a", orelse: str = "") -> str:
+    tail = f"else:\n    {orelse}\n" if orelse else ""
+    return f"if {test}:\n    {body}\n{tail}"
+
+
 LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
 ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
 

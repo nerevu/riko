@@ -63,12 +63,6 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import Conf
 
-
-def _flagged(func, flag: str) -> Any:
-    setattr(func, flag, True)
-    return func
-
-
 _ASYNC_PIPE = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
 _BOTH = {"sync_pipe": passthrough_pipe, "async_pipe": _ASYNC_PIPE}
 _SYNC_ONLY = {"sync_pipe": passthrough_pipe}
@@ -76,6 +70,13 @@ _ASYNC_ONLY = {"async_pipe": _ASYNC_PIPE}
 _HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
 _COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
 _NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
+
+
+def _flagged(func, flag: str) -> Any:
+    setattr(func, flag, True)
+    return func
+
+
 _LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
 
 _SEQUENTIAL_ASYNC = _flagged(

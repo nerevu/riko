@@ -81,18 +81,19 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, Items
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
-
-class _Mod(ModuleName):
-    HASH = "hash"
-    TRUNCATE = "truncate"
-
-
 _FEED = get_path("feed.xml")
 _SORT_CONF_RULE = SortConfRule(dir="desc")
 _SORT_CONF = SortConf({"rule": _SORT_CONF_RULE})
 _OPTIONS = CallOptions(emit=True, field="title")
 _TOKENIZER_CONF = TokenizerRawConf(delimiter=ConfArg(type="text", value=" "))
 _EMBED = Embed(name="tokenizer", conf=_TOKENIZER_CONF)
+
+
+class _Mod(ModuleName):
+    HASH = "hash"
+    TRUNCATE = "truncate"
+
+
 _TRUNCATED = Pipeline().pipe(_Mod.TRUNCATE, conf={"count": 1})
 _PARITY_STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="c", replace="C")})
 
