@@ -969,6 +969,7 @@ ENV_OVERRIDES = [
     ),
     pytest.param("RIKO_FETCH_TIMEOUT", "2.5", "fetch_timeout", 2.5, id="fetch"),
     pytest.param("RIKO_FETCH_TIMEOUT", "-1", "fetch_timeout", 30.0, id="fetch-neg"),
+    pytest.param("RIKO_BENCHMARK_DELAY", "0", "benchmark_delay", 0.0, id="delay-0"),
     pytest.param(
         "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
     ),

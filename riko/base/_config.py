@@ -111,6 +111,7 @@ class Settings:
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
+    benchmark_delay: float = 0.1
 
 
 def _env_int(
@@ -218,6 +219,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             "RIKO_PARSED_DATE_CACHE_SIZE",
             defaults.parsed_date_cache_size,
             minimum=0,
+        ),
+        benchmark_delay=_env_float(
+            source, "RIKO_BENCHMARK_DELAY", defaults.benchmark_delay
         ),
     )
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 from riko.bado._backend import async_sleep, isasync
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist, async_map
-from riko.base._config import get_worker_cnt
+from riko.base._config import get_worker_cnt, settings
 from riko.base._paths import get_path
 from riko.definitions._workflow_definition import normalize_workflow
 from riko.modules.fetch import async_pipe as async_fetch
@@ -38,7 +38,7 @@ type AsyncTest = Callable[[], Awaitable[object]]
 
 NUMBER = 1
 LOOPS = 1
-DELAY = 0.1
+DELAY = settings.benchmark_delay
 UNION_ID = "union-1"
 
 REGEX_RULE = RegexRawRule(
