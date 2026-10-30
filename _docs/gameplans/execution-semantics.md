@@ -142,8 +142,8 @@ potentially blocking sync acquisition or cleanup
 
 Worker adaptation must enter and exit a sync lifecycle resource on the same thread, so thread-affine
 clients such as `sqlite3` connections work under async execution. Today entry and exit may land on
-different worker threads; R11 (provider sessions) owns the fix, and a strict xfail in
-`tests/internal/test_execution_plan.py` marks it.
+different worker threads; R11 (provider sessions) owns the fix, and a strict xfail,
+`tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`, marks it.
 
 The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async-native *cleanup* is not bridged: an async cleanup callable, an async-native context-manager lifecycle, or an owned value that only supports `aclose()` cannot be honored by a synchronous unwind and is permanently rejected with `InvalidPipelineError` before the resource is acquired, so the rejection never leaves a produced value or entered lifecycle behind. Run the pipeline under async execution to use async cleanup.
 

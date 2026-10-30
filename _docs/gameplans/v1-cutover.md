@@ -55,7 +55,7 @@ Prerequisites that must be true before any deletion commit:
   attribute chaining, `|`/`__ror__` source seeding, and end-to-end `iter`/`aiter` execution with a
   seeded source.
 - The v2 execution runs linear and fan-in module graphs (covered by
-  `tests/internal/test_execution_plan.py`).
+  `tests/internal/test_plan_runs.py`).
 - Coverage ownership is transferred, not dropped: the string-form/template chaining behavior
   historically owned by `tests/public/test_collections.py` (since removed) is owned by
   `tests/public/test_pipeline.py` going forward. Snapshot any remaining v1-only coverage
@@ -149,7 +149,7 @@ Blocks step 4.
   and a wire's optional third entry names the target port — so fan-in (`["b", "u", "in:1"]`) is now
   expressible and the old "Limitation" section of `docs/DAG_FORMAT.rst` is gone. The R17 tripwire
   `test_convert_dag_empty_modules_raises` is **retired**, replaced by the regular test
-  `tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` (empty `modules` →
+  `tests/public/test_workflow_documents.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` (empty `modules` →
   `InvalidPipelineError("workflow has no nodes")`). `tests/dags/*.json` stay as `build-workflow`
   fixtures; `tests/internal/test_codegen.py` compiles every committed fixture and proves the generated
   module item-for-item equivalent to running the document (the two split fixtures strict-xfail), and

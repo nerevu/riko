@@ -9,7 +9,7 @@ live in their owning gameplans. This file consolidates the former
 
 ## Progress tracker (authoritative)
 
-Suite: **2814 passed / 83 xfailed**. The user commits.
+Suite: **2832 passed / 82 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1 and R3 were
 repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -375,11 +375,13 @@ canonical everywhere (JSON, entry points, resolver); every enum member's `.value
 **Surface note:** the `Module` name collision is why the discovery tree is re-exported from the
 stable surface rather than from `riko.modules`.
 
-**Tests:** `tests/internal/test_codegen.py` (taxonomy golden, member normalization, collision
-diagnostic, byte-stability, drift guard); `TestModuleNameEnum`
+**Tests:** `tests/internal/test_codegen.py` (taxonomy golden, byte-stability, drift guard);
+`TestEnumMemberName` and `TestGenerateModuleNames` in `tests/public/test_modules.py` (member
+normalization, collision diagnostic); `TestModuleNameEnum`
 (`tests/public/test_pipeline.py`, enum≡string resolution via ctor/`|`/`.pipe()`);
 `list_modules` filtering in `tests/public/test_modules.py`; surface-export presence
-(`Modules`/`Sources`/`Transforms`/`Sinks`/`describe_module`) in `tests/public/test_modules.py`. (The
+(`Modules`/`Sources`/`Transforms`/`Sinks`/`describe_module`) in
+`tests/internal/test_codegen.py::TestImportSurface`. (The
 separate `test_fluent_discovery.py` was dropped as redundant — its coverage lives in those homes.)
 **Carryover:** the non-P9A P9 work — installed-env aggregate `riko.generated.Modules` + `.pyi` stubs.
 
