@@ -13,11 +13,13 @@ from urllib.response import addinfourl
 
 import pytest
 from requests import Response
+from requests.exceptions import Timeout
 
 from riko.bado import as_async
-from riko.bado._backend import Semaphore, async_sleep, lowlevel
+from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
 from riko.bado._util import async_return, gather_results
 from riko.bado.itertools import async_map_ordered_stream, async_map_stream, async_merge
+from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import WriteResult
@@ -41,7 +43,7 @@ from riko.runtime._write_session import (
 )
 from riko.types._enums import Formats
 from tests import aresolve, async_test, is_installed, skipif_issync
-from tests._loopback import URL, loopback_url, stub_async_get
+from tests._loopback import URL, loopback_url, stalled_url, stub_async_get
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
@@ -102,6 +104,21 @@ class TestFetch:
         mock_requests.assert_called_once()
         mock_urlopen.assert_not_called()
         assert mock_requests.call_args.args[0] == target
+
+    def test_default_timeout_comes_from_settings(self):
+        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
+        response = Mock()
+        response.headers = {"Content-Type": "text/plain"}
+
+        with patch("riko.io._sync.requests.get", return_value=response) as mock_get:
+            Fetch("http://example.com/feed.txt", binary=True)
+
+        assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
+
+    @pytest.mark.simulated_network
+    def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(Timeout):
+            Fetch(url, timeout=0.2)
 
     @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):
@@ -176,6 +193,42 @@ class TestAsyncUrlOpen:
         f = await async_url_open(URL)
         assert f.ext == expected
         assert f.content_type == content_type
+
+    @async_test
+    async def test_default_timeout_comes_from_settings(self, monkeypatch):
+        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
+        seen: dict[str, object] = {}
+        stub = stub_async_get(b"{}", "application/json")
+
+        async def async_get(url: str, **kwargs: object):
+            seen.update(kwargs)
+            return await stub(url, **kwargs)
+
+        monkeypatch.setattr("riko.io._async.async_get", async_get)
+        await async_url_open(URL)
+        assert seen["timeout"] == settings.fetch_timeout
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(TimeoutException):
+            await async_url_open(url, timeout=0.2)
+
+    @pytest.mark.simulated_network
+    @pytest.mark.xfail(
+        strict=True,
+        reason="streaming async URL reads are not yet implemented: async_url_open "
+        "buffers the whole body before returning, so a stalled body times out "
+        "before the lines already received can be read",
+    )
+    @async_test
+    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
+        """The first line of a stalled body is readable, as with sync ``Fetch``."""
+        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
+
+        with stalled_url(prefix) as url:
+            async with async_url_open(url, timeout=0.5) as f:
+                assert f.readline() == "first\n"
 
     @async_test
     async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):

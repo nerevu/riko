@@ -103,6 +103,7 @@ class Settings:
     streaming_threshold: int = 1 * 1024 * 1024
     encoding: str = "utf-8"
     discovery_timeout: int = 10
+    fetch_timeout: float = 30.0
     shutdown_timeout: float = 30.0
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
     shipped_call_cache_size: int = 32
@@ -200,6 +201,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         discovery_timeout=_env_int(
             source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout
         ),
+        fetch_timeout=_env_float(source, "RIKO_FETCH_TIMEOUT", defaults.fetch_timeout),
         shutdown_timeout=_env_float(
             source, "RIKO_SHUTDOWN_TIMEOUT", defaults.shutdown_timeout
         ),

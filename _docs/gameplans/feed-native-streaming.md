@@ -199,6 +199,12 @@ they materialize or their asymptotic memory behavior.
 Share runtime-neutral algorithm/state where practical (unique-state, reducers, encoders,
 identity derivation), with sync and async adapters around waiting/I/O.
 
+Memory-parity gap (2026-10-29 unboundedness audit, owned by R10's parity audit): the async URL
+readers (`async_url_open`/`async_url_read`, `riko/io/_async.py`) buffer `response.content` whole
+with no size cap, while sync `Fetch` streams `r.raw`. Tripwire (strict xfail):
+`tests/internal/test_io.py::TestAsyncUrlOpen::test_async_url_open_reads_received_lines_before_the_body_ends`
+— the first line of a stalled body is readable in sync but the async read times out first.
+
 ### 7.1 Stream-boundary source normalization
 
 Classify one-item vs many-item sources consistently:

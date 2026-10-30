@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from functools import partial
+from math import inf
 from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._guards import is_awaitable
@@ -90,15 +91,16 @@ async def async_get(
     Kwargs:
 
         params: Query parameters added to ``url``.
-        timeout: Seconds to wait before giving up (default: the client's timeout).
-            ``0`` or ``None`` means no timeout, which mirrors the sync backend.
+
+        timeout: Seconds to wait before giving up (default: the client's own timeout).
+            ``0``, ``inf``, or ``None`` waits forever.
 
     Returns:
 
         The final response after any redirects.
 
     """
-    resolved = None if timeout == 0 else timeout
+    resolved = None if timeout in {0, inf} else timeout
 
     async with AsyncClient(follow_redirects=True) as client:
         return await client.get(url, params=params, timeout=resolved)

@@ -27,7 +27,7 @@ from typing_extensions import TypeIs
 
 from riko.bado._backend import NamedTemporaryFile, async_open
 from riko.bado._util import async_get, async_read
-from riko.base._config import ENCODING
+from riko.base._config import ENCODING, settings
 from riko.base._logging import get_logger
 from riko.base._paths import is_http_url, normalize_url
 
@@ -280,7 +280,7 @@ def async_url_open(
 ) -> _AsyncURLStream[NamedTextIOWrapper]: ...
 def async_url_open(
     url: str,
-    timeout: float = 0,
+    timeout: float = settings.fetch_timeout,
     encoding: str = ENCODING,
     binary: bool = False,
     **_: object,
@@ -303,8 +303,12 @@ def async_url_open(
     Args:
 
         url: An ``http(s)`` URL or a local path.
-        timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
+
+        timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
+            30 seconds). ``0`` or ``inf`` waits forever.
+
         encoding: The text decoding used when ``binary`` is False.
+
         binary: Whether to return raw bytes rather than decoded text.
 
     Returns:
@@ -343,7 +347,10 @@ def async_url_open(
 
 
 async def async_url_read(
-    url: str, timeout: float = 0, encoding: str = ENCODING, **_: object
+    url: str,
+    timeout: float = settings.fetch_timeout,
+    encoding: str = ENCODING,
+    **_: object,
 ) -> str:
     """
     Reads a URL or local file in full.
@@ -351,7 +358,10 @@ async def async_url_read(
     Args:
 
         url: An ``http(s)`` URL or a local path; resolved to an absolute path.
-        timeout: The HTTP request timeout in seconds; ``0`` means no timeout.
+
+        timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
+            30 seconds). ``0`` or ``inf`` waits forever.
+
         encoding: The text decoding used for local reads.
 
     Returns:
