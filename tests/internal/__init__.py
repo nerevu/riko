@@ -8,12 +8,12 @@ Index (file, then the subjects it owns, in file order):
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, CeilingRatchet,
                               ConsoleScripts, Docstyle, VerbTables, GenerateApiSurface,
-                              CitationLint, TermLint, LiteralLint, BindingLint,
-                              TierIndexCodegen, LayoutLint, BasenameLint, EscapeLint,
-                              DependencyLint, HookPinLint, CanonicalImportLint,
-                              RelativeImportLint, ImportArchitectureLint,
-                              RequireWorkflow, RunTarget, ReadDocument, Timeouts,
-                              SubprocessImports, LogLevel
+                              CitationLint, UserDocsLint, TermLint, LiteralLint,
+                              BindingLint, TierIndexCodegen, LayoutLint, BasenameLint,
+                              EscapeLint, DependencyLint, HookPinLint,
+                              CanonicalImportLint, RelativeImportLint,
+                              ImportArchitectureLint, RequireWorkflow, RunTarget,
+                              ReadDocument, Timeouts, SubprocessImports, LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
                               Pythonise, ModuleCategory, GeneratedNamesDrift,
                               GenerateModuleIds, ConfigCodegen, WorkflowFixtures,
