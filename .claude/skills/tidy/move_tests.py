@@ -448,7 +448,7 @@ def check(spec: Spec) -> list[str]:
 
 
 def get_kind(stmt: ast.stmt, markers: set[str]) -> int:
-    is_func = isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef)
+    is_func = isinstance(stmt, FUNCTION_NODES)
     kind = 0
 
     if is_func and stmt.name in KIND_OVERRIDES:

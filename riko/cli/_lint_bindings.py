@@ -17,6 +17,7 @@ import re
 from doctest import DocTestParser
 from typing import TYPE_CHECKING, NamedTuple
 
+from ._import_graph import FUNCTION_NODES
 from ._shipped_text import gen_files
 
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ _WORKFLOW_BUILDERS = frozenset(
     }
 )
 _BINDINGS = (ast.arg, ast.Assign, ast.AnnAssign)
-_DOCUMENTED = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+_DOCUMENTED = (ast.Module, ast.ClassDef, *FUNCTION_NODES)
 
 
 class BindingIssue(NamedTuple):
@@ -77,8 +78,7 @@ def _get_workflow_helpers(tree: ast.Module) -> frozenset[str]:
     return frozenset(
         node.name
         for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and _names_workflow(node.returns)
+        if isinstance(node, FUNCTION_NODES) and _names_workflow(node.returns)
     )
 
 
@@ -137,9 +137,7 @@ def _gen_field_keywords(cls: ast.ClassDef) -> Iterator[ast.arg]:
         and isinstance(statement.target, ast.Name)
     }
     methods = (
-        statement
-        for statement in cls.body
-        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+        statement for statement in cls.body if isinstance(statement, FUNCTION_NODES)
     )
 
     for method in methods:

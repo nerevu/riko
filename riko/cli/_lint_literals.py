@@ -9,6 +9,7 @@ from itertools import chain
 from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
+from ._import_graph import FUNCTION_NODES, FunctionNode
 from ._shipped_text import gen_files, gen_text
 
 if TYPE_CHECKING:
@@ -70,9 +71,7 @@ class LiteralIssue(NamedTuple):
         return f"{self.path}:{self.lineno} {found!r} -> use {instead}"
 
 
-def _get_string_defaults(
-    node: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> dict[str, str]:
+def _get_string_defaults(node: FunctionNode) -> dict[str, str]:
     """Maps each parameter whose signature default is a string to that string."""
     args = node.args
     positional = [*args.posonlyargs, *args.args]
@@ -94,7 +93,7 @@ def _gen_bare_default_issues(path: Path) -> Iterator[LiteralIssue]:
     nodes = (
         node
         for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.body
+        if isinstance(node, FUNCTION_NODES) and node.body
     )
 
     for node in nodes:

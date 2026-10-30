@@ -10,7 +10,6 @@ from ast import (
     AsyncFunctionDef,
     Attribute,
     ClassDef,
-    FunctionDef,
     ImportFrom,
     Module,
     Name,
@@ -26,6 +25,8 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
 from riko.base._verbs import VERBS
+
+from ._import_graph import FUNCTION_NODES
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -322,7 +323,7 @@ def _get_base_name(base: expr) -> str:
 def _gen_defined_names(tree: Module) -> Iterator[str]:
     """Lists the names a module's top-level statements define."""
     for node in tree.body:
-        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+        if isinstance(node, (*FUNCTION_NODES, ClassDef)):
             yield node.name
         elif isinstance(node, Assign):
             for target in node.targets:
@@ -345,7 +346,7 @@ def _gen_runtime_names(tree: Module) -> Iterator[str]:
     type_only: set[str] = set(_TYPE_ONLY_BASES)
 
     for node in tree.body:
-        if isinstance(node, (FunctionDef, AsyncFunctionDef)):
+        if isinstance(node, FUNCTION_NODES):
             yield node.name
         elif isinstance(node, ClassDef):
             bases = set(map(_get_base_name, node.bases))
@@ -403,7 +404,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
         One :class:`DocstringIssue` per offending line, in path then line order.
 
     """
-    types = (Module, ClassDef, FunctionDef, AsyncFunctionDef)
+    types = (Module, ClassDef, *FUNCTION_NODES)
 
     for root in roots:
         for path in _iter_python_files(root):
@@ -415,7 +416,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                 summary = doc.strip().split("\n", 1)[0].strip()
                 lineno = getattr(node, "lineno", 1)
                 name = getattr(node, "name", "<module>")
-                is_function = isinstance(node, (FunctionDef, AsyncFunctionDef))
+                is_function = isinstance(node, FUNCTION_NODES)
 
                 if is_function and summary and summary_leads_with_output(summary):
                     problem = "summary leads with the output"
