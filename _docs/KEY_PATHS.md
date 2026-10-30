@@ -182,7 +182,7 @@ write/session contracts.
 |---|---|
 | `riko/cli/manage.py` | thin Click command composer only |
 | `riko/cli/_lint.py` | `manage lint`, additive selectors, `--all`, and nested `lint imports` registration; `--terms` scans the shipped-text roots in full and the as-built `_docs` files (`AS_BUILT_DOCS`) for banned phrases only; a phrase matches across line breaks within one string, comment, or prose file (`gen_blocks` in `_shipped_text.py`) |
-| `riko/cli/_import_graph.py` | pure-AST import scanner; classifies module/local/type-only imports without importing riko |
+| `riko/cli/_import_graph.py` | pure-AST import scanner; classifies module/local/type-only imports without importing riko; owns the import-lint exceptions (`ImportLintError` and its subclasses) |
 | `riko/cli/_lint_import_architecture.py` | package-layer DAG, module-to-layer mapping, architecture report/validation |
 | `riko/cli/_lint_canonical_imports.py` | canonical-definition import contract |
 | `riko/cli/_lint_relative_imports.py` | sibling-relative import contract |

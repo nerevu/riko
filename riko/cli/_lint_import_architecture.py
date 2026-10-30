@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
 from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
 from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
-from riko.base._exceptions import InvalidArchitectureError
 from riko.base._graph import (
     AnyGraph,
     FrozenGraph,
@@ -24,6 +23,7 @@ from riko.base._graph import (
 from riko.base._iterutils import gen_non_none
 
 from ._import_graph import (
+    InvalidArchitectureError,
     ModuleInfo,
     _load_modules,
     collect_imports,

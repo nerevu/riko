@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
-from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import ROOT_DIR
 from riko.base._strutils import get_codegen_note
 from riko.cli import (
@@ -45,6 +45,7 @@ from riko.cli._document import read_document, require_workflow
 from riko.cli._gen_api_surface import generate_api_surface
 from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
+from riko.cli._import_graph import InvalidArchitectureError
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
