@@ -228,16 +228,6 @@ class Workflow:
             >>> dag = {"modules": [{"name": "forever"}, {"name": "truncate"}]}
             >>> Workflow.parse(dag, shape="dag")
             Workflow(sw-1 -> sw-2; outputs: default)
-            >>> fan_in = {
-            ...     "modules": [
-            ...         {"id": "a", "name": "fetch"},
-            ...         {"id": "b", "name": "fetch"},
-            ...         {"id": "u", "name": "union"},
-            ...     ],
-            ...     "wires": [["a", "u"], ["b", "u", "in:1"]],
-            ... }
-            >>> [edge.target.port for edge in Workflow.parse(fan_in).edges]
-            ['in', 'in:1']
             >>> Workflow.parse("[]")
             Traceback (most recent call last):
             ...
@@ -728,17 +718,13 @@ class Workflow:
 
         Examples:
 
-            >>> from riko.ext import ModuleNode, WriteNode
+            >>> from riko.ext import ModuleNode
             >>>
-            >>> write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
             >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="a", name="hash"), write],
+            ...     nodes=[ModuleNode(id="a", name="hash")],
             ...     outputs={"default": Endpoint("a", "out")},
             ... )
             >>> flow.require_runnable_only("execution")
-            Traceback (most recent call last):
-                ...
-            riko.base.exceptions.InvalidPipelineError: ...execution is not yet supported
 
         """
         supported = self.runnable_nodes

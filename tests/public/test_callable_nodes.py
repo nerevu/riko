@@ -82,7 +82,6 @@ _LISTLIKE_ITEMS = [
     pytest.param(_to_list, _PROCESS, id="list-process"),
     pytest.param(_to_tuple, {}, id="tuple-inline"),
     pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
-    pytest.param(_to_tuple, _PROCESS, id="tuple-process"),
     pytest.param(_to_generator, {}, id="generator-inline"),
     pytest.param(_to_generator, _THREAD, id="generator-thread"),
 ]
@@ -100,7 +99,6 @@ _PASSTHROUGH_CASES = [
     pytest.param([{"c": "hi"}], [itemgetter("c"), len], [2], id="chained-scalar"),
     pytest.param([{"x": 1}], [lambda _: None], [None], id="none-is-a-result"),
     pytest.param([{"x": 1}], [lambda i: {"y": i["x"]}], [{"y": 1}], id="mapping"),
-    pytest.param([{"x": 1}, {"x": 2}], [_scaled], [2, 4], id="one-per-item"),
 ]
 
 
@@ -242,11 +240,6 @@ class TestCallableNodes:
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
-
-    def test_map_extracts_a_field(self):
-        pipeline = tokenized(VALUE).map(itemgetter("content"))
-        assert isinstance(pipeline, Pipeline)
-        assert list(pipeline) == ["once is 1x", "twice is 2x", "thrice is 3x"]
 
     def test_map_runs_once_per_item_mid_chain(self):
         runs: list[int] = []

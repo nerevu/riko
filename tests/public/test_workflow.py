@@ -50,6 +50,7 @@ _C_IN = Endpoint("c", "in")
 _HAS_DB = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
 _UNKNOWN_KEY_RULE = {"fieldd": "title", "op": "contains", "value": "1"}
 _B = ModuleNode(id="b", name="sort")
+_INVALID = InvalidPipelineError
 _A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")
 _B_IN, _B_OUT = Endpoint("b", "in"), Endpoint("b", "out")
 
@@ -78,9 +79,7 @@ def _fetch_workflow() -> Workflow:
 
 APPENDS = [
     pytest.param(lambda flow: flow.with_node(_B), id="node"),
-    pytest.param(
-        lambda flow: flow.with_workflow(Workflow().with_node(_B)), id="workflow"
-    ),
+    pytest.param(lambda flow: flow.with_workflow(Workflow().with_node(_B)), id="flow"),
 ]
 
 
@@ -184,6 +183,10 @@ class TestWorkflow:
         assert index.outgoing["a"][0].target == "b"
         assert set(index.outputs) == {"default", "extra"}
         assert index.required == {"default": ("a", "b"), "extra": ("c",)}
+        assert index.edges == index.incoming["b"]
+
+        with pytest.raises(TypeError):
+            index.outputs["new"] = Endpoint("a", "out")  # type: ignore[index]
 
     def test_cycle_names_only_the_nodes_on_the_cycle(self):
         src = ModuleNode(id="src", name="fetch")
@@ -350,9 +353,7 @@ class _Rule:
 
 _BLANK_IDENTIFIERS = [
     pytest.param(lambda: ModuleNode(id="", name="hash"), "ModuleNode 'id'", id="id"),
-    pytest.param(
-        lambda: ModuleNode(id=" ", name="hash"), "ModuleNode 'id'", id="blank"
-    ),
+    pytest.param(lambda: ModuleNode(id=" ", name="hash"), "'id'", id="blank"),
     pytest.param(lambda: ModuleNode(id="a", name=""), "ModuleNode 'name'", id="name"),
     pytest.param(lambda: Endpoint("", "out"), "Endpoint 'node'", id="endpoint"),
     pytest.param(
@@ -397,10 +398,10 @@ class TestNodes:
 
 
 _CALLABLE_NODE_ERRORS = [
-    pytest.param({"resources": {"a-b": "db"}}, InvalidPipelineError, "identifiers"),
-    pytest.param({"resources": "def"}, InvalidPipelineError, "identifiers"),
-    pytest.param({"identity": "bogus"}, InvalidPipelineError, "'identity'"),
-    pytest.param({"fn": "len"}, TypeError, "callable"),
+    pytest.param({"resources": {"a-b": "db"}}, _INVALID, "identifiers", id="dashed"),
+    pytest.param({"resources": "def"}, _INVALID, "identifiers", id="keyword"),
+    pytest.param({"identity": "bogus"}, _INVALID, "'identity'", id="identity"),
+    pytest.param({"fn": "len"}, TypeError, "callable", id="uncallable"),
 ]
 
 
@@ -463,11 +464,6 @@ class TestCallableNode:
 
 
 class TestRequireRunnableOnly:
-    def test_a_module_only_workflow_passes(self):
-        flow = Workflow(nodes=[_A], outputs={"default": Endpoint("a", "out")})
-
-        assert flow.require_runnable_only("execution") is None
-
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
@@ -505,9 +501,7 @@ INVALID_EDGES = [
         "missing node",
         id="missing-edge-node",
     ),
-    pytest.param(
-        [], Endpoint("ghost", "out"), "missing node", id="missing-output-node"
-    ),
+    pytest.param([], Endpoint("ghost", "out"), "missing node", id="missing-output"),
     pytest.param(
         [StreamEdge(_A_IN, _B_IN)],
         _B_OUT,
@@ -521,9 +515,7 @@ INVALID_EDGES = [
         id="edge-target-on-output-port",
     ),
     pytest.param([], _A_IN, "not an 'out' port", id="output-on-input-port"),
-    pytest.param(
-        [], Endpoint("a", "sideways"), "invalid port direction", id="malformed-port"
-    ),
+    pytest.param([], Endpoint("a", "sideways"), "port direction", id="malformed-port"),
     pytest.param(
         [StreamEdge(_A_OUT, Endpoint("b", "in:0"))], _B_OUT, "invalid port", id="in:0"
     ),
@@ -536,18 +528,14 @@ INVALID_EDGES = [
         r"cycle.*\['a', 'b'\]",
         id="cycle",
     ),
-    pytest.param(
-        [StreamEdge(_A_OUT, _A_IN)], _A_OUT, r"cycle.*\['a'\]", id="self-loop"
-    ),
+    pytest.param([StreamEdge(_A_OUT, _A_IN)], _A_OUT, r"cycle.*'a'", id="self-loop"),
 ]
 
 
 INVALID_CONFS = [
     pytest.param("filter", {"rule": _UNKNOWN_KEY_RULE}, "fieldd", id="unknown-key"),
     pytest.param("sort", {"rule": 5}, "rule", id="wrong-type"),
-    pytest.param(
-        "simplemath", {"op": "nope", "other": {"value": 2}}, "op", id="bad-op"
-    ),
+    pytest.param("simplemath", {"op": "nope", "other": {"value": 2}}, "op", id="op"),
     pytest.param("strconcat", {}, "part", id="missing-key"),
 ]
 

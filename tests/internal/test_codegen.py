@@ -260,6 +260,16 @@ def _failure(call) -> tuple[str, str]:
     return type(info.value).__name__, str(info.value)
 
 
+GENERATED_INPUTS = [
+    pytest.param({"content": "hello"}, [{"greeting": "hello"}], id="one-item"),
+    pytest.param(
+        [{"content": "hello"}, {"content": "bye"}],
+        [{"greeting": "hello"}, {"greeting": "bye"}],
+        id="stream",
+    ),
+]
+
+
 class TestWorkflowModule:
     """
     A workflow module produces exactly what running its workflow document produces.
@@ -293,17 +303,7 @@ class TestWorkflowModule:
         stream = module.async_pipe(context=Context(test=True))
         assert [item async for item in stream] == await _arun_document(flow)
 
-    @pytest.mark.parametrize(
-        ("source", "expected"),
-        [
-            pytest.param({"content": "hello"}, [{"greeting": "hello"}], id="one-item"),
-            pytest.param(
-                [{"content": "hello"}, {"content": "bye"}],
-                [{"greeting": "hello"}, {"greeting": "bye"}],
-                id="stream",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("source", "expected"), GENERATED_INPUTS)
     def test_generated_pipe_maps_its_input(self, source, expected, tmp_path: Path):
         """A generated transformer maps a single item or every item of a stream."""
         flow = Pipeline.from_module("rename", conf=RENAME_CONF).workflow

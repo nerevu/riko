@@ -401,7 +401,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):
 
-- **R19** — `tests/public/test_modules.py::TestFilter::test_filter_greater_less_compare_numeric_strings_numerically`
+- **R19** — `tests/public/test_modules.py::TestFilter::test_filter_ordered_compare`
   asserts that `filter`'s `greater`/`less` compare numeric strings numerically (`"10" > "9"`) and fall
   back to lexicographic comparison for non-numeric strings (correctness-audit R19, now fixed).
 
@@ -414,14 +414,16 @@ copy-paste families are gone (each deletion names its covering owner); the § 3 
 place, with the uncovered-line ceiling recorded at 584.
 
 **Shipped (whole-suite audit, 2026-10-30).** A read-only `/audit-tests` pass, triaged the same day,
-landed in two slices. The bounds slice fixed tests that could not fail and tests that ended only
+landed in three slices. The bounds slice fixed tests that could not fail and tests that ended only
 by a timeout, gave every subprocess a `run_python` timeout, and clears asyncio debug mode for test
 runs. The layout slice fixed class order (behavior, rejection, tripwire), misfiled classes, async
 twins and helper placement. It moved supported-name tests to the public tier and split
 `test_resolution.py` out of internal `test_modules.py` and `test_workflow_documents.py` out of
 public `test_workflow.py`. It also put module constants at the top of every test file
-(`.claude/skills/tidy/lift_constants.py`). Dedup cuts, doctest moves, table folds, and the
-in-process CLI rewrite remain.
+(`.claude/skills/tidy/lift_constants.py`). The dedup slice cut duplicate tests and rows after a
+per-test coverage diff, trimmed doctests to basic usage, and folded same-shape tests into
+module-level tables. The speed slice (in-process CLI rows, a settable benchmark delay, bound
+refits) remains.
 
 ## 5b. Execution lifetime proofs (R4)
 

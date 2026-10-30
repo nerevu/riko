@@ -422,9 +422,7 @@ class TestExportPipeline:
 
 
 FINANCE_EXPORTS = [
-    pytest.param(
-        "ofx", "DATA:OFXSGML", "<STMTTRN>", len(TRANSACTIONS), id="ofx-one-per-txn"
-    ),
+    pytest.param("ofx", "DATA:OFXSGML", "<STMTTRN>", len(TRANSACTIONS), id="ofx-txns"),
     pytest.param("qif", "!Account", "Checking", 1, id="qif-account-header"),
 ]
 

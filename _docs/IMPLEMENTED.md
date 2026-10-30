@@ -453,8 +453,7 @@ edge-less nodes; normalization counts stream edges only). It
 is the one topology interpretation: `Workflow.validate()` rejects a non-empty `cyclic`, and
 `ExecutionPlan.from_workflow` (`riko/execution/_prepared.py`) and the sync/async executions read the same
 index instead of rescanning edges. Structure pinned by
-`tests/public/test_workflow.py::TestWorkflow::test_workflow_index_orders_and_indexes` and
-`tests/internal/test_values.py::TestGraphIndex::test_graph_index_derives_and_freezes_from_its_inputs`.
+`tests/public/test_workflow.py::TestWorkflow::test_workflow_index_orders_and_indexes`.
 
 > The index's v1 indexer (`parse_pipe_def`/`_index_pipe_def`, with `_OUTPUT` as a node, verbatim
 > legacy ports, and dropped orphans) was deleted at cutover step 5 (2026-10-03); those deltas are

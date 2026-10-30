@@ -55,6 +55,7 @@ _SRC = ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
 _ECHO = cast("SyncModuleWrapper", lambda items, **_: iter(list(items)))
 _SINK = ModuleDefinition(name="sink", sync_pipe=_ECHO)
 _PROBE = ModuleDefinition(name="probe", sync_pipe=passthrough_pipe)
+_DOUBLED = [{"x": 2}, {"x": 4}]
 _SRC_SINK = [ModuleNode(id="a", name="src"), ModuleNode(id="b", name="sink")]
 _PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
 _SRC_NODE = [ModuleNode(id="n", name="src")]
@@ -135,14 +136,9 @@ class _DualSeed:
 # An async stream seed is the stream itself, never one item holding the stream
 # object, and an awaitable seed is awaited once for its items.
 SEEDS = [
-    pytest.param(lambda: [{"x": 1}, {"x": 2}], [{"x": 2}, {"x": 4}], id="list"),
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
-    pytest.param(
-        agen_source, [{"x": 2}, {"x": 4}], id="async-stream", marks=skipif_issync
-    ),
-    pytest.param(
-        awaitable_source, [{"x": 2}, {"x": 4}], id="awaitable", marks=skipif_issync
-    ),
+    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
+    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
 ]
 
 
@@ -157,9 +153,7 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 CLOSING_SEEDS = [
     pytest.param(gen_closing_seed, id="generator"),
     pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
-    pytest.param(
-        ClosingAsyncIterator, id="closeable-async-iterator", marks=skipif_issync
-    ),
+    pytest.param(ClosingAsyncIterator, id="async-iterator", marks=skipif_issync),
 ]
 
 
@@ -234,7 +228,7 @@ class TestPlanRun:
             ModuleNode(id="a", name="src"), ModuleNode(id="b", name="double")
         )
 
-        assert run_plan(flow, dispatcher=dispatcher) == [{"x": 2}, {"x": 4}]
+        assert run_plan(flow, dispatcher=dispatcher) == _DOUBLED
 
     def test_run_forwards_node_options_as_call_kwargs(self) -> None:
         seen: dict[str, object] = {}
@@ -255,36 +249,6 @@ class TestPlanRun:
         assert run_plan(flow, dispatcher=dispatcher) == []
         assert seen["emit"] is True
         assert seen["conf"] == {}
-
-    def test_run_wires_others_ordered_by_port_index(self) -> None:
-        def merge(items, others=None, **_):
-            yield from items
-
-            for other in others or ():
-                yield from other
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="a", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="b", sync_pipe=tagged_source("b")),
-            ModuleDefinition(name="c", sync_pipe=tagged_source("c")),
-            ModuleDefinition(name="merge", sync_pipe=cast("SyncModuleWrapper", merge)),
-        )
-        a = ModuleNode(id="a", name="a")
-        b = ModuleNode(id="b", name="b")
-        c = ModuleNode(id="c", name="c")
-        m = ModuleNode(id="m", name="merge")
-        edges = (
-            StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
-            StreamEdge(Endpoint("c", "out"), Endpoint("m", "in:2")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
-        )
-        flow = build_workflow([a, b, c, m], edges=edges)
-
-        assert run_plan(flow, dispatcher=dispatcher) == [
-            {"t": "a"},
-            {"t": "b"},
-            {"t": "c"},
-        ]
 
     def test_run_wires_named_input_port_as_kwarg(self) -> None:
         def joiner(items, side=None, **_):

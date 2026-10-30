@@ -68,8 +68,9 @@ if TYPE_CHECKING:
 
     from riko.types._streams import Item
 
-
 _OMITTED = object()
+_NUMBERS = ["1", "2", "3"]
+_DATES = ["2019-01-01", "2020-05-01", "2024-11-12"]
 
 FETCH_MODULES = [
     "fetch",
@@ -261,45 +262,25 @@ class TestXpathfetchpage:
         }
 
 
+# Numeric operands compare numerically; anything else, including a mixed pair and
+# a non-finite value, compares as text.
+ORDERED_COMPARES = [
+    pytest.param(["9", "10"], "greater", "9", ["10"], id="numeric-strings"),
+    pytest.param([9, 10], "greater", 9, [10], id="numbers"),
+    pytest.param(["apple", "banana"], "greater", "apple", ["banana"], id="words"),
+    pytest.param(["10", "apple"], "greater", "banana", [], id="mixed-is-text"),
+    pytest.param(["nan", "5"], "greater", "9", ["nan"], id="nan-is-text"),
+    pytest.param(["-inf"], "less", "-5", [], id="inf-is-text"),
+]
+
+
 class TestFilter:
-    def test_filter_greater_less_compare_numeric_strings_numerically(self):
-        """
-        Compare numeric operands numerically and other operands lexically.
-
-        Numeric strings such as ``"10"`` and ``"9"`` use numeric ordering; non-numeric
-        strings use lexicographic ordering.
-        """
-        numeric_strings = [{"x": "9"}, {"x": "10"}]
-        string_rule = FilterConfRule(field="x", op="greater", value="9")
-        conf = FilterConf({"rule": string_rule})
-        assert _values(filter_pipe(numeric_strings, conf=conf), "x") == ["10"]
-
-        numbers = [{"x": 9}, {"x": 10}]
-        numeric_rule = FilterConfRule(field="x", op="greater", value=9)
-        conf = FilterConf({"rule": numeric_rule})
-        assert _values(filter_pipe(numbers, conf=conf), "x") == [10]
-
-        words = [{"x": "apple"}, {"x": "banana"}]
-        word_rule = FilterConfRule(field="x", op="greater", value="apple")
-        conf = FilterConf({"rule": word_rule})
-        assert _values(filter_pipe(words, conf=conf), "x") == ["banana"]
-
-    def test_filter_ordered_coercion_is_all_or_nothing(self):
-        """
-        Fall back to lexical comparison when numeric coercion is incomplete.
-
-        Mixed numeric/text pairs avoid ``Decimal``-versus-``str`` errors. Non-finite
-        values such as ``inf`` and ``nan`` are also compared as strings.
-        """
-        mixed = [{"x": "10"}, {"x": "apple"}]
-        conf = FilterConf(
-            {"rule": FilterConfRule(field="x", op="greater", value="banana")}
-        )
-        assert _values(filter_pipe(mixed, conf=conf), "x") == []
-
-        nonfinite = [{"x": "nan"}, {"x": "5"}]
-        conf = FilterConf({"rule": FilterConfRule(field="x", op="greater", value="9")})
-        assert _values(filter_pipe(nonfinite, conf=conf), "x") == ["nan"]
+    @pytest.mark.parametrize(("values", "op", "value", "expected"), ORDERED_COMPARES)
+    def test_filter_ordered_compare(self, values, op, value, expected):
+        items = [{"x": x} for x in values]
+        rule = FilterConfRule(field="x", op=op, value=value)
+        conf = FilterConf({"rule": rule})
+        assert _values(filter_pipe(items, conf=conf), "x") == expected
 
     def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
         """A ``"today"`` rule value follows the clock, not its first evaluation."""
@@ -319,16 +300,12 @@ class TestFilter:
         items = [{"x": "-inf"}]
         conf = FilterConf({"rule": FilterConfRule(field="x", op="less", value="-5")})
 
-        assert _values(filter_pipe(items, conf=conf), "x") == []
-
         monkeypatch.setattr("riko.modules.filter.ALLOW_INF", True)
         assert _values(filter_pipe(items, conf=conf), "x") == ["-inf"]
 
-        nan_items = [{"x": "nan"}]
-        nan_conf = FilterConf(
-            {"rule": FilterConfRule(field="x", op="greater", value="9")}
-        )
-        assert _values(filter_pipe(nan_items, conf=nan_conf), "x") == ["nan"]
+        nan_rule = FilterConfRule(field="x", op="greater", value="9")
+        nan_conf = FilterConf({"rule": nan_rule})
+        assert _values(filter_pipe([{"x": "nan"}], conf=nan_conf), "x") == ["nan"]
 
 
 class TestRename:
@@ -392,28 +369,17 @@ class TestJoin:
         assert len(consumed) <= LOOKAHEAD
 
 
+SORTABLE_VALUES = [
+    pytest.param(SortableCastType.FLOAT, _NUMBERS, id="float"),
+    pytest.param(SortableCastType.DECIMAL, _NUMBERS, id="decimal"),
+    pytest.param(SortableCastType.DATE, _DATES, id="date"),
+    pytest.param(SortableCastType.DATETIME, _DATES, id="datetime"),
+]
+
+
 class TestSort:
-    @pytest.mark.parametrize(
-        ("dir_", "type_", "vals"),
-        [
-            ("asc", SortableCastType.FLOAT, ["1", "2", "3"]),
-            ("asc", SortableCastType.DECIMAL, ["1", "2", "3"]),
-            ("asc", SortableCastType.DATE, ["2019-01-01", "2020-05-01", "2024-11-12"]),
-            (
-                "asc",
-                SortableCastType.DATETIME,
-                ["2019-01-01", "2020-05-01", "2024-11-12"],
-            ),
-            ("desc", SortableCastType.FLOAT, ["1", "2", "3"]),
-            ("desc", SortableCastType.DECIMAL, ["1", "2", "3"]),
-            ("desc", SortableCastType.DATE, ["2019-01-01", "2020-05-01", "2024-11-12"]),
-            (
-                "desc",
-                SortableCastType.DATETIME,
-                ["2019-01-01", "2020-05-01", "2024-11-12"],
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("dir_", ["asc", "desc"])
+    @pytest.mark.parametrize(("type_", "vals"), SORTABLE_VALUES)
     def test_sort_fillers_stay_orderable(self, dir_, type_, vals: list[str]):
         """
         An unparseable numeric field degrades to an orderable filler, not NaN.
@@ -512,26 +478,32 @@ class TestAsyncAggregate:
         assert [item async for item in result] == [{"n": 2}]
 
 
+MISSING_OPERANDS = [
+    pytest.param(udf_pipe, "func", _OMITTED, id="udf-omitted"),
+    pytest.param(aggregate_pipe, "func", _OMITTED, id="aggregate-omitted"),
+    pytest.param(join_pipe, "other", _OMITTED, id="join-omitted"),
+    pytest.param(send_pipe, "others", _OMITTED, id="send-omitted"),
+    pytest.param(udf_pipe, "func", 0, id="udf-empty"),
+    pytest.param(aggregate_pipe, "func", 0, id="aggregate-empty"),
+    pytest.param(join_pipe, "other", [], id="join-empty"),
+    pytest.param(send_pipe, "others", [], id="send-empty"),
+]
+
+
 class TestRequiredOperands:
-    @pytest.mark.parametrize(
-        ("pipe", "operand", "value"),
-        [
-            pytest.param(udf_pipe, "func", _OMITTED, id="udf-omitted"),
-            pytest.param(aggregate_pipe, "func", _OMITTED, id="aggregate-omitted"),
-            pytest.param(join_pipe, "other", _OMITTED, id="join-omitted"),
-            pytest.param(send_pipe, "others", _OMITTED, id="send-omitted"),
-            pytest.param(udf_pipe, "func", 0, id="udf-empty"),
-            pytest.param(aggregate_pipe, "func", 0, id="aggregate-empty"),
-            pytest.param(join_pipe, "other", [], id="join-empty"),
-            pytest.param(send_pipe, "others", [], id="send-empty"),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe", "operand", "value"), MISSING_OPERANDS)
     def test_missing_operand_raises(self, pipe: Any, operand: str, value: object):
         """An omitted or empty operand is a call-site error that names the operand."""
         kwargs = {} if value is _OMITTED else {operand: value}
 
         with pytest.raises(TypeError, match=f"requires the {operand!r} keyword"):
             list(pipe([{"x": 0}], **kwargs))
+
+
+NON_LOOPABLE_FILTERS = [
+    pytest.param(None, "source", id="sources"),
+    pytest.param("processor", None, id="processors"),
+]
 
 
 class TestListModules:
@@ -546,13 +518,7 @@ class TestListModules:
         assert "split" in names
         assert "dateformat" not in names
 
-    @pytest.mark.parametrize(
-        ("kind", "subtype"),
-        [
-            pytest.param(None, "source", id="sources"),
-            pytest.param("processor", None, id="processors"),
-        ],
-    )
+    @pytest.mark.parametrize(("kind", "subtype"), NON_LOOPABLE_FILTERS)
     def test_filter_non_loopable_by_kind(self, kind: str | None, subtype: str | None):
         modules = list_modules(type=kind, subtype=subtype, loopable=False)
         assert modules == ["input"]
@@ -677,22 +643,48 @@ def _skip_marked(item: Item, *args, **kwargs) -> str:
     return "processed"
 
 
+ISASYNC_CASES = [
+    pytest.param("pipe", False, False, False, id="sync-pipe"),
+    pytest.param("async_pipe", False, False, True, id="sync-async_pipe-name"),
+    pytest.param("async_pipe", True, False, True, id="async_def-async_pipe"),
+    pytest.param("shout", True, False, True, id="async_def-other-name"),
+    pytest.param("shout", False, False, False, id="sync-other-name"),
+    pytest.param("shout", False, True, True, id="explicit-required"),
+    pytest.param("async_pipe", False, True, True, id="explicit-redundant-name"),
+    pytest.param("shout", True, True, True, id="explicit-redundant-async"),
+]
+
+
+ASYNC_NAMED_PIPES = [
+    pytest.param(True, False, "an async def", id="async_def"),
+    pytest.param(False, True, "marked isasync=True", id="isasync=True"),
+    pytest.param(True, True, "an async def", id="async_def+isasync=True"),
+]
+
+
+FOREIGN_OPTIONS = [
+    pytest.param(processor, "embed", True, id="processor+embed"),
+    pytest.param(operator, "skip_if", True, id="operator+skip_if"),
+    pytest.param(splitter, "pollable", True, id="splitter+pollable"),
+    pytest.param(splitter, "emit", True, id="splitter+emit"),
+    pytest.param(splitter, "count", True, id="splitter+count"),
+    pytest.param(splitter, "skip_if", True, id="splitter+skip_if"),
+    pytest.param(splitter, "embed", True, id="splitter+embed"),
+    pytest.param(processor, "count", "first", id="processor+count"),
+    pytest.param(processor, "conf", "first", id="processor+conf"),
+    pytest.param(processor, "bogus", "first", id="processor+bogus"),
+    pytest.param(operator, "bogus", "first", id="operator+bogus"),
+    pytest.param(operator, "resources", "first", id="operator+resources"),
+    pytest.param(operator, "count", "first", id="operator+count"),
+    pytest.param(operator, "embed", "first", id="operator+embed"),
+    pytest.param(splitter, "bogus", "first", id="splitter+bogus"),
+]
+
+
 class TestProcessor:
     """A ``processor`` resolves its interface, keeps call flags, and skips items."""
 
-    @pytest.mark.parametrize(
-        ("name", "iscoro", "isasync", "expected"),
-        [
-            pytest.param("pipe", False, False, False, id="sync-pipe"),
-            pytest.param("async_pipe", False, False, True, id="sync-async_pipe-name"),
-            pytest.param("async_pipe", True, False, True, id="async_def-async_pipe"),
-            pytest.param("shout", True, False, True, id="async_def-other-name"),
-            pytest.param("shout", False, False, False, id="sync-other-name"),
-            pytest.param("shout", False, True, True, id="explicit-required"),
-            pytest.param("async_pipe", False, True, True, id="explicit-redundant-name"),
-            pytest.param("shout", True, True, True, id="explicit-redundant-async"),
-        ],
-    )
+    @pytest.mark.parametrize(("name", "iscoro", "isasync", "expected"), ISASYNC_CASES)
     def test_resolved_isasync(self, name, iscoro, isasync, expected):
         """
         Resolve ``isasync`` from the explicit flag, ``async def``, or the name.
@@ -714,14 +706,7 @@ class TestProcessor:
         result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
         assert result == [{"x": 1}, {"y": "processed"}]
 
-    @pytest.mark.parametrize(
-        ("iscoro", "isasync", "reason"),
-        [
-            pytest.param(True, False, "an async def", id="async_def"),
-            pytest.param(False, True, "marked isasync=True", id="isasync=True"),
-            pytest.param(True, True, "an async def", id="async_def+isasync=True"),
-        ],
-    )
+    @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
     def test_async_named_pipe_raises(self, iscoro, isasync, reason):
         """A function named ``pipe`` that resolves async is a contradiction."""
         with pytest.raises(TypeError) as excinfo:
@@ -732,26 +717,7 @@ class TestProcessor:
         assert "async_pipe" in message
         assert reason in message
 
-    @pytest.mark.parametrize(
-        ("decorator", "option", "value"),
-        [
-            pytest.param(processor, "embed", True, id="processor+embed"),
-            pytest.param(operator, "skip_if", True, id="operator+skip_if"),
-            pytest.param(splitter, "pollable", True, id="splitter+pollable"),
-            pytest.param(splitter, "emit", True, id="splitter+emit"),
-            pytest.param(splitter, "count", True, id="splitter+count"),
-            pytest.param(splitter, "skip_if", True, id="splitter+skip_if"),
-            pytest.param(splitter, "embed", True, id="splitter+embed"),
-            pytest.param(processor, "count", "first", id="processor+count"),
-            pytest.param(processor, "conf", "first", id="processor+conf"),
-            pytest.param(processor, "bogus", "first", id="processor+bogus"),
-            pytest.param(operator, "bogus", "first", id="operator+bogus"),
-            pytest.param(operator, "resources", "first", id="operator+resources"),
-            pytest.param(operator, "count", "first", id="operator+count"),
-            pytest.param(operator, "embed", "first", id="operator+embed"),
-            pytest.param(splitter, "bogus", "first", id="splitter+bogus"),
-        ],
-    )
+    @pytest.mark.parametrize(("decorator", "option", "value"), FOREIGN_OPTIONS)
     def test_unsupported_option_raises(self, decorator, option, value):
         kwargs: dict[str, object] = {option: value}
         name = decorator.__name__
@@ -866,16 +832,16 @@ class TestAsyncOperator:
         assert [item async for item in stream] == items
 
 
+ENUM_MEMBER_NAMES = [
+    pytest.param("fetch-page", None, "FETCH_PAGE", id="dash"),
+    pytest.param("ms.autopilot.ensure", None, "MS_AUTOPILOT_ENSURE", id="dotted"),
+    pytest.param("a--b..c", None, "A_B_C", id="repeated-separators"),
+    pytest.param("fetch", "grab", "GRAB", id="override"),
+]
+
+
 class TestEnumMemberName:
-    @pytest.mark.parametrize(
-        ("name", "override", "expected"),
-        [
-            ("fetch-page", None, "FETCH_PAGE"),
-            ("microsoft.autopilot.ensure", None, "MICROSOFT_AUTOPILOT_ENSURE"),
-            ("a--b..c", None, "A_B_C"),
-            ("fetch", "grab", "GRAB"),
-        ],
-    )
+    @pytest.mark.parametrize(("name", "override", "expected"), ENUM_MEMBER_NAMES)
     def test_enum_member_name(self, name, override, expected):
         assert enum_member_name(name, override=override) == expected
 
