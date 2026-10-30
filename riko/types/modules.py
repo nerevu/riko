@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict, Typ
 from riko.base._config import BUILTIN_PROVIDER
 from riko.base._require_guards import require_from_form
 
-from ._options import CallOptions, CallOptionsLike, ContextOverrides, RawCallOptions
-from ._pipedef import CountValues, Embed
+from ._pipedef import CountValues
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -951,16 +950,11 @@ def is_type_value(val: Mapping[str, object]) -> TypeGuard[ConfArg]:
 
 __all__ = [
     "AggregateConf",
-    "AnyConfRule",
     "AnyModuleConf",
-    "CallOptions",
-    "CallOptionsLike",
-    "ContextOverrides",
     "CountConf",
     "CsvConf",
     "CurrencyFormatConf",
     "DateFormatConf",
-    "Embed",
     "ExchangeRateConf",
     "FeedAutoDiscoveryConf",
     "FetchConf",
@@ -984,7 +978,6 @@ __all__ = [
     "ModuleSubtypes",
     "ModuleType",
     "ParsedParam",
-    "RawCallOptions",
     "ReceiveConf",
     "RefindConf",
     "RegexConf",

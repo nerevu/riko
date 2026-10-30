@@ -1177,8 +1177,7 @@ detection sees the node's extras, which `PreparedNode.extras` derives from its i
 (named ports, `others`, `resources`, `embed`). Call
 options are typed: `RawCallOptions` (emit/assign/field/count, the `**options` keyword form) and
 `ContextOverrides` (mode/inputs/test, mirroring `Context.replace`; `_resolve_context` is
-`base.replace(**overrides)`) live in `riko/types/_options.py` (re-exported from
-`riko.types.modules`), and the decorators derive their option-name sets from them with
+`base.replace(**overrides)`) live in `riko/types/_options.py`, and the decorators derive their option-name sets from them with
 `typed_dict_keys`. `RawCallOptions`, `CallOptions`, and `CallOptionsLike` are on the supported
 `riko.types` surface. `ModuleNode.options` stores the frozen attrs
 `CallOptions` record (each field `| None`, `None` = unset, type-checked per field at construction;
