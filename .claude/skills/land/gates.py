@@ -4,6 +4,7 @@ Records which gates passed on which tree, so any session can skip a repeat.
 Usage:
     python .claude/skills/land/gates.py fingerprint
     python .claude/skills/land/gates.py check GATE
+    python .claude/skills/land/gates.py scope GATE [--max-inline BYTES]
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
@@ -23,6 +24,15 @@ run (``--mutates`` records the tree the command left, for prettify and codegen).
 directory, so every worktree of the repository shares it; when another session
 holds it, ``run`` exits 75 at once instead of waiting. The OS releases the lock when
 the process exits, so it never goes stale.
+
+``scope`` resolves what a gate still has to look at, in one call: the base it
+diffs from (the tree it last passed on when git still holds it, else the marker's
+``HEAD`` when that is an ancestor, else the parent of the oldest unpushed commit,
+else ``HEAD``), the ``--stat``, the untracked files, and the diff itself against the
+current content tree, so untracked files are inside it. ``uv.lock`` and the
+generated files are left out. A diff over ``--max-inline`` bytes (default 25000)
+goes to ``.claude/<gate>-scope.diff`` instead, to be read in slices. It exits 0
+when the gate already passed on this tree, 2 when the scope is empty, 1 otherwise.
 
 ``run`` echoes the command's output and keeps its last pytest summary line
 (``1851 passed, 62 xfailed in 70s``) in the marker; ``summary`` prints it with
@@ -47,7 +57,15 @@ from pathlib import Path
 DESCRIPTION = "Skip gates that already passed on the current tree."
 GIT = shutil.which("git") or "git"
 BUSY = 75
+EMPTY = 2
+MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
+SCOPE_EXCLUDES = (
+    "uv.lock",
+    "riko/coercion/_configs.py",
+    "riko/modules/_names.py",
+    "riko/types/_module_ids.py",
+)
 
 
 def _git(*args: str, env: dict[str, str] | None = None) -> str:
@@ -154,6 +172,82 @@ def check(path: Path, gate: str) -> int:
     return 0 if marker is not None else 1
 
 
+def is_ancestor(sha: str) -> bool:
+    """Reports whether ``sha`` is an ancestor of ``HEAD``."""
+    found = subprocess.run(
+        [GIT, "merge-base", "--is-ancestor", sha, "HEAD"],
+        capture_output=True,
+        check=False,
+    )
+    return found.returncode == 0
+
+
+def resolve_base(marker: dict[str, str] | None) -> tuple[str, str]:
+    """Resolves the tree-ish a gate's scope diffs from, with the case that chose it."""
+    unpushed = _git("log", "HEAD", "--not", "--remotes", "--format=%H").split()
+
+    if marker is not None and has_object(marker["tree"]):
+        base, case = marker["tree"], f"edits since the pass at {marker['at']}"
+    elif marker is not None and is_ancestor(marker["head"]):
+        base, case = (
+            marker["head"],
+            f"commits and edits since HEAD {marker['head'][:8]}",
+        )
+    elif unpushed and has_object(f"{unpushed[-1]}^"):
+        base, case = (
+            f"{unpushed[-1]}^",
+            f"{len(unpushed)} unpushed commits and the working tree",
+        )
+    else:
+        base, case = "HEAD", "the working tree"
+
+    return base, case
+
+
+def scope(path: Path, gate: str, max_inline: int = MAX_INLINE) -> int:
+    """
+    Prints everything ``gate`` still has to look at; exit 0 skips, 2 means empty.
+
+    The diff runs from the resolved base to the current content tree, so untracked
+    files are part of it; a diff over ``max_inline`` bytes is written to
+    ``.claude/<gate>-scope.diff`` instead of printed.
+    """
+    tree = get_tree_id()
+    marker = get_passed(path, gate, tree)
+    last = load_markers(path).get(gate)
+
+    if marker is not None:
+        print(_skip_message(gate, marker))
+        code = 0
+    else:
+        base, case = resolve_base(last)
+        pathspec = ["--", ".", *(f":!{exclude}" for exclude in SCOPE_EXCLUDES)]
+        stat = _git("diff", "--stat", base, tree, *pathspec)
+        diff = _git("diff", base, tree, *pathspec)
+        untracked = _git("ls-files", "--others", "--exclude-standard")
+        print(f"scope {gate}: {case}")
+        print(f"base: {base}")
+        print(f"--- stat\n{stat or '(none)'}")
+        print(f"--- untracked\n{untracked or '(none)'}")
+
+        if not diff:
+            print(f"--- diff\n(empty: record {gate} and stop)")
+            code = EMPTY
+        elif len(diff) > max_inline:
+            target = path.with_name(f"{gate}-scope.diff")
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(diff + "\n")
+            print(
+                f"--- diff ({len(diff)} bytes) written to {target}; read it in slices"
+            )
+            code = 1
+        else:
+            print(f"--- diff ({len(diff)} bytes)\n{diff}")
+            code = 1
+
+    return code
+
+
 def print_summary(path: Path, gate: str) -> int:
     """Prints the gate's last recorded summary line; exit code 1 means none."""
     marker = load_markers(path).get(gate)
@@ -228,6 +322,9 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("check", "record", "summary"):
         sub.add_parser(name).add_argument("gate")
 
+    scope_parser = sub.add_parser("scope")
+    scope_parser.add_argument("gate")
+    scope_parser.add_argument("--max-inline", type=int, default=MAX_INLINE)
     run_parser = sub.add_parser("run")
     run_parser.add_argument("gate")
     run_parser.add_argument("--mutates", action="store_true")
@@ -243,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
         code = 0
     elif args.action == "check":
         code = check(path, args.gate)
+    elif args.action == "scope":
+        code = scope(path, args.gate, args.max_inline)
     elif args.action == "summary":
         code = print_summary(path, args.gate)
     elif args.action == "record":
