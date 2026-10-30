@@ -183,8 +183,13 @@ sync when source is moved between package groups.
   index entry. A bare section keyword (`Examples`, `Returns`) on its
   own index line reads as a docstring section to pydocstyle, so name such subjects longer.
   The bound checks take `[tool.pytest.ini_options] timeout` (`get_backstop`) as the outer bound
-  of a test with no `timeout` marker. What these checks and the tracked-doc-read check cannot see
-  is listed in the `riko/cli/_lint_tests.py` module docstring.
+  of a test with no `timeout` marker. One scope walk (top-level function, class, method) feeds
+  both the bound checks and the public `gen_bounds(tree)`, which yields `(owner, Bound,
+  is_marker)` for `.claude/skills/tidy/fit_bounds.py`. The table counts (`inline-tables`,
+  `rows-without-id`) go through the shared `_ratchet.ratchet_ceiling` against
+  `[tool.riko.tests]`, and `_lint._lint_tests` prints the sites only when a count is over its
+  ceiling. What these checks and the tracked-doc-read check cannot see is listed in the
+  `riko/cli/_lint_tests.py` module docstring.
 - **Basename lint.** `manage lint --basenames` fails when two modules under `riko/`
   (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
   `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer

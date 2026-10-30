@@ -69,7 +69,9 @@ from riko.cli._lint_tests import (
     SPLIT_LINES,
     LayoutIssue,
     gen_global_bound_issues,
+    gen_inline_tables,
     gen_layout_issues,
+    gen_rows_without_id,
     get_backstop,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
@@ -136,7 +138,16 @@ _ROW_MARK = (
 )
 
 _DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
-_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
+_PARAMETRIZE = '@pytest.mark.parametrize("v", {})'
+_BOUND_FRAGMENTS = (
+    "bound ladder",
+    "must stay below",
+    "outlasts",
+    "tracked docs",
+    "sets no timeout",
+    "equals the pyproject",
+    "awaits nothing",
+)
 _OPTIONS = "[tool.pytest.ini_options]\n"
 _SHARED = "basename is shared; rename one or allowlist the pair"
 _STALE_BASENAME = "allowlisted basename is no longer duplicated; remove it"
@@ -1200,9 +1211,16 @@ def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
     return [(issue.message, issue.fatal) for issue in issues]
 
 
-def _case(body: str, marker: str = "", prefix: str = "") -> str:
-    method = f"    {marker}\n    def test_one(self):\n        {body}\n"
+def _case(body: str, marker: str = "", prefix: str = "", kind: str = "def") -> str:
+    method = f"    {marker}\n    {kind} test_one(self):\n        {body}\n"
     return f"\n{prefix}\nclass TestGamma:\n{method}"
+
+
+def _write_alpha(root: Path, addition: str) -> Path:
+    tests_dir = _write_suite(root)
+    path = tests_dir / "public" / "test_alpha.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    return tests_dir
 
 
 BOUND_CASES = [
@@ -1261,6 +1279,31 @@ BOUND_CASES = [
         _DOC_READ.format("Path('README.rst')"),
         id="cwd-doc",
     ),
+    pytest.param(
+        "\nclass TestGamma:\n    def setup(self):\n        thread.join(0.5)\n",
+        f"join(0.5) {_LADDER}",
+        id="helper-method",
+    ),
+    pytest.param(
+        "\ndef wait():\n    thread.join(30)\n",
+        "join(30) must stay below its pyproject timeout (30 s)",
+        id="top-level-helper",
+    ),
+    pytest.param(
+        _case('subprocess.run(["x"])'),
+        "subprocess.run() sets no timeout=",
+        id="subprocess-without-timeout",
+    ),
+    pytest.param(
+        _case("...", "@pytest.mark.timeout(30)"),
+        "timeout(30) equals the pyproject timeout; drop the marker",
+        id="marker-at-backstop",
+    ),
+    pytest.param(
+        _case("assert 1", kind="async def"),
+        "test_one awaits nothing; make it a plain def",
+        id="idle-async",
+    ),
 ]
 CLEAN_BOUND_CASES = [
     pytest.param(
@@ -1278,6 +1321,44 @@ CLEAN_BOUND_CASES = [
         id="nested-constant-sleep",
     ),
     pytest.param(_case('tmp_path / "GUIDE.md"'), id="tmp-doc"),
+    pytest.param(_case('subprocess.run(["x"], timeout=5)'), id="subprocess-timeout"),
+    pytest.param(_case('subprocess.run(["x"], **options)'), id="subprocess-splat"),
+    pytest.param(_case("...", "@pytest.mark.timeout(20)"), id="marker-below-backstop"),
+    pytest.param(_case("[x async for x in agen()]", kind="async def"), id="async-for"),
+    pytest.param(_case("async with lock: ...", kind="async def"), id="async-with"),
+]
+HELPER_BOUND_CASES = [
+    pytest.param(
+        "def wait():\n    t.join(timeout=0.5)\n",
+        [f"join(timeout=0.5) {_LADDER}"],
+        id="off-ladder",
+    ),
+    pytest.param("def wait():\n    t.join(timeout=1)\n", [], id="on-ladder"),
+    pytest.param(
+        'subprocess.run(["x"])\n',
+        ["subprocess.run() sets no timeout="],
+        id="subprocess",
+    ),
+]
+SITE_CASES = [
+    pytest.param(
+        _case("...", _PARAMETRIZE.format("[\n1,\n]")), 1, 0, id="multi-line-inline"
+    ),
+    pytest.param(
+        _case("...", _PARAMETRIZE.format('[1], ids=["a"]')), 0, 0, id="one-line-inline"
+    ),
+    pytest.param(
+        _case("...", _PARAMETRIZE.format("V"), "V = [\n    1,\n]"),
+        0,
+        0,
+        id="module-table",
+    ),
+    pytest.param(
+        _case("...", prefix="V = [pytest.param(1)]"), 0, 1, id="row-without-id"
+    ),
+    pytest.param(
+        _case("...", prefix='V = [pytest.param(1, id="a")]'), 0, 0, id="row-with-id"
+    ),
 ]
 BACKSTOP_CASES = [
     pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),
@@ -1365,20 +1446,31 @@ class TestLayoutLint:
     def test_in_file_departures_fail(
         self, tmp_path: Path, addition: str, message: str
     ) -> None:
-        tests_dir = _write_suite(tmp_path)
-        path = tests_dir / "public" / "test_alpha.py"
-        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
-        assert (message, True) in _messages(tests_dir)
+        assert (message, True) in _messages(_write_alpha(tmp_path, addition))
 
     @pytest.mark.parametrize("addition", CLEAN_BOUND_CASES)
     def test_bounds_and_doc_reads_outside_the_rules_pass(
         self, tmp_path: Path, addition: str
     ) -> None:
-        tests_dir = _write_suite(tmp_path)
-        path = tests_dir / "public" / "test_alpha.py"
-        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
-        messages = [message for message, _ in _messages(tests_dir)]
+        messages = [
+            message for message, _ in _messages(_write_alpha(tmp_path, addition))
+        ]
         assert not [m for m in messages if any(f in m for f in _BOUND_FRAGMENTS)]
+
+    @pytest.mark.parametrize(("source", "expected"), HELPER_BOUND_CASES)
+    def test_shared_helper_modules_keep_the_bound_rules(
+        self, tmp_path: Path, source: str, expected: list[str]
+    ) -> None:
+        tests_dir = _write_suite(tmp_path, **{"_helper.py": source})
+        assert [message for message, _ in _messages(tests_dir)] == expected
+
+    @pytest.mark.parametrize(("addition", "tables", "rows"), SITE_CASES)
+    def test_inline_tables_and_rows_without_ids_are_counted(
+        self, tmp_path: Path, addition: str, tables: int, rows: int
+    ) -> None:
+        tests_dir = _write_alpha(tmp_path, addition)
+        found = (gen_inline_tables(tests_dir), gen_rows_without_id(tests_dir))
+        assert tuple(len(list(sites)) for sites in found) == (tables, rows)
 
     @pytest.mark.parametrize(("text", "expected"), BACKSTOP_CASES)
     def test_backstop_comes_from_the_pytest_timeout(
@@ -1426,6 +1518,9 @@ class TestLayoutLint:
     ) -> None:
         issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
         monkeypatch.setattr(_lint, "gen_layout_issues", lambda *_: [issue])
+        monkeypatch.setattr(_lint, "gen_inline_tables", lambda _: iter(()))
+        monkeypatch.setattr(_lint, "gen_rows_without_id", lambda _: iter(()))
+        monkeypatch.setattr(_lint, "ratchet_ceiling", lambda *_: 0)
 
         assert str(issue) == line
         assert _lint._lint_tests() == code

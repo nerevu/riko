@@ -38,21 +38,26 @@ Keep the table as a module-level constant above its class, one
 ``pytest.param(..., id="kebab-id")`` per row, each on one line where it fits:
 name long or repeated values once and drop the trailing comma from a row that
 fits. An ``ids=[...]`` list is fine only when the values and the ids fit
-together on one line, e.g. ``parametrize("v", [a, b], ids=["one", "two"])``. A
-test whose name states a distinct rule stays its own test, as do sync and async
-twins. Folding tests should leave the file shorter; if it grows, compact the
-rows.
+together on one line, e.g. ``parametrize("v", [a, b], ids=["one", "two"])``. An
+inline table spanning several lines counts against a ceiling recorded in
+``pyproject.toml`` until it moves to a module-level table. A test whose name
+states a distinct rule stays its own test, as do sync and async twins. Folding
+tests should leave the file shorter; if it grows, compact the rows.
 
 Every bound a test sets (``mark.timeout``, ``fail_after``, a ``wait``/``join``/
 ``result`` timeout, and the ``timeout``/``faulthandler_timeout`` globals in
 ``pyproject.toml``) is the smallest feasible value, never a round guess: measure
 the worst ``call`` time over three ``pytest -n auto --durations=0`` runs and take
 the smallest of 1, 2, 3, 5, 8, 10, 15, 20, 30 seconds that is at least five
-times it, with a floor of 1 second. An inner bound stays below its outer one. A
-value that is the test's subject (``shutdown_timeout=0.05``) is not a bound. A
+times it, with a floor of 1 second. Every bound in a ``tests/_*.py`` helper sits
+on the same ladder. An inner bound stays below its outer one. A value that is the
+test's subject (``shutdown_timeout=0.05``) is not a bound. A
 ``timeout`` marker is a backstop for a true hang (``tests/_timeouts.py``): a test
 guarding "this stops promptly" blocks for longer than its elapsed-time assertion
-but shorter than the backstop, so a regression fails the assertion instead.
+but shorter than the backstop, so a regression fails the assertion instead. A
+``timeout`` marker never equals the backstop, which already applies. Every
+``subprocess`` call sets ``timeout=``. An ``async def`` test awaits something;
+otherwise it is a plain ``def``.
 
 Files start coarse. Before splitting one past about 2000 lines, move out what
 belongs elsewhere and trim its overlaps; if it is still over, move its largest

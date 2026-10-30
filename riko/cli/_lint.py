@@ -29,7 +29,14 @@ from ._lint_escapes import ESCAPES, gen_escape_counts
 from ._lint_literals import gen_literal_issues
 from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
-from ._lint_tests import gen_global_bound_issues, gen_layout_issues, get_backstop
+from ._lint_tests import (
+    LayoutIssue,
+    gen_global_bound_issues,
+    gen_inline_tables,
+    gen_layout_issues,
+    gen_rows_without_id,
+    get_backstop,
+)
 from ._ratchet import ratchet_ceiling
 
 if TYPE_CHECKING:
@@ -150,6 +157,17 @@ _lint_literals = partial(_run_text_lint, gen_literal_issues)
 _lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
+def _ratchet_sites(key: str, noun: str, *sites: LayoutIssue) -> int:
+    """Checks a count of test sites against its ceiling, listing them when over it."""
+    code = ratchet_ceiling(ROOT_DIR / "pyproject.toml", "tests", key, len(sites), noun)
+
+    if code:
+        for site in sites:
+            print(site)
+
+    return code
+
+
 def _lint_tests() -> int:
     """Checks the test suite against its tier layout, generated indexes, and bounds."""
     pyproject = ROOT_DIR / "pyproject.toml"
@@ -166,7 +184,15 @@ def _lint_tests() -> int:
     for issue in issues:
         print(issue)
 
-    return 1 if any(issue.fatal for issue in issues) else 0
+    tables = gen_inline_tables(TESTS_DIR)
+    rows = gen_rows_without_id(TESTS_DIR)
+    noun = "inline multi-line parametrize tables"
+    codes = [
+        1 if any(issue.fatal for issue in issues) else 0,
+        _ratchet_sites("inline-tables", noun, *tables),
+        _ratchet_sites("rows-without-id", "`pytest.param` rows without `id=`", *rows),
+    ]
+    return max(codes)
 
 
 def _lint_basenames() -> int:

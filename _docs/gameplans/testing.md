@@ -141,7 +141,15 @@ Enforcement:
   on the test's own path that lasts as long as that outer bound, and a test that reads a tracked
   doc (a path built from `ROOT_DIR`/`DOCS_DIR`/`PACKAGE_DIR`/`TESTS_DIR`/`__file__` naming
   `_docs`, `docs`, or a `.md`/`.rst` file, or a `Path`/`open` of a `.md`/`.rst` name), the §1
-  rule that Markdown is never pytest input.
+  rule that Markdown is never pytest input. The bound checks also cover `tests/_*.py` helpers and
+  every non-test function and method, a `communicate` timeout counts as a bound, a `timeout`
+  marker may not equal the backstop, every `subprocess.run`/`check_output`/`check_call`/`call`
+  sets `timeout=` (or splats options that may carry it), and an `async def` test must await
+  something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
+  multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without `id=`
+  (`rows-without-id`), printing the sites only when a count rises. Its `Bound`/`gen_bounds`
+  also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels
+  each bound LOOSE, TIGHT, or ok against the ladder.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no

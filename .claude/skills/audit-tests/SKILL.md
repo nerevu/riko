@@ -27,7 +27,9 @@ them in the report, cite them:
 
 `manage lint --tests` already enforces indexing, `Test<Subject>` classes, no
 top-level tests, no private imports in `public/`, size advice, bounds on the
-ladder and below their outer bound, and no tracked-doc reads. Don't report
+ladder and below their outer bound (helpers included), no marker equal to the
+backstop, `subprocess` timeouts, async tests that await, no tracked-doc reads,
+and ceilings on inline multi-line tables and id-less rows. Don't report
 what the lint catches; run it and cite any failure once.
 
 ## 1. Resolve the scope
