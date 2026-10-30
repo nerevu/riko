@@ -160,6 +160,10 @@ Enforcement:
   environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`
   tooling is omitted (`[tool.coverage.run] omit`), and the console scripts count through their
   subprocess runs (`patch = ["subprocess"]`); a new `manage` helper module joins the omit list.
+- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call and a `pytest.param`
+  row that share a callee, a distinctive argument, and an expected value (`doctest-args`, which
+  sees short literals such as `"8"`/`"many"` that `overlaps` drops), and a doctest `Traceback`
+  whose exception and message match a `pytest.raises` (`doctest-raises`).
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and whether a
   doctest or existing test already owns the case.
 
@@ -167,18 +171,6 @@ Pending: `manage lint --tests` bans only `_private` names in `public/`. The full
 — a public test uses only supported names — would check `public/` imports against
 `riko/base/_api_surface.py`; the `public/` files' imports of non-surface modules need moving or an
 allowlist first.
-
-Pending tooling, recorded 2026-10-29 and built on the next audit that finds a miss it would have
-caught (`.claude/skills/audit-tests/SKILL.md` reports such misses under "Tool gaps"):
-
-- `overlap_scan.py` matching doctest call arguments against `pytest.param` rows, since its literal
-  threshold let `"8"`/`"many"` doctest copies through;
-- `overlap_scan.py` matching a doctest `Traceback` case against a `pytest.raises` row for the same
-  call;
-- a `manage lint --tests` check of the bound ladder in `tests/__init__.py` and of a test that can
-  end only by its `timeout` backstop;
-- a `manage lint --tests` check for a test file that reads a tracked `_docs/` or `.md` path, the
-  grep-able half of the §1 rule that Markdown is never pytest input.
 
 ### Import-linter coverage gap
 

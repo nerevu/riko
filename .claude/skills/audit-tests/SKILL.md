@@ -101,9 +101,9 @@ inspect any scripts it wrote and promote each one, fold it into
 3. **Same behavior asserted twice**, which the scanner mostly misses:
    - a cross-tier twin of a different shape (a direct `_PoolLifetime` call vs an
      end-to-end `Pipeline` run);
-   - a doctest example repeated as a `pytest.param` row (short literals such as
-     `"8"` or `"many"` fall under `MIN_STR`);
-   - a doctest error case repeated as a `pytest.raises` row;
+   - a doctest example repeated as a `pytest.param` row, or a doctest error case
+     repeated as a `pytest.raises`: the scanner's `doctest-args` and
+     `doctest-raises` sections list these; verify both sides;
    - CLI tests re-pinning error text that another test owns;
    - two tripwires for one pending capability (merge them, never delete one).
 
@@ -215,9 +215,8 @@ Close with:
   diff against a clean HEAD worktree (only the stated deletions differ),
   `codegen --tests`, `lint --all`, `test --ratchet`, and `--check-types`.
 - **Tool gaps**: leads the scanner missed that you found by hand, with the
-  `overlap_scan.py` section or lint that would catch them. A miss matching an open
-  candidate in the "Pending tooling" list of `_docs/gameplans/testing.md` §3 is the
-  trigger for building it.
+  `overlap_scan.py` section or lint that would catch them, so the next pass can
+  build that check.
 - **Script candidates**: any agent that ran past about 10 minutes or 50 tool calls
   on mechanical work, with the script it suggests.
   Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff.
