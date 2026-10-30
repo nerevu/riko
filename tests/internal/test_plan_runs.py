@@ -35,6 +35,7 @@ from tests._execution import (
     build_chain,
     build_dispatcher,
     build_workflow,
+    gen_closing_seed,
     module_workflow,
     passthrough_pipe,
     run_plan,
@@ -145,14 +146,6 @@ SEEDS = [
 ]
 
 
-def _gen_closing_seed(closed: list[str]) -> Iterator[Item]:
-    try:
-        yield {"x": 1}
-        yield {"x": 2}
-    finally:
-        closed.append("closed")
-
-
 async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
     try:
         yield {"x": 1}
@@ -162,7 +155,7 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 
 
 CLOSING_SEEDS = [
-    pytest.param(_gen_closing_seed, id="generator"),
+    pytest.param(gen_closing_seed, id="generator"),
     pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
     pytest.param(
         ClosingAsyncIterator, id="closeable-async-iterator", marks=skipif_issync
@@ -956,6 +949,14 @@ class TestAsyncPlanRun:
         async with AsyncExecution() as execution:
             stream = await execution.arun(plan, seed={"x": 5})
             assert [item async for item in stream] == [{"x": 10}]
+
+    @async_test
+    async def test_arun_reads_a_dual_iterable_seed_asynchronously(self) -> None:
+        plan = _doubler_plan("adouble")
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan, seed=_DualSeed())
+            assert [item async for item in stream] == [{"x": 200}]
 
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     @async_test

@@ -42,7 +42,7 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
-from riko.types._io import is_async_closeable
+from riko.types._io import AsyncCloseable, is_async_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -231,6 +231,32 @@ def _resolve_thread_budget() -> _ThreadBudget:
         _budgets.set(budget)
 
     return budget
+
+
+@define(eq=False)
+class _OwnedSeed[T]:
+    """
+    Wraps a closeable async seed so the run and the execution close it only once.
+
+    The root node closes its source when the run stops, and the execution closes the
+    seed again on exit. Only the first ``aclose`` reaches the seed.
+    """
+
+    _iterator: AsyncIterator[T]
+    _seed: AsyncCloseable
+    _closed: bool = False
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> T:
+        return await anext(self._iterator)
+
+    async def aclose(self) -> None:
+        """Closes the seed unless it is already closed."""
+        if not self._closed:
+            self._closed = True
+            await self._seed.aclose()
 
 
 @define(eq=False)
@@ -582,15 +608,18 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         resolved = await as_awaitable(seed)
 
-        if isinstance(resolved, AsyncIterable):
-            stream: AsyncIterable[T] = resolved
+        if not isinstance(resolved, AsyncIterable):
+            stream: AsyncIterable[T] = as_async(normalize_items(resolved))
+            owner: object = resolved
+        elif is_async_closeable(resolved):
+            stream = owner = _OwnedSeed(aiter(resolved), resolved)
         else:
-            stream = as_async(normalize_items(resolved))
+            stream = owner = resolved
 
-        if is_async_closeable(resolved):
-            self.push_async_callback(resolved.aclose)
-        elif isinstance(resolved, Generator):
-            self.callback(resolved.close)
+        if is_async_closeable(owner):
+            self.push_async_callback(owner.aclose)
+        elif isinstance(owner, Generator):
+            self.callback(owner.close)
 
         return stream
 

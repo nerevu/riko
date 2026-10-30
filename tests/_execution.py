@@ -200,6 +200,15 @@ async def arun_plan(
 passthrough_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
 
 
+def gen_closing_seed(closed: list[str]) -> Generator[Item]:
+    """Yields more items than any read-ahead and records ``"closed"`` on close."""
+    try:
+        for index in range(1, 51):
+            yield {"x": index}
+    finally:
+        closed.append("closed")
+
+
 class ClosingAsyncIterator:
     """A two-item async iterator with ``aclose`` that is not an async generator."""
 

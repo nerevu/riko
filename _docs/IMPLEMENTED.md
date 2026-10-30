@@ -1117,10 +1117,12 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   awaitable through the portal and drains an async-only stream through it, `AsyncExecution.
   _aopen_seed` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
   primitive is one item, any other iterable is the stream) and both registering a generator seed's
-  `close` on the execution's exit stack (the async side also an async generator seed's `aclose`), so
-  a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
+  `close` on the execution's exit stack (the async side also the `aclose` of any seed with one),
+  so a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
   (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the generated module's `pipe(item)` hand
-  the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. An
+  the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. The
+  async side wraps an async-iterable seed with `aclose` in `_OwnedSeed`, so the root node's own close
+  and the exit stack's reach it only once. An
   async `processor` node fed an async stream maps it lazily and in order (`_aprocess_stream` in
   `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the stream object as
   one item. Closing the node's stream (`_AsyncWrapperStream.aclose`) closes that window and its

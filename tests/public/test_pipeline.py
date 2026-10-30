@@ -57,6 +57,7 @@ from tests._execution import (
     RecordingSink,
     agen_source,
     awaitable_source,
+    gen_closing_seed,
     module_workflow,
     registered_modules,
     tag_source,
@@ -747,6 +748,12 @@ class TestClose:
         assert [item["content"] for item in rights] == ["c", "b", "a"]
 
 
+CLOSING_SEEDS = [
+    pytest.param(gen_closing_seed, id="generator"),
+    pytest.param(ClosingAsyncIterator, id="closeable-async-iterator"),
+]
+
+
 class TestAsyncClose:
     @async_test
     async def test_close_before_the_first_item_never_runs_the_source(self):
@@ -786,6 +793,16 @@ class TestAsyncClose:
         await stream.aclose()
         assert len(consumed) < 20
         assert closed == [True]
+
+    @async_test
+    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
+    async def test_early_close_closes_the_seed(self, make_seed):
+        closed: list[str] = []
+        stream = Pipeline.from_module("hash")(make_seed(closed))
+        assert await anext(stream)
+        assert closed == []
+        await stream.aclose()
+        assert closed == ["closed"]
 
     @async_test
     async def test_afirst_closes_its_run_before_returning(self):
