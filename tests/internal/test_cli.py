@@ -36,11 +36,7 @@ from riko.cli._docs import (
     gen_stale_test_symbol_citations,
     gen_unruled_terms,
 )
-from riko.cli._docstyle import (
-    gen_docstring_issues,
-    gen_example_prose,
-    summary_leads_with_output,
-)
+from riko.cli._docstyle import gen_docstring_issues, gen_example_prose
 from riko.cli._document import read_document, require_workflow
 from riko.cli._gen_api_surface import generate_api_surface
 from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
@@ -58,12 +54,13 @@ from riko.cli._lint_deps import (
 from riko.cli._lint_escapes import get_escape_counts
 from riko.cli._lint_import_architecture import (
     _validate_graph,
+    lint_architecture,
     load_architecture_report,
     render_architecture,
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_terms import BannedTerm, gen_term_issues
+from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._lint_tests import (
     MERGE_LINES,
     SPLIT_LINES,
@@ -726,8 +723,13 @@ EXAMPLE_PROSE = [
 ]
 
 
+def _function(doc: str) -> str:
+    body = indent(f"Runs.\n\n{doc}", "    ")
+    return f'def f():\n    """\n{body}\n    """\n'
+
+
 def _doctest(source: str) -> str:
-    return f'def f():\n    """\n    Runs.\n\n    >>> {source}\n    """\n'
+    return _function(f">>> {source}")
 
 
 EXAMPLE_RULES = [
@@ -780,6 +782,30 @@ EXAMPLE_RULES = [
         [],
         id="compound",
     ),
+    pytest.param(
+        "mod.py",
+        'def f():\n    """Returns x."""\n',
+        ["summary leads with the output"],
+        id="output-lead",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("Raises:\n\n    KeyError if missing."),
+        ["Raises: entry does not start with 'SomeError:'"],
+        id="malformed-raises",
+    ),
+    pytest.param(
+        "mod.py",
+        _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
+        ["narrates between examples (use a >>> # comment)"],
+        id="narration",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("f() is None"),
+        ["checks for None (show the bare call instead)"],
+        id="none-check",
+    ),
 ]
 
 
@@ -797,10 +823,6 @@ class TestDocstyle:
         path = tmp_path / name
         path.write_text(source, encoding="utf-8")
         assert [issue.problem for issue in gen_docstring_issues(path)] == expected
-
-    def test_docstring_summary_output_lead_detection(self) -> None:
-        assert summary_leads_with_output("Returns the parsed response body.")
-        assert not summary_leads_with_output("Parses the response body.")
 
 
 VERB_TABLE_MARKERS = [
@@ -915,6 +937,23 @@ class TestCitationLint:
         assert set(_docs.gen_source_symbols(path)) == expected
 
 
+class TestUserDocsLint:
+    """The internal-docs lint checks over the shipped user docs."""
+
+    def test_todo_lines_are_named_by_path_and_line(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_docs, "DOCS_DIR", tmp_path / "docs")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
+        (tmp_path / "docs" / "FAQ.rst").write_text(
+            "Intro.\n\nTODO: add seeding\n", encoding="utf-8"
+        )
+        offenders = list(_docs._gen_todo_offenders())
+        assert offenders == ["README.rst:1", "docs/FAQ.rst:3"]
+
+
 TERM_PATTERNS = [
     pytest.param(
         'REASON = "owned by R5C: write is still a sink module"\n'
@@ -999,6 +1038,14 @@ class TestTermLint:
         )
         found = [issue.path.name for issue in gen_term_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+    def test_internal_docs_are_held_to_phrases_but_not_phase_codes(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "IMPLEMENTED.md"
+        source.write_text("Landed in R4C.\n\nRun a sub-pipeline.\n", encoding="utf-8")
+        found = [(issue.lineno, issue.found) for issue in gen_phrase_issues(source)]
+        assert found == [(3, "sub-pipeline")]
 
 
 class TestLiteralLint:
@@ -1806,6 +1853,7 @@ class TestImportArchitectureLint:
         assert ("architecture violations:" in render_architecture(report)) == bool(
             targets
         )
+        assert lint_architecture(report) == (1 if targets else 0)
 
     def test_unclassified_fails(self, tmp_path: Path) -> None:
         root = tmp_path / "riko"
@@ -1813,6 +1861,7 @@ class TestImportArchitectureLint:
         write(root, "mystery/__init__.py", "")
         report = load_architecture_report(root)
         assert report.unclassified[0].module == "riko.mystery"
+        assert lint_architecture(report) == 1
 
     def test_layer_graph_validation_accepts_a_reduced_dag(self):
         _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
