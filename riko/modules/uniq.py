@@ -2,9 +2,9 @@
 """
 Filters out non unique items from a stream according to a specified field.
 
-Deduplication is windowed, not global: only the last ``limit`` values are
-remembered, so a duplicate that falls outside the window is yielded again.
-Lazy, and memory is bounded by ``limit``.
+Deduplication is windowed, not global: only the last ``limit`` values are remembered. A
+duplicate that falls outside the window is yielded again. The sync pipe is lazy, and its
+memory is bounded by ``limit``. The async pipe reads its whole source upfront.
 
 Examples:
 
@@ -95,7 +95,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously filters out non unique items according to a specified field.
 
-    Lazy: items stream through and memory is bounded by ``limit``.
+    Not lazy: the whole source is read before the first item is yielded. An endless
+    source never returns. Bound one with ``timeout`` instead.
 
     Args:
 

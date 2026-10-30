@@ -2,8 +2,7 @@
 """
 Produces a placeholder item endlessly.
 
-The stream never ends, so bound it before operations that require the source to
-finish.
+The stream never ends, so bound it before operations that require the source to finish.
 
 Examples:
 
@@ -77,7 +76,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     Asynchronously yields a placeholder item endlessly.
 
     Takes no input and reads no configuration. The stream never ends, so bound it
-    downstream with ``truncate`` or ``timeout``.
+    downstream with the ``timeout`` module (not with the async ``truncate`` module since
+    it reads the whole source upfront).
 
     Args:
 
@@ -127,7 +127,7 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     Repeats a placeholder item endlessly.
 
     Takes no input and reads no configuration. The stream never ends, so bound it
-    downstream with ``truncate`` or ``timeout``.
+    downstream with the ``truncate`` or ``timeout`` module.
 
     Args:
 

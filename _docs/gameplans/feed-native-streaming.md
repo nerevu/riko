@@ -295,6 +295,14 @@ Tripwire for S1/S7: `tests/internal/test_modules.py::TestAsyncOperatorLaziness::
 counted) source before yielding its first item, while the sync run is lazy. It flips when `truncate`
 migrates or the seam goes.
 
+The same seam never yields to the event loop while it drains (`materialize` reads a sync source
+through `as_async(cooperative=False)`), so async `forever | truncate` through `Pipeline` hangs, grows
+without bound, and ignores a cancel scope (2026-10-29 unboundedness audit: 566 MB after 6 s). The sync
+run returns. Tripwire (S1/S7, strict xfail, finite source so the suite never hangs):
+`tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_yields_to_the_event_loop_while_draining`.
+Until it flips, the async `truncate`/`uniq`/`forever` docstrings say to bound an endless source with
+`timeout`, which does checkpoint.
+
 The same seam drains async secondary inputs: async `union` drains its `others` streams (as are async
 terminal sub-sources passed as the `format`/`formatted` keywords) before the operator yields
 its first item, while the sync run chains them lazily. A strict xfail in
