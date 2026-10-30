@@ -265,9 +265,7 @@ UNSUPPORTED_MODULES = [
     pytest.param(
         "pipe_b3d43c00f9e1145ff522fb71ea743e99", "locationbuilder", id="locationbuilder"
     ),
-    pytest.param(
-        "pipe_93abb8500bd41d56a37e8885094c8d10", "termextractor", id="simpletagger"
-    ),
+    pytest.param("pipe_93abb8500bd41d56a37e8885094c8d10", "termextractor", id="tagger"),
 ]
 
 

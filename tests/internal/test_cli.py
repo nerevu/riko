@@ -466,9 +466,7 @@ class TestLintCommand:
         ("check", "text"),
         [
             pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
-            pytest.param(
-                _lint._lint_literals, "Pass ``'list'`` here.\n", id="literals"
-            ),
+            pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
         ],
     )
     def test_text_checks_exit_by_whether_issues_were_found(
@@ -745,19 +743,15 @@ EXAMPLE_RULES = [
         ['imports processor privately (use "from riko.ext import processor")'],
         id="extension-name",
     ),
-    pytest.param(
-        "mod.py", _doctest("from riko.cli._docstyle import f"), [], id="nopub"
-    ),
+    pytest.param("mod.py", _doctest("from riko.cli._docs import f"), [], id="nopub"),
     pytest.param("mod.py", _doctest("from riko import Pipeline"), [], id="public"),
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
-    pytest.param(
-        "_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="no-example"
-    ),
+    pytest.param("_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="missing"),
     pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
     pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
-    pytest.param("mod.py", "def export(): ...\n", [], id="public-no-example"),
+    pytest.param("mod.py", "def export(): ...\n", [], id="public-missing"),
     pytest.param(
         "mod.py",
         'def _build_x():\n    """Resolves x."""\n',
@@ -770,12 +764,8 @@ EXAMPLE_RULES = [
         ["summary verb does not match the name verb build"],
         id="verb-mismatch-twin",
     ),
-    pytest.param(
-        "mod.py", 'async def abuild_x():\n    """Builds x."""\n', [], id="verb-twin"
-    ),
-    pytest.param(
-        "mod.py", 'def build_x():\n    """Finds x."""\n', [], id="verb-off-table"
-    ),
+    pytest.param("mod.py", 'async def abuild():\n    """Builds x."""\n', [], id="twin"),
+    pytest.param("mod.py", 'def build_x():\n    """Finds x."""\n', [], id="off-table"),
     pytest.param(
         "_require_guards.py",
         'def require_from_keys():\n    """Builds x."""\n',
@@ -1117,9 +1107,7 @@ BINDING_CASES = [
     pytest.param("workflow = Workflow.parse(dag)\n", [1], id="parsed-local"),
     pytest.param("workflow = pipeline.workflow\n", [1], id="attribute-local"),
     pytest.param("workflow = load(dag)\n", [], id="unknown-call"),
-    pytest.param(
-        "def build() -> Workflow: ...\nworkflow = build()\n", [2], id="helper-local"
-    ),
+    pytest.param("def f() -> Workflow: ...\nworkflow = f()\n", [2], id="helper-local"),
     pytest.param("class P:\n    workflow: Workflow = field()\n", [], id="field"),
     pytest.param("evolve(self, workflow=flow)\n", [], id="keyword"),
     pytest.param(
@@ -1210,9 +1198,7 @@ TIER_INDEX_CASES = [
         f"{ALPHA_ROW}    test_long.py     AsyncGamma\n",
         id="lone-async-kept",
     ),
-    pytest.param(
-        "def helper(): ...\n", f"{ALPHA_ROW}    test_long.py\n", id="no-subjects"
-    ),
+    pytest.param("def f(): ...\n", f"{ALPHA_ROW}    test_long.py\n", id="no-subjects"),
 ]
 
 
@@ -1291,13 +1277,9 @@ BOUND_CASES = [
         id="inner-at-global",
     ),
     pytest.param(
-        _case("event.wait(timeout=0.5)"),
-        f"wait(timeout=0.5) {_LADDER}",
-        id="keyword-bound",
+        _case("event.wait(timeout=0.5)"), f"wait(timeout=0.5) {_LADDER}", id="keyword"
     ),
-    pytest.param(
-        _case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional-bound"
-    ),
+    pytest.param(_case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional"),
     pytest.param(_case("...", _ROW_MARK), f"timeout(4) {_LADDER}", id="row-marker"),
     pytest.param(
         _case("with fail_after(_BOUND): ...", prefix="_BOUND = 4"),
@@ -1352,9 +1334,7 @@ BOUND_CASES = [
     ),
 ]
 CLEAN_BOUND_CASES = [
-    pytest.param(
-        _case("async def block(): await async_sleep(3600)", _MARK), id="nested-sleep"
-    ),
+    pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
     pytest.param(_case("AsyncExecution(shutdown_timeout=0.05)"), id="subject-timeout"),
     pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
     pytest.param(_case("event.wait()"), id="no-argument"),
@@ -1387,9 +1367,7 @@ HELPER_BOUND_CASES = [
     ),
 ]
 SITE_CASES = [
-    pytest.param(
-        _case("...", _PARAMETRIZE.format("[\n1,\n]")), 1, 0, id="multi-line-inline"
-    ),
+    pytest.param(_case("...", _PARAMETRIZE.format("[\n1,\n]")), 1, 0, id="multi-line"),
     pytest.param(
         _case("...", _PARAMETRIZE.format('[1], ids=["a"]')), 0, 0, id="one-line-inline"
     ),
@@ -1399,12 +1377,8 @@ SITE_CASES = [
         0,
         id="module-table",
     ),
-    pytest.param(
-        _case("...", prefix="V = [pytest.param(1)]"), 0, 1, id="row-without-id"
-    ),
-    pytest.param(
-        _case("...", prefix='V = [pytest.param(1, id="a")]'), 0, 0, id="row-with-id"
-    ),
+    pytest.param(_case("...", prefix="V = [pytest.param(1)]"), 0, 1, id="without-id"),
+    pytest.param(_case("...", "", 'V = [pytest.param(1, id="a")]'), 0, 0, id="with-id"),
 ]
 BACKSTOP_CASES = [
     pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),
@@ -1645,9 +1619,7 @@ ESCAPE_CASES = [
     pytest.param("from typing import Any\ndef f() -> Any: ...\n", 1, 0, id="return"),
     pytest.param("from typing import cast\ncast('int', x)\n", 0, 1, id="cast"),
     pytest.param("import typing\ntyping.cast(int, x)\n", 0, 1, id="typing-cast"),
-    pytest.param(
-        "from typing import cast\ncast('dict[str, Any]', x)\n", 0, 1, id="unbound"
-    ),
+    pytest.param("from typing import cast\ncast('list[Any]', x)\n", 0, 1, id="unbound"),
     pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
 ]
 

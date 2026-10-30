@@ -795,6 +795,7 @@ CSV_SINK_CASES = [
     pytest.param(None, _X0, "append", _CSV0, id="csv-append-to-empty-emits-header"),
     pytest.param(b"x\r\n0", _X1, "append", b"x\r\n0\n1\r\n", id="csv-unterminated"),
     pytest.param(_CSV0, [], "append", _CSV0, id="csv-empty-append-unchanged"),
+    pytest.param(_CSV0, _X1, "append", b"x\r\n0\r\n1\r\n", id="csv-append-no-header"),
 ]
 
 
@@ -807,12 +808,6 @@ class TestCsv:
 
         _sink(items, path, mode)
         assert path.read_bytes() == expected
-
-    def test_append_existing_skips_header(self, tmp_path):
-        path = tmp_path / "out.csv"
-        _sink([{"x": 0}], path)
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
 
     def test_passthrough_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"

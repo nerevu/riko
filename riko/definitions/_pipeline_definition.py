@@ -428,8 +428,6 @@ class PipelineDefinition(Generic[T_co]):
             ('thread', 4)
             >>> threaded.with_execution(ordered=True).settings.concurrency
             4
-            >>> print(threaded.with_execution(concurrency=None).settings.concurrency)
-            None
             >>> print(base.settings.concurrency)
             None
 

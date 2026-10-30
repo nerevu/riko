@@ -449,26 +449,38 @@ def only(pipe):
     return next(iter(gen_return_inferences(pipe)))
 
 
+CLASSIFICATIONS = [
+    pytest.param(_gen_sync, STREAM, GENERATOR, id="sync-generator"),
+    pytest.param(_gen_async, STREAM, GENERATOR, id="async-generator"),
+    pytest.param(_ann_iterator, STREAM, ANNOTATION, id="annotated-iterator"),
+    pytest.param(_ann_awaitable, STREAM, ANNOTATION, id="annotated-awaitable"),
+    pytest.param(_builtin_nonstream, NONSTREAM, AST, id="builtin-nonstream"),
+    pytest.param(_unresolvable, NONSTREAM, AST, id="unresolvable-annotation"),
+    pytest.param(_ann_value, NONSTREAM, MISSING, id="annotated-value"),
+    pytest.param(_ann_wrapper, STREAM, MISSING, id="annotated-wrapper"),
+    pytest.param(_alias, STREAM, MISSING, id="type-alias"),
+    pytest.param(_builtin_stream, STREAM, MISSING, id="builtin-stream"),
+    pytest.param(_itertools_stream, STREAM, MISSING, id="itertools-stream"),
+    pytest.param(_passthrough, STREAM, MISSING, id="passthrough-wrapper"),
+]
+
+
+UNKNOWN_REASONS = [
+    pytest.param(_broad, ("too broad",), id="broad-annotation"),
+    pytest.param(len, ("return annotation",), id="unavailable-source"),
+    pytest.param(_ambiguous, ("build_result", "return annotation"), id="ambiguous"),
+    pytest.param(
+        lambda items: undefined(items),  # noqa: F821, PLW0108 # pyright: ignore[reportUndefinedVariable]
+        ("no function definition", "return annotation"),
+        id="lambda-in-expression",
+    ),
+]
+
+
 class TestReturnInference:
     """Return-kind inference and its diagnostics."""
 
-    @pytest.mark.parametrize(
-        ("pipe", "kind", "source"),
-        [
-            pytest.param(_gen_sync, STREAM, GENERATOR, id="sync-generator"),
-            pytest.param(_gen_async, STREAM, GENERATOR, id="async-generator"),
-            pytest.param(_ann_iterator, STREAM, ANNOTATION, id="annotated-iterator"),
-            pytest.param(_ann_awaitable, STREAM, ANNOTATION, id="annotated-awaitable"),
-            pytest.param(_builtin_nonstream, NONSTREAM, AST, id="builtin-nonstream"),
-            pytest.param(_unresolvable, NONSTREAM, AST, id="unresolvable-annotation"),
-            pytest.param(_ann_value, NONSTREAM, MISSING, id="annotated-value"),
-            pytest.param(_ann_wrapper, STREAM, MISSING, id="annotated-wrapper"),
-            pytest.param(_alias, STREAM, MISSING, id="type-alias"),
-            pytest.param(_builtin_stream, STREAM, MISSING, id="builtin-stream"),
-            pytest.param(_itertools_stream, STREAM, MISSING, id="itertools-stream"),
-            pytest.param(_passthrough, STREAM, MISSING, id="passthrough-wrapper"),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe", "kind", "source"), CLASSIFICATIONS)
     def test_classification(self, pipe, kind, source):
         inference = only(pipe)
         assert inference.kind is kind
@@ -476,21 +488,7 @@ class TestReturnInference:
         if source is not MISSING:
             assert inference.source is source
 
-    @pytest.mark.parametrize(
-        ("pipe", "reasons"),
-        [
-            pytest.param(_broad, ("too broad",), id="broad-annotation"),
-            pytest.param(len, ("return annotation",), id="unavailable-source"),
-            pytest.param(
-                _ambiguous, ("build_result", "return annotation"), id="ambiguous-call"
-            ),
-            pytest.param(
-                lambda items: undefined(items),  # noqa: F821, PLW0108 # pyright: ignore[reportUndefinedVariable]
-                ("no function definition", "return annotation"),
-                id="lambda-in-expression",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe", "reasons"), UNKNOWN_REASONS)
     def test_unknown_with_reason(self, pipe, reasons):
         inference = only(pipe)
         assert inference.kind is UNKNOWN
@@ -993,6 +991,12 @@ DECORATION_OPTION_CALLS = [
 ]
 
 
+PICKLED_CONFS = [
+    pytest.param({"times": {"type": "int", "value": "2"}}, id="static"),
+    pytest.param({"times": {"subkey": "n"}}, id="dynamic"),
+]
+
+
 class TestPrepare:
     @pytest.mark.parametrize(
         ("item", "kind"), [({"content": "a"}, ItemDispatch), ("a", ValueDispatch)]
@@ -1024,13 +1028,7 @@ class TestPrepare:
         with pytest.raises(attrs.exceptions.FrozenInstanceError):
             prepared.name = "other"  # pyright: ignore[reportAttributeAccessIssue]
 
-    @pytest.mark.parametrize(
-        "conf",
-        [
-            pytest.param({"times": {"type": "int", "value": "2"}}, id="static"),
-            pytest.param({"times": {"subkey": "n"}}, id="dynamic"),
-        ],
-    )
+    @pytest.mark.parametrize("conf", PICKLED_CONFS)
     def test_a_pickled_prepared_module_rebuilds_its_callables(self, conf):
         prepared = processor(ftype="text").prepare("m", conf=cast("Conf", conf))
         restored = pickle.loads(pickle.dumps(prepared))  # noqa: S301

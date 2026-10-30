@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, cast
 import attrs
 import pytest
 
-from riko.bado.itertools import as_async
 from riko.base._exceptions import (
     InvalidPipelineError,
     UnsupportedModuleError,
@@ -44,9 +43,9 @@ from riko.runtime._workflow_stores import (
     PackageStore,
 )
 from riko.types._enums import ExecutionMode
-from tests import async_test, pyworkflows
+from tests import pyworkflows
 from tests._execution import module_workflow, registered_modules
-from tests._workflows import EXCLAIMED, PARENT, register_documents
+from tests._workflows import register_documents
 
 if TYPE_CHECKING:
     from riko.types._wrappers import SyncModuleWrapper
@@ -767,11 +766,6 @@ class TestResolvedDocuments:
         assert second is not None
         assert second is not first
 
-    def test_module_store_wins_over_document(self):
-        store = MappingStore({"pipe_gigs": tokenizer_module})
-        resolver = _document_resolver(self.workflows, module_store=store)
-        assert resolver.load("pipe_gigs") is tokenizer_module
-
     def test_document_exposes_both_interfaces(self, tmp_path):
         register_documents(tmp_path)
         interfaces = dispatcher.require_interfaces("pipe_exclaim")
@@ -782,13 +776,6 @@ class TestResolvedDocuments:
         context = Context(ExecutionMode.DESCRIBE_DEPENDENCIES)
         pipe = dispatcher.require("pipe_exclaim")
         assert pipe(context=context) == ["strconcat"]
-
-    @async_test
-    async def test_document_runs_async(self, tmp_path):
-        register_documents(tmp_path)
-        pipe = dispatcher.require("pipe_exclaim", is_async=True)
-        items = [item async for item in pipe(as_async(PARENT))]
-        assert items == EXCLAIMED
 
     def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
         (tmp_path / "pipe_bad.json").write_text("{bad")

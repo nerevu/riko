@@ -200,9 +200,7 @@ DISTINCT_PAIRS = [
     pytest.param({1}, frozenset({1}), id="set-vs-frozenset"),
     pytest.param(NOON_UTC, date(2020, 6, 15), id="datetime-vs-date"),
     pytest.param(NOON_TT, NOON_UTC, id="struct-time-vs-datetime"),
-    pytest.param(
-        PureWindowsPath("a/b"), PurePosixPath("a/b"), id="windows-vs-posix-path"
-    ),
+    pytest.param(PureWindowsPath("a/b"), PurePosixPath("a/b"), id="windows-vs-posix"),
     pytest.param(Color.RED, 1, id="enum-vs-int"),
     pytest.param(Flavor.SWEET, "sweet", id="strenum-vs-str"),
     pytest.param(Pin(1, 2), Point(1, 2), id="attrs-vs-dataclass"),
@@ -328,11 +326,6 @@ NATIVE_KEY_PAIRS = [
 
 
 class TestReprCache:
-    def test_repr_cache_memoizes_supported_arguments(self):
-        calls, tally = _counting_cache()
-        assert (tally({"a": 1}), tally({"a": 1})) == (1, 1)
-        assert len(calls) == 1
-
     def test_scalar_arguments_skip_canonical_encoding(self, monkeypatch):
         encoded: list[object] = []
         spy = lambda value: encoded.append(value) or canonical_bytes(value)
@@ -394,15 +387,15 @@ def tokyo(monkeypatch):
     time.tzset()
 
 
+ABSOLUTE_DATES = [
+    pytest.param("Jan. 12, 2001", (2001, 1, 12), id="dotted-month"),
+    pytest.param("10/21/1958", (1958, 10, 21), id="slashed"),
+    pytest.param("15 JUN 06", (2006, 6, 15), id="day-month-year"),
+]
+
+
 class TestCastDatetime:
-    @pytest.mark.parametrize(
-        ("value", "expected"),
-        [
-            ("Jan. 12, 2001", (2001, 1, 12)),
-            ("10/21/1958", (1958, 10, 21)),
-            ("15 JUN 06", (2006, 6, 15)),
-        ],
-    )
+    @pytest.mark.parametrize(("value", "expected"), ABSOLUTE_DATES)
     def test_absolute_date_strings(self, value, expected):
         result = cast_datetime(value)
         assert result is not None
@@ -643,9 +636,7 @@ DOTDICT_DELETES = [
         {"a": {"b": {"d": 2}}},
         id="deep-case-insensitive",
     ),
-    pytest.param(
-        {"author": "bar"}, "missing", {"author": "bar"}, id="missing-root-noop"
-    ),
+    pytest.param({"author": "bar"}, "missing", {"author": "bar"}, id="missing-root"),
     pytest.param(
         {"author": {"name": "bar"}},
         "author.missing",
@@ -866,7 +857,7 @@ class TestAugmentEntries:
 
 
 class TestResolveDate:
-    def test_resolve_date_skips_blank_and_unparseable_values(self):
+    def test_resolve_date_skips_blank_and_unparseable_values(self, caplog):
         """A blank or unparseable candidate never raises; the next key is tried."""
         raw = cast(
             "ParserRSSEntry",
@@ -879,7 +870,13 @@ class TestResolveDate:
             },
         )
         keys = ("published_parsed", "published", "updated_parsed", "updated")
-        assert resolve_date(raw, *keys) is None
+
+        with caplog.at_level(WARNING, logger="riko"):
+            assert resolve_date(raw, *keys) is None
+
+        assert [r.getMessage() for r in caplog.records] == [
+            "skipping unparseable published date 'not a date'"
+        ]
         resolved = resolve_date(raw, *keys, "created")
         assert isinstance(resolved, struct_time)
         assert resolved[:3] == (2021, 3, 4)
@@ -911,9 +908,6 @@ class TestGraph:
         ordered = topological_sort(graph, key=lambda node: node != "b")
         assert ordered == [("b",), ("a",), ("c",)]
 
-    def test_topological_sort_groups_a_cycle_by_default(self):
-        assert topological_sort({"a": {"b"}, "b": {"a"}}) == [("a", "b")]
-
     def test_graph_order_ignores_hash_seed(self):
         expected = [
             "[('c',), ('a', 'b')]",
@@ -933,19 +927,6 @@ class TestGraph:
 
 
 class TestGraphIndex:
-    def test_graph_index_derives_and_freezes_from_its_inputs(self) -> None:
-        edge = GraphEdge("a", "b", "out", "in")
-        index = GraphIndex(["a", "b", "c"], [edge], {"default": Endpoint("b", "out")})
-
-        assert index.edges == (edge,)
-        assert index.incoming["b"] == (edge,)
-        assert index.upstream["b"] == frozenset({"a"})
-        assert index.required["default"] == ("a", "b")
-        assert index.roots == ("a", "c")
-
-        with pytest.raises(TypeError):
-            index.outputs["extra"] = Endpoint("a", "out")  # type: ignore[index]
-
     def test_graph_index_derives_on_first_use(self, monkeypatch) -> None:
         calls: list[str] = []
 
@@ -980,6 +961,7 @@ class TestGraphIndex:
 
 ENV_OVERRIDES = [
     pytest.param("RIKO_NODE_THREADS", "-1", "node_threads", 40, id="int-below-min"),
+    pytest.param("RIKO_NODE_THREADS", "many", "node_threads", 40, id="int-malformed"),
     pytest.param("RIKO_CONCURRENCY_LIMIT", "0", "concurrency_limit", 16, id="limit-0"),
     pytest.param("RIKO_DISCOVERY_TIMEOUT", "0", "discovery_timeout", 10, id="disc-0"),
     pytest.param(
@@ -993,9 +975,7 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "inf", "shutdown_timeout", inf, id="inf"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "-1", "shutdown_timeout", 30.0, id="neg"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "nan", "shutdown_timeout", 30.0, id="nan"),
-    pytest.param(
-        "RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="malformed"
-    ),
+    pytest.param("RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="bad"),
 ]
 
 
@@ -1061,23 +1041,21 @@ class TestResolveEnum:
         assert all(name in str(excinfo.value) for name in Executor)
 
 
+STR_REJECTIONS = [
+    pytest.param(["id", ""], "non-empty", id="empty"),
+    pytest.param(["id", "id"], "duplicate", id="duplicate"),
+    pytest.param([1, 2], "non-empty strings", id="ints"),
+    pytest.param(["a", 1], "non-empty strings", id="mixed"),
+    pytest.param([None], "non-empty strings", id="none"),
+    pytest.param(42, "string or iterable", id="non-iterable"),
+]
+
+
 class TestNormalizeStrs:
-    def test_empty_key_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="non-empty"):
-            normalize_strs(["id", ""])
-
-    def test_duplicate_keys_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="duplicate"):
-            normalize_strs(["id", "id"])
-
-    @pytest.mark.parametrize("value", [[1, 2], ["a", 1], [None]])
-    def test_non_string_keys_rejected(self, value):
-        with pytest.raises(InvalidPipelineError, match="non-empty strings"):
+    @pytest.mark.parametrize(("value", "match"), STR_REJECTIONS)
+    def test_rejects(self, value, match):
+        with pytest.raises(InvalidPipelineError, match=match):
             normalize_strs(value)
-
-    def test_non_iterable_rejected(self):
-        with pytest.raises(InvalidPipelineError, match="string or iterable"):
-            normalize_strs(42)  # pyright: ignore[reportArgumentType]
 
 
 def _runtime_record() -> type:

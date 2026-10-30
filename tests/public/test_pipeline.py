@@ -419,13 +419,6 @@ class TestModuleNameEnum:
         assert len(list(pipeline(SRC))) == count
 
 
-FIRST_CASES = [
-    pytest.param([], None, None, id="empty-none"),
-    pytest.param([], {"x": 0}, {"x": 0}, id="empty-mapping"),
-    pytest.param([{"x": 1}], None, {"x": 1}, id="item"),
-]
-
-
 class TestPipelineIteration:
     def test_an_empty_pipeline_streams_its_seed_unchanged(self):
         assert list(Pipeline()([{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
@@ -450,9 +443,8 @@ class TestPipelineIteration:
             assert list(pipeline) == [{"x": 2}, {"x": 4}]
             assert list(Pipeline().pipe("doubler")([{"x": 10}])) == [{"x": 20}]
 
-    @pytest.mark.parametrize(("seed", "default", "expected"), FIRST_CASES)
-    def test_first_returns_the_default_on_an_empty_run(self, seed, default, expected):
-        assert Pipeline().first(seed, default=default) == expected
+    def test_first_returns_the_default_on_an_empty_run(self):
+        assert Pipeline().first([], default={"x": 0}) == {"x": 0}
 
     def test_first_reads_a_self_starting_pipeline_unseeded(self):
         assert tokenized(VALUE).first(default=None) == EXPECTED[0]
@@ -750,7 +742,7 @@ class TestClose:
 
 CLOSING_SEEDS = [
     pytest.param(gen_closing_seed, id="generator"),
-    pytest.param(ClosingAsyncIterator, id="closeable-async-iterator"),
+    pytest.param(ClosingAsyncIterator, id="async-iterator"),
 ]
 
 

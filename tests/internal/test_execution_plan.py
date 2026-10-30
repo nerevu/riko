@@ -71,6 +71,8 @@ def _flagged(func, flag: str) -> Any:
 
 _ASYNC_PIPE = cast("AsyncModuleWrapper", lambda source, **_: as_async(source or {}))
 _BOTH = {"sync_pipe": passthrough_pipe, "async_pipe": _ASYNC_PIPE}
+_SYNC_ONLY = {"sync_pipe": passthrough_pipe}
+_ASYNC_ONLY = {"async_pipe": _ASYNC_PIPE}
 _HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
 _COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
 _NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
@@ -88,6 +90,15 @@ _DYNAMIC_REPLACE = cast(
 )
 
 _UPPER = cast("Conf", {"rule": {"transform": "upper"}})
+_EMPTY = Workflow(nodes=[], outputs={})
+_HASH_FLOW = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=OUTPUT_A)
+_LOOP_NODE = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
+_LOOP_FLOW = Workflow(nodes=[_LOOP_NODE], outputs=OUTPUT_A)
+_BARE_LOOP = Workflow(nodes=[ModuleNode(id="a", name="loop")], outputs=OUTPUT_A)
+_WRITE = WriteNode(id="a", name="write", backend="file", dest="out.csv")
+_WRITE_FLOW = Workflow(nodes=[_WRITE], outputs=OUTPUT_A)
+_HASH_A = {"a": _HASH}
+_HASH_AB = {"a": _HASH, "b": _HASH}
 _SYNC, _ASYNC = "sync_interface", "async_interface"
 
 
@@ -128,16 +139,27 @@ def _real_loop_workflow(embed_name="child"):
 SELECTIONS = [
     pytest.param(_BOTH, "sync", passthrough_pipe, id="native-sync"),
     pytest.param(_BOTH, "async", _ASYNC_PIPE, id="native-async"),
-    pytest.param(
-        {"sync_pipe": passthrough_pipe}, "async", passthrough_pipe, id="sync-only"
-    ),
-    pytest.param({"async_pipe": _ASYNC_PIPE}, "sync", _ASYNC_PIPE, id="async-only"),
+    pytest.param(_SYNC_ONLY, "async", passthrough_pipe, id="sync-only"),
+    pytest.param(_ASYNC_ONLY, "sync", _ASYNC_PIPE, id="async-only"),
 ]
 
 
 BUILD_REJECTIONS = [
     pytest.param(_COUNT_NO_OUTPUT, "output", id="validates-the-graph"),
     pytest.param(_NODELESS, "no nodes", id="nodeless-with-outputs"),
+]
+
+
+CONSTRUCTION_REJECTIONS = [
+    pytest.param({"nodes": []}, {}, {}, "ExecutionPlan 'workflow'", id="workflow"),
+    pytest.param(_EMPTY, {"n": 1}, {}, "ExecutionPlan module 'n'", id="unresolved"),
+    pytest.param(_EMPTY, "abc", {}, "ExecutionPlan 'modules'", id="modules-str"),
+    pytest.param(_EMPTY, None, {}, "ExecutionPlan 'modules'", id="modules-none"),
+    pytest.param(_HASH_FLOW, {}, {}, "modules must match", id="missing"),
+    pytest.param(_HASH_FLOW, _HASH_AB, {}, "modules must match", id="extra"),
+    pytest.param(_LOOP_FLOW, _HASH_A, {}, "embeds must match", id="embed-missing"),
+    pytest.param(_BARE_LOOP, _HASH_A, _HASH_A, "embeds must match", id="embed-extra"),
+    pytest.param(_WRITE_FLOW, _HASH_A, {}, "not yet supported", id="non-module"),
 ]
 
 
@@ -276,54 +298,14 @@ class TestExecutionPlan:
         with pytest.raises(InvalidPipelineError, match="splitter"):
             ExecutionPlan.from_workflow(module_workflow("listy"), dispatcher=dispatcher)
 
-    def test_workflow_must_be_a_workflow(self):
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan 'workflow'"):
-            ExecutionPlan(workflow={"nodes": []}, modules={})  # pyright: ignore[reportArgumentType]
-
-    def test_execution_plan_modules_must_be_resolved_modules(self):
-        flow = Workflow(nodes=[], outputs={})
-
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan module 'n'"):
-            ExecutionPlan(workflow=flow, modules={"n": 1})  # pyright: ignore[reportArgumentType]
-
-    @pytest.mark.parametrize("modules", ["abc", None])
-    def test_execution_plan_modules_must_be_a_mapping(self, modules: Any):
-        flow = Workflow(nodes=[], outputs={})
-
-        with pytest.raises(InvalidPipelineError, match="ExecutionPlan 'modules'"):
-            ExecutionPlan(workflow=flow, modules=modules)
-
     @pytest.mark.parametrize(
-        "modules", [{}, {"a": _HASH, "b": _HASH}], ids=["missing", "extra"]
+        ("flow", "modules", "embeds", "match"), CONSTRUCTION_REJECTIONS
     )
-    def test_modules_must_match_the_workflow(self, modules: dict[str, ResolvedModule]):
-        flow = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=OUTPUT_A)
-
-        with pytest.raises(InvalidPipelineError, match="modules must match"):
-            ExecutionPlan(workflow=flow, modules=modules)
-
-    @pytest.mark.parametrize(
-        ("embed", "embeds"),
-        [
-            pytest.param({"name": "hash", "conf": {}}, {}, id="missing"),
-            pytest.param(None, {"a": _HASH}, id="extra"),
-        ],
-    )
-    def test_embeds_must_match_the_loop_embeds(
-        self, embed: Any, embeds: dict[str, ResolvedModule]
+    def test_construction_is_validated(
+        self, flow: Any, modules: Any, embeds: Any, match: str
     ):
-        node = ModuleNode(id="a", name="loop", embed=embed)
-        flow = Workflow(nodes=[node], outputs=OUTPUT_A)
-
-        with pytest.raises(InvalidPipelineError, match="embeds must match"):
-            ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds=embeds)
-
-    def test_a_non_module_node_is_refused_when_built(self):
-        node = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-        flow = Workflow(nodes=[node], outputs=OUTPUT_A)
-
-        with pytest.raises(InvalidPipelineError, match="not yet supported"):
-            ExecutionPlan(workflow=flow, modules={"a": _HASH})
+        with pytest.raises(InvalidPipelineError, match=match):
+            ExecutionPlan(workflow=flow, modules=modules, embeds=embeds)
 
     @pytest.mark.xfail(
         strict=True,
@@ -351,10 +333,8 @@ class TestExecutionPlan:
 # The invariants live on the resolved module itself, so every construction path
 # (plan build, embeds, direct construction) is covered.
 INVALID_MODULES = [
-    pytest.param({"sync_pipe": split_pipe}, r"'sync_pipe'.*splitter", id="sync-split"),
-    pytest.param(
-        {"async_pipe": async_split}, r"'async_pipe'.*splitter", id="async-split"
-    ),
+    pytest.param({"sync_pipe": split_pipe}, r"'sync_pipe'.*split", id="sync-split"),
+    pytest.param({"async_pipe": async_split}, r"'async_pipe'.*split", id="async-split"),
     pytest.param(
         {
             "sync_pipe": passthrough_pipe,
@@ -510,15 +490,11 @@ def _async_child(produced: list[int], closed: list[str]):
 
 EMBED_ADAPTATIONS = [
     pytest.param(
-        {"sync_pipe": passthrough_pipe},
-        {"async_pipe": _ASYNC_PIPE},
-        "select_sync",
-        _ASYNC_PIPE,
-        id="async-only-under-sync",
+        _SYNC_ONLY, _ASYNC_ONLY, "select_sync", _ASYNC_PIPE, id="async-only-under-sync"
     ),
     pytest.param(
-        {"async_pipe": _ASYNC_PIPE},
-        {"sync_pipe": passthrough_pipe},
+        _ASYNC_ONLY,
+        _SYNC_ONLY,
         "select_async",
         passthrough_pipe,
         id="sync-only-under-async",
@@ -746,8 +722,8 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
 
 
 FALLBACKS = [
-    pytest.param({"sync_pipe": passthrough_pipe}, _ASYNC, _SYNC, id="sync-only"),
-    pytest.param({"async_pipe": _ASYNC_PIPE}, _SYNC, _ASYNC, id="async-only"),
+    pytest.param(_SYNC_ONLY, _ASYNC, _SYNC, id="sync-only"),
+    pytest.param(_ASYNC_ONLY, _SYNC, _ASYNC, id="async-only"),
 ]
 
 

@@ -63,6 +63,9 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
+_INLINE = {"executor": "inline"}
+_PROCESS = {"executor": "process"}
+_THREAD = {"executor": "thread"}
 ITEMS = [{"x": x} for x in range(20)]
 LIMIT = config.concurrency_limit
 INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
@@ -198,37 +201,29 @@ class TestRequireProcessSafe:
 
 SYNC_POLICIES = [
     pytest.param({"concurrency": 1}, SyncPolicy(INLINE, None), id="one"),
-    pytest.param({"executor": "inline"}, SyncPolicy(INLINE, None), id="inline"),
-    pytest.param({"executor": "thread"}, SyncPolicy(THREAD, 1), id="thread"),
-    pytest.param({"executor": "process"}, SyncPolicy(PROCESS, 1), id="process"),
+    pytest.param(_INLINE, SyncPolicy(INLINE, None), id="inline"),
+    pytest.param(_THREAD, SyncPolicy(THREAD, 1), id="thread"),
+    pytest.param(_PROCESS, SyncPolicy(PROCESS, 1), id="process"),
     pytest.param({"concurrency": "auto"}, SyncPolicy(THREAD, THREADS), id="auto"),
     pytest.param(
-        {"executor": "inline", "concurrency": 4},
-        SyncPolicy(INLINE, None),
-        id="inline-4",
+        {**_INLINE, "concurrency": 4}, SyncPolicy(INLINE, None), id="inline-4"
+    ),
+    pytest.param({**_THREAD, "concurrency": 3}, SyncPolicy(THREAD, 3), id="thread-3"),
+    pytest.param(
+        {**_PROCESS, "concurrency": 2}, SyncPolicy(PROCESS, 2), id="process-2"
     ),
     pytest.param(
-        {"executor": "thread", "concurrency": 3}, SyncPolicy(THREAD, 3), id="thread-3"
-    ),
-    pytest.param(
-        {"executor": "process", "concurrency": 2},
-        SyncPolicy(PROCESS, 2),
-        id="process-2",
-    ),
-    pytest.param(
-        {"executor": "thread", "concurrency": "auto"},
+        {**_THREAD, "concurrency": "auto"},
         SyncPolicy(THREAD, THREADS),
         id="thread-auto",
     ),
     pytest.param(
-        {"executor": "process", "concurrency": "auto"},
+        {**_PROCESS, "concurrency": "auto"},
         SyncPolicy(PROCESS, PROCS),
         id="process-auto",
     ),
     pytest.param(
-        {"executor": "inline", "concurrency": "auto"},
-        SyncPolicy(INLINE, None),
-        id="inline-auto",
+        {**_INLINE, "concurrency": "auto"}, SyncPolicy(INLINE, None), id="inline-auto"
     ),
 ]
 
@@ -502,19 +497,13 @@ class TestPoolLifetime:
 
 ASYNC_POLICIES = [
     pytest.param({}, AsyncPolicy(None, False), id="default"),
-    pytest.param({"executor": "inline"}, AsyncPolicy(1, True), id="inline"),
-    pytest.param({"executor": "thread"}, AsyncPolicy(1, False), id="thread"),
+    pytest.param(_INLINE, AsyncPolicy(1, True), id="inline"),
+    pytest.param(_THREAD, AsyncPolicy(1, False), id="thread"),
     pytest.param({"concurrency": "auto"}, AsyncPolicy(LIMIT, False), id="auto"),
+    pytest.param({**_INLINE, "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"),
+    pytest.param({**_THREAD, "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"),
     pytest.param(
-        {"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"
-    ),
-    pytest.param(
-        {"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"
-    ),
-    pytest.param(
-        {"executor": "inline", "concurrency": "auto"},
-        AsyncPolicy(LIMIT, True),
-        id="inline-auto",
+        {**_INLINE, "concurrency": "auto"}, AsyncPolicy(LIMIT, True), id="inline-auto"
     ),
 ]
 

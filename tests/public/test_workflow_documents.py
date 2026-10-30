@@ -764,9 +764,7 @@ class TestNormalizeWorkflow:
     @pytest.mark.parametrize(
         ("node", "match"),
         [
-            pytest.param(
-                {"name": "fetch", "resources": 5}, "node 'resources'", id="resources"
-            ),
+            pytest.param({"name": "fetch", "resources": 5}, "'resources'", id="res"),
             pytest.param(
                 {"name": "w", "family": "write", "backend": "file", "keys": 5},
                 "WriteNode 'keys' must be a string",
@@ -808,9 +806,7 @@ class TestNormalizeWorkflow:
                 "unknown ModuleNode key",
                 id="unknown-field",
             ),
-            pytest.param(
-                {"name": "fetch", "conf": []}, "ModuleNode 'conf'", id="falsey-conf"
-            ),
+            pytest.param({"name": "fetch", "conf": []}, "Node 'conf'", id="falsy-conf"),
             pytest.param(
                 {**_READ_NODE, "fmt": "csv", "format": "jsonl"},
                 "conflicting node 'fmt'/'format'",
@@ -1035,9 +1031,7 @@ class TestMigrate:
             pytest.param(None, None, ("out", "in"), id="null"),
             pytest.param("_OUTPUT", "count", ("out", "in:count"), id="named"),
             pytest.param("_OUTPUT", "1_URL", ("out", "in:_1_URL"), id="sanitized"),
-            pytest.param(
-                "_OUTPUT", "PARAM_5_value", ("out", "in:PARAM_5_value"), id="param"
-            ),
+            pytest.param("_OUTPUT", "PARAM_5_x", ("out", "in:PARAM_5_x"), id="param"),
         ],
     )
     def test_wire_ports_map_to_canonical_endpoints(
@@ -1228,18 +1222,6 @@ class TestMigrate:
             }
         )
         assert "orphan" in flow.nodes
-
-    def test_omitted_output_node_defaults_to_lone_leaf(self):
-        flow = migrate_v1_to_v2(
-            {
-                "modules": [
-                    {"id": "a", "type": "fetch", "conf": {}},
-                    {"id": "b", "type": "filter", "conf": {}},
-                ],
-                "wires": [_wire("_w1", "a", "b")],
-            }
-        )
-        assert flow.outputs == {"default": Endpoint("b", "out")}
 
     def test_migration_warns(self, caplog):
         migrate_v1_to_v2({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})

@@ -184,8 +184,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
 
         >>> load_settings({"RIKO_NODE_THREADS": "8"}).node_threads
         8
-        >>> load_settings({"RIKO_NODE_THREADS": "many"}).node_threads
-        40
 
     """
     source = environ if env is None else env

@@ -9,7 +9,7 @@ live in their owning gameplans. This file consolidates the former
 
 ## Progress tracker (authoritative)
 
-Suite: **2832 passed / 82 xfailed**. The user commits.
+Suite: **2831 passed / 82 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1 and R3 were
 repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
