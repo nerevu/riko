@@ -127,6 +127,7 @@ class TestBeta:
 """
 
 _BACKSTOP = 30
+_BARE_PARAM = "from pytest import param\nV = [param(1)]"
 _LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
 _MARK = "@pytest.mark.timeout(5)"
 
@@ -1379,6 +1380,7 @@ SITE_CASES = [
     ),
     pytest.param(_case("...", prefix="V = [pytest.param(1)]"), 0, 1, id="without-id"),
     pytest.param(_case("...", "", 'V = [pytest.param(1, id="a")]'), 0, 0, id="with-id"),
+    pytest.param(_case("...", prefix=_BARE_PARAM), 0, 1, id="bare-param-without-id"),
 ]
 BACKSTOP_CASES = [
     pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),

@@ -66,6 +66,16 @@ from riko.base import load_settings
 ENV_OVERRIDES = [
     pytest.param("RIKO_NODE_THREADS", "many", "node_threads", 40, id="many"),
     pytest.param("RIKO_NODE_THREADS", "-1", "node_threads", 40, id="int-below-min"),
+    pytest.param(
+        "RIKO_FETCH_TIMEOUT_SECONDS", "2.5", "fetch_timeout", 2.5, id="near-miss"
+    ),
+    pytest.param(
+        "RIKO_FETCH",  # a comment keeps it open
+        "3",
+        "fetch",
+        3,
+        id="commented",
+    ),
 ]
 NAMES = ["alpha", "beta", "gamma"]
 
@@ -132,6 +142,11 @@ LEADS = [
     pytest.param("helpers", "build_pair body inlined in", id="inlined-helper"),
     pytest.param("helpers", "under different names: LABELS", id="value"),
     pytest.param("shapes", "test_ticks_two matches table test", id="row-candidate"),
+    pytest.param(
+        "rows",
+        "'near-miss' would be 92 columns on one line (4 over)",
+        id="near-miss-row",
+    ),
     pytest.param("shapes", "(small) tests/public/test_alpha.py", id="small-shapes"),
     pytest.param("unsupported", "_hidden via wrap x1", id="via-helper"),
     pytest.param("unsupported", "monkeypatch riko._config.LIMIT", id="monkeypatch"),
@@ -173,6 +188,10 @@ def test_doctest_sections_pair_a_doctest_with_its_pytest_twin(report):
 @pytest.mark.parametrize(("section", "fragment"), LEADS)
 def test_section_lists_the_lead(report, section, fragment):
     assert any(fragment in text for text in report[section]), report[section]
+
+
+def test_a_commented_row_is_never_joined(report):
+    assert not [text for text in report["rows"] if "commented" in text]
 
 
 def test_a_concept_named_class_is_not_an_unnamed_subject(report):

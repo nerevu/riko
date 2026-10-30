@@ -16,6 +16,11 @@ every line is a lead to read, not a verdict. Sections:
   (one parametrized table), within a class or across files; ``(small)`` marks short
   same-shape tests in one class; a standalone test that matches a parametrized test
   of its file (make it a row).
+- ``rows`` -- ``pytest.param`` rows split over several lines that would miss the line
+  length by at most ``NEAR_MISS`` columns once joined: a shorter id or ``match``
+  fragment, or a module alias for a repeated value, puts each on one line (prettify
+  already joins every row that fits). Rows with a comment or a multi-line string are
+  skipped.
 - ``overlaps`` -- test pairs in different files (or a test and a collected doctest)
   that share distinctive literals: inputs and expected values seen in few places.
   Module-level tables a test names are counted as that test's literals.
@@ -67,10 +72,14 @@ import json
 import os
 import re
 import sys
+import tokenize
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from io import StringIO
 from itertools import combinations, pairwise
 from pathlib import Path
+
+from typing_extensions import TypeIs
 
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
 TIERS = ("public", "internal", "functional")
@@ -85,9 +94,12 @@ MIN_VALUE = 20
 CROSS_SUBJECT_MIN = 3
 UBIQUITOUS = 6
 MAX_DOCTEST_EXAMPLES = 6
+LINE_LENGTH = 88
+NEAR_MISS = 8
 SECTIONS = (
     "helpers",
     "shapes",
+    "rows",
     "overlaps",
     "doctest-args",
     "doctest-raises",
@@ -104,6 +116,11 @@ REJECT_NAME = re.compile(
     r"cannot"
 )
 KIND_OVERRIDES: dict[str, int] = {}
+JOIN_SUBS = (
+    (re.compile(r"\s*\n\s*"), " "),
+    (re.compile(r"([(\[{]) "), r"\1"),
+    (re.compile(r",? ([)\]}])"), r"\1"),
+)
 QUOTED = re.compile(r"'([^']{5,})'|\"([^\"]{5,})\"")
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 BUILTINS = frozenset(dir(builtins))
@@ -467,7 +484,7 @@ class Raise:
     matches: tuple[str, ...]
 
 
-def is_param(node: ast.AST) -> bool:
+def is_param(node: ast.AST) -> TypeIs[ast.Call]:
     return isinstance(node, ast.Call) and get_leaf(node.func) == "param"
 
 
@@ -504,6 +521,41 @@ def gen_param_rows(
                 yield node
             elif isinstance(node, ast.Name):
                 yield from tables.get(node.id, [])
+
+
+def get_joined(segment: str) -> str | None:
+    """Gets a call joined onto one line; ``None`` for a comment or long string."""
+    tokens = list(tokenize.generate_tokens(StringIO(segment).readline))
+    unsafe = any(
+        token.type == tokenize.COMMENT
+        or (token.type == tokenize.STRING and token.start[0] != token.end[0])
+        for token in tokens
+    )
+    joined = segment
+
+    for pattern, repl in JOIN_SUBS:
+        joined = pattern.sub(repl, joined)
+
+    return None if unsafe else joined
+
+
+def gen_joinable_rows(files: list[TestFile]):
+    for file in files:
+        lines = file.source.splitlines()
+        for node in ast.walk(file.tree):
+            if not is_param(node) or node.end_lineno == node.lineno:
+                continue
+            segment = ast.get_source_segment(file.source, node) or ""
+            joined = get_joined(segment)
+            tail = lines[node.end_lineno - 1][node.end_col_offset :]
+            comma = 1 if tail.startswith(",") else 0
+            width = None if joined is None else node.col_offset + len(joined) + comma
+            over = None if width is None else width - LINE_LENGTH
+            if over is not None and 0 <= over <= NEAR_MISS:
+                ids = [k.value for k in node.keywords if k.arg == "id"]
+                label = ast.unparse(ids[0]) if ids else "row"
+                lead = f"{label} would be {width} columns on one line ({over} over)"
+                yield f"{file.rel}:{node.lineno} {lead}", [file.rel]
 
 
 def get_exceptions(node: ast.AST) -> set[str]:
@@ -1222,6 +1274,7 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
     return {
         "helpers": gen_helper_issues(root, files),
         "shapes": gen_shapes(files),
+        "rows": gen_joinable_rows(files),
         "overlaps": gen_overlaps(units, doc_units, min_shared),
         "doctest-args": gen_doctest_args(examples, rows, spread),
         "doctest-raises": gen_doctest_raises(examples, raises),
