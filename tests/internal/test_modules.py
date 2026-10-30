@@ -7,6 +7,7 @@ import asyncio
 import copy
 import itertools
 import pickle  # noqa: S403
+import re
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
@@ -67,7 +68,7 @@ from riko.runtime._pubsub import async_hub
 from riko.runtime._registry import Registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
-from riko.runtime._workflow_resolver import WorkflowResolver
+from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
 from riko.runtime._workflow_stores import (
     CompositeStore,
     DirectoryStore,
@@ -1473,6 +1474,52 @@ class TestEntryPointModules:
         assert calls["n"] == 1
 
 
+EMBED_CYCLES = [
+    pytest.param({"pipe_a": ["pipe_a"]}, "pipe_a -> pipe_a", id="direct"),
+    pytest.param(
+        {"pipe_a": ["pipe_b"], "pipe_b": ["pipe_a"]},
+        "pipe_a -> pipe_b -> pipe_a",
+        id="via",
+    ),
+    pytest.param({"pipe_a": [{"loop": "pipe_a"}]}, "pipe_a -> pipe_a", id="loop-embed"),
+    pytest.param(
+        {"pipe_a": ["pipe_b"], "pipe_b": ["pipe_c"], "pipe_c": ["pipe_b"]},
+        "pipe_b -> pipe_c -> pipe_b",
+        id="tail",
+    ),
+    pytest.param(
+        {"pipe_a": ["pipe_b"], "pipe_b": ["pipe_c"], "pipe_c": ["forever"]},
+        None,
+        id="chain",
+    ),
+]
+
+
+def _stored_resolver(
+    documents: dict[str, list[str | dict[str, str]]],
+) -> WorkflowResolver:
+    """Builds a resolver over stored workflows that name ``documents``' values."""
+
+    def node(dependency: str | dict[str, str]) -> dict[str, object]:
+        if isinstance(dependency, dict):
+            result: dict[str, object] = {
+                "name": "loop",
+                "embed": {"name": dependency["loop"]},
+            }
+        else:
+            result = {"name": dependency}
+
+        return result
+
+    modules = {
+        name: _build_resolved_workflow(
+            name, Workflow.parse({"nodes": [node(dep) for dep in deps]}), dispatcher
+        )
+        for name, deps in documents.items()
+    }
+    return WorkflowResolver(module_store=MappingStore(modules))
+
+
 class TestWorkflowResolver:
     def test_core_default_has_no_stored_workflows(self):
         """A bare (unconfigured) resolver finds no pipe_* module and no workflow."""
@@ -1552,6 +1599,21 @@ class TestWorkflowResolver:
     def test_missing_stored_workflow_interfaces_raise(self):
         with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
             WorkflowResolver().require_interfaces("pipe_missing")
+
+    @pytest.mark.parametrize(("documents", "cycle"), EMBED_CYCLES)
+    def test_require_rejects_a_stored_workflow_that_embeds_itself(
+        self, documents, cycle
+    ) -> None:
+        """A stored workflow that reaches itself is refused instead of recursing."""
+        resolver = _stored_resolver(documents)
+
+        if cycle is None:
+            assert resolver.require("pipe_a").type == "pipe"
+        else:
+            match = rf"embeds itself \({re.escape(cycle)}\)\. .* from a 'loop' node"
+
+            with pytest.raises(InvalidPipelineError, match=match):
+                resolver.require("pipe_a")
 
 
 class TestPackageStore:

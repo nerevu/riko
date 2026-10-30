@@ -359,7 +359,8 @@ stream, or nothing, plus `context`), so hand-written `pyworkflows` modules quali
 `compile_workflow` wraps the type. The pipes `build_workflow_pipes` returns branch on `Context.mode` with
 `RUN` (or no context) first, so each mode matches one branch: `DESCRIBE` returns
 `{"inputs": …, "dependencies": […]}` (the async pipe yields it once), `DESCRIBE_INPUTS` the declared inputs,
-`DESCRIBE_DEPENDENCIES` the dependency names; the hand-written probes mirror this with module-level
+`DESCRIBE_DEPENDENCIES` the dependency names (`Workflow.dependencies`: node and loop-embed module names,
+emitted by both `compile_workflow` and the document-module builder); the hand-written probes mirror this with module-level
 `INPUTS`/`DEPENDENCIES`. Producers wrap (`compile_workflow`, `PackageStore.load`, `MappingStore`, the document-module
 builder) while inputs stay wide (`MappingStore` takes plain `types.ModuleType`s). `PackageStore` accepts a
 package or its import path and imports it at construction (`ModuleNotFoundError` for a bad path,
@@ -389,7 +390,11 @@ one name in a group raise `ValueError` naming both distributions when that name 
 (`_require_unique`), while an identical entry point listed twice (an editable install) dedupes and
 other names stay resolvable. A registered `WorkflowDocument` directory resolves by
 name: `WorkflowResolver` (given the dispatcher via `register_dispatcher` in `_resolver.py`) builds the document's
-`pipe`/`async_pipe` with `build_workflow_pipes`, after the module store. The target registry stores target
+`pipe`/`async_pipe` with `build_workflow_pipes`, after the module store. `WorkflowResolver.load` then
+refuses a stored workflow that reaches itself: starting from the loaded module, it walks the `pipe_<id>`
+names in each reachable module's `DEPENDENCIES` into a local graph (re-derived per load; only built
+document modules are cached) and raises `InvalidPipelineError` naming the cycle from `get_cycle`
+(`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target
 classes keyed by `backend` and resolves a `Backends` to its target class. The target vocabulary (base
 `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`, `WriteCapabilities`, `FileTarget`,
 `TargetRegistry`, `register_target`) is on the extension surface (`riko.ext`); the `Backends` enum is on

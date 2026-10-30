@@ -265,13 +265,27 @@ def _inputs_workflow() -> Workflow:
     return Workflow(nodes=[node], outputs=outputs, inputs=DESCRIBED_INPUTS)
 
 
+DESCRIBED_DEPENDENCIES = [
+    pytest.param(
+        Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF).workflow,
+        ["itembuilder", "rename"],
+        id="nodes",
+    ),
+    pytest.param(
+        Workflow.parse({"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}),
+        ["loop", "tokenizer"],
+        id="loop-embed",
+    ),
+]
+
+
 class TestWorkflowModuleDescribe:
-    def test_generated_pipe_describes_dependencies(self, tmp_path: Path):
+    @pytest.mark.parametrize(("flow", "expected"), DESCRIBED_DEPENDENCIES)
+    def test_generated_pipe_describes_dependencies(self, flow, expected, tmp_path):
         """Describing dependencies reports the workflow's module names, sorted."""
-        pipeline = Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF)
-        module = _build(pipeline.workflow, "pipe_described", tmp_path)
+        module = _build(flow, "pipe_described", tmp_path)
         context = Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
-        assert list(module.pipe(context=context)) == ["itembuilder", "rename"]
+        assert list(module.pipe(context=context)) == expected
 
     @async_test
     async def test_generated_async_pipe_describes_dependencies(self, tmp_path: Path):

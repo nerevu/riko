@@ -226,6 +226,10 @@ Changes
   lists the accepted values, e.g., ``Invalid ExecutionMode: 'bogus'. Expected one of
   run, describe_inputs, describe_dependencies, describe``.
 
+- Describing a workflow's dependencies (``ExecutionMode.DESCRIBE_DEPENDENCIES``) now
+  also lists the modules its ``loop`` nodes embed, e.g., ``["loop", "tokenizer"]``
+  rather than ``["loop"]``.
+
 - Renamed ``riko.async_map``'s ``connections`` parameter to ``limit``.
 
 - Renamed the ``urlparse`` module's ``parse_key`` configuration to ``normalize_key``.
@@ -291,6 +295,10 @@ Fixes
   reaches the caller intact. Errors also no longer repeat their message.
 
 - Concurrent async fetches no longer drop legitimate ``None`` results.
+
+- A stored workflow whose nodes embed it now raises ``InvalidPipelineError`` instead of
+  recursing (or, in an async run, raising a cancel-scope error). Move the workflow's
+  steps into a separate stored workflow and run that from a ``loop`` node instead.
 
 - Fetching (e.g., with ``fetchpage``) text with no newline or only carriage-return line
   endings in a sync run no longer inserts a newline between every character or drops
