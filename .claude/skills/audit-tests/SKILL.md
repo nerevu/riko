@@ -60,10 +60,14 @@ Add these only when their dimension is in scope:
 
 - **Tripwires:** `pytest --runxfail -q --no-cov -rf <files>` shows *why* each
   strict xfail fails today.
-- **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times; keep
-  each test's worst `call` time.
+- **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times, each
+  saved to a file; `uv run --active python .claude/skills/tidy/fit_bounds.py FILE...`
+  keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok.
 - **Unique coverage:** `COVERAGE_CORE=ctrace pytest --cov=riko --cov-context=test`
   ranks suspects that add no unique lines. It only ranks; it never decides.
+  The same data answers a proposed deletion: `uv run --active python
+  .claude/skills/tidy/covdiff.py --data .coverage CUT... -- COVER...` lists the
+  lines the cut tests execute that their covering tests never do.
 
 Before fanning out, estimate the cost: lines to read × about 12 tokens × the number of
 agents rereading them. Size each file group to fit a 100k-token agent: about 1k test
@@ -135,7 +139,7 @@ inspect any scripts it wrote and promote each one, fold it into
 7. **Helpers.** Single-user `tests/_*.py` names, identical definitions across
    files, 3+ inline copies that should be one helper, and placement.
 8. **Timeout bounds.** `manage lint --tests` checks ladder membership and
-   nesting; the audit measures the fit: every bound is the smallest ladder step
+   nesting; the audit measures the fit (`fit_bounds.py`): every bound is the smallest ladder step
    at least five times the worst of the three `--durations` runs above. Map a
    marker to the `def` that *follows* it, never by line range.
 9. **Stale citations and names.** Test names that cite nothing (`test_documented_*`),
@@ -183,7 +187,7 @@ gameplan cites by name as a guard.
   run `--runxfail`) and show the test still passes, or fails for the wrong reason.
 - **Fold:** list the rows, the ids, and the estimated lines saved. Every removed
   test maps to a row, and no row's data changes silently.
-- **Deletion:** flag any line that only the cut test executes. The ratchet total
+- **Deletion:** flag any line that only the cut test executes (`covdiff.py`). The ratchet total
   can't see a deleted test whose lines other tests also reach, and earlier
   "mechanical" slices lost 14 lines that way.
 - **Speed and bounds:** cite the measured times, not estimates.
