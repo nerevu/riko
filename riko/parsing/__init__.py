@@ -1,13 +1,7 @@
-"""Configuration and document parsing helpers."""
+# vim: sw=4:ts=4:expandtab
+"""
+Private configuration and document parsing helpers.
 
-from .config import conf_is_dynamic, get_field, get_skip, resolve_conf
-from .documents import any2dict, get_text
-
-__all__ = [
-    "any2dict",
-    "conf_is_dynamic",
-    "get_field",
-    "get_skip",
-    "get_text",
-    "resolve_conf",
-]
+These helpers serve the built-in modules; they are internal implementation details
+and are not part of any supported import surface.
+"""

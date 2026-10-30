@@ -7,12 +7,3 @@ execution plan into a run. Each execution owns the exit stack and sync/async bri
 for that run; these are internal implementation details and are not part of any
 supported import surface.
 """
-
-from __future__ import annotations
-
-from riko.types._events import EventSink
-
-from ._async_execution import AsyncExecution
-from ._sync_execution import SyncExecution
-
-__all__ = ["AsyncExecution", "EventSink", "SyncExecution"]

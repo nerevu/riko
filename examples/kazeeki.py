@@ -21,8 +21,8 @@ from pprint import pprint
 from typing import TYPE_CHECKING
 
 from riko import Pipeline, async_chain, get_path
+from riko.types import CallOptions
 from riko.types.modules import (
-    CallOptions,
     CurrencyFormatConf,
     CurrencyFormatRawConf,
     ExchangeRateConf,
