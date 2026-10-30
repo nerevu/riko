@@ -50,6 +50,11 @@ every line is a lead to read, not a verdict. Sections:
   (CLI runners, examples, stored fixture workflows).
 - ``doctest-balance`` -- docstrings with many doctest examples, and the tests whose
   tables name one of their callees (move the edge cases into a table).
+- ``processes`` -- tests that start a subprocess (``run_module``, ``run_python``,
+  ``subprocess.*``, ``runpytest_subprocess``) with no reason a process is needed: no
+  ``entry_point``/``cwd``/``env``/``hash_seed`` keyword and no docstring naming one
+  (``python -m``, a console script or entry point, a fresh process). Run it
+  in-process, or say why it needs a process so a later conversion keeps it.
 
 Both doctest sections miss rows given as a bare list with ``ids=[...]`` and doctest
 constants reachable only through a variable, and a ``match`` given as an
@@ -81,6 +86,7 @@ from pathlib import Path
 
 from typing_extensions import TypeIs
 
+_REASONS = r"python -m|console script|entry point|fresh process|own process|subprocess"
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
 TIERS = ("public", "internal", "functional")
 DOCTEST_ROOTS = ("riko", "examples")
@@ -96,6 +102,7 @@ UBIQUITOUS = 6
 MAX_DOCTEST_EXAMPLES = 6
 LINE_LENGTH = 88
 NEAR_MISS = 8
+
 SECTIONS = (
     "helpers",
     "shapes",
@@ -109,24 +116,31 @@ SECTIONS = (
     "placement",
     "tier",
     "doctest-balance",
+    "processes",
 )
+
 LIMITED = frozenset({"overlaps", "doctest-args", "doctest-raises", "doctest-balance"})
+
 REJECT_NAME = re.compile(
     r"reject|raise|refus|requir|invalid|error|fail|unsupported|bad|missing|must|"
     r"cannot"
 )
+
 KIND_OVERRIDES: dict[str, int] = {}
+
 JOIN_SUBS = (
     (re.compile(r"\s*\n\s*"), " "),
     (re.compile(r"([(\[{]) "), r"\1"),
     (re.compile(r",? ([)\]}])"), r"\1"),
 )
+
 QUOTED = re.compile(r"'([^']{5,})'|\"([^\"]{5,})\"")
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 BUILTINS = frozenset(dir(builtins))
 FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 API_SURFACE = "riko/base/_api_surface.py"
 PUBLIC_MODULES = frozenset({"riko.coercion._configs", "riko.types.modules"})
+
 E2E_NAMES = frozenset(
     {
         "CliRunner",
@@ -142,8 +156,17 @@ E2E_NAMES = frozenset(
         "main",
     }
 )
+
 PATCH_CALLS = frozenset({"setattr", "delattr", "setitem"})
 E2E_STR = re.compile(r"(^|[/_])(pipe_|workflows/|examples)|\.json$")
+
+SPAWN_CALLS = frozenset(
+    {"run_module", "run_python", "runpytest_subprocess", "check_output", "Popen"}
+)
+
+PROCESS_KEYWORDS = frozenset({"entry_point", "cwd", "env", "hash_seed"})
+PROCESS_REASON = re.compile(_REASONS, re.IGNORECASE)
+
 WORD_STOP = frozenset(
     {"title", "content", "description", "value", "items", "utf-8", "error"}
 )
@@ -1247,6 +1270,35 @@ def gen_tier_issues(files: list[TestFile]):
                 yield f"{file.rel}:{cls.lineno} {cls.name}: {message}", [file.rel]
 
 
+def is_spawn(node: ast.AST) -> TypeIs[ast.Call]:
+    if isinstance(node, ast.Call):
+        func = node.func
+        is_run = (
+            isinstance(func, ast.Attribute)
+            and func.attr == "run"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "subprocess"
+        )
+        spawns = is_run or get_leaf(func) in SPAWN_CALLS
+    else:
+        spawns = False
+
+    return spawns
+
+
+def gen_process_issues(files: list[TestFile]):
+    for file in files:
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                calls = [node for node in ast.walk(func) if is_spawn(node)]
+                keywords = {kw.arg for call in calls for kw in call.keywords}
+                reason = PROCESS_REASON.search(ast.get_docstring(func) or "")
+                if calls and not (keywords & PROCESS_KEYWORDS or reason):
+                    lead = "starts a process with no stated reason (in-process?)"
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                    yield text, [file.rel]
+
+
 def where(root: Path, *names: str) -> int:
     """Prints each test file's ``path::Class[::method]`` matching a name."""
     found = 0
@@ -1284,6 +1336,7 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
         "placement": gen_placement(files, load_defined(root)),
         "tier": gen_tier_issues(files),
         "doctest-balance": gen_doctest_balance(examples, rows, spread),
+        "processes": gen_process_issues(files),
     }
 
 

@@ -138,6 +138,21 @@ class TestReiteration:
     def test_twice(self):
         assert shared() == shared()
 """
+SCRIPT = """\
+from tests import run_module
+
+
+class TestRunPipe:
+    def test_spawns(self):
+        assert run_module("runpipe", "demo")
+
+    def test_entry_point(self):
+        assert run_module("runpipe", "demo", entry_point=True)
+
+    def test_module_form(self):
+        \"\"\"The ``python -m`` form runs.\"\"\"
+        assert run_module("runpipe", "demo")
+"""
 LEADS = [
     pytest.param("helpers", "build_pair body inlined in", id="inlined-helper"),
     pytest.param("helpers", "under different names: LABELS", id="value"),
@@ -155,6 +170,7 @@ LEADS = [
     pytest.param("placement", "below its first user TestTicks;", id="several-users"),
     pytest.param("placement", "TestGizmo: never names Gizmo", id="unnamed-subject"),
     pytest.param("doctest-balance", "ticks: 6 examples; tables:", id="balance"),
+    pytest.param("processes", "TestRunPipe::test_spawns: starts", id="process"),
 ]
 
 
@@ -165,11 +181,13 @@ def report(tmp_path):
     (tmp_path / "riko" / "base").mkdir(parents=True)
     tier.mkdir(parents=True)
     public.mkdir()
+    (tmp_path / "tests" / "functional").mkdir()
     (tmp_path / "riko" / "_config.py").write_text(CONFIG)
     (tmp_path / "riko" / "base" / "_api_surface.py").write_text(SURFACE)
     (tmp_path / "tests" / "_helpers.py").write_text(HELPERS)
     (tier / "test_values.py").write_text(VALUES)
     (public / "test_alpha.py").write_text(ALPHA)
+    (tmp_path / "tests" / "functional" / "test_script.py").write_text(SCRIPT)
     sections = overlap_scan.build_sections(tmp_path, 2)
     return {section: [text for text, _ in found] for section, found in sections.items()}
 
@@ -192,6 +210,10 @@ def test_section_lists_the_lead(report, section, fragment):
 
 def test_a_commented_row_is_never_joined(report):
     assert not [text for text in report["rows"] if "commented" in text]
+
+
+def test_a_process_with_a_stated_reason_is_not_a_lead(report):
+    assert len(report["processes"]) == 1, report["processes"]
 
 
 def test_a_concept_named_class_is_not_an_unnamed_subject(report):
