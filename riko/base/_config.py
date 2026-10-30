@@ -189,17 +189,17 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     defaults = Settings()
     return Settings(
         concurrency_limit=_env_int(
-            source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit
+            source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit, minimum=1
         ),
         node_threads=_env_int(
             source, "RIKO_NODE_THREADS", defaults.node_threads, minimum=0
         ),
         streaming_threshold=_env_int(
-            source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold
+            source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold, minimum=0
         ),
         encoding=_env_str(source, "RIKO_ENCODING", defaults.encoding),
         discovery_timeout=_env_int(
-            source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout
+            source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout, minimum=1
         ),
         fetch_timeout=_env_float(source, "RIKO_FETCH_TIMEOUT", defaults.fetch_timeout),
         shutdown_timeout=_env_float(

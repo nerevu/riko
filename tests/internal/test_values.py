@@ -989,6 +989,13 @@ _INVALID: list[tuple[Callable[..., object], object]] = [
 
 ENV_OVERRIDES = [
     pytest.param("RIKO_NODE_THREADS", "-1", "node_threads", 40, id="int-below-min"),
+    pytest.param("RIKO_CONCURRENCY_LIMIT", "0", "concurrency_limit", 16, id="limit-0"),
+    pytest.param("RIKO_DISCOVERY_TIMEOUT", "0", "discovery_timeout", 10, id="disc-0"),
+    pytest.param(
+        "RIKO_STREAMING_THRESHOLD", "-5", "streaming_threshold", 1024**2, id="neg-int"
+    ),
+    pytest.param("RIKO_FETCH_TIMEOUT", "2.5", "fetch_timeout", 2.5, id="fetch"),
+    pytest.param("RIKO_FETCH_TIMEOUT", "-1", "fetch_timeout", 30.0, id="fetch-neg"),
     pytest.param(
         "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
     ),

@@ -92,8 +92,10 @@ New
 
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``, ``RIKO_DISCOVERY_TIMEOUT``,
-  ``RIKO_EXCHANGE_API``, ``RIKO_NODE_THREADS``, ``RIKO_PARSED_DATE_CACHE_SIZE``,
-  ``RIKO_SHIPPED_CALL_CACHE_SIZE``, and ``RIKO_SHUTDOWN_TIMEOUT``.
+  ``RIKO_FETCH_TIMEOUT``, ``RIKO_EXCHANGE_API``, ``RIKO_NODE_THREADS``,
+  ``RIKO_PARSED_DATE_CACHE_SIZE``, ``RIKO_SHIPPED_CALL_CACHE_SIZE``, and
+  ``RIKO_SHUTDOWN_TIMEOUT``. An out-of-range value (e.g., ``RIKO_CONCURRENCY_LIMIT=0``)
+  keeps the default with a warning rather than failing a later run.
 
 Changes
 ~~~~~~~

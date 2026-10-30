@@ -107,6 +107,21 @@ async_url_open(...)` with `_io.auto_close` (close-on-iteration), never `async wi
 Incremental `httpx.stream()` body reads and `AsyncClient` reuse are **Partial** (not
 implemented). Sync `Fetch` differs — its non-memoized path streams `r.raw` incrementally.
 
+Every URL fetch is bounded by `settings.fetch_timeout` (`RIKO_FETCH_TIMEOUT`, 30 s): the sync
+`opener` family (`riko/io/_sync.py`) passes it to `requests.get` as the per-request timeout, and
+`async_url_open`/`async_url_read` (`riko/io/_async.py`) pass it to `async_get`
+(`riko/bado/_util.py`). Sync and async read `0` or `inf` as no timeout (`None` to the client). A
+stalled server raises `requests.exceptions.Timeout` (sync) or `httpx.TimeoutException` (async,
+re-exported as `TimeoutException` from `riko/bado/_backend.py` so tests need no direct `httpx`
+import).
+
+`RIKO_*` overrides are read once by `load_settings` (`riko/base/_config.py`) into the frozen
+`Settings`. `_env_int` takes an optional `minimum` (`RIKO_CONCURRENCY_LIMIT` and
+`RIKO_DISCOVERY_TIMEOUT` ≥ 1; `RIKO_NODE_THREADS`, `RIKO_STREAMING_THRESHOLD`,
+`RIKO_SHIPPED_CALL_CACHE_SIZE`, and `RIKO_PARSED_DATE_CACHE_SIZE` ≥ 0) and `_env_float` rejects
+negative and NaN values; a malformed or out-of-range value logs a warning and keeps the default, so
+a bad environment never fails a later run.
+
 Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract `Reencoder` base, whose `join_char` is the empty value of its output type. An empty source reads as empty. A decoded source whose raw first line does not end in the encoded platform newline (a single unterminated line, carriage-return-only endings, or a multi-byte newline encoding such as UTF-16, whose `\n` byte falls mid-character) is re-split lazily by `_gen_lines`: decoded chunks are buffered and split at every `\r\n`/`\r`/`\n` (`LINE_BREAKS`), a trailing `\r` is held for the next chunk, every line but the last gets the platform newline, and an empty last line is dropped, so `read()`, `read(n)`, `readline`, and iteration agree; iterating or calling `bytes()` after `read(n)` resumes with the rest of the current line. Any other source passes through untranslated, so a `\r` beside a `\n` stays raw on the sync path while async `TextIOWrapper` translates it (owned by [bado-anyio § 2c](gameplans/bado-anyio-alignment.md#2c-encoding-resolution-precedence-syncasync-parity)). Re-encoding to bytes passes the encoded stream through unsplit. `remove_BOM=True` strips one `U+FEFF` from the decoded text (`_strip_bom`, first non-empty chunk) rather than the raw bytes, so it works for any codec. Decode errors surface on read; a failure while the reencoder is opening closes its source/owner.
 
 **Typing boundary.** Parser outputs are generic over `ItemOrValue`. Processor and operator
