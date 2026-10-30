@@ -29,7 +29,7 @@ from ._lint_escapes import ESCAPES, gen_escape_counts
 from ._lint_literals import gen_literal_issues
 from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
-from ._lint_tests import gen_layout_issues
+from ._lint_tests import gen_global_bound_issues, gen_layout_issues, get_backstop
 from ._ratchet import ratchet_ceiling
 
 if TYPE_CHECKING:
@@ -150,8 +150,17 @@ _lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
 def _lint_tests() -> int:
-    """Checks the test suite against its tier layout and generated indexes."""
-    issues = list(gen_layout_issues(TESTS_DIR))
+    """Checks the test suite against its tier layout, generated indexes, and bounds."""
+    pyproject = ROOT_DIR / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+
+    if (backstop := get_backstop(text)) is None:
+        raise RuntimeError("pyproject.toml sets no [tool.pytest.ini_options] timeout")
+
+    issues = [
+        *gen_global_bound_issues(text, pyproject),
+        *gen_layout_issues(TESTS_DIR, backstop),
+    ]
 
     for issue in issues:
         print(issue)

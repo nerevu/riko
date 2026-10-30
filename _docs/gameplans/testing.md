@@ -133,6 +133,14 @@ Enforcement:
   index (`manage codegen --tests` regenerates it), a subject owned by two files, a top-level `test_*`
   function, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
   module inside a tier, or a stray folder; it prints size advice without failing.
+  It also fails on a test bound off the ladder in `tests/__init__.py` (a `timeout` marker, a
+  `fail_after`/`move_on_after` bound, a `wait`/`join`/`result` timeout, and the `timeout`/
+  `faulthandler_timeout` globals, `faulthandler_timeout` below `timeout`), an inner bound not below
+  the test's outer one (its smallest `timeout` marker, else the `pyproject.toml` backstop), a `sleep`
+  on the test's own path that lasts as long as that outer bound, and a test that reads a tracked
+  doc (a path built from `ROOT_DIR`/`DOCS_DIR`/`PACKAGE_DIR`/`TESTS_DIR`/`__file__` naming
+  `_docs`, `docs`, or a `.md`/`.rst` file, or a `Path`/`open` of a `.md`/`.rst` name), the §1
+  rule that Markdown is never pytest input.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no

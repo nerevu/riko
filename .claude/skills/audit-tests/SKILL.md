@@ -26,7 +26,8 @@ them in the report, cite them:
 | scanner sections and thresholds; mover modes | headers of `.claude/skills/tidy/overlap_scan.py` and `move_tests.py` |
 
 `manage lint --tests` already enforces indexing, `Test<Subject>` classes, no
-top-level tests, no private imports in `public/`, and size advice. Don't report
+top-level tests, no private imports in `public/`, size advice, bounds on the
+ladder and below their outer bound, and no tracked-doc reads. Don't report
 what the lint catches; run it and cite any failure once.
 
 ## 1. Resolve the scope
@@ -87,10 +88,13 @@ inspect any scripts it wrote and promote each one, fold it into
    - two tests asserting opposite outcomes for one pending feature;
    - a "…_once" test that never counts.
 2. **Tests that end only by timeout.** Look for:
-   - blocking work that outlasts its backstop, so a regression ends by the timeout
-     firing or passes on its own;
+   - blocking work inside a nested coroutine or the code under test that outlasts
+     its backstop, so a regression ends by the timeout firing or passes on its own;
    - an operation with no `fail_after`;
    - a process-spawning test with no `timeout` marker.
+
+   `manage lint --tests` flags a literal `sleep` on the test's own path that lasts
+   as long as its marker or backstop; the shapes above are the audit's.
 
    A test guarding "stops promptly" needs blocking work longer than its
    elapsed-time assertion but shorter than the backstop.
@@ -120,14 +124,18 @@ inspect any scripts it wrote and promote each one, fold it into
    move first, then split by concept). Also a **test that should be a lint**: its
    assertion's input is a tracked Markdown or prose file (not a `tmp_path` fixture,
    generated Python, or an RST doctest), so editing text rather than code fixes a
-   failure. Grep `tests/` for `_docs/`, `.md`, `ROOT_DIR /`, and `read_text(` and
-   open each hit. The fix is an offender function under `manage lint --docs` plus a
-   fixture-text unit test of it (`testing.md` §1).
+   failure. `manage lint --tests` flags a doc path built from `ROOT_DIR`,
+   `DOCS_DIR`, `PACKAGE_DIR`, `TESTS_DIR`, or `__file__`, and a `Path`/`open` of a
+   `.md`/`.rst` name; grep `tests/` for what it misses (`os.path.join`, a path held
+   in a variable): `_docs/`, `.md`, and `read_text(`, and open each hit. The fix
+   is an offender function under `manage lint --docs` plus a fixture-text unit
+   test of it (`testing.md` §1).
 7. **Helpers.** Single-user `tests/_*.py` names, identical definitions across
    files, 3+ inline copies that should be one helper, and placement.
-8. **Timeout bounds.** Every bound meets the ladder in the `tests/__init__.py`
-   docstring, measured with the three `--durations` runs above. Map a marker to the
-   `def` that *follows* it, never by line range.
+8. **Timeout bounds.** `manage lint --tests` checks ladder membership and
+   nesting; the audit measures the fit: every bound is the smallest ladder step
+   at least five times the worst of the three `--durations` runs above. Map a
+   marker to the `def` that *follows* it, never by line range.
 9. **Stale citations and names.** Test names that cite nothing (`test_documented_*`),
    old verbs in test names, and `_docs/` citations of tests that moved or were
    deleted (`lint --docs` checks `path::Class::test`; it misses prose mentions).
