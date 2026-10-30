@@ -5,24 +5,26 @@ Provides public API tests: tests that use only supported names.
 
 Index (file, then the subjects it owns, in file order):
 
-    test_callable_nodes.py    CallableNodes
-    test_modules.py           Input, FetchModules, Fetchdata, Fetchtable,
-                              Xpathfetchpage, Filter, Rename, Regex, Slugify, Join,
-                              Sort, Send, AsyncAggregate, RequiredOperands, ListModules,
-                              ModuleMetadata, Processor, AsyncOperator, EnumMemberName,
-                              GenerateModuleNames
-    test_pipeline.py          PipelineConstruction, PipelineChaining, ModuleNameEnum,
-                              PipelineIteration, OutputParity, Reiteration, Close,
-                              Failure, AsyncSourceAdapter, Alist, AsyncMap, FanIn,
-                              WithExecution, ExecutionSettings, AsyncBoundedParallel,
-                              AsyncFanInParallel, ContextMode, ContextImmutability,
-                              Context, Resource, EnvironmentBinding, Subscriptions,
-                              Split, ConditionalNodes, PipelineSeeding, PipelineStream
-    test_workflow.py          Workflow, NodeFamily, Nodes, CallableNode, WorkflowParse,
-                              PipeDag, NormalizeWorkflow, RequireRunnableOnly,
-                              CallableNodeDocuments, Validate, Migrate, Serialize,
-                              WorkflowDocumentResolution, CompileWorkflow
-    test_write.py             Write, PipelineWriteDefinition, PipelineWrite,
-                              ExportFormats, ExportPipeline, ExportFinance,
-                              AsyncWriteIterables
+    test_callable_nodes.py        CallableNodes
+    test_modules.py               Input, FetchModules, Fetchdata, Fetchtable,
+                                  Xpathfetchpage, Filter, Rename, Regex, Slugify, Join,
+                                  Sort, Send, AsyncAggregate, RequiredOperands,
+                                  ListModules, ModuleMetadata, Processor, AsyncOperator,
+                                  EnumMemberName, GenerateModuleNames
+    test_pipeline.py              PipelineConstruction, PipelineChaining,
+                                  ModuleNameEnum, PipelineIteration, OutputParity,
+                                  Reiteration, Close, Failure, AsyncSourceAdapter,
+                                  Alist, AsyncMap, FanIn, WithExecution,
+                                  ExecutionSettings, AsyncBoundedParallel,
+                                  AsyncFanInParallel, ContextMode, Context, Resource,
+                                  EnvironmentBinding, Subscriptions, Split,
+                                  ConditionalNodes, PipelineSeeding, PipelineStream
+    test_workflow.py              Workflow, NodeFamily, Nodes, ResourceBinding,
+                                  CallableNode, RequireRunnableOnly, Validate,
+                                  WorkflowDocument, CompileWorkflow
+    test_workflow_documents.py    WorkflowParse, PipeDag, NormalizeWorkflow,
+                                  CallableNodeDocuments, Migrate, Serialize
+    test_write.py                 Write, PipelineWriteDefinition, PipelineWrite,
+                                  Formats, ExportFormats, ExportPipeline, ExportFinance,
+                                  AsyncWriteIterables
 """

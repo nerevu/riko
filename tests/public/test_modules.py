@@ -60,13 +60,29 @@ from riko.types.modules import (
 )
 from tests import async_test
 from tests._lifecycle import LOOKAHEAD
-from tests._loopback import URL, stub_async_get
+from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
     from pathlib import Path
 
     from riko.types._streams import Item
+
+
+_OMITTED = object()
+
+FETCH_MODULES = [
+    "fetch",
+    "fetchdata",
+    "fetchpage",
+    "fetchsitefeed",
+    "fetchtable",
+    "fetchtext",
+]
+
+MISSING_URL = "file:///nonexistent.xml"
+JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
+XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -107,17 +123,6 @@ class TestInput:
         assert next(input_pipe(conf=conf)) == 0
 
 
-FETCH_MODULES = [
-    "fetch",
-    "fetchdata",
-    "fetchpage",
-    "fetchsitefeed",
-    "fetchtable",
-    "fetchtext",
-]
-MISSING_URL = "file:///nonexistent.xml"
-
-
 class TestFetchModules:
     @pytest.mark.parametrize("name", FETCH_MODULES)
     def test_an_unopenable_url_raises(self, name):
@@ -135,11 +140,6 @@ class TestFetchModules:
             await alist(pipeline)
 
 
-JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
-
-XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
-
-
 async def _titles(conf):
     stream = async_fetchdata_pipe(conf=conf)
     return [item.get("title") async for item in stream]
@@ -151,12 +151,12 @@ class TestFetchdata:
     @pytest.mark.parametrize(
         ("content", "content_type"), [(JSON, "application/json"), (XML, "text/xml")]
     )
+    @pytest.mark.simulated_network
     @async_test
-    async def test_file_contents(self, monkeypatch, content, content_type):
-        monkeypatch.setattr(
-            "riko.io._async.async_get", stub_async_get(content, content_type)
-        )
-        result = await _titles({"url": URL, "path": "items"})
+    async def test_file_contents(self, content, content_type):
+        with loopback_url(content, content_type=content_type, path="data") as url:
+            result = await _titles({"url": url, "path": "items"})
+
         assert result == ["A", "B"]
 
     @async_test
@@ -179,14 +179,15 @@ class TestFetchdata:
         reason="splitext keeps the query string in the extension ('json?token=abc'), "
         "so the JSON parser is never selected ",
     )
+    @pytest.mark.simulated_network
     @async_test
-    async def test_query_string_does_not_defeat_extension(self, monkeypatch):
+    async def test_query_string_does_not_defeat_extension(self):
         """Detect URL formats from extensions even when queries are present."""
-        monkeypatch.setattr(
-            "riko.io._async.async_get", stub_async_get(JSON, "application/json")
-        )
-        url = "https://example.test/export.json?token=abc"
-        result = await _titles({"url": url, "path": "items"})
+        path = "export.json?token=abc"
+
+        with loopback_url(JSON, content_type="application/json", path=path) as url:
+            result = await _titles({"url": url, "path": "items"})
+
         assert result == ["A", "B"]
 
     @pytest.mark.xfail(
@@ -509,9 +510,6 @@ class TestAsyncAggregate:
         """A sync func gets the collected items; an async func gets the async stream."""
         result = async_aggregate_pipe(_agen_xs(), func=func)
         assert [item async for item in result] == [{"n": 2}]
-
-
-_OMITTED = object()
 
 
 class TestRequiredOperands:

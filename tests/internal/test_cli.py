@@ -85,6 +85,146 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
 
+def _if(test: str, body: str = "import a", orelse: str = "") -> str:
+    tail = f"else:\n    {orelse}\n" if orelse else ""
+    return f"if {test}:\n    {body}\n{tail}"
+
+
+_TYPING = "[tool.riko.typing]\n"
+_TODAY = date(2026, 10, 27)
+_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
+_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
+_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_DATED = "any = 8\nany-lowered = 2026-10-27\n"
+_LOWERED = f"{_DATED}{_WINDOW}"
+_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
+_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
+_HOLDS = "9 uses hold the ceiling of 9."
+_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
+_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
+
+_DISCARDED = (
+    " CI discards this change; run the ratchet locally and commit pyproject.toml."
+)
+
+_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
+_MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
+_PRIVATE_MODULE = ["private module without a public API carries a module example"]
+_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
+
+_ALPHA = """
+class TestAlpha:
+    def test_one(self): ...
+
+
+class TestAsyncAlpha:
+    def test_one(self): ...
+
+
+class TestBeta:
+    def test_two(self): ...
+"""
+
+_BACKSTOP = 30
+_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
+_MARK = "@pytest.mark.timeout(5)"
+
+_ROW_MARK = (
+    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
+)
+
+_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
+_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
+_OPTIONS = "[tool.pytest.ini_options]\n"
+_SHARED = "basename is shared; rename one or allowlist the pair"
+_STALE_BASENAME = "allowlisted basename is no longer duplicated; remove it"
+_ANY = "from typing import Any\n"
+_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
+_UPWARD = "from riko.runtime.b import thing\n"
+_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+
+_TIMEOUT_SUITE = """
+import time
+
+import pytest
+
+
+@pytest.mark.timeout(0.5, method="signal")
+@pytest.mark.xfail(strict=True, reason="never ends")
+def test_hangs():
+    time.sleep(5)
+
+
+@pytest.mark.xfail(strict=True, reason="known defect")
+def test_fails():
+    assert False
+"""
+
+SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
+PYPROJECT = ROOT_DIR / "pyproject.toml"
+SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
+
+DISTRIBUTIONS = {
+    "dateutil": ["python-dateutil"],
+    "requests": ["requests"],
+    "lxml": ["lxml"],
+}
+
+PYPROJECT_TOML = """
+[project]
+dependencies = ["python-dateutil>=2", "requests"]
+
+[project.optional-dependencies]
+xml = ["lxml>=5", "requests"]
+
+[dependency-groups]
+lint = ["types-requests"]
+"""
+
+STALE = "the index is stale; run `manage codegen --tests`"
+ALPHA_ROW = "    test_alpha.py    Alpha, Beta\n"
+LONG = "".join(f"class TestSubject{n:02}: ...\n" for n in range(12))
+
+SUBJECTS = [
+    ", ".join(f"Subject{n:02}" for n in range(start, start + 6)) for start in (0, 6)
+]
+
+LONG_ROWS = f"{ALPHA_ROW}    test_long.py     {SUBJECTS[0]},\n{' ' * 21}{SUBJECTS[1]}\n"
+ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
+TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
+REQUESTS = "import requests\n"
+
+ONLY = (
+    "'python-dateutil' is a [project] dependency that nothing imports at run time; "
+    "import it outside TYPE_CHECKING or move it to a dependency group"
+)
+
+LXML = "import lxml\n"
+
+LOCK = """
+[[package]]
+name = "ruff"
+version = "0.16.10"
+"""
+
+HOOKS = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        additional_dependencies: [ruff==0.16.10]
+      - id: ruff-format
+        additional_dependencies: [ruff==0.16.9]
+"""
+
+WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
+TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
+LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
+ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
+
+
 def write(root: Path, path: str, text: str) -> None:
     target = root / path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -146,9 +286,6 @@ def _record_upgrade(
     monkeypatch.setattr(_upgrade, "_uv", "uv")
     monkeypatch.setattr(_upgrade, "call", call)
     return calls
-
-
-SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 
 
 class TestUpgradeCommand:
@@ -396,9 +533,6 @@ class TestLintCommand:
         assert calls == expected
 
 
-PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
-
-
 def _coverage_report(root: Path, uncovered: int) -> Path:
     report = root / "coverage.json"
     report.write_text(json.dumps({"totals": {"missing_lines": uncovered}}))
@@ -491,7 +625,6 @@ class TestCoverageRatchet:
         assert folders == []
 
 
-_TYPING = "[tool.riko.typing]\n"
 CEILING_TEXT_CASES = [
     pytest.param("x = 1\n", "x = 1\n\n[tool.riko.typing]\nany = 4\n", id="no-table"),
     pytest.param(f"{_TYPING}cast = 1\n", f"{_TYPING}any = 4\ncast = 1\n", id="no-key"),
@@ -509,21 +642,6 @@ CEILING_TEXT_CASES = [
 ]
 
 
-_TODAY = date(2026, 10, 27)
-_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
-_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
-_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
-_DATED = "any = 8\nany-lowered = 2026-10-27\n"
-_LOWERED = f"{_DATED}{_WINDOW}"
-_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
-_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
-_HOLDS = "9 uses hold the ceiling of 9."
-_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
-_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
-_DISCARDED = (
-    " CI discards this change; run the ratchet locally and commit pyproject.toml."
-)
-_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
 STALE_CASES = [
     pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
     pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
@@ -570,9 +688,6 @@ class TestCeilingRatchet:
         assert capsys.readouterr().out == f"{report}\n"
 
 
-SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
-
-
 class TestConsoleScripts:
     """Every console script names an importable callable."""
 
@@ -604,10 +719,6 @@ def _doctest(source: str) -> str:
     return f'def f():\n    """\n    Runs.\n\n    >>> {source}\n    """\n'
 
 
-_MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
-_PRIVATE_MODULE = ["private module without a public API carries a module example"]
-_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
-_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
 EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
@@ -1017,25 +1128,6 @@ class TestBindingLint:
         ]
 
 
-DISTRIBUTIONS = {
-    "dateutil": ["python-dateutil"],
-    "requests": ["requests"],
-    "lxml": ["lxml"],
-}
-
-
-PYPROJECT_TOML = """
-[project]
-dependencies = ["python-dateutil>=2", "requests"]
-
-[project.optional-dependencies]
-xml = ["lxml>=5", "requests"]
-
-[dependency-groups]
-lint = ["types-requests"]
-"""
-
-
 def _write_suite(root: Path, **files: str) -> Path:
     tests_dir = root / "tests"
     tier = tests_dir / "public"
@@ -1052,13 +1144,6 @@ def _write_suite(root: Path, **files: str) -> Path:
     return tests_dir
 
 
-STALE = "the index is stale; run `manage codegen --tests`"
-ALPHA_ROW = "    test_alpha.py    Alpha, Beta\n"
-LONG = "".join(f"class TestSubject{n:02}: ...\n" for n in range(12))
-SUBJECTS = [
-    ", ".join(f"Subject{n:02}" for n in range(start, start + 6)) for start in (0, 6)
-]
-LONG_ROWS = f"{ALPHA_ROW}    test_long.py     {SUBJECTS[0]},\n{' ' * 21}{SUBJECTS[1]}\n"
 TIER_INDEX_CASES = [
     pytest.param(None, ALPHA_ROW, id="twin-collapses"),
     pytest.param(LONG, LONG_ROWS, id="wraps-under-column"),
@@ -1107,31 +1192,6 @@ INDEX_FORMS = [
     pytest.param("Alpha, Beta\n", "Alpha\n", [STALE], id="hand-edited"),
     pytest.param("", "", [], id="current"),
 ]
-
-
-_ALPHA = """
-class TestAlpha:
-    def test_one(self): ...
-
-
-class TestAsyncAlpha:
-    def test_one(self): ...
-
-
-class TestBeta:
-    def test_two(self): ...
-"""
-
-
-_BACKSTOP = 30
-_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
-_MARK = "@pytest.mark.timeout(5)"
-_ROW_MARK = (
-    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
-)
-_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
-_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
-_OPTIONS = "[tool.pytest.ini_options]\n"
 
 
 def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
@@ -1378,8 +1438,6 @@ class TestLayoutLint:
         assert "consider merging" in messages[0][0]
 
 
-_SHARED = "basename is shared; rename one or allowlist the pair"
-_STALE = "allowlisted basename is no longer duplicated; remove it"
 BASENAME_CASES = [
     pytest.param(("a/x.py", "b/y.py"), frozenset(), [], id="clean"),
     pytest.param(
@@ -1392,7 +1450,7 @@ BASENAME_CASES = [
     pytest.param(
         ("a/x.py",),
         frozenset({"x.py"}),
-        [("x.py", ("pkg/a/x.py",), _STALE)],
+        [("x.py", ("pkg/a/x.py",), _STALE_BASENAME)],
         id="stale",
     ),
     pytest.param(("a/__init__.py", "b/__init__.py"), frozenset(), [], id="init"),
@@ -1432,25 +1490,6 @@ class TestBasenameLint:
         assert line in capsys.readouterr().out
 
 
-def _if(test: str, body: str = "import a", orelse: str = "") -> str:
-    tail = f"else:\n    {orelse}\n" if orelse else ""
-    return f"if {test}:\n    {body}\n{tail}"
-
-
-TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
-ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
-LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
-ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
-TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
-REQUESTS = "import requests\n"
-ONLY = (
-    "'python-dateutil' is a [project] dependency that nothing imports at run time; "
-    "import it outside TYPE_CHECKING or move it to a dependency group"
-)
-
-LXML = "import lxml\n"
-
-
 def _try(body: str, caught: str = "ImportError", handler: str = "pass") -> str:
     return f"try:\n    {body}\nexcept {caught}:\n    {handler}\n"
 
@@ -1470,8 +1509,6 @@ ESCAPE_CASES = [
     pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
 ]
 
-_ANY = "from typing import Any\n"
-_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
 ESCAPE_RATCHET_CASES = [
     pytest.param(_ANY, 0, "any = 0\ncast = 0", id="gain-lowers"),
     pytest.param(_ANY_CAST, 0, "any = 2\ncast = 1", id="equal-holds"),
@@ -1578,24 +1615,6 @@ class TestDependencyLint:
         assert _issues(tmp_path, source)[1] == expected
 
 
-LOCK = """
-[[package]]
-name = "ruff"
-version = "0.16.10"
-"""
-
-
-HOOKS = """
-repos:
-  - repo: local
-    hooks:
-      - id: ruff-check
-        additional_dependencies: [ruff==0.16.10]
-      - id: ruff-format
-        additional_dependencies: [ruff==0.16.9]
-"""
-
-
 def _pin_issues(tmp_path: Path, hooks: str) -> list[tuple[str, str]]:
     config = tmp_path / ".pre-commit-config.yaml"
     config.write_text(hooks, encoding="utf-8")
@@ -1668,9 +1687,6 @@ class TestRelativeImportLint:
         assert issues[0].suggestion == "from .b import thing"
 
 
-_UPWARD = "from riko.runtime.b import thing\n"
-_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
-_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
 ARCHITECTURE_IMPORTS = [
     pytest.param(_UPWARD, ["runtime"], id="upward"),
     pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
@@ -1723,7 +1739,6 @@ class TestImportArchitectureLint:
             _validate_graph("test", graph)
 
 
-WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
 LEGACY = [pytest.param(DAG, id="dag"), pytest.param(PIPE_DEF, id="v1")]
 
 
@@ -1790,24 +1805,6 @@ class TestReadDocument:
     def test_read_document_parses_a_committed_document(self):
         document, name = read_document(str(DAG_PATH))
         assert (document, name) == (DAG, "pipe_forever")
-
-
-_TIMEOUT_SUITE = """
-import time
-
-import pytest
-
-
-@pytest.mark.timeout(0.5, method="signal")
-@pytest.mark.xfail(strict=True, reason="never ends")
-def test_hangs():
-    time.sleep(5)
-
-
-@pytest.mark.xfail(strict=True, reason="known defect")
-def test_fails():
-    assert False
-"""
 
 
 class TestTimeouts:

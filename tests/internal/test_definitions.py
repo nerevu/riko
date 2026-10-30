@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, get_args, get_type_hints
 import pytest
 from attrs import fields_dict
 
-from riko.base._exceptions import InvalidPipelineError
 from riko.base._require_guards import typed_dict_keys
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -21,7 +20,6 @@ from riko.definitions._nodes import (
     CacheNode,
     ModuleNode,
     ReadNode,
-    StreamEdge,
     SubscribeNode,
     WriteNode,
 )
@@ -67,7 +65,6 @@ from riko.types._workflow import (
     parse_port,
 )
 from riko.types._workflow import Edge as EdgeBase
-from tests._execution import OUTPUT_A
 from tests._resources import (
     CREDENTIAL,
     SCALAR,
@@ -92,6 +89,12 @@ from tests._targets import RecordStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+_RESOLVED = "Expected a resolved resource value"
+_NODES = (ModuleNode, ReadNode, WriteNode, ActionNode, CacheNode, SubscribeNode)
+_NODE_ALIASES = frozenset({"family", "format"})
+_EDGE_ALIASES = frozenset({"family"})
 
 
 def untyped_inputs(**values: Any) -> dict[str, Any]:
@@ -138,59 +141,6 @@ class TestFrozenDict:
     def test_merging_returns_a_frozen_dict(self, merged: Any, expected: dict):
         assert isinstance(merged, FrozenDict)
         assert merged == expected
-
-
-class TestContext:
-    def test_nested_inputs_are_read_only(self):
-        context = Context(inputs=untyped_inputs(tags=["a"], meta={"ids": [1]}))
-        assert context.inputs is not None
-        assert context.inputs["tags"] == ("a",)
-        meta = context.inputs["meta"]
-        assert isinstance(meta, FrozenDict)
-        assert meta["ids"] == (1,)
-
-    def test_resources_must_be_reusable(self):
-        with pytest.raises(
-            TypeError, match="Context resource 'r' must be of type ReusableResource"
-        ):
-            Context(_resources={"r": _Client()})  # pyright: ignore[reportArgumentType]
-
-    @pytest.mark.parametrize("resources", ["abc", None])
-    def test_non_mapping_resources_are_rejected(self, resources: Any):
-        with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
-            Context(_resources=resources)
-
-    def test_derived_inputs_are_read_only(self):
-        derived = Context().replace(inputs=untyped_inputs(tags=["a"]))
-        assert derived.inputs is not None
-        assert derived.inputs["tags"] == ("a",)
-
-    @pytest.mark.parametrize("name", ["_mode", "_inputs", "_resources", "extra"])
-    def test_private_fields_cannot_be_set(self, name: str):
-        context = Context()
-
-        with pytest.raises(AttributeError):
-            setattr(context, name, None)
-
-        with pytest.raises(AttributeError):
-            delattr(context, name)
-
-    def test_pickle_round_trip_keeps_resources(self):
-        resource = Resource.from_external(_Client())
-        context = Context().with_resource("client", resource)
-        restored = loads(dumps(context))  # noqa: S301
-
-        assert list(restored.resources) == ["client"]
-
-    def test_context_with_resource_is_immutable_copy(self):
-        base = Context(test=True)
-        resource = Resource.from_factory(sync_gen_factory)
-        derived = base.with_resource("resource", resource)
-
-        assert "resource" not in base.resources
-        assert derived.resources["resource"] is resource
-        assert derived.test
-        assert derived is not base
 
 
 def _sync_generator():
@@ -259,6 +209,30 @@ MARKER_CONSTRUCTION_CASES = [
         lambda: OneShotResource.from_factory(dict, cleanup=False), id="factory"
     ),
     pytest.param(lambda: ReusableResource.from_lifecycle(gen_client), id="lifecycle"),
+]
+
+
+CONTEXT_FACTORY_REJECTIONS = [
+    pytest.param("scalar", id="scalar"),
+    pytest.param("connection", id="connection"),
+    pytest.param("sync_contextmanager", id="sync-context-manager"),
+    pytest.param("one_shot_resource", id="one-shot"),
+]
+
+
+RESOLVED_VALUE_REJECTIONS = [
+    pytest.param("scalar", "Must provide a Closeable value", id="scalar"),
+    pytest.param("sync_contextmanager", _RESOLVED, id="sync-context-manager"),
+    pytest.param("one_shot_resource", _RESOLVED, id="one-shot"),
+    pytest.param("external_resource", _RESOLVED, id="external"),
+]
+
+
+NON_FACTORY_VALUES = [
+    pytest.param("scalar", id="scalar"),
+    pytest.param("connection", id="connection"),
+    pytest.param("one_shot_resource", id="one-shot"),
+    pytest.param("external_resource", id="external"),
 ]
 
 
@@ -362,11 +336,6 @@ class TestResource:
             with pytest.raises(AttributeError, match="no value until acquired"):
                 _ = resource.value
 
-    @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
-    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
-        with pytest.raises(TypeError, match="is a declaration type"):
-            construct()
-
     @pytest.mark.parametrize("func", GENERATOR_FUNCS)
     def test_generator_object_points_to_from_lifecycle(self, func):
         started = func()
@@ -394,12 +363,30 @@ class TestResource:
         with pytest.raises(TypeError, match=r"ValueFactory requires.*cleanup function"):
             Resource.from_factory(factory)  # pyright: ignore[reportArgumentType]
 
-    def test_classify_rejects_non_resource(self):
+    @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
+    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
+        with pytest.raises(TypeError, match="is a declaration type"):
+            construct()
+
+    @pytest.mark.parametrize("fixture", CONTEXT_FACTORY_REJECTIONS)
+    def test_context_rejects_a_non_factory_value(self, fixture, request):
+        with pytest.raises(TypeError, match="Invalid resource factory"):
+            Context().with_resource("value", request.getfixturevalue(fixture))
+
+    @pytest.mark.parametrize(("fixture", "match"), RESOLVED_VALUE_REJECTIONS)
+    def test_resource_rejects_an_unresolved_value(self, fixture, match, request):
+        with pytest.raises(TypeError, match=match):
+            Resource(request.getfixturevalue(fixture))
+
+    @pytest.mark.parametrize("fixture", NON_FACTORY_VALUES)
+    def test_factories_reject_a_non_factory_value(self, fixture, request):
+        value = request.getfixturevalue(fixture)
+
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
-            build_lifecycle_plan(SCALAR)  # pyright: ignore[reportArgumentType]
+            Resource.from_lifecycle(value)
 
         with pytest.raises(TypeError, match="Invalid resource factory"):
-            Resource.from_factory(SCALAR)  # pyright: ignore[reportArgumentType]
+            Resource.from_factory(value)
 
 
 class TestResourceFreezing:
@@ -439,188 +426,7 @@ class TestResourceFreezing:
             resource._plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
 
 
-class TestResourceBinding:
-    @pytest.mark.parametrize(
-        ("resources", "match"),
-        [
-            *(
-                pytest.param(value, "must bind non-empty strings", id=repr(value))
-                for value in (
-                    b"db",
-                    "",
-                    {"db": 1},
-                    {"db": None},
-                    {1: "db"},
-                    {"": "db"},
-                    ["db", 1],
-                )
-            ),
-            pytest.param(5, "must be a str, mapping, or iterable", id="non-binding"),
-        ],
-    )
-    def test_invalid_bindings_are_rejected(self, resources: Any, match: str):
-        with pytest.raises(InvalidPipelineError, match=f"node 'resources' {match}"):
-            ModuleNode(id="a", name="hash", resources=resources)
-
-    def test_an_alias_cannot_repeat(self):
-        with pytest.raises(InvalidPipelineError, match="must not repeat an alias"):
-            ModuleNode(id="a", name="hash", resources=["db", "db"])
-
-    @pytest.mark.parametrize(
-        ("resources", "expected"),
-        [
-            ("db", {"db": "db"}),
-            (["db", "cache"], {"db": "db", "cache": "cache"}),
-            ({"db": "primary_db"}, {"db": "primary_db"}),
-            (None, {}),
-        ],
-    )
-    def test_accepted_forms_normalize(self, resources: Any, expected: dict):
-        assert (
-            ModuleNode(id="a", name="hash", resources=resources).resources == expected
-        )
-
-
-_SORT_NODE = ModuleNode(id="b", name="sort")
-_TWO_HASHES = [ModuleNode(id="b", name="hash"), ModuleNode(id="c", name="hash")]
-_B_OUT = Endpoint("b", "out")
-APPEND_REJECTIONS = [
-    pytest.param(
-        Workflow(nodes=[_SORT_NODE]), "appended workflow has nodes", id="no-default"
-    ),
-    pytest.param(
-        Workflow(nodes=_TWO_HASHES, outputs={"default": _B_OUT}),
-        "exactly one node",
-        id="two-open-inputs",
-    ),
-    pytest.param(
-        Workflow(nodes=[_SORT_NODE], outputs={"default": _B_OUT, "side": _B_OUT}),
-        "workflow output",
-        id="named-output-clash",
-    ),
-    pytest.param(
-        Workflow(inputs={"limit": {"type": "string"}}),
-        "declare input",
-        id="input-clash",
-    ),
-]
-APPENDS = [
-    pytest.param(lambda flow: flow.with_node(_SORT_NODE), id="node"),
-    pytest.param(
-        lambda flow: flow.with_workflow(Workflow().with_node(_SORT_NODE)), id="workflow"
-    ),
-]
-
-
 class TestWorkflowFields:
-    def test_appending_a_node_declares_its_resources(self):
-        flow = Workflow(resources=("cache",))
-        node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
-        assert flow.with_node(node).resources == ("cache", "db")
-
-    @pytest.mark.parametrize(("other", "match"), APPEND_REJECTIONS)
-    def test_appending_a_workflow_rejects(self, other, match):
-        flow = Workflow(
-            nodes=[ModuleNode(id="a", name="fetch")],
-            outputs={"default": Endpoint("a", "out"), "side": Endpoint("a", "out")},
-            inputs={"limit": {"type": "integer"}},
-        )
-        with pytest.raises(InvalidPipelineError, match=match):
-            flow.with_workflow(other)
-
-    @pytest.mark.parametrize("append", APPENDS)
-    def test_appending_needs_a_default_output_to_follow(self, append):
-        flow = Workflow(nodes=[ModuleNode(id="a", name="fetch")])
-        with pytest.raises(
-            InvalidPipelineError, match="this workflow has nodes but no default output"
-        ):
-            append(flow)
-
-    def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
-        with pytest.raises(TypeError, match="not JSON serializable"):
-            json.dumps(object(), cls=WorkflowEncoder)
-
-    def test_nodes_must_be_an_iterable_of_nodes(self):
-        nodes: Any = {"a": ModuleNode(id="a", name="hash")}
-
-        with pytest.raises(InvalidPipelineError, match="'nodes' must be a list"):
-            Workflow(nodes=nodes, outputs=OUTPUT_A)
-
-    def test_a_node_id_cannot_repeat(self):
-        nodes = [ModuleNode(id="a", name="hash"), ModuleNode(id="a", name="count")]
-
-        with pytest.raises(InvalidPipelineError, match="must not repeat a node id"):
-            Workflow(nodes=nodes, outputs=OUTPUT_A)
-
-    @pytest.mark.parametrize("field", ["nodes", "edges"])
-    @pytest.mark.parametrize("value", ["ab", b"ab", {"a": 1}, 3])
-    def test_node_and_edge_containers_must_be_lists(self, field: str, value: Any):
-        kwargs = {"nodes": [ModuleNode(id="a", name="hash")], field: value}
-
-        with pytest.raises(InvalidPipelineError, match=f"'{field}' must be a list"):
-            Workflow(outputs=OUTPUT_A, **kwargs)
-
-    def test_edges_must_be_edges(self):
-        nodes = [ModuleNode(id="a", name="hash")]
-        edges: Any = [("a", "b")]
-
-        with pytest.raises(InvalidPipelineError, match="Workflow edge"):
-            Workflow(nodes=nodes, outputs=OUTPUT_A, edges=edges)
-
-    def test_edge_endpoints_must_be_endpoints(self):
-        with pytest.raises(InvalidPipelineError, match="StreamEdge 'source'"):
-            StreamEdge(("a", "out"), Endpoint("b", "in"))  # pyright: ignore[reportArgumentType]
-
-    @pytest.mark.parametrize(("node", "port"), [(1, "out"), ("a", None)])
-    def test_endpoint_fields_must_be_strings(self, node: Any, port: Any):
-        with pytest.raises(InvalidPipelineError, match="Endpoint '"):
-            Endpoint(node, port)
-
-    @pytest.mark.parametrize(
-        ("fields", "match"),
-        [
-            pytest.param(
-                {"nodes": [1], "outputs": {}},
-                "Workflow node position 0 must be of type Node",
-                id="nodes",
-            ),
-            pytest.param(
-                {"nodes": [], "outputs": {"o": 1}},
-                "Workflow output 'o' must be of type Endpoint",
-                id="outputs",
-            ),
-        ],
-    )
-    def test_mapping_values_must_have_the_field_type(
-        self, fields: dict[str, Any], match: str
-    ):
-        with pytest.raises(InvalidPipelineError, match=match):
-            Workflow(**fields)
-
-    @pytest.mark.parametrize("field", ["outputs", "inputs"])
-    def test_non_mapping_fields_are_rejected(self, field: str):
-        fields: dict[str, Any] = {"nodes": [], "outputs": {}, field: "abc"}
-
-        with pytest.raises(InvalidPipelineError, match=f"Workflow '{field}'"):
-            Workflow(**fields)
-
-    @pytest.mark.parametrize(
-        "field", ["nodes", "outputs", "inputs", "edges", "resources"]
-    )
-    def test_none_is_not_an_omitted_field(self, field: str):
-        """An explicit None is rejected rather than read as the empty default."""
-        fields: dict[str, Any] = {field: None}
-
-        with pytest.raises(InvalidPipelineError, match=f"Workflow '{field}'"):
-            Workflow(**fields)
-
-    def test_omitted_fields_are_empty(self):
-        """Every omitted field defaults to its empty form."""
-        flow = Workflow()
-        mappings = (flow.nodes, flow.outputs, flow.inputs)
-        assert mappings == ({}, {}, {})
-        assert (flow.edges, flow.resources) == ((), ())
-
     def test_pickle_and_copy_round_trip(self):
         node = ModuleNode(
             id="a",
@@ -644,15 +450,9 @@ class TestWorkflowFields:
             assert restored_node.resources == {"db": "primary_db"}
             assert isinstance(restored.inputs["q"], FrozenDict)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="owned by the pending workflow input declarations work: a strict "
-        "Workflow accepts an input declaration that is not a JSON Schema mapping",
-    )
-    @pytest.mark.parametrize("declaration", [5, "string"])
-    def test_non_schema_inputs_are_rejected(self, declaration: object):
-        with pytest.raises(InvalidPipelineError, match="Workflow 'inputs'"):
-            Workflow(nodes=[], outputs={}, inputs={"q": declaration})
+    def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
+        with pytest.raises(TypeError, match="not JSON serializable"):
+            json.dumps(object(), cls=WorkflowEncoder)
 
 
 _EXISTING_IDS = [
@@ -747,13 +547,6 @@ class TestParsePort:
             parse_port(port)
 
 
-_NODES = (ModuleNode, ReadNode, WriteNode, ActionNode, CacheNode, SubscribeNode)
-
-_NODE_ALIASES = frozenset({"family", "format"})
-
-_EDGE_ALIASES = frozenset({"family"})
-
-
 def _attrs_fields(*classes) -> set[str]:
     return {name for cls in classes for name in fields_dict(cls)}
 
@@ -824,18 +617,6 @@ class TestExecutionSettings:
 class TestWriteMode:
     def test_mode_values(self):
         assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
-
-
-class TestFormats:
-    def test_format_values(self):
-        assert [f.value for f in Formats] == [
-            "csv",
-            "geojson",
-            "json",
-            "jsonl",
-            "ofx",
-            "qif",
-        ]
 
 
 class TestWriteOperation:

@@ -29,8 +29,6 @@ if TYPE_CHECKING:
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
-type Items = ParserOutput | StatefulItem
-
 KAZEEKI1_EXAMPLE = {
     "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
     "dc:creator": "riko",
@@ -45,6 +43,7 @@ KAZEEKI1_EXAMPLE = {
     "k:tags": "Web,Software,IT",
     "k:work_location": " Worldwide",
 }
+
 KAZEEKI1_CONTENT = (
     " With this specification sheet we",
     "for implementing a website for a german...",
@@ -64,10 +63,71 @@ KAZEEKI2_EXAMPLE = {
     "k:tags": "Web-Development,Web-Programming",
     "k:work_location": "unknown",
 }
+
 KAZEEKI2_CONTENT = (
     "<p>Hello, I need to fix an application",
     "are welcome to this project.<br><br><b>",
 )
+
+NATIVE_TITLE = "Running “Native” Data Wrangling Applicat"
+
+CSV_DESCRIPTION = (
+    "Total allowances claimed, inc travel: "
+    "151619<br>Total basic allowances claimed, ex travel: "
+    "146282<br>Total Travel claimed: 5337<br>MP Mileage: "
+    "3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>"
+    "Cost of staying away from main home: 22541<br>London "
+    "Supplement: 0<br>Office Running Costs: 19848<br>"
+    "Staffing Costs: 88283"
+)
+
+CSV_ITEM = {
+    "FamilyNumOfJourneys": "0",
+    "Member": "Lancaster",
+    "MPOtherEuropean": "0",
+    "FamilyTotal": "0",
+    "OfficeRunningCosts": "19848",
+    "MPOtherRail": "233",
+    "CostofStayingAwayFromMainHome": "22541",
+    "StationeryAssocdPostageCosts": "3471",
+    "CommsAllowance": "9767",
+    "Mileage": "3358",
+    "MPMisc": "20",
+    "title": "Mr Mark Lancaster",
+    "description": CSV_DESCRIPTION,
+    "TotalAllowancesClaimedIncTravel": "151619",
+    "SpouseTotal": "31",
+    "EmployeeTotal": "222",
+    "MPRail": "1473",
+    "LondonSupplement": "0",
+    "StaffingCosts": "88283",
+    "EmployeeNumOfJourneys": "21",
+    "CentrallyPurchasedStationery": "1149",
+    "TotalBasicAllowancesExcTravel": "146282",
+    "CentralITProvision": "1223",
+    "StaffCoverAndOtherCosts": "0",
+    "firstName": "Mr Mark",
+    "MPOtherAir": "0",
+    "MPOtherMileage": "0",
+    "TotalTravelClaimed": "5337",
+    "MPAir": "0",
+    "SpouseNumOfJourneys": "1",
+}
+
+ITEMBUILDER_ITEMS = [
+    {
+        "attr1": "val1",
+        "attrpath": {"attr2": "val2", "attr3": "extVal"},
+        "longpath": {"attrpath": {"attr3": "val3"}},
+    },
+    {"attr1": "VAL1", "attrpath": {"attr2": "VAL2"}},
+]
+
+ASSIGNED = [{"title": "a b c", "tokens": {"content": c}} for c in "abc"]
+EMBEDDED = [{"title": "hello", "strconcat": "hello!"}]
+
+
+type Items = ParserOutput | StatefulItem
 
 
 def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -> None:
@@ -117,7 +177,6 @@ def _check_dates[T: datetime | struct_time | date](*dates: T | object) -> tuple[
     return cast("tuple[T, ...]", dates)
 
 
-NATIVE_TITLE = "Running “Native” Data Wrangling Applicat"
 FIRST_ITEM_FIELDS = [
     pytest.param(
         "pipe_HrX5bjkv3BGEp9eSy6ky6g",
@@ -183,57 +242,6 @@ KAZEEKI = [
     pytest.param("kazeeki1", 5, KAZEEKI1_EXAMPLE, KAZEEKI1_CONTENT, id="fetchdata"),
     pytest.param("kazeeki2", 1, KAZEEKI2_EXAMPLE, KAZEEKI2_CONTENT, id="itembuilder"),
 ]
-CSV_DESCRIPTION = (
-    "Total allowances claimed, inc travel: "
-    "151619<br>Total basic allowances claimed, ex travel: "
-    "146282<br>Total Travel claimed: 5337<br>MP Mileage: "
-    "3358<br>MP Rail Travel: 1473<br>MP Air Travel: 0<br>"
-    "Cost of staying away from main home: 22541<br>London "
-    "Supplement: 0<br>Office Running Costs: 19848<br>"
-    "Staffing Costs: 88283"
-)
-CSV_ITEM = {
-    "FamilyNumOfJourneys": "0",
-    "Member": "Lancaster",
-    "MPOtherEuropean": "0",
-    "FamilyTotal": "0",
-    "OfficeRunningCosts": "19848",
-    "MPOtherRail": "233",
-    "CostofStayingAwayFromMainHome": "22541",
-    "StationeryAssocdPostageCosts": "3471",
-    "CommsAllowance": "9767",
-    "Mileage": "3358",
-    "MPMisc": "20",
-    "title": "Mr Mark Lancaster",
-    "description": CSV_DESCRIPTION,
-    "TotalAllowancesClaimedIncTravel": "151619",
-    "SpouseTotal": "31",
-    "EmployeeTotal": "222",
-    "MPRail": "1473",
-    "LondonSupplement": "0",
-    "StaffingCosts": "88283",
-    "EmployeeNumOfJourneys": "21",
-    "CentrallyPurchasedStationery": "1149",
-    "TotalBasicAllowancesExcTravel": "146282",
-    "CentralITProvision": "1223",
-    "StaffCoverAndOtherCosts": "0",
-    "firstName": "Mr Mark",
-    "MPOtherAir": "0",
-    "MPOtherMileage": "0",
-    "TotalTravelClaimed": "5337",
-    "MPAir": "0",
-    "SpouseNumOfJourneys": "1",
-}
-ITEMBUILDER_ITEMS = [
-    {
-        "attr1": "val1",
-        "attrpath": {"attr2": "val2", "attr3": "extVal"},
-        "longpath": {"attrpath": {"attr3": "val3"}},
-    },
-    {"attr1": "VAL1", "attrpath": {"attr2": "VAL2"}},
-]
-ASSIGNED = [{"title": "a b c", "tokens": {"content": c}} for c in "abc"]
-EMBEDDED = [{"title": "hello", "strconcat": "hello!"}]
 WHOLE_STREAMS = [
     pytest.param(
         "pipe_b96287458de001ad62a637095df33ad5",

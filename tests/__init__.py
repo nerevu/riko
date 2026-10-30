@@ -25,10 +25,12 @@ something the other cannot reach.
 Inside a file, every test belongs to a ``Test<Subject>`` class (its async twin,
 ``TestAsync<Subject>``, follows it). Helpers sit directly above the one class that
 uses them, at the top of the file when several classes do, or in a ``tests/_*.py``
-module when several files do. Code repeated inline three or more times becomes
-one such helper. Within a class, behavior tests come first, then rejection tables,
-then strict-xfail tripwires. A regression test goes in its subject's class; a tripwire
-goes where the real test will live once it flips.
+module when several files do. Module-level constants are the exception: every
+one except a ``pytest.param`` table sits at the top of the file, private names
+first, with any helper a constant needs above them. Code repeated inline three
+or more times becomes one such helper. Within a class, behavior tests come first,
+then rejection tables, then strict-xfail tripwires. A regression test goes in its
+subject's class; a tripwire goes where the real test will live once it flips.
 
 Tests that share setup and assertion and differ only in data are one
 parametrized test, and a new case of an existing shape is a row, not a method.
@@ -81,7 +83,9 @@ from riko.base._paths import TESTS_DIR as TESTS_DIR
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
 
+
 SCRIPT_TIMEOUT = 5
+
 
 skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
 
