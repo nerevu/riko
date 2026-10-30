@@ -301,8 +301,7 @@ class WorkflowResolver:
             >>> store = MappingStore({"pipe_demo": ModuleType("pipe_demo")})
             >>> resolver = WorkflowResolver(module_store=store)
             >>> resolver.reset()
-            >>> resolver.load("pipe_demo") is None
-            True
+            >>> resolver.load("pipe_demo")
 
         """
         self._module_store = None
@@ -379,8 +378,7 @@ class WorkflowResolver:
             >>> resolver = WorkflowResolver(module_store=store)
             >>> resolver.load("pipe:demo").__name__
             'pipe_demo'
-            >>> resolver.load("pipe_other") is None
-            True
+            >>> resolver.load("pipe_other")
 
         """
         pipe_id = pythonise(name)
@@ -593,8 +591,7 @@ def reset_workflow_resolver() -> None:
         >>> reset_workflow_resolver()
         >>> register_workflow_store(package="riko.modules")
         >>> reset_workflow_resolver()
-        >>> workflow_resolver.load("pipe_demo") is None
-        True
+        >>> workflow_resolver.load("pipe_demo")
 
     """
     workflow_resolver.reset()

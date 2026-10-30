@@ -164,8 +164,7 @@ def resolve_date(entry: ParserRSSEntry, *keys: str) -> struct_time | None:
         >>> entry = {"published_parsed": None, "published": "", "updated": "2020-06-15"}
         >>> resolve_date(entry, "published_parsed", "published", "updated")[:3]
         (2020, 6, 15)
-        >>> resolve_date(entry, "published_parsed", "published") is None
-        True
+        >>> resolve_date(entry, "published_parsed", "published")
 
     """
     _date: struct_time | None = None

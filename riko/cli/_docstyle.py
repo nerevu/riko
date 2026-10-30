@@ -42,6 +42,7 @@ COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
+_NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
@@ -146,8 +147,7 @@ def get_summary_verb(summary: str) -> str | None:
 
         >>> get_summary_verb("Resolves a seed to one stream.")
         'resolve'
-        >>> get_summary_verb("Finds the first match.") is None
-        True
+        >>> get_summary_verb("Finds the first match.")
 
     """
     return _LEAD_VERBS.get(summary.strip().split(" ", 1)[0])
@@ -231,6 +231,32 @@ def gen_malformed_raises(doc: str) -> Iterator[str]:
                 yield line
 
 
+def gen_none_checks(doc: str) -> Iterator[str]:
+    """
+    Finds doctest lines that check for ``None`` instead of showing the result.
+
+    A call that returns ``None`` shows no output, so the bare call already
+    demonstrates it.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each ``>>>`` line ending in ``is None``.
+
+    Examples:
+
+        >>> doc = ">>> f(1) is None\\nTrue\\n>>> f(2)\\n"
+        >>> list(gen_none_checks(doc))
+        ['>>> f(1) is None']
+
+    """
+    lines = (line.strip() for line in doc.splitlines())
+    yield from (line for line in lines if _NONE_CHECK.fullmatch(line))
+
+
 def resolve_public_path(name: str) -> str | None:
     """
     Finds the supported import path of a public name.
@@ -250,8 +276,7 @@ def resolve_public_path(name: str) -> str | None:
         'riko'
         >>> resolve_public_path("processor")
         'riko.ext'
-        >>> resolve_public_path("summary_leads_with_output") is None
-        True
+        >>> resolve_public_path("summary_leads_with_output")
 
     """
     return next((path for path, names in _PUBLIC_PATHS if name in names), None)
@@ -391,9 +416,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     Walks ``roots`` for docstrings that break the summary or example rules.
 
     Function summaries must not lead with the output or with a different general-purpose
-    verb than the function name. No docstring may narrate between its doctest examples
-    or import a public name through a private module. A private module without a public
-    API carries no module example, and one with a public runtime API carries one.
+    verb than the function name. No docstring may narrate between its doctest examples,
+    check a result with ``is None``, or import a public name through a private module.
+    A private module without a public API carries no module example, and one with a
+    public runtime API carries one.
 
     Args:
 
@@ -440,6 +466,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     problem = "narrates between examples (use a >>> # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
 
+                for check in gen_none_checks(doc):
+                    problem = "checks for None (show the bare call instead)"
+                    yield DocstringIssue(path, lineno, name, problem, check)
+
                 for line, imported, public in gen_private_imports(doc):
                     problem = (
                         f"imports {imported} privately "
@@ -457,6 +487,7 @@ __all__ = [
     "gen_docstring_issues",
     "gen_example_prose",
     "gen_malformed_raises",
+    "gen_none_checks",
     "gen_private_imports",
     "get_name_verb",
     "get_summary_verb",

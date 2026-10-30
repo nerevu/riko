@@ -449,8 +449,7 @@ def def_from_require[D, R](
         >>> from riko.base._guards import require_mapping
         >>>
         >>> optional_mapping = def_from_require(require_mapping, error=TypeError)
-        >>> optional_mapping(None) is None
-        True
+        >>> optional_mapping(None)
         >>> optional_mapping("abc")
         Traceback (most recent call last):
         ...

@@ -68,8 +68,7 @@ def ext_from_content_type(content_type: str | None) -> str | None:
         'json'
         >>> ext_from_content_type("text/html")
         'html'
-        >>> ext_from_content_type(None) is None
-        True
+        >>> ext_from_content_type(None)
 
     """
     if not content_type:

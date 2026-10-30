@@ -182,8 +182,7 @@ class ModuleDefinition:
             >>> definition = ModuleDefinition(sync_pipe=sync_pipe)
             >>> definition.get_pipe() is sync_pipe
             True
-            >>> definition.get_pipe(is_async=True) is None
-            True
+            >>> definition.get_pipe(is_async=True)
 
         """
         return self.async_pipe if is_async else self.sync_pipe

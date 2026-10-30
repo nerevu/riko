@@ -163,8 +163,7 @@ def get_module_metadata(
 
         >>> get_module_metadata("count").type
         'operator'
-        >>> get_module_metadata("does-not-exist") is None
-        True
+        >>> get_module_metadata("does-not-exist")
 
     """
     canonical = normalize_module_name(name)

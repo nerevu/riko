@@ -41,8 +41,7 @@ class WorkflowStore[T](Protocol):
         ...     def load(self, name):
         ...         return None
         >>>
-        >>> EmptyStore().load("pipe_demo") is None
-        True
+        >>> EmptyStore().load("pipe_demo")
 
     """
 
@@ -89,8 +88,7 @@ class PackageStore:
         >>> store = PackageStore("examples.pyworkflows")
         >>> store.load("pipe_timezone").__name__
         'examples.pyworkflows.pipe_timezone'
-        >>> store.load("pipe_missing") is None
-        True
+        >>> store.load("pipe_missing")
 
     """
 
@@ -144,8 +142,7 @@ class MappingStore:
         >>> store = MappingStore({"pipe_demo": module})
         >>> store.load("pipe_demo") is module
         True
-        >>> store.load("pipe_other") is None
-        True
+        >>> store.load("pipe_other")
 
     """
 
