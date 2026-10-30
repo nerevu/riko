@@ -187,7 +187,8 @@ neighborhood it affects:
    doctests of six or more examples whose callee has a table, same-named tests,
    unsupported names in public and supported-only internal classes, out-of-order
    or misplaced classes and helpers, classes that never name their riko-named subject,
-   functional classes with no end-to-end marker).
+   functional classes with no end-to-end marker, tests that start a process
+   without saying why).
    Read its full output once; never pipe it through `head`/`grep` and rerun
    (`--limit` already caps it). Read and verify only those, never whole files.
    Make the moves with
