@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 from tokenize import open as open_python
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from riko.base._exceptions import ImportAnalysisError
 from riko.base._iterutils import gen_non_none
@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 type _ImportKind = Literal["module", "local", "type"]
+
+type FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
+
+FUNCTION_NODES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +131,7 @@ class _ImportVisitor(ast.NodeVisitor):
         else:
             self.generic_visit(node)
 
-    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    def _visit_function(self, node: FunctionNode) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
 

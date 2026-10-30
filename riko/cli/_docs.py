@@ -18,6 +18,7 @@ from riko.base._paths import DOCS_DIR, PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
+from ._import_graph import FUNCTION_NODES
 from ._lint_terms import BANNED_TERMS
 
 if TYPE_CHECKING:
@@ -345,7 +346,8 @@ def gen_test_symbols(*paths: Path) -> Iterator[str]:
                 yield f"{rel}::{node.name}"
 
                 for member in node.body:
-                    is_func = isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef)
+                    is_func = isinstance(member, FUNCTION_NODES)
+
                     if is_func and member.name.startswith("test"):
                         yield f"{rel}::{node.name}::{member.name}"
                         yield f"{node.name}::{member.name}"
