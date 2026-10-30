@@ -587,10 +587,11 @@ def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
 def _gen_tier_issues(tier: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     yield from _gen_index_issues(tier)
     owners: dict[str, str] = {}
-    modules = (path for path in sorted(tier.glob("*.py")) if path.name != "__init__.py")
 
-    for path in modules:
-        if not path.name.startswith("test_"):
+    for path in sorted(tier.glob("*.py")):
+        if path.name == "__init__.py":
+            pass
+        elif not path.name.startswith("test_"):
             message = "shared helpers belong in a tests/_*.py module"
             yield LayoutIssue(path, 1, message)
         elif HISTORY_NAMES.match(path.name):
