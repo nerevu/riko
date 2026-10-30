@@ -182,15 +182,6 @@ class CyclicIdentityError(IdentityError):
         super().__init__("cannot canonically encode a cyclic structure")
 
 
-class ImportLintError(RikoError): ...
-
-
-class ImportAnalysisError(ImportLintError): ...
-
-
-class InvalidArchitectureError(ImportLintError): ...
-
-
 class RikoWarning(UserWarning):
     """Base class for Riko-specific warnings."""
 
@@ -205,9 +196,6 @@ __all__ = [
     "EmptyPipelineError",
     "IdentityEncodingError",
     "IdentityError",
-    "ImportAnalysisError",
-    "ImportLintError",
-    "InvalidArchitectureError",
     "InvalidPipelineError",
     "ModuleError",
     "PipelineError",

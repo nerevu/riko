@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from tokenize import open as open_python
 from typing import TYPE_CHECKING, Final, Literal
 
-from riko.base._exceptions import ImportAnalysisError
+from riko.base._exceptions import RikoError
 from riko.base._iterutils import gen_non_none
 
 if TYPE_CHECKING:
@@ -18,6 +18,15 @@ type _ImportKind = Literal["module", "local", "type"]
 type FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
 
 FUNCTION_NODES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
+class ImportLintError(RikoError): ...
+
+
+class ImportAnalysisError(ImportLintError): ...
+
+
+class InvalidArchitectureError(ImportLintError): ...
 
 
 @dataclass(frozen=True, slots=True)
