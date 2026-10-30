@@ -152,8 +152,7 @@ def get_tzname(
         >>>
         >>> get_tzname(datetime(2020, 1, 1, tzinfo=UTC))
         'UTC'
-        >>> get_tzname(datetime(2020, 1, 1).date()) is None
-        True
+        >>> get_tzname(datetime(2020, 1, 1).date())
 
     """
     if isinstance(_date, struct_time):

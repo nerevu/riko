@@ -645,6 +645,8 @@ code block without interpreter prompts.
 - Treat doctests as executable user documentation first, tests second.
 - Show actual returned values, not boolean assertions
   (`>>> next(pipe(items))["count"]` → `5`, not `... == {"count": 5} → True`).
+  A `None` result is the bare call with no output, never `... is None` → `True`
+  (`manage lint --docstrings` enforces it).
 - Follow Arrange → Act → Observe; keep each example focused on one behavior.
 - Every code block runs on its own: it imports and defines everything it uses,
   even when an earlier block in the same file or section already did, because

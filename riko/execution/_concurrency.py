@@ -171,8 +171,7 @@ def require_process_safe(
         ...     outputs={"default": Endpoint("h", "out")},
         ... )
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        >>> require_process_safe(plan, "default", None) is None
-        True
+        >>> require_process_safe(plan, "default", None)
 
     """
     for node_id in plan.index.required[output]:

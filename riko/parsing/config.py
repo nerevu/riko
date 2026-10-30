@@ -252,8 +252,7 @@ def get_field(
         'hello'
         >>> get_field({"title": "hello"})
         {'title': 'hello'}
-        >>> get_field({"title": "hello"}, "missing") is None
-        True
+        >>> get_field({"title": "hello"}, "missing")
 
     """
     if field and isinstance(item, DotDict):

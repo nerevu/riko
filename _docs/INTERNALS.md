@@ -201,14 +201,15 @@ sync when source is moved between package groups.
   there is no check. Exit codes never change. Under GitHub Actions the warning, and any
   `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
   annotations.
-- **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
-  imports a public name through a private `riko` module path, a module example in an
-  underscore-prefixed module that defines no public name, and a missing one in an
-  underscore-prefixed module whose public names include a function or a class other
-  than a `Protocol`, `TypedDict`, or exception. All three read the public names
-  from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION` to `riko.ext`,
-  `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`, first match winning
-  (`resolve_public_path` in `riko/cli/_docstyle.py`).
+- **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
+  that ends in `is None` (`gen_none_checks`; the bare call shows a `None` result), a
+  doctest that imports a public name through a private `riko` module path, a module
+  example in an underscore-prefixed module that defines no public name, and a missing
+  one in an underscore-prefixed module whose public names include a function or a
+  class other than a `Protocol`, `TypedDict`, or exception. The last three read the
+  public names from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION`
+  to `riko.ext`, `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`,
+  first match winning (`resolve_public_path` in `riko/cli/_docstyle.py`).
 - **Stale citation lint.** `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py`
   citation (in the tracked `_docs/` root docs, gameplans, `CONTRIBUTING.rst`, `CLAUDE.md`, or
   `docs/*.rst`) or `riko/*.py` citation (in the tracked `_docs/` root docs, `CLAUDE.md`,
