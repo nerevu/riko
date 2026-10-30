@@ -124,7 +124,9 @@ a module's callables, name, and docstring summary once into a plain keyword-only
 definition-boundary normalization point this decision would extend. Since 2026-10-22 a `Pipeline.map`
 callable node borrows the built-in `udf` wrapper for this metadata (`_resolve_callable` in
 `riko/execution/_prepared.py`; `udf`'s parser never runs), so the ruling covers callable nodes too:
-stamping or honest slot types would let a callable node resolve without a donor module.
+stamping or honest slot types would let a callable node resolve without a donor module. The same
+decision settles whether `SyncModuleWrapper`/`AsyncModuleWrapper` join `riko.ext`; until then a
+caller registering a plain callable casts to the private protocol (2026-10-30 surface triage).
 
 ## E2. Plugin ecosystem v1
 

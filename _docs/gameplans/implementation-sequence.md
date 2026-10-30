@@ -1589,7 +1589,9 @@ Deliver:
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
   structurally from incoming `PublishEdge`s and owned sender endpoints;
-- no PENDING/DONE/sender-id markers in the data stream;
+- no PENDING/DONE/sender-id markers in the data stream (until then the `StatefulItem`/`StreamState`
+  marker types the built-in `receive` yields stay off the supported type surface; 2026-10-30
+  surface triage);
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
 - receive-time `func=` semantics in sync and async together: run at subscription
