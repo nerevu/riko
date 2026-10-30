@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import click
 
-from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
+from riko.base._paths import PACKAGE_DIR, PYPROJECT, ROOT_DIR, TESTS_DIR
 
 from ._build import twine_check
 from ._docs import AS_BUILT_DOCS, lint_docs
@@ -158,10 +158,8 @@ _lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
 def _ratchet_sites(key: str, noun: str, *sites: LayoutIssue) -> int:
-    """Checks a count of test sites against its ceiling, listing them when over it."""
-    code = ratchet_ceiling(ROOT_DIR / "pyproject.toml", "tests", key, len(sites), noun)
-
-    if code:
+    """Checks a count of test sites against its ceiling and prints them when over it."""
+    if code := ratchet_ceiling(PYPROJECT, "tests", key, len(sites), noun):
         for site in sites:
             print(site)
 
@@ -170,14 +168,13 @@ def _ratchet_sites(key: str, noun: str, *sites: LayoutIssue) -> int:
 
 def _lint_tests() -> int:
     """Checks the test suite against its tier layout, generated indexes, and bounds."""
-    pyproject = ROOT_DIR / "pyproject.toml"
-    text = pyproject.read_text(encoding="utf-8")
+    text = PYPROJECT.read_text(encoding="utf-8")
 
     if (backstop := get_backstop(text)) is None:
         raise RuntimeError("pyproject.toml sets no [tool.pytest.ini_options] timeout")
 
     issues = [
-        *gen_global_bound_issues(text, pyproject),
+        *gen_global_bound_issues(text, PYPROJECT),
         *gen_layout_issues(TESTS_DIR, backstop),
     ]
 
@@ -202,9 +199,8 @@ def _lint_basenames() -> int:
 
 def _lint_escapes() -> int:
     """Checks the package's ``Any`` and ``cast`` uses against their ceilings."""
-    pyproject = ROOT_DIR / "pyproject.toml"
     totals = sum((counts for _, counts in gen_escape_counts(PACKAGE_DIR)), Counter())
-    ratchet = partial(ratchet_ceiling, pyproject, "typing")
+    ratchet = partial(ratchet_ceiling, PYPROJECT, "typing")
     codes = [
         ratchet(escape.lower(), totals[escape], f"`{escape}` uses")
         for escape in ESCAPES
@@ -217,11 +213,10 @@ def _lint_deps() -> int:
     if not _deptry:
         raise RuntimeError("deptry not found")
 
-    pyproject = ROOT_DIR / "pyproject.toml"
     hooks = ROOT_DIR / ".pre-commit-config.yaml"
     deptry_code = call([_deptry, "."], cwd=ROOT_DIR)
     issues = [
-        *gen_import_issues(PACKAGE_DIR, pyproject),
+        *gen_import_issues(PACKAGE_DIR, PYPROJECT),
         *gen_hook_pin_issues(hooks, ROOT_DIR / "uv.lock"),
     ]
 
