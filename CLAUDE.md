@@ -195,6 +195,11 @@ new permanent bullet here.
   exemptions: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
 - New code is fully typed and documented. Prefer type narrowing over `cast`; narrow
   untyped values once at the boundary and carry the tightened type forward.
+- **Constants at the top** — after the imports come the module `logger`, then `type`
+  aliases, then constants, private (`_NAME`) before public (`NAME`), one-line
+  constants on adjacent lines; a helper a constant calls goes just above the first
+  constant that needs it. Only test `pytest.param` tables stay above their class.
+  `.claude/skills/tidy/lift_constants.py` applies the order.
 - **attrs record shape** — store what a record is built from and derive the rest as
   a `cached_property`; a `Factory`/private init alias is only for state a caller may
   legitimately supply, never to inject a derived value. A function that builds `X`
