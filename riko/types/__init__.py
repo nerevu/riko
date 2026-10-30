@@ -8,7 +8,7 @@ not part of the SemVer-guaranteed API.
 
 from ._events import EventSink
 from ._options import CallOptions, CallOptionsLike, RawCallOptions
-from ._pipedef import PipeDag, PipeDef, PipeDefLike
+from ._pipedef import DagModule, Embed, PipeDag, PipeDef, PipeDefLike
 from ._resource import ResourceStrategy
 from ._streams import (
     AsyncItems,
@@ -32,6 +32,8 @@ __all__ = [
     "CallOptions",
     "CallOptionsLike",
     "Conf",
+    "DagModule",
+    "Embed",
     "EventSink",
     "Feed",
     "InputLike",

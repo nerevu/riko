@@ -166,7 +166,7 @@ class FileTarget:
         Examples:
 
             >>> from riko.ext import FileTarget
-            >>> from riko.definitions._write import WriteMode
+            >>> from riko import WriteMode
             >>>
             >>> capabilities = FileTarget("out.jsonl").get_capabilities()
             >>> capabilities.serializes, capabilities.appendable

@@ -1,5 +1,18 @@
 # vim: sw=4:ts=4:expandtab
-"""Immutable execution settings a pipeline runs with."""
+"""
+Immutable execution settings a pipeline runs with.
+
+Examples:
+
+    Basic usage::
+
+        >>> from riko import ExecutionSettings, Pipeline
+        >>>
+        >>> pipeline = Pipeline.from_module("hash").with_execution(concurrency=2)
+        >>> pipeline.settings == ExecutionSettings(concurrency=2)
+        True
+
+"""
 
 from __future__ import annotations
 
@@ -127,7 +140,7 @@ class ExecutionSettings:
 
         Basic usage::
 
-            >>> from riko.definitions._settings import ExecutionSettings
+            >>> from riko import ExecutionSettings
             >>>
             >>> settings = ExecutionSettings(executor="thread", concurrency=4)
             >>> settings.executor, settings.concurrency
@@ -157,7 +170,7 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko.definitions._settings import ExecutionSettings
+            >>> from riko import ExecutionSettings
             >>>
             >>> ExecutionSettings().sync_policy
             SyncPolicy(executor=<Executor.INLINE: 'inline'>, workers=None)
@@ -205,7 +218,7 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko.definitions._settings import ExecutionSettings
+            >>> from riko import ExecutionSettings
             >>>
             >>> ExecutionSettings(concurrency=4).async_policy
             AsyncPolicy(limit=4, inline=False)

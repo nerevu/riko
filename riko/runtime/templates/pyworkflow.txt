@@ -15,6 +15,9 @@ from riko.ext import (
 )
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes
+{%- if has_embed %}
+from riko.types import Embed
+{%- endif %}
 {%- if raw_confs %}
 from riko.types.modules import (
 {%- for raw_conf in raw_confs %}

@@ -22,6 +22,7 @@ from riko.base._exceptions import (
     PipelineStateError,
     RikoError,
     UnsupportedModuleError,
+    UnsupportedTargetError,
     UnsupportedWorkflowError,
 )
 from riko.base._paths import get_path, get_temp_file
@@ -32,7 +33,9 @@ from riko.definitions._resource_definition import (
     Resource,
     ReusableResource,
 )
+from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow, WorkflowLike
+from riko.definitions._write import WriteMode
 from riko.io._async import async_get_temp_file, async_url_open, async_write
 from riko.modules._metadata import describe_module, get_module_metadata, list_modules
 from riko.modules._names import Modules, Sinks, Sources, Transforms
@@ -47,6 +50,7 @@ from riko.types._enums import (
     Executor,
     Formats,
     IdentityMode,
+    SortableCastType,
 )
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
@@ -72,6 +76,7 @@ __all__ = [
     "EmptyPipelineError",
     "Endpoint",
     "ExecutionMode",
+    "ExecutionSettings",
     "Executor",
     "Formats",
     "IdentityMode",
@@ -86,14 +91,17 @@ __all__ = [
     "ReusableResource",
     "RikoError",
     "Sinks",
+    "SortableCastType",
     "Sources",
     "Transforms",
     "UnsupportedModuleError",
+    "UnsupportedTargetError",
     "UnsupportedWorkflowError",
     "Workflow",
     "WorkflowDocument",
     "WorkflowLike",
     "WorkflowModule",
+    "WriteMode",
     "alist",
     "as_async",
     "async_chain",

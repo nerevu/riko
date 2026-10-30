@@ -177,7 +177,6 @@ def _collect_raw_confs(nodes: list[ModuleNode]) -> list[str]:
 
         if node.embed is not None:
             embed_conf = node.embed["conf"]
-            used.add("Embed")
 
             if (raw := _resolve_raw_conf(node.embed["name"], embed_conf)) is not None:
                 used.add(raw)
@@ -240,6 +239,7 @@ def compile_workflow(
         is_async=is_async,
         ext_names=sorted({"ModuleNode", *edge_names}),
         raw_confs=_collect_raw_confs(nodes),
+        has_embed=any(node.embed is not None for node in nodes),
         nodes=[_render_node(node) for node in nodes],
         edges=_render_edges(flow.edges),
         outputs=_render_outputs(flow.outputs),
