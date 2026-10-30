@@ -20,7 +20,8 @@ New
   ``.with_resource`` provides a resource, and ``.replace(…)`` swaps the workflow. For
   parallel runs, set ``pipeline.with_execution(concurrency=…`` to ``"auto"`` or > 1.
   ``shutdown_timeout=`` bounds a run's cleanup and how long stopped worker processes
-  get before being killed.
+  get before being killed. ``pipeline.settings`` holds these as a
+  ``riko.ExecutionSettings``.
 
 - Added ``riko.Resource`` for use with ``pipeline.with_resource``. ``Resource(…)`` owns
   an existing value and closes it with ``cleanup`` or the value's own ``close``.
@@ -43,8 +44,10 @@ New
   it returns. Added to ``riko.types``: ``RawWorkflow``/``RawEndpoint``/``RawNode``/
   ``RawEdge`` to annotate workflows; ``PipeDefLike`` for a ``PipeDef`` or similar
   mapping; ``InputLike`` for what a pipeline runs on; ``PipelineStream``/``PipelineRun``
-  for what ``pipeline(items)``/``pipeline.open(items)`` returns; and ``RawCallOptions``/
-  ``CallOptions``/``CallOptionsLike`` for a module's call options (``options=``).
+  for what ``pipeline(items)``/``pipeline.open(items)`` returns; ``RawCallOptions``/
+  ``CallOptions``/``CallOptionsLike`` for a module's call options (``options=``);
+  ``DagModule`` for a ``PipeDag`` ``modules`` entry; and ``Embed`` for the module a
+  ``loop`` runs (``embed=``).
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` (``run-pipe -p flow.json``, or an
   example id) or a ``WorkflowModule`` file directly, alongside the pipe scripts (Python
@@ -61,8 +64,8 @@ New
 - Every riko logger is now a child of the ``"riko"`` logger, so
   ``logging.getLogger("riko").setLevel(...)`` sets the level for all of them.
 
-- Added ``riko.PipelineError``, ``riko.InvalidPipelineError``, and
-  ``riko.EmptyPipelineError``.
+- Added ``riko.PipelineError``, ``riko.InvalidPipelineError``,
+  ``riko.EmptyPipelineError``, and ``riko.UnsupportedTargetError``.
 
 - Added ``normalize_workflow`` (``WorkflowLike`` -> ``Workflow``), ``migrate_v1_to_v2``
   (``PipeDef`` -> ``Workflow``), the node and edge classes (e.g., ``ModuleNode``), and
@@ -275,8 +278,10 @@ Removed
 - Removed ``autorss``, ``cast``, ``collections``, ``compile``, ``context``,
   ``currencies``, ``dates``, ``dotdict``, ``exceptions``, ``locations``, ``parsers``,
   ``paths``, ``pprint2``, ``topsort``, ``bado.io``, ``ext.names``, and ``types.compile``
-  from ``riko``. ``CastType`` is now on ``riko`` and ``normalize_module_name`` on
-  ``riko.ext``. Everything else they held is private, with no public replacement.
+  from ``riko``. ``CastType``, ``SortableCastType`` (a sort rule's ``type``), and
+  ``WriteMode`` (``Pipeline.write``'s ``mode``) are now on ``riko`` and
+  ``normalize_module_name`` on ``riko.ext``. Everything else they held is private, with
+  no public replacement.
 
 - Removed the ``config``, ``decorators``, ``protocols``, and ``registry`` Python modules
   from ``riko.ext``. Every name they held is already on ``riko.ext`` (``reset_registry``
