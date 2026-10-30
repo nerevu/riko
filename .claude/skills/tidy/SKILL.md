@@ -153,15 +153,18 @@ neighborhood it affects:
    (now used by one file → beside its class; by several → `tests/_*.py`).
    Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
    file>` (static, about 2s). It lists candidates (unused or single-user helpers,
-   copied definitions, same-shape tests, shared literals, same-named tests,
-   unsupported names in public, functional classes with no end-to-end marker).
+   copied definitions, same-shape tests, shared literals, doctest calls repeated
+   as `pytest.param` rows, doctest errors repeated as `pytest.raises`, same-named
+   tests, unsupported names in public, functional classes with no end-to-end
+   marker).
    Read and verify only those, never whole files. Make the moves with
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user;
    moves repoint doc citations), and find a test's current home with
-   `overlap_scan.py --where NAME`. After editing either script, run its smoke
-   test: `uv run --active pytest .claude/skills/tidy/test_move_tests.py`.
+   `overlap_scan.py --where NAME`. After editing either script, run the smoke
+   tests: `uv run --active pytest .claude/skills/tidy/test_move_tests.py
+   .claude/skills/tidy/test_overlap_scan.py`.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.

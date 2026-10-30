@@ -16,6 +16,13 @@ every line is a lead to read, not a verdict. Sections:
 - ``overlaps`` -- test pairs in different files (or a test and a collected doctest)
   that share distinctive literals: inputs and expected values seen in few places.
   Module-level tables a test names are counted as that test's literals.
+- ``doctest-args`` -- a doctest call and a ``pytest.param`` row that name the same
+  callee and share a distinctive argument and an expected value (short literals
+  such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see).
+- ``doctest-raises`` -- a doctest ``Traceback`` and a ``pytest.raises`` (inline, or a
+  table row carrying the exception and fragment) for the same exception whose
+  ``match`` fragment is found in the doctest's message; ``(same callee)`` marks the
+  pairs most likely to be one case.
 - ``names`` -- test methods with the same name (``async_`` dropped) in different
   files: often one rule asserted twice.
 - ``cross-subject`` -- classes that lean on a name whose ``Test<Subject>`` class
@@ -28,6 +35,10 @@ every line is a lead to read, not a verdict. Sections:
 - ``tier`` -- functional-tier classes that touch none of the end-to-end markers
   (CLI runners, examples, stored fixture workflows).
 
+Both doctest sections miss rows given as a bare list with ``ids=[...]`` and doctest
+constants reachable only through a variable, and a ``match`` given as an
+f-string.
+
 ``--where NAME...`` instead prints where each test class or method (``Class``,
 ``test_x``, or ``Class::test_x``) lives now, as ``path::Class[::method]``.
 
@@ -39,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import builtins
 import doctest
 import json
 import os
@@ -54,6 +66,8 @@ TIERS = ("public", "internal", "functional")
 DOCTEST_ROOTS = ("riko", "examples")
 DOCTEST_FILES = ("README.rst", "docs")
 MIN_STR = 5
+MIN_ARG = 2
+MIN_INT = 10
 MAX_SPREAD = 6
 MIN_SHAPE_DUMP = 300
 CROSS_SUBJECT_MIN = 3
@@ -62,6 +76,8 @@ SECTIONS = (
     "helpers",
     "shapes",
     "overlaps",
+    "doctest-args",
+    "doctest-raises",
     "names",
     "cross-subject",
     "unsupported",
@@ -69,6 +85,9 @@ SECTIONS = (
     "tier",
 )
 QUOTED = re.compile(r"'([^']{5,})'|\"([^\"]{5,})\"")
+NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+BUILTINS = frozenset(dir(builtins))
+FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 API_SURFACE = "riko/base/_api_surface.py"
 PUBLIC_MODULES = frozenset({"riko.coercion._configs", "riko.types.modules"})
 E2E_NAMES = frozenset(
@@ -188,7 +207,7 @@ def gen_classes(file: TestFile):
 
 def gen_tests(cls: ast.ClassDef):
     for stmt in cls.body:
-        is_func = isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef)
+        is_func = isinstance(stmt, FUNCTION_NODES)
         if is_func and stmt.name.startswith("test"):
             yield stmt
 
@@ -216,51 +235,142 @@ def gen_doctest_sources(root: Path):
         yield from ([path] if path.is_file() else sorted(path.rglob("*.rst")))
 
 
-def build_doctest_units(root: Path) -> list[Unit]:
-    parser = doctest.DocTestParser()
-    units = []
+def get_leaf(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        leaf = node.id
+    elif isinstance(node, ast.Attribute):
+        leaf = node.attr
+    else:
+        leaf = None
+    return leaf
 
+
+def gen_constants(*nodes: ast.AST):
+    for node in nodes:
+        for child in ast.walk(node):
+            is_value = isinstance(child, ast.Constant) and not isinstance(
+                child.value, bool
+            )
+            if is_value:
+                yield repr(child.value)
+
+
+def get_number(text: str) -> str:
+    return repr(float(text) if "." in text else int(text))
+
+
+def get_outputs(want: str) -> set[str]:
+    try:
+        tree = ast.parse(want.strip(), mode="eval")
+    except SyntaxError:
+        quoted = {repr(t) for found in QUOTED.findall(want) for t in found if t}
+        outputs = quoted | {get_number(text) for text in NUMBER.findall(want)}
+    else:
+        outputs = set(gen_constants(tree))
+    return outputs
+
+
+@dataclass
+class Example:
+    """One doctest example: its parsed source, expected output, and exception line."""
+
+    path: str
+    name: str
+    line: int
+    source: str
+    tree: ast.Module | None
+    want: str
+    exc_msg: str | None
+
+    @property
+    def where(self) -> str:
+        return f"{self.path}:{self.line} doctest {self.name}"
+
+    @property
+    def callees(self) -> set[str]:
+        nodes = [] if self.tree is None else ast.walk(self.tree)
+        calls = (get_leaf(node.func) for node in nodes if isinstance(node, ast.Call))
+        return {name for name in calls if name is not None} - BUILTINS
+
+    @property
+    def inputs(self) -> set[str]:
+        return set() if self.tree is None else set(gen_constants(self.tree))
+
+    @property
+    def outputs(self) -> set[str]:
+        return get_outputs(self.want)
+
+    @property
+    def exception(self) -> str:
+        head = (self.exc_msg or "").partition(":")[0].strip()
+        return head.rsplit(".", 1)[-1]
+
+    @property
+    def message(self) -> str:
+        return (self.exc_msg or "").partition(":")[2].strip()
+
+
+def gen_docstring_groups(root: Path, parser: doctest.DocTestParser):
     for path in gen_doctest_sources(root):
         rel = path.relative_to(root).as_posix()
         text = path.read_text()
 
         if path.suffix == ".rst":
-            groups = [(rel, 1, parser.get_examples(text))]
-        else:
-            groups = []
+            yield rel, rel, 1, parser.get_examples(text)
+            continue
+
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+
+        for node in ast.walk(tree):
+            is_doc = isinstance(node, (ast.Module, ast.ClassDef, *FUNCTION_NODES))
+            doc = ast.get_docstring(node, clean=False) if is_doc else None
+            if doc and ">>>" in doc:
+                line = getattr(node, "lineno", 1)
+                name = getattr(node, "name", "<module>")
+                yield rel, name, line, parser.get_examples(doc)
+
+
+def build_examples(root: Path) -> list[Example]:
+    parser = doctest.DocTestParser()
+    examples = []
+
+    for rel, name, line, found in gen_docstring_groups(root, parser):
+        for example in found:
             try:
-                tree = ast.parse(text)
+                tree = ast.parse(example.source)
             except SyntaxError:
-                continue
-
-            for node in ast.walk(tree):
-                is_doc = isinstance(
-                    node,
-                    ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+                tree = None
+            examples.append(
+                Example(
+                    rel, name, line, example.source, tree, example.want, example.exc_msg
                 )
-                doc = ast.get_docstring(node, clean=False) if is_doc else None
-                if doc and ">>>" in doc:
-                    line = getattr(node, "lineno", 1)
-                    name = getattr(node, "name", "<module>")
-                    groups.append((name, line, parser.get_examples(doc)))
+            )
 
-        for name, line, examples in groups:
-            literals = set()
-            for example in examples:
-                try:
-                    literals |= set(gen_literals(ast.parse(example.source)))
-                except SyntaxError:
-                    pass
-                literals |= {
-                    text
-                    for found in QUOTED.findall(example.want)
-                    for text in found
-                    if text and text.lower() not in WORD_STOP
-                }
-            if literals:
-                units.append(Unit(rel, f"doctest {name}", line, literals))
+    return examples
 
-    return units
+
+def build_doctest_units(examples: list[Example]) -> list[Unit]:
+    groups = defaultdict(set)
+
+    for example in examples:
+        literals = groups[example.path, example.name, example.line]
+        if example.tree is not None:
+            literals |= set(gen_literals(example.tree))
+        literals |= {
+            text
+            for found in QUOTED.findall(example.want)
+            for text in found
+            if text and text.lower() not in WORD_STOP
+        }
+
+    return [
+        Unit(path, f"doctest {name}", line, literals)
+        for (path, name, line), literals in groups.items()
+        if literals
+    ]
 
 
 def gen_overlaps(units: list[Unit], doc_units: list[Unit], min_shared: int):
@@ -290,6 +400,235 @@ def gen_overlaps(units: list[Unit], doc_units: list[Unit], min_shared: int):
         if count >= min_shared:
             shared = sorted(pool[a][1] & pool[b][1], key=len, reverse=True)
             yield count, pool[a][0], pool[b][0], shared[:4]
+
+
+@dataclass
+class Row:
+    """One ``pytest.param`` row and the test that consumes it."""
+
+    path: str
+    line: int
+    test: str
+    names: set[str]
+    constants: set[str]
+
+
+@dataclass
+class Raise:
+    """One ``pytest.raises`` call, or a table row carrying an exception and message."""
+
+    path: str
+    line: int
+    test: str
+    names: set[str]
+    exceptions: set[str]
+    matches: tuple[str, ...]
+
+
+def is_param(node: ast.AST) -> bool:
+    return isinstance(node, ast.Call) and get_leaf(node.func) == "param"
+
+
+def get_defined(stmt: ast.stmt) -> list[str]:
+    if isinstance(stmt, (*FUNCTION_NODES, ast.ClassDef)):
+        names = [stmt.name]
+    elif isinstance(stmt, ast.Assign):
+        names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
+    elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+        names = [stmt.target.id]
+    else:
+        names = []
+    return names
+
+
+def build_param_tables(file: TestFile) -> dict[str, list[ast.Call]]:
+    tables = {}
+
+    for stmt in file.tree.body:
+        if isinstance(stmt, ast.Assign | ast.AnnAssign) and stmt.value is not None:
+            params = [node for node in ast.walk(stmt.value) if is_param(node)]
+            for name in get_defined(stmt):
+                tables[name] = params
+
+    return tables
+
+
+def gen_param_rows(
+    func: ast.FunctionDef | ast.AsyncFunctionDef, tables: dict[str, list[ast.Call]]
+):
+    for decorator in func.decorator_list:
+        for node in ast.walk(decorator):
+            if is_param(node):
+                yield node
+            elif isinstance(node, ast.Name):
+                yield from tables.get(node.id, [])
+
+
+def get_exceptions(node: ast.AST) -> set[str]:
+    elts = node.elts if isinstance(node, ast.Tuple) else [node]
+    return {leaf for leaf in map(get_leaf, elts) if leaf is not None}
+
+
+def gen_strings(*nodes: ast.AST):
+    for node in nodes:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.value
+        elif isinstance(node, ast.Call):
+            yield from gen_strings(*node.args)
+
+
+def get_matches(call: ast.Call) -> tuple[str, ...]:
+    values = (keyword.value for keyword in call.keywords if keyword.arg == "match")
+    return tuple(gen_strings(*values))
+
+
+def get_row_raise(row: ast.Call) -> tuple[set[str], tuple[str, ...]]:
+    leaves = (get_leaf(arg) for arg in row.args)
+    exceptions = {
+        leaf for leaf in leaves if leaf and leaf.endswith(("Error", "Exception"))
+    }
+    return exceptions, tuple(gen_strings(*row.args))
+
+
+def build_rows(files: list[TestFile]) -> tuple[list[Row], list[Raise]]:
+    rows, raises = [], []
+
+    for file in files:
+        tables = build_param_tables(file)
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                test = f"{cls.name}.{func.name}"
+                names = set(gen_names(func))
+                for row in gen_param_rows(func, tables):
+                    row_names = names | set(gen_names(row))
+                    constants = set(gen_constants(*row.args))
+                    if constants:
+                        rows.append(
+                            Row(file.rel, row.lineno, test, row_names, constants)
+                        )
+                    exceptions, matches = get_row_raise(row)
+                    if exceptions and "raises" in names:
+                        raises.append(
+                            Raise(
+                                file.rel,
+                                row.lineno,
+                                test,
+                                row_names,
+                                exceptions,
+                                matches,
+                            )
+                        )
+                for node in ast.walk(func):
+                    is_raises = isinstance(node, ast.Call) and node.args
+                    if is_raises and get_leaf(node.func) == "raises":
+                        exceptions = get_exceptions(node.args[0])
+                        raises.append(
+                            Raise(
+                                file.rel,
+                                node.lineno,
+                                test,
+                                names,
+                                exceptions,
+                                get_matches(node),
+                            )
+                        )
+
+    return rows, raises
+
+
+def get_name_spread(files: list[TestFile]) -> Counter[str]:
+    spread = Counter()
+
+    for file in files:
+        for cls in gen_classes(file):
+            spread.update(set(gen_names(cls)))
+
+    return spread
+
+
+def is_distinctive(literal: str) -> bool:
+    try:
+        value = ast.literal_eval(literal)
+    except (ValueError, SyntaxError):
+        value = None
+    if value is None or isinstance(value, bool):
+        distinctive = False
+    elif isinstance(value, int | float):
+        distinctive = abs(value) >= MIN_INT
+    elif isinstance(value, str | bytes):
+        distinctive = len(value) >= MIN_ARG
+    else:
+        distinctive = True
+    return distinctive
+
+
+def get_head(text: str, width: int) -> str:
+    lines = text.strip().splitlines()
+    return lines[0][:width] if lines else ""
+
+
+def gen_doctest_args(examples: list[Example], rows: list[Row], spread: Counter[str]):
+    leads = {}
+
+    for example in examples:
+        callee = {name for name in example.callees if spread[name] <= UBIQUITOUS}
+        inputs, outputs = example.inputs, example.outputs
+        for row in rows:
+            if not callee & row.names:
+                continue
+            shared_in = {lit for lit in row.constants & inputs if is_distinctive(lit)}
+            shared_out = row.constants & outputs
+            if shared_in and shared_out:
+                key = example.where, row.path, row.test
+                lead = leads.setdefault(key, (example, row, [], set(), set()))
+                lead[2].append(row.line)
+                lead[3].update(shared_in)
+                lead[4].update(shared_out)
+
+    for example, row, lines, shared_in, shared_out in leads.values():
+        source, want = get_head(example.source, 60), get_head(example.want, 30)
+        at = ",".join(map(str, lines))
+        ins, outs = ", ".join(sorted(shared_in)), ", ".join(sorted(shared_out))
+        text = (
+            f"{example.where}: {source} -> {want}\n"
+            f"      <-> {row.path}:{at} {row.test}\n"
+            f"      in {ins}; out {outs}"
+        )
+        yield text, [example.path, row.path]
+
+
+def has_match(fragment: str, message: str) -> bool:
+    try:
+        found = re.search(fragment, message) is not None
+    except re.error:
+        found = fragment in message
+    return found
+
+
+def gen_doctest_raises(examples: list[Example], raises: list[Raise]):
+    seen = set()
+
+    for example in examples:
+        if example.exc_msg is None:
+            continue
+        exception, message, callees = (
+            example.exception,
+            example.message,
+            example.callees,
+        )
+        for raised in raises:
+            key = example.where, raised.path, raised.test
+            fragment = next((f for f in raised.matches if has_match(f, message)), None)
+            hit = exception in raised.exceptions and fragment is not None
+            if hit and key not in seen:
+                seen.add(key)
+                tag = " (same callee)" if callees & raised.names else ""
+                text = (
+                    f"{example.where}: {exception}: {get_head(message, 60)}\n"
+                    f"      <-> {raised.path}:{raised.line} {raised.test}"
+                    f" match={fragment!r}{tag}"
+                )
+                yield text, [example.path, raised.path]
 
 
 def gen_shapes(files: list[TestFile]):
@@ -347,7 +686,7 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
         )
         for stmt in tree.body:
             names = []
-            if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            if isinstance(stmt, (*FUNCTION_NODES, ast.ClassDef)):
                 names = [stmt.name]
             elif isinstance(stmt, ast.Assign):
                 names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
@@ -365,7 +704,7 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
 
     for file in files:
         for stmt in file.tree.body:
-            if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+            if isinstance(stmt, FUNCTION_NODES):
                 text = ast.unparse(stmt).replace(f"def {stmt.name}(", "def _(", 1)
             elif isinstance(stmt, ast.Assign | ast.AnnAssign):
                 text = ast.unparse(stmt)
@@ -467,24 +806,12 @@ def gen_unsupported(files: list[TestFile], supported: frozenset[str]):
                 yield f"{file.rel}:{cls.lineno} {cls.name}: {names}", [file.rel]
 
 
-def get_defined(stmt: ast.stmt) -> list[str]:
-    if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        names = [stmt.name]
-    elif isinstance(stmt, ast.Assign):
-        names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
-    elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-        names = [stmt.target.id]
-    else:
-        names = []
-    return names
-
-
 def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
     classes = list(gen_classes(file))
     module_uses = set()
 
     for stmt in file.tree.body:
-        if not isinstance(stmt, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+        if not isinstance(stmt, (ast.ClassDef, *FUNCTION_NODES)):
             module_uses |= set(gen_names(stmt)) - set(get_defined(stmt))
 
     misplaced = []
@@ -507,7 +834,7 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
                 user = previous
             needs = set(gen_names(stmt)) - set(get_defined(stmt))
             later = [n for n in needs if defined_at.get(n, 0) > user.lineno]
-            if later and not isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+            if later and not isinstance(stmt, FUNCTION_NODES):
                 continue
             between = [c.name for c in classes if stmt.lineno < c.lineno < user.lineno]
             if user.lineno < stmt.lineno:
@@ -585,7 +912,9 @@ def main() -> int:
     root = Path(".")
     files = load_test_files(root)
     units = build_units(files)
-    doc_units = [] if args.no_doctests else build_doctest_units(root)
+    examples = [] if args.no_doctests else build_examples(root)
+    doc_units = build_doctest_units(examples)
+    rows, raises = build_rows(files)
     report = {section: [] for section in SECTIONS}
 
     for text, paths in gen_helper_issues(root, files):
@@ -602,6 +931,14 @@ def main() -> int:
             report["overlaps"].append(
                 f"{count} shared: {left.where}\n      <-> {right.where}\n      {lits}"
             )
+
+    for text, paths in gen_doctest_args(examples, rows, get_name_spread(files)):
+        if keep(paths) and len(report["doctest-args"]) < args.limit:
+            report["doctest-args"].append(text)
+
+    for text, paths in gen_doctest_raises(examples, raises):
+        if keep(paths) and len(report["doctest-raises"]) < args.limit:
+            report["doctest-raises"].append(text)
 
     for text, paths in gen_same_names(units):
         if keep(paths):
