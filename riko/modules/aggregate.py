@@ -47,10 +47,11 @@ if TYPE_CHECKING:
     from riko.coercion._configs import AggregateObjconf
     from riko.types._wrappers import PipeTuples
 
-DEFAULTS: Defaults = Defaults()
 logger: Logger = get_logger(__name__)
 
 type AggregateResult = Item | Items
+
+DEFAULTS: Defaults = Defaults()
 
 
 async def async_parser(

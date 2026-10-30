@@ -65,9 +65,11 @@ type NodeId = str
 type Port = str
 type ResourceName = str
 type WorkflowDocument = bytes
+
 type DocumentNodeFamily = Literal[
     "module", "read", "write", "cache", "action", "subscribe"
 ]
+
 type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]

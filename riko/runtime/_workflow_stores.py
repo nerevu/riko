@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import ModuleType
 
+type ModuleStore = WorkflowStore[ResolvedWorkflow]
+type DocumentStore = WorkflowStore[Workflow]
+
 
 class WorkflowStore[T](Protocol):
     """
@@ -60,10 +63,6 @@ class WorkflowStore[T](Protocol):
 
         """
         ...
-
-
-type ModuleStore = WorkflowStore[ResolvedWorkflow]
-type DocumentStore = WorkflowStore[Workflow]
 
 
 class PackageStore:

@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, Items
     from riko.types._wrappers import ConversionOutput
 
+type _Destination = str | TextIO
+
 __all__ = ["Formats", "export", "list_formats"]
 
 
@@ -57,9 +59,6 @@ def list_formats() -> list[str]:
 
     """
     return sorted(map(str, CONVERSION_FUNCS))
-
-
-type _Destination = str | TextIO
 
 
 def _resolve_option[T](value: T | MissingType, default: T) -> T:

@@ -47,9 +47,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types.modules import RenameConfRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"extract": "rule", "listize": True, "emit": True}
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def reducer(item: Item, rule: RenameConfRule) -> Item:

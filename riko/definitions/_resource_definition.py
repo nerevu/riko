@@ -49,9 +49,10 @@ if TYPE_CHECKING:
 
     from riko.types._io import Closeable
 
-
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 type Values = Mapping[str, object]
+type ReusableResources = FrozenDict[str, ReusableResource[object]]
+type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 
 @define(frozen=True, slots=True, eq=False, repr=False, init=False)
@@ -451,8 +452,5 @@ class ReusableResource[T](Resource[T]):
 
         def __new__(cls, *args: object, **kwargs: object) -> Never: ...
 
-
-type ReusableResources = FrozenDict[str, ReusableResource[object]]
-type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 __all__ = ["OneShotResource", "Resource", "ReusableResource"]

@@ -49,6 +49,7 @@ ONSETS = (
     "tr",
     "v",
 )
+
 VOWELS = "aeiou"
 CODAS = ("", "l", "m", "n", "r", "s", "th", "nd", "nt", "ck")
 
@@ -69,6 +70,17 @@ ADJECTIVES = [
     "steady",
     "wild",
 ]
+
+PARAMS: dict[str, Callable[[list[re.Match[str]]], re.Match[str]]] = {
+    "first": lambda matches: matches[0],
+    "last": lambda matches: matches[-1],
+}
+
+OPS: dict[str, Callable[[str, re.Match[str]], str]] = {
+    "before": lambda word, match: word[: match.start()],
+    "after": lambda word, match: word[match.end() :],
+    "at": lambda _, match: match.group(),
+}
 
 
 def _gen_words(match, splits: Iterable[BasicValue]):
@@ -178,18 +190,6 @@ def substitute(word: str, rule: RegexRule) -> str:
         replaced = word
 
     return replaced
-
-
-PARAMS: dict[str, Callable[[list[re.Match[str]]], re.Match[str]]] = {
-    "first": lambda matches: matches[0],
-    "last": lambda matches: matches[-1],
-}
-
-OPS: dict[str, Callable[[str, re.Match[str]], str]] = {
-    "before": lambda word, match: word[: match.start()],
-    "after": lambda word, match: word[match.end() :],
-    "at": lambda _, match: match.group(),
-}
 
 
 def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:

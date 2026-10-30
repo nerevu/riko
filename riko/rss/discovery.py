@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from riko.io._filelike import StringFileLike
     from riko.types._streams import Stream
 
-TIMEOUT = settings.discovery_timeout
 logger: Logger = get_logger(__name__)
+
+TIMEOUT = settings.discovery_timeout
 
 
 class RSSLinkParser(LinkParser):

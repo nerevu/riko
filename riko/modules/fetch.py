@@ -45,9 +45,11 @@ if TYPE_CHECKING:
     from riko.types._rss import RSSEntry
     from riko.types._streams import Item
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger: Logger = get_logger(__name__)
+
 keys: set[str] = {"author", "dc:creator", "id", "link", "pubDate", "summary", "title"}
 
 

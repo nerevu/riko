@@ -6,15 +6,14 @@ from riko.definitions._context import Context
 from riko.types._enums import ExecutionMode
 from tests.pyworkflows._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
+INPUTS: list = []
+DEPENDENCIES = ["fetchdata", "rename", "regex"]
+
 
 def build() -> Pipeline:
     """Builds the fetchdata variant of the simple kazeeki chain."""
     source = Pipeline.from_module("fetchdata", conf=fetchdata_conf)
     return source.rename(conf=rename_conf).regex(conf=regex_conf)
-
-
-INPUTS: list = []
-DEPENDENCIES = ["fetchdata", "rename", "regex"]
 
 
 def pipe(context: Context | None = None, **_):

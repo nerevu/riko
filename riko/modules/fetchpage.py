@@ -49,9 +49,10 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchPageObjconf
     from riko.types._streams import Item
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
-logger: Logger = get_logger(__name__)
 
 
 def get_string(content: str, start: str, end: str) -> str:

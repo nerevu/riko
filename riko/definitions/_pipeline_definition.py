@@ -71,6 +71,8 @@ if TYPE_CHECKING:
     )
     from ._write import Destination
 
+_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
+
 T_co = TypeVar("T_co", covariant=True, default=Item)
 
 
@@ -82,9 +84,6 @@ def _is_module_pair(value: object) -> TypeGuard[tuple[str, AnyModuleConf]]:
         and isinstance(value[0], str)
         and is_mapping(value[1])
     )
-
-
-_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
 
 
 def _require_workflow(value: object, what: str | None = None, **_) -> Workflow:

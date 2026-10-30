@@ -85,12 +85,6 @@ from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
-
-def _if(test: str, body: str = "import a", orelse: str = "") -> str:
-    tail = f"else:\n    {orelse}\n" if orelse else ""
-    return f"if {test}:\n    {body}\n{tail}"
-
-
 _TYPING = "[tool.riko.typing]\n"
 _TODAY = date(2026, 10, 27)
 _WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
@@ -222,6 +216,13 @@ repos:
 
 WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
 TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
+
+
+def _if(test: str, body: str = "import a", orelse: str = "") -> str:
+    tail = f"else:\n    {orelse}\n" if orelse else ""
+    return f"if {test}:\n    {body}\n{tail}"
+
+
 LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
 ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
 

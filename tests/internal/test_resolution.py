@@ -51,6 +51,9 @@ from tests._workflows import EXCLAIMED, PARENT, register_documents
 if TYPE_CHECKING:
     from riko.types._wrappers import SyncModuleWrapper
 
+_NAME = "acme.mod"
+_MISSING_NAME = "nope"
+
 
 def _pipe_wrapper(**attrs):
     wrapper = cast("SyncModuleWrapper", lambda source, **_: source)
@@ -61,8 +64,6 @@ def _pipe_wrapper(**attrs):
     return wrapper
 
 
-_NAME = "acme.mod"
-_MISSING_NAME = "nope"
 _MARKER = _pipe_wrapper()
 _DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
 

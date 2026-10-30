@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"field": "content"}
 DEFAULTS: Defaults = {"type": "text"}
-
-logger: Logger = get_logger(__name__)
 
 
 def parser(

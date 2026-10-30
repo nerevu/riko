@@ -33,10 +33,23 @@ if TYPE_CHECKING:
         SyncProcessorWrapperOutput,
     )
 
+type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
+type AsyncTest = Callable[[], Awaitable[object]]
+
 NUMBER = 1
 LOOPS = 1
 DELAY = 0.1
 UNION_ID = "union-1"
+
+REGEX_RULE = RegexRawRule(
+    {
+        "field": {"type": "text", "value": "title"},
+        "match": {"type": "text", "value": "a"},
+        "replace": {"type": "text", "value": "b"},
+    }
+)
+
+REGEX_CONF = RegexRawConf({"rule": [REGEX_RULE]})
 
 files: list[str] = [
     "ouseful.xml",
@@ -60,17 +73,7 @@ confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 length: int = len(files)
 iterable: list[float] = [DELAY for _ in files]
 
-REGEX_RULE = RegexRawRule(
-    {
-        "field": {"type": "text", "value": "title"},
-        "match": {"type": "text", "value": "a"},
-        "replace": {"type": "text", "value": "b"},
-    }
-)
-REGEX_CONF = RegexRawConf({"rule": [REGEX_RULE]})
 items: list[Item] = [{"title": f"a{i}"} for i in range(200)]
-type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
-type AsyncTest = Callable[[], Awaitable[object]]
 
 
 def build_fanin() -> Workflow:

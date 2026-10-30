@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
+type Items = ParserOutput | StatefulItem
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
 
@@ -125,9 +126,6 @@ ITEMBUILDER_ITEMS = [
 
 ASSIGNED = [{"title": "a b c", "tokens": {"content": c}} for c in "abc"]
 EMBEDDED = [{"title": "hello", "strconcat": "hello!"}]
-
-
-type Items = ParserOutput | StatefulItem
 
 
 def _assert_kazeeki(item: Mapping, example: Mapping, content: tuple[str, str]) -> None:

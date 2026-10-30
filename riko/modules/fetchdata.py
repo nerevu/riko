@@ -46,9 +46,10 @@ if TYPE_CHECKING:
     from riko.coercion._configs import FetchDataObjconf
     from riko.types._streams import Item, Stream
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = Defaults({"encoding": ENCODING})
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

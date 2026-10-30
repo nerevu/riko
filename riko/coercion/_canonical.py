@@ -34,6 +34,10 @@ if TYPE_CHECKING:
 type CanonicalValue = str | bool | list[CanonicalValue] | None
 type Canonicalizer[V] = Callable[[V, set[int]], CanonicalValue]
 
+_NATIVE_KEY_TYPES: frozenset[type] = frozenset(
+    {str, bytes, int, float, bool, type(None)}
+)
+
 IDENTITY_FORMAT_VERSION = 1
 
 
@@ -282,11 +286,6 @@ def digest(value: object, domain: IdentityDomain) -> str:
     header = f"riko-identity:{IDENTITY_FORMAT_VERSION}:{domain.value}".encode()
     _bytes = canonical_bytes(value)
     return blake2b(header + b"\x00" + _bytes, digest_size=16).hexdigest()
-
-
-_NATIVE_KEY_TYPES: frozenset[type] = frozenset(
-    {str, bytes, int, float, bool, type(None)}
-)
 
 
 def _is_native_val(value: object) -> bool:

@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from ._workflow import GraphEdge
     from .modules import AnyConfRule
 
-
 type FrozenJSON = (
     bool
     | int
@@ -46,6 +45,15 @@ type FrozenParams = FrozenDict[str, FrozenJSON]
 type FrozenPolicy = FrozenDict[str, FrozenJSON]
 type FrozenTupleMapping = FrozenDict[str, tuple[GraphEdge, ...]]
 type FrozenSetMapping = FrozenDict[str, frozenset[str]]
+type Freezer[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
+type MappingConverter[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
+type TypeConverter[T, FV] = Callable[[T], FrozenDict[str, FV]]
+
+type OptionalMappingConverter[FV] = Callable[
+    [Mapping[str, object] | None], FrozenDict[str, FV]
+]
+
+type OptionalTypeConverter[T, FV] = Callable[[T | None], FrozenDict[str, FV]]
 
 
 def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
@@ -289,17 +297,6 @@ def thaw(value: object) -> object:
         result = value
 
     return result
-
-
-type Freezer[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
-type MappingConverter[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
-type TypeConverter[T, FV] = Callable[[T], FrozenDict[str, FV]]
-type OptionalMappingConverter[FV] = Callable[
-    [Mapping[str, object] | None], FrozenDict[str, FV]
-]
-
-
-type OptionalTypeConverter[T, FV] = Callable[[T | None], FrozenDict[str, FV]]
 
 
 def instances_freezer[T](

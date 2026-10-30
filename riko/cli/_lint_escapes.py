@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-ESCAPES: tuple[str, ...] = ("Any", "cast")
 _TYPING_MODULES = frozenset({"typing", "typing_extensions"})
+ESCAPES: tuple[str, ...] = ("Any", "cast")
 
 
 class _EscapeCounter(ast.NodeVisitor):

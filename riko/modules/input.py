@@ -41,7 +41,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types._values import Inputs
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
+
 DEFAULTS: Defaults = {
     "type": "text",
     "default": "",
@@ -49,7 +52,6 @@ DEFAULTS: Defaults = {
     "test": False,
     "input_key": "content",
 }
-logger: Logger = get_logger(__name__)
 
 
 def parser(

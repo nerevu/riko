@@ -32,15 +32,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-BANNED_LEADS: tuple[str, ...] = ("Return", "Yield")
-COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("_require_guards.py", "require_from_attrs"),
-        ("_require_guards.py", "require_from_form"),
-        ("_require_guards.py", "require_from_keys"),
-        ("_require_guards.py", "require_from_typed_dict"),
-    }
-)
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
@@ -48,11 +39,23 @@ _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
 _EXCEPTION_SUFFIXES: tuple[str, ...] = ("Error", "Exception", "Warning")
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
+
 _PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
     ("riko", STABLE),
     ("riko.ext", EXTENSION),
     ("riko.ext.codegen", EXT_CODEGEN),
     ("riko.types", TYPES),
+)
+
+BANNED_LEADS: tuple[str, ...] = ("Return", "Yield")
+
+COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("_require_guards.py", "require_from_attrs"),
+        ("_require_guards.py", "require_from_form"),
+        ("_require_guards.py", "require_from_keys"),
+        ("_require_guards.py", "require_from_typed_dict"),
+    }
 )
 
 

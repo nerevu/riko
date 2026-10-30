@@ -70,20 +70,15 @@ type CoroutineFunc = Callable[..., Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
 type SplitterParserOutput = Cascade
+
 type ParserOutput[T: ItemOrValue] = (
     ProcessorParserOutput[T] | OperatorParserOutput[T] | SplitterParserOutput
 )
+
 type ParserMaterializedOutput = list[ItemOrValue]
 type Caster[T] = Callable[[str | int], T]
 type NumericCaster = Callable[[str | NumLike], NumLike]
 type ArgCaster[T] = Callable[..., T]
-
-
-class PreCaster[T](TypedDict):
-    default: PrimitiveValue | dict[str, str] | None
-    func: Caster[T]
-
-
 type ItemDispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
 type ConversionOutput = Iterable[str] | StringIO
 type ConversionFunc = Callable[..., ConversionOutput]
@@ -91,18 +86,94 @@ type ConversionFunc = Callable[..., ConversionOutput]
 # Sync
 type SyncOperatorWrapperOutput = Stream
 type SyncOperatorWrapperInternalOutput = Iterator[ItemOrValue]
+
 type SyncOperatorWrapperInput = (
     Items | SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 )
+
 type SyncProcessorWrapperOutput = Stream
 type SyncProcessorWrapperInternalOutput = Iterator[ItemOrValue]
 type SyncProcessorWrapperInput = ItemOrValue | ItemsOrValues
-
 type SyncSplitterWrapperOutput = Cascade
 type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
-
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 type SyncConfCastFunc = Callable[..., DynamicConf]
+
+type SyncWrapperInput = (
+    SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
+)
+
+# A keyword argument name each item call supplies, which a configuration's
+# ``terminal`` reference may name.
+type ExtraName = str
+type ExtraNames = tuple[ExtraName, ...]
+type PrepareConf = MaybeFrozenConf | DynamicConf
+type AsyncOperatorWrapperOutput = AsyncStream
+type AsyncOperatorWrapperInternalOutput = AsyncIterator[ItemOrValue]
+type AsyncOperatorWrapperInput = AsyncItems | SyncOperatorWrapperInput
+type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
+
+type AsyncProcessorWrapperInternalOutput = (
+    SyncProcessorWrapperInternalOutput | AsyncIterator[ItemOrValue]
+)
+
+type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
+type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
+type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
+type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
+
+type AsyncModuleWrapperOutput[T] = (
+    AsyncWrapperStream[T, Iterator[T]]
+    | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
+)
+
+type AsyncProcessorParser[I, E, O: ItemOrValue] = (
+    SyncProcessorParser[I, E, O] | AwaitableProcessorParser[I, E, O]
+)
+
+type AsyncOperatorParser[T: ItemOrValue, E] = (
+    SyncOperatorParser[T, E] | AwaitableOperatorParser[T, E]
+)
+
+type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
+
+# Both
+type WrapperOutput = SyncWrapperOutput | AsyncWrapperOutput
+
+type OperatorParser[T: ItemOrValue, E] = (
+    SyncOperatorParser[T, E] | AsyncOperatorParser[T, E]
+)
+
+type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
+
+type ProcessorParser[I, E, O: ItemOrValue] = (
+    SyncProcessorParser[I, E, O] | AsyncProcessorParser[I, E, O]
+)
+
+type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
+type ProcessorWrapperInput = SyncProcessorWrapperInput | AsyncProcessorWrapperInput
+type SplitterParser[E] = SyncSplitterParser[E] | AsyncSplitterParser[E]
+type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
+type SplitterWrapperOutput = SyncSplitterWrapperOutput | AsyncSplitterWrapperOutput
+type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
+type SubPipe = SyncSubPipe | AsyncSubPipe
+type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
+type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
+
+WRAPPER_META: tuple[str, ...] = (
+    "name",
+    "type",
+    "subtype",
+    "subtypes",
+    "pollable",
+    "loopable",
+    "isasync",
+)
+
+
+class PreCaster[T](TypedDict):
+    default: PrimitiveValue | dict[str, str] | None
+    func: Caster[T]
 
 
 class SyncProcessorParser[I, E, O: ItemOrValue](Protocol):
@@ -142,11 +213,6 @@ class SyncSplitterParser[E](Protocol):
     ) -> SplitterParserOutput: ...
 
 
-type SyncWrapperInput = (
-    SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
-)
-
-
 class SyncFieldParseFunc(Protocol):
     """Reads a module's configured field from one item."""
 
@@ -170,13 +236,6 @@ class CastFuncs[T, E](NamedTuple):
     field_caster: ArgCaster[T]
     extract_caster: ArgCaster[E]
     conf_caster: SyncConfCastFunc
-
-
-# A keyword argument name each item call supplies, which a configuration's
-# ``terminal`` reference may name.
-type ExtraName = str
-type ExtraNames = tuple[ExtraName, ...]
-type PrepareConf = MaybeFrozenConf | DynamicConf
 
 
 class PreparedCall(Protocol):
@@ -234,17 +293,6 @@ class ModuleWrapper(WrapperMeta, Protocol):
     """A pipe callable: the discovery metadata plus a ``prepare`` for its calls."""
 
     prepare: Preparer
-
-
-WRAPPER_META: tuple[str, ...] = (
-    "name",
-    "type",
-    "subtype",
-    "subtypes",
-    "pollable",
-    "loopable",
-    "isasync",
-)
 
 
 def is_wrapper_meta(value: object) -> TypeIs[WrapperMeta]:
@@ -378,26 +426,6 @@ class AsyncWrapperStream[Y, A](Protocol):
     def __anext__(self) -> Awaitable[Y]: ...
 
 
-type AsyncOperatorWrapperOutput = AsyncStream
-type AsyncOperatorWrapperInternalOutput = AsyncIterator[ItemOrValue]
-type AsyncOperatorWrapperInput = AsyncItems | SyncOperatorWrapperInput
-
-type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
-type AsyncProcessorWrapperInternalOutput = (
-    SyncProcessorWrapperInternalOutput | AsyncIterator[ItemOrValue]
-)
-type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
-
-type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
-type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
-
-type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
-type AsyncModuleWrapperOutput[T] = (
-    AsyncWrapperStream[T, Iterator[T]]
-    | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
-)
-
-
 class AwaitableProcessorParser[I, E, O: ItemOrValue](Protocol):
     """
     Parses one item's field, extraction, and configuration asynchronously.
@@ -433,15 +461,6 @@ class AwaitableSplitterParser[E](Protocol):
     def __call__(
         self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> Awaitable[SplitterParserOutput]: ...
-
-
-type AsyncProcessorParser[I, E, O: ItemOrValue] = (
-    SyncProcessorParser[I, E, O] | AwaitableProcessorParser[I, E, O]
-)
-type AsyncOperatorParser[T: ItemOrValue, E] = (
-    SyncOperatorParser[T, E] | AwaitableOperatorParser[T, E]
-)
-type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
 
 
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
@@ -495,30 +514,6 @@ class AsyncSplitterWrapper(AsyncModuleWrapper):
     ) -> AsyncSplitterWrapperOutput:
         _ = (items, conf)
         raise NotImplementedError
-
-
-# Both
-type WrapperOutput = SyncWrapperOutput | AsyncWrapperOutput
-
-type OperatorParser[T: ItemOrValue, E] = (
-    SyncOperatorParser[T, E] | AsyncOperatorParser[T, E]
-)
-type OperatorWrapper = SyncOperatorWrapper | AsyncOperatorWrapper
-
-type ProcessorParser[I, E, O: ItemOrValue] = (
-    SyncProcessorParser[I, E, O] | AsyncProcessorParser[I, E, O]
-)
-type ProcessorWrapper = SyncProcessorWrapper | AsyncProcessorWrapper
-type ProcessorWrapperInput = SyncProcessorWrapperInput | AsyncProcessorWrapperInput
-
-type SplitterParser[E] = SyncSplitterParser[E] | AsyncSplitterParser[E]
-type SplitterWrapper = SyncSplitterWrapper | AsyncSplitterWrapper
-type SplitterWrapperOutput = SyncSplitterWrapperOutput | AsyncSplitterWrapperOutput
-type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
-
-type SubPipe = SyncSubPipe | AsyncSubPipe
-type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
-type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 
 def is_subpipe[T: SubPipe](value: T | ModuleWrapper | object) -> TypeIs[T]:

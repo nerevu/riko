@@ -51,7 +51,6 @@ type BinaryChunk = bytes | list[int]
 type Chunk = TextChunk | BinaryChunk
 type WriteContent = AnyStr | IOFileLike | Iterable[str] | Iterable[bytes]
 
-
 _MODE_KINDS = frozenset("rwxa")
 _MODE_DUPLEX = frozenset("bt")
 _MODE_CHARS = _MODE_KINDS | _MODE_DUPLEX | {"+"}

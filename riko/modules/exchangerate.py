@@ -52,10 +52,12 @@ if TYPE_CHECKING:
     from riko.coercion._configs import ExchangeRateObjconf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 EXCHANGE_API = settings.exchange_api
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
-
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
+
 DEFAULTS: Defaults = {
     "currency": "USD",
     "memoize": True,
@@ -64,8 +66,6 @@ DEFAULTS: Defaults = {
     "param": PARAMS,
     "encoding": ENCODING,
 }
-
-logger: Logger = get_logger(__name__)
 
 
 class RatesJson(TypedDict):

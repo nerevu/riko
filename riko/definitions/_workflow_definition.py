@@ -81,16 +81,15 @@ if TYPE_CHECKING:
     from riko.types._pipedef import Embed, PipeDag, PipeDefLike
     from riko.types._workflow import EdgeFamily, WorkflowDocument
 
+type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
+type NodesInput = Iterable[Node]
+type OutputsInput = Mapping[str, Endpoint]
 
 _EMPTY_INPUTS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _EMPTY_OUTPUTS: FrozenDict[str, Endpoint] = FrozenDict()
 _EMPTY_NODES: FrozenDict[NodeId, Node] = FrozenDict()
 _EMPTY_EDGES: tuple[Edge, ...] = ()
 _EMPTY_RESOURCES: tuple[str, ...] = ()
-
-type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
-type NodesInput = Iterable[Node]
-type OutputsInput = Mapping[str, Endpoint]
 
 endpoint_freezer = instances_freezer(Endpoint, "Workflow output")
 outputs_converter = mapping_converter(

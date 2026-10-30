@@ -53,12 +53,13 @@ if TYPE_CHECKING:
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
 
+_LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
+
 
 async def _double(x: int) -> int:
     return x * 2
 
 
-_LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 _MAP = partial(async_map_stream, _double, range(3))
 _ORDERED = partial(async_map_ordered_stream, _double, range(3))
 _MERGE = partial(async_merge, [])

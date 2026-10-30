@@ -34,23 +34,6 @@ class VerbRule(NamedTuple):
         return f"{self.verb.capitalize()}s"
 
 
-class VerbPair(NamedTuple):
-    """
-    Two verbs that are easy to mistake for each other.
-
-    Attributes:
-
-        first: One verb of the pair.
-        second: The other verb of the pair.
-        test: The question that tells them apart.
-
-    """
-
-    first: str
-    second: str
-    test: str
-
-
 VERBS: tuple[VerbRule, ...] = (
     VerbRule(
         "load",
@@ -125,6 +108,25 @@ VERBS: tuple[VerbRule, ...] = (
         "`get_document_shape`",
     ),
 )
+
+
+class VerbPair(NamedTuple):
+    """
+    Two verbs that are easy to mistake for each other.
+
+    Attributes:
+
+        first: One verb of the pair.
+        second: The other verb of the pair.
+        test: The question that tells them apart.
+
+    """
+
+    first: str
+    second: str
+    test: str
+
+
 VERB_PAIRS: tuple[VerbPair, ...] = (
     VerbPair("get", "load", "Does it read external or ambient state? Then `load`."),
     VerbPair(

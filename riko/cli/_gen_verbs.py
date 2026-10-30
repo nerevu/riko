@@ -19,20 +19,28 @@ if TYPE_CHECKING:
 
 type TableFormat = Literal["md", "rst"]
 
-VERB_BLOCKS: frozenset[str] = frozenset({"verbs", "verb-pairs"})
-VERB_DOCS: dict[Path, TableFormat] = {
-    ROOT_DIR / "CONTRIBUTING.rst": "rst",
-    ROOT_DIR / "CLAUDE.md": "md",
-}
-_KEY = rf"(?P<key>{'|'.join(sorted(VERB_BLOCKS, reverse=True))})"
 _CODE = compile(r"`([^`]+)`")
+_NBSP = "\x00"
+_NOTE = get_codegen_note("--verbs")
+
 _RST_WIDTHS: dict[str, tuple[int, ...]] = {
     "verbs": (13, 11, 22, 24, 20, 30, 22),
     "verb-pairs": (27, 88),
 }
-_NBSP = "\x00"
 
-_NOTE = get_codegen_note("--verbs")
+_BEGINS: dict[TableFormat, str] = {
+    "md": "<!-- {key}: {note} -->\n",
+    "rst": ".. begin {key}: {note}\n",
+}
+
+VERB_BLOCKS: frozenset[str] = frozenset({"verbs", "verb-pairs"})
+_KEY = rf"(?P<key>{'|'.join(sorted(VERB_BLOCKS, reverse=True))})"
+
+VERB_DOCS: dict[Path, TableFormat] = {
+    ROOT_DIR / "CONTRIBUTING.rst": "rst",
+    ROOT_DIR / "CLAUDE.md": "md",
+}
+
 VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
     "md": compile(
         rf"<!-- {_KEY}(?:: [^>\n]*)? -->\n.*?(?P<end><!-- /(?P=key) -->)", DOTALL
@@ -40,10 +48,6 @@ VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
     "rst": compile(
         rf"\.\. begin {_KEY}(?:: [^\n]*)?\n.*?(?P<end>\.\. end (?P=key))", DOTALL
     ),
-}
-_BEGINS: dict[TableFormat, str] = {
-    "md": "<!-- {key}: {note} -->\n",
-    "rst": ".. begin {key}: {note}\n",
 }
 
 _sub = partial(_CODE.sub, r"``\1``")

@@ -26,10 +26,8 @@ if TYPE_CHECKING:
 
 type _Binding = ast.arg | ast.Assign | ast.AnnAssign
 
-RESERVED_NAME = "workflow"
-PREFERRED_NAME = "flow"
-
 _WORKFLOW_TYPE = re.compile(r"\b(?:Workflow|WorkflowLike)\b")
+
 _WORKFLOW_BUILDERS = frozenset(
     {
         "Workflow",
@@ -39,8 +37,11 @@ _WORKFLOW_BUILDERS = frozenset(
         "require_workflow",
     }
 )
+
 _BINDINGS = (ast.arg, ast.Assign, ast.AnnAssign)
 _DOCUMENTED = (ast.Module, ast.ClassDef, *FUNCTION_NODES)
+RESERVED_NAME = "workflow"
+PREFERRED_NAME = "flow"
 
 
 class BindingIssue(NamedTuple):

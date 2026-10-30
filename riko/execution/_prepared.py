@@ -76,6 +76,14 @@ if TYPE_CHECKING:
         WrapperOutput,
     )
 
+type PreparedNodes = FrozenDict[NodeId, PreparedNode]
+type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
+type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
+
+_MODULE_FLAGS = ("loopable", "sequential_inputs")
+_CALLABLE_MODULE = "udf"
+_EMPTY_EMBEDS: ResolvedModules = FrozenDict()
+
 
 class NodeCall(Protocol):
     """A node's call that is prepared once with its configuration and call options."""
@@ -86,10 +94,6 @@ class NodeCall(Protocol):
         WrapperOutput | SplitterWrapperOutput | Iterator[object] | AsyncIterator[object]
     ): ...
 
-
-type PreparedNodes = FrozenDict[NodeId, PreparedNode]
-type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
-type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
 _is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
@@ -109,9 +113,6 @@ def _has_pipe(
     if value is None and instance.sync_pipe is None:
         msg = f"{instance.name!r} has neither a sync nor an async callable"
         raise InvalidPipelineError(msg)
-
-
-_MODULE_FLAGS = ("loopable", "sequential_inputs")
 
 
 def _has_flag(pipe: AnyModuleWrapper, flag: str) -> bool:
@@ -275,9 +276,6 @@ class ResolvedModule:
         A module without a declared subtype is not a source.
         """
         return getattr(self.select_async(), "subtype", None) == "source"
-
-
-_CALLABLE_MODULE = "udf"
 
 
 def _gen_item_result(
@@ -572,7 +570,6 @@ _rmodule_freezer = instances_freezer(ResolvedModule, "ExecutionPlan module")
 _modules_converter = mapping_converter(
     _rmodule_freezer, ResolvedModulesInput, what="ExecutionPlan 'modules'"
 )
-_EMPTY_EMBEDS: ResolvedModules = FrozenDict()
 _embeds_converter = optional_mapping_converter(
     _rmodule_freezer, ResolvedModulesInput, what="ExecutionPlan 'embeds'"
 )

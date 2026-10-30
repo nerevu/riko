@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from ._options import RawCallOptions
     from .modules import AnyModuleRawConf, Conf
 
+type PipeDefLike = PipeDef | Mapping[str, object]
 
 PipeId = NewType("PipeId", str)
 CountValues = Literal["first", "all"]
@@ -37,9 +38,6 @@ def is_pipe_id(value: object) -> TypeIs[PipeId]:
 
     """
     return isinstance(value, str) and value.startswith(PIPE_ID_PREFIXES)
-
-
-type PipeDefLike = PipeDef | Mapping[str, object]
 
 
 class Embed(TypedDict):
