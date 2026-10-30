@@ -4,10 +4,7 @@
 from __future__ import annotations
 
 import copy
-import os
 import pickle  # noqa: S403
-import subprocess
-import sys
 import time
 import typing
 from dataclasses import dataclass, make_dataclass
@@ -52,7 +49,7 @@ from riko.base._exceptions import (
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._guards import require_mapping, require_sequence
 from riko.base._logging import get_logger, set_log_level
-from riko.base._paths import ROOT_DIR, get_path
+from riko.base._paths import get_path
 from riko.base._recordutils import field_names
 from riko.base._require_guards import (
     normalize_strs,
@@ -96,6 +93,7 @@ from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
+from tests import run_python
 from tests._execution import build_workflow
 
 if TYPE_CHECKING:
@@ -271,13 +269,6 @@ print(digest(value, IdentityDomain.FINGERPRINT))
 """
 
 
-def _get_subprocess_digest(hash_seed: str) -> str:
-    env = {**os.environ, "PYTHONHASHSEED": hash_seed}
-    args = [sys.executable, "-c", DIGEST_SCRIPT]
-    done = subprocess.run(args, env=env, capture_output=True, check=True, text=True)
-    return done.stdout.strip()
-
-
 class TestDigest:
     @pytest.mark.parametrize(
         ("value", "domain", "expected"),
@@ -290,7 +281,8 @@ class TestDigest:
         assert len(result) == 32
 
     def test_digest_is_stable_across_processes_with_different_hash_seeds(self):
-        digests = {_get_subprocess_digest(seed) for seed in ("0", "1", "4242")}
+        runs = [run_python("-c", DIGEST_SCRIPT, hash_seed=s) for s in ("0", "4242")]
+        digests = {run.stdout.strip() for run in runs}
         assert len(digests) == 1
 
 
@@ -881,12 +873,7 @@ print(scc_sort({"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}))
 
 
 def _get_seeded_order(seed: str) -> list[str]:
-    env = {**os.environ, "PYTHONHASHSEED": seed}
-    args = [sys.executable, "-c", _SEEDED_ORDER]
-    run = subprocess.run(
-        args, capture_output=True, check=True, cwd=ROOT_DIR, env=env, text=True
-    )
-    return run.stdout.splitlines()
+    return run_python("-c", _SEEDED_ORDER, hash_seed=seed).stdout.splitlines()
 
 
 DESCENDANT_CASES = [

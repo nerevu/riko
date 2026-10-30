@@ -66,16 +66,22 @@ changed.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from importlib.util import find_spec
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from riko.bado._backend import issync, run
+from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
+
+SCRIPT_TIMEOUT = 5
 
 skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
 
@@ -99,3 +105,25 @@ def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:
         return [item async for item in aiterable]
 
     return run(_collect)
+
+
+def run_python(
+    *args: str, hash_seed: str | None = None, check: bool = True, **kwargs: Any
+) -> subprocess.CompletedProcess[str]:
+    """
+    Runs ``python *args`` from the checkout root and returns the finished process.
+
+    The run captures text output, raises on a nonzero exit unless ``check`` is
+    false, and is killed after ``SCRIPT_TIMEOUT`` seconds; ``kwargs`` override
+    the other ``subprocess.run`` options.
+    ``hash_seed`` sets ``PYTHONHASHSEED`` for the child.
+    """
+    seed = {} if hash_seed is None else {"PYTHONHASHSEED": hash_seed}
+    options = {
+        "capture_output": True,
+        "cwd": ROOT_DIR,
+        "env": os.environ | seed,
+        "text": True,
+        "timeout": SCRIPT_TIMEOUT,
+    }
+    return subprocess.run([sys.executable, *args], check=check, **options | kwargs)

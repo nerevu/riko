@@ -13,9 +13,8 @@ from os.path import isfile
 
 import pytest
 
-from riko.base._paths import ROOT_DIR
 from riko.definitions._workflow_definition import Workflow
-from tests import TESTS_DIR, async_test, skipif_issync
+from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_issync
 from tests._workflows import (
     DAG,
     DAG_PATH,
@@ -83,7 +82,8 @@ def run_module(
     """
     command = [ENTRY_POINTS[module]] if entry_point else [sys.executable, "-m"]
     target = [] if entry_point else [f"riko.cli.{module}"]
-    options = {"cwd": _BASEDIR, "capture_output": True, "text": True} | kwargs
+    options = {"cwd": _BASEDIR, "capture_output": True, "text": True}
+    options |= {"timeout": SCRIPT_TIMEOUT} | kwargs
     return subprocess.run([*command, *target, *args], check=False, **options)
 
 
@@ -269,7 +269,7 @@ BENCHMARK_LABELS = [
 
 class TestBenchmark:
     def test_benchmark(self):
-        ran = run_module("benchmark", entry_point=True)
+        ran = run_module("benchmark", entry_point=True, timeout=20)
         assert ran.returncode == 0, ran.stderr
         output = ran.stdout
         lines = [line.strip() for line in output.splitlines()]
@@ -474,10 +474,7 @@ class TestExamplePipelines:
     )
     def test_register_example(self, script, expected):
         """Tests the runtime-registration example scripts run and register."""
-        cmd = [sys.executable, f"examples/{script}.py"]
-        proc = subprocess.run(
-            cmd, cwd=ROOT_DIR, capture_output=True, text=True, check=False
-        )
+        proc = run_python(f"examples/{script}.py", check=False)
         assert proc.returncode == 0, f"{script} failed: {proc.stderr}"
         assert expected in proc.stdout, f"{script} output: {proc.stdout!r}"
 

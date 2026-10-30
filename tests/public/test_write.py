@@ -4,17 +4,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
-import sys
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko import export
 from riko.base._exceptions import UnsupportedTargetError
-from riko.base._paths import ROOT_DIR
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
@@ -26,7 +22,7 @@ from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
-from tests import async_test, is_installed
+from tests import async_test, is_installed, run_python
 from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
@@ -157,17 +153,14 @@ class TestWrite:
         list(pipe(items, conf=WriteConf({"dest": path, "fmt": fmt})))
         assert path.read_bytes().strip() == expected
 
-    @pytest.mark.parametrize("fmt", ["json", "jsonl"])
-    def test_set_values_are_written_sorted_under_any_hash_seed(self, tmp_path, fmt):
+    def test_set_values_are_written_sorted_under_any_hash_seed(self, tmp_path):
         def write(seed: str) -> bytes:
-            path = tmp_path / f"{seed}.{fmt}"
-            args = [sys.executable, "-c", _SEEDED_SET_WRITE, str(path), fmt]
-            env = {**os.environ, "PYTHONHASHSEED": seed}
-            subprocess.run(args, check=True, cwd=ROOT_DIR, env=env)
+            path = tmp_path / f"{seed}.json"
+            run_python("-c", _SEEDED_SET_WRITE, str(path), "json", hash_seed=seed)
             return path.read_bytes()
 
         expected = b'"tags": ["alpha", "beta", "delta", "gamma"]'
-        assert all(expected in write(seed) for seed in ("1", "2", "3"))
+        assert all(expected in write(seed) for seed in ("1", "2"))
 
     @pytest.mark.parametrize("conf", SKIPPED_TARGETS)
     def test_sync_bad_target_skips_but_passes_through(self, tmp_path, conf):

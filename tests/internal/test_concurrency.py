@@ -83,7 +83,7 @@ def _mark_and_block(directory: str) -> None:
     staged = Path(directory, f"{getpid()}.tmp")
     staged.write_text("")
     staged.replace(staged.with_suffix(".pid"))
-    sleep(60)
+    sleep(5)
 
 
 def _pair(item: str) -> list[str]:
@@ -459,19 +459,22 @@ class TestSyncPolicy:
         assert released == ["terminate"]
 
     @pytest.mark.slow
-    @pytest.mark.timeout(3)
+    @pytest.mark.timeout(2)
     def test_terminate_with_infinite_grace_waits_for_the_worker_to_exit(self) -> None:
         pool = ProcessPoolExecutor(1)
         lifetime = _PoolLifetime(pool, 1, grace=inf)
-        pool.submit(int).result(timeout=2)
+        pool.submit(int).result(timeout=1)
         (worker,) = pool._processes.values()
-        pool.submit(sleep, 60)
+        pool.submit(sleep, 5)
         sleep(0.2)
-        lifetime.terminate()
+        terminating = Thread(target=lifetime.terminate, daemon=True)
+        terminating.start()
+        terminating.join(timeout=1)
+        assert not terminating.is_alive()
         assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(15)
+    @pytest.mark.timeout(8)
     def test_terminate_kills_every_stuck_worker_within_one_grace(
         self, tmp_path: Path
     ) -> None:
@@ -484,7 +487,10 @@ class TestSyncPolicy:
         for _ in range(workers):
             pool.submit(_mark_and_block, str(tmp_path))
 
+        deadline = perf_counter() + 2
+
         while len(list(tmp_path.glob("*.pid"))) < workers:
+            assert perf_counter() < deadline
             sleep(0.01)
 
         start = perf_counter()

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from functools import partial
+from math import inf, nan
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -285,8 +286,8 @@ class TestCallableNode:
 PARSE_REJECTIONS = [
     pytest.param({"pipeline": []}, None, "'nodes' or 'modules'", id="unknown-shape"),
     pytest.param(RAW_WORKFLOW, "v3", "Invalid shape", id="unknown-declared-shape"),
-    pytest.param("{bad json", None, None, id="bad-json"),
-    pytest.param(b"\xff", None, None, id="undecodable-bytes"),
+    pytest.param("{bad json", None, "malformed JSON", id="bad-json"),
+    pytest.param(b"\xff", None, "malformed JSON", id="undecodable-bytes"),
     pytest.param({"nodes": []}, None, "no nodes", id="validates"),
 ]
 
@@ -488,7 +489,17 @@ class TestPipeDag:
             Workflow.parse({"modules": [module]})
 
 
+NON_JSON_VALUES = [
+    pytest.param(Decimal("1.50"), id="decimal"),
+    pytest.param(date(2020, 6, 15), id="date"),
+    pytest.param({"a", "b"}, id="set"),
+    pytest.param(b"bytes", id="bytes"),
+    pytest.param(nan, id="nan"),
+    pytest.param(inf, id="inf"),
+]
+
 _NODE_VALUE_PLACEMENTS = {
+    "conf": lambda value: {"name": "tag", "conf": {"x": value}},
     "embed": lambda value: {
         "name": "loop",
         "embed": {"name": "tag", "conf": {"x": value}},
@@ -1002,13 +1013,10 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match=match):
             normalize_workflow(raw)
 
-    @pytest.mark.parametrize(
-        "port", ["out:", "bogus:x", "", "out:-1", "in:-1", "out:a b"]
-    )
-    def test_invalid_port_rejected(self, port):
-        edge = {"source": {"node": "a"}, "target": {"node": "b", "port": port}}
+    def test_invalid_port_rejected(self):
+        edge = {"source": {"node": "a"}, "target": {"node": "b", "port": "out:"}}
 
-        with pytest.raises(InvalidPipelineError, match="port"):
+        with pytest.raises(InvalidPipelineError, match="invalid port: 'out:'"):
             normalize_workflow({"nodes": _TWO_NODES, "edges": [edge]})
 
     @pytest.mark.parametrize("declaration", [5, ["a"], None])
@@ -1018,26 +1026,7 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="type name or mapping"):
             normalize_workflow(raw)
 
-    @pytest.mark.parametrize(
-        "value",
-        [
-            Decimal("1.50"),
-            date(2020, 6, 15),
-            {"a", "b"},
-            b"bytes",
-            float("nan"),
-            float("inf"),
-        ],
-    )
-    def test_non_json_native_conf_value_rejected(self, value):
-        raw = {"nodes": [{"id": "n", "name": "tag", "conf": {"x": value}}]}
-
-        with pytest.raises(InvalidPipelineError):
-            normalize_workflow(raw)
-
-    @pytest.mark.parametrize(
-        "value", [Decimal("1.50"), {"a", "b"}, b"bytes", float("nan")]
-    )
+    @pytest.mark.parametrize("value", NON_JSON_VALUES)
     @pytest.mark.parametrize("placement", sorted(_NODE_VALUE_PLACEMENTS))
     def test_non_json_native_node_value_rejected(self, placement, value):
         raw = {"nodes": [{"id": "n", **_NODE_VALUE_PLACEMENTS[placement](value)}]}

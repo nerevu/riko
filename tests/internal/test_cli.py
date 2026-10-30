@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import io
 import json
-import subprocess
-import sys
 import tomllib
 from datetime import date, timedelta
 from importlib import import_module
@@ -80,6 +78,7 @@ from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
 from riko.runtime._compile import compile_workflow
+from tests import run_python
 from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 
 if TYPE_CHECKING:
@@ -1821,7 +1820,13 @@ class TestTimeouts:
         """
         pytester.makepyfile(_TIMEOUT_SUITE)
         result = pytester.runpytest_subprocess(
-            "-p", "tests._timeouts", "-p", "no:cacheprovider", "-o", "addopts="
+            "-p",
+            "tests._timeouts",
+            "-p",
+            "no:cacheprovider",
+            "-o",
+            "addopts=",
+            timeout=8,
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
@@ -1832,8 +1837,7 @@ class TestSubprocessImports:
         # A script outside the checkout resolves riko the way a console script does.
         probe = tmp_path / "probe.py"
         probe.write_text("import riko\nprint(riko.__file__)\n")
-        args = [sys.executable, str(probe)]
-        done = subprocess.run(args, capture_output=True, check=True, text=True)
+        done = run_python(str(probe), cwd=tmp_path)
         assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
