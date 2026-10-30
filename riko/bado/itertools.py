@@ -311,7 +311,7 @@ def async_reduce[T, S](
 async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     content: Iterable[T],
-    limit: int = 0,
+    limit: int = DEF_CONCURRENCY_LIMIT,
     *,
     budget: Semaphore | None = None,
     **kwargs: object,
@@ -325,8 +325,8 @@ async def async_map[T, S](
 
         content: The items to map over.
 
-        limit: Maximum number of concurrent calls. ``0`` (the default) runs them all
-            at once.
+        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``,
+            16). ``0`` runs them all at once.
 
         budget: A semaphore shared across maps that caps how many calls run at
             once in total. A permit is held only while *func* runs (default: None).

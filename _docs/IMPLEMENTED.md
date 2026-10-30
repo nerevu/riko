@@ -194,9 +194,10 @@ streaming ships through `async_map_stream` / `async_map_ordered_stream`
 indexed reorder buffer; the sync pool keeps order with a sliding `Executor.submit` look-ahead
 window (`riko/execution/_pools.py`).
 
-`async_map` reads `limit=0` as unlimited (the streaming variants take a fixed worker count of
-at least 1) and preserves legitimate `None` results through the `MISSING` sentinel; eager
-materialization is by design, with the streaming variants above as the bounded alternative.
+`async_map` caps calls in flight at `limit` (default `DEF_CONCURRENCY_LIMIT`) and reads `limit=0` as
+unlimited (the streaming variants take a fixed worker count of at least 1) and preserves legitimate
+`None` results through the `MISSING` sentinel; eager materialization is by design, with the
+streaming variants above as the bounded alternative.
 
 ## 7. Timeout (shipped)
 
