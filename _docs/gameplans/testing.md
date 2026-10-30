@@ -169,17 +169,32 @@ Enforcement:
   environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`
   tooling is omitted (`[tool.coverage.run] omit`), and the console scripts count through their
   subprocess runs (`patch = ["subprocess"]`); a new `manage` helper module joins the omit list.
-- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call and a `pytest.param`
-  row that share a callee, a distinctive argument, and an expected value (`doctest-args`, which
-  sees short literals such as `"8"`/`"many"` that `overlaps` drops), and a doctest `Traceback`
-  whose exception and message match a `pytest.raises` (`doctest-raises`).
+- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call whose every
+  argument and an expected value appear in one `pytest.param` row of a test naming the callee
+  (`doctest-args`, which sees short literals such as `"8"`/`"many"` that `overlaps` drops), a
+  doctest `Traceback` whose exception and message match a `pytest.raises` (`doctest-raises`), and a
+  docstring with six or more examples whose callees a test table already covers
+  (`doctest-balance`). Its module docstring lists the other sections and their known false
+  positives. `.claude/skills/tidy/covdiff.py` reads one `--cov-context=test` coverage file and
+  lists the lines the tests to be cut execute that their covering tests never do.
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and whether a
   doctest or existing test already owns the case.
 
 Pending: `manage lint --tests` bans only `_private` names in `public/`. The fuller placement rule
 — a public test uses only supported names — would check `public/` imports against
 `riko/base/_api_surface.py`; the `public/` files' imports of non-surface modules need moving or an
-allowlist first.
+allowlist first. As of the 2026-10-30 surface triage the remaining non-surface names in `public/`
+are the `SyncModuleWrapper`/`AsyncModuleWrapper` cast targets (waiting on the slot-type decision in
+[extensibility.md](extensibility.md)), the `riko.bado._backend` test primitives (`checkpoint`,
+`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, and `maybe_aclosing`.
+
+No static check fits rows shadowed by an earlier branch in the code under test (needs a
+mutation-style check), xfail comparisons that are false on their face, xfail worst times that
+measure the defect rather than the test, a `sleep` that outlasts its bound inside a nested
+function or a shielded cleanup, same-subject tests whose bodies differ in more than literals, or
+test names that keep a retired verb (every flagged name still named a live function); the audit
+agents look for those by hand. A sync-only run needs no local plugin: the CI `optional=false`
+legs install no extras, and `manage test --tox -e py312` reproduces that locally.
 
 ### Import-linter coverage gap
 
