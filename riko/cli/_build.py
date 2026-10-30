@@ -10,7 +10,7 @@ from sys import exit
 
 import click
 
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import PYPROJECT, ROOT_DIR
 
 _uv: str | None = shutil.which("uv")
 _twine: str | None = shutil.which("twine")
@@ -51,7 +51,7 @@ def _publish(dry_run: bool = False) -> None:
 def twine_check() -> int:
     """Validate that built distributions render on PyPI."""
     dists = sorted(glob(str(ROOT_DIR / "dist" / "*")))
-    inputs = [ROOT_DIR / "README.rst", ROOT_DIR / "pyproject.toml"]
+    inputs = [ROOT_DIR / "README.rst", PYPROJECT]
 
     if not dists:
         raise RuntimeError("No distributions found in dist/; run `manage build` first")

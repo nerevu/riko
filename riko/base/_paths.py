@@ -22,6 +22,7 @@ PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
 TESTS_DIR = ROOT_DIR / "tests"
 DOCS_DIR = ROOT_DIR / "docs"
+PYPROJECT = ROOT_DIR / "pyproject.toml"
 
 
 def is_http_url(url: str) -> bool:

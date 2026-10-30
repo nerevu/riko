@@ -11,7 +11,7 @@ from tempfile import mkdtemp
 
 import click
 
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import PYPROJECT
 
 from ._coverage import load_uncovered_lines
 from ._ratchet import ratchet_ceiling
@@ -21,10 +21,9 @@ _pytest: str | None = shutil.which("pytest")
 
 
 def _ratchet_coverage(report: Path) -> int:
-    pyproject = ROOT_DIR / "pyproject.toml"
     uncovered = load_uncovered_lines(report)
     return ratchet_ceiling(
-        pyproject, "coverage", "uncovered", uncovered, "uncovered lines"
+        PYPROJECT, "coverage", "uncovered", uncovered, "uncovered lines"
     )
 
 

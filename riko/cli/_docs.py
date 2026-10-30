@@ -14,7 +14,7 @@ from shutil import which
 from subprocess import run
 from typing import TYPE_CHECKING
 
-from riko.base._paths import DOCS_DIR, PACKAGE_DIR, ROOT_DIR, TESTS_DIR
+from riko.base._paths import DOCS_DIR, PACKAGE_DIR, PYPROJECT, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
 from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
@@ -38,7 +38,6 @@ _ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
 _TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
 _GAMEPLANS = _INTERNAL_DOCS / "gameplans"
 _SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
-_PYPROJECT = ROOT_DIR / "pyproject.toml"
 _EXPECTED_SECTIONS = 28
 
 _SECTION_INDEX_RULE = (
@@ -229,7 +228,7 @@ def _version_tuple(text: str) -> tuple[int, int, int]:
 
 def _packaged_version() -> tuple[int, int, int]:
     """Reads the packaged project version from pyproject.toml."""
-    data = tomllib.loads(_read(_PYPROJECT)) if _PYPROJECT.exists() else {}
+    data = tomllib.loads(_read(PYPROJECT)) if PYPROJECT.exists() else {}
     raw = data.get("project", {}).get("version", "0.0.0")
     return _version_tuple(raw)
 

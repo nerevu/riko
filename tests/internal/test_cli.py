@@ -18,7 +18,7 @@ import pytest
 from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import PYPROJECT, ROOT_DIR
 from riko.base._strutils import get_codegen_note
 from riko.cli import (
     _codegen,
@@ -175,7 +175,6 @@ def test_fails():
 """
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
-PYPROJECT = ROOT_DIR / "pyproject.toml"
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
 
 DISTRIBUTIONS = {
@@ -586,7 +585,7 @@ class TestCoverageRatchet:
             else f"[tool.riko.coverage]\nuncovered = {recorded}\n"
         )
         pyproject.write_text(f"[project]\nname = 'x'\n{table}")
-        monkeypatch.setattr(_test, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_test, "PYPROJECT", pyproject)
 
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
@@ -1635,7 +1634,7 @@ class TestEscapeLint:
         (package / "mod.py").write_text(source, encoding="utf-8")
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text("[tool.riko.typing]\nany = 2\ncast = 1\n")
-        monkeypatch.setattr(_lint, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_lint, "PYPROJECT", pyproject)
         monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
 
         assert _lint._lint_escapes() == code
