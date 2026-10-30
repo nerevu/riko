@@ -1754,6 +1754,12 @@ Deliver iterative mode:
 - explicit stable loop `id=` where cross-revision state identity is required;
 - resume counts total iterations across executions;
 - Pipeline DAG remains acyclic; feedback is internal loop execution semantics;
+- self-embedding stays rejected: `WorkflowResolver.load` refuses a stored workflow that names
+  itself, directly or through other stored workflows (user ruling 2026-10-29, unboundedness-audit
+  triage). That includes data-driven recursion that would terminate (a filter emptying the stream
+  before a self-`loop`); such work moves to `until`/`max_iterations`, which carry a hard bound. Do
+  not add a runtime recursion-depth limit in its place. Test:
+  `tests/internal/test_modules.py::TestWorkflowResolver::test_require_rejects_a_stored_workflow_that_embeds_itself`;
 - the canonical Workflow v2 structural fields for `until`/`max_iterations` (R4A did not build them).
 - the structural type of `ModuleNode.embed`, settled together with what an embed may reference
   (registered module, processor, stored workflow, or embedded `Pipeline`): today the field is typed

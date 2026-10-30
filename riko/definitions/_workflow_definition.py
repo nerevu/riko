@@ -429,6 +429,13 @@ class Workflow:
         return FrozenDict.from_frozen(embeds)
 
     @cached_property
+    def dependencies(self) -> tuple[str, ...]:
+        """The module and stored-workflow names the nodes and their loop embeds run."""
+        names = (node.name for node in self.module_nodes.values())
+        embeds = (embed["name"] for embed in self.embeds.values())
+        return tuple(sorted({*names, *embeds}))
+
+    @cached_property
     def index(self) -> GraphIndex:
         """Interprets the topology once; edges and outputs name declared nodes."""
         return GraphIndex(self.nodes, self.graph_edges, self.outputs)

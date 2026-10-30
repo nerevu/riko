@@ -244,9 +244,9 @@ def compile_workflow(
         edges=_render_edges(flow.edges),
         outputs=_render_outputs(flow.outputs),
         inputs=render_value(flow.inputs),
-        resources=render_value(list(flow.resources)),
+        resources=render_value(flow.resources),
         has_resources=len(flow.resources) > 0,
-        dependencies=render_value(sorted({node.name for node in nodes})),
+        dependencies=render_value(flow.dependencies),
         subtype="transformer" if len(flow.inputs) else "source",
     )
 

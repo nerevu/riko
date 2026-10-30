@@ -80,7 +80,7 @@ implementation for the selected private execution mode and adapts only when that
 - **One store kind via a document adapter (2026-10-10, unscheduled).** Today `DirectoryStore.load`
   returns a `Workflow` while the package/mapping/composite stores return a `ResolvedWorkflow`,
   so `WorkflowResolver` keeps two slots (`module_store`, `document_store`), hard-codes module-first
-  precedence, and owns the document→module build and its cache (`_load_resolved_document`,
+  precedence, and owns the document→module build and its cache (`_load_resolved`,
   `_resolved_documents`, cleared on `register_dispatcher`/`register`/`reset`). The difference is
   deliberate: building a `ResolvedWorkflow` from a graph needs the dispatcher (to look up each node's
   pipe), and the dispatcher already holds the resolver, so a `DirectoryStore` that returned modules
