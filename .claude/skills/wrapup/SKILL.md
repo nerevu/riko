@@ -47,9 +47,12 @@ agent and report "tidy current". Otherwise launch one fresh `general-purpose`
 agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow
-`.claude/skills/tidy/SKILL.md` in the repo at the current working directory. You
-cannot ask the user: apply mechanical fixes, and return phase-owned findings
-and framed judgment questions instead of deciding them." Wait for its report
+`.claude/skills/tidy/SKILL.md`, reproduced below, in the repo at the current
+working directory; `/wrapup` is the caller. You cannot ask the user: apply
+mechanical fixes, and return phase-owned findings and framed judgment questions
+instead of deciding them." and then the whole file pasted in
+(`cat .claude/skills/tidy/SKILL.md`), so the agent never spends a turn reading
+it. Wait for its report
 before step 1, so the evidence batch sees the tidied tree. Its judgment
 questions join step 2's single AskUserQuestion call; its phase-owned findings
 and "tidy edits not yet through the full suite" (when it edited anything) go

@@ -16,27 +16,28 @@ needs is the diff and the rule files named below.
 
 Tidy's marker is the `tidy` entry of `.claude/gate-markers.json` (untracked,
 per worktree, survives `/clear`, shared by every session), written by
-`python .claude/skills/land/gates.py`. Run `gates.py check tidy` first: exit 0
-means tidy already ran on this exact content, so report "nothing to tidy" and
-stop. The marker is the working tree's content tree id, so committing, staging,
-an autosquash, or another session's earlier tidy keeps it valid; only a content
-edit invalidates it. Otherwise the scope is what changed since the last pass:
+`python .claude/skills/land/gates.py`. The marker is the working tree's content
+tree id, so committing, staging, an autosquash, or another session's earlier
+tidy keeps it valid; only a content edit invalidates it.
 
-- `check` printed a `changed since: git diff <tidied tree> <current tree>` line
-  (the tidied tree still exists): that diff plus untracked files. It holds only
-  the content edited since the pass, so work the pass already covered stays out,
-  including commits made after it;
-- otherwise, everything changed since the marker's `head` sha (printed by
-  `check`):
-  - marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
-    `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
-  - marker missing or not an ancestor (after an autosquash rebase): the unpushed
-    commits (`git log HEAD --not --remotes`) diffed from
-    the parent of the oldest one, plus the working tree and untracked files; with
-    no unpushed commits, the working tree alone.
+Resolve the whole scope with **one call**:
 
-If the scope is empty, run `gates.py record tidy` and stop. A
-wholesale run ("tidy the repo") takes every tracked file and fans out one
+```bash
+date && python .claude/skills/land/gates.py scope tidy
+```
+
+It prints which base applies (the tidied tree when git still holds it, so work
+the pass already covered stays out; else the marker's `head` when it is an
+ancestor of `HEAD`; else the parent of the oldest unpushed commit after an
+autosquash; else `HEAD`), the `--stat`, the untracked files, and the diff itself
+with `uv.lock` and the generated files left out. Untracked files are inside the
+diff. A diff over 25kB lands in `.claude/tidy-scope.diff`; read it in slices
+with `Read` offsets, never whole. Exit 0 means tidy already ran on this exact
+content: report "nothing to tidy" and stop. Exit 2 means the scope is empty:
+run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
+by hand.
+
+A wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.
 Every agent brief ends with the mid-run self-check: past about 10 minutes or
 100k tokens with mechanical, repeated work left, stop at a consistent point, run
@@ -49,8 +50,17 @@ fold it into an existing one,
 park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
-diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
-`tests/`, `docs/`, `README.rst`, `CONTRIBUTING.rst`, `examples/`, `_docs/`).
+diff renamed, removed, or changed in meaning. One call lists them:
+
+```bash
+python .claude/skills/land/gates.py scope tidy | python .claude/skills/tidy/neighborhood.py
+```
+
+(or `--diff-file .claude/tidy-scope.diff` for a large scope). It reports each
+removed or re-signed definition with its surviving references across `riko/`,
+`tests/`, `docs/`, `_docs/`, `examples/`, `README.rst`, and `CONTRIBUTING.rst`,
+and the names the same file added, so a rename reads as one. Grep by hand only
+for a term the diff changed in meaning without touching its definition.
 
 ## 2. Load the rules (one batch)
 
@@ -69,6 +79,20 @@ until touched.
 
 ## 3. Check
 
+Open with the lints that already enforce part of this list, in one call:
+
+```bash
+uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --bindings --tests
+```
+
+Its output is findings. It owns: banned phrases and phase codes in shipped
+text (`--terms`), summary verbs matching the verb table (`--docstrings`),
+`pipeline`/`flow` bindings (`--bindings`), test file/class layout (`--tests`).
+Do not re-check those by hand; the hand checks below cover what a regex
+cannot. Independent probes go in one response as parallel tool calls, or in one
+chained Bash command — never one grep per turn — and `sed -n` ranges of several
+files go in the same call.
+
 For each file in scope, and only the lines the change introduced or the
 neighborhood it affects:
 
@@ -76,8 +100,9 @@ neighborhood it affects:
    message, or concept is checked against the Reserved terms table, the
    supported names in `riko/base/_api_surface.py`, and existing names
    (`grep -rnw`). A collision is a new name that already means something else,
-   or an existing riko term used in another sense. A use the "say this instead"
-   column rules out is a violation.
+   or an existing riko term used in another sense. The regex-able "say this
+   instead" phrases are already `BANNED_TERMS`; the hand check is for a new name
+   that reuses a reserved term in another sense.
 2. **Naming conventions** — function names follow the verb table (a `get` that
    loads, a `normalize` that is not idempotent, a precondition not named
    `require_*`); `a`/`_a` prefix only with a sync twin; `StrEnum` vs `Literal`
@@ -157,7 +182,9 @@ neighborhood it affects:
    as `pytest.param` rows, doctest errors repeated as `pytest.raises`, same-named
    tests, unsupported names in public, functional classes with no end-to-end
    marker).
-   Read and verify only those, never whole files. Make the moves with
+   Read its full output once; never pipe it through `head`/`grep` and rerun
+   (`--limit` already caps it). Read and verify only those, never whole files.
+   Make the moves with
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
@@ -192,17 +219,20 @@ terms ruling) or a new `manage lint` check, so CI enforces it from then on.
 
 ## 5. Verify the fixes
 
-Prettify, then lint and test only what tidy touched:
+When `/land` called tidy (its brief says so), **skip this step**: land's
+prettify, `lint --all`, and test gates follow at once, and running them here
+first doubled the work. Report "tidy edits unverified; land's gates follow".
+
+Otherwise prettify, then lint and test only what tidy touched, as one chained
+call:
 
 ```bash
-uv run --active python -m riko.cli.manage prettify
-uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --docs --bindings
-uv run --active python -m pytest --no-cov -q <test modules for the touched files>
+uv run --active python -m riko.cli.manage prettify && uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --docs --bindings && uv run --active python -m pytest --no-cov -q <test modules for the touched files>
 ```
 
-When `/land` called tidy, its full gates follow anyway. When `/wrapup` called
-it, report "tidy edits not yet through the full suite" so the handoff carries
-it to the next `/land`.
+When `/wrapup` called it, report "tidy edits not yet through the full suite" so
+the handoff carries it to the next `/land`. Nothing to fix means nothing to
+verify: go straight to the marker.
 
 ## 6. Mark and report
 
