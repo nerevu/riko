@@ -57,17 +57,23 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
-   subagent (`model: "opus"`, so it never inherits a Fable session's model)
-   given the skill text plus the mid-run self-check (past about 10 minutes or
+   subagent (`model: "opus"`, so it never inherits a Fable session's model),
+   never as an in-loop grep pass. Run `python $G check tidy` first and skip
+   the agent when it exits 0 (tidy already ran on this tree, in any session).
+   The brief opens "Follow `.claude/skills/tidy/SKILL.md`, reproduced below;
+   `/land` is the caller, so skip its verify step" and then **pastes the whole
+   file** (`cat .claude/skills/tidy/SKILL.md`) — the agent must never spend a
+   turn reading it — plus the mid-run self-check (past about 10 minutes or
    100k tokens with mechanical work left: pause, report, and name the helper
-   script; afterwards inspect any scripts it wrote for itself and promote, fold,
-   or drop each), never as an in-loop grep pass. Run `python $G check tidy` first and skip
-   the agent when it exits 0 (tidy already ran on this tree, in any session). Its mechanical fixes
+   script; afterwards inspect any scripts it wrote for itself and promote, fold, park in
+   `.claude/skills/drafts/`, or drop each). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
-2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify`. Never hand-fix
+2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`. Never hand-fix
    formatting-class lint errors — formatting is prettify's job, before any
-   linter runs.
+   linter runs. The `record tidy` re-marks the prettified tree: tidy skips its
+   own prettify under `/land`, so without it a format-only change would reopen
+   tidy's scope for the next session.
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), run
    `python $G run codegen --mutates -- <manage> codegen --all` and check `git diff`
