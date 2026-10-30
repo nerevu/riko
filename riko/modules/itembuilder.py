@@ -45,13 +45,15 @@ if TYPE_CHECKING:
     from riko.types._values import RikoDict
     from riko.types.modules import ParsedParam
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "ftype": BasicCastType.NONE,
     "listize": True,
     "extract": "attrs",
 }
+
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

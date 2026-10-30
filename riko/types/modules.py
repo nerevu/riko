@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from ._io import PathLike
     from ._scalars import BasicValue
 
-
 # Shared
 type ModuleType = Literal["operator", "processor", "splitter"]
 type ModuleCategory = Literal["sink", "source", "transform"]
@@ -33,15 +32,138 @@ type ModuleSubtype = Literal[
 ]
 
 type ModuleSubtypes = frozenset[ModuleSubtype]
+type Inference = tuple[OperatorReturnKind, str | None]
+
+type AnyModuleRawConf = (
+    CountRawConf
+    | CsvRawConf
+    | CurrencyFormatRawConf
+    | DateFormatRawConf
+    | ExchangeRateRawConf
+    | FeedAutoDiscoveryRawConf
+    | FetchRawConf
+    | FetchDataRawConf
+    | FetchPageRawConf
+    | FetchSiteFeedRawConf
+    | FetchTableRawConf
+    | FetchTextRawConf
+    | FilterRawConf
+    | GeolocateRawConf
+    | InputRawConf
+    | ItemBuilderRawConf
+    | JoinRawConf
+    | ReceiveRawConf
+    | RefindRawConf
+    | RegexRawConf
+    | RenameRawConf
+    | RssItemBuilderRawConf
+    | SendRawConf
+    | SimpleMathRawConf
+    | SlugifyRawConf
+    | SortRawConf
+    | SplitRawConf
+    | StrconcatRawConf
+    | StrfindRawConf
+    | StrReplaceRawConf
+    | StrTransformRawConf
+    | SubelementRawConf
+    | SubstrRawConf
+    | SumRawConf
+    | TailRawConf
+    | TimeoutRawConf
+    | TokenizerRawConf
+    | TruncateRawConf
+    | TypecastRawConf
+    # | UdfRawConf
+    | UniqRawConf
+    | UrlBuilderRawConf
+    | UrlParseRawConf
+    | XpathFetchPageRawConf
+)
+
+# General
+type OptionValues = bool | str | CountValues
+
+type ConfValues = (
+    BasicValue
+    | ParsedParam
+    | bool
+    | float
+    | int
+    | Literal["and", "or"]
+    | list[ParsedParam]
+    | list[str]
+    | str
+    | None
+)
+
+type AnyConfRule = (
+    FindConfRule
+    | FilterConfRule
+    | RegexConfRule
+    | RenameConfRule
+    | SortConfRule
+    | StrReplaceConfRule
+    | StrTransformConfRule
+)
+
+type AnyModuleConf = (
+    AggregateConf
+    | CountConf
+    | CsvConf
+    | CurrencyFormatConf
+    | DateFormatConf
+    | ExchangeRateConf
+    | FeedAutoDiscoveryConf
+    | FetchConf
+    | FetchDataConf
+    | FetchPageConf
+    | FetchSiteFeedConf
+    | FetchTableConf
+    | FetchTextConf
+    | FilterConf
+    | GeolocateConf
+    | InputConf
+    | ItemBuilderConf
+    | JoinConf
+    | ReceiveConf
+    | RefindConf
+    | RegexConf
+    | RenameConf
+    | RssItemBuilderConf
+    | SendConf
+    | SimpleMathConf
+    | SlugifyConf
+    | SortConf
+    | SplitConf
+    | StrconcatConf
+    | StrfindConf
+    | StrReplaceConf
+    | StrTransformConf
+    | SubelementConf
+    | SubstrConf
+    | SumConf
+    | TailConf
+    | TimeoutConf
+    | TokenizerConf
+    | TruncateConf
+    | TypecastConf
+    | UdfConf
+    | UniqConf
+    | UrlBuilderConf
+    | UrlParseConf
+    | WriteConf
+    | XpathFetchPageConf
+)
+
+type Conf = AnyModuleConf | AnyModuleRawConf
+type MaybeFrozenConf = Conf | FrozenConf
 
 
 class OperatorReturnKind(StrEnum):
     STREAM = "stream"
     NONSTREAM = "nonstream"
     UNKNOWN = "unknown"
-
-
-type Inference = tuple[OperatorReturnKind, str | None]
 
 
 class InferenceSource(StrEnum):
@@ -466,54 +588,6 @@ class XpathFetchPageRawConf(TypedDict):
     html5: NotRequired[Value]
 
 
-type AnyModuleRawConf = (
-    CountRawConf
-    | CsvRawConf
-    | CurrencyFormatRawConf
-    | DateFormatRawConf
-    | ExchangeRateRawConf
-    | FeedAutoDiscoveryRawConf
-    | FetchRawConf
-    | FetchDataRawConf
-    | FetchPageRawConf
-    | FetchSiteFeedRawConf
-    | FetchTableRawConf
-    | FetchTextRawConf
-    | FilterRawConf
-    | GeolocateRawConf
-    | InputRawConf
-    | ItemBuilderRawConf
-    | JoinRawConf
-    | ReceiveRawConf
-    | RefindRawConf
-    | RegexRawConf
-    | RenameRawConf
-    | RssItemBuilderRawConf
-    | SendRawConf
-    | SimpleMathRawConf
-    | SlugifyRawConf
-    | SortRawConf
-    | SplitRawConf
-    | StrconcatRawConf
-    | StrfindRawConf
-    | StrReplaceRawConf
-    | StrTransformRawConf
-    | SubelementRawConf
-    | SubstrRawConf
-    | SumRawConf
-    | TailRawConf
-    | TimeoutRawConf
-    | TokenizerRawConf
-    | TruncateRawConf
-    | TypecastRawConf
-    # | UdfRawConf
-    | UniqRawConf
-    | UrlBuilderRawConf
-    | UrlParseRawConf
-    | XpathFetchPageRawConf
-)
-
-
 # Parsed
 # Rules
 @dataclass
@@ -859,84 +933,6 @@ class XpathFetchPageConf(TypedDict, total=False):
     encoding: str
     html5: bool
 
-
-# General
-type OptionValues = bool | str | CountValues
-
-type ConfValues = (
-    BasicValue
-    | ParsedParam
-    | bool
-    | float
-    | int
-    | Literal["and", "or"]
-    | list[ParsedParam]
-    | list[str]
-    | str
-    | None
-)
-
-type AnyConfRule = (
-    FindConfRule
-    | FilterConfRule
-    | RegexConfRule
-    | RenameConfRule
-    | SortConfRule
-    | StrReplaceConfRule
-    | StrTransformConfRule
-)
-
-type AnyModuleConf = (
-    AggregateConf
-    | CountConf
-    | CsvConf
-    | CurrencyFormatConf
-    | DateFormatConf
-    | ExchangeRateConf
-    | FeedAutoDiscoveryConf
-    | FetchConf
-    | FetchDataConf
-    | FetchPageConf
-    | FetchSiteFeedConf
-    | FetchTableConf
-    | FetchTextConf
-    | FilterConf
-    | GeolocateConf
-    | InputConf
-    | ItemBuilderConf
-    | JoinConf
-    | ReceiveConf
-    | RefindConf
-    | RegexConf
-    | RenameConf
-    | RssItemBuilderConf
-    | SendConf
-    | SimpleMathConf
-    | SlugifyConf
-    | SortConf
-    | SplitConf
-    | StrconcatConf
-    | StrfindConf
-    | StrReplaceConf
-    | StrTransformConf
-    | SubelementConf
-    | SubstrConf
-    | SumConf
-    | TailConf
-    | TimeoutConf
-    | TokenizerConf
-    | TruncateConf
-    | TypecastConf
-    | UdfConf
-    | UniqConf
-    | UrlBuilderConf
-    | UrlParseConf
-    | WriteConf
-    | XpathFetchPageConf
-)
-
-type Conf = AnyModuleConf | AnyModuleRawConf
-type MaybeFrozenConf = Conf | FrozenConf
 
 require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(
     AnyModuleConf

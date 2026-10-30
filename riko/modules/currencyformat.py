@@ -41,9 +41,10 @@ if TYPE_CHECKING:
     from riko.coercion._configs import CurrencyFormatObjconf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {"currency": "USD", "clean": False}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

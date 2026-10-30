@@ -54,6 +54,7 @@ GLOBAL_BOUNDS: Final = ("timeout", "faulthandler_timeout")
 DOC_SUFFIXES: Final = (".md", ".rst")
 DOC_DIRS: Final[frozenset[str]] = frozenset({"_docs", "docs"})
 DOC_OPENERS: Final[frozenset[str]] = frozenset({"Path", "open"})
+
 REPO_ROOTS: Final[frozenset[str]] = frozenset(
     {"ROOT_DIR", "DOCS_DIR", "PACKAGE_DIR", "TESTS_DIR", "__file__"}
 )

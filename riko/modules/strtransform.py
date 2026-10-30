@@ -46,14 +46,16 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import StrTransformConfRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "listize": True,
     "ftype": BasicCastType.TEXT,
     "field": "content",
     "extract": "rule",
 }
+
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 ATTRS = {
     "capitalize",

@@ -39,9 +39,10 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._enums import StrLike
 
-
 type AttrsValidator[T] = Callable[[AttrsInstance, Attribute[Any], T], None]
 type DefFunc[T, R] = Callable[[T | None], R]
+type Require[T, R] = TypeRequire[T, R] | InstanceRequire[T, R]
+
 _KEY_QUALIFIERS = frozenset({"Required", "NotRequired"})
 
 
@@ -67,9 +68,6 @@ class InstanceRequire[T, R](Protocol):
     """
 
     def __call__(self, cls: type[R], value: T, what: str | None = None) -> R: ...
-
-
-type Require[T, R] = TypeRequire[T, R] | InstanceRequire[T, R]
 
 
 @overload

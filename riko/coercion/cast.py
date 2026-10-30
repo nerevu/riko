@@ -60,103 +60,13 @@ if TYPE_CHECKING:
     from riko.types._values import BasicArg
     from riko.types._wrappers import PreCaster
 
+logger: Logger = get_logger(__name__)
+
 URL_SAFE = "%/:=&?~#+!$,;'@()*[]"
 MATH_WORDS = {"seconds", "minutes", "hours", "days", "weeks", "months", "years"}
 TEXT_WORDS = {"last", "next", "week", "month", "year"}
 NAMED_DAYS = frozenset({"today", "now", "tomorrow", "yesterday"})
 KWARG_TYPES = {CastType.DATE, CastType.DATETIME, CastType.LOCATION}
-
-logger: Logger = get_logger(__name__)
-
-SourceOpts: DecorationOptions = {"ftype": BasicCastType.NONE}
-
-
-def cast_literal(content: BasicValue | bool) -> BasicArg:
-    """
-    Parses a string into the Python literal it denotes.
-
-    A non-string is returned unchanged; ``"true"``/``"false"`` (any case)
-    become booleans; anything else is parsed via ``ast.literal_eval``, falling
-    back to the original string when it is not a valid literal.
-
-    Args:
-
-        content: The value to parse.
-
-    Returns:
-
-        The parsed literal, or ``content`` unchanged when it is not a string or
-        not a valid literal.
-
-    Examples:
-
-        >>> cast_literal("true")
-        True
-        >>> cast_literal("[1, 2]")
-        [1, 2]
-        >>> cast_literal("foo")
-        'foo'
-
-    """
-    if isinstance(content, (bool, int, float, Decimal)):
-        parsed = content
-    elif content.lower() in {"true", "false"}:
-        parsed = loads(content.lower())
-    else:
-        try:
-            parsed = literal_eval(content)
-        except (ValueError, SyntaxError):
-            parsed = content
-
-    return parsed
-
-
-def url_quote(url: str | int) -> str:
-    """
-    Percent-encodes a URL while leaving URL-syntax characters intact.
-
-    Args:
-
-        url: The URL (or numeric host) to encode.
-
-    Returns:
-
-        The encoded URL, with the characters in ``URL_SAFE`` left unescaped.
-
-    Examples:
-
-        >>> url_quote("a b/c")
-        'a%20b/c'
-
-    """
-    return quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
-
-
-def cast_url(url: str | int) -> str:
-    """
-    Normalizes a value into a percent-encoded URL.
-
-    Prepends ``http://`` when no scheme is present, then encodes it and
-    round-trips it through ``urlparse``.
-
-    Args:
-
-        url: The URL (or numeric host) to normalize.
-
-    Returns:
-
-        The normalized, encoded URL string.
-
-    Examples:
-
-        >>> cast_url("example.com/a b")
-        'http://example.com/a%20b'
-
-    """
-    url = f"http://{url}" if "://" not in str(url) else url
-    quoted = url_quote(url)
-    parsed = urlparse(quoted)
-    return parsed.geturl()
 
 
 def build_street_address(_: str) -> Location:
@@ -282,6 +192,94 @@ GEOLOCATERS: dict[str, Callable[[str], AnyLocation]] = {
     "ip_address": build_ip_address,
     "currency": lambda x: CURRENCY_CODES.get(x, {}),
 }
+
+
+def cast_literal(content: BasicValue | bool) -> BasicArg:
+    """
+    Parses a string into the Python literal it denotes.
+
+    A non-string is returned unchanged; ``"true"``/``"false"`` (any case)
+    become booleans; anything else is parsed via ``ast.literal_eval``, falling
+    back to the original string when it is not a valid literal.
+
+    Args:
+
+        content: The value to parse.
+
+    Returns:
+
+        The parsed literal, or ``content`` unchanged when it is not a string or
+        not a valid literal.
+
+    Examples:
+
+        >>> cast_literal("true")
+        True
+        >>> cast_literal("[1, 2]")
+        [1, 2]
+        >>> cast_literal("foo")
+        'foo'
+
+    """
+    if isinstance(content, (bool, int, float, Decimal)):
+        parsed = content
+    elif content.lower() in {"true", "false"}:
+        parsed = loads(content.lower())
+    else:
+        try:
+            parsed = literal_eval(content)
+        except (ValueError, SyntaxError):
+            parsed = content
+
+    return parsed
+
+
+def url_quote(url: str | int) -> str:
+    """
+    Percent-encodes a URL while leaving URL-syntax characters intact.
+
+    Args:
+
+        url: The URL (or numeric host) to encode.
+
+    Returns:
+
+        The encoded URL, with the characters in ``URL_SAFE`` left unescaped.
+
+    Examples:
+
+        >>> url_quote("a b/c")
+        'a%20b/c'
+
+    """
+    return quote(url, safe=URL_SAFE)  # type: ignore[arg-type]
+
+
+def cast_url(url: str | int) -> str:
+    """
+    Normalizes a value into a percent-encoded URL.
+
+    Prepends ``http://`` when no scheme is present, then encodes it and
+    round-trips it through ``urlparse``.
+
+    Args:
+
+        url: The URL (or numeric host) to normalize.
+
+    Returns:
+
+        The normalized, encoded URL string.
+
+    Examples:
+
+        >>> cast_url("example.com/a b")
+        'http://example.com/a%20b'
+
+    """
+    url = f"http://{url}" if "://" not in str(url) else url
+    quoted = url_quote(url)
+    parsed = urlparse(quoted)
+    return parsed.geturl()
 
 
 def cast_location(
@@ -481,6 +479,8 @@ CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
     "pass": {"default": None, "func": lambda i: i},
     "none": {"default": None, "func": lambda _: None},
 }
+
+SourceOpts: DecorationOptions = {"ftype": BasicCastType.NONE}
 
 
 def resolve_cast_type(type_: str | CastType | None) -> CastType:

@@ -49,14 +49,16 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import FindConfRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "listize": True,
     "field": "content",
     "extract": "rule",
 }
+
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def reducer(word: str, rule: FindConfRule) -> str:

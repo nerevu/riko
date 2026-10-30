@@ -10,6 +10,7 @@ from typing_extensions import TypeIs
 from riko.base._guards import isinstance_strict
 
 type PathLike = str | Path
+type Closeable = SyncCloseable | AsyncCloseable
 
 
 @runtime_checkable
@@ -21,8 +22,6 @@ class SyncCloseable(Protocol):
 class AsyncCloseable(Protocol):
     async def aclose(self) -> object | None: ...
 
-
-type Closeable = SyncCloseable | AsyncCloseable
 
 CloseableType = (SyncCloseable, AsyncCloseable)
 PathLikeType: tuple[type[str], type[Path]] = (str, Path)

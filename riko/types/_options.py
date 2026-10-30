@@ -42,6 +42,11 @@ if TYPE_CHECKING:
     from ._wrappers import ParserOutput
     from .modules import AnyConfRule, OptionValues, Skip
 
+type ItemOrValueDispatch[T, E] = ItemDispatch[T, E] | ValueDispatch[T, E]
+type SkipFunc = Callable[[Item], bool]
+type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
+type CallOptionsLike = CallOptions | RawCallOptions | Mapping[str, OptionValues]
+
 
 class Defaults(TypedDict, total=False):
     col_names: list[str] | None
@@ -155,12 +160,6 @@ class ValueDispatch[T, E](NamedTuple):
     casted: Casted[T, E]
 
 
-type ItemOrValueDispatch[T, E] = ItemDispatch[T, E] | ValueDispatch[T, E]
-
-type SkipFunc = Callable[[Item], bool]
-type SkipIf = SkipFunc | Skip | Iterable[SkipFunc] | Iterable[Skip]
-
-
 class RawCallOptions(TypedDict, total=False):
     """Call options forwarded to a module callable, as keyword arguments."""
 
@@ -169,8 +168,6 @@ class RawCallOptions(TypedDict, total=False):
     field: str
     count: CountValues
 
-
-type CallOptionsLike = CallOptions | RawCallOptions | Mapping[str, OptionValues]
 
 _is_optional_bool = validator_from_require(require_instance, bool, optional=True)
 _is_optional_str = validator_from_require(require_instance, str, optional=True)

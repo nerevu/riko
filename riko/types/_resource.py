@@ -46,11 +46,12 @@ if TYPE_CHECKING:
 
     from ._io import Closeable
 
-
 type ValueFactory[T] = Callable[..., T | Awaitable[T]]
+
 type GeneratorFactory[T] = Callable[
     ..., Generator[T, None, None] | AsyncGenerator[T, None]
 ]
+
 type AnyContextManager[T] = AbstractContextManager[T] | AbstractAsyncContextManager[T]
 type ContextManagerFactory[T] = Callable[..., AnyContextManager[T]]
 type LifecycleFactory[T] = GeneratorFactory[T] | ContextManagerFactory[T]
@@ -58,6 +59,16 @@ type ResourceFactory[T] = LifecycleFactory[T] | ValueFactory[T]
 type LifecycleValue[T] = AnyContextManager[T]
 type Cleanup[T] = Callable[[T], Awaitable[None] | None]
 type ResolvedValue[T] = T | Closeable
+type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
+
+type ResourcePlan[T] = (
+    ExternalPlan[T] | OwnedPlan[T] | ValueFactoryPlan[T] | LifecyclePlan[T]
+)
+
+# Every function the decorators build shares their helper's code object, so any
+# callable decorated once yields it.
+_SYNC_CM_CODE: CodeType = contextmanager(iter).__code__
+_ASYNC_CM_CODE: CodeType = asynccontextmanager(aiter).__code__  # pyright: ignore[reportArgumentType, reportCallIssue]
 
 
 class ResourceStrategy(Enum):
@@ -67,12 +78,6 @@ class ResourceStrategy(Enum):
     OWNED = auto()
     VALUE_FACTORY = auto()
     LIFECYCLE = auto()
-
-
-# Every function the decorators build shares their helper's code object, so any
-# callable decorated once yields it.
-_SYNC_CM_CODE: CodeType = contextmanager(iter).__code__
-_ASYNC_CM_CODE: CodeType = asynccontextmanager(aiter).__code__  # pyright: ignore[reportArgumentType, reportCallIssue]
 
 
 def _gen_wrapper_chain(val: object) -> Iterator[object]:
@@ -320,12 +325,6 @@ class AsyncLifecyclePlan[T]:
     def requires_async_cleanup(self) -> bool:
         """Whether cleaning up the resource needs the event loop. Always."""
         return True
-
-
-type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
-type ResourcePlan[T] = (
-    ExternalPlan[T] | OwnedPlan[T] | ValueFactoryPlan[T] | LifecyclePlan[T]
-)
 
 
 def build_lifecycle_plan[T](

@@ -50,9 +50,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Feed, Items, Stream
     from riko.types._wrappers import ConversionOutput, PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = Defaults({"fmt": None, "mode": "wb+"})
-logger: Logger = get_logger(__name__)
 
 
 def _prepare_content(items: Items, objconf: WriteObjconf) -> ConversionOutput | None:

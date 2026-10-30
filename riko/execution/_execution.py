@@ -46,19 +46,38 @@ if TYPE_CHECKING:
     from riko.types._events import EventSink
     from riko.types._workflow import GraphEdge
 
-
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
 type ExtraObjects[T] = ResourceView | ModuleWrapper
+
 type ExtraStreams[T] = (
     AsyncIterable[T] | Iterator[T] | Sequence[Iterator[T] | AsyncIterable[T]]
 )
+
 type ExtraValues[T] = ExtraObjects[T] | ExtraStreams[T]
 type ExtraInput[T] = Mapping[str, ExtraValues[T]]
 type ExtraOutput[T] = dict[str, ExtraValues[T]]
 type Acquisition[T] = _Acquired[T] | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition[Any]]
 
+
+class _NullEventSink:
+    """Discards every emitted event."""
+
+    __slots__ = ()
+
+    def emit(self, event: object) -> None:
+        """
+        Discards an emitted execution event.
+
+        Args:
+
+            event: The event value produced during a run.
+
+        """
+
+
+_NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
 
@@ -113,25 +132,6 @@ class _FailedAcquisition:
     def unwrap(self) -> Never:
         """Replays the acquisition's original error."""
         raise self.error
-
-
-class _NullEventSink:
-    """Discards every emitted event."""
-
-    __slots__ = ()
-
-    def emit(self, event: object) -> None:
-        """
-        Discards an emitted execution event.
-
-        Args:
-
-            event: The event value produced during a run.
-
-        """
-
-
-_NULL_EVENT_SINK = _NullEventSink()
 
 
 def _event_sink(self: _BaseExecution) -> EventSink:

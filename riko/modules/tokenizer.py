@@ -37,17 +37,17 @@ if TYPE_CHECKING:
     from riko.coercion._configs import TokenizerObjconf
     from riko.types._options import DecorationOptions, Defaults
 
-TOKEN_KEY = "content"  # noqa: S105
+logger: Logger = get_logger(__name__)
 
+TOKEN_KEY = "content"  # noqa: S105
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
+
 DEFAULTS: Defaults = {
     "delimiter": ",",
     "dedupe": False,
     "sort": False,
     "token_key": TOKEN_KEY,
 }
-
-logger: Logger = get_logger(__name__)
 
 
 def parser(

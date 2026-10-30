@@ -47,10 +47,13 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
-sort_type = SortableCastType.TEXT
-DEFAULTS: Defaults = {"rule": SortConfRule(dir="asc", field="content", type=sort_type)}
 logger: Logger = get_logger(__name__)
+
+OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
+
+DEFAULTS: Defaults = {
+    "rule": SortConfRule(dir="asc", field="content", type=SortableCastType.TEXT)
+}
 
 
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:

@@ -49,10 +49,10 @@ if TYPE_CHECKING:
     from riko.types._streams import AnyIterable, Feed, Stream
     from riko.types._wrappers import PipeTuples
 
-OPTS: DecorationOptions = {"ptype": BasicCastType.INT}
-DEFAULTS: Defaults = {}
 logger: Logger = get_logger(__name__)
 
+OPTS: DecorationOptions = {"ptype": BasicCastType.INT}
+DEFAULTS: Defaults = {}
 MS_PER_SECOND = 1_000
 
 

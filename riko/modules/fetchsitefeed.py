@@ -41,9 +41,10 @@ if TYPE_CHECKING:
     from riko.types._rss import RSSEntry
     from riko.types._streams import Item
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

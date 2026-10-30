@@ -29,18 +29,22 @@ if TYPE_CHECKING:
 
 _INTERNAL_DOCS = ROOT_DIR / "_docs"
 _STANDARD = _INTERNAL_DOCS / "DOCUMENTATION_STANDARD.md"
+
 _RESERVED_TERMS = re.compile(
     r"^## Reserved terms$(.*?)(?=^## |\Z)", re.DOTALL | re.MULTILINE
 )
+
 _ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
 _TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
 _GAMEPLANS = _INTERNAL_DOCS / "gameplans"
 _SEQUENCE = _GAMEPLANS / "implementation-sequence.md"
 _PYPROJECT = ROOT_DIR / "pyproject.toml"
 _EXPECTED_SECTIONS = 28
+
 _SECTION_INDEX_RULE = (
     f"section index must contain each §0-{_EXPECTED_SECTIONS - 1} once"
 )
+
 _ROOT_MARKDOWN = frozenset(
     {
         "API_SURFACE.md",
@@ -55,72 +59,70 @@ _ROOT_MARKDOWN = frozenset(
         "RUNTIME_CONTRACT.md",
     }
 )
-AS_BUILT_DOCS: tuple[Path, ...] = tuple(
-    _INTERNAL_DOCS / name
-    for name in (
-        "IMPLEMENTED.md",
-        "INTERNALS.md",
-        "KEY_PATHS.md",
-        "MILESTONES.md",
-        "PHASE_CHECKLISTS.md",
-        "ROADMAP.md",
-    )
-)
+
 _LEGACY_INSPIRATION = _INTERNAL_DOCS / "inspiration"
 _INSPIRATION_RULE = "prior-art material belongs under research/inspiration/"
+
 _API_SURFACE_GROUPS = frozenset(
     {"export", "compile", "bado", "modules", "root-exceptions", "other", "extension"}
 )
+
 _GIT: str | None = which("git")
 
 _STATUS_BANNER = re.compile(
     r"^\s*>?\s*\*\*status\b\s*(?::|\*\*)", re.IGNORECASE | re.MULTILINE
 )
+
 _SECTION_ROW = re.compile(r"^\|\s*(\d+)\s*\|", re.MULTILINE)
 _GAMEPLAN_LINK = re.compile(r"gameplans/([A-Za-z0-9._-]+\.md)")
+
 _NON_AUTHORITATIVE_HEADER = re.compile(
     r"\b(retired|archived)\b|research/adr notebook|prior-art research|"
     r"not as a task list",
     re.IGNORECASE,
 )
+
 _NON_AUTHORITATIVE_TABLE_LINK = re.compile(r"\]\((?:archive|research)/")
+
 _R_PHASE = re.compile(
     r"^### (?P<phase>R\d+[A-Z]?)\s+—.*?(?=^### R\d+[A-Z]?\s+—|^## |\Z)",
     re.MULTILINE | re.DOTALL,
 )
+
 _VERSION = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
+
 _COMPLETION = re.compile(
     r"\b(complete|completed|delivered|shipped|landed|done)\b", re.IGNORECASE
 )
+
 _TEST_CITATION = re.compile(
     r"`((?:tests/)?(?:public|internal|functional)/test_\w+\.py)"
 )
+
 _SYMBOL_CITATION = re.compile(
     r"`(?:(?P<path>(?:tests/)?(?:public|internal|functional)/test_\w+\.py)::)?"
     r"(?P<cls>Test\w+)(?:::(?P<method>test_\w+))?"
 )
+
 _HISTORY_WORDS = re.compile(
     r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
 )
+
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
+
 _SOURCE_SYMBOL_CITATION = re.compile(
     r"(?:`(?P<first>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)(?=[`(\[])[^`]*`/)?"
     r"`(?P<name>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)(?=[`(\[])[^`]*`"
     r" \(`(?P<path>riko/[A-Za-z0-9_./-]+\.py)`"
 )
+
 _CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
 _TODO = re.compile(r"^\s*TODO\b")
+
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
-
-get_posix_root = lambda path: path.relative_to(ROOT_DIR).as_posix()
-
-
-def _read(path: Path) -> str:
-    """Reads a UTF-8 document, or empty text when it is absent."""
-    return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
 def _tracked_docs() -> set[Path]:
@@ -143,6 +145,63 @@ def _gameplan_paths() -> list[Path]:
     tracked = _tracked_docs()
     globbed = _GAMEPLANS.glob("*.md") if _GAMEPLANS.exists() else []
     return sorted(path for path in globbed if path in tracked)
+
+
+def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
+    """Finds archive or research links listed in ROADMAP tables."""
+    return [
+        line.strip()
+        for line in roadmap.splitlines()
+        if line.lstrip().startswith("|") and _NON_AUTHORITATIVE_TABLE_LINK.search(line)
+    ]
+
+
+def _section_index_offenders(roadmap: str) -> list[int]:
+    """Finds section numbers the roadmap index lists other than exactly once."""
+    counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
+    expected = Counter(range(_EXPECTED_SECTIONS))
+    return sorted((counts - expected) | (expected - counts))
+
+
+def _unindexed_gameplan_offenders(roadmap: str) -> list[str]:
+    """Finds authoritative gameplans the roadmap never links."""
+    linked = set(_GAMEPLAN_LINK.findall(roadmap))
+    return sorted({path.name for path in _gameplan_paths()} - linked)
+
+
+def _missing_gameplan_offenders(roadmap: str) -> list[str]:
+    """Finds roadmap gameplan links that name no tracked gameplan."""
+    linked = set(_GAMEPLAN_LINK.findall(roadmap))
+    return sorted(linked - {path.name for path in _gameplan_paths()})
+
+
+_ROADMAP_CHECKS: dict[str, Callable[[str], Iterable[object]]] = {
+    _SECTION_INDEX_RULE: _section_index_offenders,
+    "unindexed authoritative gameplans": _unindexed_gameplan_offenders,
+    "links to missing gameplans": _missing_gameplan_offenders,
+    "archive/research documents cannot appear in authority tables": (
+        _non_authoritative_listing_offenders
+    ),
+}
+
+AS_BUILT_DOCS: tuple[Path, ...] = tuple(
+    _INTERNAL_DOCS / name
+    for name in (
+        "IMPLEMENTED.md",
+        "INTERNALS.md",
+        "KEY_PATHS.md",
+        "MILESTONES.md",
+        "PHASE_CHECKLISTS.md",
+        "ROADMAP.md",
+    )
+)
+
+get_posix_root = lambda path: path.relative_to(ROOT_DIR).as_posix()
+
+
+def _read(path: Path) -> str:
+    """Reads a UTF-8 document, or empty text when it is absent."""
+    return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
 def _root_doc_paths() -> list[Path]:
@@ -192,15 +251,6 @@ def _authority_namespace_offenders() -> list[str]:
             offenders.append(path.name)
 
     return offenders
-
-
-def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
-    """Finds archive or research links listed in ROADMAP tables."""
-    return [
-        line.strip()
-        for line in roadmap.splitlines()
-        if line.lstrip().startswith("|") and _NON_AUTHORITATIVE_TABLE_LINK.search(line)
-    ]
 
 
 def _phase_closure_offenders() -> list[str]:
@@ -675,38 +725,9 @@ def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
     ]
 
 
-def _section_index_offenders(roadmap: str) -> list[int]:
-    """Finds section numbers the roadmap index lists other than exactly once."""
-    counts = Counter(int(n) for n in _SECTION_ROW.findall(roadmap))
-    expected = Counter(range(_EXPECTED_SECTIONS))
-    return sorted((counts - expected) | (expected - counts))
-
-
-def _unindexed_gameplan_offenders(roadmap: str) -> list[str]:
-    """Finds authoritative gameplans the roadmap never links."""
-    linked = set(_GAMEPLAN_LINK.findall(roadmap))
-    return sorted({path.name for path in _gameplan_paths()} - linked)
-
-
-def _missing_gameplan_offenders(roadmap: str) -> list[str]:
-    """Finds roadmap gameplan links that name no tracked gameplan."""
-    linked = set(_GAMEPLAN_LINK.findall(roadmap))
-    return sorted(linked - {path.name for path in _gameplan_paths()})
-
-
 def _legacy_inspiration_offenders() -> list[str]:
     """Finds the retired prior-art folder when it still exists."""
     return [_LEGACY_INSPIRATION.name] if _LEGACY_INSPIRATION.exists() else []
-
-
-_ROADMAP_CHECKS: dict[str, Callable[[str], Iterable[object]]] = {
-    _SECTION_INDEX_RULE: _section_index_offenders,
-    "unindexed authoritative gameplans": _unindexed_gameplan_offenders,
-    "links to missing gameplans": _missing_gameplan_offenders,
-    "archive/research documents cannot appear in authority tables": (
-        _non_authoritative_listing_offenders
-    ),
-}
 
 
 def lint_docs() -> int:

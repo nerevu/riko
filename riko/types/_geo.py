@@ -2,6 +2,10 @@
 
 from typing import Required, TypedDict
 
+type IPAddress = dict[str, str]
+type Location = IPAddress | dict[str, float]
+type AnyLocation = Region | CurrencyCode | Location | dict[str, float | str]
+
 
 # Geo/currency
 class Region(TypedDict, total=False):
@@ -20,8 +24,3 @@ class CurrencyCode(TypedDict, total=False):
     symbol: str
     symbol_native: str
     locale: str
-
-
-type IPAddress = dict[str, str]
-type Location = IPAddress | dict[str, float]
-type AnyLocation = Region | CurrencyCode | Location | dict[str, float | str]

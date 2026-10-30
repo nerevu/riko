@@ -40,9 +40,10 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ptype": BasicCastType.NONE, "field": "content"}
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+_EXCLUDED_NAMES = frozenset({"_lint_literals.py", "test_cli.py"})
+
 
 class LiteralRule(NamedTuple):
     """
@@ -32,18 +34,17 @@ class LiteralRule(NamedTuple):
     instead: str
 
 
+_BARE_STRING_DEFAULT = LiteralRule(
+    re.compile(r"^\s*\**(\w+)(?: \([^)]*\))?: .*\(default: ([^\s\"`()]+)\)"),
+    'a quoted string default, e.g. (default: "content")',
+)
+
 LITERAL_RULES: tuple[LiteralRule, ...] = (
     LiteralRule(
         re.compile(r"\(default: ``(?![A-Z][A-Z0-9_]*``)[^`]*``"),
         'a plain-text default, e.g. (default: "content")',
     ),
     LiteralRule(re.compile(r"``'[^`]*'``"), 'a double-quoted value, e.g. ``"x"``'),
-)
-
-_EXCLUDED_NAMES = frozenset({"_lint_literals.py", "test_cli.py"})
-_BARE_STRING_DEFAULT = LiteralRule(
-    re.compile(r"^\s*\**(\w+)(?: \([^)]*\))?: .*\(default: ([^\s\"`()]+)\)"),
-    'a quoted string default, e.g. (default: "content")',
 )
 
 

@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from riko.types._wrappers import SyncPipeTuples
     from riko.types.modules import FilterConfRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"listize": True, "extract": "rule"}
 DEFAULTS: Defaults = {"combine": "and", "permit": True, "stop": False}
 COMBINE_BOOLEAN = {"and": all, "or": any}
@@ -110,8 +112,6 @@ STRING_OPS = {"contains", "doesnotcontain", "matches"}
 DATE_OPS = {"after", "before"}
 PASSTHROUGH_OPS = {"truthy", "falsy", "eq", "is", "isnot"}
 TRUTHINESS_OPS = {"truthy", "falsy"}
-
-logger: Logger = get_logger(__name__)
 
 
 def cast_arg[VT](arg: VT, op: str) -> str | date | VT | None:

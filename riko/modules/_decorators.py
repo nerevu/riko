@@ -163,17 +163,21 @@ _SPLITTER_OPTS: frozenset[str] = frozenset(
     SharedDecorationOptions.__required_keys__
     | SharedDecorationOptions.__optional_keys__
 )
+
 _OPERATOR_OPTS: frozenset[str] = frozenset(
     OperatorDecorationOptions.__required_keys__
     | OperatorDecorationOptions.__optional_keys__
 )
+
 _PROCESSOR_OPTS: frozenset[str] = frozenset(
     ProcessorDecorationOptions.__required_keys__
     | ProcessorDecorationOptions.__optional_keys__
 )
+
 _CALL_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(RawCallOptions))
 _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverrides))
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
+
 _require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
 _require_decoration_options = require_from_typed_dict(

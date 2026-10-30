@@ -39,9 +39,10 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = SourceOpts
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

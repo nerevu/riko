@@ -26,12 +26,6 @@ if TYPE_CHECKING:
     from ._rss import RSSEntry
     from ._values import RikoDict, RikoValue, StringyDict
 
-
-# Item/value
-class StatefulItem(TypedDict):
-    state: StreamState
-
-
 type Item = (
     RikoDict
     | dict[str, RikoValue]
@@ -46,39 +40,37 @@ type Item = (
 
 type ItemOrValue = Item | RikoValue
 type ItemValue = ItemOrValue | list[ItemOrValue]
-
 # Sync
 type Stream = Iterator[Item]
 type Cascade = Iterator[Stream]
 type ItemOrStream = Item | Stream
-
 type Items = Iterable[Item]
 type Streams = Iterable[Stream]
 type ItemsOrValues = Iterable[ItemOrValue]
-
 type ValueStream = Iterator[RikoValue]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type ItemGenerator = Generator[Item, None]
-
 # Async
 type AsyncStream = AsyncIterator[Item]
 type AsyncCascade = AsyncIterator[Stream]
 type AsyncItemOrStream = ItemOrStream | AsyncStream
-
 type AsyncItems = AsyncIterable[Item]
 type AsyncStreams = AsyncIterable[Stream]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
-
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 type AsyncItemGenerator = AsyncGenerator[Item, None]
 type StreamGenerator = Generator[object, None, Stream]
-
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
 type ValueFeed = AnyIterable[ItemValue]
 type InputLike = Item | ValueFeed | Awaitable[Item | ValueFeed]
 type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams
+
+
+# Item/value
+class StatefulItem(TypedDict):
+    state: StreamState
 
 
 def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:

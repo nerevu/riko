@@ -5,6 +5,8 @@ from __future__ import annotations
 from time import struct_time
 from typing import Literal, Protocol, Required, TypedDict, overload
 
+type RSSEntry = ExpandedRSSEntry | YahooRSSEntry | AugmentedRSSEntry
+
 
 class EntryContent(TypedDict, total=False):
     value: Required[str]
@@ -71,9 +73,6 @@ YahooRSSEntry = TypedDict(
 
 class AugmentedRSSEntry(ParserRSSEntry, ExpandedRSSEntry, YahooRSSEntry):
     """A parsed feed entry with the Yahoo! Pipes fields and date aliases filled in."""
-
-
-type RSSEntry = ExpandedRSSEntry | YahooRSSEntry | AugmentedRSSEntry
 
 
 class ParsedFeed(Protocol):

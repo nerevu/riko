@@ -51,9 +51,10 @@ if TYPE_CHECKING:
     from riko.types._values import RikoValue
     from riko.types.modules import RegexConfRule, RegexRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"listize": True, "extract": "rule", "emit": True}
 DEFAULTS: Defaults = {"multi": False}
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

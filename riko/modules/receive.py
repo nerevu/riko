@@ -56,9 +56,10 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "pollable": True}
 DEFAULTS: Defaults = {"name": "", "wait": 1, "max_wait": 5, "max_len": 256}
-logger: Logger = get_logger(__name__)
 
 
 def _apply(func: ReceiveFunc, item: Item, **fkwargs: object) -> Item | None:

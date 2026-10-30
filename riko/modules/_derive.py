@@ -18,6 +18,8 @@ from ._inference import gen_return_inferences
 if TYPE_CHECKING:
     from riko.types._wrappers import ModuleParser
 
+SEQUENTIAL_READERS = frozenset({"join", "union"})
+
 
 # Keep this module independent of riko.ext. It is imported while riko.modules is still
 # initializing.
@@ -54,9 +56,6 @@ def _get_operator_subtypes(pipe: ModuleParser) -> tuple[ModuleSubtype, ModuleSub
         raise TypeError(msg)
 
     return subtype, frozenset(subtypes)
-
-
-SEQUENTIAL_READERS = frozenset({"join", "union"})
 
 
 def is_loopable(name: str, module_type: ModuleType | str) -> bool:

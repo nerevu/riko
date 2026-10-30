@@ -19,10 +19,11 @@ from ._lint_deps import HOOK_PINNED, build_pinned_config, get_locked_version
 if TYPE_CHECKING:
     from pathlib import Path
 
-_uv: str | None = shutil.which("uv")
 _UPGRADE_STAMP = ROOT_DIR / ".cache" / "last-upgrade"
 _HOOK_CONFIG = ROOT_DIR / ".pre-commit-config.yaml"
 _LOCKFILE = ROOT_DIR / "uv.lock"
+
+_uv: str | None = shutil.which("uv")
 
 
 def _upgrade_lock(uv: str, packages: tuple[str, ...] = ()) -> int:

@@ -37,13 +37,15 @@ if TYPE_CHECKING:
     from riko.coercion._configs import SubstrObjconf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "ptype": BasicCastType.INT,
     "field": "content",
 }
+
 DEFAULTS: Defaults = {"start": 0, "length": 0}
-logger: Logger = get_logger(__name__)
 
 
 def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> str:

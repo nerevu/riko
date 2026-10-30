@@ -37,14 +37,14 @@ if TYPE_CHECKING:
 
 logger: Logger = get_logger(__name__)
 
-TV_KEYS = ("type", "value")
-PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
-D = TypeVar("D")
-
 type Data[VT] = Iterable[tuple[str, VT]]
 type DotDictInput[VT] = Data[VT] | Item
 type SubkeyRef = Mapping[str, str]
 type Key = str | SubkeyRef
+
+TV_KEYS = ("type", "value")
+PASSTHROUGH_TYPES = (str, int, float, date, Decimal, Objectify)
+D = TypeVar("D")
 
 
 def parse_key(key: Key | None = None) -> list[str]:

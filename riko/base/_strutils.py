@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+_CODEGEN_CLI = "manage codegen"
+
 
 def replacer(content: str, old: str, new: str = "_") -> str:
     """
@@ -86,9 +88,6 @@ def get_doc_summary(obj: object) -> str | None:
     """
     lines = (getattr(obj, "__doc__", None) or "").strip().splitlines()
     return lines[0].strip() if lines else None
-
-
-_CODEGEN_CLI = "manage codegen"
 
 
 def get_codegen_note(selector: str) -> str:

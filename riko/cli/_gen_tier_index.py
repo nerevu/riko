@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+_LINE_LENGTH = 88
+_INDENT = " " * 4
+_GAP = " " * 4
+
 TIER_SUMMARIES = {
     "public": "Provides public API tests: tests that use only supported names.",
     "internal": "Provides internal tests: mechanics, drift guards, and failure modes.",
@@ -30,12 +34,10 @@ TIER_SUMMARIES = {
         "end to end."
     ),
 }
+
 TIERS = tuple(TIER_SUMMARIES)
 GENERATED_HEADER = f"# {get_codegen_note('--tests')}"
 INDEX_HEADER = "Index (file, then the subjects it owns, in file order):"
-_LINE_LENGTH = 88
-_INDENT = " " * 4
-_GAP = " " * 4
 
 
 def gen_subjects(tree: ast.Module) -> Iterator[tuple[str, ast.ClassDef]]:

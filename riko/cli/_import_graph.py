@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 type _ImportKind = Literal["module", "local", "type"]
-
 type FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
 
 FUNCTION_NODES: Final = (ast.FunctionDef, ast.AsyncFunctionDef)

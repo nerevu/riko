@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
+
 _TEXT_ROOTS: tuple[str, ...] = (
     "riko",
     "tests",

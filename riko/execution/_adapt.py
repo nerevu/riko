@@ -39,6 +39,10 @@ if TYPE_CHECKING:
 
     from ._prepared import ResolvedModule
 
+type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
+
+_FUNC_META = ("__name__", "__qualname__", "__doc__")
+
 
 class LoopCall(Protocol):
     """Runs an awaitable-returning callable to completion from a worker thread."""
@@ -52,11 +56,6 @@ class WorkerCall(Protocol):
     def __call__[R, *Ts](
         self, func: Callable[[*Ts], R], /, *args: *Ts
     ) -> Awaitable[R]: ...
-
-
-type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
-
-_FUNC_META = ("__name__", "__qualname__", "__doc__")
 
 
 def require_stream[T](

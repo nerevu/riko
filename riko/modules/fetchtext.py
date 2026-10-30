@@ -45,9 +45,10 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "assign": "content"}
 DEFAULTS: Defaults = {"encoding": ENCODING}
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

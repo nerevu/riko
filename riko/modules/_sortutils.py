@@ -38,7 +38,6 @@ SORT_FILLER = float("-inf")
 DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})
 INVALID_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
 NON_SORTABLE = (Mapping, Sequence)
-
 B = TypeVar("B", Literal[True], Literal[False])
 
 

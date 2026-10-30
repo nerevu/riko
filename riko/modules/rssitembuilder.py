@@ -45,9 +45,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types._values import RikoValue
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE}
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 RSS: DotDict[str] = DotDict(
     {

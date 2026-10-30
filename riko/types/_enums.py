@@ -14,6 +14,15 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import Literal
 
+type ModuleNameLike = str | ModuleName
+type StrLike = str | Iterable[str]
+type FmtLike = Formats | str
+type BackendLike = Backends | str
+type ExecutorLike = Executor | str
+type IdentityModeLike = IdentityMode | str
+type DocumentShapeLike = DocumentShape | str
+type ConcurrencyLike = int | Literal["auto"]
+
 
 class ModuleName(StrEnum):
     """
@@ -238,13 +247,3 @@ class DocumentShape(StrEnum):
     DAG = "dag"
     V1 = "v1"
     V2 = "v2"
-
-
-type ModuleNameLike = str | ModuleName
-type StrLike = str | Iterable[str]
-type FmtLike = Formats | str
-type BackendLike = Backends | str
-type ExecutorLike = Executor | str
-type IdentityModeLike = IdentityMode | str
-type DocumentShapeLike = DocumentShape | str
-type ConcurrencyLike = int | Literal["auto"]

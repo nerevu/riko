@@ -26,7 +26,14 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
     from pathlib import Path
 
+type _ImportNode = ast.Import | ast.ImportFrom
+
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+_IMPORT_ERRORS = frozenset(
+    {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+)
+
 HOOK_PINNED: tuple[str, ...] = ("ruff",)
 
 
@@ -91,11 +98,6 @@ def _is_not_type_checking(test: ast.expr) -> bool:
     return is_negated
 
 
-_IMPORT_ERRORS = frozenset(
-    {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
-)
-
-
 def _catches_import_error(handler: ast.ExceptHandler) -> bool:
     """Tells whether an ``except`` clause catches a failed import."""
     match handler.type:
@@ -127,9 +129,6 @@ class RuntimeImport(NamedTuple):
     name: str
     lineno: int
     guarded: bool
-
-
-type _ImportNode = ast.Import | ast.ImportFrom
 
 
 def _gen_import_nodes(

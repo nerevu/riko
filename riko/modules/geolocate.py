@@ -40,9 +40,10 @@ if TYPE_CHECKING:
     from riko.types._geo import AnyLocation
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
 DEFAULTS: Defaults = {"type": "street_address"}
-logger: Logger = get_logger(__name__)
 
 
 def parser(
