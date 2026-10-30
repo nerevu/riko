@@ -165,7 +165,9 @@ neighborhood it affects:
    subject's class, never a history-named file. Tables follow the
    `tests/__init__.py` layout: module-level constant, one-line `pytest.param`
    rows with ids (an `ids=[...]` list only when values and ids share one line);
-   a fold that grows the file needs its rows compacted. A doctest grown past basic
+   a fold that grows the file needs its rows compacted (`overlap_scan.py`'s `rows`
+   section lists rows a few columns too long: shorten the id or `match`, or alias a
+   repeated value; never a bare `param` import). A doctest grown past basic
    usage moves its extra cases into its subject's test table. If
    `manage test --ratchet` reports more uncovered lines, find the lines the
    change stopped executing before anything else.
@@ -179,7 +181,8 @@ neighborhood it affects:
    Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
    file>` (static, about 2s). It lists candidates (unused or single-user helpers,
    copied definitions and constants, helper bodies inlined in tests, same-shape
-   tests and standalone tests that fit a table, shared literals, doctest calls
+   tests and standalone tests that fit a table, `pytest.param` rows a few columns
+   too long for one line, shared literals, doctest calls
    repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
    doctests of six or more examples whose callee has a table, same-named tests,
    unsupported names in public and supported-only internal classes, out-of-order
