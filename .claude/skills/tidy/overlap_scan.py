@@ -9,16 +9,19 @@ The scan is static (AST only, nothing is imported or run) and prints *candidates
 every line is a lead to read, not a verdict. Sections:
 
 - ``helpers`` -- ``tests/_*.py`` names with zero or one importing file (fold the name
-  beside its one user), and module-level definitions repeated across test files with
-  identical source (one copy belongs in ``tests/_*.py``).
+  beside its one user), module-level definitions repeated across test files with
+  identical source (one copy belongs in ``tests/_*.py``), one value bound to different
+  names in several files, and a helper's body repeated inline in a test elsewhere.
 - ``shapes`` -- test methods whose bodies are identical once literals are blanked
-  (one parametrized table), within a class or across files.
+  (one parametrized table), within a class or across files; ``(small)`` marks short
+  same-shape tests in one class; a standalone test that matches a parametrized test
+  of its file (make it a row).
 - ``overlaps`` -- test pairs in different files (or a test and a collected doctest)
   that share distinctive literals: inputs and expected values seen in few places.
   Module-level tables a test names are counted as that test's literals.
-- ``doctest-args`` -- a doctest call and a ``pytest.param`` row that name the same
-  callee and share a distinctive argument and an expected value (short literals
-  such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see).
+- ``doctest-args`` -- a doctest call whose arguments all appear in a ``pytest.param``
+  row of a test naming the same callee, with an expected value in common (short
+  literals such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see).
 - ``doctest-raises`` -- a doctest ``Traceback`` and a ``pytest.raises`` (inline, or a
   table row carrying the exception and fragment) for the same exception whose
   ``match`` fragment is found in the doctest's message; ``(same callee)`` marks the
@@ -28,12 +31,20 @@ every line is a lead to read, not a verdict. Sections:
 - ``cross-subject`` -- classes that lean on a name whose ``Test<Subject>`` class
   lives in another file of the same tier (a move candidate).
 - ``unsupported`` -- public-tier classes that use names missing from the supported
-  surface in ``riko/base/_api_surface.py`` (internal, or a deliberate exception).
+  surface in ``riko/base/_api_surface.py`` (internal, or a deliberate exception),
+  directly, through a module-level helper, or as a ``monkeypatch`` string target;
+  and internal-tier classes that use only supported riko names (public-tier
+  candidates; code-generator sweeps stay internal by the tier rule, so drop those).
 - ``placement`` -- module-level helpers with exactly one user class that sit
   below it or with other classes in between (the rule puts them directly above;
-  file-wide ``*_PENDING`` tripwire markers stay at the top).
+  file-wide ``*_PENDING`` tripwire markers stay at the top); helpers with several
+  users that sit below the first; classes whose behavior tests follow a rejection
+  table or tripwire; and classes whose subject is a riko name (a class, function,
+  or constant defined under ``riko/``) that they never name.
 - ``tier`` -- functional-tier classes that touch none of the end-to-end markers
   (CLI runners, examples, stored fixture workflows).
+- ``doctest-balance`` -- docstrings with many doctest examples, and the tests whose
+  tables name one of their callees (move the edge cases into a table).
 
 Both doctest sections miss rows given as a bare list with ``ids=[...]`` and doctest
 constants reachable only through a variable, and a ``match`` given as an
@@ -58,7 +69,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from itertools import combinations
+from itertools import combinations, pairwise
 from pathlib import Path
 
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
@@ -70,8 +81,10 @@ MIN_ARG = 2
 MIN_INT = 10
 MAX_SPREAD = 6
 MIN_SHAPE_DUMP = 300
+MIN_VALUE = 20
 CROSS_SUBJECT_MIN = 3
 UBIQUITOUS = 6
+MAX_DOCTEST_EXAMPLES = 6
 SECTIONS = (
     "helpers",
     "shapes",
@@ -83,7 +96,14 @@ SECTIONS = (
     "unsupported",
     "placement",
     "tier",
+    "doctest-balance",
 )
+LIMITED = frozenset({"overlaps", "doctest-args", "doctest-raises", "doctest-balance"})
+REJECT_NAME = re.compile(
+    r"reject|raise|refus|requir|invalid|error|fail|unsupported|bad|missing|must|"
+    r"cannot"
+)
+KIND_OVERRIDES: dict[str, int] = {}
 QUOTED = re.compile(r"'([^']{5,})'|\"([^\"]{5,})\"")
 NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
 BUILTINS = frozenset(dir(builtins))
@@ -105,6 +125,7 @@ E2E_NAMES = frozenset(
         "main",
     }
 )
+PATCH_CALLS = frozenset({"setattr", "delattr", "setitem"})
 E2E_STR = re.compile(r"(^|[/_])(pipe_|workflows/|examples)|\.json$")
 WORD_STOP = frozenset(
     {"title", "content", "description", "value", "items", "utf-8", "error"}
@@ -158,18 +179,38 @@ def gen_names(node: ast.AST):
 
 
 class _Blank(ast.NodeTransformer):
+    def __init__(self, names: frozenset[str] = frozenset()):
+        self.names = names
+
     def visit_Constant(self, node: ast.Constant) -> ast.AST:
         return ast.copy_location(ast.Constant(value="_"), node)
 
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        blank = ast.Constant(value="_") if node.id in self.names else node
+        return ast.copy_location(blank, node)
 
-def get_shape(func: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+
+def get_body(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.stmt]:
     body = list(func.body)
     first = body[0] if body else None
     if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
         body = body[1:]
-    blanked = [_Blank().visit(ast.parse(ast.unparse(stmt))) for stmt in body]
+    return body
+
+
+def get_dumps(
+    func: ast.FunctionDef | ast.AsyncFunctionDef, blank_names: frozenset[str]
+) -> list[str]:
+    blank = _Blank(blank_names)
+    return [ast.dump(blank.visit(ast.parse(ast.unparse(st)))) for st in get_body(func)]
+
+
+def get_shape(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+    blank_names: frozenset[str] = frozenset(),
+) -> str:
     prefix = "async " if isinstance(func, ast.AsyncFunctionDef) else ""
-    return prefix + "\n".join(ast.dump(stmt) for stmt in blanked)
+    return prefix + "\n".join(get_dumps(func, blank_names))
 
 
 def get_tier(path: Path) -> str | None:
@@ -293,10 +334,6 @@ class Example:
         return {name for name in calls if name is not None} - BUILTINS
 
     @property
-    def inputs(self) -> set[str]:
-        return set() if self.tree is None else set(gen_constants(self.tree))
-
-    @property
     def outputs(self) -> set[str]:
         return get_outputs(self.want)
 
@@ -398,8 +435,13 @@ def gen_overlaps(units: list[Unit], doc_units: list[Unit], min_shared: int):
 
     for (a, b), count in pairs.most_common():
         if count >= min_shared:
+            left, right = pool[a][0], pool[b][0]
             shared = sorted(pool[a][1] & pool[b][1], key=len, reverse=True)
-            yield count, pool[a][0], pool[b][0], shared[:4]
+            lits = ", ".join(repr(lit[:40]) for lit in shared[:4])
+            text = (
+                f"{count} shared: {left.where}\n      <-> {right.where}\n      {lits}"
+            )
+            yield text, [left.path, right.path]
 
 
 @dataclass
@@ -567,23 +609,38 @@ def get_head(text: str, width: int) -> str:
     return lines[0][:width] if lines else ""
 
 
+def gen_call_inputs(example: Example):
+    nodes = [] if example.tree is None else ast.walk(example.tree)
+
+    for node in nodes:
+        callee = get_leaf(node.func) if isinstance(node, ast.Call) else None
+        if callee is not None and callee not in BUILTINS:
+            arguments = (*node.args, *(keyword.value for keyword in node.keywords))
+            yield callee, set(gen_constants(*arguments))
+
+
 def gen_doctest_args(examples: list[Example], rows: list[Row], spread: Counter[str]):
     leads = {}
 
     for example in examples:
-        callee = {name for name in example.callees if spread[name] <= UBIQUITOUS}
-        inputs, outputs = example.inputs, example.outputs
+        outputs = example.outputs
+        calls = [
+            (callee, inputs)
+            for callee, inputs in gen_call_inputs(example)
+            if inputs and spread[callee] <= UBIQUITOUS
+        ]
         for row in rows:
-            if not callee & row.names:
-                continue
-            shared_in = {lit for lit in row.constants & inputs if is_distinctive(lit)}
             shared_out = row.constants & outputs
-            if shared_in and shared_out:
-                key = example.where, row.path, row.test
-                lead = leads.setdefault(key, (example, row, [], set(), set()))
-                lead[2].append(row.line)
-                lead[3].update(shared_in)
-                lead[4].update(shared_out)
+            for callee, inputs in calls:
+                shared_in = {lit for lit in inputs if is_distinctive(lit)}
+                fits = callee in row.names and inputs <= row.constants
+                if fits and shared_in and shared_out:
+                    key = example.where, row.path, row.test
+                    lead = leads.setdefault(key, (example, row, [], set(), set()))
+                    if row.line not in lead[2]:
+                        lead[2].append(row.line)
+                    lead[3].update(shared_in)
+                    lead[4].update(shared_out)
 
     for example, row, lines, shared_in, shared_out in leads.values():
         source, want = get_head(example.source, 60), get_head(example.want, 30)
@@ -631,20 +688,86 @@ def gen_doctest_raises(examples: list[Example], raises: list[Raise]):
                 yield text, [example.path, raised.path]
 
 
+def gen_doctest_balance(examples: list[Example], rows: list[Row], spread: Counter[str]):
+    groups = defaultdict(list)
+
+    for example in examples:
+        if not example.path.endswith(".rst"):
+            groups[example.path, example.name, example.line].append(example)
+
+    for group in groups.values():
+        if len(group) >= MAX_DOCTEST_EXAMPLES:
+            callees = {
+                name
+                for example in group
+                for name in example.callees
+                if spread[name] <= UBIQUITOUS
+            }
+            found = [row for row in rows if row.names & callees]
+            tests = sorted({f"{row.path}::{row.test}" for row in found})
+            if not tests:
+                continue
+            where = group[0].where
+            paths = [group[0].path, *sorted({row.path for row in found})]
+            yield f"{where}: {len(group)} examples; tables: {', '.join(tests)}", paths
+
+
+def get_param_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> frozenset[str]:
+    names = set()
+
+    for decorator in func.decorator_list:
+        is_table = isinstance(decorator, ast.Call) and decorator.args
+        if is_table and get_leaf(decorator.func) == "parametrize":
+            for node in ast.walk(decorator.args[0]):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    names |= {name.strip() for name in node.value.split(",")}
+
+    return frozenset(names)
+
+
+def gen_row_candidates(file: TestFile):
+    tests = [(cls, func) for cls in gen_classes(file) for func in gen_tests(cls)]
+    tables = {}
+
+    for cls, func in tests:
+        names = get_param_names(func)
+        if names:
+            where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
+            tables.setdefault(get_shape(func, names), where)
+
+    for cls, func in tests:
+        table = None if get_param_names(func) else tables.get(get_shape(func))
+        if table is not None:
+            where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
+            yield f"{where} matches table test {table}: make it a row"
+
+
 def gen_shapes(files: list[TestFile]):
     by_shape = defaultdict(list)
+    small = defaultdict(list)
 
     for file in files:
         for cls in gen_classes(file):
             for func in gen_tests(cls):
                 shape = get_shape(func)
+                where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
                 if len(shape) >= MIN_SHAPE_DUMP:
-                    where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
                     by_shape[shape].append((file.rel, where))
+                else:
+                    small[file.rel, cls.name, shape].append(where)
 
     for group in by_shape.values():
         if len(group) > 1:
-            yield [where for _, where in group], sorted({path for path, _ in group})
+            text = "\n      ".join(where for _, where in group)
+            yield text, sorted({path for path, _ in group})
+
+    for (path, _, _), group in small.items():
+        if len(group) > 1:
+            yield "(small) " + "\n      ".join(group), [path]
+
+    for file in files:
+        for text in gen_row_candidates(file):
+            yield text, [file.rel]
 
 
 def gen_same_names(units: list[Unit]):
@@ -662,6 +785,40 @@ def gen_same_names(units: list[Unit]):
 
 def _import_module(node: ast.ImportFrom) -> str:
     return "." * node.level + (node.module or "")
+
+
+def gen_helper_bodies(root: Path, files: list[TestFile]):
+    helpers = sorted(root.glob("tests/_*.py"))
+    trees = [
+        (p.relative_to(root).as_posix(), ast.parse(p.read_text())) for p in helpers
+    ]
+
+    for rel, tree in [*trees, *((file.rel, file.tree) for file in files)]:
+        for stmt in tree.body:
+            if isinstance(stmt, FUNCTION_NODES):
+                params = {arg.arg for arg in stmt.args.args + stmt.args.kwonlyargs}
+                dumps = get_dumps(stmt, frozenset(params))
+                if len(dumps) >= 2:
+                    yield f"{rel}:{stmt.lineno} {stmt.name}", rel, dumps
+
+
+def gen_inlined_helpers(root: Path, files: list[TestFile]):
+    by_head = defaultdict(list)
+
+    for helper, rel, dumps in gen_helper_bodies(root, files):
+        by_head[dumps[0]].append((helper, rel, dumps))
+
+    for file in files:
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                body = get_dumps(func, frozenset())
+                for start, dump in enumerate(body):
+                    for helper, rel, dumps in by_head.get(dump, []):
+                        inlined = body[start : start + len(dumps)] == dumps
+                        if inlined and rel != file.rel:
+                            where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
+                            text = f"{helper} body inlined in {where}"
+                            yield text, [rel, file.rel]
 
 
 def gen_helper_issues(root: Path, files: list[TestFile]):
@@ -701,6 +858,7 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
                     yield f"{rel}:{stmt.lineno} {name}: used by {who}", [rel, *found]
 
     by_source = defaultdict(list)
+    by_value = defaultdict(list)
 
     for file in files:
         for stmt in file.tree.body:
@@ -708,6 +866,10 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
                 text = ast.unparse(stmt).replace(f"def {stmt.name}(", "def _(", 1)
             elif isinstance(stmt, ast.Assign | ast.AnnAssign):
                 text = ast.unparse(stmt)
+                value = "" if stmt.value is None else ast.unparse(stmt.value)
+                if len(value) >= MIN_VALUE:
+                    for name in get_defined(stmt):
+                        by_value[value].append((name, f"{file.rel}:{stmt.lineno}"))
             else:
                 continue
             by_source[text].append(f"{file.rel}:{stmt.lineno}")
@@ -721,6 +883,14 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
                 + "\n      ".join(where),
                 sorted(paths),
             )
+
+    for found in by_value.values():
+        paths = {w.split(":", 1)[0] for _, w in found}
+        if len(paths) > 1 and len({name for name, _ in found}) > 1:
+            names = ", ".join(f"{name} ({w})" for name, w in found)
+            yield f"identical value under different names: {names}", sorted(paths)
+
+    yield from gen_inlined_helpers(root, files)
 
 
 def _camel(name: str) -> str:
@@ -786,24 +956,70 @@ def _is_public_module(module: str) -> bool:
     return module in PUBLIC_MODULES or (is_pipe and not parts[2].startswith("_"))
 
 
+def gen_riko_imports(file: TestFile):
+    for stmt in ast.walk(file.tree):
+        module = (stmt.module or "") if isinstance(stmt, ast.ImportFrom) else ""
+        if module.startswith("riko"):
+            for alias in stmt.names:
+                yield module, alias.asname or alias.name, alias.name
+
+
+def get_helper_uses(file: TestFile, private: dict[str, str]) -> dict[str, set[str]]:
+    uses = {}
+
+    for stmt in file.tree.body:
+        if isinstance(stmt, (*FUNCTION_NODES, ast.Assign, ast.AnnAssign)):
+            found = set(gen_names(stmt)) & set(private)
+            for name in get_defined(stmt) if found else []:
+                uses[name] = found
+
+    return uses
+
+
+def is_private_target(target: str, supported: frozenset[str]) -> bool:
+    parts = target.split(".")
+    hidden = any(part.startswith("_") for part in parts)
+    return parts[0] == "riko" and (hidden or parts[-1] not in supported)
+
+
+def gen_patch_targets(cls: ast.ClassDef, supported: frozenset[str]):
+    for node in ast.walk(cls):
+        is_patch = isinstance(node, ast.Call) and get_leaf(node.func) in PATCH_CALLS
+        for arg in node.args if is_patch else []:
+            is_text = isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+            if is_text and is_private_target(arg.value, supported):
+                yield arg.value
+
+
 def gen_unsupported(files: list[TestFile], supported: frozenset[str]):
     for file in files:
-        if file.tier != "public":
-            continue
-        private = {}
-        for stmt in ast.walk(file.tree):
-            is_riko = isinstance(stmt, ast.ImportFrom) and (
-                stmt.module or ""
-            ).startswith("riko")
-            if is_riko and not _is_public_module(stmt.module or ""):
-                for alias in stmt.names:
-                    if alias.name not in supported:
-                        private[alias.asname or alias.name] = alias.name
+        imports = list(gen_riko_imports(file))
+        private = {
+            bound: name
+            for module, bound, name in imports
+            if not _is_public_module(module) and name not in supported
+        }
+        helpers = get_helper_uses(file, private)
         for cls in gen_classes(file):
-            used = Counter(name for name in gen_names(cls) if name in private)
-            if used:
-                names = ", ".join(f"{n} x{c}" for n, c in used.most_common())
-                yield f"{file.rel}:{cls.lineno} {cls.name}: {names}", [file.rel]
+            names = list(gen_names(cls))
+            used = Counter(name for name in names if name in private)
+            via = Counter(name for name in names if name in helpers)
+            patched = list(gen_patch_targets(cls, supported))
+            where = f"{file.rel}:{cls.lineno} {cls.name}"
+            if file.tier == "public":
+                found = [f"{n} x{c}" for n, c in used.most_common()]
+                for helper, count in via.most_common():
+                    found += [
+                        f"{n} via {helper} x{count}" for n in sorted(helpers[helper])
+                    ]
+                found += [f"monkeypatch {target}" for target in patched]
+                if found:
+                    yield f"{where}: {', '.join(found)}", [file.rel]
+            elif file.tier == "internal":
+                riko = {bound for _, bound, _ in imports} & set(names)
+                if riko and not (used or via or patched):
+                    lead = "uses only supported names (public-tier candidate)"
+                    yield f"{where}: {lead}", [file.rel]
 
 
 def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
@@ -823,8 +1039,18 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
         is_test = isinstance(stmt, ast.ClassDef) and stmt.name.startswith("Test")
         for name in [] if is_test else get_defined(stmt):
             users = [c for c in classes if name in set(gen_names(c))]
-            skip = len(users) != 1 or name.endswith("_PENDING") or name in module_uses
+            skip = not users or name.endswith("_PENDING") or name in module_uses
             if skip:
+                continue
+            if len(users) > 1:
+                first = users[0]
+                is_def = isinstance(stmt, (*FUNCTION_NODES, ast.ClassDef))
+                if is_def and first.lineno < stmt.lineno:
+                    lead = (
+                        f"below its first user {first.name}; "
+                        "several users put it at the top"
+                    )
+                    misplaced.append((name, "", stmt.lineno, lead))
                 continue
             user = users[0]
             index = classes.index(user)
@@ -848,10 +1074,106 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
     return misplaced
 
 
-def gen_placement(files: list[TestFile]):
+def get_kind(stmt: ast.stmt, markers: set[str]) -> int:
+    is_func = isinstance(stmt, FUNCTION_NODES)
+    kind = 0
+
+    if is_func and stmt.name in KIND_OVERRIDES:
+        kind = KIND_OVERRIDES[stmt.name]
+    elif is_func and stmt.name.startswith("test"):
+        kind = 1
+        for deco in stmt.decorator_list:
+            text = ast.unparse(deco)
+            strict = "xfail" in text and "strict=True" in text
+            if strict or text.split("(")[0] in markers:
+                kind = 3
+        raises = any(
+            isinstance(n, ast.Attribute) and n.attr == "raises" for n in ast.walk(stmt)
+        )
+        if kind == 1 and raises and REJECT_NAME.search(stmt.name):
+            kind = 2
+
+    return kind
+
+
+def get_xfail_markers(tree: ast.Module) -> set[str]:
+    return {
+        target.id
+        for st in tree.body
+        if isinstance(st, ast.Assign)
+        and "xfail" in ast.unparse(st.value)
+        and "strict=True" in ast.unparse(st.value)
+        for target in st.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def gen_order_issues(file: TestFile):
+    markers = get_xfail_markers(file.tree)
+
+    for cls in gen_classes(file):
+        kinds = [get_kind(func, markers) for func in gen_tests(cls)]
+        if any(a > b for a, b in pairwise(kinds)):
+            lead = (
+                "behavior after a rejection table or tripwire; run move_tests.py --sort"
+            )
+            yield f"{file.rel}:{cls.lineno} {cls.name}: {lead}"
+
+
+def _snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def load_defined(root: Path) -> frozenset[str]:
+    defined = set()
+
+    for path in (root / DOCTEST_ROOTS[0]).rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, (ast.ClassDef, *FUNCTION_NODES)):
+                defined.add(node.name)
+            elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+                defined.add(node.name.id)
+            elif isinstance(node, ast.Assign):
+                defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+
+    return frozenset(defined)
+
+
+def gen_unnamed_subjects(file: TestFile, defined: frozenset[str]):
+    table_names = {
+        name: set(gen_names(stmt))
+        for stmt in file.tree.body
+        if isinstance(stmt, ast.Assign | ast.AnnAssign)
+        for name in get_defined(stmt)
+    }
+
+    for cls in gen_classes(file):
+        subject = cls.name.removeprefix("Test").removeprefix("Async")
+        if subject not in defined and _snake(subject) not in defined:
+            continue
+        names = set(gen_names(cls))
+        for name in names & set(table_names):
+            names |= table_names[name] | file.tables[name]
+        names |= {
+            node.value if isinstance(node, ast.Constant) else node.name
+            for node in ast.walk(cls)
+            if isinstance(node, FUNCTION_NODES)
+            or (isinstance(node, ast.Constant) and isinstance(node.value, str))
+        }
+        words = _snake(subject).split("_")
+        text = " ".join(names).lower()
+        if not all(word in text for word in words):
+            yield f"{file.rel}:{cls.lineno} {cls.name}: never names {subject}"
+
+
+def gen_placement(files: list[TestFile], defined: frozenset[str]):
     for file in files:
         for name, _, lineno, lead in get_misplaced(file):
             yield f"{file.rel}:{lineno} {name}: {lead}", [file.rel]
+        for text in gen_order_issues(file):
+            yield text, [file.rel]
+        for text in gen_unnamed_subjects(file, defined):
+            yield text, [file.rel]
 
 
 def gen_tier_issues(files: list[TestFile]):
@@ -890,6 +1212,28 @@ def where(root: Path, *names: str) -> int:
     return 0 if found else 1
 
 
+def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
+    files = load_test_files(root)
+    units = build_units(files)
+    examples = build_examples(root) if doctests else []
+    doc_units = build_doctest_units(examples)
+    rows, raises = build_rows(files)
+    spread = get_name_spread(files)
+    return {
+        "helpers": gen_helper_issues(root, files),
+        "shapes": gen_shapes(files),
+        "overlaps": gen_overlaps(units, doc_units, min_shared),
+        "doctest-args": gen_doctest_args(examples, rows, spread),
+        "doctest-raises": gen_doctest_raises(examples, raises),
+        "names": gen_same_names(units),
+        "cross-subject": gen_cross_subject(files),
+        "unsupported": gen_unsupported(files, load_supported(root)),
+        "placement": gen_placement(files, load_defined(root)),
+        "tier": gen_tier_issues(files),
+        "doctest-balance": gen_doctest_balance(examples, rows, spread),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("--files", nargs="*", default=[], help="focus on these files")
@@ -909,56 +1253,14 @@ def main() -> int:
         return not focus or bool(focus & set(paths))
 
     os.chdir(root)
-    root = Path(".")
-    files = load_test_files(root)
-    units = build_units(files)
-    examples = [] if args.no_doctests else build_examples(root)
-    doc_units = build_doctest_units(examples)
-    rows, raises = build_rows(files)
     report = {section: [] for section in SECTIONS}
+    sections = build_sections(Path("."), args.min_shared, doctests=not args.no_doctests)
 
-    for text, paths in gen_helper_issues(root, files):
-        if keep(paths):
-            report["helpers"].append(text)
-
-    for group, paths in gen_shapes(files):
-        if keep(paths):
-            report["shapes"].append("\n      ".join(group))
-
-    for count, left, right, shared in gen_overlaps(units, doc_units, args.min_shared):
-        if keep([left.path, right.path]) and len(report["overlaps"]) < args.limit:
-            lits = ", ".join(repr(s[:40]) for s in shared)
-            report["overlaps"].append(
-                f"{count} shared: {left.where}\n      <-> {right.where}\n      {lits}"
-            )
-
-    for text, paths in gen_doctest_args(examples, rows, get_name_spread(files)):
-        if keep(paths) and len(report["doctest-args"]) < args.limit:
-            report["doctest-args"].append(text)
-
-    for text, paths in gen_doctest_raises(examples, raises):
-        if keep(paths) and len(report["doctest-raises"]) < args.limit:
-            report["doctest-raises"].append(text)
-
-    for text, paths in gen_same_names(units):
-        if keep(paths):
-            report["names"].append(text)
-
-    for text, paths in gen_cross_subject(files):
-        if keep(paths):
-            report["cross-subject"].append(text)
-
-    for text, paths in gen_unsupported(files, load_supported(root)):
-        if keep(paths):
-            report["unsupported"].append(text)
-
-    for text, paths in gen_placement(files):
-        if keep(paths):
-            report["placement"].append(text)
-
-    for text, paths in gen_tier_issues(files):
-        if keep(paths):
-            report["tier"].append(text)
+    for section, found in sections.items():
+        limit = args.limit if section in LIMITED else None
+        for text, paths in found:
+            if keep(paths) and (limit is None or len(report[section]) < limit):
+                report[section].append(text)
 
     if args.json:
         print(json.dumps(report, indent=2))

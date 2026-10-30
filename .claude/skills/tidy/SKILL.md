@@ -178,10 +178,13 @@ neighborhood it affects:
    (now used by one file → beside its class; by several → `tests/_*.py`).
    Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
    file>` (static, about 2s). It lists candidates (unused or single-user helpers,
-   copied definitions, same-shape tests, shared literals, doctest calls repeated
-   as `pytest.param` rows, doctest errors repeated as `pytest.raises`, same-named
-   tests, unsupported names in public, functional classes with no end-to-end
-   marker).
+   copied definitions and constants, helper bodies inlined in tests, same-shape
+   tests and standalone tests that fit a table, shared literals, doctest calls
+   repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
+   doctests of six or more examples whose callee has a table, same-named tests,
+   unsupported names in public and supported-only internal classes, out-of-order
+   or misplaced classes and helpers, classes that never name their riko-named subject,
+   functional classes with no end-to-end marker).
    Read its full output once; never pipe it through `head`/`grep` and rerun
    (`--limit` already caps it). Read and verify only those, never whole files.
    Make the moves with

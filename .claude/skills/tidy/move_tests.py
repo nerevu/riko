@@ -87,7 +87,14 @@ FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 STRING_TYPE = re.compile(r"[A-Za-z_][\w.]*(\[[\w.,\[\] |]*\])?( \| [\w.\[\], |]+)*")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from overlap_scan import TestFile, get_misplaced, load_supported  # noqa: E402
+from overlap_scan import (  # noqa: E402
+    KIND_OVERRIDES,
+    TestFile,
+    get_kind,
+    get_misplaced,
+    get_xfail_markers,
+    load_supported,
+)
 from overlap_scan import _is_public_module as is_public_module  # noqa: E402
 
 
@@ -431,12 +438,7 @@ def _read(path: Path) -> str:
     return path.read_text() if path.exists() else ""
 
 
-REJECT_NAME = re.compile(
-    r"reject|raise|refus|requir|invalid|error|fail|unsupported|bad|missing|must|"
-    r"cannot"
-)
 KINDS = {"other": 0, "behavior": 1, "rejection": 2, "tripwire": 3}
-KIND_OVERRIDES: dict[str, int] = {}
 
 
 def check(spec: Spec) -> list[str]:
@@ -473,42 +475,12 @@ def check(spec: Spec) -> list[str]:
     return sorted(set(private))
 
 
-def get_kind(stmt: ast.stmt, markers: set[str]) -> int:
-    is_func = isinstance(stmt, FUNCTION_NODES)
-    kind = 0
-
-    if is_func and stmt.name in KIND_OVERRIDES:
-        kind = KIND_OVERRIDES[stmt.name]
-    elif is_func and stmt.name.startswith("test"):
-        kind = 1
-        for deco in stmt.decorator_list:
-            text = ast.unparse(deco)
-            strict = "xfail" in text and "strict=True" in text
-            if strict or text.split("(")[0] in markers:
-                kind = 3
-        raises = any(
-            isinstance(n, ast.Attribute) and n.attr == "raises" for n in ast.walk(stmt)
-        )
-        if kind == 1 and raises and REJECT_NAME.search(stmt.name):
-            kind = 2
-
-    return kind
-
-
 def sort_class(spec: Spec, dry: bool) -> list[Path]:
     text = spec.path.read_text()
     lines = text.splitlines(keepends=True)
     tree = ast.parse(text)
     cls = find_class(tree, spec.cls)
-    markers = {
-        target.id
-        for st in tree.body
-        if isinstance(st, ast.Assign)
-        and "xfail" in ast.unparse(st.value)
-        and "strict=True" in ast.unparse(st.value)
-        for target in st.targets
-        if isinstance(target, ast.Name)
-    }
+    markers = get_xfail_markers(tree)
     members = list(cls.body)
     first = members[0]
     has_doc = isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
@@ -735,7 +707,8 @@ def place_leads(paths: list[Path], dry: bool) -> list[Path]:
         file = TestFile(rel, tier, ast.parse(source), source)
         groups = {}
         for name, target, _, _ in get_misplaced(file):
-            groups.setdefault(target, []).append(name)
+            if target:
+                groups.setdefault(target, []).append(name)
 
         for target, names in groups.items():
             specs = [Spec(path, name) for name in names]
