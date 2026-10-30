@@ -371,7 +371,11 @@ registry idiom — the process-global is shared by reference, so in-place mutati
 test imports at once), and the `ResolverDispatcher` façade (`riko/runtime/_resolver.py`) doing one symmetric dispatch.
 Stored-workflow lookup resolves through the façade (`dispatcher.require`); the v1 compiler's
 `resolve_module` delegate was deleted with it at cutover step 5 (2026-10-03). Workflow modules expose a stable `pipe`/`async_pipe` entry, so a stored workflow resolves exactly
-like a built-in. External packages add modules with **no core edit** (`examples/riko-example-ext/`).
+like a built-in. `WorkflowResolver.load` walks a stored workflow's node names, loop embeds, and
+`DEPENDENCIES` before returning it and raises `InvalidPipelineError` (naming the cycle and pointing
+to `loop`) when one reaches itself; acyclic names are memoized until `register`/`reset`. The check
+is static, so self-recursion that would end on its own is refused too (user ruling 2026-10-29).
+External packages add modules with **no core edit** (`examples/riko-example-ext/`).
 The module registry and a private target registry (`riko/runtime/_target_registry.py`, built-in
 `FileTarget`, entry points under `riko.targets`) share a generic `Registry[T]` base
 (`riko/runtime/_registry.py`) — one three-tier runtime → entry-point → built-in lifetime, each keyed by a
@@ -1083,7 +1087,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `StopIteration` never leaks into an enclosing iterator. A bare `break` out of `async for` over a
   `Pipeline` is safe but releases the run only when the abandoned generator is garbage collected
   (regression
-  `tests/public/test_pipeline.py::TestPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`)
+  `tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`)
   and warns with a `ResourceWarning`; `async with pipeline.open()` is the prompt-release form.
 - **Fluent authoring** derives definitions immutably in the definitions layer, with no
   normalize/runtime import: the canonical constructor takes `(workflow)` — it accepts a
@@ -1128,7 +1132,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   module port contracts. Callable `.map`/`.flat_map` are deliberately not shipped —
   callable-pipes owns them; a strict-xfail tripwire in `tests/public/test_pipeline.py` flips
   when they land. Tests: `tests/public/test_pipeline.py` plus seeded-run and end-to-end
-  coverage in `tests/internal/test_execution_plan.py`.
+  coverage in `tests/internal/test_plan_runs.py`.
 
 **Node-thread budget** (2026-10-16). Under `AsyncExecution` a node without an async implementation
 holds a worker thread while it pulls its input stream, so a sync-only chain needs threads at once. All
@@ -1245,7 +1249,7 @@ tuple and a dict as a `FrozenDict`.
 
 Regressions: `tests/public/test_callable_nodes.py::TestCallableNodes`,
 `tests/public/test_workflow.py::TestCallableNode`, and
-`tests/public/test_workflow.py::TestCallableNodeDocuments`.
+`tests/public/test_workflow_documents.py::TestCallableNodeDocuments`.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

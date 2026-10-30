@@ -164,7 +164,8 @@ any workflow); running it waits on `WriteNode` execution, pinned by
 (the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
 caller rather than ahead of it (triage 2026-10-25). When `WriteNode` execution lands and the `WRITE_NODE_PENDING` tripwires in
 `tests/public/test_write.py` flip, trim the internal copies that assert the same bytes and errors through
-`write_through` (`tests/internal/test_io.py` `TestWriteExecution`/`TestAsyncWriteExecution`/`TestSink`),
+`write_through` (`tests/internal/test_io.py` `TestWriteExecution`/`TestAsyncWriteExecution`/`TestSink`,
+plus `TestJsonl::test_singleton_has_no_array` and `TestCsv::test_passthrough_singleton_preserves_schema`),
 keeping only what has no public path: termination, the async
 terminate/throw cases (triage 2026-10-28).
 
