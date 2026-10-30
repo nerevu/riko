@@ -80,6 +80,10 @@ Design notes:
 * Separate the cache TTL from the network timeout. `build_opener` forwards the same `**kwargs` to
   the opener and to `mezmorize.memoize(**kwargs)`, so one `timeout` sets both the `urlopen`
   timeout and the cache entry lifetime (`riko/io/_sync.py` `Fetch.__init__` TODO).
+* Bound the opener memo. `build_opener` is `@repr_cache`-memoized, an unbounded store keyed on the
+  forwarded `**kwargs`, and each `memoize=True` entry builds its own mezmorize cache. Every caller
+  passes conf-level kwargs today, so it cannot grow per item (2026-10-29 unboundedness audit, latent,
+  no tripwire); keep it that way, or bound the store, when the cache moves to the fetch boundary.
 
 ### `throttle`
 

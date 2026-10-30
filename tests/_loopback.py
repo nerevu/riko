@@ -21,6 +21,7 @@ Tests that use this should carry ``@pytest.mark.simulated_network``.
 
 from __future__ import annotations
 
+import socket
 import threading
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -98,4 +99,46 @@ def loopback_url(
     finally:
         server.shutdown()
         server.server_close()
+        thread.join(timeout=1)
+
+
+@contextmanager
+def stalled_url(prefix: bytes = b"", *, path: str = "stalled.txt") -> Generator[str]:
+    """
+    Serves a connection that accepts, sends *prefix*, then never finishes.
+
+    The server never closes the connection on its own, so a fetch without a
+    timeout blocks forever. *prefix* is written as is: pass response headers and
+    a partial body to simulate a stalled stream, or nothing for a stalled response.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+    accepted: list[socket.socket] = []
+    done = threading.Event()
+
+    def serve() -> None:
+        while not done.is_set():
+            try:
+                connection, _ = server.accept()
+            except OSError:
+                break
+
+            accepted.append(connection)
+
+            with suppress(OSError):
+                connection.sendall(prefix)
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+
+    try:
+        yield f"http://127.0.0.1:{server.getsockname()[1]}/{path}"
+    finally:
+        done.set()
+        server.close()
+
+        for connection in accepted:
+            connection.close()
+
         thread.join(timeout=1)
