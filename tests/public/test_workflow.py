@@ -523,6 +523,15 @@ INVALID_EDGES = [
         [StreamEdge(Endpoint("a", "out:0"), _B_IN)], _B_OUT, "invalid port", id="out:0"
     ),
     pytest.param(
+        [
+            StreamEdge(_A_OUT, Endpoint("b", "in:1")),
+            StreamEdge(_A_OUT, Endpoint("b", "in:01")),
+        ],
+        _B_OUT,
+        r"multiple stream edges.*\('b', 'in:1'\)",
+        id="in:1-and-in:01",
+    ),
+    pytest.param(
         [StreamEdge(_A_OUT, _B_IN), StreamEdge(_B_OUT, _A_IN)],
         _B_OUT,
         r"cycle.*\['a', 'b'\]",
