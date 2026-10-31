@@ -152,6 +152,25 @@ class Endpoint:
     def __str__(self) -> str:
         return f"Endpoint({self.node!r}, {self.port!r})"
 
+    @property
+    def port_key(self) -> tuple[NodeId, str]:
+        """
+        The node id and the port's canonical spelling.
+
+        Raises:
+
+            ValueError: If the port does not follow the port grammar.
+
+        Examples:
+
+            >>> Endpoint("b", "in:01").port_key
+            ('b', 'in:1')
+            >>> Endpoint("b", "in:1").port_key
+            ('b', 'in:1')
+
+        """
+        return self.node, str(parse_port(self.port))
+
 
 _is_endpoint = validator_from_require(require_instance, Endpoint)
 
@@ -175,6 +194,10 @@ class ParsedPort:
     direction: PortDirection
     index: int | None
     name: str | None
+
+    def __str__(self) -> str:
+        qualifier = self.name if self.index is None else self.index
+        return self.direction if qualifier is None else f"{self.direction}:{qualifier}"
 
     @property
     def is_default(self) -> bool:
