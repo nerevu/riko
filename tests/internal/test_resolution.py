@@ -634,11 +634,16 @@ class TestWorkflowResolver:
             "pipe_gigs"
         )
 
-    def test_second_document_store_requires_replace(self, tmp_path):
-        resolver = WorkflowResolver(document_store=DirectoryStore(tmp_path))
+    def test_rejected_registration_leaves_every_store_unchanged(self, tmp_path):
+        document_store = DirectoryStore(tmp_path)
+        resolver = WorkflowResolver(document_store=document_store)
+        stores = (MappingStore({}), DirectoryStore(tmp_path))
 
         with pytest.raises(ValueError, match="document store already registered"):
-            resolver.register(document_store=DirectoryStore(tmp_path))
+            resolver.register(module_store=stores[0], document_store=stores[1])
+
+        assert resolver._module_store is None
+        assert resolver._document_store is document_store
 
     def test_missing_stored_workflow_interfaces_raise(self):
         with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
