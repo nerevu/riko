@@ -35,6 +35,11 @@ class ModuleInfo:
     is_package: bool
     tree: ast.Module
 
+    @property
+    def package(self) -> str:
+        """The dotted name of the package that owns this module."""
+        return self.name if self.is_package else self.name.rpartition(".")[0]
+
 
 @dataclass(frozen=True, slots=True)
 class _ImportRef:
@@ -48,7 +53,8 @@ class _ImportRef:
     level: int
 
 
-def _load_modules(root: Path) -> tuple[ModuleInfo, ...]:
+def load_modules(root: Path) -> tuple[ModuleInfo, ...]:
+    """Loads and parses every Python module under ``root`` without importing it."""
     modules: list[ModuleInfo] = []
     package = root.name
 
@@ -74,14 +80,12 @@ def _load_modules(root: Path) -> tuple[ModuleInfo, ...]:
     return tuple(modules)
 
 
-def _resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> str:
+def resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> str:
+    """Resolves the absolute module a ``from`` import names."""
     if level == 0:
         resolved = module or ""
     else:
-        package = (
-            current.name if current.is_package else current.name.rpartition(".")[0]
-        )
-        parts = package.split(".") if package else []
+        parts = current.package.split(".") if current.package else []
         keep = max(0, len(parts) - level + 1)
         base = parts[:keep]
 
@@ -183,7 +187,7 @@ class _ImportVisitor(ast.NodeVisitor):
             )
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        imported = _resolve_from_module(self.module, node.module, node.level)
+        imported = resolve_from_module(self.module, node.module, node.level)
         self.refs.append(
             _ImportRef(
                 importer=self.module.name,
@@ -202,10 +206,6 @@ def collect_imports(module: ModuleInfo) -> tuple[_ImportRef, ...]:
     visitor = _ImportVisitor(module)
     visitor.visit(module.tree)
     return tuple(visitor.refs)
-
-
-def _module_package(module: ModuleInfo) -> str:
-    return module.name if module.is_package else module.name.rpartition(".")[0]
 
 
 def resolve_import_targets(

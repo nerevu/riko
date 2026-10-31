@@ -271,7 +271,7 @@ class TestCodegenCommand:
             _codegen,
             "_CODEGEN",
             {
-                name: (_record(calls, name), lambda name=name: name, f"{name} failed")
+                name: (_record(calls, name), name, f"{name} failed")
                 for name in _codegen._CODEGEN
             },
         )
@@ -414,7 +414,7 @@ class TestImportsCommand:
         checks = {
             name: _record_path(calls, name, int(name in failing)) for name in names
         }
-        monkeypatch.setattr(_import_commands, "_IMPORT_CHECKS", checks)
+        monkeypatch.setattr(_import_commands, "IMPORT_CHECKS", checks)
 
         result = CliRunner().invoke(_import_commands.IMPORTS_COMMAND, args)
         assert result.exit_code == exit_code

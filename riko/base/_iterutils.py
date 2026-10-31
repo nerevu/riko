@@ -10,6 +10,30 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 
+def gen_instances[T](
+    items: Iterable[object], accepted: type[T] | tuple[type[T], ...]
+) -> Iterator[T]:
+    """
+    Generates the items that are instances of ``accepted``.
+
+    Args:
+
+        items: The source iterable.
+        accepted: The type, or tuple of types, an item must be an instance of.
+
+    Yields:
+
+        Each item that is an instance of ``accepted``.
+
+    Examples:
+
+        >>> list(gen_instances([1, "a", 2.0, None], (int, float)))
+        [1, 2.0]
+
+    """
+    return (item for item in items if isinstance(item, accepted))
+
+
 def noop[T](value: T) -> T:
     """
     Passes a value through unchanged.

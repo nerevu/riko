@@ -25,8 +25,8 @@ from riko.base._iterutils import gen_non_none
 from ._import_graph import (
     InvalidArchitectureError,
     ModuleInfo,
-    _load_modules,
     collect_imports,
+    load_modules,
     resolve_import_targets,
 )
 
@@ -221,7 +221,7 @@ def load_architecture_report(
         name = "custom"
 
     _validate_graph(name, dependencies)
-    modules = _load_modules(root)
+    modules = load_modules(root)
     module_names = {module.name for module in modules}
     unclassified = tuple(
         UnclassifiedModule(module.name, module.path)

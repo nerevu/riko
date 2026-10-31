@@ -47,7 +47,7 @@ from riko.base._api_surface import (
     STABLE,
     TYPES,
 )
-from riko.base._paths import PACKAGE_DIR
+from riko.base._paths import CONFIG_PATH, MODULE_IDS_PATH, MODULE_NAMES_PATH
 from riko.base._strutils import pythonise
 from riko.cli._gen_config import objconf_structure, render
 from riko.definitions._context import Context
@@ -104,9 +104,6 @@ _SOURCES = {
 }
 
 _SINKS = {"write"}
-_NAMES = PACKAGE_DIR / "modules" / "_names.py"
-_MODULE_IDS = PACKAGE_DIR / "types" / "_module_ids.py"
-_CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"
 
 RENAME_CONF = RenameRawConf(
     {
@@ -510,7 +507,7 @@ class TestModuleCategory:
 class TestGeneratedNamesDrift:
     def test_generated_names_match(self):
         entries = gen_catalog_entries()
-        name_lines = _NAMES.read_text().splitlines()
+        name_lines = MODULE_NAMES_PATH.read_text().splitlines()
         generated_lines = generate_module_names(*entries).splitlines()
 
         for actual, expected in zip(name_lines, generated_lines, strict=True):
@@ -519,14 +516,14 @@ class TestGeneratedNamesDrift:
 
 class TestGenerateModuleIds:
     def test_generated_module_ids_match(self):
-        assert _MODULE_IDS.read_text() == generate_module_ids()
+        assert MODULE_IDS_PATH.read_text() == generate_module_ids()
 
 
 class TestConfigCodegen:
     """Run ``manage codegen --config`` to update generated configs."""
 
     def test_configs_match_generated(self):
-        assert _CONFIGS.read_text() == render()
+        assert CONFIG_PATH.read_text() == render()
 
     def test_fetchtable_inherits_csv(self):
         assert objconf_structure()["FetchTableObjconf"][0] == "CsvObjconf"

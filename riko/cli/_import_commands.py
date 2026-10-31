@@ -29,7 +29,7 @@ def _lint_architecture_imports(root: Path) -> int:
     return lint_architecture(report)
 
 
-_IMPORT_CHECKS: dict[str, Callable[[Path], int]] = {
+IMPORT_CHECKS: dict[str, Callable[[Path], int]] = {
     "canonical": lint_canonical_imports,
     "relative": lint_relative_imports,
     "architecture": _lint_architecture_imports,
@@ -41,7 +41,7 @@ def run_import_checks(root: Path, *checks: str) -> int:
 
     for name in checks:
         try:
-            check_code = _IMPORT_CHECKS[name](root)
+            check_code = IMPORT_CHECKS[name](root)
         except ImportLintError as e:
             click.echo(f"error: {e}", err=True)
             check_code = 2
@@ -79,7 +79,7 @@ def _imports_command(
 ) -> None:
     """Check Riko's internal import contracts."""
     if all_:
-        selected = _IMPORT_CHECKS
+        selected = IMPORT_CHECKS
     else:
         selections = (
             ("canonical", canonical),

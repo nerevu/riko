@@ -14,9 +14,16 @@ from shutil import which
 from subprocess import run
 from typing import TYPE_CHECKING
 
-from riko.base._paths import DOCS_DIR, PACKAGE_DIR, PYPROJECT, ROOT_DIR, TESTS_DIR
+from riko.base._paths import (
+    API_SURFACE_PATH,
+    DOCS_DIR,
+    PACKAGE_DIR,
+    PYPROJECT,
+    ROOT_DIR,
+    TESTS_DIR,
+)
 
-from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
+from ._gen_api_surface import API_SURFACE_BLOCK, generate_api_surface
 from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
 from ._import_graph import FUNCTION_NODES
 from ._lint_terms import BANNED_TERMS
@@ -685,8 +692,8 @@ def _api_surface_offenders() -> list[str]:
     """Finds API-surface blocks that drift from the contract declaration."""
     offenders: list[str] = []
 
-    if text := _read(_DOC):
-        present = {match["key"] for match in _BLOCK.finditer(text)}
+    if text := _read(API_SURFACE_PATH):
+        present = {match["key"] for match in API_SURFACE_BLOCK.finditer(text)}
 
         if missing := sorted(_API_SURFACE_GROUPS - present):
             offenders.append(f"missing generated blocks: {missing}")
@@ -754,7 +761,7 @@ def lint_docs() -> int:
         f"{_INTERNAL_DOCS}: completion claimed above packaged version": partial(
             _version_claim_offenders, _packaged_version()
         ),
-        str(_DOC): _api_surface_offenders,
+        str(API_SURFACE_PATH): _api_surface_offenders,
         "verb tables drift": _gen_verb_table_offenders,
         "cited test files no longer exist": _gen_stale_test_citation_offenders,
         "cited tests no longer exist": _gen_stale_test_symbol_offenders,

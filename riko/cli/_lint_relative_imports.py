@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ._import_graph import _load_modules, _module_package, collect_imports
+from ._import_graph import collect_imports, load_modules
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,8 +44,8 @@ def _suggestion(
 def _iter_issues(root: Path) -> tuple[_RelativeIssue, ...]:
     issues: list[_RelativeIssue] = []
 
-    for module in _load_modules(root):
-        package = _module_package(module)
+    for module in load_modules(root):
+        package = module.package
 
         for ref in collect_imports(module):
             if ref.level or not ref.imported.startswith("riko"):
