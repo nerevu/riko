@@ -58,8 +58,8 @@ from tests._execution import (
     agen_source,
     awaitable_source,
     gen_closing_seed,
-    module_workflow,
     registered_modules,
+    relay_pipe,
     tag_source,
 )
 from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
@@ -676,20 +676,30 @@ class TestClose:
         assert closed == [True]
 
     def test_early_close_closes_an_upstream_node(self) -> None:
+        # The source stays referenced, and the relay reads it with a plain ``for``
+        # loop, so only the run's own close can end it.
         closed: list[bool] = []
+        sources: list[Iterator[Item]] = []
 
-        @tag_source
-        def src(_items=None, **_):
+        def gen():
             try:
                 yield {"x": 1}
                 yield {"x": 2}
             finally:
                 closed.append(True)
 
-        sync_pipe = cast("SyncModuleWrapper", src)
+        @tag_source
+        def src(_items=None, **_):
+            sources.append(gen())
+            return sources[-1]
 
-        with registered_modules(ModuleDefinition(name="itersrc2", sync_pipe=sync_pipe)):
-            stream = Pipeline(module_workflow("itersrc2"))()
+        definitions = (
+            ModuleDefinition(name="itersrc2", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+
+        with registered_modules(*definitions):
+            stream = Pipeline.from_module("itersrc2").pipe("relay")()
             assert next(stream) == {"x": 1}
             stream.close()
             assert closed == [True]

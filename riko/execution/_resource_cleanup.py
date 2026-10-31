@@ -11,7 +11,7 @@ from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_awaitable
 from riko.types._io import is_async_closeable
 
-from ._execution import _asyncify_call
+from ._execution import asyncify_call
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -124,7 +124,7 @@ async def aclose_with[T](cleanup: Callable[[T], object], value: T) -> None:
         value: The resource value to close.
 
     """
-    await as_awaitable(await _asyncify_call(cleanup, value))
+    await as_awaitable(await asyncify_call(cleanup, value))
 
 
 __all__ = ["aclose_resource", "aclose_with", "close_resource", "close_with"]

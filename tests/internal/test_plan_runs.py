@@ -29,6 +29,7 @@ from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
 from tests._execution import (
     ClosingAsyncIterator,
+    ClosingIterator,
     agen_source,
     arun_plan,
     awaitable_source,
@@ -38,6 +39,7 @@ from tests._execution import (
     gen_closing_seed,
     module_workflow,
     passthrough_pipe,
+    relay_pipe,
     run_plan,
     tag_source,
     tagged_source,
@@ -65,6 +67,7 @@ _NON_DEFAULT = "non-default output port"
 _SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
 _EMPTY = Workflow(nodes=[], outputs={})
 _NOPE = "no workflow output 'nope'"
+_RESERVED = "use a reserved name"
 
 
 @tag_source
@@ -78,10 +81,18 @@ def _decorated_reader(stream, objconf, tuples, **kwargs):
     yield {"got": kwargs["resources"]["slot"]}
 
 
-def _named_port_workflow() -> Workflow:
+def _named_port_workflow(name: str = "count") -> Workflow:
     a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="probe")
-    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:count"))
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", f"in:{name}"))
     return build_workflow([a, b], edges=(edge,))
+
+
+def _unbound_relay_workflow() -> Workflow:
+    """Chains a source into a relay that binds a resource no context provides."""
+    a = ModuleNode(id="a", name="src")
+    b = ModuleNode(id="b", name="relay", resources={"slot": "primary"})
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
+    return build_workflow([a, b], edges=(edge,), resources=("primary",))
 
 
 READERS = [
@@ -92,7 +103,9 @@ READERS = [
 
 # Execution fails closed on non-default output ports: only the bare 'out' port is
 # executable, so a distinct 'out:1' source port or selected output is rejected
-# rather than silently aliased to the node's 'out' stream.
+# rather than silently aliased to the node's 'out' stream. A named input port that
+# shares a name with an argument every module call takes is rejected rather than
+# overwriting that argument or being overwritten by it.
 RUN_REJECTIONS = [
     pytest.param(
         build_workflow(_SRC_SINK, edges=(_PORT_1_EDGE,)),
@@ -111,6 +124,19 @@ RUN_REJECTIONS = [
         (_SRC, _PROBE),
         _NEEDS_SEED,
         id="transformer-fed-only-through-a-named-port",
+    ),
+    pytest.param(_named_port_workflow("conf"), (_SRC, _PROBE), _RESERVED, id="in:conf"),
+    pytest.param(
+        _named_port_workflow("context"), (_SRC, _PROBE), _RESERVED, id="in:context"
+    ),
+    pytest.param(
+        _named_port_workflow("embed"), (_SRC, _PROBE), _RESERVED, id="in:embed"
+    ),
+    pytest.param(
+        _named_port_workflow("others"), (_SRC, _PROBE), _RESERVED, id="in:others"
+    ),
+    pytest.param(
+        _named_port_workflow("resources"), (_SRC, _PROBE), _RESERVED, id="in:resources"
     ),
 ]
 
@@ -626,6 +652,23 @@ class TestPlanRun:
         ):
             list(execution.run(plan))
 
+    def test_run_closes_built_streams_when_a_later_node_fails(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with (
+            pytest.raises(InvalidPipelineError, match="not provided"),
+            SyncExecution() as execution,
+        ):
+            execution.run(plan)
+
+        assert closed == ["closed"]
+
     def test_run_rejects_seed_with_multiple_open_inputs(self) -> None:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
@@ -1011,6 +1054,83 @@ class TestAsyncPlanRun:
 
         assert seen == [{"x": 0}, {"x": 1}, {"x": 2}]
         assert closed == [True]
+
+    @async_test
+    async def test_arun_closes_built_streams_when_a_later_node_fails(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with pytest.raises(InvalidPipelineError, match="not provided"):
+            async with AsyncExecution() as execution:
+                await execution.arun(plan)
+
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_closes_a_sync_worker_nodes_async_input_once(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="relay"))
+        plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                assert await anext(stream) == {"x": 1}
+                await stream.aclose()
+
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_sync_worker_node_closes_its_input_once_it_finishes(
+        self,
+    ) -> None:
+        # The source stays referenced and never ends, so only the node finishing can
+        # close it before the run itself is closed.
+        closed, sources = [], []
+
+        async def gen():
+            try:
+                while True:
+                    yield {"x": 1}
+            finally:
+                closed.append("closed")
+
+        @tag_source
+        def src(_items=None, **_):
+            sources.append(gen())
+            return sources[-1]
+
+        def take_two(items, **_):
+            for index, item in enumerate(items):
+                if index == 2:
+                    break
+
+                yield item
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(
+                name="take", sync_pipe=cast("SyncModuleWrapper", take_two)
+            ),
+        )
+        nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="take"))
+        plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(plan)
+                assert [item async for item in stream] == [{"x": 1}, {"x": 1}]
+                assert closed == ["closed"]
 
     @async_test
     async def test_arun_sync_worker_node_closes_its_async_inputs_on_early_exit(

@@ -847,7 +847,7 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_async_execution.py`)
    starts the sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`) and
    pulls its output one item per `__anext__` as the consumer demands it, while the pipe reads its async
-   primary source and every async secondary input (`others`, named ports — `_bridge_inputs`) lazily from
+   primary source and every async secondary input (named ports through `map_values`, `others` through `ExecutionExtras.map_others`) lazily from
    the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
    `run_from_thread`). `_adapt.py` owns the pieces: `require_stream`/`require_async_stream` (the
    node-output boundary, moved out of `_execution.py`), `async_drain(source, call)` — one

@@ -215,7 +215,7 @@ class TestSyncExecution:
             raise RuntimeError("cleanup failed")
 
         execution = SyncExecution()
-        execution.callback(boom)
+        execution.queue_callback(boom)
 
         with pytest.raises(RuntimeError, match="cleanup failed"):
             execution.close()
@@ -231,7 +231,7 @@ class TestSyncExecution:
 
         def run() -> None:
             with SyncExecution() as execution:
-                execution.callback(boom)
+                execution.queue_callback(boom)
                 raise ValueError("primary")
 
         with pytest.raises(ExceptionGroup) as info:
@@ -336,7 +336,7 @@ class TestAsyncExecution:
             raise RuntimeError("cleanup failed")
 
         execution = AsyncExecution()
-        execution.push_async_callback(boom)
+        execution.queue_async_callback(boom)
 
         with pytest.raises(RuntimeError, match="cleanup failed"):
             await execution.aclose()
@@ -377,7 +377,7 @@ class TestAsyncExecution:
 
         async def run() -> None:
             async with AsyncExecution() as execution:
-                execution.push_async_callback(boom)
+                execution.queue_async_callback(boom)
                 raise ValueError("primary")
 
         with pytest.raises(ExceptionGroup) as info:
@@ -392,7 +392,7 @@ class TestAsyncExecution:
         calls: list[str] = []
 
         async with AsyncExecution() as execution:
-            execution.callback(calls.append, "closed")
+            execution.queue_callback(calls.append, "closed")
 
         assert calls == ["closed"]
 
@@ -426,7 +426,7 @@ class TestAsyncExecution:
 
         async def run() -> None:
             async with AsyncExecution(shutdown_timeout=0.05) as execution:
-                execution.push_async_callback(slow)
+                execution.queue_async_callback(slow)
                 raise ValueError("primary")
 
         with pytest.raises(ExceptionGroup) as info:
@@ -446,7 +446,7 @@ class TestAsyncExecution:
 
         with fail_after(1):
             async with AsyncExecution(shutdown_timeout=inf) as execution:
-                execution.push_async_callback(slow)
+                execution.queue_async_callback(slow)
 
         assert done == [True]
 

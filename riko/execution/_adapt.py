@@ -11,10 +11,8 @@ private to the runtime and belong to no supported surface.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
-from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Protocol, cast
 
-from riko.bado._util import maybe_aclosing
 from riko.base._guards import is_listlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
@@ -24,6 +22,8 @@ from riko.types._wrappers import (
     require_single_output,
     require_sync_wrapper,
 )
+
+from ._execution import asyncify_call
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -79,7 +79,7 @@ def require_stream[T](
 
     Raises:
 
-        InvalidPipelineError: If ``pipe`` is a multi-output splitter.
+        InvalidPipelineError: If ``pipe`` is a splitter.
 
     """
     require_single_output(pipe)
@@ -106,7 +106,7 @@ def require_async_stream[T](
 
     Raises:
 
-        InvalidPipelineError: If ``pipe`` is a multi-output splitter.
+        InvalidPipelineError: If ``pipe`` is a splitter.
 
     """
     require_single_output(pipe)
@@ -146,22 +146,23 @@ def _maybe_close(value: object) -> None:
         value.close()
 
 
-def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
+def async_drain[T](items: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
     Args:
 
-        source: The async stream to read.
-        call: Runs an awaitable-returning callable to completion on the event
-            loop from the calling thread.
+        items: The async stream to read.
+
+        call: Runs an awaitable-returning callable to completion on the event loop from
+            the calling thread.
 
     Yields:
 
         Each item ``source`` produces, in order.
 
     """
-    iterator = aiter(source)
+    iterator = aiter(items)
 
     while True:
         try:
@@ -172,51 +173,39 @@ def async_drain[T](source: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
             yield item
 
 
-def _next_or_missing[T](iterator: Iterator[T]) -> T | MissingType:
-    """Gets the next item from ``iterator``, or ``MISSING`` once it is exhausted."""
-    return next(iterator, MISSING)
+def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
+    """Gets the next item from ``stream``, or ``MISSING`` once it is exhausted."""
+    return next(stream, MISSING)
 
 
 async def pull_stream[T](
-    closeable: object,
-    iterator: Iterator[T],
-    *node_streams: AsyncIterator[object],
-    pull: WorkerCall,
-    close: WorkerCall,
+    stream: Iterator[T], *, pull: WorkerCall, close: Callable[[], Awaitable[object]]
 ) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
     Args:
 
-        closeable: The pipe's return value whose closure releases what the stream holds.
-
-        iterator: The synchronous item stream to read.
-
-        node_streams: The async streams ``iterator`` reads. Closed once ``closeable`` is
-            closed (even when closing it fails).
+        stream: The synchronous item stream to read that is closed once reading stops.
 
         pull: Runs a blocking callable off the event loop.
 
-        close: Runs the final closure off the event loop (even while the execution is
-            shutting down).
+        close: Closes the node streams ``stream`` reads. Called once ``stream`` is
+            closed.
 
     Yields:
 
-        Each item ``iterator`` produces, in order.
+        Each item ``stream`` produces, in order.
 
     """
-    async with AsyncExitStack() as stack:
-        for stream in node_streams:
-            await stack.enter_async_context(maybe_aclosing(stream))
-
+    try:
+        while not isinstance(item := await pull(_next_or_missing, stream), MissingType):
+            yield item
+    finally:
         try:
-            while not isinstance(
-                item := await pull(_next_or_missing, iterator), MissingType
-            ):
-                yield item
+            await asyncify_call(_maybe_close, stream)
         finally:
-            await close(_maybe_close, closeable)
+            await close()
 
 
 def _copy_wrapper_meta(
