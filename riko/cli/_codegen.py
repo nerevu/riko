@@ -8,12 +8,15 @@ from typing import TYPE_CHECKING
 
 import click
 
-from ._gen_api_surface import _DOC as API_SURFACE_PATH
+from riko.base._paths import (
+    API_SURFACE_PATH,
+    CONFIG_PATH,
+    MODULE_IDS_PATH,
+    MODULE_NAMES_PATH,
+)
+
 from ._gen_api_surface import main as gen_api_surface_main
-from ._gen_config import _CONFIGS as CONFIG_PATH
 from ._gen_config import main as gen_config_main
-from ._gen_names import _MODULE_IDS as MODULE_IDS_PATH
-from ._gen_names import _NAMES as NAMES_PATH
 from ._gen_names import main as gen_names_main
 from ._gen_tier_index import TIERS
 from ._gen_tier_index import main as gen_tier_index_main
@@ -23,30 +26,30 @@ from ._gen_verbs import main as gen_verbs_main
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_CODEGEN: dict[str, tuple[Callable[[], int], Callable[[], str], str]] = {
+_CODEGEN: dict[str, tuple[Callable[[], int], str, str]] = {
     "config": (
         gen_config_main,
-        lambda: f"wrote configuration file to {CONFIG_PATH}",
+        f"wrote configuration file to {CONFIG_PATH}",
         "Error updating configuration file!",
     ),
     "names": (
         gen_names_main,
-        lambda: f"regenerated module names to {NAMES_PATH} and {MODULE_IDS_PATH}",
+        f"regenerated module names to {MODULE_NAMES_PATH} and {MODULE_IDS_PATH}",
         "Error regenerating module names!",
     ),
     "api": (
         gen_api_surface_main,
-        lambda: f"regenerated the API-surface document at {API_SURFACE_PATH}",
+        f"regenerated the API-surface document at {API_SURFACE_PATH}",
         "Error regenerating the API-surface document!",
     ),
     "tests": (
         gen_tier_index_main,
-        lambda: f"regenerated the {', '.join(TIERS)} test indexes",
+        f"regenerated the {', '.join(TIERS)} test indexes",
         "Error regenerating the test indexes!",
     ),
     "verbs": (
         gen_verbs_main,
-        lambda: f"regenerated the verb tables in {', '.join(map(str, VERB_DOCS))}",
+        f"regenerated the verb tables in {', '.join(map(str, VERB_DOCS))}",
         "Error regenerating the verb tables!",
     ),
 }
@@ -68,20 +71,15 @@ def _codegen_command(
     all_: bool = False,
 ) -> None:
     """Regenerate generated project artifacts."""
+    pairs = (
+        ("config", config),
+        ("names", names),
+        ("api", api),
+        ("tests", tests),
+        ("verbs", verbs),
+    )
     selected = (
-        tuple(_CODEGEN)
-        if all_
-        else tuple(
-            name
-            for name, enabled in (
-                ("config", config),
-                ("names", names),
-                ("api", api),
-                ("tests", tests),
-                ("verbs", verbs),
-            )
-            if enabled
-        )
+        tuple(_CODEGEN) if all_ else tuple(name for name, enabled in pairs if enabled)
     )
     selected = selected or ("config",)
 
@@ -91,7 +89,7 @@ def _codegen_command(
         if runner():
             raise RuntimeError(error)
 
-        print(f"Successfully {summary()}.")
+        print(f"Successfully {summary}.")
 
 
 CODEGEN_COMMAND = _codegen_command

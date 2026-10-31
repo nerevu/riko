@@ -31,7 +31,7 @@ from typing_extensions import TypeForm
 
 from ._exceptions import InvalidPipelineError
 from ._guards import is_mapping, require_mapping
-from ._iterutils import sort_stably
+from ._iterutils import gen_instances, sort_stably
 from ._recordutils import field_names, required_attrs_keys
 from ._typing import gen_union_members
 
@@ -934,7 +934,7 @@ def require_from_form[T](
     """
     default_what = getattr(form, "__name__", "value") if what is None else what
     leaves = tuple(gen_union_members(form))
-    classes = tuple(leaf for leaf in leaves if isinstance(leaf, type))
+    classes = tuple(gen_instances(leaves, type))
     shapes = tuple(cls for cls in classes if not is_typeddict(cls))
     arms = tuple(leaf for leaf in leaves if get_origin(leaf) is Literal)
     literals = tuple(arg for arm in arms for arg in get_args(arm))
@@ -1028,7 +1028,7 @@ def require_strlike(
         result: str | tuple[str, ...] | None = value
     elif isinstance(value, Iterable):
         items = tuple(value)
-        strs = tuple(v for v in items if isinstance(v, str))
+        strs = tuple(gen_instances(items, str))
         result = strs if len(strs) == len(items) else None
     else:
         result = None

@@ -24,6 +24,7 @@ from doctest import DocTestParser
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
+from riko.base._iterutils import gen_instances
 from riko.base._verbs import VERBS
 
 from ._import_graph import FUNCTION_NODES
@@ -438,7 +439,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     for root in roots:
         for path in _iter_python_files(root):
             tree = parse(path.read_text(encoding="utf-8"))
-            nodes = (node for node in walk(tree) if isinstance(node, types))
+            nodes = gen_instances(walk(tree), types)
 
             for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
                 doc = get_docstring(node) or ""

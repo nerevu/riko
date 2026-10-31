@@ -17,6 +17,8 @@ import re
 from doctest import DocTestParser
 from typing import TYPE_CHECKING, NamedTuple
 
+from riko.base._iterutils import gen_instances
+
 from ._import_graph import FUNCTION_NODES
 from ._shipped_text import gen_files
 
@@ -137,17 +139,14 @@ def _gen_field_keywords(cls: ast.ClassDef) -> Iterator[ast.arg]:
         if isinstance(statement, ast.AnnAssign)
         and isinstance(statement.target, ast.Name)
     }
-    methods = (
-        statement for statement in cls.body if isinstance(statement, FUNCTION_NODES)
-    )
 
-    for method in methods:
+    for method in gen_instances(cls.body, FUNCTION_NODES):
         yield from (arg for arg in method.args.kwonlyargs if arg.arg in names)
 
 
 def _gen_tree_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[int]:
     """Finds the line of each reserved-name ``Workflow`` binding in a tree."""
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    classes = list(gen_instances(ast.walk(tree), ast.ClassDef))
     fields = {id(statement) for cls in classes for statement in cls.body}
     keywords = {id(arg) for cls in classes for arg in _gen_field_keywords(cls)}
     bindings = (

@@ -42,7 +42,10 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
+from operator import itemgetter
 from typing import TYPE_CHECKING, Final, NamedTuple
+
+from riko.base._iterutils import gen_instances, gen_non_none
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
 from ._import_graph import FUNCTION_NODES, FunctionNode
@@ -347,10 +350,9 @@ def _gen_scopes(tree: ast.Module, constants: dict[str, Seconds]) -> Iterator[_Sc
             yield _Scope(node.name, node, markers, [])
         elif isinstance(node, ast.ClassDef):
             enclosing = list(_gen_timeouts(node.decorator_list, constants))
-            methods = (item for item in node.body if isinstance(item, FUNCTION_NODES))
             yield _Scope(node.name, None, enclosing, [])
 
-            for method in methods:
+            for method in gen_instances(node.body, FUNCTION_NODES):
                 markers = list(_gen_timeouts(method.decorator_list, constants))
                 owner = f"{node.name}::{method.name}"
                 yield _Scope(owner, method, markers, enclosing)
@@ -721,10 +723,9 @@ def gen_rows_without_id(tests_dir: Path) -> Iterator[LayoutIssue]:
 
     for path, tree in _gen_tier_trees(tests_dir):
         assignments = map(_get_assignment, tree.body)
-        values = (item[1] for item in assignments if item is not None)
 
-        for value in values:
-            calls = (node for node in ast.walk(value) if isinstance(node, ast.Call))
+        for value in gen_non_none(assignments, itemgetter(1)):
+            calls = gen_instances(ast.walk(value), ast.Call)
 
             for row in filter(_is_unnamed_row, calls):
                 yield LayoutIssue(path, row.lineno, message)

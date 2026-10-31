@@ -7,15 +7,14 @@ import re
 from typing import TYPE_CHECKING
 
 from riko.base import _api_surface
-from riko.base._paths import ROOT_DIR
+from riko.base._paths import API_SURFACE_PATH
 from riko.base._strutils import get_codegen_note
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-_DOC = ROOT_DIR / "_docs" / "API_SURFACE.md"
 _NOTE = get_codegen_note("--api")
-_BLOCK = re.compile(
+API_SURFACE_BLOCK = re.compile(
     r"<!-- api-surface:(?P<key>[a-z-]+)(?:: [^>\n]*)? -->\n.*?"
     r"(?P<end>\n<!-- /api-surface:(?P=key) -->)",
     re.DOTALL,
@@ -61,12 +60,12 @@ def _replace(match: re.Match[str]) -> str:
 
 def generate_api_surface(text: str) -> str:
     """Render the API-surface document from the contract declaration."""
-    return _BLOCK.sub(_replace, text)
+    return API_SURFACE_BLOCK.sub(_replace, text)
 
 
 def main() -> int:
     """Regenerate the API-surface reference document from the contract."""
-    _DOC.write_text(generate_api_surface(_DOC.read_text()))
+    API_SURFACE_PATH.write_text(generate_api_surface(API_SURFACE_PATH.read_text()))
     return 0
 
 

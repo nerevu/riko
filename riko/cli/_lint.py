@@ -21,7 +21,7 @@ from riko.base._paths import PACKAGE_DIR, PYPROJECT, ROOT_DIR, TESTS_DIR
 from ._build import twine_check
 from ._docs import AS_BUILT_DOCS, lint_docs
 from ._docstyle import gen_docstring_issues
-from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+from ._import_commands import IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_basenames import gen_basename_issues
 from ._lint_bindings import gen_binding_issues
 from ._lint_deps import gen_hook_pin_issues, gen_import_issues
@@ -440,7 +440,7 @@ def _lint_command(
             return_codes.append(_lint_yaml(*where))
 
         if all_:
-            return_codes.append(run_import_checks(PACKAGE_DIR, *_IMPORT_CHECKS))
+            return_codes.append(run_import_checks(PACKAGE_DIR, *IMPORT_CHECKS))
 
         if dist:
             return_codes.append(twine_check())
