@@ -290,9 +290,10 @@ class WorkflowResolver:
         resolve_store = partial(self._resolve_store, replace=replace)
         margs = (self._module_store, module_store)
         dargs = (self._document_store, document_store)
-
-        self._module_store = resolve_store(*margs, "module store")
-        self._document_store = resolve_store(*dargs, "document store")
+        self._module_store, self._document_store = (
+            resolve_store(*margs, "module store"),
+            resolve_store(*dargs, "document store"),
+        )
         self._resolved_documents.clear()
 
     def reset(self) -> None:
