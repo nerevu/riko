@@ -58,14 +58,28 @@ handle each part under its own rule.
 Before writing any fix, test, or tripwire, write the proposed disposition
 for every finding as a list (not a table), one line per finding: finding →
 disposition → the gameplan line that decides it → the artifact you intend to
-produce. Write it as visible text in the same message as the question; a
-paraphrase or summary sentence does not count.
+produce. Write it as visible text before the questions, where it stays in
+the transcript once the dialog closes; a paraphrase or summary sentence does
+not count. This is a hard gate: if the list is not yet on screen, write it
+before calling AskUserQuestion, even when every finding looks obvious.
 
-Then ask the user to confirm with AskUserQuestion — "Proceed as dispositioned
-(Recommended)", "Revise", or "Stop here" — and do nothing until they choose.
-The question must stand on its own, because the dialog can hide earlier
-output: put the same per-finding list in the "Proceed" option's `preview`,
-and never word the question as "above" or "as laid out".
+Before offering a repair shape, check what else consumes the thing it
+changes: every caller, gate, skill, or check that reads it. List each one
+the change affects in that option's description as a cost. An absolute claim
+such as "nothing reads X" has to come from a search you ran, not from
+memory. If you find a cost after the user has answered, stop before applying
+anything (or before continuing, if you already have), state the cost, and
+ask again. Never report it afterwards as a side note.
+
+Then confirm through AskUserQuestion with **one question per finding**, up to
+4 per call (send further calls for more findings). The dialog hides text
+written in the same turn and its preview box truncates, so each question must
+carry its own disposition: the question names the finding and the proposed
+action, the first option is that action marked "(Recommended)", and the other
+options are real alternatives (a different shape, defer, skip), each with what
+it buys and costs in its description. Keep any `preview` to a two-line
+summary. Do nothing until every question is answered. Never word a question
+as "above" or "as laid out".
 
 Some findings need more than a confirmation. Ask a dedicated question, with
 options that state what each buys, costs, and forecloses and a recommendation
@@ -80,9 +94,9 @@ listed first, when:
   gameplan itself should change
 - the split of a compound finding could reasonably be drawn differently
 
-Batch these into the same AskUserQuestion call as the confirmation (up to 4
-questions). Clear-cut dispositions with a single decisive gameplan line need
-only the confirmation.
+Ask these in place of that finding's confirmation question, in the same
+calls (up to 4 questions per call). Clear-cut dispositions with a single
+decisive gameplan line need only the confirmation.
 
 ## 4. Tripwires for owned findings
 
