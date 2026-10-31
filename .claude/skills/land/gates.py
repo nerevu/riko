@@ -10,10 +10,15 @@ Usage:
     python .claude/skills/land/gates.py summary GATE
 
 A gate's marker is the content tree id of the working tree it passed on: every
-tracked and untracked, non-ignored file as ``git write-tree`` would store it. It
-ignores ``HEAD`` and the index, so committing, staging, rebasing, or switching
-sessions keeps a marker valid while the content is unchanged; any edit
-invalidates it. Markers live in ``.claude/gate-markers.json`` of each worktree.
+tracked and untracked, non-ignored file as ``git write-tree`` would store it.
+Each gate's id leaves out what that gate never reads under ``.claude/``: nothing
+for tidy, the markdown for ``lint`` and ``prettify`` (Ruff), and the whole folder
+for the other gates, so a skill-prose edit reruns tidy alone and a
+skill-script edit reruns tidy, lint, and prettify. It ignores ``HEAD`` and the
+index, so committing, staging, rebasing, or switching sessions keeps a marker
+valid while the content is unchanged; any other edit invalidates it. Markers
+live in ``.claude/gate-markers.json`` of each worktree. ``fingerprint`` prints
+the full tree id.
 
 ``check`` exits 0 when the gate already passed on this tree (skip it) and 1 when
 it must run. ``record`` marks it passed on the current tree. ``run`` does both
@@ -60,6 +65,9 @@ BUSY = 75
 EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
+RUFF_GATES = frozenset({"lint", "prettify"})
+TIDY_ONLY = (":(glob).claude/**/*.md",)
+UNGATED = (".claude",)
 SCOPE_EXCLUDES = (
     "uv.lock",
     "riko/coercion/_configs.py",
@@ -85,8 +93,13 @@ def get_lock_path() -> Path:
     return Path(common) / "riko-gate.lock"
 
 
-def get_tree_id() -> str:
-    """Gets the content tree id of the working tree, ignoring HEAD and the index."""
+def get_tree_id(gate: str | None = None) -> str:
+    """
+    Gets the content tree id of the working tree, ignoring HEAD and the index.
+
+    The id leaves out what ``gate`` never reads under ``.claude/``: nothing for
+    tidy, the markdown for the Ruff gates, the whole folder for the rest.
+    """
     index = Path(tempfile.mkdtemp(prefix="gates-")) / "index"
     real_index = Path(
         _git("rev-parse", "--path-format=absolute", "--git-path", "index")
@@ -97,6 +110,17 @@ def get_tree_id() -> str:
 
     env = {**os.environ, "GIT_INDEX_FILE": str(index)}
     _git("add", "-A", env=env)
+
+    if gate in RUFF_GATES:
+        unread: tuple[str, ...] = TIDY_ONLY
+    elif gate in {None, "tidy"}:
+        unread = ()
+    else:
+        unread = UNGATED
+
+    if unread:
+        _git("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env)
+
     return _git("write-tree", env=env)
 
 
@@ -154,7 +178,7 @@ def check(path: Path, gate: str) -> int:
     When the tree it last passed on still exists, also prints the ``git diff`` that
     shows what changed since that pass.
     """
-    tree = get_tree_id()
+    tree = get_tree_id(gate)
     marker = get_passed(path, gate, tree)
     last = load_markers(path).get(gate)
 
@@ -212,7 +236,7 @@ def scope(path: Path, gate: str, max_inline: int = MAX_INLINE) -> int:
     files are part of it; a diff over ``max_inline`` bytes is written to
     ``.claude/<gate>-scope.diff`` instead of printed.
     """
-    tree = get_tree_id()
+    tree = get_tree_id(gate)
     marker = get_passed(path, gate, tree)
     last = load_markers(path).get(gate)
 
@@ -256,7 +280,9 @@ def print_summary(path: Path, gate: str) -> int:
     if marker is None or summary is None:
         print(f"no {gate} summary recorded")
     else:
-        state = "current" if marker["tree"] == get_tree_id() else "tree changed since"
+        state = (
+            "current" if marker["tree"] == get_tree_id(gate) else "tree changed since"
+        )
         print(f"{summary} ({state}; passed at {marker['at']})")
 
     return 0 if summary is not None else 1
@@ -294,12 +320,12 @@ def run(path: Path, gate: str, command: list[str], *, mutates: bool, lock: bool)
 
 
 def _run_unlocked(path: Path, gate: str, command: list[str], *, mutates: bool) -> int:
-    before = get_tree_id()
+    before = get_tree_id(gate)
     marker = get_passed(path, gate, before)
 
     if marker is None:
         code, summary = execute(command)
-        after = get_tree_id()
+        after = get_tree_id(gate)
 
         if code == 0 and (mutates or after == before):
             write_marker(path, gate, after, summary)
@@ -345,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "summary":
         code = print_summary(path, args.gate)
     elif args.action == "record":
-        write_marker(path, args.gate, tree := get_tree_id())
+        write_marker(path, args.gate, tree := get_tree_id(args.gate))
         print(f"recorded {args.gate} on tree {tree[:12]}")
         code = 0
     elif command:

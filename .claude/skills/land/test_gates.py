@@ -53,6 +53,32 @@ def test_tree_id_ignores_staging_and_commits_but_not_edits(repo, tmp_path):
     assert untracked == staged == committed == gates.get_tree_id()
 
 
+def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):
+    skill = tmp_path / ".claude" / "skills" / "SKILL.md"
+    script = skill.with_name("helper.py")
+    skill.parent.mkdir(parents=True)
+    skill.write_text("one\n")
+    script.write_text("x = 1\n")
+    repo("add", "-f", ".claude")
+    repo("commit", "-qm", "skill")
+    ids = {gate: gates.get_tree_id(gate) for gate in ("tidy", "lint", "test")}
+    skill.write_text("two\n")
+    (tmp_path / ".claude" / "scratch.md").write_text("x\n")
+
+    assert gates.get_tree_id("tidy") != ids["tidy"]
+    assert gates.get_tree_id("lint") == ids["lint"]
+    assert gates.get_tree_id("test") == ids["test"]
+
+    script.write_text("x = 2\n")
+
+    assert gates.get_tree_id("lint") != ids["lint"]
+    assert gates.get_tree_id("test") == ids["test"]
+
+    (tmp_path / "a.py").write_text("a = 2\n")
+
+    assert gates.get_tree_id("test") != ids["test"]
+
+
 @pytest.mark.usefixtures("repo")
 def test_run_records_then_skips_until_the_tree_changes(tmp_path, capsys):
     path = gates.get_state_dir() / "gate-markers.json"

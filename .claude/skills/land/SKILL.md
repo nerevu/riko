@@ -18,14 +18,19 @@ sessions on the same tree. Gate passes are recorded per tree, not per session,
 by `.claude/skills/land/gates.py` (`G` below):
 
 - **Markers.** A pass is stored in `.claude/gate-markers.json` against the
-  working tree's content tree id. Staging, committing, an autosquash, `/clear`,
-  or another session leaves it valid; any content edit invalidates it. Run each
-  gate through `python $G run <gate> [--mutates] [--lock] -- <command>`: it
+  working tree's content tree id, minus what the gate never reads under
+  `.claude/`: nothing for tidy, the markdown for lint and prettify (Ruff), the
+  whole folder for the other gates. Staging, committing, an autosquash, `/clear`, or
+  another session leaves it valid; any content edit invalidates it, except
+  that a skill-prose edit reruns only tidy and a skill-script edit reruns
+  tidy, lint, and prettify. Run each gate through
+  `python $G run <gate> [--mutates] [--lock] -- <command>`: it
   prints `skip <gate>` and exits 0 when the gate already passed on this tree
   (from any session), otherwise runs the command and records a pass only when
   it succeeds and the tree did not change during the run. Mutating gates
-  (prettify, codegen) pass `--mutates`, which records the tree they left. Every
-  fix changes the tree id, so the gates after it rerun on their own.
+  (prettify, codegen) pass `--mutates`, which records the tree they left. A fix
+  changes the tree id of every gate that reads the fixed file, so those gates
+  rerun on their own.
 - **No waiting, no deadlocks.** Only the full suite and `diff_uncovered.py` take
   `--lock`, a non-blocking OS lock on `riko-gate.lock` in the git common
   directory (shared by every worktree), which the OS drops when the process exits. When
