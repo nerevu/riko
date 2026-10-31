@@ -40,6 +40,7 @@ type Item = (
 
 type ItemOrValue = Item | RikoValue
 type ItemValue = ItemOrValue | list[ItemOrValue]
+
 # Sync
 type Stream = Iterator[Item]
 type Cascade = Iterator[Stream]
@@ -50,6 +51,7 @@ type ItemsOrValues = Iterable[ItemOrValue]
 type ValueStream = Iterator[RikoValue]
 type StreamOrValueStream = Iterator[ItemOrValue]
 type ItemGenerator = Generator[Item, None]
+
 # Async
 type AsyncStream = AsyncIterator[Item]
 type AsyncCascade = AsyncIterator[Stream]
@@ -60,6 +62,7 @@ type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 type AsyncItemGenerator = AsyncGenerator[Item, None]
 type StreamGenerator = Generator[object, None, Stream]
+
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]

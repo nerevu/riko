@@ -107,11 +107,11 @@ def is_installed(module: str) -> bool:
     return find_spec(module) is not None
 
 
-def aresolve[T](aiterable: AsyncIterable[T]) -> list[T]:
-    """Drain *aiterable* to a list via ``riko.bado.run`` (one event loop)."""
+def aresolve[T](items: AsyncIterable[T]) -> list[T]:
+    """Drain *items* to a list via ``riko.bado.run`` (one event loop)."""
 
     async def _collect() -> list[T]:
-        return [item async for item in aiterable]
+        return [item async for item in items]
 
     return run(_collect)
 

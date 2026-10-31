@@ -18,6 +18,7 @@ Examples:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
 from math import inf
@@ -25,6 +26,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._guards import is_awaitable
 from riko.base._sentinels import MISSING, MissingType
+from riko.types._io import is_async_closeable
 
 from ._backend import USE_CLIENT_DEFAULT, AsyncClient, Path, create_task_group
 
@@ -165,16 +167,16 @@ async def maybe_async[T](
 
 
 @asynccontextmanager
-async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
+async def maybe_aclosing[T: AsyncIterator](stream: T) -> AsyncGenerator[T, None]:
     """
-    Closes *iterator* on exit when it has an ``aclose`` method.
+    Closes *stream* on exit when it has an ``aclose`` method.
 
-    Unlike :func:`contextlib.aclosing`, an iterator without ``aclose`` (such as a
-    plain async iterator) passes through untouched, so callers needn't check first.
+    Unlike :func:`contextlib.aclosing`, a stream without ``aclose`` (such as a plain
+    async iterator) passes through untouched, so callers needn't check first.
 
     Args:
 
-        iterator: The async iterator to close on exit.
+        stream: The async iterator to close on exit.
 
     Yields:
 
@@ -200,10 +202,10 @@ async def maybe_aclosing[T](iterator: T) -> AsyncGenerator[T, None]:
 
     """
     try:
-        yield iterator
+        yield stream
     finally:
-        if (aclose := getattr(iterator, "aclose", None)) is not None:
-            await aclose()
+        if is_async_closeable(stream):
+            await stream.aclose()
 
 
 def async_partial[T](

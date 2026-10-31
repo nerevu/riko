@@ -689,7 +689,7 @@ def require_async_wrapper(value: object) -> AsyncModuleWrapper:
 
 def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
     """
-    Reports whether ``pipe`` was decorated as a multi-output splitter.
+    Reports whether ``pipe`` was decorated as a splitter.
 
     The check reads the module kind stamped on the wrapper at decoration, not
     the shape of anything the pipe yields.
@@ -717,7 +717,7 @@ def require_single_output(
     value: ModuleWrapper, what: str | None = "pipe", **_
 ) -> ModuleWrapper:
     """
-    Rejects a multi-output splitter until port-keyed fan-out delivery is executable.
+    Rejects a splitter until port-keyed fan-out delivery is executable.
 
     Args:
 

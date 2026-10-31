@@ -459,8 +459,8 @@ async def _agen_xs() -> AsyncIterator[Item]:
         yield {"x": x}
 
 
-async def _async_count(stream: AsyncIterable[Item]) -> list[Item]:
-    return [{"n": len([item async for item in stream])}]
+async def _async_count(items: AsyncIterable[Item]) -> list[Item]:
+    return [{"n": len([item async for item in items])}]
 
 
 ASYNC_AGGREGATE_FUNCS = [

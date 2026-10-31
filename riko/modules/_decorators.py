@@ -645,7 +645,7 @@ async def _materialize_terminal[T](value: object) -> object:
 
 
 async def _aprocess_stream[T](
-    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], stream: AsyncIterable[T]
+    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], items: AsyncIterable[T]
 ) -> AsyncIterator[ItemOrValue]:
     """
     Maps a processor over an async stream lazily, in order, flattening its results.
@@ -653,14 +653,14 @@ async def _aprocess_stream[T](
     Args:
 
         wrapper: The per-item processor call, returning that item's results.
-        stream: The async stream of items to process.
+        items: The async stream of items to process.
 
     Yields:
 
         Each result of every item, in stream order.
 
     """
-    async with aclosing(async_map_ordered_stream(wrapper, stream)) as mapped:
+    async with aclosing(async_map_ordered_stream(wrapper, items)) as mapped:
         async for processed in mapped:
             for value in processed:
                 yield value
