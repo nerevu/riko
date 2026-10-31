@@ -223,6 +223,5 @@ Close with:
 - **Tool gaps**: leads the scanner missed that you found by hand, with the
   `overlap_scan.py` section or lint that would catch them, so the next pass can
   build that check.
-- **Script candidates**: any agent that ran past about 10 minutes or 50 tool calls
-  on mechanical work, with the script it suggests.
+- **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts, with the script each suggests.
   Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff.

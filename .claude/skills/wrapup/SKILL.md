@@ -225,11 +225,8 @@ session that starts before the user runs it knows to.
 End with a short manifest: tidy's fixes and open findings, each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
-is safe to clear, and any **script candidates**: a subagent this session whose
-completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) spent on
-mechanical, repeatable work (slicing or replaying diffs, rebuilding tables, bulk
-renames, rehearsing commits), or that wrote its own helper scripts into the
-scratchpad. Name each one's task, duration, and tool count, and the script it
+is safe to clear, and any **script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (slicing or replaying diffs, rebuilding tables, bulk
+renames, rehearsing commits, auditing memory). Name each one's task, duration, and tool count, and the script it
 suggests (name, inputs, outputs, and home, such as beside the skill that launched
 the agent). Propose them only; build one when the user agrees.
 Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work

@@ -221,9 +221,6 @@ End with:
   autosquash results, which chain is on the clipboard, any hunk dropped from a
   fixup and why, and that the autosquash waits for `/wrapup`. These are
   commands for the user to run, never executed on their branch.
-- **Script candidates**: a subagent whose completion notice shows a long run (roughly 10+ minutes or 50+
-  tool calls) on mechanical, repeatable work, or that wrote its own helper scripts
-  into the scratchpad (the tidy
-  agent included). Name the task, its duration and tool count, and the script it
+- **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (the tidy agent included). Name the task, its duration and tool count, and the script it
   suggests (name, inputs, outputs, home); propose it, never build it unasked.
   Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.
