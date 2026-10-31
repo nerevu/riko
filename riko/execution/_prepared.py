@@ -11,10 +11,12 @@ dispatcher, or registry.
 from __future__ import annotations
 
 from functools import cached_property, partial
-from itertools import filterfalse
+from inspect import Parameter, signature
+from itertools import chain, filterfalse
+from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
 
-from attrs import define, evolve, field
+from attrs import asdict, define, evolve, field, fields_dict
 from typing_extensions import TypeIs
 
 from riko.bado._util import async_partial, maybe_async
@@ -57,6 +59,7 @@ if TYPE_CHECKING:
         Iterable,
         Iterator,
         Mapping,
+        Sequence,
     )
 
     from riko.definitions._context import Context
@@ -75,6 +78,8 @@ if TYPE_CHECKING:
         SyncModuleWrapper,
         WrapperOutput,
     )
+
+    from ._resource_view import ResourceView
 
 type PreparedNodes = FrozenDict[NodeId, PreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
@@ -95,6 +100,99 @@ class NodeCall(Protocol):
     ): ...
 
 
+@define(frozen=True, slots=True, kw_only=True)
+class ExecutionExtras[V]:
+    """
+    The keyword arguments an execution adds to a node's call.
+
+    They sit beside the node's named input streams, so no input port may share a
+    field's name. A field left as ``None`` is not passed.
+
+    Attributes:
+
+        others: The streams wired to the node's positional input ports.
+        resources: The Context resources bound to the node.
+        embed: The module a loop node runs per item.
+
+    Examples:
+
+        >>> extras = ExecutionExtras(others=[iter([1])])
+        >>> list(extras.kwargs)
+        ['others']
+
+    """
+
+    others: Sequence[V] | None = None
+    resources: ResourceView | None = None
+    embed: ModuleWrapper | None = None
+
+    @staticmethod
+    def _get_delivered(node: RunnableNode, *ports: ParsedPort) -> dict[str, bool]:
+        return {
+            "others": any(map(attrgetter("is_positional"), ports)),
+            "resources": bool(node.resources),
+            "embed": isinstance(node, ModuleNode) and node.embed is not None,
+        }
+
+    @classmethod
+    def get_names(cls, node: RunnableNode, *ports: ParsedPort) -> tuple[str, ...]:
+        """
+        Gets the names of the fields an execution delivers to ``node``, in field order.
+
+        Args:
+
+            node: The node the execution calls.
+            ports: The node's input ports.
+
+        Returns:
+
+            The delivered field names.
+
+        """
+        names = fields_dict(cls)
+        delivered = cls._get_delivered(node, *ports)
+        return tuple(filter(delivered.get, names))
+
+    @property
+    def kwargs(self) -> dict[str, Sequence[V] | ResourceView | ModuleWrapper]:
+        """The fields that are set, keyed by name."""
+        values = asdict(self, recurse=False)
+        return {name: value for name, value in values.items() if value is not None}
+
+    def map_others[R](self, func: Callable[[V], R]) -> ExecutionExtras[R]:
+        """
+        Maps ``func`` over every stream in ``self.others``.
+
+        Args:
+
+            func: Applied to one ``self.others`` stream.
+
+        Returns:
+
+            A new record holding the mapped ``self.others`` streams.
+
+        Examples:
+
+            >>> extras = ExecutionExtras(others=[[1], [2]])
+            >>> extras.map_others(len).others
+            [1, 1]
+
+        """
+        others = None if self.others is None else [func(s) for s in self.others]
+        return ExecutionExtras(
+            others=others, resources=self.resources, embed=self.embed
+        )
+
+
+def _get_keyword_names(*funcs: Callable[..., object]) -> frozenset[str]:
+    """Gets the names of the keyword-only parameters ``funcs`` take."""
+    params = chain.from_iterable(signature(f).parameters.values() for f in funcs)
+    return frozenset(p.name for p in params if p.kind is Parameter.KEYWORD_ONLY)
+
+
+_RESERVED_INPUTS = frozenset(fields_dict(ExecutionExtras)) | _get_keyword_names(
+    NodeCall.__call__, build_call
+)
 _is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
 
@@ -468,12 +566,8 @@ class PreparedNode:
     def extras(self) -> ExtraNames:
         """The names of the extra inputs delivered with each item, in call order."""
         named = gen_non_none(port.name for port in self.input_ports)
-        has_others = any(port.is_positional for port in self.input_ports)
-        others = ["others"] if has_others else []
-        resources = ["resources"] if self.node.resources else []
-        has_embed = isinstance(self.node, ModuleNode) and self.node.embed is not None
-        embed = ["embed"] if has_embed else []
-        return (*named, *others, *resources, *embed)
+        delivered = ExecutionExtras.get_names(self.node, *self.input_ports)
+        return (*named, *delivered)
 
     @cached_property
     def has_secondary_input_streams(self) -> bool:
@@ -578,6 +672,10 @@ _require_workflow = narrow_from_require(
 )
 
 
+def _is_reserved_input(port: str) -> bool:
+    return parse_port(port).name in _RESERVED_INPUTS
+
+
 def require_default_output_port(port: str, ref: str) -> None:
     """
     Rejects a non-default output port until multi-output delivery is executable.
@@ -623,8 +721,9 @@ class ExecutionPlan:
 
         InvalidPipelineError: If ``workflow`` is not a ``Workflow``, its graph is
             invalid, a source port fans out to more than one edge, a node is neither a
-            module node nor a callable node, ``modules`` does not resolve exactly the
-            workflow's nodes, or ``embeds`` does not resolve exactly its loop embeds.
+            module node nor a callable node, a named input port uses a reserved name
+            (e.g., ``conf``), ``modules`` does not resolve the workflow's nodes, or
+            ``embeds`` does not resolve its loop embeds.
 
     Examples:
 
@@ -673,7 +772,8 @@ class ExecutionPlan:
 
             InvalidPipelineError: If the graph is invalid, a source port fans out to
                 more than one edge, a node isn't a module or callable node (write,
-                action, cache, or subscribe), or a node runs a multi-output splitter.
+                action, cache, or subscribe), a named input port uses a reserved name
+                (e.g., ``conf``), or a node runs a splitter.
 
             UnsupportedModuleError: If no module has the name a node gives.
 
@@ -901,6 +1001,36 @@ class ExecutionPlan:
 
         return target
 
+    def require_seed[S](self, seed: S | None, output: str) -> S:
+        """
+        Requires the seed that an empty workflow streams as its default output.
+
+        A workflow with no nodes is an identity plan: it outputs its seed. It can't run
+        without a seed, and exposes only the default workflow output.
+
+        Args:
+
+            seed: Items for the workflow output's open input.
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            ``seed``.
+
+        Raises:
+
+            InvalidPipelineError: If ``output`` is not the default workflow output, or
+                ``seed`` is not given.
+
+        """
+        if output != "default":
+            raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
+        elif seed is None:
+            msg = "workflow has no nodes; an empty workflow requires a seed"
+            raise InvalidPipelineError(msg)
+
+        return seed
+
     def gen_build_order[V](
         self, output: str, *, seed: V | None = None
     ) -> Iterator[tuple[str, V | None]]:
@@ -934,14 +1064,15 @@ class ExecutionPlan:
 
     def validate(self) -> None:
         """
-        Validates that the workflow is runnable and the plan resolves exactly its nodes.
+        Validates that the workflow is runnable and the plan resolves its nodes.
 
         Raises:
 
             InvalidPipelineError: If the graph is invalid, a source port fans out to
                 more than one edge, a workflow node is neither a module node nor a
-                callable node, ``modules`` does not resolve the workflow's nodes, or
-                ``embeds`` does not resolve its loop embeds.
+                callable node, a named input port uses a reserved name (e.g., ``conf``),
+                ``modules`` does not resolve the workflow's nodes, or ``embeds`` does
+                not resolve its loop embeds.
 
         """
         flow = self.workflow
@@ -951,8 +1082,12 @@ class ExecutionPlan:
 
         flow.require_executable()
         flow.require_runnable_only("execution")
+        targets = ((e.target, e.target_port) for e in flow.graph_edges)
 
-        if unresolved := set(flow.runnable_nodes).symmetric_difference(self.modules):
+        if reserved := sorted(t for t in targets if _is_reserved_input(t[1])):
+            msg = f"input port(s) {reserved} use a reserved name. Rename the port(s)."
+            raise InvalidPipelineError(msg)
+        elif unresolved := set(flow.runnable_nodes).symmetric_difference(self.modules):
             msg = f"modules must match the workflow's nodes: {sorted(unresolved)}"
             raise InvalidPipelineError(msg)
         elif mismatched := set(flow.embeds).symmetric_difference(self.embeds):
@@ -960,4 +1095,10 @@ class ExecutionPlan:
             raise InvalidPipelineError(msg)
 
 
-__all__ = ["ExecutionPlan", "PreparedInterface", "PreparedNode", "ResolvedModule"]
+__all__ = [
+    "ExecutionExtras",
+    "ExecutionPlan",
+    "PreparedInterface",
+    "PreparedNode",
+    "ResolvedModule",
+]

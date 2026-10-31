@@ -10,15 +10,7 @@ types are private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import (
-    AsyncIterable,
-    AsyncIterator,
-    Callable,
-    Iterable,
-    Iterator,
-    Mapping,
-    Sequence,
-)
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping
 from contextlib import AsyncExitStack, ExitStack
 from typing import TYPE_CHECKING, Any, Never, overload
 
@@ -31,10 +23,8 @@ from riko.base._iterutils import map_values
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._frozendict import FrozenDict
 from riko.types._workflow import parse_port
-from riko.types._wrappers import ModuleWrapper
 
 from ._prepared import require_default_output_port
-from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -48,15 +38,6 @@ if TYPE_CHECKING:
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
-type ExtraObjects[T] = ResourceView | ModuleWrapper
-
-type ExtraStreams[T] = (
-    AsyncIterable[T] | Iterator[T] | Sequence[Iterator[T] | AsyncIterable[T]]
-)
-
-type ExtraValues[T] = ExtraObjects[T] | ExtraStreams[T]
-type ExtraInput[T] = Mapping[str, ExtraValues[T]]
-type ExtraOutput[T] = dict[str, ExtraValues[T]]
 type Acquisition[T] = _Acquired[T] | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition[Any]]
 
@@ -81,7 +62,7 @@ _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
 
-async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
+async def asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     """
     Runs a blocking callable on a worker thread from the current event loop.
 
@@ -99,17 +80,6 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
 
     """
     return await asyncify(func)(*args)
-
-
-def _require_seed[S](seed: S | None, output: str) -> S:
-    """Requires the seed an identity plan streams as its default output."""
-    if output != "default":
-        raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
-    elif seed is None:
-        msg = "workflow has no nodes; an empty workflow requires a seed"
-        raise InvalidPipelineError(msg)
-
-    return seed
 
 
 @define(frozen=True, slots=True)
@@ -182,7 +152,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
 
-    def callback(self, func: Callable, *args: object) -> None:
+    def queue_callback(self, func: Callable, *args: object) -> None:
         """
         Registers a synchronous ``func`` to run during exit-stack unwind.
 
@@ -240,20 +210,20 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         seed: I | None,
         *,
         as_stream: Callable[[I | Iterable[Any]], V],
-    ) -> tuple[V, ExtraOutput[object]]:
+    ) -> tuple[V, dict[str, V], list[V] | None]:
         """
         Wires the output streams of a node's upstream nodes onto its input ports.
 
-        Each incoming edge carries its upstream node's output stream to one of this
-        node's input ports. The edge into the default input port supplies the primary
-        input stream. ``seed`` supplies it only when no edge targets that port. Edges
-        into positional ``in:<n>`` ports become ``others``, ordered by ``n``. Edges into
-        named ``in:<name>`` ports are passed under their own name.
+        Each incoming edge carries its output stream to one of this node's input ports.
+        The default input port receives the input stream. ``seed`` supplies it only when
+        no edge targets that port. Edges into named ``in:<name>`` ports become the named
+        streams, and are keyed by their name. Edges into positional ``in:<n>`` ports
+        become the positional streams, and are ordered by ``n``.
 
         When no edge targets the default input port and no seed is given, the primary
         input stream is empty if any positional ports are wired. This is because the
-        node then reads only ``others``. Otherwise, the primary input stream holds the
-        default seed: one item that lets a self-starting node run once.
+        node then reads only its positional streams. Otherwise, the input stream holds
+        the default seed: one item that lets a self-starting node run once.
 
         Args:
 
@@ -264,12 +234,13 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
         Returns:
 
-            The node's primary input stream and its secondary input streams.
+            The node's input stream, its named streams, and its positional streams
+            (``None`` when none are wired).
 
         """
-        primary: V | None = None if seed is None else as_stream(seed)
+        stream: V | None = None if seed is None else as_stream(seed)
         indexed: list[tuple[int, V]] = []
-        extra: ExtraOutput[object] = {}
+        named: dict[str, V] = {}
 
         for edge in incoming:
             require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
@@ -277,20 +248,19 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             output_stream = steps[edge.source]
 
             if input_port.is_default:
-                primary = output_stream
+                stream = output_stream
             elif input_port.index is not None:
                 indexed.append((input_port.index, output_stream))
             elif input_port.name is not None:
-                extra[input_port.name] = output_stream
+                named[input_port.name] = output_stream
 
-        if indexed:
-            ordered = sorted(indexed, key=lambda item: item[0])
-            extra["others"] = [stream for _, stream in ordered]
+        ordered = sorted(indexed, key=lambda item: item[0])
+        others = [_stream for _, _stream in ordered] if ordered else None
 
-        if primary is None:
-            primary = as_stream(() if indexed else DEFAULT_SEED)
+        if stream is None:
+            stream = as_stream(() if indexed else DEFAULT_SEED)
 
-        return primary, extra
+        return stream, named, others
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool

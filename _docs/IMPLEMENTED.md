@@ -873,8 +873,8 @@ portal drain and the worker-side upstream reader are the same function with a di
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic exit-stack
   LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
   resource context manager observes, replaces, or suppresses it under normal Python semantics and the
-  execution surfaces the returned suppression. Plain cleanup callbacks (`callback`,
-  `push_async_callback`, and every Riko-registered cleanup built on them) are wrapped so a failure
+  execution surfaces the returned suppression. Plain cleanup callbacks (`queue_callback`,
+  `queue_async_callback`, and every Riko-registered cleanup built on them) are wrapped so a failure
   is recorded rather than raised, which is what keeps a callback from replacing the primary error;
   an exhausted shutdown timeout (`TimeoutError`) is recorded the same way. `_report_shutdown` then raises: a lone cleanup failure with no primary error bare; several
   with no primary as an `ExceptionGroup`; and any cleanup failures beside an unsuppressed primary
@@ -900,7 +900,7 @@ Under `SyncExecution`, async value *production* bridges through the portal, but 
 is a permanent boundary: it raises `InvalidPipelineError` before the resource is acquired, so no value
 is produced and no lifecycle entered behind the rejection. Under `AsyncExecution`, blocking sync work
 is instead offloaded to a worker thread: a sync value factory, a sync cleanup callback, and an owned
-sync `close()` run through `aclose_with` over `_asyncify_call` (an unguarded worker seam, because cleanup runs while the
+sync `close()` run through `aclose_with` over `asyncify_call` (an unguarded worker seam, because cleanup runs while the
 execution is closing, when the guarded `run_sync` would refuse; an awaitable the sync cleanup returns is then
 awaited on the loop, while `SyncExecution`'s `close_with` refuses one with `InvalidPipelineError`), and a sync context-manager lifecycle
 is entered through a `_WorkerContext` async wrapper so both `__enter__` and `__exit__` run off-loop with
@@ -1002,7 +1002,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   from the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
   `run_from_thread`). There are no background tasks and no channels, so backpressure is pure demand, an
   error raises at the pull that hits it after every earlier item has been yielded, and abandoning or
-  closing the async stream closes the sync pipe's returned iterator (any with a `close`) off-loop through the unguarded `_asyncify_call`
+  closing the async stream closes the sync pipe's returned iterator (any with a `close`) off-loop through the unguarded `asyncify_call`
   seam (which still works while the execution is shutting down). Async input streams are typed
   `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`.
   *Design note:* the earlier plan's "bounded channel" was replaced by this demand-driven pull because
@@ -1072,7 +1072,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   stream the seed unchanged as the plan's `default` output, through the same
   `_open_seed`/`_aopen_seed` boundary a seeded plan uses (awaitables and async iterables
   resolve; a mapping is one record; under sync execution a value that is both sync- and async-iterable is read synchronously).
-  `run` always takes a plan (there is no `plan=None` path). `_require_seed` raises
+  `run` always takes a plan (there is no `plan=None` path). `ExecutionPlan.require_seed` raises
   `InvalidPipelineError` for any other output name, and for an empty plan without a seed, so an unseeded
   `Pipeline()` still fails `workflow has no nodes`; a node-less workflow that
   declares outputs or edges is not empty and still fails validation.
@@ -1115,8 +1115,8 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `riko/types/_streams.py`) opened once per run — `SyncExecution._open_seed` awaits an
   awaitable through the portal and drains an async-only stream through it, `AsyncExecution.
   _aopen_seed` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
-  primitive is one item, any other iterable is the stream) and both registering a generator seed's
-  `close` on the execution's exit stack (the async side also the `aclose` of any seed with one),
+  primitive is one item, any other iterable is the stream) and both registering the `close` of any
+  seed with one on the execution's exit stack (the async side also the `aclose` of any seed with one),
   so a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
   (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the generated module's `pipe(item)` hand
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. The

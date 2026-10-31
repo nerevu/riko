@@ -8,14 +8,7 @@ portal for async-only components, and the run's one worker pool.
 
 from __future__ import annotations
 
-from collections.abc import (
-    AsyncIterable,
-    Callable,
-    Generator,
-    Iterable,
-    Iterator,
-    Mapping,
-)
+from collections.abc import AsyncIterable, Callable, Iterable, Iterator, Mapping
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import ExitStack
 from functools import cached_property, partial
@@ -30,7 +23,7 @@ from riko.base._guards import is_awaitable
 from riko.base._iterutils import map_values
 from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
-from riko.types._io import is_async_closeable
+from riko.types._io import is_async_closeable, is_sync_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -51,12 +44,12 @@ from ._execution import (
     Acquisition,
     SyncExecSteps,
     _Acquired,
-    _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _require_seed,
+    asyncify_call,
 )
 from ._pools import _PoolLifetime
+from ._prepared import ExecutionExtras
 from ._resource_acquisition import build_context_manager, call_factory
 from ._resource_cleanup import close_resource, close_with
 from ._resource_view import ResourceView
@@ -109,9 +102,6 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     _stack: ExitStack = field(factory=ExitStack, init=False)
     _pools: ExitStack = field(factory=ExitStack, init=False)
 
-    def __enter__(self) -> Self:
-        return self
-
     @cached_property
     def _pool(self) -> _PoolLifetime:
         """The run's one worker pool, shared by every mapped node."""
@@ -128,33 +118,16 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         grace = self.settings.shutdown_timeout
         return self._pools.enter_context(_PoolLifetime(pool, workers, grace=grace))
 
-    def close(
-        self,
-        exc_type: type[BaseException] | None = None,
-        exc: BaseException | None = None,
-        traceback: TracebackType | None = None,
-    ) -> bool:
-        """
-        Unwinds the exit stack and stops the portal under the primary error.
+    @cached_property
+    def portal(self) -> BlockingPortal:
+        if (portal_cm := start_blocking_portal()) is None:
+            msg = "anyio is required to run async components in a sync execution"
+            raise RuntimeError(msg)
 
-        The worker pool is released first, so no worker still runs when resources close.
-        Only the first call shuts the execution down. A repeated call does nothing.
-        """
-        suppressed = False
+        return self.enter_context(portal_cm)
 
-        if not self._closing:
-            self._closing = True
-            raised: BaseException | None = None
-            self._stack.push(self._pools)
-
-            try:
-                suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
-            except Exception as error:  # noqa: BLE001
-                raised = error
-
-            self._report_shutdown(exc, raised, suppressed)
-
-        return suppressed
+    def __enter__(self) -> Self:
+        return self
 
     def __exit__(
         self,
@@ -164,13 +137,16 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     ) -> bool:
         return self.close(exc_type, exc, traceback)
 
-    @cached_property
-    def portal(self) -> BlockingPortal:
-        if (portal_cm := start_blocking_portal()) is None:
-            msg = "anyio is required to run async components in a sync execution"
-            raise RuntimeError(msg)
+    def _async_drain(self, items: AsyncIterable[T]) -> Iterator[T]:
+        """Pulls an async stream item by item through the execution portal."""
+        return async_drain(items, self.run_async)
 
-        return self.enter_context(portal_cm)
+    def _drain_owned(self, items: AsyncIterable[T]) -> Iterator[T]:
+        """Drains an async stream this execution owns and closes it at exit."""
+        if is_async_closeable(items):
+            self.queue_callback(self.portal.call, items.aclose)
+
+        return self._async_drain(items)
 
     @overload
     def run_async[R](self, func: Awaitable[R], /) -> R: ...
@@ -209,9 +185,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return result
 
-    def _validate_sync_cleanup[R](
-        self, plan: OwnedPlan[R] | ValueFactoryPlan[R]
-    ) -> None:
+    def _register_cleanup(self, cleanup: Callable, value: object) -> None:
+        """Registers ``cleanup(value)`` to run on unwind."""
+        self.queue_callback(close_with, cleanup, value)
+
+    def _validate_cleanup[R](self, plan: OwnedPlan[R] | ValueFactoryPlan[R]) -> None:
         if plan.requires_async_cleanup:
             match plan:
                 case OwnedPlan(cleanup=None):
@@ -226,7 +204,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         value = self.run_async(raw) if is_awaitable(raw) else raw
 
         if (cleanup := plan.cleanup) is not False:
-            self.callback(close_with, cleanup, value)
+            self._register_cleanup(cleanup, value)
 
         return value
 
@@ -238,11 +216,12 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             case ExternalPlan():
                 value = plan.value
             case OwnedPlan():
-                self._validate_sync_cleanup(plan)
                 value = plan.value
-                self.callback(close_with, partial(close_resource, plan.cleanup), value)
+                self._validate_cleanup(plan)
+                cleanup = partial(close_resource, plan.cleanup)
+                self._register_cleanup(cleanup, value)
             case ValueFactoryPlan():
-                self._validate_sync_cleanup(plan)
+                self._validate_cleanup(plan)
                 value = self._call_factory(plan)
             case SyncLifecyclePlan():
                 value = self._enter_lifecycle(plan)
@@ -251,6 +230,34 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 raise InvalidPipelineError(msg)
 
         return value
+
+    def close(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc: BaseException | None = None,
+        traceback: TracebackType | None = None,
+    ) -> bool:
+        """
+        Unwinds the exit stack and stops the portal under the primary error.
+
+        The worker pool is released first, so no worker still runs when resources close.
+        Only the first call shuts the execution down. A repeated call does nothing.
+        """
+        suppressed = False
+
+        if not self._closing:
+            self._closing = True
+            raised: BaseException | None = None
+            self._stack.push(self._pools)
+
+            try:
+                suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
+            except Exception as error:  # noqa: BLE001
+                raised = error
+
+            self._report_shutdown(exc, raised, suppressed)
+
+        return suppressed
 
     def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition[ResolvedValue[R]]:
         try:
@@ -285,16 +292,29 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return self._acquired[resource].unwrap()
 
-    def _async_drain(self, source: AsyncIterable[T]) -> Iterator[T]:
-        """Pulls an async stream item by item through the execution portal."""
-        return async_drain(source, self.run_async)
+    def _open_seed(
+        self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
+    ) -> Iterator[T]:
+        """
+        Opens a seed as the item stream this execution reads.
 
-    def _drain_owned(self, source: AsyncIterable[T]) -> Iterator[T]:
-        """Drains an async stream this execution owns and closes it at exit."""
-        if is_async_closeable(source):
-            self.callback(self.portal.call, source.aclose)
+        A seed is one item, an item stream, an async item stream, or an awaitable
+        resolving to one of those. An awaitable is awaited when the run starts; the
+        stream itself stays lazy. A seed that is both sync- and async-iterable is
+        read synchronously. The execution closes a seed with ``close``, or any async
+        seed with ``aclose``, when it exits.
+        """
+        resolved = self.run_async(seed) if is_awaitable(seed) else seed
 
-        return self._async_drain(source)
+        if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
+            stream = iter(normalize_items(resolved))
+        else:
+            stream = self._drain_owned(resolved)
+
+        if is_sync_closeable(resolved):
+            self.queue_callback(resolved.close)
+
+        return stream
 
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
         return ResourceView(map_values(self.acquire, self._require_bindings(binding)))
@@ -335,58 +355,40 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         """
         node = plan.nodes[node_id]
-        sync_native = node.sync_interface.native
-        call, pipe = node.sync_interface.call, node.sync_interface.pipe
+        interface = node.sync_interface
+        native = interface.native
         args = (node.incoming, steps, seed)
-        source, extra = self._resolve_node_inputs(*args, as_stream=iter)
+        _stream, named, others = self._resolve_node_inputs(*args, as_stream=iter)
+        bind = self._bind_resources
+        resources = bind(node.resources) if node.resources else None
 
-        if node.resources:
-            extra["resources"] = self._bind_resources(node.resources)
-
-        if (embed := node.embed) is not None:
-            host_isasync, drain = not sync_native, self._async_drain
-            extra["embed"] = select_embed(
-                embed, host_isasync=host_isasync, run_sync=_asyncify_call, drain=drain
+        if node.embed is None:
+            embed = None
+        else:
+            embed = select_embed(
+                node.embed,
+                host_isasync=not native,
+                run_sync=asyncify_call,
+                drain=self._async_drain,
             )
 
+        extras = ExecutionExtras(others=others, resources=resources, embed=embed)
+        extra = {**named, **extras.kwargs}
+
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
-            item_call = node.sync_interface.item_call
+            call = interface.item_call
             context = None if isinstance(node.node, CallableNode) else self.context
-            _mapped = partial(item_call, context=context, **extra)
+            _mapped = partial(call, context=context, **extra)
             mapped = cast("Callable[[T], Iterable[T]]", _mapped)
-            stream = self._map_stream(mapped, source)
-        elif sync_native:
-            _stream = call(source, context=self.context, **extra)
+            stream = self._map_stream(mapped, _stream)
+        elif native:
+            _stream = interface.call(_stream, context=self.context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)
-            stream = require_stream(value, pipe)
+            stream = require_stream(value, interface.pipe)
         else:
-            _stream = call(source, context=self.context, **extra)
+            _stream = interface.call(_stream, context=self.context, **extra)
             avalue = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = self._drain_owned(require_async_stream(avalue, pipe))
-
-        return stream
-
-    def _open_seed(
-        self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
-    ) -> Iterator[T]:
-        """
-        Opens a seed as the item stream this execution reads.
-
-        A seed is one item, an item stream, an async item stream, or an awaitable
-        resolving to one of those. An awaitable is awaited when the run starts; the
-        stream itself stays lazy. A seed that is both sync- and async-iterable is
-        read synchronously. The execution closes a generator seed, or any async seed
-        with ``aclose``, when it exits.
-        """
-        resolved = self.run_async(seed) if is_awaitable(seed) else seed
-
-        if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
-            stream = iter(normalize_items(resolved))
-        else:
-            stream = self._drain_owned(resolved)
-
-        if isinstance(resolved, Generator):
-            self.callback(resolved.close)
+            stream = self._drain_owned(require_async_stream(avalue, interface.pipe))
 
         return stream
 
@@ -396,7 +398,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         output: str,
         seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> Iterator[T]:
-        """Builds the item stream for one of the plan's workflow outputs."""
+        """
+        Builds the item stream for one of the plan's workflow outputs.
+
+        The execution closes every node stream it built when it exits, last built
+        first, even when building a later node fails. The output stream is the
+        caller's to close.
+        """
         endpoint = plan.require_output(output)
         steps: SyncExecSteps = {}
 
@@ -406,7 +414,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         stream = None if seed is None else self._open_seed(seed)
 
         for node_id, node_seed in plan.gen_build_order(output, seed=stream):
-            steps[node_id] = self._build_stream(plan, node_id, steps, node_seed)
+            node_stream = self._build_stream(plan, node_id, steps, node_seed)
+            steps[node_id] = node_stream
+
+            if node_id != endpoint.node and is_sync_closeable(node_stream):
+                self.queue_callback(node_stream.close)
 
         return steps[endpoint.node]
 
@@ -453,7 +465,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         self._require_open("run")
 
         if plan.workflow.is_empty:
-            stream = self._open_seed(_require_seed(seed, output))
+            stream = self._open_seed(plan.require_seed(seed, output))
         else:
             stream = self._run_plan(plan, output, seed)
 
