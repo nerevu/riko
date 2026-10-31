@@ -192,6 +192,20 @@ section describes only its current frontier, not history:
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
 
+In the same response, run `python .claude/skills/wrapup/memory_audit.py` and fix
+any dangling link, unindexed file, or broken frontmatter it reports. Claude
+Code loads only the index's first 200 lines or 25KB, and warns from about 140
+lines; the audit's ranking shows which files hold the most history. If
+the index reaches 140 lines or 18KB, merge related topic files before ending,
+down to about 120 lines so the next few sessions have room: same-phase
+memories into one file per phase, same-date triage memories into one file per
+date. A merged file holds rulings, rejected alternatives, and traps only, each
+under a `## <old slug>` heading; mechanism the repo documents stays out. Give
+it a `description` that covers every absorbed fact and rewrite `[[old-slug]]`
+links to the merged slug. Never delete the old files; `mv` them into the
+`memory-archive/` folder beside the memory directory (outside it, so recall
+never reads them) and list them in the report.
+
 If step 1 found pending `fixup!` commits, issue in the same response one Bash
 call that puts the autosquash line on the clipboard with `pbcopy`:
 
