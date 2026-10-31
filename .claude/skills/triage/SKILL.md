@@ -41,7 +41,10 @@ are often stated in a phase you wouldn't guess from the file that misbehaves.
   already landed: fix now at the root cause, add a regression test (a row in
   the subject's existing table when one has the same shape; see
   `tests/__init__.py`), add a `docs/CHANGES.rst` line if user-observable. No
-  prose journaling.
+  prose journaling. Prove each new test fails on the old code with
+  `python .claude/skills/triage/fail_first.py --ref <commit before the fix> --
+  <test files> -k <selectors>` (it never touches the working tree); a test that
+  passes there either guards something else or does not probe the bug.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.
