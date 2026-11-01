@@ -83,7 +83,9 @@ Which imports are public?
   (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats`` bucket enums), and the
   pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
-  the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
+  the ``processor``/``operator``/``splitter`` decorators; the module-metadata types;
+  the registration functions for modules, workflow stores, and write targets; and the
+  ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.

@@ -65,6 +65,13 @@ missing — one a sync/async parity gap, one absent from both paths.
 `fetch`'s own doctest — but only the sync path honors it. An async pipeline that re-fetches the
 same url pays full cost every time, with no warning.
 
+The sync path is broken too (2026-10-31 sibling audit). `fetch.parser` forwards only `encoding`, so the
+`fetch` module ignores `memoize` in both modes. A direct sync text-mode `Fetch(url, memoize=True)` for a
+local or `urlopen` URL raises `TypeError: cannot pickle 'TextIOWrapper'` and leaks the opener's
+`SpooledTemporaryFile` (HTTP text memoize works through `StringIO(r.text)`), and the cache key is the URL
+alone, so a text fetch after a binary fetch of the same URL returns bytes. Tripwire:
+`tests/internal/test_io.py::TestFetch::test_memoized_text_fetch_after_binary_reads_text`.
+
 Design notes:
 
 * The cache belongs at the **fetch** boundary (`async_url_read`/`async_url_open`), not in each

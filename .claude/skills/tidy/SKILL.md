@@ -135,8 +135,10 @@ neighborhood it affects:
 6. **Changelog and journaling** — a `docs/CHANGES.rst` bullet that is not a
    user-visible change against the last release, a "gained/now" delta where the
    unreleased bullet should be edited, a missing bullet for a user-visible
-   change, fix narratives in CLAUDE.md or `_docs/`, per-release renames in
-   `docs/MIGRATION.rst`, untracked scratch docs cited from stable docs.
+   change (a fix for a 2026-introduced defect needs none: the general Fixes
+   bullet covers it, per `_docs/INTERNALS.md`), fix narratives in CLAUDE.md or
+   `_docs/`, per-release renames in `docs/MIGRATION.rst`, untracked scratch
+   docs cited from stable docs.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define

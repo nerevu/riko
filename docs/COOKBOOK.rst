@@ -674,6 +674,21 @@ threads (or on the event-loop thread with the inline executor). The ``source`` i
 pulled only as workers free up. Under ``for`` a thread or process pool likewise pulls
 the ``source`` no further ahead than it has workers.
 
+``with_execution`` also takes ``shutdown_timeout``: the number of seconds a run's
+cleanup may take (and, under ``for``, how long stopped worker processes get before
+being killed). Settings a ``pipeline`` carries are readable as ``pipeline.settings``
+(an ``ExecutionSettings``).
+
+.. code-block:: python
+
+    >>> from riko import Pipeline
+    >>>
+    >>> pipeline = Pipeline.from_module('hash').with_execution(
+    ...     concurrency=2, shutdown_timeout=5.0
+    ... )
+    >>> pipeline.settings.concurrency, pipeline.settings.shutdown_timeout
+    (2, 5.0)
+
 Advanced recipes
 ----------------
 
@@ -847,6 +862,10 @@ callable that returns the value should use ``Resource.from_factory`` with an exp
     >>> pipeline.context.resources['client'].value is client
     True
 
+Under ``for``, a resource value whose only close is async (an ``aclose`` with no
+``close``) is rejected with a message naming the fix. Produce it with an async factory
+or lifecycle (riko runs the async cleanup) or iterate with ``async for``.
+
 Fanning out a stream
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -996,6 +1015,23 @@ operators such as ``union``/``join`` expressible too.
     >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]
+
+A ``Workflow`` composes like a ``Pipeline``: ``flow.with_node(node)`` appends a node
+after the default output, and ``flow.with_workflow(other)`` appends a whole workflow.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Workflow
+    >>> from riko.ext import ModuleNode
+    >>>
+    >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
+    >>> flow = Workflow.parse({'modules': [{'name': 'itembuilder', 'conf': conf}]})
+    >>> counted = flow.with_node(ModuleNode(id='count', name='count'))
+    >>> list(Pipeline(counted))
+    [{'count': 1}]
+    >>> hashed = flow.with_workflow(Pipeline.from_module('hash').workflow)
+    >>> sorted(node.name for node in hashed.nodes.values())
+    ['hash', 'itembuilder']
 
 ``compile_workflow`` turns the same ``Workflow`` into a workflow module
 (``WorkflowModule``): the Python source of a module that rebuilds it. The module

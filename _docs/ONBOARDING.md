@@ -15,7 +15,7 @@ Skills prepare the tree and suggest a commit message; you run `git commit`.
 
 ### Codebases
 - [ ] riko — https://github.com/nerevu/riko (primary). Three branches matter: `main` is the released code, `features` is where release-bound work lands and the changelog is curated, and `next` is the experimental branch where in-flight work lives without clogging the changelog. Most Claude sessions run on `next`.
-- [ ] meza — https://github.com/reubano/meza (pinned by `pyproject.toml`; owns low-level data conversion)
+- [ ] meza — https://github.com/reubano/meza (a PyPI floor in `pyproject.toml`; owns low-level data conversion; riko's workarounds for its defects are in `_docs/gameplans/upstream-fixes.md`)
 - [ ] mezmorize — https://github.com/reubano/mezmorize (memoizes the URL opener in `riko/io/_sync.py`)
 - [ ] riko-tutorial — https://github.com/reubano/riko-tutorial (worked examples)
 

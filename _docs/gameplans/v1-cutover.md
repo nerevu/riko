@@ -123,7 +123,7 @@ Blocks step 4.
 - The strict-xfail tripwire `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` (since retired)
   is **retired** (maybe in the same commit that changes `build_workflow`), per
   [testing.md](testing.md).
-- As-built (2026-09-29, landed in the working tree, commit pending): the decision was **keep every
+- As-built (2026-09-29, landed, `5f7e668f`): the decision was **keep every
   CLI, make it v2-native** — nothing was deleted. `riko/cli/_workflow.py` is the shared front door
   (`read_document`, `require_workflow`), and `Workflow.parse` reads the three shapes
   (`get_document_shape` in `riko/definitions/_serialize.py` returns a `DocumentShape`
@@ -227,7 +227,7 @@ unaffected by everything below.
   there is re-homed, not dropped — `pythonise` survives in `riko/base/_strutils.py` with live
   consumers. `tests/internal/test_codegen.py` is the v2 replacement and stays.
 - **As-built (2026-10-03; built via `/architect`, gated green — `lint --all` 0, pyright 0, 1572
-  passed / 60 xfailed; uncommitted at wrapup).** Deleted `riko/runtime/_compile.py`,
+  passed / 60 xfailed; landed, `b60acd49`).** Deleted `riko/runtime/_compile.py`,
   `_compile_repr.py`, `templates/pypipe.txt`/`pypipe_async.txt`, `riko/types/_pipeline.py`, and
   `tests/internal/test_compile.py` (since deleted). `COMPILE` = `{compile_pipe, parse_dag}` (`manage codegen --api`
   regenerated). `resolve_module` was **not** relocated — its two test callers use

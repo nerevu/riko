@@ -122,7 +122,7 @@ import).
 negative and NaN values; a malformed or out-of-range value logs a warning and keeps the default, so
 a bad environment never fails a later run.
 
-Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract `Reencoder` base, whose `join_char` is the empty value of its output type. An empty source reads as empty. A decoded source whose raw first line does not end in the encoded platform newline (a single unterminated line, carriage-return-only endings, or a multi-byte newline encoding such as UTF-16, whose `\n` byte falls mid-character) is re-split lazily by `_gen_lines`: decoded chunks are buffered and split at every `\r\n`/`\r`/`\n` (`LINE_BREAKS`), a trailing `\r` is held for the next chunk, every line but the last gets the platform newline, and an empty last line is dropped, so `read()`, `read(n)`, `readline`, and iteration agree; iterating or calling `bytes()` after `read(n)` resumes with the rest of the current line. Any other source passes through untranslated, so a `\r` beside a `\n` stays raw on the sync path while async `TextIOWrapper` translates it (owned by [bado-anyio § 2c](gameplans/bado-anyio-alignment.md#2c-encoding-resolution-precedence-syncasync-parity)). Re-encoding to bytes passes the encoded stream through unsplit. `remove_BOM=True` strips one `U+FEFF` from the decoded text (`_strip_bom`, first non-empty chunk) rather than the raw bytes, so it works for any codec. Decode errors surface on read; a failure while the reencoder is opening closes its source/owner.
+Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract `Reencoder` base, whose `join_char` is the empty value of its output type. An empty source reads as empty. A decoded source whose raw first line does not end in the encoded platform newline (a single unterminated line, carriage-return-only endings, or a multi-byte newline encoding such as UTF-16, whose `\n` byte falls mid-character) is re-split lazily by `_gen_lines`: decoded chunks are buffered and split at every `\r\n`/`\r`/`\n` (`LINE_BREAKS`), a trailing `\r` is held for the next chunk, every line but the last gets the platform newline, and an empty last line is dropped, so `read()`, `read(n)`, `readline`, and iteration agree; iterating or calling `bytes()` after `read(n)` resumes with the rest of the current line. Any other source passes through untranslated, so a `\r` beside a `\n` stays raw on the sync path while async `TextIOWrapper` translates it (owned by [bado-anyio § 2c](gameplans/bado-anyio-alignment.md#2c-encoding-resolution-precedence-syncasync-parity)). Re-encoding to bytes passes the encoded stream through unsplit. `remove_BOM=True` strips one `U+FEFF` from the decoded text (`gen_without_bom`, first non-empty chunk) rather than the raw bytes, so it works for any codec. Decode errors surface on read; a failure while the reencoder is opening closes its source/owner.
 
 **Typing boundary.** Parser outputs are generic over `ItemOrValue`. Processor and operator
 wrappers remain `Stream` / `AsyncStream` at the public boundary; splitters are the structural
@@ -288,8 +288,9 @@ so a caller-written `.item` is a missing key as in memory. It then rewinds throu
 bytes read before the match) and calls `ijson.items` once on the file with the found key's spelling,
 appending `.item` for an array. This keeps the native backend's speed. A missing path or a scalar
 logs a warning and yields nothing in both branches; malformed JSON logs an error. Known differences:
-with keys that differ only in case, the streamed branch takes the first and `DotDict` the last; a
-path running past a scalar is tracked in
+with keys that differ only in case, the streamed branch takes the first and `DotDict` the last
+([dotdict-parsing.md](gameplans/dotdict-parsing.md#known-instance-keys-that-differ-only-in-case-resolve-to-different-duplicates));
+a path running past a scalar is tracked in
 [dotdict-parsing.md](gameplans/dotdict-parsing.md#known-instance-a-path-past-a-scalar-returns-the-scalar).
 
 Without `lxml` (the `perf` extra), `xml2etree` parses XML with the standard-library parser
@@ -883,8 +884,8 @@ portal drain and the worker-side upstream reader are the same function with a di
 - **`SyncExecution`** runs synchronously behind an `ExitStack`; async-only components run through a
   lazily started `BlockingPortal` (memoized via `functools.cached_property`) that is entered onto the
   exit stack, so shutdown stops the portal (joining its tasks) as part of the stack's LIFO unwind.
-  This is sound because sync execution rejects async-native cleanup, so no owned cleanup ever needs
-  the portal alive.
+  The portal is entered before any cleanup it bridges is registered, so it stops after them. Every
+  portal close is bounded by the shutdown timeout, and an expiry is recorded as a cleanup error.
 - **`AsyncExecution`** runs behind an `AsyncExitStack`; blocking sync components run on a worker
   thread. Shutdown unwinds the stack behind a cancellation shield within the shutdown timeout
   (30 s by default, `RIKO_SHUTDOWN_TIMEOUT`, `math.inf` for none), so ambient cancellation of the
@@ -913,24 +914,32 @@ outcome); the records are passive data, and `call_factory`/`build_context_manage
 (`riko/execution/_resource_acquisition.py`) thaw fresh argument copies each time. A generator function's `enter` is a module-level partial, so the plan pickles. Cleanup rides the exit stack: owned → `close`/`aclose`,
 value-factory → cleanup callback, lifecycle → context-manager entry. Explicit `cleanup` is
 authoritative. The two executions adapt work across sync/async as mirror images, classifying async-vs-sync
-with the same predicates (`is_async_callable`/`is_async_closeable`/`is_sync_closeable`, read through the plan records' `is_async`/`requires_async_cleanup`).
-Under `SyncExecution`, async value *production* bridges through the portal, but async-native
-*cleanup* — an async cleanup callable, an async-native lifecycle, or an `aclose()`-only owned value —
-is a permanent boundary: it raises `InvalidPipelineError` before the resource is acquired, so no value
-is produced and no lifecycle entered behind the rejection. Under `AsyncExecution`, blocking sync work
-is instead offloaded to a worker thread: a sync value factory, a sync cleanup callback, and an owned
-sync `close()` run through `aclose_with` over `asyncify_call` (an unguarded worker seam, because cleanup runs while the
-execution is closing, when the guarded `run_sync` would refuse; an awaitable the sync cleanup returns is then
-awaited on the loop, while `SyncExecution`'s `close_with` refuses one with `InvalidPipelineError`), and a sync context-manager lifecycle
-is entered through a `_WorkerContext` async wrapper so both `__enter__` and `__exit__` run off-loop with
-exception info preserved.
+with the same predicates (`is_async_callable`, and `get_sync_closer`/`get_async_closer` in
+`riko/types/_io.py`, read through the plan records' `is_async`). Each execution registers every owned
+value's close in one place, `register_owned`, over `close_owned`/`aclose_owned`
+(`riko/execution/_resource_cleanup.py`). Under `SyncExecution`, async value *production* bridges
+through the portal, and so does the async cleanup of a value produced there: an async factory's async
+or awaitable-returning cleanup, and an async lifecycle, entered through
+`portal.wrap_async_context_manager` around `_BoundedExit` so its entry and exit run in one task. A
+sync factory with an async cleanup raises `InvalidPipelineError` before the factory runs, an
+awaitable its sync cleanup returns raises it at close, and a
+caller-made value whose only close is async (`Resource(value)`, a sync-read seed, a native pipe's raw
+return, a node stream) raises it when opened or built, before any item is read (`ASYNC_CLEANUP_MSG`/
+`ASYNC_CLOSE_MSG` name the fix). Under `AsyncExecution` every async close is awaited, and blocking
+sync work is offloaded to a worker thread: a sync value factory, a resource's sync cleanup callback,
+and its owned sync `close()` run on a worker through `aclose_owned(..., inline=False)` over
+`asyncify_call` (an unguarded worker seam, because cleanup runs while the execution is closing, when
+the guarded `run_sync` would refuse; an awaitable the sync close returns is then awaited on the loop),
+a seed's sync close runs inline, a sync node's stream and raw return close on a worker, and a sync
+context-manager lifecycle is entered through a `_WorkerContext` async wrapper so both `__enter__` and
+`__exit__` run off-loop with exception info preserved.
 
 **Resource-model shape.** `Resource` stores `_plan`, `credential`, and `lazy` — no private subclass
 hierarchy and no field-pair invariants. `OneShotResource` / `ReusableResource` remain as user-facing
 marker types (`reusable` is `isinstance`); `Resource(value, cleanup=)` builds an `OwnedPlan` in its own
 `__init__` and the alternate constructors set fields through a private builder. `Resource` itself has
 no open/close behavior: the execution's `acquire`/`aacquire` drive its `_plan` and clean up (owned
-values through `close_resource`/`aclose_resource` in `riko/execution/_resource_cleanup.py`).
+values through `close_owned`/`aclose_owned` in `riko/execution/_resource_cleanup.py`).
 `Resource`, `ReusableResource`, and `OneShotResource` are on the stable `riko` surface; `ResourceStrategy`
 is on `riko.types`, and the plan records are private (2026-10-28 ruling). A `contextmanager`/`asynccontextmanager` factory is
 recognized by the decorator's shared helper code anywhere in its `__wrapped__` chain, so another
@@ -939,12 +948,13 @@ recognized by the decorator's shared helper code anywhere in its `__wrapped__` c
 **External-resource proof.** `tests/internal/test_execution.py` proves the lifetime holds a
 genuinely external resource — a real HTTP client against the loopback server
 (`@pytest.mark.simulated_network`), not a synthetic object — under both sync and async execution,
-across eager open + cleanup, the async-under-sync rejection boundary, and mid-run failure rollback;
+across eager open + cleanup, an async client's lifecycle bridged under sync execution, and mid-run failure rollback;
 failure-induced cancellation of execution-spawned tasks moves to R7 with the task hosting it needs.
 The foundation semantics are proven directly: ambient cancellation
 of the shutdown task still unwinds resources, a resource context manager receives and can suppress the
 primary error, a lone cleanup failure raises bare, concurrent first-use is single-flight, and
-async-native cleanup is rejected before any value is produced. Deferred to R11
+a sync factory's async cleanup is rejected before any value is produced, and a bridged async cleanup
+that outlives the shutdown timeout is reported at exit. Deferred to R11
 (provider sessions): true lazy-open-on-first-use — `lazy=` is recorded but every bound resource is
 acquired, used or not — and resource-to-resource dependency ordering.
 
@@ -1134,9 +1144,9 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   `riko/types/_streams.py`) opened once per run — `SyncExecution._open_seed` awaits an
   awaitable through the portal and drains an async-only stream through it, `AsyncExecution.
   _aopen_seed` awaits and wraps, both sharing `normalize_items` (`_adapt.py`: a mapping or
-  primitive is one item, any other iterable is the stream) and both registering the `close` of any
-  seed with one on the execution's exit stack (the async side also the `aclose` of any seed with one),
-  so a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
+  primitive is one item, any other iterable is the stream) and both registering the seed's close
+  on the execution's exit stack (the async side awaits an async close; the sync side rejects a
+  sync-read seed whose only close is async before any item is read), so a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
   (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the generated module's `pipe(item)` hand
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. The
   async side wraps an async-iterable seed with `aclose` in `_OwnedSeed`, so the root node's own close
@@ -1167,9 +1177,25 @@ own open output streams leave free, raises `InvalidPipelineError`; other executi
 `_RunStream` wraps every run's output: closing it closes the node streams the run built in reverse
 build order (so a native async chain never relies on garbage collection to reach a suspended
 node stream), then returns the threads; they also return when the output stream ends or fails (even
-before its first item), and the execution's exit stack returns any it still holds. `SyncExecution`
-registers an `aclose` through its portal for every async stream it drains (an async-native node's
-output, or an async seed with `aclose`), so they close at exit whether or not they are generators.
+before its first item), and the execution's exit stack returns any it still holds and closes the node streams of any run whose output the caller left open. `SyncExecution`
+registers an `aclose` through its portal, bounded by the shutdown timeout, for every async stream it
+drains (an async-native node's output, or an async seed with `aclose`), so they close at exit whether
+or not they are generators.
+Each run owns every node stream it builds. `SyncExecution` registers each non-output node stream's
+`close` on its exit stack (the runner's `yield from` closes the output), so a downstream operator that
+reads with a plain `for` loop never strands its input, and a node that fails to build still closes the
+streams built before it. A sync node stream or raw return whose only close is async raises
+`InvalidPipelineError` when built. `AsyncExecution` keeps one `_NodeStreams` registry per run: it closes each
+stream once (by identity), last built first, on `_RunStream.aclose`, a failed build, or execution exit, closing through `aclose_owned` so a sync node's stream and the raw return it was drawn from (registered as soon as the node is called, so an output nobody reads still closes them) keep their worker; a sync node
+on a worker closes its async inputs through it as soon as it finishes, so an upstream source is
+released before the run ends without being closed twice. Named input ports may not use a name every
+module call already takes (the `ExecutionExtras` fields `others`/`resources`/`embed`, `conf` and
+`context` from the call signatures, `item`, and the call options; operators keep `count` as a port
+because stored workflows wire a count stream into `truncate`/`tail`, while a processor reserves it
+because its parser receives the `count` option); `ExecutionPlan.validate` rejects them rather than letting
+one argument overwrite the other. A pipe's closeable return value that is not its own iterator is
+closed once, after the node stream, in both modes. Duplicate-port and fan-out checks count `Endpoint.port_key` (the node
+plus the port's canonical spelling), so `in:1` and `in:01` are one port.
 
 **Process executor ships each call once** (2026-10-16). `build_item_call`
 (`riko/execution/_concurrency.py`) pickles a mapped node's prepared call once on first pull; each task
@@ -1308,7 +1334,7 @@ Invariants worth stating:
 
 - **keys are unified** — the caller supplies a single `keys` list because a target's `match_keyed_modes`
   and `idempotent_modes` are disjoint (`match_keyed_modes & idempotent_modes == ∅`, enforced in
-  `__post_init__`), so `(target, mode)` alone fixes whether keys mean record-match identity or
+  `__attrs_post_init__`), so `(target, mode)` alone fixes whether keys mean record-match identity or
   idempotency/dedup identity. There is no separate `idempotency_key`.
 - **incremental is a `target × format` capability**, not a global format trait — `File` owns private
   `_FILE_APPEND_FORMATS` / `_FILE_INCREMENTAL_FORMATS`; there are no global `APPENDABLE_FORMATS` /

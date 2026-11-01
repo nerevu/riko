@@ -187,6 +187,14 @@ allowlist first. As of the 2026-10-30 surface triage the remaining non-surface n
 are the `SyncModuleWrapper`/`AsyncModuleWrapper` cast targets (waiting on the slot-type decision in
 [extensibility.md](extensibility.md)), the `riko.bado._backend` test primitives (`checkpoint`,
 `fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, and `maybe_aclosing`.
+The 2026-10-31 sibling audit found more names that a supported signature, field, or return
+exposes but no surface exports. Publishing them is deferred (user ruling) to one surface pass:
+`SyncPolicy`/`AsyncPolicy` (`ExecutionSettings` fields), `GraphIndex`/`GraphEdge`/`RunnableNode`
+(`Workflow.index`/`graph_edges`/`runnable_nodes`), `ModuleCategory` (`get_module_category`,
+`list_modules(category=)`), `FrozenDict`/`FrozenConf` (`Workflow`/`ModuleNode` fields),
+`PreparedModule` (`prepare`/`setup`), the underscore names `_AsyncURLStream`/`NamedTextIOWrapper`
+(returned by `async_url_open`) and `_Destination` (`export`'s `f`), `DotDict` (an `Item` member),
+and the `*RawConf` family plus `OptionValues` (`riko.types.Conf`, `CallOptionsLike`).
 
 No static check fits rows shadowed by an earlier branch in the code under test (needs a
 mutation-style check), xfail comparisons that are false on their face, xfail worst times that
@@ -441,7 +449,7 @@ modes:
 | | sync Pipeline execution | async Pipeline execution |
 |---|---|---|
 | `@contextmanager` sync resource | native entry | worker-adapted entry |
-| `@asynccontextmanager` async resource | portal entry | native entry |
+| `@asynccontextmanager` async resource | portal entry, exit bounded by `shutdown_timeout` | native entry |
 
 Each cell proves eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
 cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.

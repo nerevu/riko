@@ -271,7 +271,8 @@ Meza owns conversion work where applicable. Riko may temporarily provide adapter
 the new architecture, but conversion implementation should be upstreamed/finalized there when it is
 generally useful.
 
-Upstream candidates currently implemented in Riko (each removes the Riko copy once meza ships it):
+Upstream candidates currently implemented in Riko (each removes the Riko copy once meza ships it;
+tracked with riko's other meza workarounds in [upstream-fixes.md](upstream-fixes.md)):
 
 - `listize` (`riko/coercion/_sequences.py`) — move back to meza;
 - `cast_datetime` (`riko/coercion/cast.py`) — inherit from meza's date casting;

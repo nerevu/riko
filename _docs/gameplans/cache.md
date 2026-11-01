@@ -29,7 +29,8 @@ Pipeline.cache()
 ```
 
 There is no Riko `CacheStore` hierarchy. Generally useful backend/cache behavior should move
-upstream to Mezmoize rather than being duplicated in Riko.
+upstream to Mezmoize rather than being duplicated in Riko; any interim riko workaround gets an
+entry in [upstream-fixes.md](upstream-fixes.md).
 
 The private integration module may follow the same pattern as `_reencode.py`, for example
 `_mezmorize.py`: a runtime subclass of the upstream class, typed through a local `.pyi` stub under

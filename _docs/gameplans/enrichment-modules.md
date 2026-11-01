@@ -169,12 +169,21 @@ non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
 `now` computations with one. Tripwire (2026-10-10 naming triage):
 `tests/internal/test_values.py::TestCastDatetime::test_relative_offsets_share_the_named_day_zone`.
 
+The host zone is also applied as a fixed offset: `ensure_tzinfo(try_local_tz=True)` takes
+`dt.now(UTC).astimezone().tzinfo`, so a date in the other daylight-saving season gets
+today's offset (a July date resolved in January is an hour off). The settable zone must
+be a real zone resolved at each date. Tripwire (2026-11-01 land triage):
+`tests/internal/test_values.py::TestResolveAwareDatetime::test_local_zone_uses_the_dates_own_offset`.
+
 The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
 and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_script.py`).
 
 Related backlog: `riko/base/_dateutils.py` builds its abbreviation table from `pytz`
 (`pytz>=2019.3` in `pyproject.toml`); replace that with `zoneinfo`/`tzdata` and drop the
-dependency.
+dependency. Settle the preferred zone for each ambiguous abbreviation there: since the
+2026-10-31 determinism fix, `TZINFOS` picks the alphabetically last zone (`IST` is Europe/Dublin,
+`AST` Canada/Atlantic, `EET` Europe/Vilnius, `WAT` Africa/Porto-Novo), which is stable but not a
+considered choice.
 
 This is additive, so it is not SemVer-gated.
 

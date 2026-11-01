@@ -786,10 +786,12 @@ and other consumers remain ecosystem/observability work.
 
 Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
 tests prove a real sync lifecycle under **both** sync and async execution, a real async lifecycle
-under native async execution, and deterministic rejection of async-native cleanup under sync
-execution. The fourth quadrant — async-native cleanup on `SyncExecution` — is an explicit
-`InvalidPipelineError` raised before acquisition, not a bridged run, so async resources are never
-smuggled through the sync portal for cleanup.
+under native async execution, and the fourth quadrant: async-native cleanup under sync execution.
+Amended 2026-10-31: that quadrant bridges the cleanup of a value riko produced on the sync portal (an
+async factory's cleanup, an `@asynccontextmanager` lifecycle) through the portal, bounded by the
+shutdown timeout, and rejects a caller-made value whose only close is async with an
+`InvalidPipelineError` before acquisition. (Until then every async-native cleanup on
+`SyncExecution` was rejected before acquisition.)
 
 Covered cases: eager open, mid-execution failure rollback, failure-induced task cancellation,
 ambient-cancellation-safe cleanup, exception-aware `__exit__`/`__aexit__` cleanup, and
@@ -1076,6 +1078,12 @@ Deliver:
   scalar-only (reject nested values at runtime) or JSON-valued (widen `Inputs`) alongside the
   declaration schema, and replace the converter list with a single typed converter in the same
   change.
+
+Audit note (2026-10-31 sibling audit): stored-workflow describe (`build_workflow_pipes` in
+`riko/runtime/_workflow_pipes.py`) returns its `description`/`inputs` dicts by reference in the
+DESCRIBE and `describe_input` modes, so a caller's mutation leaks into later calls. Return fresh or
+frozen data when input declarations land (tripwire
+`tests/internal/test_resolution.py::TestResolvedDocuments::test_document_description_is_fresh_per_call`).
 
 **Exit:**
 
@@ -1675,7 +1683,10 @@ unsoundnesses ride on this (2026-10-27 triage, typing only, so no runtime tripwi
 `DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded `T`, and the
 acquisition entries hold `Acquisition[ResolvedValue[R]]` (`R | Closeable`) while `acquire`/`aacquire`
 return `R`; retyping the router on `Stream`/`AsyncStream` port streams and dropping `| Closeable` from
-`ResolvedValue` (the `Resource(value: Closeable)` overload must bind `T`) remove both.
+`ResolvedValue` (the `Resource(value: Closeable)` overload must bind `T`) remove both. The same
+retype lets `register_owned` (sync and async executions) type its `cleanup` as `Cleanup[V]` for the
+registered value: it is `Cleanup[Never]` today because `OwnedPlan[T]` pairs a `T | Closeable`
+value with a `Cleanup[T]` (2026-10-31 pyright signature-rules triage).
 
 Typing note (2026-10-30): the splitter exit retypes call outputs by module type, not by color.
 `PreparedInterface` (`riko/execution/_prepared.py`) is one record for both colors: its `pipe` is
@@ -1685,6 +1696,11 @@ after this phase. Split the interface into sync and async variants (a tagged uni
 `isinstance` narrows, each with a color-typed call protocol) in the same rewrite of node dispatch.
 `_run_sync_node` (`riko/execution/_async_execution.py`) then takes the sync variant by type rather
 than by docstring.
+
+Audit note (2026-10-31 sibling audit): a sync `receive` closed early stays registered on its channel,
+so a later `receive` on that channel with `func=` gets items without `func` applied. The Subscription
+runtime that replaces the module owns release on close (tripwire
+`tests/public/test_modules.py::TestReceive::test_receive_closed_early_releases_its_channel`).
 
 **Exit:**
 
@@ -1817,7 +1833,9 @@ the tag moves to its own marker read by its own guard, rather than a fourth `.ty
 Audit note (2026-10-10 structural audit): `riko/modules/_loop.py` carries twin sync/async bodies
 (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_parent`, `_run_loop`/`_arun_loop`) and
 one copy has already drifted (`module_name` vs `op_module_name`); `_take_first` re-implements
-`_maybe_close` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
+the owned-value close now in `close_owned` (`riko/execution/_resource_cleanup.py`) and closes only
+a `Generator` result while `_atake_first` closes anything async-closeable (audit 2026-11-01; no
+built-in embed returns a closeable non-generator, so no tripwire). Consolidate the pure logic into one body behind an
 iterator adapter (as the execution split did for `_resolve_inputs`) when this phase settles the embed
 shape, since the names change then anyway.
 
@@ -1889,6 +1907,28 @@ records, and the `processor`/`operator`/`splitter` classes, which never referenc
 along those seams once this phase's shim deletions shrink the base, not before: extracting the base
 now would move the `_materialize_terminal*` shims this phase deletes. Repoint every internal importer
 of `processor`/`operator`/`splitter` in the same change; `riko.ext` stays the facade authors import.
+
+Audit note (2026-10-31 sibling audit): named input streams reach a node's call as flat keyword
+arguments beside the call options and execution extras, so `ExecutionPlan.validate` keeps a reserved
+port-name list (`_RESERVED_INPUTS` in `riko/execution/_prepared.py`), and `count` is reserved on
+processors only because operators take it as a port (`in:count` on `truncate`/`tail`). Deliver named
+inputs in their own mapping as part of the parser input contract above; that retires the reserved list
+and the processor-only `count` rule. It changes the `riko.ext` parser protocol (what `**kwargs`
+holds), so it shares that contract's compatibility boundary.
+
+Audit note (2026-10-31 sibling audit): a sync pipe given async input (an async-only embed for sync
+`loop`, an async generator as `union` others or `join` other) fails with a bare "object is not
+iterable" `TypeError` instead of an error naming the async input; the parity work owns the boundary
+error (tripwire `tests/internal/test_modules.py::TestSyncPipeAsyncInput::test_sync_pipe_names_an_async_input`).
+
+Audit note (2026-10-31 sibling audit): an empty document has no one policy across parsers. Empty
+JSON logs an error and yields nothing, empty XML raises `XMLSyntaxError`, and an empty feed raises
+fastfeedparser's `ValueError: Empty content`. Settle it while the parsers move to the Feed-native path;
+the proposed rule is an empty stream plus a warning (the data contract survives an empty input), with
+any change recorded in CHANGES. No tripwire (policy, not a defect). The feed parsers also diverge
+on a malformed feed (2026-11-03 triage): feedparser returns `bozo=1` with a `bozo_exception`, while
+fastfeedparser raises `ValueError` and never sets `bozo`, so `parse_rss`'s bozo warning branch
+(`riko/rss/feeds.py`) runs only under feedparser. Settle malformed input under the same rule.
 
 **Exit:**
 

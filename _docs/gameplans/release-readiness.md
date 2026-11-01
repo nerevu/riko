@@ -208,6 +208,10 @@ Same principle for optional parser/frame/finance/connector dependencies.
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides and tests the
   dependency graph users actually install, plus min-supported and latest-compatible lanes.
+  *Today (2026-10-31):* `publish.yml` resolves the built wheel with every extra
+  (`riko[async,perf,finance]`) from published metadata alone, after the git-sourced meza pin
+  had let the lockfile pass while `riko[perf]` could not install from PyPI. The
+  min-supported and latest-compatible lanes remain.
 
 ## 8. Surface & doc hygiene
 
