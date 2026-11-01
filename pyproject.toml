@@ -35,7 +35,7 @@ dependencies = [
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
     "jinja2>=3.1.6",
-    "meza>=0.42.5",
+    "meza>=0.47.1",
     "mezmorize>=0.27.0",
     "networkx>=3.4.2",
     "pygogo>=0.12.0,<2.0.0",
@@ -105,6 +105,8 @@ gen-api-surface = "riko.cli._gen_api_surface:main"
 # Resolve only releases at least a week old, so a broken or hijacked release never
 # reaches the lock. `exclude-newer-package` admits an urgent one early.
 exclude-newer = "1 week"
+# meza is maintained alongside riko, so its releases are trusted on publication.
+exclude-newer-package = { meza = false }
 
 # Rebuild the local `riko` install when any source file changes, not just when
 # pyproject.toml/setup.py change (uv's default). Without this, edits under
@@ -410,8 +412,6 @@ commands = [
 module-name = "riko"
 module-root = ""
 
-[tool.uv.sources]
-meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b58379ab833e796dcf92df" }
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.13.0"]
