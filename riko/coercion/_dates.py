@@ -222,7 +222,7 @@ def resolve_aware_datetime(
         >>> st = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
         >>> resolve_aware_datetime(st, try_local_tz=False).tm_gmtoff
         0
-        >>> local = datetime(2020, 6, 15, 12).astimezone().utcoffset().total_seconds()
+        >>> local = datetime.now().astimezone().utcoffset().total_seconds()
         >>> resolve_aware_datetime(st, try_local_tz=True).tm_gmtoff == local
         True
 
