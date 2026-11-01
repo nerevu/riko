@@ -54,6 +54,8 @@ if TYPE_CHECKING:
 
     from riko.types._streams import AnyIterable
 
+    from ._backend import MemoryObjectReceiveStream
+
 
 def _cap[T, S](
     func: Callable[[T], Awaitable[S]], budget: Semaphore | None
@@ -262,11 +264,19 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
     return value
 
 
+@overload
+def async_reduce[T, S](
+    func: Callable[[T, S], T | Awaitable[T]], content: Iterable[S], initial: T
+) -> Awaitable[T]: ...
+@overload
+def async_reduce[T](
+    func: Callable[[T, T], T | Awaitable[T]], content: Iterable[T], initial: None = ...
+) -> Awaitable[T]: ...
 def async_reduce[T, S](
     func: Callable[[T, S], T | Awaitable[T]],
     content: Iterable[S],
     initial: T | None = None,
-) -> Awaitable[T]:
+) -> Awaitable[T | S]:
     """
     Reduces *content* with *func*.
 
@@ -299,7 +309,11 @@ def async_reduce[T, S](
     content = iter(content)
     value = next(content) if initial is None else initial
 
-    async def work(async_func, content, value):
+    async def work(
+        async_func: Callable[[T, S], T | Awaitable[T]],
+        content: Iterator[S],
+        value: T | S,
+    ) -> T | S:
         for item in content:
             value = await maybe_async(async_func, value, item)
 
@@ -421,7 +435,9 @@ async def _pool_stream[T, S](
             async for item in items:
                 await item_send.send(item)
 
-    async def worker(results, items) -> None:
+    async def worker(
+        results: MemoryObjectSendStream[S], items: MemoryObjectReceiveStream[T]
+    ) -> None:
         async with results, items:
             async for item in items:
                 await drain(item, results)
@@ -620,5 +636,8 @@ async def async_merge[S](
             async for item in _items:
                 await results.send(item)
 
-    async for item in _pool_stream(source, drain, limit=limit, buffer=buffer):
-        yield item
+    stream = _pool_stream(source, drain, limit=limit, buffer=buffer)
+
+    async with aclosing(stream) as results:
+        async for item in results:
+            yield item

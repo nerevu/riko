@@ -19,6 +19,7 @@ Examples:
 
 from __future__ import annotations
 
+from codecs import getincrementaldecoder
 from io import BufferedIOBase, BytesIO, StringIO, TextIOBase, TextIOWrapper
 from typing import TYPE_CHECKING, Literal, overload
 
@@ -165,13 +166,28 @@ def _chunk_content(
         yield from content
 
 
-def _normalize_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
-    if isinstance(raw, str):
-        result: AnyStr = raw.encode(encoding) if binary else raw
-    else:
-        result = raw if binary else raw.decode(encoding)
+def _gen_normalized_chunks(
+    chunks: Iterable[AnyStr], binary: bool, encoding: str
+) -> Iterator[AnyStr]:
+    """
+    Normalizes chunks into ``str`` or ``bytes`` for writing.
 
-    return result
+    Examples:
+
+        >>> list(_gen_normalized_chunks([b"h\\xc3", b"\\xa9"], False, "utf-8"))
+        ['h', 'é', '']
+
+    """
+    decoder = getincrementaldecoder(encoding)()
+
+    for raw in chunks:
+        if isinstance(raw, str):
+            yield raw.encode(encoding) if binary else raw
+        else:
+            yield raw if binary else decoder.decode(raw)
+
+    if not binary:
+        yield decoder.decode(b"", final=True)
 
 
 class NamedTextIOWrapper(TextIOWrapper):
@@ -449,13 +465,13 @@ async def async_write(
     opener = async_open(dest, mode, encoding=open_encoding)
 
     async with await opener as f:
-        for normalized in _chunk_content(content, chunksize):
-            data = _normalize_chunk(normalized, binary, encoding)
-            await f.write(data)  # pyright: ignore[reportArgumentType]
-            progress += len(data)
+        chunks = _chunk_content(content, chunksize)
 
-    written = progress
-    return written
+        for normalized in _gen_normalized_chunks(chunks, binary, encoding):
+            await f.write(normalized)  # pyright: ignore[reportArgumentType]
+            progress += len(normalized)
+
+    return progress
 
 
 def async_get_temp_file() -> NamedTemporaryFile[bytes]:

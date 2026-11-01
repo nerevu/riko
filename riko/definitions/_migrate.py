@@ -27,7 +27,17 @@ from riko.base._require_guards import (
 )
 from riko.base._strutils import pythonise
 from riko.types._options import RawCallOptions
-from riko.types._pipedef import DagModule, Embed, EmbedRef, PipeModule
+from riko.types._pipedef import (
+    DagModule,
+    Embed,
+    EmbedRef,
+    OutputModule,
+    PipeDag,
+    PipeDef,
+    PipeModule,
+    Wire,
+    WireEndpoint,
+)
 from riko.types._workflow import (
     WORKFLOW_VERSION,
     RawEdge,
@@ -42,9 +52,10 @@ from ._normalize import resolve_port
 from ._write import WriteMode
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from logging import Logger
 
-    from riko.types._pipedef import PipeDag, PipeDefLike
+    from riko.types._pipedef import PipeDefLike
 
 logger: Logger = get_logger(__name__)
 
@@ -64,6 +75,11 @@ require_base_pipe = require_from_typed_dict(
     PipeModule, "write option", exclude=_OPTIONS
 )
 require_write_conf = require_from_typed_dict(WriteConf, extra={"keys"})
+_require_pipe_def = require_from_typed_dict(PipeDef, "pipe definition")
+_require_pipe_dag = require_from_typed_dict(PipeDag, "dag")
+_require_wire = require_from_typed_dict(Wire, "wire")
+_require_wire_endpoint = require_from_typed_dict(WireEndpoint, "wire endpoint")
+_require_output_module = require_from_typed_dict(OutputModule, "`PipeDef` output node")
 
 
 def _lower_key[K](key: K) -> K | str:
@@ -72,9 +88,20 @@ def _lower_key[K](key: K) -> K | str:
 
 
 def _lower_keys[T](obj: T) -> T:
-    """Lowercases every all-uppercase string key, at any depth."""
+    """
+    Lowercases every all-uppercase string key at any depth.
+
+    Raises:
+
+        InvalidPipelineError: If lowercasing makes two keys of one mapping collide.
+
+    """
     if is_mapping(obj):
         result = map_keys_and_values(_lower_key, _lower_keys, obj)
+
+        if len(result) < len(obj):
+            msg = f"keys that differ only in case collide: {sorted(map(str, obj))}"
+            raise InvalidPipelineError(msg)
     elif isinstance(obj, list):
         result = [_lower_keys(v) for v in obj]
     else:
@@ -211,10 +238,10 @@ def _migrate_wires(
     edges: list[RawEdge] = []
     endpoints: dict[str, RawEndpoint] = {}
 
-    for wire in require_sequence(wires, "wires"):
-        mapping = require_mapping(wire, "wire")
-        src = require_mapping(mapping.get("src"), "wire 'src'")
-        tgt = require_mapping(mapping.get("tgt"), "wire 'tgt'")
+    for _wire in require_sequence(wires, "wires"):
+        wire = _require_wire(require_mapping(_wire, "wire"))
+        src = _require_wire_endpoint(require_mapping(wire["src"], "wire 'src'"))
+        tgt = _require_wire_endpoint(require_mapping(wire["tgt"], "wire 'tgt'"))
         src_node = require_str(src.get("moduleid"), "wire 'src' moduleid")
         src_port = resolve_port(src.get("id"), OUTPUT_PORT)
         endpoint = RawEndpoint({"node": src_node, "port": src_port})
@@ -231,7 +258,17 @@ def _migrate_wires(
     return edges, endpoints
 
 
-def migrate_pipe_def(pipe_def: PipeDefLike) -> RawWorkflow:
+def _require_output_id(module: Mapping[str, object]) -> str:
+    """Requires a ``PipeDef`` ``output`` module to be bare and gets its id."""
+    output = _require_output_module(module)
+
+    if output.get("conf"):
+        raise InvalidPipelineError("the `PipeDef` output node takes no 'conf'")
+
+    return require_str(output["id"], "module 'id'")
+
+
+def migrate_pipe_def(_pipe_def: PipeDefLike) -> RawWorkflow:
     """
     Migrates a ``PipeDef`` into the shorthand workflow mapping it describes.
 
@@ -249,18 +286,18 @@ def migrate_pipe_def(pipe_def: PipeDefLike) -> RawWorkflow:
 
     Raises:
 
-        InvalidPipelineError: If a module or wire is malformed, or a module key has
-            no ``Workflow`` equivalent.
+        InvalidPipelineError: If a module or wire is malformed, a key has no
+            ``Workflow`` equivalent, or two configuration keys differ only in case.
 
     """
-    mapping = require_mapping(pipe_def, "pipe definition")
-    raw_modules = require_sequence(mapping.get("modules", ()), "modules")
+    pipe_def = _require_pipe_def(require_mapping(_pipe_def, "pipe definition"))
+    raw_modules = require_sequence(pipe_def["modules"], "modules")
     modules = [require_mapping(m, "module") for m in raw_modules]
     outputs, inputs = partition(modules, lambda m: m.get("type") == OUTPUT_MODULE)
 
-    output_ids = frozenset(require_str(m.get("id"), "module 'id'") for m in outputs)
+    output_ids = frozenset(map(_require_output_id, outputs))
     nodes = [_migrate_pipe_module(require_pipe(m)) for m in inputs]
-    edges, endpoints = _migrate_wires(mapping.get("wires", ()), output_ids)
+    edges, endpoints = _migrate_wires(pipe_def.get("wires", ()), output_ids)
     logger.warning(_WARNING)
     raw = RawWorkflow({"nodes": nodes, "edges": edges, "version": WORKFLOW_VERSION})
 
@@ -285,7 +322,7 @@ def _raw_edge(*wire: object) -> RawEdge:
     return RawEdge({"source": source_endpoint, "target": target_endpoint})
 
 
-def parse_dag_graph(dag: PipeDag) -> RawWorkflow:
+def parse_dag_graph(_dag: PipeDag) -> RawWorkflow:
     """
     Expands a ``PipeDag`` into the shorthand workflow mapping it describes.
 
@@ -301,17 +338,17 @@ def parse_dag_graph(dag: PipeDag) -> RawWorkflow:
 
     Raises:
 
-        InvalidPipelineError: If a module carries a key its workflow node does not
-            accept, or a wire has the wrong number of entries.
+        InvalidPipelineError: If the input or a module carries a key its workflow
+            doesn't accept, or a wire has the wrong number of entries.
 
     """
-    mapping = require_mapping(dag, "dag")
-    _modules = require_sequence(mapping.get("modules", ()), "modules")
+    dag = _require_pipe_dag(require_mapping(_dag, "dag"))
+    _modules = require_sequence(dag["modules"], "modules")
     modules = [require_mapping(m, "module") for m in _modules]
     pairs = [_migrate_dag_module(i, require_dag(m)) for i, m in enumerate(modules, 1)]
     node_ids, nodes = unzip(pairs)
     linear = list(pairwise(node_ids))
-    wires = require_sequence(mapping.get("wires") or linear, "wires")
+    wires = require_sequence(dag.get("wires") or linear, "wires")
     edges = [_raw_edge(*require_sequence(wire, "wire")) for wire in wires]
     return RawWorkflow({"nodes": nodes, "edges": edges})
 

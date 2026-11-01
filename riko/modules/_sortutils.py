@@ -7,14 +7,14 @@ Attributes:
     SORT_FILLER: Orderable stand-in (``-inf``) for a sort value that cannot be cast.
     DATELIKE_TYPES: Cast types reduced to epoch timestamps for sorting.
     INVALID_TYPES: Cast types with no usable sort value or typed default.
-    NON_SORTABLE: Types (mappings, sequences) that fall back to the default key.
+    SORTABLE_TYPES: Types a sort key may hold; any other value sorts by the default.
 
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, ItemsView, Iterable, Mapping, Sequence
+from collections.abc import Callable, ItemsView, Iterable, Mapping
 from datetime import UTC, date, tzinfo
 from datetime import datetime as dt
 from decimal import Decimal
@@ -37,20 +37,19 @@ logger: Logger = get_logger(__name__)
 SORT_FILLER = float("-inf")
 DATELIKE_TYPES = frozenset({CastType.DATE, CastType.DATETIME})
 INVALID_TYPES = frozenset({CastType.LOCATION, CastType.NONE})
-NON_SORTABLE = (Mapping, Sequence)
+SORTABLE_TYPES = (str, int, float, Decimal, dt, date, struct_time)
 B = TypeVar("B", Literal[True], Literal[False])
 
 
 def _resolve_uncastable(
-    value: Mapping | Sequence | PrimitiveValue, msg: str, default: SortableValue
-) -> SortableValue | None:
+    value: object, msg: str, default: SortableValue
+) -> SortableValue:
     """
     Handles a value that cannot be cast for a sort key, degrading by type.
 
-    A scalar (``str``/``int``/``struct_time``) is returned uncast since it is
-    already orderable; a container is replaced with ``default``, which the caller
-    supplies as an orderable filler. Every branch logs a warning rather than
-    raising, so a heterogeneous stream still sorts.
+    An orderable scalar (``SORTABLE_TYPES``) is returned uncast. Anything else,
+    containers included, is replaced with ``default``. Every branch logs a warning
+    rather than raising, so a heterogeneous stream still sorts.
 
     Args:
 
@@ -63,15 +62,12 @@ def _resolve_uncastable(
         The original value when it is already orderable, else ``default``.
 
     """
-    if isinstance(value, (str, int, struct_time)):
+    if isinstance(value, SORTABLE_TYPES):
         msg += ". Returning value without casting."
         casted = value
-    elif isinstance(value, NON_SORTABLE):
+    else:
         msg += ". Returning default value."
         casted = default
-    else:
-        msg += ". Returning value without casting."
-        casted = value
 
     logger.warning(msg)
     return casted
@@ -129,7 +125,7 @@ def def_itemgetter(
     default: PrimitiveValue | None = None,
     type_: str | None = None,
     fallback_tzinfo: tzinfo = UTC,
-) -> Callable[[Mapping | PrimitiveValue], SortableValue]:
+) -> Callable[[Mapping[str, object] | PrimitiveValue], SortableValue]:
     """
     Like operator.itemgetter but fills in missing fields with a typed default.
 
@@ -163,7 +159,7 @@ def def_itemgetter(
     sort_default = _resolve_default(cast_type, default)
     invalid_type = cast_type in INVALID_TYPES
 
-    def keyfunc(item: Mapping | PrimitiveValue) -> SortableValue:
+    def keyfunc(item: Mapping[str, object] | PrimitiveValue) -> SortableValue:
         if is_mapping(item):
             value = item.get(attr)
         else:
@@ -175,12 +171,10 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, sort_default)
         elif cast_type is not None:
             casted = cast_value(value, cast_type)
-        elif isinstance(value, (str, int, struct_time)):
+        elif isinstance(value, SORTABLE_TYPES):
             casted = value
-        elif isinstance(value, NON_SORTABLE):
-            casted = _warn_and_default(type(value).__name__, sort_default)
         elif value is not None:
-            casted = value
+            casted = _warn_and_default(type(value).__name__, sort_default)
         else:
             casted = sort_default
 
@@ -192,7 +186,9 @@ def def_itemgetter(
 
             casted = aware.timestamp()
 
-        if casted is None or (isinstance(casted, (float, Decimal)) and isnan(casted)):
+        unsortable = not isinstance(casted, SORTABLE_TYPES)
+
+        if unsortable or (isinstance(casted, (float, Decimal)) and isnan(casted)):
             casted = sort_default
 
         return casted
@@ -205,7 +201,7 @@ def build_sort_key(
     default: PrimitiveValue | None = None,
     type_: str | None = None,
     fallback_tzinfo: tzinfo = UTC,
-) -> Callable[[Mapping | PrimitiveValue], tuple[bool, SortableValue]]:
+) -> Callable[[Mapping[str, object] | PrimitiveValue], tuple[bool, SortableValue]]:
     """
     Builds a sort key that tracks whether the sorted item contains the sort field.
 
@@ -240,7 +236,7 @@ def build_sort_key(
     """
     keyfunc = def_itemgetter(attr, type_=type_, fallback_tzinfo=fallback_tzinfo)
 
-    def key(item: Mapping | PrimitiveValue) -> tuple[bool, SortableValue]:
+    def key(item: Mapping[str, object] | PrimitiveValue) -> tuple[bool, SortableValue]:
         value = item.get(attr) if is_mapping(item) else item
 
         if value is None and default is not None:
@@ -253,7 +249,7 @@ def build_sort_key(
     return key
 
 
-def group_by[T: Mapping | PrimitiveValue](
+def group_by[T: Mapping[str, object] | PrimitiveValue](
     content: Iterable[T], attr: str, default: PrimitiveValue | None = None
 ) -> ItemsView[str, list[T]]:
     """

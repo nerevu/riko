@@ -12,7 +12,7 @@ Examples:
         >>> from riko.modules.hash import pipe
         >>>
         >>> next(pipe({"content": "hello world"}))["hash"]
-        1921504423
+        913045020
 
 Attributes:
 
@@ -23,10 +23,10 @@ Attributes:
 
 from __future__ import annotations
 
-import ctypes
 from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
+from riko.coercion._canonical import IdentityDomain, digest
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -62,7 +62,7 @@ def parser(
 
     Returns:
 
-        The hash, wrapped to an unsigned 32-bit integer.
+        The process independent hash as an unsigned 32-bit integer.
 
     Examples:
 
@@ -71,10 +71,10 @@ def parser(
         >>> item = {"content": "hello world"}
         >>> kwargs = {"stream": item}
         >>> parser(item["content"], None, None, **kwargs)
-        1921504423
+        913045020
 
     """
-    return ctypes.c_uint(hash(content)).value
+    return int(digest(content, IdentityDomain.FINGERPRINT)[:8], 16)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -118,7 +118,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int:
         ...     print((await anext(result))["hash"])
         >>>
         >>> run(main)
-        1921504423
+        913045020
 
     """
     return parser(*args, **kwargs)
@@ -159,10 +159,10 @@ def pipe(*args: Any, **kwargs: object) -> int:
     Examples:
 
         >>> next(pipe({"content": "hello world"}))
-        {'content': 'hello world', 'hash': 1921504423}
+        {'content': 'hello world', 'hash': 913045020}
         >>> kwargs = {"field": "title", "assign": "result"}
         >>> next(pipe({"title": "greeting"}, **kwargs))["result"]
-        528683593
+        333169765
 
     """
     return parser(*args, **kwargs)

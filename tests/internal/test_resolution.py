@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, assert_type, cast
 
 import attrs
 import pytest
@@ -27,6 +27,7 @@ from riko.modules._metadata import get_module_metadata, list_modules
 from riko.modules.truncate import pipe as truncate
 from riko.runtime._importutils import require_interface
 from riko.runtime._module_registry import (
+    ModuleRegistry,
     module_registry,
     register_module,
     reset_module_registry,
@@ -34,6 +35,7 @@ from riko.runtime._module_registry import (
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._registry import Registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
+from riko.runtime._target_registry import TargetRegistry
 from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
 from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
 from riko.runtime._workflow_stores import (
@@ -42,7 +44,8 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
-from riko.types._enums import ExecutionMode
+from riko.types._enums import Backends, ExecutionMode
+from riko.types._wrappers import SubPipe, is_subpipe
 from tests import pyworkflows
 from tests._execution import module_workflow, registered_modules
 from tests._workflows import register_documents
@@ -64,6 +67,12 @@ def _pipe_wrapper(**attrs):
 
 
 _MARKER = _pipe_wrapper()
+
+
+class _FileBackendTarget:
+    backend = Backends.FILE
+
+
 _DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
 
 _META = {
@@ -94,6 +103,13 @@ class TestWorkflowDecorator:
         assert tagged.type == "pipe"
         assert get_module_metadata("truncate", strict=True).type == "operator"
 
+    def test_is_subpipe_narrows_an_untyped_value(self):
+        values: list[object] = [workflow(subtype="transformer")(truncate), truncate]
+        narrowed = [value for value in values if is_subpipe(value)]
+
+        assert_type(narrowed, list[SubPipe])
+        assert narrowed == values[:1]
+
     def test_rejects_positional_arguments(self):
         with pytest.raises(TypeError, match="Pipeline"):
             workflow(object())  # pyright: ignore[reportCallIssue]
@@ -118,6 +134,17 @@ class _FalsyPipe:
 
     def __call__(self, source, **kwargs):
         return source
+
+
+BUILTIN_SHADOWS = [
+    pytest.param(
+        ModuleRegistry(),
+        ModuleDefinition(name="count", sync_pipe=_MARKER),
+        "module",
+        id="module",
+    ),
+    pytest.param(TargetRegistry(), _FileBackendTarget, "target", id="target"),
+]
 
 
 class TestModuleRegistry:
@@ -184,11 +211,14 @@ class TestModuleRegistry:
         fixed_registry.register(definition, replace=True)
         assert fixed_registry.require("tokenizer") is _MARKER
 
-    def test_register_rejects_builtin_shadow_without_replace(self, fixed_registry):
-        with pytest.raises(ValueError, match="shadows a built-in module"):
-            fixed_registry.register(ModuleDefinition(name="count", sync_pipe=_MARKER))
+    @pytest.mark.parametrize(("registry", "entry", "label"), BUILTIN_SHADOWS)
+    def test_register_rejects_builtin_shadow_without_replace(
+        self, registry, entry, label
+    ):
+        with pytest.raises(ValueError, match=f"shadows a built-in {label}"):
+            registry.register(entry)
 
-        assert fixed_registry.registered_names == ()
+        assert registry.registered_names == ()
 
     def test_registered_names_are_sorted(self, fixed_registry):
         fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=_MARKER))
@@ -782,6 +812,21 @@ class TestResolvedDocuments:
         context = Context(ExecutionMode.DESCRIBE_DEPENDENCIES)
         pipe = dispatcher.require("pipe_exclaim")
         assert pipe(context=context) == ["strconcat"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="describing a stored workflow's declared inputs is not yet implemented",
+    )
+    def test_document_description_is_fresh_per_call(self, tmp_path):
+        register_documents(tmp_path)
+        context = Context(ExecutionMode.DESCRIBE)
+        pipe = dispatcher.require("pipe_exclaim")
+        first = pipe(context=context)
+        assert isinstance(first, dict)
+        first["dependencies"].append("mutated")
+        first["inputs"]["mutated"] = {}
+
+        assert pipe(context=context) == {"inputs": {}, "dependencies": ["strconcat"]}
 
     def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
         (tmp_path / "pipe_bad.json").write_text("{bad")

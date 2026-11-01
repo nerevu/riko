@@ -17,6 +17,8 @@ Basic usage::
         pipeline = Pipeline.from_module("fetch", conf={"url": url})
 
 Tests that use this should carry ``@pytest.mark.simulated_network``.
+``ForwardOnly`` stands in for a fetched response body (``r.raw``) when a test needs a
+binary stream that cannot seek, without a server.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import socket
 import threading
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO, RawIOBase
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -36,6 +39,20 @@ if TYPE_CHECKING:
 
 CHUNK = 8192
 URL = "https://example.test/data"
+
+
+class ForwardOnly(RawIOBase):
+    """A binary stream that reads ``data`` once and cannot seek."""
+
+    def __init__(self, data: bytes) -> None:
+        super().__init__()
+        self.inner = BytesIO(data)
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b) -> int:
+        return self.inner.readinto(b)
 
 
 def stub_async_get(content: bytes, content_type: str):

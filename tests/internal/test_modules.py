@@ -7,7 +7,14 @@ import asyncio
 import copy
 import itertools
 import pickle  # noqa: S403
-from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
+import re
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Iterator,
+)
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
 from time import monotonic
@@ -17,23 +24,28 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 import attrs
 import pytest
 
-from riko.bado._backend import Event, async_sleep, create_task_group
+from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
 from riko.bado.itertools import as_async
 from riko.base import _paths as paths_module
 from riko.base._exceptions import ReceiverUnavailableError
 from riko.base._paths import PACKAGE_DIR, get_path
 from riko.base._sentinels import MISSING
 from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
+from riko.coercion._dataclass import build_regex_rule
+from riko.coercion._objectify import objectify
 from riko.definitions._context import Context
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._resource_view import ResourceView
-from riko.modules import _metadata, csv
+from riko.modules import _metadata, csv, fetchtable
 from riko.modules import count as count_module
 from riko.modules import exchangerate as exchangerate_module
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
 from riko.modules._metadata import get_module_metadata
 from riko.modules._prepare import build_conf, resolve_and_cast
+from riko.modules._textops import multi_substitute
+from riko.modules.fetchpage import get_string
+from riko.modules.join import pipe as join
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
 from riko.modules.send import async_pipe as async_send
@@ -45,6 +57,7 @@ from riko.modules.tokenizer import async_pipe as async_tok
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.truncate import async_pipe as async_truncate
 from riko.modules.union import async_pipe as async_union
+from riko.modules.union import pipe as union
 from riko.runtime._pubsub import async_hub
 from riko.runtime._workflow_pipes import workflow
 from riko.types._options import ItemDispatch, ValueDispatch
@@ -59,8 +72,10 @@ from riko.types._wrappers import (
 )
 from riko.types.modules import (
     Conf,
+    CsvConf,
     InferenceSource,
     OperatorReturnKind,
+    RegexConfRule,
     SendConf,
     StrconcatRawConf,
     TokenizerRawConf,
@@ -359,6 +374,29 @@ class TestAsyncOperatorLaziness:
 
         assert any(saw_loop)
 
+    @pytest.mark.timeout(5)
+    @pytest.mark.xfail(
+        strict=True,
+        raises=TimeoutError,
+        reason="streaming an endless async input through the async loop is not yet "
+        "implemented: it reads the whole input before running the embed",
+    )
+    @async_test
+    async def test_async_loop_yields_from_an_endless_source(self) -> None:
+        async def endless() -> AsyncStream:
+            index = 0
+
+            while True:
+                await async_sleep(0)
+                yield {"title": f"a{index} b"}
+                index += 1
+
+        with fail_after(1):
+            stream = async_loop(
+                endless(), embed=async_tok, conf=TOKENIZER_CONF, field="title"
+            )
+            assert await anext(stream) == {"content": "a0"}
+
     @pytest.mark.xfail(
         strict=True,
         reason="async union reads its secondary input to the end before yielding its "
@@ -448,6 +486,33 @@ def _unresolvable(items) -> Nonexistent:  # noqa: F821 # pyright: ignore[reportU
 
 def only(pipe):
     return next(iter(gen_return_inferences(pipe)))
+
+
+async def _async_rows() -> AsyncStream:
+    yield {"x": 1}
+
+
+ASYNC_INPUTS_TO_SYNC_PIPES = [
+    pytest.param(
+        lambda: loop(iter(PARENTS), embed=async_tok, conf=TOKENIZER_CONF),  # pyright: ignore[reportArgumentType]
+        id="loop-async-embed",
+    ),
+    pytest.param(lambda: union([{"x": 0}], others=[_async_rows()]), id="union"),
+    pytest.param(lambda: join([{"x": 0}], other=_async_rows()), id="join"),
+]
+
+
+class TestSyncPipeAsyncInput:
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="an error naming the async input a synchronous pipe was given is not "
+        "yet implemented",
+    )
+    @pytest.mark.parametrize("call", ASYNC_INPUTS_TO_SYNC_PIPES)
+    def test_sync_pipe_names_an_async_input(self, call):
+        with pytest.raises(TypeError, match="async input"):
+            list(call())
 
 
 CLASSIFICATIONS = [
@@ -863,6 +928,29 @@ class TestAsyncLoop:
         assert produced == [0, 0]
         assert closed == ["a", "b"]
 
+    @async_test
+    async def test_closing_the_loop_closes_the_running_child(self):
+        closed: list[str] = []
+
+        async def child(tag: str):
+            try:
+                for index in range(50):
+                    yield {"content": f"{tag}{index}"}
+            finally:
+                closed.append(tag)
+
+        async def _sub(item, context=None, **_):
+            return child(str(item["title"]))
+
+        stream = async_loop(
+            iter([{"title": "a"}, {"title": "b"}]), embed=workflow()(_sub), emit=True
+        )
+
+        assert isinstance(stream, AsyncGenerator)
+        assert await anext(stream) == {"content": "a0"}
+        await stream.aclose()
+        assert closed == ["a"]
+
     @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
     @pytest.mark.anyio
     async def test_unembeddable_embed_passes_parents_through(
@@ -1092,7 +1180,65 @@ class TestPrepare:
         assert captured["view"] is view
 
 
+class _FalsyCaster:
+    """A caster whose truth value is False."""
+
+    def __len__(self) -> int:
+        return 0
+
+    def __call__(self, value: object) -> str:
+        return f"<{value}>"
+
+
+class TestObjectify:
+    def test_objectify_applies_a_falsy_func(self):
+        assert objectify(5, _FalsyCaster()) == "<5>"
+
+
+GET_STRING_CASES = [
+    pytest.param("a<p>x</p>b", "<p>", "</p>", "x", id="between-markers"),
+    pytest.param("<p></p>", "<p>", "</p>", "", id="adjacent-markers"),
+    pytest.param("abc", "<p>", "</p>", "", id="missing-start"),
+    pytest.param("a<p>xy", "<p>", "</p>", "xy", id="missing-end"),
+    pytest.param("abc", "", "c", "ab", id="no-start"),
+]
+
+
+class TestGetString:
+    @pytest.mark.parametrize(("content", "start", "end", "expected"), GET_STRING_CASES)
+    def test_get_string_slices_between_markers(self, content, start, end, expected):
+        assert get_string(content, start, end) == expected
+
+
+class TestMultiSubstitute:
+    def test_a_rule_that_closes_its_group_early_raises(self):
+        """A ``match`` that escapes its rule group leaves no rule to apply."""
+        rule = build_regex_rule(
+            RegexConfRule(field="content", match="a)|(b", replace="x")
+        )
+
+        with pytest.raises(re.error, match="no rule group matched"):
+            multi_substitute("b", [rule])
+
+
 class TestCsvParser:
+    @pytest.mark.parametrize("has_header", [True, False])
+    @pytest.mark.parametrize("module", [csv, fetchtable], ids=["csv", "fetchtable"])
+    def test_empty_csv_yields_no_rows(self, tmp_path, module, has_header):
+        path = tmp_path / "empty.csv"
+        path.write_text("")
+        conf = CsvConf(url=str(path), has_header=has_header)
+        assert list(module.pipe(conf=conf)) == []
+
+    @pytest.mark.parametrize("has_header", [True, False])
+    @pytest.mark.parametrize("module", [csv, fetchtable], ids=["csv", "fetchtable"])
+    @async_test
+    async def test_async_empty_csv_yields_no_rows(self, tmp_path, module, has_header):
+        path = tmp_path / "empty.csv"
+        path.write_text("")
+        conf = CsvConf(url=str(path), has_header=has_header)
+        assert [item async for item in module.async_pipe(conf=conf)] == []
+
     def test_csv_headerless_closes_original_source(self, monkeypatch):
         """
         Ensure ``auto_close`` closes the original fetch after header buffering.

@@ -39,7 +39,7 @@ from typing import (
 
 from attrs import define
 
-from riko.bado._util import as_awaitable
+from riko.bado._util import as_awaitable, maybe_aclosing
 from riko.bado.itertools import (
     as_async,
     async_iter,
@@ -82,7 +82,7 @@ from riko.types._streams import (
     Stream,
     StreamOrValueStream,
 )
-from riko.types._wrappers import PreparedCall
+from riko.types._wrappers import Func, PreparedCall
 from riko.types.modules import Conf, require_conf
 
 from ._assignment import build_assignment, gen_assignments
@@ -97,6 +97,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._values import RikoValue
     from riko.types._wrappers import (
+        AsyncFunc,
         AsyncOperatorParser,
         AsyncOperatorWrapper,
         AsyncOperatorWrapperInput,
@@ -211,7 +212,7 @@ class _AsyncWrapperStream[T]:
 
     __slots__ = ("_agen", "_make")
 
-    def __init__(self, make: Callable[..., Awaitable[AnyIterable[T]]]) -> None:
+    def __init__(self, make: AsyncFunc[AnyIterable[T]]) -> None:
         self._make = make
         self._agen: AsyncIterator[T] | None = None
 
@@ -270,7 +271,7 @@ class Module[B: bool]:
             msg = f"@{cls.__name__} takes either the function to wrap or decoration "
             raise TypeError(msg + "options, not both")
         elif callable(pipe):
-            wrap = cast("Callable[[Callable[..., object]], ModuleWrapper]", cls())
+            wrap = cast("Callable[[Func[object]], ModuleWrapper]", cls())
             result = wrap(pipe)
         else:
             result = super().__new__(cls)
@@ -749,7 +750,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     options: RawCallOptions
 
     @property
-    def parser(self) -> Callable[..., Any]:
+    def parser(self) -> Func[Any]:
         """The undecorated parser the pipe callable wraps."""
         return vars(self.wrapper)["__wrapped__"]
 
@@ -997,8 +998,9 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
 
             processed = async_iter(self._finish(stream))
 
-        async for item in processed:
-            yield item
+        async with maybe_aclosing(processed) as iterator:
+            async for item in iterator:
+                yield item
 
 
 @define(frozen=True, slots=True)
@@ -1790,8 +1792,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
             output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             stream = cast("AsyncOperatorWrapperInternalOutput", output)
 
-            async for item in stream:
-                yield item
+            async with maybe_aclosing(stream) as iterator:
+                async for item in iterator:
+                    yield item
 
         def sync_wrapper(
             items: SyncOperatorWrapperInput | None = None,

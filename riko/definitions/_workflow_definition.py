@@ -817,8 +817,8 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
 
     A module's call options become the node's ``options``, a loop's embedded module and
     its configuration become the node's ``embed``, and a ``write`` module's file-open
-    mode maps to a reconcile mode. A module key with no ``Workflow`` equivalent is
-    rejected rather than silently dropped.
+    mode maps to a reconcile mode. A key with no ``Workflow`` equivalent is rejected
+    rather than silently dropped, as are configuration keys that differ only in case.
 
     Args:
 
@@ -831,8 +831,8 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
 
     Raises:
 
-        InvalidPipelineError: If a module or wire is malformed, or a module key has
-            no ``Workflow`` equivalent.
+        InvalidPipelineError: If a module or wire is malformed, a key has no
+            ``Workflow`` equivalent, or two configuration keys differ only in case.
 
     Examples:
 

@@ -376,7 +376,7 @@ class TestStoredWorkflows:
         example = {
             "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
             "dc:creator": "riko",
-            "id": 2241242391,
+            "id": 1367112638,
             "k:author": "Homepage for a germansocial organization",
             "k:budget_raw": "0 - $250",
             "k:budget_raw1": "0",

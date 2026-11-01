@@ -11,16 +11,17 @@ Attributes:
 
 from __future__ import annotations
 
-import itertools as it
 import re
+from itertools import chain, pairwise
 from operator import itemgetter
 from random import choice
 from typing import TYPE_CHECKING
 
+from ..base._iterutils import partition
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Sequence
 
-    from riko.types._scalars import BasicValue
     from riko.types.modules import FindConfRule, RegexRule
 
 INVALID_FILECHAR_PATTERN = re.compile(r'[<>:"/\\\|\*?%]')
@@ -83,16 +84,17 @@ OPS: dict[str, Callable[[str, re.Match[str]], str]] = {
 }
 
 
-def _gen_words(match, splits: Iterable[BasicValue]):
-    groups = list(it.dropwhile(lambda x: not x, match.groups()))
-
+def _gen_words(groups: Sequence[str | None], splits: Iterable[str]) -> Iterator[str]:
     for s in splits:
         try:
             num = int(s)
         except ValueError:
             word = s
         else:
-            word = next(it.islice(groups, num, num + 1))
+            if not 1 <= num <= len(groups):
+                raise re.error(f"invalid group reference {num}")
+
+            word = groups[num - 1] or ""
 
         yield word
 
@@ -107,10 +109,14 @@ def gen_name(count: int = 2) -> Iterator[str]:
 
 def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
     """
-    Replaces the matches of several regex rules in ``word``.
+    Replaces text using multiple regex rules in a combined pattern.
 
-    All rules share one combined pattern and the first rule's ``flags``. A rule's
-    ``replace`` may refer to a captured group as ``$n``. Adapted from
+    Matches are processed left to right, with earlier rules taking precedence when
+    multiple patterns match at the same position. Each serial rule adds one pass.
+    Parallel rules collectively add one pass. Every pass considers all rules.
+
+    All rules share the first rule's ``flags``. Replacements may reference captured
+    groups using ``$n``. Adapted from
     http://code.activestate.com/recipes/576710-multi-regex-single-pass-replace-of-multiple-regexe/
 
     Args:
@@ -122,35 +128,33 @@ def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
 
         ``word`` with each rule's matches replaced.
 
+    Raises:
+
+        re.error: If a rule's ``replace`` refers to a group its ``match`` lacks.
+
     """
     flags = rules[0]["flags"]
-    tuples = ((p, r["match"]) for p, r in enumerate(rules))
-    regexes = (f"(?P<match_{p}>{r})" for p, r in tuples)
+    pairs = ((p, r["match"]) for p, r in enumerate(rules))
+    regexes = (f"(?P<match_{p}>{r})" for p, r in pairs)
     pattern = "|".join(regexes)
     regex = re.compile(pattern, flags)
     resplit = re.compile("\\$(\\d+)")
-    rules_in_series = filter(itemgetter("series"), rules)
-    rules_in_parallel = (r for r in rules if not r["series"])
+    starts = (regex.groupindex[f"match_{p}"] for p, _ in enumerate(rules))
+    spans = tuple(pairwise(chain(starts, [regex.groups + 1])))
+    rules_in_series, rules_in_parallel = partition(rules, itemgetter("series"))
+    passes = len(rules_in_series) + any(rules_in_parallel)
 
-    try:
-        has_parallel = [next(rules_in_parallel)]
-    except StopIteration:
-        has_parallel = []
-
-    for _ in it.chain(rules_in_series, has_parallel):
+    for _ in range(passes):
         prev_name = None
         prev_is_series = None
         i = 0
 
         for match in regex.finditer(word):
-            items = match.groupdict().items()
-            item = next(filter(itemgetter(1), items))
+            if (name := match.lastgroup) is None:
+                raise re.error("no rule group matched", pattern)
 
-            if not item:
-                continue
-
-            name = item[0]
-            rule = rules[int(name[6:])]
+            position = int(name[6:])
+            rule = rules[position]
             series = rule.get("series")
             kwargs = {"count": rule["count"], "series": series}
             is_previous = name == prev_name
@@ -165,16 +169,17 @@ def multi_substitute(word: str, rules: Sequence[RegexRule]) -> str:
             prev_is_series = series
 
             if resplit.findall(rule["replace"]):
-                splits = resplit.split(rule["replace"])
-                words = _gen_words(match, splits)
+                first, last = spans[position]
+                groups = match.groups()[first : last - 1]
+                words = _gen_words(groups, resplit.split(rule["replace"]))
+                replacement = "".join(words)
             else:
-                splits = rule["replace"]
-                start = match.start() + i
-                end = match.end() + i
-                words = [word[:start], splits, word[end:]]
-                i += rule["offset"]
+                replacement = rule["replace"]
 
-            word = "".join(words)
+            start = match.start() + i
+            end = match.end() + i
+            word = f"{word[:start]}{replacement}{word[end:]}"
+            i += len(replacement) - (end - start)
 
     return word
 

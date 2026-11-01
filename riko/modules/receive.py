@@ -32,12 +32,14 @@ Attributes:
 
 from __future__ import annotations
 
+from functools import partial
 from inspect import signature
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 
 from meza.fntools import dfilter
 
+from riko.base._iterutils import noop
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING, StreamState, is_missing_type
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
@@ -92,6 +94,7 @@ def register_receiver(
 
     if name not in sync_hub.receivers:
         fkwargs = dfilter(func_kwargs or {}, ["conf", "assign", "stream"])
+        apply = partial(_apply, func, **fkwargs) if func is not None else noop
 
         @coroutine(registry_name=name, maxlen=maxlen)
         def receiver() -> Receiver:
@@ -111,7 +114,7 @@ def register_receiver(
                             on_receive(item)
                             continue
 
-                        result = _apply(func, item, **fkwargs) if func else item
+                        result = apply(item)
 
                     queue = sync_hub.queues[name]
 
@@ -154,13 +157,12 @@ async def async_parser(
     """
     name = objconf.name or "".join(gen_name())
     fkwargs = dfilter(kwargs, ["conf", "assign", "stream"])
+    apply = partial(_apply, func, **fkwargs) if func is not None else noop
     results: list[Item] = []
 
     async with async_hub.subscribe(name) as receive_stream:
         async for item in receive_stream:
-            results.append(
-                cast("Item", _apply(func, item, **fkwargs) if func else item)
-            )
+            results.append(cast("Item", apply(item)))
 
     return iter(results)
 

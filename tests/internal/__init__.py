@@ -15,9 +15,9 @@ Index (file, then the subjects it owns, in file order):
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
                               ReadDocument, Timeouts, SubprocessImports, LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
-                              Pythonise, ModuleCategory, GeneratedNamesDrift,
-                              GenerateModuleIds, ConfigCodegen, WorkflowFixtures,
-                              WorkflowProbes, ImportSurface
+                              Pythonise, ModuleCategory, ProviderClassCollision,
+                              GeneratedNamesDrift, GenerateModuleIds, ConfigCodegen,
+                              WorkflowFixtures, WorkflowProbes, ImportSurface
     test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
@@ -29,14 +29,16 @@ Index (file, then the subjects it owns, in file order):
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, EmbedAdaptation, Embed,
                               PreparedCall, PreparedNode
-    test_io.py                Fetch, AsyncUrlOpen, Reencode, ConversionFuncs,
-                              ChunkContent, AsyncMapStream, AsyncMerge, GatherResults,
+    test_io.py                ReplayReader, Fetch, AsyncUrlOpen, Reencode,
+                              ConversionFuncs, ChunkContent, FetchTextBom,
+                              AsyncMapStream, AsyncMerge, GatherResults,
                               CapabilityFlags, RegisterTarget, ConverterPath, Csv,
                               Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
-                              AsyncOperatorLaziness, ReturnInference, ModuleMetadata,
-                              WrapperMeta, Loop, Processor, Prepare, CsvParser,
-                              ExchangeRate, AsyncSend, AsyncReceive,
+                              AsyncOperatorLaziness, SyncPipeAsyncInput,
+                              ReturnInference, ModuleMetadata, WrapperMeta, Loop,
+                              Processor, Prepare, Objectify, GetString, MultiSubstitute,
+                              CsvParser, ExchangeRate, AsyncSend, AsyncReceive,
                               AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
@@ -45,11 +47,11 @@ Index (file, then the subjects it owns, in file order):
                               PackageStore, DirectoryStore, CompositeStore, Catalog,
                               ResolvedDocuments
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
-                              CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
-                              ParseDateString, ResolveAwareDatetime, TtToDatedict,
-                              DotDict, GetSkip, Any2dict, XmlParser, AugmentEntries,
-                              ResolveDate, Graph, GraphIndex, LoadSettings,
-                              RequireGuards, RequireFromForm, ResolveEnum,
-                              NormalizeStrs, FieldNames, TypedDictKeys, Logging,
-                              RikoError
+                              CastDatetime, OverloadTypes, ResolveCastType,
+                              DefItemgetter, Fromdict, ParseDateString,
+                              ResolveAwareDatetime, TtToDatedict, DotDict, GetSkip,
+                              Any2dict, XmlParser, AugmentEntries, ResolveDate, Graph,
+                              GraphIndex, LoadSettings, RequireGuards, RequireFromForm,
+                              ResolveEnum, NormalizeStrs, FieldNames, TypedDictKeys,
+                              Logging, RikoError
 """

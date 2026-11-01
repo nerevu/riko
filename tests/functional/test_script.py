@@ -175,7 +175,7 @@ class TestRunPipe:
         """The usage example still runs through the CLI."""
         ran = run_command("runpipe", "usage")
         assert ran.returncode == 0, ran.stderr
-        assert "'hash': 197222720" in ran.stdout
+        assert "'hash': 456903819" in ran.stdout
 
     def test_run_pipe_workflow_document(self, tmp_path):
         workflow_file = tmp_path / "flow.json"

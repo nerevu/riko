@@ -53,6 +53,7 @@ from riko.types.modules import (
 )
 from tests import aresolve, async_test, skipif_issync
 from tests._execution import (
+    AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     RecordingSink,
     agen_source,
@@ -754,6 +755,7 @@ class TestClose:
 CLOSING_SEEDS = [
     pytest.param(gen_closing_seed, id="generator"),
     pytest.param(ClosingAsyncIterator, id="async-iterator"),
+    pytest.param(AsyncCloseAsyncIterator, id="async-close-iterator"),
 ]
 
 

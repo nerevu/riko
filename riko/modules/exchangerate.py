@@ -161,7 +161,7 @@ async def async_parser(
         r = await async_get(objconf.url, params=objconf.param)
         rates = await async_json(r)
     else:
-        content = await async_url_read(objconf.url)
+        content = await async_url_read(objconf.url, encoding=objconf.encoding)
         loaded = loads(content).get("rates", {})
         rates = require_mapping(loaded, "rates", error=TypeError)
 

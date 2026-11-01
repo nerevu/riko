@@ -820,6 +820,12 @@ class TestDocstyle:
 VERB_TABLE_MARKERS = [
     pytest.param("md", "<!-- verbs -->\n<!-- /verbs -->", "| `load` |", id="md"),
     pytest.param("rst", ".. begin verbs\n.. end verbs", "| ``load`` ", id="rst"),
+    pytest.param(
+        "md",
+        "<!-- verb-rules -->\n<!-- /verb-rules -->",
+        "| `load` | Loads | **MUST** cross",
+        id="md-rules",
+    ),
 ]
 
 
@@ -1900,6 +1906,12 @@ def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return warnings
 
 
+MALFORMED_JSON = [
+    pytest.param("{bad json", id="syntax"),
+    pytest.param('{"nodes": {"a": {}, "a": {}}}', id="duplicate-key"),
+]
+
+
 class TestReadDocument:
     """Reading JSON inputs from paths and stdin."""
 
@@ -1908,10 +1920,11 @@ class TestReadDocument:
         assert read_document("no-such-flow.json") == (None, "no-such-flow")
         assert any("Unable to read input file" in warning for warning in warnings)
 
-    def test_read_document_reports_malformed_json(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize("text", MALFORMED_JSON)
+    def test_read_document_reports_malformed_json(self, text, tmp_path, monkeypatch):
         warnings = _record_warnings(monkeypatch)
         malformed = tmp_path / "malformed.json"
-        malformed.write_text("{bad json", encoding="utf-8")
+        malformed.write_text(text, encoding="utf-8")
         assert read_document(str(malformed)) == (None, "malformed")
         assert any("Unable to parse input" in warning for warning in warnings)
 

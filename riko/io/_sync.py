@@ -32,6 +32,7 @@ from mezmorize.utils import get_cache_type
 from riko._package import __version__
 from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
 from riko.base._paths import is_http_url, normalize_url
+from riko.base._sentinels import MISSING, is_missing_type
 
 from ._reencode import reencode
 
@@ -41,10 +42,20 @@ if TYPE_CHECKING:
     from http.client import HTTPResponse
     from urllib.response import addinfourl
 
+    from _typeshed import WriteableBuffer
+    from urllib3.response import HTTPResponse as URLLib3Response
+
     from riko.types._scalars import AnyStr
+    from riko.types._streams import Stream
     from riko.types._values import BasicArg
 
-    from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
+    from ._filelike import (
+        BinaryFileLike,
+        BinaryReadable,
+        FileLike,
+        Opener,
+        StringFileLike,
+    )
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
@@ -235,6 +246,45 @@ def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
             f.close()
 
 
+def gen_rows(rows: Stream) -> Stream:
+    """
+    Generates the rows of a table read by meza, or none when the source is empty.
+
+    meza's csv reader raises ``RuntimeError`` on an empty source instead of
+    yielding nothing; that error is dropped before the first row.
+
+    Args:
+
+        rows: The rows read from the table source.
+
+    Yields:
+
+        Each row, in order.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>> from meza.io import read_csv
+        >>>
+        >>> list(gen_rows(read_csv(StringIO("a\\n1\\n"))))
+        [{'a': '1'}]
+        >>> list(gen_rows(read_csv(StringIO(""))))
+        []
+
+    """
+    first = MISSING
+
+    try:
+        first = next(rows, MISSING)
+    except RuntimeError as err:
+        if not isinstance(err.__cause__, StopIteration):
+            raise
+
+    if not is_missing_type(first):
+        yield first
+        yield from rows
+
+
 @overload
 def buffer(
     f: StringFileLike, binary: bool = ..., encoding: str = ...
@@ -257,9 +307,9 @@ def buffer(
     """
     Buffers ``f`` into a re-readable copy.
 
-    The spool stays in memory until it exceeds the streaming threshold, then
-    spills to disk. Byte streams are decoded when ``encoding`` is set; ``binary``
-    is auto-detected from the first chunk when not supplied.
+    The spool stays in memory until it exceeds the streaming threshold, then spills to
+    disk. Byte streams are decoded when ``encoding`` is set. ``binary`` is auto-detected
+    from the first chunk when not supplied.
 
     Args:
 
@@ -348,6 +398,75 @@ def seekable(
     return f if rewound else buffer(f, binary=binary, encoding=encoding)
 
 
+class ReplayReader(RawIOBase):
+    """
+    Reads a binary stream once, and then replays it from where reading started.
+
+    A seekable source seeks back. A forward-only source (e.g., an HTTP response body)
+    is spooled as it is read, so the copy holds only what was read before
+    :meth:`replay`, and spills to disk past the streaming threshold. Closing the
+    reader closes the copy, not ``source``.
+
+    Examples:
+
+        >>> from io import BytesIO
+        >>>
+        >>> with ReplayReader(BytesIO(b"abcdef")) as reader:
+        ...     reader.read(2)
+        ...     reader.replay()
+        ...     reader.read()
+        b'ab'
+        b'abcdef'
+
+    """
+
+    def __init__(self, source: BinaryReadable) -> None:
+        super().__init__()
+        self.source = source
+        self.start = source.tell() if source.seekable() else None
+
+        if self.start is None:
+            self.spool = SpooledTemporaryFile(  # noqa: SIM115
+                max_size=STREAMING_THRESHOLD, mode="w+b"
+            )
+        else:
+            self.spool = None
+
+        self.replaying = False
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: WriteableBuffer) -> int:
+        view = memoryview(b).cast("B")
+        size = len(view)
+
+        if self.spool is None:
+            data = self.source.read(size) or b""
+        elif self.replaying:
+            data = self.spool.read(size) or self.source.read(size) or b""
+        else:
+            data = self.source.read(size) or b""
+            self.spool.write(data)
+
+        view[: len(data)] = data
+        return len(data)
+
+    def replay(self) -> None:
+        """Rewinds to where reading started."""
+        if self.spool is None:
+            self.source.seek(0 if self.start is None else self.start)
+        else:
+            self.spool.seek(0)
+            self.replaying = True
+
+    def close(self) -> None:
+        if self.spool is not None:
+            self.spool.close()
+
+        super().close()
+
+
 @overload
 def opener(
     url: str,
@@ -371,7 +490,7 @@ def opener(
     binary: Literal[True],
     timeout: float | None = settings.fetch_timeout,
     **_: object,
-) -> tuple[RawIOBase, str | None]: ...
+) -> tuple[addinfourl | URLLib3Response, str | None]: ...
 @overload
 def opener(
     url: str,
@@ -451,7 +570,7 @@ def opener(
             response = BytesIO(r.content)
             r.close()
         elif binary:
-            response = cast("RawIOBase", r.raw)
+            response = r.raw
         elif memoize:
             response = StringIO(r.text)
             r.close()

@@ -13,20 +13,24 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as native_etree  # noqa: N813, S405
 from html.parser import HTMLParser
-from io import BytesIO, RawIOBase, StringIO
+from io import StringIO
 from itertools import chain
-from json import JSONDecodeError, load, loads
-from typing import TYPE_CHECKING, cast
+from json import JSONDecodeError, dumps, load, loads
+from typing import TYPE_CHECKING
 from xml.etree.ElementTree import Element, ElementTree  # noqa: S405
 
 import feedparser
 import html5lib
+from typing_extensions import TypeIs
 
 from riko.base._config import STREAMING_THRESHOLD
 from riko.base._guards import is_mapping
 from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING
 from riko.coercion._sequences import listize
+from riko.io._filelike import is_binary_readable
+from riko.io._sync import Fetch, ReplayReader
 
 from ._dotdict import DotDict
 
@@ -34,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
     from logging import Logger
 
-    from riko.io._filelike import FileLike
+    from riko.io._filelike import BinaryReadable, FileLike
     from riko.types._rss import ParsedFeed
     from riko.types._streams import Item, Stream
     from riko.types._values import RikoDict, Stringy, StringyDict
@@ -68,6 +72,7 @@ type AnyElementTree = (
 )
 
 type AnyElement = nativeElement | lxmlElement
+type JsonEvent = tuple[str, str, object]
 
 IS_FASTFEEDPARSER: bool = fastfeedparser is not None
 
@@ -121,6 +126,8 @@ if TYPE_CHECKING:
 
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
+
+HAS_IJSON = ijson is not None and IJSON_IS_NATIVE
 
 
 class LinkParser(HTMLParser):
@@ -420,9 +427,9 @@ def xml2etree(
 def _get_value(
     i: StringyDict,
     value: Stringy | None = None,
-    tag="content",
-    append=True,
-    strip=False,
+    tag: str = "content",
+    append: bool = True,
+    strip: bool = False,
 ) -> StringyDict:
     content: Stringy = i.get(tag, "")
 
@@ -481,6 +488,114 @@ def element2dict(element: AnyElement) -> StringyDict:
     return i
 
 
+def _is_json_records(value: object) -> TypeIs[RikoDict | list[RikoDict | None] | str]:
+    return is_mapping(value) or isinstance(value, list | str)
+
+
+def _gen_json_records(value: object, path: str) -> Stream:
+    """
+    Generates the records a parsed JSON value holds.
+
+    A missing ``path``, a number, a boolean, and ``null`` logs a warning and yields
+    nothing.
+
+    Examples:
+
+        >>> list(_gen_json_records([{"a": 1}, None], ""))
+        [{'a': 1}]
+        >>> list(_gen_json_records(5, "a.b"))
+        []
+
+    """
+    if _is_json_records(value):
+        yield from any2dict(value, ext=None)
+    elif value is MISSING:
+        logger.warning(f"the JSON document has no value at {path!r}")
+    else:
+        location = f"value at {path!r}" if path else "document"
+        logger.warning(f"the JSON {location} is the scalar {dumps(value)}, not records")
+
+
+def _get_ijson_source(content: FileLike | str) -> BinaryReadable | None:
+    """
+    Gets the binary stream to parse incrementally, or ``None`` to parse in memory.
+
+    A ``Fetch`` is read through its file. A stream that cannot seek always streams. One
+    that can streams when at least ``STREAMING_THRESHOLD`` bytes remain.
+    """
+    stream = content.file if isinstance(content, Fetch) else content
+    source = None
+
+    if HAS_IJSON and is_binary_readable(stream) and stream.seekable():
+        start = stream.tell()
+        size = stream.seek(0, 2) - start
+        stream.seek(start)
+        source = stream if size >= STREAMING_THRESHOLD else None
+    elif HAS_IJSON and is_binary_readable(stream):
+        source = stream
+
+    return source
+
+
+def _find_json_event(events: Iterator[JsonEvent], path: str) -> JsonEvent:
+    """
+    Gets the parse event that starts the value at ``path``.
+
+    Keys match case-insensitively, the way ``DotDict`` paths do.
+
+    """
+    keys = path.lower().split(".") if path else []
+    matched: list[str] = []
+    found = "", "", MISSING
+
+    for prefix, kind, value in events:
+        if len(matched) == len(keys):
+            found = prefix, kind, value
+            break
+
+        expected = keys[len(matched)]
+        joined = ".".join(matched)
+
+        if kind == "map_key" and prefix == joined and str(value).lower() == expected:
+            matched.append(str(value))
+
+    return found
+
+
+def _gen_streamed_records(source: BinaryReadable, path: str) -> Stream:
+    if ijson is None:
+        raise ImportError("ijson is required for streamed JSON parsing")
+
+    with ReplayReader(source) as reader:
+        try:
+            events = ijson.parse(reader, use_float=True)
+            prefix, kind, value = _find_json_event(events, path)
+
+            if kind in {"start_array", "start_map"}:
+                reader.replay()
+
+                if kind == "start_array":
+                    prefix = f"{prefix}.item" if prefix else "item"
+
+                items = ijson.items(reader, prefix, use_float=True)
+                yield from gen_non_none(items)
+            else:
+                yield from _gen_json_records(value, path)
+        except ijson.JSONError as e:
+            logger.error(e)
+
+
+def _get_json_value(document: object, path: str) -> object:
+    if not path:
+        value = document
+    elif is_mapping(document):
+        value = DotDict(document).get(path, MISSING)
+    else:
+        value = MISSING
+
+    return value
+
+
 def any2dict(
     content: FileLike | RikoDict | list[RikoDict | None] | str,
     ext: str | None = "xml",
@@ -515,39 +630,24 @@ def any2dict(
         elif root is not None:
             yield element2dict(root)
     elif ext == "json":
-        if not IJSON_IS_NATIVE:
-            use_ijson = False
-        elif isinstance(content, BytesIO):
-            size = content.seek(0, 2)
-            content.seek(0)
-            use_ijson = size >= STREAMING_THRESHOLD
-        else:
-            use_ijson = isinstance(content, RawIOBase)
-
-        if use_ijson and ijson:
-            if path and not path.endswith(".item"):
-                prefix = f"{path}.item"
-            else:
-                prefix = path
-
-            items = ijson.items(content, prefix, use_float=True)
-            yield from cast("Stream", items)
+        if (source := _get_ijson_source(content)) is not None:
+            yield from _gen_streamed_records(source, path)
         elif isinstance(content, str):
             try:
                 json = loads(content)
             except JSONDecodeError as e:
                 logger.error(e)
             else:
-                value = DotDict(json).get(path, "") if path else json
-                yield from any2dict(cast("list[RikoDict | None]", value), ext=None)
+                value = _get_json_value(json, path)
+                yield from _gen_json_records(value, path)
         else:
             try:
                 json_obj = load(content)
             except (JSONDecodeError, ValueError) as e:
                 logger.error(e)
             else:
-                value = DotDict(json_obj).get(path, "") if path else json_obj
-                yield from any2dict(cast("RikoDict", value), ext=None)
+                value = _get_json_value(json_obj, path)
+                yield from _gen_json_records(value, path)
     elif ext:
         raise TypeError(f"Invalid file type: '{ext}'")
     elif isinstance(content, str):

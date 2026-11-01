@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -447,6 +448,13 @@ ASYNC_WRITE_ITERABLES = [
 ]
 
 
+SPLIT_MULTIBYTE_WRITES = [
+    pytest.param(iter([b"h\xc3", b"\xa9llo"]), None, id="iterator"),
+    pytest.param("héllo".encode(), 2, id="bytes"),
+    pytest.param(BytesIO("héllo".encode()), 2, id="bytes-io"),
+]
+
+
 class TestAsyncWriteIterables:
     """``async_write`` writes each ``str``/``bytes`` element of an iterable."""
 
@@ -460,3 +468,12 @@ class TestAsyncWriteIterables:
         path = tmp_path / "out.txt"
         assert await async_write(path, content, mode=mode) == written
         assert path.read_bytes() == expected
+
+    @pytest.mark.parametrize(("content", "chunksize"), SPLIT_MULTIBYTE_WRITES)
+    @async_test
+    async def test_decodes_a_character_split_across_chunks(
+        self, tmp_path, content, chunksize
+    ):
+        path = tmp_path / "out.txt"
+        assert await async_write(path, content, mode="w", chunksize=chunksize) == 5
+        assert path.read_text(encoding="utf-8") == "héllo"

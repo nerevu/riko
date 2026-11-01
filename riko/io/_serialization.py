@@ -232,7 +232,7 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
     """
     convert = _require_converter(fmt)
     require = partial(require_mapping, what="item", error=TypeError)
-    thawed = map(thaw, map(require, items))
+    thawed = (thaw(require(item)) for item in items)
     first = next(thawed, None)
 
     if first is None and fmt == Formats.GEOJSON:

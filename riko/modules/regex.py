@@ -242,6 +242,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     Raises:
 
         TypeError: If ``conf`` has no ``rule`` key.
+        re.error: If a rule's ``replace`` refers to a group its ``match`` lacks.
 
     Notes:
 
@@ -325,6 +326,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     Raises:
 
         TypeError: If ``conf`` has no ``rule`` key.
+        re.error: If a rule's ``replace`` refers to a group its ``match`` lacks.
 
     Notes:
 

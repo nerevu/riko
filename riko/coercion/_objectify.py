@@ -133,7 +133,7 @@ def objectify[T, R](
     """
     if is_mapping(data):
         objectified = Objectify(data, func=func, **defaults)
-    elif func:
+    elif func is not None:
         if isinstance(data, (str, struct_time)):
             objectified = func(data)
         elif isinstance(data, Sequence):

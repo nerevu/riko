@@ -29,6 +29,7 @@ from riko.types._wrappers import is_subpipe
 from ._document import read_document, require_workflow
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from types import ModuleType
 
     from riko.types._io import PathLike
@@ -109,7 +110,9 @@ def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
 
 
 async def runner(
-    async_pipe: AsyncModuleWrapper, test: bool = False, cb: Callable | None = None
+    async_pipe: AsyncModuleWrapper,
+    test: bool = False,
+    cb: Callable[[Sequence[object]], object] | None = None,
 ) -> None:
     stream = async_pipe(**build_pipe_kwargs(async_pipe, test))
     result = await alist(stream)

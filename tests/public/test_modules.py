@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import gc
+import re
 import sqlite3
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Generator, Iterator, Mapping
 from datetime import datetime, timedelta, timezone
 from inspect import isawaitable
 from itertools import count
@@ -14,8 +15,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.bado._backend import create_task_group
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
 from riko.definitions._context import Context
@@ -34,9 +37,12 @@ from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.filter import pipe as filter_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
+from riko.modules.receive import async_pipe as async_receive_pipe
 from riko.modules.receive import pipe as receive_pipe
+from riko.modules.regex import async_pipe as async_regex
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
+from riko.modules.send import async_pipe as async_send_pipe
 from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
@@ -46,10 +52,12 @@ from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
+    FetchPageConf,
     FilterConf,
     FilterConfRule,
     InputConf,
     JoinConf,
+    ReceiveConf,
     RegexConf,
     RegexConfRule,
     RenameConf,
@@ -58,7 +66,7 @@ from riko.types.modules import (
     SortConfRule,
     XpathFetchPageConf,
 )
-from tests import async_test
+from tests import async_test, run_python
 from tests._lifecycle import LOOKAHEAD
 from tests._loopback import loopback_url
 
@@ -139,6 +147,22 @@ class TestFetchModules:
 
         with pytest.raises(OSError, match="No such file"):
             await alist(pipeline)
+
+    @async_test
+    async def test_async_fetchpage_decodes_with_the_configured_encoding(self, tmp_path):
+        """An async read honors ``encoding`` as the sync read does (latin-1 page)."""
+        path = tmp_path / "latin1.html"
+        path.write_bytes("<title>café</title>".encode("latin-1"))
+        conf = FetchPageConf(
+            {
+                "url": str(path),
+                "start": "<title>",
+                "end": "</title>",
+                "encoding": "latin-1",
+            }
+        )
+        pipeline = Pipeline.from_module("fetchpage", conf=conf)
+        assert list(pipeline) == await alist(pipeline) == ["café"]
 
 
 async def _titles(conf):
@@ -319,8 +343,60 @@ class TestRename:
         conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
         assert next(rename({"content": ""}, conf=conf)) == {"greeting": ""}
 
+    def test_rename_to_the_empty_key(self):
+        """An empty ``newval`` renames to the empty key; an omitted one deletes."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="")})
+        assert dict(next(rename({"content": "hi"}, conf=conf))) == {"": "hi"}
+
+
+MULTI_REPLACE_CASES = [
+    pytest.param([("(hello)", "[$1]")], "say [hello] world", id="group-keeps-context"),
+    pytest.param([("l", "LL")], "say heLLLLo worLLd", id="longer-replacement-shifts"),
+    pytest.param(
+        [("(a?)", "[$1]")],
+        "[]s[a][]y[] []h[]e[]l[]l[]o[] []w[]o[]r[]l[]d[]",
+        id="zero-width-group",
+    ),
+    pytest.param([("$", "!")], "say hello world!", id="end-anchor"),
+    pytest.param([("^", "!")], "!say hello world", id="start-anchor"),
+    pytest.param(
+        [("(h)(e)", "$2$1"), ("(o)", "<$1>")], "say ehll<o> w<o>rld", id="two-rules"
+    ),
+]
+
 
 class TestRegex:
+    @pytest.mark.parametrize(("rules", "expected"), MULTI_REPLACE_CASES)
+    def test_multi_regex_matches_single_rule_replacement(self, rules, expected):
+        """``multi`` replaces exactly as the single-rule path does."""
+        item = {"content": "say hello world"}
+        conf_rules = [
+            RegexConfRule(field="content", match=m, replace=r) for m, r in rules
+        ]
+        multi = next(regex(item, conf=RegexConf({"rule": conf_rules, "multi": True})))
+        single = next(regex(item, conf=RegexConf({"rule": conf_rules})))
+        assert multi == {"content": expected}
+        assert single == multi
+
+    @pytest.mark.parametrize(("rules", "expected"), MULTI_REPLACE_CASES)
+    @async_test
+    async def test_async_multi_regex_matches_single_rule_replacement(
+        self, rules, expected
+    ):
+        conf_rules = [
+            RegexConfRule(field="content", match=m, replace=r) for m, r in rules
+        ]
+        conf = RegexConf({"rule": conf_rules, "multi": True})
+        stream = async_regex({"content": "say hello world"}, conf=conf)
+        assert await anext(stream) == {"content": expected}
+
+    def test_multi_regex_rejects_a_missing_group_reference(self):
+        rule = RegexConfRule(field="content", match="(hello)", replace="$3")
+        conf = RegexConf({"rule": rule, "multi": True})
+
+        with pytest.raises(re.error, match="invalid group reference 3"):
+            next(regex({"content": "say hello world"}, conf=conf))
+
     def test_regex_skips_absent_field(self):
         """A regex rule naming an absent field leaves the item untouched."""
         conf = RegexConf(
@@ -333,6 +409,19 @@ SLUGIFY_CASES = [
     pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
     pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
 ]
+
+
+HASH_PROBE = (
+    "from riko.modules.hash import pipe; "
+    "print(next(pipe({'content': 'hello world'}))['hash'])"
+)
+
+
+class TestHash:
+    def test_hash_is_the_same_under_every_hash_seed(self):
+        """Two interpreters with different hash seeds produce the same hash."""
+        outputs = {run_python("-c", HASH_PROBE, hash_seed=seed).stdout for seed in "12"}
+        assert outputs == {"913045020\n"}
 
 
 class TestSlugify:
@@ -444,6 +533,58 @@ class TestSort:
         assert _values(sort_pipe(items, conf=conf), "d") == expected
 
 
+class _FalsyFunc:
+    """A receive ``func`` whose truth value is False."""
+
+    def __len__(self) -> int:
+        return 0
+
+    def __call__(self, item: Item) -> dict[str, object]:
+        return {**item, "seen": True}
+
+
+class TestReceive:
+    def test_receive_applies_a_falsy_func(self):
+        conf = ReceiveConf(name="falsy-func", wait=0.01, max_wait=2)
+        receiver = receive_pipe(conf=conf, func=_FalsyFunc())
+        next(receiver)
+        list(send_pipe([{"x": 0}], others=["falsy-func"]))
+        received = next(item for item in receiver if "state" not in item)
+        assert received == {"x": 0, "seen": True}
+
+    @async_test
+    async def test_async_receive_applies_a_falsy_func(self):
+        received: list[Item] = []
+
+        async def collect() -> None:
+            conf = ReceiveConf(name="async-falsy-func")
+            stream = async_receive_pipe(conf=conf, func=_FalsyFunc())
+            received.extend([item async for item in stream])
+
+        async with create_task_group() as tg:
+            tg.start_soon(collect)
+            await alist(async_send_pipe([{"x": 0}], others=["async-falsy-func"]))
+
+        assert received == [{"x": 0, "seen": True}]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="releasing a receive channel when its pipe is closed early is not yet "
+        "implemented",
+    )
+    def test_receive_closed_early_releases_its_channel(self):
+        conf = ReceiveConf(name="closed-early", wait=0.01, max_wait=2)
+        first = receive_pipe(conf=conf)
+        assert isinstance(first, Generator)
+        next(first)
+        first.close()
+        second = receive_pipe(conf=conf, func=_FalsyFunc())
+        next(second)
+        list(send_pipe([{"x": 0}], others=["closed-early"]))
+        received = next(item for item in second if "state" not in item)
+        assert received == {"x": 0, "seen": True}
+
+
 class TestSend:
     def test_send_populates_ids_when_given(self):
         """The explicit ``ids`` parameter records each target's delivery id."""
@@ -488,6 +629,18 @@ MISSING_OPERANDS = [
     pytest.param(join_pipe, "other", [], id="join-empty"),
     pytest.param(send_pipe, "others", [], id="send-empty"),
 ]
+
+
+class TestUdf:
+    def test_sync_call_rejects_an_awaitable_result(self):
+        async def double(item):
+            return {"y": item["x"] * 2}
+
+        def deferred(item):
+            return double(item)
+
+        with pytest.raises(InvalidPipelineError, match="iterate with `async for`"):
+            list(udf_pipe([{"x": 1}], func=deferred))
 
 
 class TestRequiredOperands:

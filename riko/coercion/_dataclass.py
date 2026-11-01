@@ -179,7 +179,6 @@ def build_regex_rule(
         "replace": replace,
         "default": rule.default,
         "field": rule.field,
-        "offset": rule.offset or 0,
         "series": rule.seriesmatch,
     }
 

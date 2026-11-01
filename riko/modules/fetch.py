@@ -100,7 +100,7 @@ def parser(
     """
     Fetches the feed and returns its entries.
 
-    ``encoding`` and ``memoize`` are honored here.
+    ``encoding`` is honored here; ``memoize`` is not.
 
     Args:
 
@@ -201,8 +201,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
             url (str): The feed to fetch, local or remote. Required.
             encoding (str): Feed encoding (default: "utf-8").
-            memoize (bool): Whether to cache the fetched feed (default:
-                False).
+            memoize (bool): Accepted but not yet honored: the feed is fetched
+                on every run (default: False).
 
         context (Context): the run environment
 

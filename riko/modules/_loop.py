@@ -102,9 +102,10 @@ async def _afold_parent(
 ) -> AsyncStream:
     yielded = False
 
-    async for value in as_async(results):
-        yielded = True
-        yield value if emit else cast("Item", {**parent, assign: value})
+    async with maybe_aclosing(as_async(results)) as iterator:
+        async for value in iterator:
+            yielded = True
+            yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -145,8 +146,11 @@ async def _arun_loop(
         items = await maybe_async(embedder, parent)
         stream = _take(items, count)
 
-        async for value in _afold_parent(parent, stream, assign, emit):
-            yield value
+        async with maybe_aclosing(
+            _afold_parent(parent, stream, assign, emit)
+        ) as folded:
+            async for value in folded:
+                yield value
 
 
 def loop_embed_sync(

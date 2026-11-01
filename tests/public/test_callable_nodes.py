@@ -21,7 +21,7 @@ from tests._execution import registered_modules
 from tests._lifecycle import VALUE, tokenized
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator, Mapping
+    from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
 
     from riko.types._wrappers import SyncModuleWrapper
 
@@ -46,6 +46,10 @@ def _upper_content(item: Mapping[str, object]) -> str:
 async def _ascaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
     await checkpoint()
     return item["x"] * factor
+
+
+def _defer_scaled(item: Mapping[str, Any]) -> Awaitable[int]:
+    return _ascaled(item)
 
 
 def _raise_value_error(item: object) -> NoReturn:
@@ -237,6 +241,12 @@ class TestCallableNodes:
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
 
+    def test_sync_iteration_rejects_an_awaitable_result(self):
+        pipeline = Pipeline().map(_defer_scaled)
+
+        with pytest.raises(InvalidPipelineError, match="async for"):
+            list(pipeline([{"x": 1}]))
+
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
@@ -255,7 +265,7 @@ class TestCallableNodes:
             .hash(options={"assign": "content"})
             .map(record)
         )
-        assert pipeline.first() == {"content": 396558121}
+        assert pipeline.first() == {"content": 3944515045}
         assert len(runs) == 1
 
     def test_map_requires_the_context_to_provide_its_resources(self):

@@ -25,9 +25,8 @@ from riko.base._dateutils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from riko.types._scalars import DateDict
+    from riko.types._wrappers import Func
 
 TT_KEYS = (
     "year",
@@ -251,7 +250,7 @@ def resolve_aware_datetime(
     return new_date
 
 
-def get_relative_date(unit: str, count: int, op: Callable, now: dt) -> date | dt:
+def get_relative_date(unit: str, count: int, op: Func[date], now: dt) -> date | dt:
     """
     Offsets ``now`` (or its date) by ``count`` units of time.
 

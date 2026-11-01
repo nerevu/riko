@@ -56,10 +56,14 @@ DEFAULTS: Defaults = Defaults({"encoding": ENCODING, "detag": False})
 
 
 def get_string(content: str, start: str, end: str) -> str:
-    start_pos = content.find(start) if start else 0
-    right = content[start_pos + (len(start) if start else 0) :]
-    end_pos = right[1:].find(end) + 1 if end else len(right)
-    return right[:end_pos] if end_pos > 0 else right
+    if (start_pos := content.find(start)) == -1:
+        result = ""
+    else:
+        right = content[start_pos + len(start) :]
+        end_pos = right.find(end) if end else -1
+        result = right if end_pos == -1 else right[:end_pos]
+
+    return result
 
 
 async def async_parser(
@@ -102,7 +106,7 @@ async def async_parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchpage")
-    content = await async_url_read(url)
+    content = await async_url_read(url, encoding=objconf.encoding)
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]

@@ -30,7 +30,7 @@ type AnyGraph[T] = Graph[T] | FrozenGraph[T]
 type SortKey[T] = Callable[[T], SupportsRichComparison] | None
 
 
-def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph:
+def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph[T]:
     return nx.DiGraph(map_values(sort_stably, graph))
 
 

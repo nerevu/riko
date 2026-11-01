@@ -7,10 +7,11 @@ Index (file, then the subjects it owns, in file order):
 
     test_callable_nodes.py        CallableNodes
     test_modules.py               Input, FetchModules, Fetchdata, Fetchtable,
-                                  Xpathfetchpage, Filter, Rename, Regex, Slugify, Join,
-                                  Sort, Send, AsyncAggregate, RequiredOperands,
-                                  ListModules, ModuleMetadata, Processor, AsyncOperator,
-                                  EnumMemberName, GenerateModuleNames
+                                  Xpathfetchpage, Filter, Rename, Regex, Hash, Slugify,
+                                  Join, Sort, Receive, Send, AsyncAggregate, Udf,
+                                  RequiredOperands, ListModules, ModuleMetadata,
+                                  Processor, AsyncOperator, EnumMemberName,
+                                  GenerateModuleNames
     test_pipeline.py              PipelineConstruction, PipelineChaining,
                                   ModuleNameEnum, PipelineIteration, OutputParity,
                                   Reiteration, Close, Failure, AsyncSourceAdapter,

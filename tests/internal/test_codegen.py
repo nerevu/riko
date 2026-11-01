@@ -56,6 +56,7 @@ from riko.definitions._workflow_definition import Workflow, normalize_workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
+    NameEntry,
     gen_catalog_entries,
     generate_module_ids,
     generate_module_names,
@@ -502,6 +503,34 @@ class TestModuleCategory:
     def test_no_module_is_a_sink(self):
         """Writes run through targets, so no module is categorized as a sink."""
         assert list_modules(category="sink") == []
+
+
+PROVIDER_CLASS_COLLISIONS = (
+    pytest.param("modules.foo", "transform", "Modules", id="flat-class"),
+    pytest.param("sources.bar", "source", "Sources", id="category-class"),
+)
+
+
+class TestProviderClassCollision:
+    def test_providers_normalizing_alike_fail(self):
+        first = NameEntry(name="foo-bar.x", category="transform")
+        second = NameEntry(name="foo_bar.y", category="transform")
+
+        with pytest.raises(ValueError, match="'foo-bar' and 'foo_bar'"):
+            generate_module_names(first, second)
+
+    @pytest.mark.parametrize(
+        ("name", "category", "class_name"), PROVIDER_CLASS_COLLISIONS
+    )
+    def test_provider_class_collision_fails(self, name, category, class_name):
+        builtin = NameEntry(name="fetch", category="source")
+        entry = NameEntry(name=name, category=category)
+
+        with pytest.raises(ValueError, match="provider") as excinfo:
+            generate_module_names(builtin, entry)
+
+        assert repr(name) in str(excinfo.value)
+        assert repr(class_name) in str(excinfo.value)
 
 
 class TestGeneratedNamesDrift:

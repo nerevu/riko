@@ -57,7 +57,7 @@ def reducer(item: Item, rule: RenameConfRule) -> Item:
     value = DotDict(item).get(rule.field, MISSING)
     reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
 
-    if rule.newval and value is not MISSING:
+    if rule.newval is not None and value is not MISSING:
         reduced.update({rule.newval: value})
 
     return cast("Item", reduced)

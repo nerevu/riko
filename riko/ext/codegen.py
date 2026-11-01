@@ -61,6 +61,7 @@ _CANONICAL: dict[ModuleCategory, ModuleClass] = {
     "transform": "Transforms",
     "sink": "Sinks",
 }
+_GENERATED_CLASSES = frozenset({*_CANONICAL.values(), "Modules"})
 
 
 # TODO: compare to pythonise
@@ -97,6 +98,12 @@ class NameEntry:
         else:
             class_name = enum_member_name(self.provider).capitalize()
 
+            if class_name in _GENERATED_CLASSES:
+                raise ValueError(
+                    f"module id {self.name!r} from provider {self.provider!r} maps "
+                    f"to generated class {class_name!r}; rename the provider"
+                )
+
         return class_name
 
     @property
@@ -128,7 +135,20 @@ def gen_catalog_entries() -> Iterator[NameEntry]:
 
 def _group(entries: Iterable[NameEntry]) -> dict[str, list[NameEntry]]:
     groups: dict[str, list[NameEntry]] = defaultdict(list)
-    [groups[entry.class_name].append(entry) for entry in entries]
+    providers: dict[str, str] = {}
+
+    for entry in entries:
+        class_name, provider = entry.class_name, entry.provider
+        known = providers.setdefault(class_name, provider)
+
+        if known != provider:
+            raise ValueError(
+                f"providers {known!r} and {provider!r} both map to generated class "
+                f"{class_name!r}. Rename one of them."
+            )
+
+        groups[class_name].append(entry)
+
     return groups
 
 

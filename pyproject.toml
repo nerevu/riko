@@ -323,8 +323,8 @@ uncovered-lowered = 2026-10-29
 # day as `<key>-lowered`.
 any = 128
 any-lowered = 2026-10-27
-cast = 91
-cast-lowered = 2026-10-27
+cast = 85
+cast-lowered = 2026-11-01
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the

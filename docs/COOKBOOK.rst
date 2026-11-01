@@ -354,7 +354,7 @@ also accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"
     >>>
     >>> # chain a module by name
     >>> (pipeline | Transforms.HASH).first(items)
-    {'content': 'a', 'hash': 1267964084}
+    {'content': 'a', 'hash': 393565300}
 
 A ``pipeline`` holds no ``items`` of its own. Every run takes a ``seed`` as its first
 argument, whether you call it (``pipeline(items)``), pipe it (``items | pipeline``),
@@ -474,7 +474,7 @@ can serve as the prefix of several ``pipelines``.
     >>> list(pipeline.count())
     [{'count': 1}]
     >>> list(pipeline.hash())
-    [{'content': "Let's talk about riko!", 'hash': 197222720}]
+    [{'content': "Let's talk about riko!", 'hash': 456903819}]
     >>> sorted(pipeline.workflow.nodes)
     ['itembuilder-1']
 
@@ -491,7 +491,7 @@ them into a concrete list you can index, measure, and reuse.
     >>> pipeline = Pipeline.from_module("hash")
     >>> items = export(pipeline([{'content': 'a'}, {'content': 'b'}]))
     >>> len(items), items[0]['hash']      # unlike the pipeline, indexable & measurable
-    (2, 1267964084)
+    (2, 393565300)
 
 You can pass an export type as the second argument ``list`` (the default) and ``tuple``
 return the items, and a format serializes them. A format may be a plain string or a
@@ -508,9 +508,9 @@ optional ``csv2ofx`` dependency). A format returns a ``StringIO`` buffer.
     >>> {"csv", "geojson", "json", "jsonl"}.issubset(list_formats())
     True
     >>> export(pipeline(items), "tuple")
-    ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
+    ({'title': 'a', 'hash': 393565300}, {'title': 'b', 'hash': 1183997491})
     >>> export(pipeline(items), Formats.JSON).getvalue()
-    '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
+    '[{"hash": 393565300, "title": "a"}, {"hash": 1183997491, "title": "b"}]'
 
 
 For serialized output, you can pass a file path or file like object as the third

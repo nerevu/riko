@@ -95,6 +95,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     entry_point_group = "riko.modules"
     label = "module"
+    builtin_names = BUILTIN_MODULE_IDS
 
     def _key(self, entry: ModuleDefinition) -> str:
         return entry.name
@@ -111,47 +112,6 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             definition = evolve(definition, name=ep.name)
 
         return definition
-
-    def register(self, entry: ModuleDefinition, *, replace: bool = False) -> None:
-        """
-        Adds a runtime module definition without shadowing existing names.
-
-        Args:
-
-            entry: The named module definition to register.
-
-            replace: Whether the definition may replace an existing runtime
-                registration, or shadow an entry-point or built-in module.
-
-        Raises:
-
-            ValueError: If ``entry`` has no name, or its name is already registered
-                or names an entry-point or built-in module and ``replace`` is False.
-
-        Examples:
-
-            >>> registry = ModuleRegistry()
-            >>> registry.register(
-            ...     ModuleDefinition(name="count", sync_pipe=list), replace=True
-            ... )
-            >>> registry.registered_names
-            ('count',)
-
-        """
-        if (name := self._key(entry)) and not replace:
-            if name in self._entry_points:
-                tier = "an entry-point"
-            elif name in BUILTIN_MODULE_IDS:
-                tier = "a built-in"
-            else:
-                tier = None
-
-            if tier is not None:
-                msg = f"{self.label} {name!r} shadows {tier} module; "
-                msg += "pass replace=True to override it"
-                raise ValueError(msg)
-
-        super().register(entry, replace=replace)
 
     def _require_builtin_name(self, name: str) -> None:
         if name not in BUILTIN_MODULE_IDS:

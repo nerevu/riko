@@ -255,6 +255,18 @@ PARSE_REJECTIONS = [
     pytest.param(RAW_WORKFLOW, "v3", "Invalid shape", id="unknown-declared-shape"),
     pytest.param("{bad json", None, "malformed JSON", id="bad-json"),
     pytest.param(b"\xff", None, "malformed JSON", id="undecodable-bytes"),
+    pytest.param(
+        '{"nodes": [{"name": "fetch"}], "nodes": [{"name": "count"}]}',
+        None,
+        "duplicate key 'nodes'",
+        id="duplicate-top-level-key",
+    ),
+    pytest.param(
+        '{"nodes": [{"name": "fetch", "conf": {"url": "a", "url": "b"}}]}',
+        None,
+        "duplicate key 'url'",
+        id="duplicate-nested-key",
+    ),
     pytest.param({"nodes": []}, None, "no nodes", id="validates"),
 ]
 
@@ -1008,6 +1020,47 @@ UPPERCASE_CONFS = [
 ]
 
 
+_FETCH = {"id": "a", "type": "fetch", "conf": {}}
+_OUT = {"id": "_OUTPUT", "type": "output", "conf": {}}
+_WIRE = _wire("_w1", "a", "_OUTPUT")
+
+MALFORMED_DOCUMENTS = [
+    pytest.param(
+        {"modules": [_FETCH, _OUT], "wires": [_WIRE], "bogus": 1},
+        "unknown pipe definition key",
+        id="pipe-def-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, _OUT], "wires": [{**_WIRE, "bogus": 1}]},
+        "unknown wire key",
+        id="wire-unknown-key",
+    ),
+    pytest.param(
+        {
+            "modules": [_FETCH, _OUT],
+            "wires": [{**_WIRE, "src": {"id": "_OUTPUT", "moduleid": "a", "x": 1}}],
+        },
+        "unknown wire endpoint key",
+        id="wire-endpoint-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, {**_OUT, "conf": {"x": 1}}], "wires": [_WIRE]},
+        "output node takes no 'conf'",
+        id="output-module-conf",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, {**_OUT, "bogus": 1}], "wires": [_WIRE]},
+        "unknown `PipeDef` output node key",
+        id="output-module-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [{"name": "forever"}], "bogus": 1},
+        "unknown dag key",
+        id="dag-unknown-key",
+    ),
+]
+
+
 class TestMigrate:
     def test_terminal_output_becomes_default_output(self):
         flow = migrate_v1_to_v2(
@@ -1255,15 +1308,34 @@ class TestMigrate:
                 r"missing PipeModule key\(s\): \['type'\]",
                 id="missing-type",
             ),
+            pytest.param(
+                {"id": "f", "type": "fetch", "conf": {"URL": "x", "url": "y"}},
+                "differ only in case",
+                id="case-colliding-conf-keys",
+            ),
+            pytest.param(
+                {"id": "f", "type": "fetch", "conf": {"url": {"VALUE": 1, "value": 2}}},
+                "differ only in case",
+                id="nested-case-colliding-conf-keys",
+            ),
         ],
     )
     def test_malformed_module_raises(self, module, match):
         with pytest.raises(InvalidPipelineError, match=match):
             migrate_v1_to_v2({"modules": [module]})
 
+    @pytest.mark.parametrize(("document", "match"), MALFORMED_DOCUMENTS)
+    def test_unknown_document_key_raises(self, document, match):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Workflow.parse(document)
+
     def test_non_mapping_pipe_def_raises(self):
         with pytest.raises(InvalidPipelineError, match="pipe definition"):
             migrate_v1_to_v2(["not", "a", "mapping"])  # pyright: ignore[reportArgumentType]
+
+    def test_missing_modules_raises(self):
+        with pytest.raises(InvalidPipelineError, match=r"missing pipe definition key"):
+            migrate_v1_to_v2({"wires": []})
 
     @pytest.mark.xfail(
         strict=True,

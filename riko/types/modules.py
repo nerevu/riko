@@ -12,7 +12,7 @@ from riko.base._require_guards import require_from_form
 from ._pipedef import CountValues
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
     from re import Pattern, RegexFlag
 
     from riko.base._require_guards import TypeRequire
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from ._frozendict import FrozenConf
     from ._io import PathLike
     from ._scalars import BasicValue
+    from ._wrappers import Func
 
 # Shared
 type ModuleType = Literal["operator", "processor", "splitter"]
@@ -278,7 +279,6 @@ class RegexRule(TypedDict):
     field: str
     flags: int | RegexFlag
     match: Pattern[str]
-    offset: int
     replace: str
     series: bool
 
@@ -411,6 +411,7 @@ class FetchTableRawConf(TypedDict):
 class FetchTextRawConf(TypedDict):
     url: Value | list[Value]
     encoding: NotRequired[Value]
+    strip_bom: NotRequired[Value]
 
 
 class FilterRawRule(TypedDict):
@@ -459,7 +460,6 @@ class RegexRawRule(TypedDict, total=False):
     field: Value
     flags: Value
     match: Value
-    offset: Value
     replace: Value
     series: Value
     singlelinematch: Value
@@ -627,7 +627,6 @@ class RegexConfRule:
     default: str | None = None
     casematch: bool | None = None
     singlelinematch: bool | None = None
-    offset: int = 0
     seriesmatch: bool = True
     replace: str = ""
 
@@ -715,7 +714,7 @@ class RssItemBuilderConf(TypedDict, total=False):
 
 
 class AggregateConf(TypedDict):
-    func: Callable
+    func: Func[object]
 
 
 class CountConf(TypedDict, total=False):
@@ -786,6 +785,7 @@ class FetchTableConf(CsvConf, total=False):
 class FetchTextConf(TypedDict, total=False):
     url: Required[str]
     encoding: str
+    strip_bom: bool
 
 
 class FilterConf(TypedDict, total=False):
@@ -902,7 +902,7 @@ class TypecastConf(TypedDict):
 
 
 class UdfConf(TypedDict):
-    func: Callable
+    func: Func[object]
 
 
 class UniqConf(TypedDict, total=False):

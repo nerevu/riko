@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
     from riko.types._values import BasicArg
-    from riko.types._wrappers import PreCaster
+    from riko.types._wrappers import Func, PreCaster
 
 logger: Logger = get_logger(__name__)
 
@@ -547,11 +547,11 @@ def cast_value(
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.DATETIME], **kwargs: object
-) -> dt: ...
+) -> dt | None: ...
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.DATE], **kwargs: object
-) -> date: ...
+) -> date | None: ...
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.URL], **kwargs: object
@@ -637,7 +637,7 @@ def cast_value[T](
     return value
 
 
-cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
+cast_none: Func[None] = partial(cast_value, type_=CastType.NONE)
 
 
 def cast_pass[T](content: T, **_: object) -> T:

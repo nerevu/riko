@@ -71,7 +71,7 @@ class WriteMode(StrEnum):
     DELETE = "delete"
 
 
-@dataclass(frozen=True, slots=True)
+@define(frozen=True, slots=True)
 class WriteCapabilities:
     """
     What a ``SupportsWrite`` target supports for a resolved ``(target × format)``.
@@ -92,11 +92,15 @@ class WriteCapabilities:
 
     """
 
-    modes: frozenset[WriteMode]
+    modes: frozenset[WriteMode] = field(converter=frozenset)
     fmt: Formats | None = None
     incremental: bool = False
-    match_keyed_modes: frozenset[WriteMode] = frozenset()
-    idempotent_modes: frozenset[WriteMode] = frozenset()
+    match_keyed_modes: frozenset[WriteMode] = field(
+        default=frozenset(), converter=frozenset
+    )
+    idempotent_modes: frozenset[WriteMode] = field(
+        default=frozenset(), converter=frozenset
+    )
 
     @property
     def keyed_modes(self) -> frozenset[WriteMode]:
@@ -113,7 +117,7 @@ class WriteCapabilities:
         """Whether the target encodes items with a format, derived from ``fmt``."""
         return self.fmt is not None
 
-    def __post_init__(self) -> None:
+    def __attrs_post_init__(self) -> None:
         if difference := self.keyed_modes - self.modes:
             msg = f"keyed modes {difference!r} are not present in modes"
         elif overlap := self.match_keyed_modes & self.idempotent_modes:

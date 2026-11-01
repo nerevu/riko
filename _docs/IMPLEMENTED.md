@@ -275,6 +275,23 @@ Feed parsing goes through `riko/parsing/documents.py::parse_feed`: with `fastfee
 installed it reads a file source into memory first (it accepts only text or bytes);
 otherwise `feedparser` receives the open file and reads it itself, so riko never reads the
 feed twice. Its result is typed by the `ParsedFeed` protocol (`riko/types/_rss.py`).
+
+JSON in `any2dict` takes one of two branches with the same results. A binary stream (a `Fetch` is
+read through its file; `is_binary_readable` in `riko/io/_filelike.py` tells bytes from text)
+streams through native `ijson` when it cannot seek, such as a sync HTTP body (`async_url_open`
+buffers the body into a seekable `BytesIO`, so an async fetch streams only by size), or when at least
+`STREAMING_THRESHOLD` bytes remain (`_get_ijson_source`); everything else is parsed in memory and
+read with `DotDict.get(path, MISSING)` (`_get_json_value`, which treats a non-mapping document as missing under a path). The streamed branch walks parse events
+with `_find_json_event`, matching each `path` key case-insensitively against `map_key` events,
+so a caller-written `.item` is a missing key as in memory. It then rewinds through
+`riko/io/_sync.py::ReplayReader` (a seekable source seeks back; a forward-only one spools only the
+bytes read before the match) and calls `ijson.items` once on the file with the found key's spelling,
+appending `.item` for an array. This keeps the native backend's speed. A missing path or a scalar
+logs a warning and yields nothing in both branches; malformed JSON logs an error. Known differences:
+with keys that differ only in case, the streamed branch takes the first and `DotDict` the last; a
+path running past a scalar is tracked in
+[dotdict-parsing.md](gameplans/dotdict-parsing.md#known-instance-a-path-past-a-scalar-returns-the-scalar).
+
 Without `lxml` (the `perf` extra), `xml2etree` parses XML with the standard-library parser
 and HTML with `html5lib`, and the module's `etree`/`html`/`html5parser`/`XML_PARSER` names
 are `None`.

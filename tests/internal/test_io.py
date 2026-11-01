@@ -6,7 +6,7 @@ from __future__ import annotations
 from functools import partial
 from importlib.metadata import EntryPoint
 from io import BytesIO, StringIO
-from os import linesep
+from os import environ, linesep
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 from urllib.response import addinfourl
@@ -26,7 +26,8 @@ from riko.definitions._write import WriteResult
 from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
-from riko.io._sync import Fetch
+from riko.io._sync import Fetch, ReplayReader
+from riko.modules import fetchtext
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
@@ -42,9 +43,9 @@ from riko.runtime._write_session import (
     write_through,
 )
 from riko.types._enums import Formats
-from tests import aresolve, async_test, is_installed, skipif_issync
+from tests import aresolve, async_test, is_installed, run_python, skipif_issync
 from tests._lifecycle import ITEMS
-from tests._loopback import URL, loopback_url, stalled_url, stub_async_get
+from tests._loopback import URL, ForwardOnly, loopback_url, stalled_url, stub_async_get
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
@@ -97,6 +98,18 @@ def served_url():
     """Serves the loopback body over a real socket for the streamed branches."""
     with loopback_url(_LOOPBACK_BODY) as served:
         yield served
+
+
+class TestReplayReader:
+    def test_forward_only_source_spools_only_what_was_read(self):
+        with ReplayReader(ForwardOnly(b"abcdef")) as reader:
+            assert reader.read(4) == b"abcd"
+            reader.replay()
+            spool = reader.spool
+            assert spool is not None
+            assert spool.seek(0, 2) == 4
+            spool.seek(0)
+            assert reader.read() == b"abcdef"
 
 
 class TestFetch:
@@ -159,6 +172,21 @@ class TestFetch:
         with Fetch(served_url, memoize=True) as f:
             assert f.read() == _LOOPBACK_BODY
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a text-mode response cache is not yet implemented",
+    )
+    def test_memoized_text_fetch_after_binary_reads_text(self, tmp_path):
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
+
+        with Fetch(path.as_uri(), memoize=True, binary=True) as f:
+            f.read()
+
+        with Fetch(path.as_uri(), memoize=True) as f:
+            assert f.read() == "hello"
+
     @pytest.mark.simulated_network
     def test_streamed_binary_read_returns_payload(self, served_url):
         with Fetch(served_url, binary=True) as f:
@@ -185,6 +213,25 @@ class TestFetch:
             fetched.read()
 
         assert handle.closed
+
+
+ASYNC_GET_SCRIPT = """
+import sys
+from time import monotonic
+from riko.bado import run
+from riko.bado._backend import TimeoutException
+from riko.bado._util import async_get
+
+async def main():
+    start = monotonic()
+
+    try:
+        await async_get(sys.argv[1])
+    except TimeoutException:
+        print(monotonic() - start)
+
+run(main)
+"""
 
 
 class TestAsyncUrlOpen:
@@ -217,6 +264,17 @@ class TestAsyncUrlOpen:
     async def test_timeout_stops_a_stalled_read(self):
         with stalled_url() as url, pytest.raises(TimeoutException):
             await async_url_open(url, timeout=0.2)
+
+    @pytest.mark.simulated_network
+    @skipif_issync
+    def test_async_get_waits_the_configured_fetch_timeout(self):
+        """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
+        env = environ | {"RIKO_FETCH_TIMEOUT": "0.2"}
+
+        with stalled_url() as url:
+            run = run_python("-c", ASYNC_GET_SCRIPT, url, env=env)
+
+        assert float(run.stdout) < 2
 
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
@@ -529,6 +587,32 @@ class TestChunkContent:
             assert list(_chunk_content(f, 3)) == expected
 
 
+BOM_LINES = [
+    pytest.param({}, "hello", id="stripped"),
+    pytest.param({"strip_bom": False}, "\ufeffhello", id="kept"),
+]
+
+
+class TestFetchTextBom:
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    def test_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert list(fetchtext.pipe(conf=conf)) == [expected, "world"]
+
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    @async_test
+    async def test_async_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert [line async for line in fetchtext.async_pipe(conf=conf)] == [
+            expected,
+            "world",
+        ]
+
+
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
     state = {"current": 0, "peak": 0}
 
@@ -724,6 +808,15 @@ async def _gen_items(items, delay=0.0):
 
 
 class TestAsyncMerge:
+    @async_test
+    async def test_early_close_closes_every_source(self):
+        """Closing the merge after one item closes every source cleanly."""
+        closed: list[bool] = []
+        merged = async_merge([_forever(closed), _forever(closed)], limit=2)
+        await anext(merged)
+        await merged.aclose()
+        assert closed == [True, True]
+
     @skipif_issync
     def test_async_merge_yields_every_value(self):
         """More iterables than ``limit`` still merge in full."""

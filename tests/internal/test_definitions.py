@@ -676,6 +676,19 @@ class TestWriteCapabilities:
 
         assert caps.keyed_modes == frozenset({WriteMode.MERGE, WriteMode.APPEND})
 
+    def test_mode_sets_are_frozen_copies_of_the_input(self):
+        modes, keyed = {WriteMode.APPEND, WriteMode.MERGE}, {WriteMode.MERGE}
+        caps = WriteCapabilities(modes=modes, match_keyed_modes=keyed)
+        modes.clear()
+        keyed.add(WriteMode.APPEND)
+
+        expected = WriteCapabilities(
+            modes=frozenset({WriteMode.APPEND, WriteMode.MERGE}),
+            match_keyed_modes=frozenset({WriteMode.MERGE}),
+        )
+        assert caps == expected
+        assert hash(caps) == hash(expected)
+
     def test_keyed_modes_must_be_subset_of_modes(self):
         with pytest.raises(ValueError, match="not present in modes"):
             WriteCapabilities(
