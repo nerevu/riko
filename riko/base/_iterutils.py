@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, overload
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
+    from riko.types._wrappers import Func
+
 
 def gen_instances[T](
     items: Iterable[object], accepted: type[T] | tuple[type[T], ...]
@@ -56,9 +58,7 @@ def noop[T](value: T) -> T:
 
 
 def multi_try[T, S](
-    source: object,
-    zipped: Iterable[tuple[Callable[..., T], type[Exception]]],
-    default: S = None,
+    source: object, zipped: Iterable[tuple[Func[T], type[Exception]]], default: S = None
 ) -> T | S:
     """
     Tries each callable on a source until one does not raise.
@@ -431,9 +431,7 @@ def dispatch[T, U, V, X, Y, Z](
 def dispatch[T](
     split: Sequence[T], *funcs: Callable[[T], object]
 ) -> tuple[object, ...]: ...
-def dispatch(
-    split: Sequence[object], *funcs: Callable[..., object]
-) -> tuple[object, ...]:
+def dispatch(split: Sequence[object], *funcs: Func[object]) -> tuple[object, ...]:
     r"""
     Delivers each item of a sequence to a different function.
 
@@ -467,27 +465,18 @@ def dispatch(
 
 @overload
 def broadcast[W, X](
-    item: object, f1: Callable[..., W], f2: Callable[..., X], **kwargs: object
+    item: object, f1: Func[W], f2: Func[X], **kwargs: object
 ) -> tuple[W, X]: ...
 @overload
 def broadcast[W, X, Y](
-    item: object,
-    f1: Callable[..., W],
-    f2: Callable[..., X],
-    f3: Callable[..., Y],
-    **kwargs: object,
+    item: object, f1: Func[W], f2: Func[X], f3: Func[Y], **kwargs: object
 ) -> tuple[W, X, Y]: ...
 @overload
 def broadcast[W, X, Y, Z](
-    item: object,
-    f1: Callable[..., W],
-    f2: Callable[..., X],
-    f3: Callable[..., Y],
-    f4: Callable[..., Z],
-    **kwargs: object,
+    item: object, f1: Func[W], f2: Func[X], f3: Func[Y], f4: Func[Z], **kwargs: object
 ) -> tuple[W, X, Y, Z]: ...
 def broadcast(
-    item: object, *funcs: Callable[..., object], **kwargs: object
+    item: object, *funcs: Func[object], **kwargs: object
 ) -> tuple[object, ...]:
     r"""
     Delivers the same item to different functions.

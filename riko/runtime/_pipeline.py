@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._streams import InputLike, PipelineRun, PipelineStream
+    from riko.types._wrappers import Func
     from riko.types.modules import Conf
 
 
@@ -351,7 +352,7 @@ class Pipeline(PipelineDefinition[T_co]):
         )
         return Pipeline[Item](flow, context=self.context, settings=self.settings)
 
-    def __getattr__(self, name: str) -> Callable[..., Pipeline[Item]]:
+    def __getattr__(self, name: str) -> Func[Pipeline[Item]]:
         """Chains a built-in module by attribute. E.g., ``.sort()`` appends sort."""
         return partial(self.pipe, self._require_attribute(name))
 

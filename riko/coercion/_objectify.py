@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView
     from typing import Protocol
 
-    from riko.types._streams import ItemOrValue
     from riko.types._wrappers import ArgCaster
 
     class _Valued[V](Protocol):
@@ -107,16 +106,16 @@ def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...
 @overload
 def objectify[T](data: T) -> T: ...
 @overload
-def objectify[T](data: Mapping[str, T], func: ArgCaster) -> Objectify[T]: ...
+def objectify[T](data: Mapping[str, T], func: ArgCaster[object]) -> Objectify[T]: ...
 @overload
-def objectify[T](
-    data: Sequence[T], func: ArgCaster
-) -> list[ItemOrValue | Objectify[object]]: ...
+def objectify[T, R](
+    data: Sequence[T], func: ArgCaster[R]
+) -> list[R | Objectify[object]]: ...
 @overload
-def objectify[T](data: T, func: ArgCaster) -> T | ItemOrValue: ...
-def objectify[T](
-    data: T, func: ArgCaster | None = None, **defaults: object
-) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
+def objectify[T, R](data: T, func: ArgCaster[R]) -> T | R: ...
+def objectify[T, R](
+    data: T, func: ArgCaster[R] | None = None, **defaults: object
+) -> T | R | Objectify[T] | Objectify[object] | list[R | Objectify[object]]:
     """
     Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.
 

@@ -12,7 +12,9 @@ from difflib import get_close_matches
 from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable
+
+    from riko.types._wrappers import Func
 
 type _Call = tuple[tuple[object, ...], dict[str, object]]
 
@@ -54,7 +56,7 @@ class RikoError(Exception):
 
     def __reduce__(
         self,
-    ) -> tuple[Callable[..., Self], tuple[type[Self], *_Call], dict[str, object]]:
+    ) -> tuple[Func[Self], tuple[type[Self], *_Call], dict[str, object]]:
         return (_rebuild, (type(self), *self._call), self.__dict__)
 
 

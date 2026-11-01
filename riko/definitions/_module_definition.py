@@ -24,11 +24,10 @@ from riko.base._strutils import get_doc_summary
 from riko.types._enums import ModuleName, ModuleNameLike
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
+        Func,
         Interface,
         SyncModuleWrapper,
     )
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
 _UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
 
 
-def get_callable_name(fn: Callable[..., object] | None, default: str = "") -> str:
+def get_callable_name(fn: Func[object] | None, default: str = "") -> str:
     """Names a callable after its ``__name__``, or ``default`` for an unnamed one."""
     candidate: object = getattr(fn, "__name__", None)
     is_valid = candidate not in _UNNAMEABLE_PIPES

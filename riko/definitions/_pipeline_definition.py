@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
+    from riko.types._wrappers import Func
     from riko.types.modules import AnyModuleConf, Conf
 
     from ._nodes import CallableVersion
@@ -623,7 +624,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _build_callable_workflow(
         self,
-        fn: Callable[..., object],
+        fn: Func[object],
         *,
         resources: ResourcesLike = (),
         version: CallableVersion = MISSING,
@@ -637,7 +638,7 @@ class PipelineDefinition(Generic[T_co]):
         node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **_kwargs)
         return flow.with_node(node)
 
-    def __getattr__(self, name: str) -> Callable[..., PipelineDefinition[Item]]:
+    def __getattr__(self, name: str) -> Func[PipelineDefinition[Item]]:
         """
         Chains a module by attribute. E.g., ``.sort()`` appends the sort module.
 

@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from _typeshed import DataclassInstance
     from attrs import AttrsInstance
 
+    from riko.types._wrappers import Func
+
 type CanonicalValue = str | bool | list[CanonicalValue] | None
 type Canonicalizer[V] = Callable[[V, set[int]], CanonicalValue]
 
@@ -349,7 +351,7 @@ class repr_cache[R]:  # noqa: N801
 
     """
 
-    def __init__(self, fn: Callable[..., R]) -> None:
+    def __init__(self, fn: Func[R]) -> None:
         self._fn = fn
         self._store: dict[Hashable, R] = {}
         self._hits = 0

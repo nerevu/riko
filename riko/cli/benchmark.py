@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator, Sequence
 from functools import partial
 from itertools import chain
 from multiprocessing import Pool
@@ -21,20 +20,21 @@ from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.modules.regex import pipe as regex
 from riko.runtime._pipeline import Pipeline
-from riko.types._rss import RSSEntry
 from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import Item, Items
     from riko.types._workflow import RawEdge, RawNode, RawWorkflow
     from riko.types._wrappers import (
+        AsyncFunc,
         ParserMaterializedOutput,
         SyncProcessorWrapperOutput,
     )
 
-type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
-type AsyncTest = Callable[[], Awaitable[object]]
+type AsyncTest = AsyncFunc[object]
 
 NUMBER = 1
 LOOPS = 1

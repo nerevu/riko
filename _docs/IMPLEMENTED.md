@@ -542,7 +542,9 @@ union member by `isinstance` (any mapping matches a TypedDict member, keys unche
 `resolve_enum`-style "Expected one of"), and raises `TypeError` for any other form when the guard is
 built. `CallOptions.count` and `fromdict`'s `Literal` fields both validate through it. `require_from_typed_dict` and
 `require_from_attrs` both reduce to `require_from_keys(required, allowed)`; in both, `exclude=`
-forbids a key and `not_required=` only drops it from the required set. The conf contracts' guards
+forbids a key. Only `require_from_attrs` takes `not_required=` (it returns a plain
+`dict[str, object]`); a key a TypedDict guard may see omitted is `NotRequired` in the TypedDict
+itself, so the returned TypedDict promises exactly the keys the guard checked. The conf contracts' guards
 (`require_module_conf`, `require_conf`) live beside them in `riko/types/modules.py`, off `__all__`.
 Mapping fields use one converter callable, never a converter list: pyright types the generated
 `__init__` parameter from a single converter's argument but falls back to the field annotation for a

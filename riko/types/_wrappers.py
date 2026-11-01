@@ -17,13 +17,14 @@ from typing import (
     Any,
     Literal,
     NamedTuple,
+    Never,
     Protocol,
     TypedDict,
     Unpack,
     overload,
 )
 
-from typing_extensions import TypeIs
+from typing_extensions import TypeIs, TypeVar
 
 from riko.base._config import SUBPIPE_TYPE
 from riko.base._exceptions import InvalidPipelineError
@@ -65,8 +66,8 @@ type Interface = Literal["pipe", "async_pipe"]
 
 # Input/Output
 type Func[T] = Callable[..., T]
-type AsyncFunc[T] = Callable[..., Awaitable[T]]
-type CoroutineFunc = Callable[..., Coroutine[object, object, object]]
+type AsyncFunc[T] = Func[Awaitable[T]]
+type CoroutineFunc = Func[Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
 type SplitterParserOutput = Cascade
@@ -78,10 +79,10 @@ type ParserOutput[T: ItemOrValue] = (
 type ParserMaterializedOutput = list[ItemOrValue]
 type Caster[T] = Callable[[str | int], T]
 type NumericCaster = Callable[[str | NumLike], NumLike]
-type ArgCaster[T] = Callable[..., T]
+type ArgCaster[T] = Func[T]
 type ItemDispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
 type ConversionOutput = Iterable[str] | StringIO
-type ConversionFunc = Callable[..., ConversionOutput]
+type ConversionFunc = Func[ConversionOutput]
 
 # Sync
 type SyncOperatorWrapperOutput = Stream
@@ -97,7 +98,7 @@ type SyncProcessorWrapperInput = ItemOrValue | ItemsOrValues
 type SyncSplitterWrapperOutput = Cascade
 type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
-type SyncConfCastFunc = Callable[..., DynamicConf]
+type SyncConfCastFunc = Func[DynamicConf]
 
 type SyncWrapperInput = (
     SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
@@ -158,7 +159,11 @@ type SplitterWrapperOutput = SyncSplitterWrapperOutput | AsyncSplitterWrapperOut
 type SplitterWrapperInput = SyncSplitterWrapperInput | AsyncSplitterWrapperInput
 type SubPipe = SyncSubPipe | AsyncSubPipe
 type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
-type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
+type ModuleParser = (
+    ProcessorParser[Never, Never, ItemOrValue]
+    | OperatorParser[ItemOrValue, Never]
+    | SplitterParser[Never]
+)
 
 WRAPPER_META: tuple[str, ...] = (
     "name",
@@ -516,7 +521,10 @@ class AsyncSplitterWrapper(AsyncModuleWrapper):
         raise NotImplementedError
 
 
-def is_subpipe[T: SubPipe](value: T | ModuleWrapper | object) -> TypeIs[T]:
+_SubPipeT = TypeVar("_SubPipeT", bound=SubPipe, default=SubPipe)
+
+
+def is_subpipe(value: _SubPipeT | object) -> TypeIs[_SubPipeT]:
     """
     Reports whether ``value`` is a callable the ``workflow`` decorator tagged.
 

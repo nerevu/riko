@@ -38,6 +38,7 @@ from ._typing import gen_union_members
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._enums import StrLike
+    from riko.types._wrappers import Func
 
 type AttrsValidator[T] = Callable[[AttrsInstance, Attribute[Any], T], None]
 type DefFunc[T, R] = Callable[[T | None], R]
@@ -84,7 +85,7 @@ def narrow_from_require[T, R](
 ) -> Callable[[R], R]: ...
 def narrow_from_require[T, R](
     require: Require[T, R], *args: object, accepted: object = None, **kwargs: object
-) -> Callable[..., R]:
+) -> Func[R]:
     """
     Advertises a typed converter to callers but validates any object at runtime.
 
@@ -195,13 +196,13 @@ def typed_dict_keys[T](item: TypeForm[T]) -> tuple[frozenset[str], frozenset[str
     return frozenset(required), frozenset(optional)
 
 
-def require_from_keys[V](
+def require_from_keys(
     required: Collection[str],
     allowed: Collection[str],
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
-) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+) -> TypeRequire[Mapping[str, object], dict[str, object]]:
     """
     Builds a guard that requires a mapping's keys to fit explicit key sets.
 
@@ -241,7 +242,9 @@ def require_from_keys[V](
     _allowed = _required.union(allowed)
     default_what = what
 
-    def require(value: Mapping[str, V], what: str | None = None, **_) -> dict[str, V]:
+    def require(
+        value: Mapping[str, object], what: str | None = None, **_
+    ) -> dict[str, object]:
         """Confirms a mapping has only the allowed keys and all required ones."""
         what = default_what if what is None else what
         keys = set(value)
@@ -261,16 +264,15 @@ def require_from_typed_dict[T](
     what: str | None = None,
     *,
     exclude: Collection[str] = (),
-    not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
 ) -> TypeRequire[Mapping[str, object], T]:
     """
     Builds a guard that requires a mapping's keys to fit a TypedDict.
 
-    Equivalent to ``require_from_form`` if you don't need ``exclude``, ``not_required``,
-    or ``extra``. Use ``require_from_form`` instead if you need to check against
-    a tuple of TypedDicts.
+    Equivalent to ``require_from_form`` if you don't need ``exclude`` or ``extra``.
+    Use ``require_from_form`` instead if you need to check against a tuple of
+    TypedDicts.
 
     Args:
 
@@ -280,7 +282,6 @@ def require_from_typed_dict[T](
     Kwargs:
 
         exclude: Keys of ``item`` the mapping must not have.
-        not_required: Required keys of ``item`` the mapping may leave out.
         extra: Keys outside ``item`` the mapping may also have.
         error: The exception raised for an unknown or missing key.
 
@@ -300,8 +301,8 @@ def require_from_typed_dict[T](
         ...     x: int
         ...     y: int
         >>>
-        >>> require_from_typed_dict(Point, not_required={"y"})({"x": 1})
-        {'x': 1}
+        >>> require_from_typed_dict(Point)({"x": 1, "y": 2})
+        {'x': 1, 'y': 2}
         >>> require_from_typed_dict(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
@@ -310,7 +311,7 @@ def require_from_typed_dict[T](
     """
     cls = _require_typed_dict_class(item)
     _required, _optional = typed_dict_keys(cls)
-    required = _required.difference(exclude, not_required)
+    required = _required.difference(exclude)
     allowed = (_required | _optional).difference(exclude).union(extra)
     default_what = cls.__name__ if what is None else what
     check = require_from_keys(required, allowed, default_what, error=error)
@@ -322,7 +323,7 @@ def require_from_typed_dict[T](
     return require
 
 
-def require_from_attrs[T: AttrsInstance, V](
+def require_from_attrs[T: AttrsInstance](
     cls: type[T],
     what: str | None = None,
     *,
@@ -330,7 +331,7 @@ def require_from_attrs[T: AttrsInstance, V](
     not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
-) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+) -> TypeRequire[Mapping[str, object], dict[str, object]]:
     """
     Builds a guard that requires a mapping's keys to fit an attrs ``__init__``.
 
@@ -414,12 +415,12 @@ def def_from_require[T, D, R](
     **kwargs: object,
 ) -> DefFunc[T, R | D]: ...
 def def_from_require[D, R](
-    require: Callable[..., R],
+    require: Func[R],
     *args: object,
     default: D | None = None,
     what: str | None = None,
     **kwargs: object,
-) -> Callable[..., R | D | None]:
+) -> Func[R | D | None]:
     """
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
 
@@ -471,8 +472,6 @@ def def_from_typed_dict[T, D](
     what: str | None = None,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
-    *,
-    not_required: Collection[str] = (),
 ) -> DefFunc[Mapping[str, object], T | D | None]:
     """
     Adapts a TypedDict to an attrs converter that ignores ``None``s.
@@ -487,10 +486,6 @@ def def_from_typed_dict[T, D](
         what: The name used in error messages (default: the TypedDict's name).
         exclude: Keys of ``item`` the mapping must not have.
         extra: Keys outside ``item`` the mapping may also have.
-
-    Kwargs:
-
-        not_required: Required keys of ``item`` the mapping may leave out.
 
     Returns:
 
@@ -508,9 +503,7 @@ def def_from_typed_dict[T, D](
         ({'x': 0}, {'x': 1})
 
     """
-    require = require_from_typed_dict(
-        item, what, exclude=exclude, not_required=not_required, extra=extra
-    )
+    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
     return def_from_require(require, default=default, what=what)
 
 
@@ -552,7 +545,7 @@ def narrow_def_from_require[T, D, R](
     what: str | None = None,
     *,
     accepted: object = None,
-) -> Callable[..., R | D | None]:
+) -> Func[R | D | None]:
     """
     Adapts a ``require_*`` guard to a typed attrs converter that ignores ``None``s.
 
@@ -592,10 +585,7 @@ def narrow_def_from_require[T, D, R](
 
 
 def validator_from_require(
-    require: Callable[..., object],
-    *args: object,
-    optional: bool = False,
-    **kwargs: object,
+    require: Func[object], *args: object, optional: bool = False, **kwargs: object
 ) -> AttrsValidator[object]:
     """
     Adapts a ``require_*`` guard into an attrs field validator.
@@ -647,8 +637,6 @@ def validator_from_typed_dict[T](
     optional: bool = False,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
-    *,
-    not_required: Collection[str] = (),
 ) -> AttrsValidator[object]:
     """
     Builds an attrs validator that checks a mapping's keys against a TypedDict.
@@ -660,10 +648,6 @@ def validator_from_typed_dict[T](
         optional: Whether ``None`` skips the check.
         exclude: Keys of ``item`` the mapping must not have.
         extra: Keys outside ``item`` the mapping may also have.
-
-    Kwargs:
-
-        not_required: Required keys of ``item`` the mapping may leave out.
 
     Returns:
 
@@ -690,9 +674,7 @@ def validator_from_typed_dict[T](
         riko.base.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
 
     """
-    require = require_from_typed_dict(
-        item, what, exclude=exclude, not_required=not_required, extra=extra
-    )
+    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
     return validator_from_require(require, optional=optional)
 
 
@@ -886,8 +868,7 @@ def require_from_form[T](
 
     Use ``require_instance`` instead to build a validator or converter for one class,
     e.g., ``validator_from_require(require_instance, bool)``. Use
-    ``require_from_typed_dict`` instead when you need ``exclude``, ``not_required``,
-    or ``extra``.
+    ``require_from_typed_dict`` instead when you need ``exclude`` or ``extra``.
 
     Args:
 

@@ -28,6 +28,7 @@ from riko.base._require_guards import require_finite, require_instances, require
 
 if TYPE_CHECKING:
     from ._workflow import GraphEdge
+    from ._wrappers import Func
     from .modules import AnyConfRule
 
 type FrozenJSON = (
@@ -168,11 +169,21 @@ class FrozenDict[K, V](Mapping[K, V]):
 @overload
 def freeze(value: None) -> None: ...
 @overload
-def freeze[K, V](value: Mapping[K, list[V]]) -> FrozenDict[K, tuple[V]]: ...
+def freeze[K, J, V](
+    value: Mapping[K, Mapping[J, V]],
+) -> FrozenDict[K, FrozenDict[J, V]]: ...
+@overload
+def freeze[K, V](value: Mapping[K, list[V]]) -> FrozenDict[K, tuple[V, ...]]: ...
 @overload
 def freeze[K, V](value: Mapping[K, set[V]]) -> FrozenDict[K, frozenset[V]]: ...
 @overload
 def freeze[K, V](value: Mapping[K, V]) -> FrozenDict[K, V]: ...
+@overload
+def freeze[K, V](
+    value: list[dict[K, V]] | tuple[Mapping[K, V], ...],
+) -> tuple[FrozenDict[K, V], ...]: ...
+@overload
+def freeze[T](value: list[list[T]]) -> tuple[tuple[T, ...], ...]: ...
 @overload
 def freeze[T](value: list[T] | tuple[T, ...]) -> tuple[T, ...]: ...
 @overload
@@ -357,7 +368,7 @@ def mapping_converter[FV](
     *_: object,
     what: str = "value",
     error: type[Exception] = InvalidPipelineError,
-) -> Callable[..., FrozenDict[str, FV]]:
+) -> Func[FrozenDict[str, FV]]:
     """
     Builds an attrs converter that freezes a required mapping and rejects anything else.
 
@@ -472,7 +483,7 @@ def optional_mapping_converter[FV](
     default: Mapping[str, object] | None = None,
     what: str = "value",
     error: type[Exception] = InvalidPipelineError,
-) -> Callable[..., FrozenDict[str, FV]]:
+) -> Func[FrozenDict[str, FV]]:
     """
     Builds an attrs converter to freeze mappings or ``None`` and reject anything else.
 

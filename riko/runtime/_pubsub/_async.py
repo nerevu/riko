@@ -33,8 +33,8 @@ class SubscriptionState(StrEnum):
 class _Slot:
     name: str
     generation: int
-    send_stream: MemoryObjectSendStream
-    receive_stream: MemoryObjectReceiveStream
+    send_stream: MemoryObjectSendStream[Item]
+    receive_stream: MemoryObjectReceiveStream[Item]
     state: SubscriptionState = field(default=SubscriptionState.PENDING)
 
 
@@ -84,7 +84,7 @@ class AsyncPubSubHub:
     @asynccontextmanager
     async def subscribe(
         self, name: str
-    ) -> AsyncGenerator[MemoryObjectReceiveStream, None]:
+    ) -> AsyncGenerator[MemoryObjectReceiveStream[Item], None]:
         slot = self._get_or_create(name)
 
         if slot.state is SubscriptionState.SUBSCRIBED:
