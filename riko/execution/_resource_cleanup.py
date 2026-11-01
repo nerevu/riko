@@ -1,130 +1,138 @@
 # vim: sw=4:ts=4:expandtab
-"""Closes the resource values an execution owns."""
+"""Closes the values an execution owns."""
 
 from __future__ import annotations
 
-from inspect import iscoroutine
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING
 
-from riko.bado._util import as_awaitable, maybe_async
-from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_awaitable
-from riko.types._io import is_async_closeable
+from riko.bado._util import as_awaitable, maybe_async, require_value
+from riko.base._guards import is_async_callable, is_awaitable
+from riko.types._io import get_async_closer, get_sync_closer
 
 from ._execution import asyncify_call
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from riko.types._io import SyncCloseable
     from riko.types._resource import Cleanup
+    from riko.types._wrappers import Func
+
+ASYNC_CLOSE_MSG = (
+    "a value whose only close is async cannot be closed under `for`; produce it "
+    "with an async resource factory or lifecycle, or iterate with `async for`"
+)
+ASYNC_CLEANUP_MSG = (
+    "an async resource cleanup runs under `for` only for a value an async factory "
+    "produced; make the factory async, or iterate with `async for`"
+)
 
 
-def close_resource[T](
-    cleanup: Cleanup[T] | Literal[False] | None, value: T
-) -> Awaitable[None] | None:
-    """
-    Closes an owned resource's value.
+def _get_closer(
+    value: object, *, prefer_async: bool
+) -> Callable[[], object | Awaitable[object]] | None:
+    """Gets ``value``'s closer, its async one first when ``prefer_async``."""
+    sync_closer, async_closer = get_sync_closer(value), get_async_closer(value)
 
-    A ``cleanup`` override is called with the value, ``False`` leaves the value
-    open, and ``None`` invokes the value's own ``close()``.
+    if prefer_async:
+        closer = sync_closer if async_closer is None else async_closer
+    else:
+        closer = async_closer if sync_closer is None else sync_closer
 
-    Args:
-
-        cleanup: The resource's cleanup override.
-        value: The resource value to close.
-
-    Returns:
-
-        Whatever ``cleanup`` returns. A caller can await an awaitable result.
-
-    Examples:
-
-        >>> class Client:
-        ...     closed = False
-        ...     def close(self):
-        ...         self.closed = True
-        >>>
-        >>> closed, kept = Client(), Client()
-        >>> close_resource(None, closed)
-        >>> close_resource(False, kept)
-        >>> closed.closed, kept.closed
-        (True, False)
-
-    """
-    result = None
-
-    if cleanup is None:
-        cast("SyncCloseable", value).close()
-    elif cleanup is not False:
-        result = cleanup(value)
-
-    return result
+    return closer
 
 
-async def aclose_resource[T](
-    cleanup: Cleanup[T] | Literal[False] | None, value: T
+def close_owned[T](
+    value: T,
+    cleanup: Cleanup[T] | None = None,
+    *,
+    bridge: Callable[[Awaitable[object]], object] | None = None,
 ) -> None:
     """
-    Closes an owned resource's value with a preference of ``aclose()`` over ``close()``.
+    Closes an owned value without an event loop.
 
-    A ``cleanup`` override is called (and awaited when async) with the value,
-    ``False`` leaves the value open, and ``None`` invokes the value's own
-    ``aclose()`` or ``close()``.
-
-    Args:
-
-        cleanup: The resource's cleanup override.
-        value: The resource value to close.
-
-    """
-    if cleanup is False:
-        pass
-    elif cleanup is not None:
-        await maybe_async(cleanup, value)
-    elif is_async_closeable(value):
-        await value.aclose()
-    else:
-        cast("SyncCloseable", value).close()
-
-
-def close_with[T](cleanup: Callable[[T], object], value: T) -> None:
-    """
-    Closes a resource value with a sync cleanup under sync execution.
+    A ``cleanup`` is called with the value. Otherwise the value's own close is called.
+    With a ``bridge`` its async close is preferred, and any awaitable the close
+    returns is awaited through the ``bridge``.
 
     Args:
 
-        cleanup: The sync cleanup to call with the value.
-        value: The resource value to close.
+        value: The value to close.
+        cleanup: The cleanup to call with ``value`` in place of its own close.
+        bridge: Runs an awaitable to completion on the event loop that owns ``value``.
 
     Raises:
 
-        InvalidPipelineError: If ``cleanup`` returns an awaitable, which a sync
-            execution cannot await.
+        InvalidPipelineError: If the close returns an awaitable and there is no
+            ``bridge``.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO()
+        >>> close_owned(f)
+        >>> f.closed
+        True
 
     """
-    result = cleanup(value)
+    if cleanup is None:
+        closer = _get_closer(value, prefer_async=bridge is not None)
+        result = None if closer is None else closer()
+    else:
+        result = cleanup(value)
 
-    if is_awaitable(result):
-        if iscoroutine(result):
-            result.close()
+    if bridge is not None and is_awaitable(result):
+        bridge(result)
+    else:
+        require_value(result, ASYNC_CLEANUP_MSG)
 
-        raise InvalidPipelineError("async resource cleanup requires async execution")
+
+async def _aclose_sync(func: Func[object], *args: object, inline: bool) -> None:
+    """Closes with a sync ``func`` on the loop when ``inline``, else on a worker."""
+    if inline:
+        await maybe_async(func, *args)
+    else:
+        await as_awaitable(await asyncify_call(func, *args))
 
 
-async def aclose_with[T](cleanup: Callable[[T], object], value: T) -> None:
+async def aclose_owned[T](
+    value: T, cleanup: Cleanup[T] | None = None, *, inline: bool = True
+) -> None:
     """
-    Closes a resource value with a sync cleanup on a worker thread.
+    Closes an owned value on the event loop.
 
-    An awaitable the cleanup returns is awaited on the event loop.
+    A ``cleanup`` is called with the value. Otherwise the value's async close is
+    preferred over its sync one. An awaitable a sync close returns is awaited.
 
     Args:
 
-        cleanup: The sync cleanup to call with the value.
-        value: The resource value to close.
+        value: The value to close.
+        cleanup: The cleanup to call with ``value`` in place of its own close.
+        inline: Whether a sync close runs on the event loop rather than on a worker
+            thread.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>> from riko.bado import run
+        >>>
+        >>> f = StringIO()
+        >>> run(aclose_owned, f)
+        >>> f.closed
+        True
 
     """
-    await as_awaitable(await asyncify_call(cleanup, value))
+    if cleanup is None:
+        async_closer, sync_closer = get_async_closer(value), get_sync_closer(value)
+
+        if async_closer is not None:
+            await async_closer()
+        elif sync_closer is not None:
+            await _aclose_sync(sync_closer, inline=inline)
+    elif is_async_callable(cleanup):
+        await cleanup(value)
+    else:
+        await _aclose_sync(cleanup, value, inline=inline)
 
 
-__all__ = ["aclose_resource", "aclose_with", "close_resource", "close_with"]
+__all__ = ["ASYNC_CLEANUP_MSG", "ASYNC_CLOSE_MSG", "aclose_owned", "close_owned"]

@@ -21,20 +21,24 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
+from inspect import iscoroutine
 from math import inf
 from typing import TYPE_CHECKING, Literal, overload
 
+from riko.base._config import settings
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_awaitable
 from riko.base._sentinels import MISSING, MissingType
 from riko.types._io import is_async_closeable
 
-from ._backend import USE_CLIENT_DEFAULT, AsyncClient, Path, create_task_group
+from ._backend import AsyncClient, Path, create_task_group
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
+    from collections.abc import AsyncGenerator, Awaitable, Iterable, Mapping
 
     from anyio.abc import TaskGroup
-    from httpx._client import UseClientDefault
+
+    from riko.types._wrappers import AsyncFunc, Func
 
     from ._backend import HTTPXResponse
 
@@ -81,7 +85,7 @@ async def async_get(
     url: str,
     *,
     params: Mapping[str, str] | None = None,
-    timeout: float | UseClientDefault | None = USE_CLIENT_DEFAULT,
+    timeout: float | None = settings.fetch_timeout,
 ) -> HTTPXResponse:
     """
     Fetches ``url`` via httpx and follows redirects.
@@ -94,8 +98,8 @@ async def async_get(
 
         params: Query parameters added to ``url``.
 
-        timeout: Seconds to wait before giving up (default: the client's own timeout).
-            ``0``, ``inf``, or ``None`` waits forever.
+        timeout: Seconds to wait before giving up (default: ``RIKO_FETCH_TIMEOUT``,
+            30 seconds). ``0``, ``inf``, or ``None`` waits forever.
 
     Returns:
 
@@ -155,19 +159,57 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     return [r for r in results if not isinstance(r, MissingType)]
 
 
+def require_value[T](result: T | Awaitable[T], msg: str) -> T:
+    """
+    Requires ``result`` to not be awaitable, and closes any awaitable coroutine given.
+
+    Args:
+
+        result: The call's result.
+        msg: The error message for an awaitable result.
+
+    Returns:
+
+        ``result``.
+
+    Raises:
+
+        InvalidPipelineError: If ``result`` is awaitable.
+
+    Examples:
+
+        >>> require_value(3, "unused")
+        3
+        >>> require_value(async_return(3), "use `async for`")
+        Traceback (most recent call last):
+        ...
+        riko.base.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
+
+    """
+    if is_awaitable(result):
+        if iscoroutine(result):
+            result.close()
+
+        raise InvalidPipelineError(msg)
+
+    return result
+
+
 async def as_awaitable[T](value: T | Awaitable[T]) -> T:
     return (await value) if is_awaitable(value) else value
 
 
 async def maybe_async[T](
-    func: Callable[..., T | Awaitable[T]], *args: object, **kwargs: object
+    func: Func[T | Awaitable[T]], *args: object, **kwargs: object
 ) -> T:
     """Calls ``func`` and awaits its result only when it is awaitable."""
     return await as_awaitable(func(*args, **kwargs))
 
 
 @asynccontextmanager
-async def maybe_aclosing[T: AsyncIterator](stream: T) -> AsyncGenerator[T, None]:
+async def maybe_aclosing[T: AsyncIterator[object]](
+    stream: T,
+) -> AsyncGenerator[T, None]:
     """
     Closes *stream* on exit when it has an ``aclose`` method.
 
@@ -208,8 +250,6 @@ async def maybe_aclosing[T: AsyncIterator](stream: T) -> AsyncGenerator[T, None]
             await stream.aclose()
 
 
-def async_partial[T](
-    func: Callable[..., T | Awaitable[T]], **kwargs
-) -> Callable[..., Awaitable[T]]:
+def async_partial[T](func: Func[T | Awaitable[T]], **kwargs: object) -> AsyncFunc[T]:
     """Applies ``kwargs`` to ``func`` for later awaiting via :func:`maybe_async`."""
     return partial(maybe_async, func, **kwargs)

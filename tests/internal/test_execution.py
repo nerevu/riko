@@ -41,7 +41,7 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._resource_cleanup import aclose_resource
+from riko.execution._resource_cleanup import aclose_owned
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
@@ -114,6 +114,16 @@ class _AsyncClient:
 
     async def aclose(self) -> None:
         self.closed = True
+
+
+class _AsyncCloseClient:
+    """A client whose only ``close()`` is an async function."""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def close(self) -> None:
+        self.events.append("close")
 
 
 CLIENT_CLASSES = [
@@ -581,9 +591,10 @@ async def _async_test_open_close(resource, value: object | None = None):
 
 
 ACLOSE_CASES = [
-    pytest.param(False, False, id="left-open"),
-    pytest.param(_SyncClient.close, True, id="sync-cleanup"),
-    pytest.param(None, True, id="sync-close"),
+    pytest.param(_SyncClient, _SyncClient.close, id="sync-cleanup"),
+    pytest.param(_SyncClient, None, id="sync-close"),
+    pytest.param(_AsyncClient, _AsyncClient.aclose, id="async-cleanup"),
+    pytest.param(_AsyncClient, None, id="async-close"),
 ]
 
 
@@ -613,8 +624,22 @@ AFAILED_ACQUISITIONS = [
 ]
 
 
-async def _adb() -> AsyncGenerator[str]:
-    yield "value"
+async def _adb(events: list[str]) -> AsyncGenerator[str]:
+    try:
+        yield "value"
+    finally:
+        events.append("cleanup")
+
+
+async def _ahang(_value: object) -> None:
+    await async_sleep(1)
+
+
+async def _ahang_db() -> AsyncGenerator[str]:
+    try:
+        yield "value"
+    finally:
+        await async_sleep(1)
 
 
 async def _acleanup(_value: object) -> None:
@@ -627,7 +652,6 @@ def _counted(produced: list[int]) -> object:
 
 
 SYNC_ASYNC_REJECTIONS = [
-    pytest.param(lambda _: Resource.from_lifecycle(_adb), None, id="async-lifecycle"),
     pytest.param(
         lambda produced: Resource.from_factory(
             partial(_counted, produced), cleanup=_acleanup
@@ -636,9 +660,12 @@ SYNC_ASYNC_REJECTIONS = [
         id="async-cleanup-before-producer",
     ),
     pytest.param(
-        lambda _: Resource(_AsyncClient()),
-        "closing an async-only",
-        id="async-only-value",
+        lambda _: Resource(_AsyncClient()), "only close is async", id="async-only-value"
+    ),
+    pytest.param(
+        lambda _: Resource(_AsyncCloseClient()),
+        "only close is async",
+        id="async-close-value",
     ),
 ]
 
@@ -653,6 +680,35 @@ def _awaitable_cleanup(events: list[str]):
     return cleanup
 
 
+def _async_cleanup(events: list[str]):
+    async def acleanup(_value: object) -> None:
+        events.append("cleanup")
+
+    return acleanup
+
+
+SYNC_BRIDGED_CLEANUPS = [
+    pytest.param(
+        lambda events: Resource.from_lifecycle(partial(_adb, events)),
+        id="async-lifecycle",
+    ),
+    pytest.param(
+        lambda events: Resource.from_factory(_value, cleanup=_async_cleanup(events)),
+        id="async-cleanup",
+    ),
+    pytest.param(
+        lambda events: Resource.from_factory(
+            _value, cleanup=_awaitable_cleanup(events)
+        ),
+        id="awaitable-cleanup-result",
+    ),
+]
+SYNC_HANGING_CLEANUPS = [
+    pytest.param(
+        lambda: Resource.from_factory(_value, cleanup=_ahang), id="async-cleanup"
+    ),
+    pytest.param(lambda: Resource.from_lifecycle(_ahang_db), id="async-lifecycle"),
+]
 AWAITABLE_CLEANUPS = [
     pytest.param(lambda cleanup: Resource(_SyncClient(), cleanup=cleanup), id="owned"),
     pytest.param(
@@ -671,6 +727,12 @@ class _DualClient:
 
     async def aclose(self) -> None:
         self.events.append("aclose")
+
+
+ASYNC_NATIVE_CLOSES = [
+    pytest.param(_DualClient, ["aclose"], id="dual-client-aclose"),
+    pytest.param(_AsyncCloseClient, ["close"], id="async-close"),
+]
 
 
 class TestResourceAcquisition:
@@ -943,14 +1005,40 @@ class TestResourceAcquisition:
 
         assert events == []
 
+    @skipif_issync
+    @pytest.mark.parametrize("build", SYNC_BRIDGED_CLEANUPS)
+    def test_sync_bridges_the_cleanup_of_an_async_produced_value(self, build) -> None:
+        events: list[str] = []
+        acquired = None
+
+        with SyncExecution() as execution:
+            acquired = execution.acquire(build(events))
+            assert events == []
+
+        assert acquired == "value"
+        assert events == ["cleanup"]
+
+    @skipif_issync
+    @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
+    def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        with pytest.raises(TimeoutError), SyncExecution(settings=settings) as execution:
+            execution.acquire(build())
+
+    @skipif_issync
     @pytest.mark.simulated_network
-    def test_sync_external_async_http_client_rejected(self) -> None:
-        with (
-            loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="async-native"),
-        ):
-            execution.acquire(Resource.from_lifecycle(_async_http_client(url, [])))
+    def test_sync_external_async_http_client_bridged(self) -> None:
+        events: list[str] = []
+
+        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+            with SyncExecution() as execution:
+                execution.acquire(
+                    Resource.from_lifecycle(_async_http_client(url, events))
+                )
+                assert events == []
+
+            assert events == ["closed"]
 
 
 class TestAsyncResourceAcquisition:
@@ -964,14 +1052,15 @@ class TestAsyncResourceAcquisition:
 
         assert events == ["cleanup"]
 
+    @pytest.mark.parametrize(("build", "expected"), ASYNC_NATIVE_CLOSES)
     @async_test
-    async def test_async_cleanup_closes_a_dual_client_with_aclose(self) -> None:
-        client = _DualClient()
+    async def test_async_cleanup_closes_an_owned_value_natively(self, build, expected):
+        client = build()
 
         async with AsyncExecution() as execution:
             await execution.aacquire(Resource(client))
 
-        assert client.events == ["aclose"]
+        assert client.events == expected
 
     @pytest.mark.parametrize(("build", "error"), AFAILED_ACQUISITIONS)
     @async_test
@@ -1157,12 +1246,13 @@ class TestAsyncResourceAcquisition:
         assert events == ["x"]
         assert client.closed is False
 
-    @pytest.mark.parametrize(("cleanup", "closed"), ACLOSE_CASES)
+    @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
+    @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
     @async_test
-    async def test_aclose_resource(self, cleanup, closed) -> None:
-        client = _SyncClient()
-        await aclose_resource(cleanup, client)
-        assert client.closed is closed
+    async def test_aclose_owned(self, client_class, cleanup, inline) -> None:
+        client = client_class()
+        await aclose_owned(client, cleanup, inline=inline)
+        assert client.closed is True
 
     @pytest.mark.simulated_network
     @async_test

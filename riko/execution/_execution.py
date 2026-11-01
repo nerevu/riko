@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
     from riko.types._workflow import GraphEdge
+    from riko.types._wrappers import Func
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
@@ -62,7 +63,7 @@ _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
 
-async def asyncify_call[T](func: Callable[..., T], *args: object) -> T:
+async def asyncify_call[T](func: Func[T], *args: object) -> T:
     """
     Runs a blocking callable on a worker thread from the current event loop.
 
@@ -104,7 +105,7 @@ class _FailedAcquisition:
         raise self.error
 
 
-def _event_sink(self: _BaseExecution) -> EventSink:
+def _event_sink[S: (ExitStack, AsyncExitStack)](self: _BaseExecution[S]) -> EventSink:
     sink = self.settings.event_sink
     return _NULL_EVENT_SINK if sink is None else sink
 
@@ -145,14 +146,14 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         if self._closing:
             raise PipelineStateError("closing", action, subject="execution")
 
-    def _record_cleanup_error(self, func: Callable, *args: object) -> None:
+    def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
         """Runs a cleanup callback and saves its failure for the shutdown report."""
         try:
             func(*args)
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
 
-    def queue_callback(self, func: Callable, *args: object) -> None:
+    def queue_callback(self, func: Func[object], *args: object) -> None:
         """
         Registers a synchronous ``func`` to run during exit-stack unwind.
 

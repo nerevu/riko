@@ -19,14 +19,15 @@ from riko.runtime._module_registry import ModuleRegistry, module_registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._workflow import Endpoint
+from riko.types._wrappers import Func
 
 if TYPE_CHECKING:
     from collections.abc import (
         AsyncGenerator,
         AsyncIterator,
         Awaitable,
-        Callable,
         Generator,
+        Iterator,
         Mapping,
         Sequence,
     )
@@ -56,7 +57,7 @@ def registered_modules(
         module_registry.reset()
 
 
-def tag_source[F: Callable[..., object]](fn: F) -> F:
+def tag_source[F: Func[object]](fn: F) -> F:
     """Tags a bare test callable as a source module, so an unseeded run may start it."""
     stamp_wrapper_meta(
         fn,
@@ -116,19 +117,19 @@ async def awaitable_source() -> list[dict[str, int]]:
     return [{"x": 1}, {"x": 2}]
 
 
-def _mark(func: Callable[..., object]) -> None:
+def _mark(func: Func[object]) -> None:
     setattr(func, "loopable", True)  # noqa: B010
     setattr(func, "type", "processor")  # noqa: B010
 
 
-def mark_loopable(func: Callable[..., object]) -> SyncModuleWrapper:
+def mark_loopable(func: Func[object]) -> SyncModuleWrapper:
     """Mark sync *func* as a loopable processor so a plan may map it per item."""
     _mark(func)
     return cast("SyncModuleWrapper", func)
 
 
 def mark_async_loopable(
-    func: Callable[..., AsyncIterator[object] | Awaitable[object]],
+    func: Func[AsyncIterator[object] | Awaitable[object]],
 ) -> AsyncModuleWrapper:
     """Mark async *func* as a loopable processor so a plan may map it per item."""
     _mark(func)
@@ -253,6 +254,75 @@ class ClosingAsyncIterator:
 
         self.index += 1
         return {"x": self.index}
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+
+class _TwoItems:
+    """A two-item iterator, or with ``fresh`` a handle that hands out a fresh one."""
+
+    def __init__(self, closed: list[str], *, fresh: bool = False) -> None:
+        self.closed, self.fresh, self.index = closed, fresh, 0
+
+    def __iter__(self) -> Iterator[Item]:
+        return iter([{"x": 1}, {"x": 2}]) if self.fresh else self
+
+    def __next__(self) -> Item:
+        if self.index == 2:
+            raise StopIteration
+
+        self.index += 1
+        return {"x": self.index}
+
+
+class AsyncCloseIterator(_TwoItems):
+    """A two-item iterator whose only close is an ``async def close``."""
+
+    async def close(self) -> None:
+        self.closed.append("closed")
+
+
+class AcloseOnlyIterator(_TwoItems):
+    """A two-item iterator whose only close is ``aclose``."""
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+
+class AsyncCloseAsyncIterator:
+    """A two-item async iterator whose only close is an ``async def close``."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.index = closed, 0
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> Item:
+        if self.index == 2:
+            raise StopAsyncIteration
+
+        self.index += 1
+        return {"x": self.index}
+
+    async def close(self) -> None:
+        self.closed.append("closed")
+
+
+async def _agen_two() -> AsyncGenerator[Item]:
+    for index in (1, 2):
+        yield {"x": index}
+
+
+class ClosingAsyncHandle:
+    """An ``aclose``-able handle that hands out a fresh two-item async iterator."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+
+    def __aiter__(self) -> AsyncIterator[Item]:
+        return _agen_two()
 
     async def aclose(self) -> None:
         self.closed.append("closed")

@@ -16,14 +16,12 @@ from typing import TYPE_CHECKING, Protocol, cast
 from riko.base._guards import is_listlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
-from riko.types._io import is_sync_closeable
 from riko.types._wrappers import (
+    Func,
     require_async_wrapper,
     require_single_output,
     require_sync_wrapper,
 )
-
-from ._execution import asyncify_call
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -140,12 +138,6 @@ def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
     return value if is_listlike(value) else [cast("T", value)]
 
 
-def _maybe_close(value: object) -> None:
-    """Closes closeable ``value``s so they release anything they hold."""
-    if is_sync_closeable(value):
-        value.close()
-
-
 def async_drain[T](items: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
@@ -186,12 +178,12 @@ async def pull_stream[T](
 
     Args:
 
-        stream: The synchronous item stream to read that is closed once reading stops.
+        stream: The synchronous item stream to read.
 
         pull: Runs a blocking callable off the event loop.
 
-        close: Closes the node streams ``stream`` reads. Called once ``stream`` is
-            closed.
+        close: Closes ``stream``, the value it was drawn from, and the node streams
+            it reads. Called once reading stops.
 
     Yields:
 
@@ -202,14 +194,11 @@ async def pull_stream[T](
         while not isinstance(item := await pull(_next_or_missing, stream), MissingType):
             yield item
     finally:
-        try:
-            await asyncify_call(_maybe_close, stream)
-        finally:
-            await close()
+        await close()
 
 
 def _copy_wrapper_meta(
-    target: Callable[..., object], source: ModuleWrapper, *, isasync: bool
+    target: Func[object], source: ModuleWrapper, *, isasync: bool
 ) -> None:
     """
     Stamps ``source``'s discovery metadata onto ``target`` as sync or async.

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
 from attrs import asdict, define, evolve, field, fields_dict
 from typing_extensions import TypeIs
 
-from riko.bado._util import async_partial, maybe_async
+from riko.bado._util import async_partial, maybe_async, require_value
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable
@@ -28,6 +28,7 @@ from riko.base._require_guards import (
     narrow_from_require,
     require_instance,
     require_str,
+    typed_dict_keys,
     validator_from_require,
 )
 from riko.definitions._nodes import (
@@ -48,8 +49,9 @@ from riko.types._frozendict import (
     normalize_mapping,
     optional_mapping_converter,
 )
+from riko.types._options import RawCallOptions
 from riko.types._workflow import parse_port
-from riko.types._wrappers import require_single_output
+from riko.types._wrappers import Func, require_single_output
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -106,7 +108,8 @@ class ExecutionExtras[V]:
     The keyword arguments an execution adds to a node's call.
 
     They sit beside the node's named input streams, so no input port may share a
-    field's name. A field left as ``None`` is not passed.
+    field's name; the ``item`` argument's; or the ``emit``, ``assign``, or ``field``
+    call option's. A field left as ``None`` is not passed.
 
     Attributes:
 
@@ -184,15 +187,27 @@ class ExecutionExtras[V]:
         )
 
 
-def _get_keyword_names(*funcs: Callable[..., object]) -> frozenset[str]:
+def _get_keyword_names(*funcs: Func[object]) -> frozenset[str]:
     """Gets the names of the keyword-only parameters ``funcs`` take."""
     params = chain.from_iterable(signature(f).parameters.values() for f in funcs)
     return frozenset(p.name for p in params if p.kind is Parameter.KEYWORD_ONLY)
 
 
-_RESERVED_INPUTS = frozenset(fields_dict(ExecutionExtras)) | _get_keyword_names(
-    NodeCall.__call__, build_call
+# Operators keep ``count`` as a port: stored workflows wire a count stream into
+# ``in:count`` on ``truncate``/``tail``. A processor's parser receives the ``count``
+# option instead, so a processor reserves it.
+_CALL_OPTION_NAMES = frozenset().union(*typed_dict_keys(RawCallOptions)) - {"count"}
+
+_RESERVED_INPUTS = frozenset(
+    {"item", *fields_dict(ExecutionExtras), *_CALL_OPTION_NAMES}
+) | _get_keyword_names(NodeCall.__call__, build_call)
+
+_PROCESSOR_RESERVED_INPUTS = _RESERVED_INPUTS | {"count"}
+
+_AWAITABLE_RESULT = (
+    "a map function returned an awaitable; iterate with `async for` to await it"
 )
+
 _is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
 
@@ -367,6 +382,11 @@ class ResolvedModule:
         return _has_flag(self.select_async(), "sequential_inputs")
 
     @property
+    def is_processor(self) -> bool:
+        """Whether the module runs its parser once per item (a processor module)."""
+        return getattr(self.select_async(), "type", None) == "processor"
+
+    @property
     def is_source(self) -> bool:
         """
         Whether the module creates items on its own and needs no input stream.
@@ -377,7 +397,7 @@ class ResolvedModule:
 
 
 def _gen_item_result(
-    fn: Callable[..., object],
+    fn: Func[object],
     item: object = None,
     *,
     context: Context | None = None,
@@ -391,11 +411,12 @@ def _gen_item_result(
     the one result, even ``None`` or an iterator. The ``context`` is accepted for the
     prepared call signature but never passed on to ``fn``.
     """
-    yield fn(item, **kwargs, **normalize_mapping(resources))
+    result = fn(item, **kwargs, **normalize_mapping(resources))
+    yield require_value(result, _AWAITABLE_RESULT)
 
 
 async def _agen_item_result[T](
-    fn: Callable[..., T | Awaitable[T]],
+    fn: Func[T | Awaitable[T]],
     item: object = None,
     *,
     context: Context | None = None,
@@ -407,8 +428,8 @@ async def _agen_item_result[T](
 
 
 def _gen_stream_results[T](
-    fn: Callable[..., T],
-    item: Iterable[object] = (),
+    fn: Func[T | Awaitable[T]],
+    items: Iterable[object] = (),
     *,
     context: Context | None = None,
     resources: Mapping[str, object] | None = None,
@@ -416,11 +437,12 @@ def _gen_stream_results[T](
 ) -> Iterator[T]:
     """Applies a callable node's ``fn`` to each item of a stream, one result each."""
     call = partial(fn, **kwargs, **normalize_mapping(resources))
-    return map(call, item)
+    require = partial(require_value, msg=_AWAITABLE_RESULT)
+    return (require(call(item)) for item in items)
 
 
 async def _agen_stream_results[T](
-    fn: Callable[..., T | Awaitable[T]],
+    fn: Func[T | Awaitable[T]],
     item: AnyIterable[object] = (),
     *,
     context: Context | None = None,
@@ -457,7 +479,9 @@ class PreparedInterface(NamedTuple):
     native: bool
 
 
-def _resolve_callable(dispatcher: Dispatcher, node: CallableNode) -> ResolvedModule:
+def _resolve_callable[T](
+    dispatcher: Dispatcher, node: CallableNode[T]
+) -> ResolvedModule:
     """
     Resolves the module a callable node runs as.
 
@@ -672,8 +696,10 @@ _require_workflow = narrow_from_require(
 )
 
 
-def _is_reserved_input(port: str) -> bool:
-    return parse_port(port).name in _RESERVED_INPUTS
+def _is_reserved_input(port: str, module: ResolvedModule | None) -> bool:
+    is_processor = module is not None and module.is_processor
+    reserved = _PROCESSOR_RESERVED_INPUTS if is_processor else _RESERVED_INPUTS
+    return parse_port(port).name in reserved
 
 
 def require_default_output_port(port: str, ref: str) -> None:
@@ -1084,7 +1110,9 @@ class ExecutionPlan:
         flow.require_runnable_only("execution")
         targets = ((e.target, e.target_port) for e in flow.graph_edges)
 
-        if reserved := sorted(t for t in targets if _is_reserved_input(t[1])):
+        if reserved := sorted(
+            t for t in targets if _is_reserved_input(t[1], self.modules.get(t[0]))
+        ):
             msg = f"input port(s) {reserved} use a reserved name. Rename the port(s)."
             raise InvalidPipelineError(msg)
         elif unresolved := set(flow.runnable_nodes).symmetric_difference(self.modules):
