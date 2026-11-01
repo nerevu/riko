@@ -43,7 +43,8 @@ park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; repo
 
 First run `python .claude/skills/land/gates.py check tidy`. When it exits 0,
 tidy already ran on this exact tree (in this or another session): skip the
-agent and report "tidy current". Otherwise launch one fresh `general-purpose`
+agent and report "tidy current". Otherwise run `python .claude/skills/land/require_agents.py`
+(on failure, stop and report its output) and launch one fresh `implementer`
 agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow

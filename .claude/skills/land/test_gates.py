@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 import gates
+import require_agents
 
 
 @pytest.fixture
@@ -194,3 +195,28 @@ def test_run_keeps_the_last_pytest_summary_line(capsys):
     assert "ratchet ok" in capsys.readouterr().out
     assert gates.print_summary(path, "test") == 0
     assert capsys.readouterr().out.startswith("3 passed, 2 xfailed in 9s (current;")
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        pytest.param({}, ["auditor.md is", "implementer.md is"], id="none"),
+        pytest.param(
+            {"auditor": "Bash, Read", "implementer": "Bash, Read, Edit"},
+            ["implementer.md: grant the tools Write"],
+            id="short-grant",
+        ),
+        pytest.param(
+            {"auditor": "Bash, Read", "implementer": "Bash, Read, Edit, Write"},
+            [],
+            id="complete",
+        ),
+    ],
+)
+def test_require_agents(tmp_path, files, expected):
+    for name, tools in files.items():
+        (tmp_path / f"{name}.md").write_text(f"---\ntools: {tools}\n---\n")
+
+    problems = require_agents.get_problems(tmp_path)
+    assert len(problems) == len(expected)
+    assert all(want in got for want, got in zip(expected, problems, strict=True))

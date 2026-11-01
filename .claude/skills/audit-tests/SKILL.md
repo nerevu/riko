@@ -71,10 +71,12 @@ Add these only when their dimension is in scope:
 
 Before fanning out, estimate the cost: lines to read × about 12 tokens × the number of
 agents rereading them. Size each file group to fit a 100k-token agent: about 1k test
-lines. An agent starts with about 50k of fixed context, and verifying costs about 23
-tokens per assigned line in tool results plus about 500 per turn (2–4.5k-line groups
-ran all eight agents of the 2026-10-29 audit to 145–189k). Split agents by file group
-(`model: "opus"`), give each agent the scan leads for its files, and require both
+lines. An `auditor` agent starts with about 23k of fixed context (a `general-purpose`
+one with about 50k, so never use it here), and verifying costs about 23 tokens per
+assigned line in tool results plus about 500 per turn (2–4.5k-line groups ran all
+eight agents of the 2026-10-29 audit to 145–189k). Run `python .claude/skills/land/require_agents.py` first (on failure, stop
+and report its output). Split `auditor` agents by file
+group (`model: "opus"`), give each agent the scan leads for its files, and require both
 sides of every suspected duplicate to be read. Tag each lead CONFIRMED or DROPPED,
 with the reason. Every brief ends with: "Run `date` at the start and between items. If
 you pass about 10 minutes or 100k tokens and the remaining work is mechanical, stop at

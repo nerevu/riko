@@ -62,9 +62,11 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
-   subagent (`model: "opus"`, so it never inherits a Fable session's model),
-   never as an in-loop grep pass. Run `python $G check tidy` first and skip
+   `implementer` subagent (`model: "opus"`, so it never inherits a Fable
+   session's model), never as an in-loop grep pass. Run `python $G check tidy` first and skip
    the agent when it exits 0 (tidy already ran on this tree, in any session).
+   Before spawning, run `python .claude/skills/land/require_agents.py`; when it fails, stop and
+   report its output (the user-level agent definitions are missing).
    The brief opens "Follow `.claude/skills/tidy/SKILL.md`, reproduced below;
    `/land` is the caller, so skip its verify step" and then **pastes the whole
    file** (`cat .claude/skills/tidy/SKILL.md`) — the agent must never spend a
@@ -189,7 +191,9 @@ to an agent, which repeats their work by hand for many minutes.
    user's index or tree), refuses a plan where any id is in no step or in two,
    confirms the last tree equals the working tree, runs build checks on each
    step (ruff's undefined/unused names and `import riko`; `--full-checks` adds
-   pyright and the import contracts for bisect-safe commits), and replays the
+   `lint --all`, `--verify-types`, and full-project pyright on the step's own
+   tree for bisect-safe commits; `--tests` runs the suite with the ratchet on each
+   step, one at a time, so run it alone), and replays the
    autosquash in a throwaway worktree. It writes `NN.patch`/`NN.msg`,
    `commands.txt` (always led by `git reset -q`),
    `chain.txt`, and each step's files with `+added/-removed` line counts (plus

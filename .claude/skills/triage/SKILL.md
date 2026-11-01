@@ -35,6 +35,11 @@ Search for the phase that owns the behavior, in authority order:
 Grep the gameplans for the module, concept, and failure vocabulary — owners
 are often stated in a phase you wouldn't guess from the file that misbehaves.
 
+A defect in a dependency (meza, mezmorize, …) that riko works around belongs to
+`_docs/gameplans/upstream-fixes.md`: the local workaround is the repair, and it
+ships with an entry there plus a strict-xfail canary in
+`tests/internal/test_upstream.py` that calls the dependency directly.
+
 ## 3. Decide the disposition
 
 - **Local repair** — no phase owns the behavior, or the owning phase has

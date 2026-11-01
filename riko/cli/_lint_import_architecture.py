@@ -189,7 +189,7 @@ def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
         raise InvalidArchitectureError(f"redundant dependency: {source} -> {target}")
 
 
-def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
+def _gen_layers(name: str, graph: AnyGraph[str], verbose: bool = True) -> Iterator[str]:
     """Render the dependency DAG as compact chained expressions."""
     _validate_graph(name, graph)
     layers: dict[frozenset[str], set[str]] = defaultdict(set)
