@@ -329,8 +329,9 @@ is a fallback, so it is a `resolve`.
   `describe_module()` read runtime metadata; `Modules`/`Sources`/`Transforms`/
   `Sinks` and `Formats` are re-exported from the stable `riko` surface. `Formats`
   (serialization) is not `Sinks` (pipe category).
-- **meza is pinned by `pyproject.toml`**; lower-level conversion ownership remains
-  with meza where the runtime contract says so.
+- **meza resolves from PyPI releases only** (a `meza>=` floor, no git source);
+  lower-level conversion ownership remains with meza where the runtime contract says
+  so. Workarounds for meza defects are tracked in `_docs/gameplans/upstream-fixes.md`.
 - **Tunable knobs live in `riko/base/_config.py`** — static project policy
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the import
   linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens

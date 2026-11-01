@@ -179,6 +179,7 @@ The complete `§0–27` routing map:
 | [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side protocol adapters; current §23 runtime remains in contract. |
 | [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict/business-data key handling. |
 | [release-readiness.md](gameplans/release-readiness.md) | Pre-1.0 API/DX/release gate. |
+| [upstream-fixes.md](gameplans/upstream-fixes.md) | Dependency defects riko works around: per-defect workaround, direct-call canary test, and what riko deletes when the dependency fixes it. |
 | [correctness-audit.md](gameplans/correctness-audit.md) | Cross-repo correctness taxonomy/open defect register and merge-gate work. |
 | [v1-cutover.md](gameplans/v1-cutover.md) | Ordered R4B clean-break checklist retiring `SyncPipe`/`AsyncPipe`/collections and the v1 compiler: P10 mechanics migrate first, generated-pipeline/CLI flips, deletion steps, drift guards; forward order stays with `implementation-sequence.md`. |
 

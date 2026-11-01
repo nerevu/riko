@@ -46,6 +46,7 @@ Index (file, then the subjects it owns, in file order):
                               RequireInterface, EntryPointModules, WorkflowResolver,
                               PackageStore, DirectoryStore, CompositeStore, Catalog,
                               ResolvedDocuments
+    test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, OverloadTypes, ResolveCastType,
                               DefItemgetter, Fromdict, ParseDateString,

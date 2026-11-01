@@ -61,6 +61,18 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    breaks a gate, fixing the code is the default; holding a package back is a
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
+   **When meza's locked version changed** (`git diff -- uv.lock` shows a new
+   meza version, from this step or from the change itself), sync
+   `_docs/gameplans/upstream-fixes.md` before moving on; the user never edits
+   it by hand. Run `uv run --active pytest -p no:cacheprovider --no-cov
+   tests/internal/test_upstream.py -rX`. For each unexpected pass: raise the
+   `meza>=` floor in `pyproject.toml` to the locked version (users on an older
+   meza still need the workaround), delete the workaround the entry names, its
+   canary, and the entry, and re-run that area's tests. Then update the entry
+   header's floor line, and set each remaining entry's **Upstream branch/PR**
+   line from `git -C ~/Documents/Projects/meza branch -a` and `gh pr list -R
+   reubano/meza` (a merged or deleted branch reads "none yet" again). Name
+   every deleted workaround in the report.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
    `implementer` subagent (`model: "opus"`, so it never inherits a Fable
    session's model), never as an in-loop grep pass. Run `python $G check tidy` first and skip

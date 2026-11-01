@@ -10,3 +10,6 @@ def records2csv(
 def records2geojson(
     records: Iterable[Mapping[str, object]], **kwargs: object
 ) -> StringIO: ...
+def records2json(
+    records: Iterable[Mapping[str, object]], newline: bool = False, **kwargs: object
+) -> StringIO: ...
