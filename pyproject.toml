@@ -256,6 +256,10 @@ exclude = [
     "build/*",
     "dist/*",
 ]
+executionEnvironments = [
+    { root = "riko", reportMissingTypeArgument = "error", reportUnknownParameterType = "error", reportMissingParameterType = "error" },
+    { root = "." },
+]
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
