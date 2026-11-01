@@ -57,6 +57,16 @@ jobs:
           fi
       - name: Build
         run: uv build
+      - name: Resolve every extra from PyPI (wheel)
+        # Installs the wheel with its published metadata only (no lockfile, no git
+        # sources), so an extra that users cannot install fails before publishing.
+        run: |
+          tmp="$(mktemp -d)"
+          cd "$tmp"
+          dist="$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
+          uv run --isolated --no-project \
+            --with "riko[async,perf,finance] @ file://$dist" \
+            python -c "import riko, ijson, lxml, fastfeedparser, csv2ofx"
       - name: Smoke test (wheel)
         run: |
           tmp="$(mktemp -d)"
