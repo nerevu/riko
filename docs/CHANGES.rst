@@ -229,8 +229,8 @@ Fixes
 
 - Fixed many defects that earlier 2026 releases introduced: riko's errors; async runs
   and async I/O; writing and exporting; ``DotDict``, field assignment, and configuration
-  lookups; module decorators and their options; the ``loop`` module; JSON and feed
-  parsing; dates; and URL and path resolution.
+  lookups; module decorators and their options; plugin module loading; the ``loop``
+  module; JSON and feed parsing; dates; and URL and path resolution.
 
 - Fetching in a sync run no longer garbles text with no newline or only carriage-return
   line endings, drops all but the first line of UTF-16 text, raises ``RuntimeError`` on

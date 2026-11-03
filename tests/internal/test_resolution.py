@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import re
+from functools import partial
 from importlib.metadata import EntryPoint
+from threading import Barrier, Thread
 from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, assert_type, cast
 
@@ -514,6 +516,27 @@ class TestEntryPointModules:
             fixed_registry.require(_MISSING_NAME)
 
         assert calls["n"] == 1
+
+    def test_racing_first_loads_get_one_entry(self, monkeypatch, fixed_registry):
+        barrier = Barrier(2)
+
+        def factory():
+            barrier.wait(timeout=5)
+            return ModuleDefinition(name=_NAME, sync_pipe=_pipe_wrapper())
+
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, factory))
+        loaded: list[ModuleDefinition | None] = []
+        load = partial(fixed_registry.load_definition, _NAME)
+        threads = [Thread(target=lambda: loaded.append(load())) for _ in range(2)]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join(timeout=5)
+
+        assert len(loaded) == 2
+        assert loaded[0] is loaded[1]
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
         defn = ModuleDefinition(name="acme.other", sync_pipe=_MARKER)

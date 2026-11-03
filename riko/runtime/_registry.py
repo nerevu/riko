@@ -71,7 +71,13 @@ class Registry[T]:
             raise ValueError(msg + f"plugin ({', '.join(dists)}); keep one")
 
     def _load_entry_point(self, name: str) -> T | None:
-        """Loads the entry-point tier's entry for ``name`` once, if one declares it."""
+        """
+        Loads the entry-point tier's entry for ``name``, if one declares it.
+
+        Every caller gets the same entry. Threads racing on a first load may each run
+        the entry point, but only the first result is kept. Loading one must not have
+        side effects.
+        """
         ep = self._entry_points.get(name)
 
         if name not in self._loaded and ep is not None:
@@ -82,7 +88,7 @@ class Registry[T]:
                 msg = f"entry point {name!r} declares a {self.label} named {key!r}; "
                 raise ValueError(msg + "the two must match")
 
-            self._loaded[name] = loaded
+            self._loaded.setdefault(name, loaded)
 
         return self._loaded.get(name)
 
