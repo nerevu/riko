@@ -223,7 +223,8 @@ Close with:
 - **Slice plan for the fix**: broken tests first, then layout moves, then
   dedup/folds, then rules or lints. Each slice is verified by a sorted collect-id
   diff against a clean HEAD worktree (only the stated deletions differ),
-  `codegen --tests`, `lint --all`, `test --ratchet`, and `--check-types`.
+  `codegen --tests`, `lint --all`, `test --ratchet`, and `--check-types`, each full
+  gate run through `gates.py run` with `/land`'s command so `/land` reuses the pass.
 - **Tool gaps**: leads the scanner missed that you found by hand, with the
   `overlap_scan.py` section or lint that would catch them, so the next pass can
   build that check.

@@ -322,6 +322,11 @@ is a fallback, so it is a `resolve`.
   `--deps`, `--bindings`, `--tests`, `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
   verification (`--check-types`/`--verify-types`), pylint strict mode, and
   distribution checks remain explicit heavyweight checks.
+- **Whole-tree gates run through `gates.py`** — every full `lint --all`, `test --ratchet`,
+  `--check-types`, `--verify-types`, `prettify`, or `codegen` run, in any skill or ad hoc, goes
+  through `python .claude/skills/land/gates.py run <gate> [--mutates] [--lock] -- <command>` with
+  `/land`'s exact command, so the pass is recorded against the tree and `/land` skips it instead of
+  rerunning. A bare run records nothing. Targeted runs (one file, `-k`) stay bare.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
   `_docs/` model; transient scratch material does not belong in authoritative root
   docs.
