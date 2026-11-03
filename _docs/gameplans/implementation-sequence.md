@@ -1035,6 +1035,8 @@ Deliver:
 
 - `Workflow` input declarations (canonical full JSON Schema; authoring shorthands normalize to it;
   requiredness inferred from an absent default; `default: null` implies nullable);
+  until then a strict `Workflow` accepts a non-mapping declaration (tripwire
+  `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`);
 - the `{"input": name}` structural reference grammar in node configuration;
 - a decision on callable nodes (R4C `map`): whether `{"input": name}` references also apply to a
   `CallableNode`'s keyword arguments, so `pipeline.map(fn, q={"input": "q"})` calls `fn(item, q=<value>)`,
