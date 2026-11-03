@@ -12,6 +12,7 @@ Usage:
     python .claude/skills/tidy/move_tests.py --drop-row path::TABLE ID [ID ...]
     python .claude/skills/tidy/move_tests.py --place path::NAME [...] --above CLASS
     python .claude/skills/tidy/move_tests.py --place-leads FILE [FILE ...] [--dry-run]
+    python .claude/skills/tidy/move_tests.py --plan-split FILE
 
 ``SPEC`` is ``path::Class`` (a whole class) or ``path::Class::method`` (one test
 method). ``DEST`` is ``path`` for classes, ``path::Class`` for methods, which are
@@ -41,11 +42,12 @@ Modes:
   the source file's helpers) that are not on the supported surface, so a move to
   ``public`` can be decided before it is made; it exits 1 when any spec uses one.
 - ``--sort`` orders each class as the layout rule wants: other members, behavior
-  tests, rejection tests (built on ``pytest.raises`` and named for a refusal),
-  then strict-xfail tripwires (a ``strict=True`` xfail decorator or a module-level
-  marker holding one). The order within each group is kept, and the heuristic
-  classification is printed; ``--kind TEST=KIND`` (repeatable) reclassifies a
-  misfiled test as ``behavior``, ``rejection``, or ``tripwire``.
+  tests, rejection tests (a ``pytest.raises`` with no assertion outside it but
+  about the error it binds), then strict-xfail tripwires (a ``strict=True``
+  xfail decorator or a module-level marker holding one). The order within each
+  group is kept, and the heuristic classification is printed; ``--kind
+  TEST=KIND`` (repeatable) reclassifies a misfiled test as ``behavior``,
+  ``rejection``, or ``tripwire``.
 
 - ``--delete`` removes each test method or class (decorators and leading
   comments included), and the class too when its last method goes.
@@ -58,6 +60,11 @@ Modes:
   every helper with one user class moves directly above it (above the sync class
   of a twin pair). Helpers that a module-level statement also uses are left
   alone, since moving them could break import order.
+- ``--plan-split`` writes nothing: it prints each test class's line footprint
+  (the class plus the helpers only it uses, transitively) and each helper several
+  classes share, with its users. A split moves classes whose footprints sum to the
+  wanted size; the shared helpers go to ``tests/_*.py`` or stay with the larger
+  half and are imported.
 
 Moves, merges, and renames also repoint backticked citations of the moved symbol
 (``path::Class[::test]`` and ``Class::test``) in ``_docs/`` (archive and research
@@ -76,8 +83,13 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 DESCRIPTION = "Move test classes or methods between test files."
 RUFF = shutil.which("ruff") or "ruff"
@@ -511,6 +523,44 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
     return [spec.path]
 
 
+def gen_split_plan(path: Path) -> Iterator[str]:
+    tree = ast.parse(path.read_text())
+    classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    defs = {name: stmt for stmt in tree.body for name in get_defined(stmt)}
+    users: defaultdict[int, set[str]] = defaultdict(set)
+
+    for cls in classes:
+        seen: dict[int, ast.stmt] = {}
+        queue = list(get_used(cls))
+
+        while queue:
+            stmt = defs.get(queue.pop())
+            if stmt is not None and stmt is not cls and id(stmt) not in seen:
+                seen[id(stmt)] = stmt
+                queue.extend(get_used(stmt))
+
+        for key in seen:
+            users[key].add(cls.name)
+
+    own: Counter[str] = Counter()
+
+    for stmt in tree.body:
+        skipped = isinstance(stmt, ast.ClassDef | ast.Import | ast.ImportFrom | ast.If)
+        names = users.get(id(stmt), set())
+        size = (stmt.end_lineno or stmt.lineno) - stmt.lineno + 1
+
+        if not skipped and len(names) == 1:
+            own[next(iter(names))] += size
+        elif not skipped and len(names) > 1:
+            shared = ", ".join(sorted(names))
+            yield f"shared {path}:{stmt.lineno} {size} lines: {shared}"
+
+    for cls in classes:
+        top = min([cls.lineno, *(d.lineno for d in cls.decorator_list)])
+        size = (cls.end_lineno or cls.lineno) - top + 1
+        yield f"{cls.name} {path}:{cls.lineno} class={size} helpers={own[cls.name]}"
+
+
 def merge(dest: str, spec: Spec, dry: bool, with_helpers: bool) -> list[Path]:
     tree = ast.parse(spec.path.read_text())
     cls = find_class(tree, spec.cls)
@@ -746,6 +796,9 @@ def main() -> int:
     mode.add_argument(
         "--place-leads", action="store_true", help="apply placement leads to FILEs"
     )
+    mode.add_argument(
+        "--plan-split", action="store_true", help="print FILE's class footprints"
+    )
     parser.add_argument("--above", help="with --place: the class to place above")
     parser.add_argument(
         "--kind",
@@ -762,6 +815,12 @@ def main() -> int:
     KIND_OVERRIDES.update(
         (name, KINDS[kind]) for name, _, kind in (k.partition("=") for k in args.kind)
     )
+
+    if args.plan_split:
+        for path in args.args:
+            for line in gen_split_plan(Path(path)):
+                print(line)
+        return 0
 
     if args.place_leads:
         return _fix(set(place_leads([Path(a) for a in args.args], args.dry_run)))

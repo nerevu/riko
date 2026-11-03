@@ -203,7 +203,8 @@ neighborhood it affects:
    tests and standalone tests that fit a table, `pytest.param` rows a few columns
    too long for one line, shared literals, doctest calls
    repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
-   doctests of six or more examples whose callee has a table, same-named tests,
+   test messages a doctest also pins, doctests of six or more examples whose callee
+   has a table, tests with no assertion or asserts only inside a loop, same-named tests,
    unsupported names in public and supported-only internal classes, out-of-order
    or misplaced classes and helpers, classes that never name their riko-named subject,
    functional classes with no end-to-end marker, tests that start a process
@@ -214,7 +215,8 @@ neighborhood it affects:
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
-   `--with-helpers` so a moved method carries the helpers only it used;
+   `--with-helpers` so a moved method carries the helpers only it used,
+   `--plan-split` for each class's footprint before a split;
    moves repoint doc citations), and find a test's current home with
    `overlap_scan.py --where NAME`. Module constants that a move strands below
    code go back to the top with `python .claude/skills/tidy/lift_constants.py

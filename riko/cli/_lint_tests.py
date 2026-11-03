@@ -8,7 +8,8 @@ Each test tier folder (``public``, ``internal``, ``functional``) ends its
 check fails when an index is stale, a test sits outside a ``Test<Subject>`` class, a
 subject is owned by two files in one tier, a file or folder is misplaced, or a
 public test imports a private name. File sizes outside the split/merge bounds are
-reported as advice rather than failures.
+reported as advice rather than failures; a file named in ``SIZE_EXEMPT`` keeps its
+size on purpose (the dependency canaries are cited by path and stay one file).
 
 Every bound in a test file or a ``tests/_*.py`` helper (a ``timeout`` marker, a
 ``fail_after``/``move_on_after`` bound, or a ``wait``/``join``/``result``/
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
 FIXTURE_DIRS = frozenset({"workflows", "pyworkflows", "dags", "typing"})
 SPLIT_LINES = 2000
 MERGE_LINES = 300
+SIZE_EXEMPT: Final[frozenset[str]] = frozenset({"test_upstream.py"})
 HISTORY_NAMES = re.compile(r"^test_(regressions?|fixes|bugs?|misc)\b")
 TIMEOUT_LADDER: Final[frozenset[int]] = frozenset({1, 2, 3, 5, 8, 10, 15, 20, 30})
 LADDER_TEXT: Final = f"{', '.join(map(str, sorted(TIMEOUT_LADDER)))} s"
@@ -581,7 +583,9 @@ def _gen_file_issues(
                         message = f"public tests import supported names: {alias.name}"
                         yield LayoutIssue(path, node.lineno, message)
 
-    if lines > SPLIT_LINES:
+    if path.name in SIZE_EXEMPT:
+        pass
+    elif lines > SPLIT_LINES:
         message = (
             f"{lines} lines; move its largest Test<Subject> class into its own file, "
             "then check both files for overlaps, misfits, and move candidates"

@@ -62,7 +62,9 @@ Add these only when their dimension is in scope:
   strict xfail fails today.
 - **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times, each
   saved to a file; `uv run --active python .claude/skills/tidy/fit_bounds.py FILE...`
-  keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok.
+  keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok; an
+  inner bound's fit is capped below its enclosing block or marker (`cap=`), and an
+  elapsed-time assertion prints its elapsed < block < marker chain with a fit per link.
 - **Unique coverage:** `COVERAGE_CORE=ctrace pytest --cov=riko --cov-context=test`
   ranks suspects that add no unique lines. It only ranks; it never decides.
   The same data answers a proposed deletion: `uv run --active python

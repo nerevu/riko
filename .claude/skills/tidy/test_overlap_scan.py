@@ -8,6 +8,7 @@ Run after editing the tidy scripts:
 
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 
@@ -95,6 +96,7 @@ import pytest
 from riko._config import _hidden, ticks
 
 LABELS = ["alpha", "beta", "gamma"]
+LAST = 1
 
 
 def wrap():
@@ -136,7 +138,7 @@ class TestGizmo:
 
 class TestReiteration:
     def test_twice(self):
-        assert shared() == shared()
+        assert shared() == shared() == LAST
 """
 SCRIPT = """\
 from tests import run_module
@@ -171,6 +173,8 @@ LEADS = [
     pytest.param("placement", "TestGizmo: never names Gizmo", id="unnamed-subject"),
     pytest.param("doctest-balance", "ticks: 6 examples; tables:", id="balance"),
     pytest.param("processes", "TestRunPipe::test_spawns: starts", id="process"),
+    pytest.param("doctest-messages", "'must be a string' -> riko", id="message"),
+    pytest.param("assertless", "TestTicks::test_ticks_inline: no", id="assertless"),
 ]
 
 
@@ -208,6 +212,10 @@ def test_section_lists_the_lead(report, section, fragment):
     assert any(fragment in text for text in report[section]), report[section]
 
 
+def test_a_constant_stays_at_the_top(report):
+    assert not [text for text in report["placement"] if "LAST" in text]
+
+
 def test_a_commented_row_is_never_joined(report):
     assert not [text for text in report["rows"] if "commented" in text]
 
@@ -218,3 +226,33 @@ def test_a_process_with_a_stated_reason_is_not_a_lead(report):
 
 def test_a_concept_named_class_is_not_an_unnamed_subject(report):
     assert not [text for text in report["placement"] if "Reiteration" in text]
+
+
+REJECTIONS = [
+    pytest.param("with pytest.raises(E):\n    f()", True, id="only-raises"),
+    pytest.param(
+        "x = 1\nwith pytest.raises(E):\n    f(x)", True, id="setup-then-raises"
+    ),
+    pytest.param(
+        "with pytest.raises(E) as exc:\n    f()\nmsg = str(exc.value)\nassert msg",
+        True,
+        id="asserts-about-the-error",
+    ),
+    pytest.param("pytest.raises(E, f)", True, id="call-form"),
+    pytest.param(
+        "with pytest.raises(E):\n    f()\nassert closed == []",
+        False,
+        id="asserts-after",
+    ),
+    pytest.param(
+        "assert ready\nwith pytest.raises(E):\n    f()", False, id="asserts-before"
+    ),
+    pytest.param("assert f() == 1", False, id="no-raises"),
+]
+
+
+@pytest.mark.parametrize(("body", "expected"), REJECTIONS)
+def test_is_rejection_reads_the_test_body(body, expected):
+    source = "def test_x():\n" + "".join(f"    {line}\n" for line in body.splitlines())
+    func = ast.parse(source).body[0]
+    assert overlap_scan.is_rejection(func) is expected

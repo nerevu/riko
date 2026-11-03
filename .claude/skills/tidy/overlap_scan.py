@@ -27,6 +27,11 @@ every line is a lead to read, not a verdict. Sections:
 - ``doctest-args`` -- a doctest call whose arguments all appear in a ``pytest.param``
   row of a test naming the same callee, with an expected value in common (short
   literals such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see).
+- ``doctest-messages`` -- a test string literal of several words and
+  ``MIN_MESSAGE`` to ``MAX_MESSAGE`` characters (an f-string's literal parts
+  included) found verbatim inside the source or output of at most
+  ``MAX_MESSAGE_DOCS`` doctests: a message pinned by both a test and the doctest
+  beside the code that raises it.
 - ``doctest-raises`` -- a doctest ``Traceback`` and a ``pytest.raises`` (inline, or a
   table row carrying the exception and fragment) for the same exception whose
   ``match`` fragment is found in the doctest's message; ``(same callee)`` marks the
@@ -42,7 +47,8 @@ every line is a lead to read, not a verdict. Sections:
   candidates; code-generator sweeps stay internal by the tier rule, so drop those).
 - ``placement`` -- module-level helpers with exactly one user class that sit
   below it or with other classes in between (the rule puts them directly above;
-  file-wide ``*_PENDING`` tripwire markers stay at the top); helpers with several
+  file-wide ``*_PENDING`` tripwire markers and every constant other than a
+  ``pytest.param`` table stay at the top); helpers with several
   users that sit below the first; classes whose behavior tests follow a rejection
   table or tripwire; and classes whose subject is a riko name (a class, function,
   or constant defined under ``riko/``) that they never name.
@@ -50,6 +56,11 @@ every line is a lead to read, not a verdict. Sections:
   (CLI runners, examples, stored fixture workflows).
 - ``doctest-balance`` -- docstrings with many doctest examples, and the tests whose
   tables name one of their callees (move the edge cases into a table).
+- ``assertless`` -- tests with no assertion-shaped node (an ``assert``, a call
+  whose name ends in ``raises``/``warns``/``fail``/``approx``/``deprecated_call``
+  or starts with ``assert``/``check``/``expect``, or a call to a helper of the file
+  or class that asserts), and tests whose every ``assert`` sits inside a ``for``
+  loop (an empty iterable passes).
 - ``processes`` -- tests that start a subprocess (``run_module``, ``run_python``,
   ``subprocess.*``, ``runpytest_subprocess``) with no reason a process is needed: no
   ``entry_point``/``cwd``/``env``/``hash_seed`` keyword and no docstring naming one
@@ -59,6 +70,10 @@ every line is a lead to read, not a verdict. Sections:
 Both doctest sections miss rows given as a bare list with ``ids=[...]`` and doctest
 constants reachable only through a variable, and a ``match`` given as an
 f-string.
+Callees are matched by their final name only, so ``(same callee)`` also pairs
+two different methods that share a name (``WorkflowResolver.register`` and
+``ModuleRegistry.register``), and a call made through ``getattr`` or a stored
+reference has no callee at all; read both sides before folding.
 
 ``--where NAME...`` instead prints where each test class or method (``Class``,
 ``test_x``, or ``Class::test_x``) lives now, as ``path::Class[::method]``.
@@ -102,6 +117,9 @@ UBIQUITOUS = 6
 MAX_DOCTEST_EXAMPLES = 6
 LINE_LENGTH = 88
 NEAR_MISS = 8
+MIN_MESSAGE = 12
+MAX_MESSAGE = 120
+MAX_MESSAGE_DOCS = 3
 
 SECTIONS = (
     "helpers",
@@ -109,6 +127,7 @@ SECTIONS = (
     "rows",
     "overlaps",
     "doctest-args",
+    "doctest-messages",
     "doctest-raises",
     "names",
     "cross-subject",
@@ -116,14 +135,18 @@ SECTIONS = (
     "placement",
     "tier",
     "doctest-balance",
+    "assertless",
     "processes",
 )
 
-LIMITED = frozenset({"overlaps", "doctest-args", "doctest-raises", "doctest-balance"})
-
-REJECT_NAME = re.compile(
-    r"reject|raise|refus|requir|invalid|error|fail|unsupported|bad|missing|must|"
-    r"cannot"
+LIMITED = frozenset(
+    {
+        "overlaps",
+        "doctest-args",
+        "doctest-messages",
+        "doctest-raises",
+        "doctest-balance",
+    }
 )
 
 KIND_OVERRIDES: dict[str, int] = {}
@@ -163,6 +186,9 @@ E2E_STR = re.compile(r"(^|[/_])(pipe_|workflows/|examples)|\.json$")
 SPAWN_CALLS = frozenset(
     {"run_module", "run_python", "runpytest_subprocess", "check_output", "Popen"}
 )
+
+CHECK_SUFFIXES = ("raises", "warns", "fail", "approx", "deprecated_call")
+CHECK_PREFIXES = ("assert", "check", "_assert", "_check", "expect", "_expect")
 
 PROCESS_KEYWORDS = frozenset({"entry_point", "cwd", "env", "hash_seed"})
 PROCESS_REASON = re.compile(_REASONS, re.IGNORECASE)
@@ -737,6 +763,38 @@ def has_match(fragment: str, message: str) -> bool:
     return found
 
 
+def gen_messages(node: ast.AST):
+    for child in ast.walk(node):
+        parts = child.values if isinstance(child, ast.JoinedStr) else [child]
+        for part in parts:
+            value = part.value if isinstance(part, ast.Constant) else None
+            fits = isinstance(value, str) and MIN_MESSAGE <= len(value) <= MAX_MESSAGE
+            if fits and "\n" not in value and " " in value.strip():
+                yield value
+
+
+def gen_doctest_messages(files: list[TestFile], examples: list[Example]):
+    groups = defaultdict(list)
+
+    for example in examples:
+        groups[example.path, example.name, example.line].append(
+            example.source + example.want
+        )
+
+    blocks = [(key, "\n".join(texts)) for key, texts in groups.items()]
+
+    for file in files:
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                for message in sorted(set(gen_messages(func))):
+                    found = [key for key, text in blocks if message in text]
+                    test = f"{file.rel}:{func.lineno} {cls.name}::{func.name}"
+
+                    for path, name, line in found[: len(found) <= MAX_MESSAGE_DOCS]:
+                        doc = f"{path}:{line} doctest {name}"
+                        yield f"{test} {message!r} -> {doc}", [file.rel, path]
+
+
 def gen_doctest_raises(examples: list[Example], raises: list[Raise]):
     seen = set()
 
@@ -1114,7 +1172,11 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
         is_test = isinstance(stmt, ast.ClassDef) and stmt.name.startswith("Test")
         for name in [] if is_test else get_defined(stmt):
             users = [c for c in classes if name in set(gen_names(c))]
-            skip = not users or name.endswith("_PENDING") or name in module_uses
+            is_value = isinstance(stmt, (ast.Assign, ast.AnnAssign))
+            is_table = is_value and any(is_param(n) for n in ast.walk(stmt))
+            is_constant = is_value and not is_table
+            pending = name.endswith("_PENDING")
+            skip = not users or pending or name in module_uses or is_constant
             if skip:
                 continue
             if len(users) > 1:
@@ -1162,13 +1224,68 @@ def get_kind(stmt: ast.stmt, markers: set[str]) -> int:
             strict = "xfail" in text and "strict=True" in text
             if strict or text.split("(")[0] in markers:
                 kind = 3
-        raises = any(
-            isinstance(n, ast.Attribute) and n.attr == "raises" for n in ast.walk(stmt)
-        )
-        if kind == 1 and raises and REJECT_NAME.search(stmt.name):
+        if kind == 1 and is_rejection(stmt):
             kind = 2
 
     return kind
+
+
+def _is_raises(node: ast.AST) -> bool:
+    func = node.func if isinstance(node, ast.Call) else None
+    return isinstance(func, ast.Attribute) and func.attr == "raises"
+
+
+def _is_check(node: ast.AST, errors: set[str]) -> bool:
+    func = node.func if isinstance(node, ast.Call) else None
+    leaf = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+    names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+    is_assert = isinstance(node, ast.Assert) or leaf.startswith("assert")
+    return is_assert and not names & errors
+
+
+def is_rejection(func: ast.AST) -> bool:
+    """
+    Whether a test only checks that a call raises.
+
+    A rejection holds a ``pytest.raises`` (block or call) and asserts nothing
+    outside it, except about the error it binds (``as exc``) or a value assigned
+    from it (``message = str(exc.value)``); a test that also
+    asserts before, after, or around the raise is a behavior test.
+    """
+    blocks = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, (ast.With, ast.AsyncWith))
+        and any(_is_raises(item.context_expr) for item in node.items)
+    ]
+    calls = [n for n in ast.walk(func) if _is_raises(n)]
+    inside = {id(n) for block in blocks for n in ast.walk(block)}
+    inside |= {id(n) for call in calls for n in ast.walk(call)}
+    errors = {
+        item.optional_vars.id
+        for block in blocks
+        for item in block.items
+        if isinstance(item.optional_vars, ast.Name)
+    }
+    outside = [n for n in ast.walk(func) if id(n) not in inside]
+    assigns = [n for n in outside if isinstance(n, ast.Assign)]
+    size = -1
+
+    while size != len(errors):
+        size = len(errors)
+
+        for assign in assigns:
+            if {
+                n.id for n in ast.walk(assign.value) if isinstance(n, ast.Name)
+            } & errors:
+                errors |= {
+                    n.id
+                    for t in assign.targets
+                    for n in ast.walk(t)
+                    if isinstance(n, ast.Name)
+                }
+
+    return bool(calls) and not any(_is_check(n, errors) for n in outside)
 
 
 def get_xfail_markers(tree: ast.Module) -> set[str]:
@@ -1270,6 +1387,68 @@ def gen_tier_issues(files: list[TestFile]):
                 yield f"{file.rel}:{cls.lineno} {cls.name}: {message}", [file.rel]
 
 
+def gen_called(node: ast.AST):
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call):
+            func = child.func
+            yield (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", "")
+            )
+
+
+def has_check(node: ast.AST, helpers: set[str]) -> bool:
+    called = list(gen_called(node))
+    has_assert = any(isinstance(child, ast.Assert) for child in ast.walk(node))
+    has_call = any(
+        name.endswith(CHECK_SUFFIXES)
+        or name.startswith(CHECK_PREFIXES)
+        or name in helpers
+        for name in called
+    )
+    return has_assert or has_call
+
+
+def is_loop_only(func: ast.AST) -> bool:
+    asserts = [node for node in ast.walk(func) if isinstance(node, ast.Assert)]
+    loops = [
+        node for node in ast.walk(func) if isinstance(node, (ast.For, ast.AsyncFor))
+    ]
+    looped = {id(node) for loop in loops for node in ast.walk(loop)}
+    raises = any(name.endswith(CHECK_SUFFIXES) for name in gen_called(func))
+    return bool(asserts) and all(id(a) in looped for a in asserts) and not raises
+
+
+def gen_assertless(files: list[TestFile]):
+    for file in files:
+        module = {
+            node.name
+            for node in file.tree.body
+            if isinstance(node, FUNCTION_NODES) and has_check(node, set())
+        }
+
+        for cls in gen_classes(file):
+            methods = [node for node in cls.body if isinstance(node, FUNCTION_NODES)]
+            helpers = module | {
+                node.name
+                for node in methods
+                if not node.name.startswith("test") and has_check(node, module)
+            }
+
+            for func in gen_tests(cls):
+                if not has_check(func, helpers):
+                    reason = "no assertion"
+                elif is_loop_only(func):
+                    reason = "asserts only inside a for loop"
+                else:
+                    reason = None
+
+                if reason is not None:
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {reason}"
+                    yield text, [file.rel]
+
+
 def is_spawn(node: ast.AST) -> TypeIs[ast.Call]:
     if isinstance(node, ast.Call):
         func = node.func
@@ -1329,6 +1508,7 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
         "rows": gen_joinable_rows(files),
         "overlaps": gen_overlaps(units, doc_units, min_shared),
         "doctest-args": gen_doctest_args(examples, rows, spread),
+        "doctest-messages": gen_doctest_messages(files, examples),
         "doctest-raises": gen_doctest_raises(examples, raises),
         "names": gen_same_names(units),
         "cross-subject": gen_cross_subject(files),
@@ -1336,6 +1516,7 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
         "placement": gen_placement(files, load_defined(root)),
         "tier": gen_tier_issues(files),
         "doctest-balance": gen_doctest_balance(examples, rows, spread),
+        "assertless": gen_assertless(files),
         "processes": gen_process_issues(files),
     }
 
