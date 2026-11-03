@@ -39,7 +39,7 @@ minutes in, send it a non-stopping status ping; pause one that is grinding,
 build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
 `/tmp`, new untracked files) and decide for each: promote it to a shared helper,
 fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
 
 First run `python .claude/skills/land/gates.py check tidy`. When it exits 0,
 tidy already ran on this exact tree (in this or another session): skip the
@@ -230,7 +230,7 @@ is safe to clear, and any **script candidates**: candidates come from the main l
 renames, rehearsing commits, auditing memory). Name each one's task, duration, and tool count, and the script it
 suggests (name, inputs, outputs, and home, such as beside the skill that launched
 the agent). Propose them only; build one when the user agrees.
-Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
+Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never deleted) — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
 (design, review, triage) is never a candidate. When fixups are pending, the manifest's last line is the
 rebase step: the user runs the clipboard line (shown for reference) only now,
 after wrapup has finished. `/land` deliberately leaves this step to wrapup.

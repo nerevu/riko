@@ -85,7 +85,7 @@ you pass about 10 minutes or 100k tokens and the remaining work is mechanical, s
 a consistent point and report what is done, what is left, and the script that would
 finish it." Ping each agent for status at about 10 minutes. When an agent finishes,
 inspect any scripts it wrote and promote each one, fold it into
-`overlap_scan.py`/`move_tests.py`, park it in `.claude/skills/drafts/`, or drop it.
+`overlap_scan.py`/`move_tests.py`, park it in `.claude/skills/drafts/`, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it).
 
 ## 3. Dimensions, in risk order
 

@@ -50,7 +50,7 @@ minutes in, send it a non-stopping status ping; pause one that is grinding,
 build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
 `/tmp`, new untracked files) and decide for each: promote it to a shared helper,
 fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
 diff renamed, removed, or changed in meaning. One call lists them:

@@ -85,7 +85,7 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    turn reading it — plus the mid-run self-check (past about 10 minutes or
    100k tokens with mechanical work left: pause, report, and name the helper
    script; afterwards inspect any scripts it wrote for itself and promote, fold, park in
-   `.claude/skills/drafts/`, or drop each). Its mechanical fixes
+   `.claude/skills/drafts/`, or drop each; a dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user, never deleted by an agent). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
 2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`. Never hand-fix
@@ -244,4 +244,4 @@ End with:
   commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (the tidy agent included). Name the task, its duration and tool count, and the script it
   suggests (name, inputs, outputs, home); propose it, never build it unasked.
-  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.
+  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never deleted) — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.
