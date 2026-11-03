@@ -122,18 +122,23 @@ def loopback_url(
 
 
 @contextmanager
-def stalled_url(prefix: bytes = b"", *, path: str = "stalled.txt") -> Generator[str]:
+def stalled_url(
+    prefix: bytes = b"", *, path: str = "stalled.txt", stall: float = 2
+) -> Generator[str]:
     """
-    Serves a connection that accepts, sends *prefix*, then never finishes.
+    Serves a connection that accepts, sends *prefix*, then stalls.
 
-    The server never closes the connection on its own, so a fetch without a
-    timeout blocks forever. *prefix* is written as is: pass response headers and
-    a partial body to simulate a stalled stream, or nothing for a stalled response.
+    *prefix* is written as is: pass response headers and a partial body to
+    simulate a stalled stream, or nothing for a stalled response. The server
+    drops each connection *stall* seconds after accepting it, so a fetch that
+    ignores its timeout fails with a connection error instead of hanging; a
+    timeout under test must be well below *stall*.
     """
     server = socket.socket()
     server.bind(("127.0.0.1", 0))
     server.listen()
     accepted: list[socket.socket] = []
+    timers: list[threading.Timer] = []
     done = threading.Event()
 
     def serve() -> None:
@@ -144,6 +149,10 @@ def stalled_url(prefix: bytes = b"", *, path: str = "stalled.txt") -> Generator[
                 break
 
             accepted.append(connection)
+            timer = threading.Timer(stall, connection.close)
+            timer.daemon = True
+            timers.append(timer)
+            timer.start()
 
             with suppress(OSError):
                 connection.sendall(prefix)
@@ -156,6 +165,9 @@ def stalled_url(prefix: bytes = b"", *, path: str = "stalled.txt") -> Generator[
     finally:
         done.set()
         server.close()
+
+        for timer in timers:
+            timer.cancel()
 
         for connection in accepted:
             connection.close()

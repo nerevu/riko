@@ -1452,6 +1452,7 @@ class TestAsyncPlanRun:
 
         assert upstream_closed == ["closed"]
 
+    @pytest.mark.timeout(1)
     @async_test
     async def test_arun_unconsumed_sync_only_source_does_not_block_exit(self) -> None:
         @tag_source
@@ -1468,10 +1469,9 @@ class TestAsyncPlanRun:
             module_workflow("src"), dispatcher=dispatcher
         )
 
-        with fail_after(1):
-            async with AsyncExecution() as execution:
-                stream = await execution.arun(plan)
-                assert stream is not None
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan)
+            assert stream is not None
 
     @async_test
     async def test_arun_sync_worker_node_reads_secondary_inputs_lazily(self) -> None:

@@ -7,6 +7,7 @@ import copy
 import pickle  # noqa: S403
 import time
 import typing
+from contextlib import contextmanager
 from dataclasses import dataclass, make_dataclass
 from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
@@ -107,7 +108,7 @@ from tests._execution import build_workflow
 from tests._loopback import ForwardOnly
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
 
     from riko.types._frozendict import FrozenSetMapping
     from riko.types._scalars import BasicValue
@@ -395,15 +396,24 @@ class TestResolveConf:
         assert first is not second
 
 
-@pytest.fixture
-def tokyo(monkeypatch):
+@contextmanager
+def _local_zone(name: str) -> Generator[None]:
     if not hasattr(time, "tzset"):
         pytest.skip("tzset is POSIX-only")
 
-    monkeypatch.setenv("TZ", "Asia/Tokyo")
-    time.tzset()
-    yield
-    time.tzset()
+    try:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("TZ", name)
+            time.tzset()
+            yield
+    finally:
+        time.tzset()
+
+
+@pytest.fixture
+def tokyo():
+    with _local_zone("Asia/Tokyo"):
+        yield
 
 
 ABSOLUTE_DATES = [
@@ -663,21 +673,13 @@ class TestResolveAwareDatetime:
         reason="resolving the local zone at the date's own daylight-saving offset is "
         "not yet implemented",
     )
-    def test_local_zone_uses_the_dates_own_offset(self, monkeypatch):
-        if not hasattr(time, "tzset"):
-            pytest.skip("tzset is POSIX-only")
-
+    def test_local_zone_uses_the_dates_own_offset(self):
         zone = ZoneInfo("America/New_York")
-        monkeypatch.setenv("TZ", "America/New_York")
-        time.tzset()
         in_dst = bool(datetime.now(zone).dst())
         naive = datetime(2020, 1, 15, 12) if in_dst else datetime(2020, 7, 15, 12)
 
-        try:
+        with _local_zone("America/New_York"):
             result = resolve_aware_datetime(naive, try_local_tz=True)
-        finally:
-            monkeypatch.undo()
-            time.tzset()
 
         assert isinstance(result, datetime)
         assert result.utcoffset() == naive.replace(tzinfo=zone).utcoffset()

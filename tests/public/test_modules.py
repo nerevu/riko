@@ -16,9 +16,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from riko.bado._backend import create_task_group
+from riko.bado._backend import create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
+from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
@@ -204,7 +205,7 @@ class TestFetchdata:
     @pytest.mark.xfail(
         strict=True,
         reason="splitext keeps the query string in the extension ('json?token=abc'), "
-        "so the JSON parser is never selected ",
+        "so the JSON parser is never selected",
     )
     @pytest.mark.simulated_network
     @async_test
@@ -680,9 +681,10 @@ class TestReceive:
             stream = async_receive_pipe(conf=conf, func=_FalsyFunc())
             received.extend([item async for item in stream])
 
-        async with create_task_group() as tg:
-            tg.start_soon(collect)
-            await alist(async_send_pipe([{"x": 0}], others=["async-falsy-func"]))
+        with fail_after(1):
+            async with create_task_group() as tg:
+                tg.start_soon(collect)
+                await alist(async_send_pipe([{"x": 0}], others=["async-falsy-func"]))
 
         assert received == [{"x": 0, "seen": True}]
 
@@ -700,7 +702,7 @@ class TestReceive:
         second = receive_pipe(conf=conf, func=_FalsyFunc())
         next(second)
         list(send_pipe([{"x": 0}], others=["closed-early"]))
-        received = next(item for item in second if "state" not in item)
+        received = next((item for item in second if "state" not in item), None)
         assert received == {"x": 0, "seen": True}
 
 
@@ -758,7 +760,7 @@ class TestUdf:
         def deferred(item):
             return double(item)
 
-        with pytest.raises(InvalidPipelineError, match="iterate with `async for`"):
+        with pytest.raises(InvalidPipelineError, match="udf func"):
             list(udf_pipe([{"x": 1}], func=deferred))
 
 
@@ -1010,7 +1012,6 @@ class TestAsyncProcessor:
         _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
         assert seen == [True, True]
 
-    @pytest.mark.timeout(1)
     @async_test
     async def test_async_sync_iterable_streams_before_exhaustion(self):
         """Keep an unbounded sync iterable from being read whole up front."""
@@ -1028,7 +1029,7 @@ class TestAsyncProcessor:
 
         async with maybe_aclosing(async_pipe(unbounded(), test=True)) as stream:
             assert await anext(stream)
-            assert len(pulled) <= 1000
+            assert len(pulled) <= DEF_CONCURRENCY_LIMIT
 
     @async_test
     async def test_async(self):

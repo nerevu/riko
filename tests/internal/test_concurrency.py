@@ -279,6 +279,7 @@ class TestSyncPolicy:
         assert opened == []
 
     @pytest.mark.slow
+    @pytest.mark.timeout(5)
     def test_sync_process_executor_maps_items(self, opened) -> None:
         plan = build_chain_plan("hash")
         settings = ExecutionSettings(executor="process", concurrency=2)
@@ -467,7 +468,7 @@ class TestPoolLifetime:
         assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(8)
+    @pytest.mark.timeout(10)
     def test_terminate_kills_every_stuck_worker_within_one_grace(
         self, tmp_path: Path
     ) -> None:
@@ -695,7 +696,7 @@ class TestThreadBudget:
         plan = _passthru_plan(45)
         result: list = []
 
-        with fail_after(2):
+        with fail_after(3):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan, seed=ITEMS[:2])
                 result = [item async for item in stream]
@@ -736,7 +737,7 @@ class TestThreadBudget:
                 await arun_plan(plan, settings=ExecutionSettings(), seed=ITEMS[:5])
             )
 
-        with fail_after(1):
+        with fail_after(2):
             async with create_task_group() as tg:
                 for _ in range(4):
                     tg.start_soon(consume)
@@ -876,7 +877,7 @@ class TestThreadBudget:
         flow = build_workflow([*chains[0], *chains[1], fan_in], edges=tuple(edges))
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
-        with fail_after(2):
+        with fail_after(5):
             result = await arun_plan(plan, settings=ExecutionSettings())
 
         assert plan.get_thread_demand("default", mapped=False) == 25

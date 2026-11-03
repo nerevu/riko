@@ -131,7 +131,7 @@ CLIENT_CLASSES = [
 
 def _check_opened(acquired: object, value: object | None) -> None:
     if value is None:
-        assert acquired
+        assert isinstance(acquired, Connection)
     else:
         assert acquired is value
 
@@ -139,8 +139,8 @@ def _check_opened(acquired: object, value: object | None) -> None:
         assert acquired.opened
 
 
-def _check_closed(resource, acquired: object, value: object | None) -> None:
-    if value is not None and isinstance(acquired, Connection):
+def _check_closed(resource, acquired: object) -> None:
+    if isinstance(acquired, Connection):
         assert acquired.closed is not resource.external
         acquired.opened = True  # reopen so the same value can be acquired again
 
@@ -599,7 +599,7 @@ def _test_open_close(resource, value: object | None = None):
         acquired = execution.acquire(resource)
         _check_opened(acquired, value)
 
-    _check_closed(resource, acquired, value)
+    _check_closed(resource, acquired)
 
 
 async def _async_test_open_close(resource, value: object | None = None):
@@ -609,7 +609,7 @@ async def _async_test_open_close(resource, value: object | None = None):
         acquired = await execution.aacquire(resource)
         _check_opened(acquired, value)
 
-    _check_closed(resource, acquired, value)
+    _check_closed(resource, acquired)
 
 
 ACLOSE_CASES = [

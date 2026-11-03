@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 import attrs
 import pytest
 
-from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
+from riko.bado._backend import Event, async_sleep, create_task_group
+from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import as_async
 from riko.base import _paths as paths_module
 from riko.base._exceptions import ReceiverUnavailableError
@@ -370,31 +371,39 @@ class TestAsyncOperatorLaziness:
 
         assert any(saw_loop)
 
-    @pytest.mark.timeout(5)
     @pytest.mark.xfail(
         strict=True,
-        raises=TimeoutError,
+        raises=RuntimeError,
         reason="streaming an endless async input through the async loop is not yet "
         "implemented: it reads the whole input before running the embed",
     )
     @async_test
     async def test_async_loop_yields_from_an_endless_source(self) -> None:
-        async def endless() -> AsyncStream:
-            index = 0
+        """
+        Loop yields its first item without draining its source.
 
-            while True:
+        The source raises once it is pulled past a guard, so a draining loop fails
+        instead of running forever.
+        """
+        pulled: list[int] = []
+
+        async def source() -> AsyncStream:
+            for i in range(10_000):
+                if len(pulled) >= 100:
+                    raise RuntimeError("the source was read past its guard")
+
+                pulled.append(i)
                 await async_sleep(0)
-                yield {"title": f"a{index} b"}
-                index += 1
+                yield {"title": f"a{i} b"}
 
-        with fail_after(1):
-            stream = async_loop(
-                endless(), embed=async_tok, conf=TOKENIZER_CONF, field="title"
-            )
-            assert await anext(stream) == {"content": "a0"}
+        stream = async_loop(
+            source(), embed=async_tok, conf=TOKENIZER_CONF, field="title"
+        )
+        assert await anext(stream) == {"content": "a0"}
 
     @pytest.mark.xfail(
         strict=True,
+        raises=RuntimeError,
         reason="async union reads its secondary input to the end before yielding its "
         "first item, while the synchronous union reads it lazily",
     )
@@ -1322,8 +1331,10 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     ):
         tg.start_soon(_drain_receiver, receive_stream)
         stream = async_send(_finite_source(consumed), others=["r4-lazy"])
-        first = await anext(stream)
-        seen = len(consumed)
+
+        async with maybe_aclosing(stream):
+            first = await anext(stream)
+            seen = len(consumed)
 
     return (first, seen)
 
@@ -1391,10 +1402,14 @@ class TestAsyncSend:
         assert received == expected
 
     @pytest.mark.timeout(1)
-    @pytest.mark.xfail(reason="lazy async fan-out is not yet implemented", strict=True)
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="lazy async fan-out is not yet implemented",
+    )
     @async_test
     async def test_async_send_does_not_buffer_its_source(self):
-        """Keep unbounded async sends from returning before completion."""
+        """Send yields its first item without reading its source past the lookahead."""
         consumed: list[int] = []
         first, seen = await _send_first(consumed)
 
@@ -1446,7 +1461,7 @@ class TestAsyncReceive:
 
 
 class TestAsyncTimeoutIterator:
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(3)
     @pytest.mark.xfail(
         strict=True,
         reason="AsyncTimeoutIterator only checks its deadline between anexts. A "
@@ -1459,11 +1474,11 @@ class TestAsyncTimeoutIterator:
 
         async def source():
             yield {"x": 0}
-            await async_sleep(1.0)
+            await async_sleep(0.5)
             yield {"x": 1}
 
         it = AsyncTimeoutIterator(source(), timeout_ms=50)
         start = monotonic()
         [item async for item in it]
         run_time = monotonic() - start
-        assert run_time < 0.5
+        assert run_time < 0.25

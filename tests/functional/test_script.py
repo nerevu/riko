@@ -43,7 +43,8 @@ ENTRY_POINTS = {
 }
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
 ITEM_ATTRS = {"key": "title", "value": "riko"}
-TIMEZONE_TEXT = "{'date': '5/4/1982', 'dateformat': 'May 04, 1982 UTC'}\n"
+FARECHART_DOCUMENT = "pipe_a3d1afa31f0a24cc51dcbe79f1590343"
+FARECHART_TEXT = "{'url': 'farechart'}\n"
 
 RAISING_SCRIPT = (
     "from riko import UnsupportedModuleError\n\n"
@@ -57,6 +58,8 @@ BENCHMARK_LABELS = [
     "baseline_threads",
     "baseline_procs",
     "sync_module",
+    "sync_module_per_item",
+    "sync_prepared_per_item",
     "sync_pipeline",
     "sync_workflow",
 ]
@@ -72,8 +75,10 @@ DEMO_RUNS = [
         marks=skipif_issync,
         id="simple1-async",
     ),
-    pytest.param("pipe_timezone", TIMEZONE_TEXT, [], "in-process", id="document"),
-    pytest.param("pipe_timezone", TIMEZONE_TEXT, [], "outside", id="outside-checkout"),
+    pytest.param(FARECHART_DOCUMENT, FARECHART_TEXT, [], "in-process", id="document"),
+    pytest.param(
+        FARECHART_DOCUMENT, FARECHART_TEXT, [], "outside", id="outside-checkout"
+    ),
 ]
 RIKO_ERRORS = [
     pytest.param("pipe.py", RAISING_SCRIPT, "module: x", id="pipe-script"),

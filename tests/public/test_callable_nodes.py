@@ -83,7 +83,7 @@ def _count(value: Iterable[object]) -> int:
 _LISTLIKE_ITEMS = [
     pytest.param(_to_list, {}, id="list-inline"),
     pytest.param(_to_list, _THREAD, id="list-thread"),
-    pytest.param(_to_list, _PROCESS, id="list-process"),
+    pytest.param(_to_list, _PROCESS, id="list-process", marks=pytest.mark.slow),
     pytest.param(_to_tuple, {}, id="tuple-inline"),
     pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
     pytest.param(_to_generator, {}, id="generator-inline"),
@@ -124,7 +124,7 @@ _BAD_VERSIONS = [
 _EXECUTIONS = [
     pytest.param({}, id="inline"),
     pytest.param(_THREAD, id="thread"),
-    pytest.param(_PROCESS, id="process"),
+    pytest.param(_PROCESS, id="process", marks=pytest.mark.slow),
 ]
 
 
@@ -244,9 +244,10 @@ class TestCallableNodes:
     def test_sync_iteration_rejects_an_awaitable_result(self):
         pipeline = Pipeline().map(_defer_scaled)
 
-        with pytest.raises(InvalidPipelineError, match="async for"):
+        with pytest.raises(InvalidPipelineError, match="a map function"):
             list(pipeline([{"x": 1}]))
 
+    @pytest.mark.slow
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]

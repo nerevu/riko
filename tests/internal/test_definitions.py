@@ -754,8 +754,9 @@ class TestValidateTargetMode:
         ],
     )
     def test_supported_key_combinations(self, mode, keys):
-        capabilities = RecordStore().get_capabilities()
-        validate_target_mode(RecordStore(), mode, capabilities, keys=keys)
+        target = RecordStore()
+        capabilities = target.get_capabilities()
+        assert validate_target_mode(target, mode, capabilities, keys=keys) is None
 
     def test_unkeyed_mode_with_keys_rejected(self):
         capabilities = FileTarget("out.csv").get_capabilities()
