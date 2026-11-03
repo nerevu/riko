@@ -308,8 +308,8 @@ class TestWorkflow:
     @pytest.mark.xfail(
         strict=True,
         raises=pytest.fail.Exception,
-        reason="owned by the pending workflow input declarations work: a strict "
-        "Workflow accepts an input declaration that is not a JSON Schema mapping",
+        reason="workflow input declarations are not yet implemented: a strict Workflow "
+        "accepts an input declaration that is not a JSON Schema mapping",
     )
     @pytest.mark.parametrize("declaration", [5, "string"])
     def test_non_schema_inputs_are_rejected(self, declaration: object):

@@ -225,8 +225,8 @@ class TestFetchdata:
     @pytest.mark.xfail(
         strict=True,
         raises=UnicodeDecodeError,
-        reason="owned by the pending encoding-precedence work: XML is decoded with "
-        "the configured encoding instead of the encoding its declaration names",
+        reason="encoding precedence is not yet implemented: XML is decoded with the "
+        "configured encoding instead of the encoding its declaration names",
     )
     def test_declared_encoding_is_honored(self, tmp_path):
         path = tmp_path / "latin1.xml"
@@ -282,9 +282,9 @@ class TestFetchtable:
     @pytest.mark.xfail(
         strict=True,
         raises=(TypeError, UnicodeDecodeError),
-        reason="owned by the connectors work: fetchtable forwards the csv-only"
-        " delimiter option to the sqlite reader (TypeError) and opens the binary"
-        " source as text (UnicodeDecodeError); xlsx follows the same path",
+        reason="binary tabular connectors are not yet implemented: fetchtable forwards "
+        "the csv-only delimiter option to the sqlite reader (TypeError) and opens "
+        "the binary source as text (UnicodeDecodeError); xlsx follows the same path",
     )
     @pytest.mark.filterwarnings("ignore::ResourceWarning")
     def test_fetchtable_reads_sqlite_fixture(self, sqlite_path: Path):

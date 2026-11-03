@@ -505,8 +505,9 @@ class TestAsyncUrlOpen:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the pending encoding-precedence work: sync decoding keeps "
-        "carriage returns that async decoding converts to newlines",
+        reason="decoding line endings alike in sync and async reads is not yet "
+        "implemented: sync decoding keeps carriage returns that async decoding "
+        "converts to newlines",
     )
     @async_test
     async def test_sync_and_async_decode_line_endings_alike(self):

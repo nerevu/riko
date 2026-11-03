@@ -311,8 +311,8 @@ class TestExecutionPlan:
     @pytest.mark.xfail(
         strict=True,
         raises=pytest.fail.Exception,
-        reason="owned by the module port contracts: a positional input into a module "
-        "that declares no positional ports is accepted and silently ignored",
+        reason="rejecting a positional input into a module that declares no positional "
+        "ports is not yet implemented: the input is accepted and silently ignored",
     )
     def test_build_plan_rejects_undeclared_positional_input(self) -> None:
         dispatcher = build_dispatcher(
@@ -687,9 +687,9 @@ class TestAsyncAdaptEmbed:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the pending lazy sync-under-async embed work: a sync-only "
-        "embed under an async loop is collected to a list on the worker before the "
-        "loop takes its first result, so count='first' cannot stop the child early",
+        reason="lazy sync-only embeds under an async loop are not yet implemented: the "
+        "embed is collected to a list on the worker before the loop takes its first "
+        "result, so count='first' cannot stop the child early",
     )
     @async_test
     async def test_arun_count_first_stays_lazy_for_a_sync_only_embed(self) -> None:

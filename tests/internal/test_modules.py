@@ -282,7 +282,7 @@ class TestSplitter:
     @pytest.mark.xfail(
         strict=True,
         raises=TypeError,
-        reason="owned by the pending execution-owned split fan-out work: the async "
+        reason="execution-owned split fan-out is not yet implemented: the async "
         "splitter wrapper reads its input synchronously, so handing it an async "
         "stream raises TypeError instead of yielding the branches",
     )
@@ -296,7 +296,7 @@ class TestSplitter:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the pending execution-owned split fan-out work: the splitter "
+        reason="execution-owned split fan-out is not yet implemented: the splitter "
         "wrapper does not resolve its context, so its parser receives the raw "
         "context object instead of the context's inputs",
     )
@@ -320,10 +320,10 @@ class TestAsyncOperatorLaziness:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the pending Feed-native streaming migration of truncate and "
-        "the final legacy-seam cleanup: an async operator whose parser is synchronous "
-        "materializes its whole async input before parsing, so truncate pulls its "
-        "entire source before yielding its first item",
+        reason="Feed-native streaming for truncate is not yet implemented: an async "
+        "operator whose parser is synchronous materializes its whole async input "
+        "before parsing, so truncate pulls its entire source before yielding its "
+        "first item",
     )
     @async_test
     async def test_async_truncate_stays_lazy_over_a_long_source(self) -> None:
@@ -347,9 +347,9 @@ class TestAsyncOperatorLaziness:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the pending Feed-native streaming migration of truncate and "
-        "the final legacy-seam cleanup: the whole-source read never yields to the "
-        "event loop, so an endless source cannot be cancelled",
+        reason="Feed-native streaming for truncate is not yet implemented: the "
+        "whole-source read never yields to the event loop, so an endless source "
+        "cannot be cancelled",
     )
     @async_test
     async def test_async_truncate_yields_to_the_event_loop_while_draining(self) -> None:

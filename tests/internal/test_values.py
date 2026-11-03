@@ -451,8 +451,9 @@ class TestCastDatetime:
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
-        reason="owned by the settable date timezone work: with try_local_tz, named "
-        "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
+        reason="a settable date timezone is not yet implemented: with try_local_tz, "
+        "named days ('now') use the local zone but counted offsets ('+1 seconds') "
+        "stay UTC",
     )
     @pytest.mark.usefixtures("tokyo")
     def test_relative_offsets_share_the_named_day_zone(self):
