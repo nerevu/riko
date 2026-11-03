@@ -42,6 +42,7 @@ from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
 from riko.modules import join, union
 from riko.runtime._resolver import dispatcher
+from riko.runtime._workflow_pipes import build_workflow_pipes
 from riko.types._enums import Executor
 from riko.types._workflow import Endpoint
 from tests import async_test
@@ -374,6 +375,32 @@ class TestSyncPolicy:
 
         assert events == ["worker done", "cleanup"]
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="streaming a mapped node's per-item output under a sync worker pool is "
+        "not yet implemented: each item's whole output is collected first",
+    )
+    def test_sync_mapped_node_output_streams_before_the_item_completes(self) -> None:
+        pulled: list[int] = []
+
+        def fan(item, **_):
+            for n in range(50):
+                pulled.append(n)
+                yield {"n": n}
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="fan", sync_pipe=mark_loopable(fan))
+        )
+        flow = build_workflow([ModuleNode(id="f", name="fan")])
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+
+        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
+            stream = cast("Generator", execution.run(plan, seed=[{"x": 0}]))
+            next(stream)
+            assert len(pulled) < 50
+            stream.close()
+
     @pytest.mark.slow
     @pytest.mark.parametrize("ordered", [False, True])
     def test_sync_chained_mapping_reads_the_source_on_demand(self, ordered) -> None:
@@ -664,6 +691,23 @@ def _passthru_plan(depth: int) -> ExecutionPlan:
     )
 
 
+def _nested_plan() -> ExecutionPlan:
+    """Plans a stored workflow of one sync-only node, read by a sync-only node."""
+    pipe = cast("SyncModuleWrapper", _passthru)
+    passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
+    inner = build_chain(ModuleNode(id="i", name="passthru"))
+    pipes = build_workflow_pipes(
+        inner, build_dispatcher(passthru), subtype="transformer"
+    )
+    stored = ModuleDefinition(
+        name="stored", sync_pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
+    )
+    nodes = (ModuleNode(id="s", name="stored"), ModuleNode(id="p", name="passthru"))
+    return ExecutionPlan.from_workflow(
+        build_chain(*nodes), dispatcher=build_dispatcher(passthru, stored)
+    )
+
+
 @pytest.fixture
 def node_threads(monkeypatch):
     def set_budget(total: int) -> None:
@@ -901,6 +945,28 @@ class TestThreadBudget:
                     await execution.arun(_passthru_plan(depth), seed=source())
 
         assert read == []
+
+    @async_test
+    async def test_async_nested_run_short_of_threads_raises(self, node_threads) -> None:
+        node_threads(1)
+
+        with fail_after(2):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
+
+                with pytest.raises(
+                    InvalidPipelineError, match="nested stored workflow"
+                ):
+                    _ = [item async for item in stream]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="counting a nested stored workflow's node threads in its parent's "
+        "demand is not yet implemented",
+    )
+    def test_nested_stored_workflow_threads_enter_the_parent_demand(self) -> None:
+        assert _nested_plan().get_thread_demand("default", mapped=False) == 2
 
     @async_test
     async def test_async_run_beside_own_open_stream_over_budget_raises(

@@ -1255,7 +1255,10 @@ parsers annotated `stream: Feed`. Separately, 12 casts in `riko/modules/_decorat
 sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2 `embed` casts on
 the same split, and the untyped `_PreparedCall.parser` behind 3 more); `isasync` interface
 classification here should type that split instead. `manage lint --escapes` lowers its ceilings as
-these go.
+these go. The stub rewrite also gives call options one owner (2026-11-03 repo-audit triage, deferred
+here): `Module.prepare` copies `count` into `prepared.opts` where nothing reads it, while
+`_PreparedCall` answers `field`/`count` from its raw `options` and `prepared.opts` answers
+`emit`/`assign`; drop the dead copy and read every call option from one place then.
 
 Audit note (2026-11-03 triage): a `DynamicConf` objconf parses a value only on `__getitem__` or
 attribute access; its `items()`/`values()`/`get()` are the raw dict's and skip the parse.
@@ -1888,6 +1891,18 @@ R10 therefore owns:
   child to completion on its worker (strict-xfail tripwire
   `tests/internal/test_execution_plan.py::TestAsyncAdaptEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
   the worker-held stream must also enter the node-thread demand).
+- a stored workflow's own sync-only nodes enter its parent plan's node-thread demand, and its nested
+  run is covered by the parent's reservation instead of reserving again (strict-xfail tripwire
+  `tests/internal/test_concurrency.py::TestThreadBudget::test_nested_stored_workflow_threads_enter_the_parent_demand`).
+  Until then a nested run that would wait for threads while its parent's node thread reads it raises
+  `InvalidPipelineError` (`_reserve_threads` in `riko/execution/_async_execution.py`), because that
+  wait can never end (2026-11-03 repo-audit triage).
+- a sync run under `with_execution(concurrency>1)` streams a mapped node's per-item output instead
+  of collecting it on the worker first (`run_item` returns `list(call(item))` in
+  `riko/execution/_concurrency.py`), so an endless per-item source such as `forever` yields its first
+  item there as it does at `concurrency=1` (strict-xfail tripwire
+  `tests/internal/test_concurrency.py::TestSyncPolicy::test_sync_mapped_node_output_streams_before_the_item_completes`;
+  user ruling 2026-11-03 repo-audit triage: fix it with or before the legacy parity slice).
 
 Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`
 (`riko/modules/_decorators.py`) drain async terminal sub-sources for the sync conf parser; they are

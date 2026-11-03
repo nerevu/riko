@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack, aclosing
+from contextvars import ContextVar
 from functools import cached_property, partial
 from inspect import isasyncgen
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
@@ -167,6 +168,7 @@ class _ThreadBudget:
 _budgets: RunVar[_ThreadBudget] | None = (
     None if lowlevel is None else lowlevel.RunVar("node_threads")
 )
+_on_node_thread: ContextVar[bool] = ContextVar("on_node_thread", default=False)
 
 
 def _resolve_thread_budget() -> _ThreadBudget:
@@ -413,7 +415,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Raises:
 
             InvalidPipelineError: If ``demand`` exceeds the event loop's node-thread
-                budget, or what this execution's open output streams leave free.
+                budget, or what this execution's open output streams leave free, or if
+                the run is read from a node thread and too few threads are free.
 
         """
         budget = _resolve_thread_budget()
@@ -423,17 +426,26 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         if demand > budget.total:
             msg = (
                 f"workflow output {output!r} may hold {demand} threads at once for "
-                "modules without an async implementation, more than the node-thread "
-                f"budget of {budget.total}; raise RIKO_NODE_THREADS or shorten the "
-                "chain of such modules"
+                "modules without an async implementation. The node-thread budget is "
+                f"{budget.total}. Raise RIKO_NODE_THREADS, or shorten the chain of "
+                "such modules."
             )
             raise InvalidPipelineError(msg)
         elif held + demand > budget.total:
             msg = (
                 f"workflow output {output!r} may hold {demand} threads at once for "
-                f"modules without an async implementation, but this execution's open "
-                f"output streams hold {held} of the node-thread budget of "
-                f"{budget.total}; close them first or raise RIKO_NODE_THREADS"
+                "modules without an async implementation. This execution's open output "
+                f"streams already hold {held} of the node-thread budget of "
+                f"{budget.total}. Close them first, or raise RIKO_NODE_THREADS."
+            )
+            raise InvalidPipelineError(msg)
+        elif _on_node_thread.get() and budget.available < demand:
+            msg = (
+                f"workflow output {output!r} runs inside a module without an async "
+                "implementation, for example as a nested stored workflow. It may hold "
+                f"{demand} threads at once, but only {budget.available} of the "
+                f"node-thread budget of {budget.total} are free. It cannot wait for "
+                "threads its parent holds, so raise RIKO_NODE_THREADS."
             )
             raise InvalidPipelineError(msg)
 
@@ -455,7 +467,14 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     ) -> R:
         """Runs a sync-only node's blocking step on one of the run's node threads."""
         self._require_open("run work in")
-        return await maybe_async(func, *args, inline=False, limiter=limiter)
+        token = _on_node_thread.set(True)
+
+        try:
+            result = await maybe_async(func, *args, inline=False, limiter=limiter)
+        finally:
+            _on_node_thread.reset(token)
+
+        return result
 
     def register_owned[R](
         self,
@@ -835,10 +854,11 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         stays owned.
 
         A module without an async implementation runs on a thread it holds while it
-        reads its input stream. Every run on one event loop draws those threads from
-        one shared budget (``RIKO_NODE_THREADS``), and a run takes all the threads it
-        may need before reading anything. It waits while other executions hold them,
-        and raises when this execution's own open output streams leave too few.
+        reads its input stream. Every run on one event loop draws those threads from one
+        shared budget (``RIKO_NODE_THREADS``). A run takes all the threads it may need
+        before reading anything. It waits while other executions hold them, and raises
+        when this execution's own open output streams leave too few. It also raises when
+        it runs nested inside such a module and too few threads are free.
 
         Args:
 

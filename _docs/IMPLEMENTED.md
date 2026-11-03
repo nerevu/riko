@@ -1181,7 +1181,9 @@ input holds; a node whose module reads its inputs one at a time (`sequential_inp
 `union`/`join` by `has_sequential_inputs` in `riko/modules/_derive.py` and stamped on the wrapper) the
 most any one input holds; other nodes the sum of their inputs) before reading anything, so runs never hold part of
 a chain while waiting for the rest. A run needing more than the budget, or more than this execution's
-own open output streams leave free, raises `InvalidPipelineError`; other executions' runs wait.
+own open output streams leave free, raises `InvalidPipelineError`; other executions' runs wait,
+except a run read from a node thread (a stored workflow nested under a sync-only node), which raises
+when too few threads are free because its parent holds the threads it would wait for.
 `_RunStream` wraps every run's output: closing it closes the node streams the run built in reverse
 build order (so a native async chain never relies on garbage collection to reach a suspended
 node stream), then returns the threads; they also return when the output stream ends or fails (even

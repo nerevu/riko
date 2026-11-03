@@ -105,7 +105,9 @@ the lifetime of the returned stream, or until its `open()` block exits. Iteratio
 Exhaustion ends the run normally, and a consumed or closed stream behaves like any exhausted Python
 iterator: another `for` loop yields nothing and `next(stream, default)` returns the default. Only
 iterating a started stream in the other mode raises `PipelineStateError`. Sync iteration pulls lazily; async iteration streams items as they are
-produced.
+produced. One exception: under `with_execution(concurrency=N)` with `N > 1`, a sync run collects each
+item's whole output on the worker before yielding it, so a node whose per-item output is unbounded
+(`forever`) does not stream there; `concurrency=1` and the async run do.
 `AsyncStream`s behave like ordinary async iterators — riko does not detect or recreate a consumed
 feed. (The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were deleted
 at v1-cutover step 4, 2026-10-02.)
