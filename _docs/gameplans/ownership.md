@@ -61,7 +61,8 @@ Cross-plan examples are acceptable. Parallel specifications are not.
 | Click-native CLI/plugin contract | `cli.md` | package-owned Click commands calling services |
 | currency/location reference tables | `reference-data.md` | consumers of tables |
 | test-layer ownership + suite consolidation | `testing.md` | phase/domain-specific semantic tests remain with owner |
-| `bado` <-> AnyIO helper/version audit + benchmarking | `bado-anyio-alignment.md` | async runtime semantics from execution owner |
+| `bado` <-> AnyIO helper/version audit | `bado-anyio-alignment.md` | async runtime semantics from execution owner; measurement harness from `performance.md` |
+| benchmark harness + output grammar, historical regression runner, profiler methodology | `performance.md` | runtime semantics and optimization of measured code with their owners; `test_benchmark` test knobs with `testing.md` |
 | Windows Autopilot provisioning scenario | `autopilot-provisioning.md` | generic Microsoft/admin/wait contracts |
 | pre-1.0 DX/release/package fidelity gate | `release-readiness.md` | API semantics remain with owners |
 | implementation dependency graph / keep-refactor-supersede classification | `implementation-sequence.md` | no duplicate semantic contract |

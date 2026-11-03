@@ -118,8 +118,10 @@ cache-keys = [{ file = "pyproject.toml" }, { file = "riko/**/*.py" }]
 malware-check = true
 
 [tool.ruff]
+force-exclude = true
 extend-exclude = [
     "**/pycache",
+    "_docs/research/inspiration",
     ".cache",
     ".ruff_cache",
     ".tox/*",
@@ -250,6 +252,7 @@ reportUnknownParameterType = "error"
 reportMissingParameterType = "error"
 exclude = [
     "**/pycache",
+    "_docs/research/inspiration",
     ".cache",
     ".claude",
     ".ruff_cache",
