@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import json
 from collections import ChainMap
-from copy import deepcopy
 from functools import partial
-from pickle import dumps, loads  # noqa: S403
-from typing import TYPE_CHECKING, Any, get_args, get_type_hints
+from typing import TYPE_CHECKING, Any, cast, get_args, get_type_hints
 
 import pytest
 from attrs import fields_dict
 
+from riko.base._exceptions import ResourceInterpretationWarning
 from riko.base._require_guards import typed_dict_keys
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -31,7 +30,6 @@ from riko.definitions._resource_definition import (
     ReusableResource,
 )
 from riko.definitions._serialize import WorkflowEncoder
-from riko.definitions._settings import ExecutionSettings
 from riko.definitions._targets import (
     FileTarget,
     build_write,
@@ -40,7 +38,7 @@ from riko.definitions._targets import (
     validate_target_mode,
 )
 from riko.definitions._workflow_definition import Workflow
-from riko.definitions._write import WriteCapabilities, WriteMode, WriteOperation
+from riko.definitions._write import WriteMode, WriteOperation
 from riko.types._enums import Formats
 from riko.types._frozendict import FrozenDict
 from riko.types._io import get_async_closer, get_sync_closer
@@ -65,6 +63,7 @@ from riko.types._workflow import (
     parse_port,
 )
 from riko.types._workflow import Edge as EdgeBase
+from tests import ROUND_TRIPS
 from tests._resources import (
     CREDENTIAL,
     SCALAR,
@@ -89,6 +88,7 @@ from tests._targets import RecordStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from contextlib import AbstractContextManager
 
 
 _RESOLVED = "Expected a resolved resource value"
@@ -123,10 +123,6 @@ class TestFrozenDict:
     def test_equal_frozen_dicts_hash_alike(self):
         assert hash(FrozenDict({"a": [1]})) == hash(FrozenDict({"a": (1,)}))
 
-    def test_an_unhashable_value_makes_it_unhashable(self):
-        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
-            hash(FrozenDict({"a": bytearray()}))
-
     @pytest.mark.parametrize(
         ("merged", "expected"),
         [
@@ -141,6 +137,10 @@ class TestFrozenDict:
     def test_merging_returns_a_frozen_dict(self, merged: Any, expected: dict):
         assert isinstance(merged, FrozenDict)
         assert merged == expected
+
+    def test_an_unhashable_value_makes_it_unhashable(self):
+        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
+            hash(FrozenDict({"a": bytearray()}))
 
 
 def _sync_generator():
@@ -216,6 +216,7 @@ CONTEXT_FACTORY_REJECTIONS = [
     pytest.param("scalar", id="scalar"),
     pytest.param("connection", id="connection"),
     pytest.param("sync_contextmanager", id="sync-context-manager"),
+    pytest.param("async_contextmanager", id="async-context-manager"),
     pytest.param("one_shot_resource", id="one-shot"),
 ]
 
@@ -223,8 +224,15 @@ CONTEXT_FACTORY_REJECTIONS = [
 RESOLVED_VALUE_REJECTIONS = [
     pytest.param("scalar", "Must provide a Closeable value", id="scalar"),
     pytest.param("sync_contextmanager", _RESOLVED, id="sync-context-manager"),
+    pytest.param("async_contextmanager", _RESOLVED, id="async-context-manager"),
     pytest.param("one_shot_resource", _RESOLVED, id="one-shot"),
     pytest.param("external_resource", _RESOLVED, id="external"),
+]
+
+
+CONTEXT_MANAGERS = [
+    pytest.param("sync_contextmanager", id="sync"),
+    pytest.param("async_contextmanager", id="async"),
 ]
 
 
@@ -236,18 +244,21 @@ NON_FACTORY_VALUES = [
 ]
 
 
+def cleanup_contextmanager(_: AbstractContextManager[Connection]):
+    pass
+
+
 class TestResource:
-    def test_pickle_and_copy_round_trip(self):
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_pickle_and_copy_round_trip(self, round_trip):
         resource = Resource.from_factory(gen_client, retries=[1, 2], lazy=True)
+        restored = round_trip(resource)
 
-        pickled = loads(dumps(resource))  # noqa: S301
-
-        for restored in (pickled, deepcopy(resource)):
-            assert isinstance(restored, ReusableResource)
-            assert isinstance(restored._plan, SyncLifecyclePlan)
-            assert restored._plan.source is gen_client
-            assert restored.lazy
-            assert restored._plan.kwargs["retries"] == (1, 2)
+        assert isinstance(restored, ReusableResource)
+        assert isinstance(restored._plan, SyncLifecyclePlan)
+        assert restored._plan.source is gen_client
+        assert restored.lazy
+        assert restored._plan.kwargs["retries"] == (1, 2)
 
     @pytest.mark.parametrize(
         ("factory", "classification"),
@@ -316,6 +327,20 @@ class TestResource:
         )
         check_credential_and_lazy(resource)
 
+    def test_context_manager_lifecycle_metadata(self, sync_contextmanager):
+        lifecycle = Resource.from_lifecycle(sync_contextmanager)
+        check_metadata(lifecycle, OneShotResource, external=False, reusable=False)
+
+    def test_a_context_manager_cast_as_a_value_factory_warns(self, sync_contextmanager):
+        casted = cast(
+            "ValueFactory[AbstractContextManager[Connection]]", sync_contextmanager
+        )
+
+        with pytest.warns(ResourceInterpretationWarning, match="context manager"):
+            factory = Resource.from_factory(casted, cleanup=cleanup_contextmanager)
+
+        check_metadata(factory, ReusableResource, external=False, reusable=True)
+
     @pytest.mark.parametrize(
         ("build", "strategy", "async_native", "has_value"), RESOURCE_SHAPES
     )
@@ -378,6 +403,22 @@ class TestResource:
         with pytest.raises(TypeError, match=match):
             Resource(request.getfixturevalue(fixture))
 
+    @pytest.mark.parametrize("fixture", CONTEXT_MANAGERS)
+    def test_a_context_manager_needs_from_lifecycle(self, fixture, request):
+        value = request.getfixturevalue(fixture)
+
+        with pytest.raises(TypeError, match=_RESOLVED):
+            Resource.from_external(value)
+
+        with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
+            Resource.from_factory(value)
+
+    def test_an_external_resource_takes_no_credential_or_lazy(self, external_resource):
+        with pytest.raises(TypeError, match=r"credential.*lazy.*LifecycleFactory"):
+            Context().with_resource(
+                "value", external_resource, credential=CREDENTIAL, lazy=True
+            )
+
     @pytest.mark.parametrize("fixture", NON_FACTORY_VALUES)
     def test_factories_reject_a_non_factory_value(self, fixture, request):
         value = request.getfixturevalue(fixture)
@@ -427,7 +468,8 @@ class TestResourceFreezing:
 
 
 class TestWorkflowFields:
-    def test_pickle_and_copy_round_trip(self):
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_pickle_and_copy_round_trip(self, round_trip):
         node = ModuleNode(
             id="a",
             name="loop",
@@ -437,18 +479,17 @@ class TestWorkflowFields:
         )
         flow = Workflow(nodes=[node], outputs={}, inputs={"q": {"type": "string"}})
 
-        pickled = loads(dumps(flow))  # noqa: S301
+        restored = round_trip(flow)
 
-        for restored in (pickled, deepcopy(flow)):
-            assert restored == flow
-            restored_node = restored.nodes["a"]
-            assert isinstance(restored_node, ModuleNode)
-            rules = restored_node.conf["rules"]
-            assert isinstance(rules, tuple)
-            assert isinstance(rules[0], FrozenDict)
-            assert rules == ({"field": "x", "nested": {"ids": (1, 2)}},)
-            assert restored_node.resources == {"db": "primary_db"}
-            assert isinstance(restored.inputs["q"], FrozenDict)
+        assert restored == flow
+        restored_node = restored.nodes["a"]
+        assert isinstance(restored_node, ModuleNode)
+        rules = restored_node.conf["rules"]
+        assert isinstance(rules, tuple)
+        assert isinstance(rules[0], FrozenDict)
+        assert rules == ({"field": "x", "nested": {"ids": (1, 2)}},)
+        assert restored_node.resources == {"db": "primary_db"}
+        assert isinstance(restored.inputs["q"], FrozenDict)
 
     def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
         with pytest.raises(TypeError, match="not JSON serializable"):
@@ -590,6 +631,10 @@ class TestRawWorkflowFields:
 
 
 class TestPipelineDefinitionFields:
+    def test_a_context_is_accepted(self):
+        context = Context()
+        assert PipelineDefinition(context=context).context is context
+
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
@@ -600,23 +645,6 @@ class TestPipelineDefinitionFields:
     def test_run_settings_are_checked_when_built(self, kwargs: Any, match: str):
         with pytest.raises(TypeError, match=match):
             PipelineDefinition(**kwargs)
-
-    def test_a_context_is_accepted(self):
-        context = Context()
-        assert PipelineDefinition(context=context).context is context
-
-
-class TestExecutionSettings:
-    def test_a_none_shutdown_timeout_raises(self) -> None:
-        # ``with_execution`` turns ``None`` into the default, so only direct
-        # construction can pass it through.
-        with pytest.raises(TypeError, match="a number"):
-            ExecutionSettings(shutdown_timeout=None)  # pyright: ignore[reportArgumentType]
-
-
-class TestWriteMode:
-    def test_mode_values(self):
-        assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
 
 
 class TestWriteOperation:
@@ -652,59 +680,6 @@ class TestWriteOperation:
             op.mode = WriteMode.APPEND  # pyright: ignore[reportAttributeAccessIssue]
 
 
-class TestWriteCapabilities:
-    def test_appendable_derived_from_modes(self):
-        appendable = WriteCapabilities(modes=frozenset({WriteMode.APPEND}))
-        unappendable = WriteCapabilities(modes=frozenset({WriteMode.REPLACE}))
-
-        assert appendable.appendable is True
-        assert unappendable.appendable is False
-
-    def test_serializes_derived_from_format(self):
-        serializing = WriteCapabilities(modes=frozenset(), fmt=Formats.CSV)
-        native = WriteCapabilities(modes=frozenset())
-
-        assert serializing.serializes is True
-        assert native.serializes is False
-
-    def test_keyed_modes_is_union(self):
-        caps = WriteCapabilities(
-            modes=frozenset(WriteMode),
-            match_keyed_modes=frozenset({WriteMode.MERGE}),
-            idempotent_modes=frozenset({WriteMode.APPEND}),
-        )
-
-        assert caps.keyed_modes == frozenset({WriteMode.MERGE, WriteMode.APPEND})
-
-    def test_mode_sets_are_frozen_copies_of_the_input(self):
-        modes, keyed = {WriteMode.APPEND, WriteMode.MERGE}, {WriteMode.MERGE}
-        caps = WriteCapabilities(modes=modes, match_keyed_modes=keyed)
-        modes.clear()
-        keyed.add(WriteMode.APPEND)
-
-        expected = WriteCapabilities(
-            modes=frozenset({WriteMode.APPEND, WriteMode.MERGE}),
-            match_keyed_modes=frozenset({WriteMode.MERGE}),
-        )
-        assert caps == expected
-        assert hash(caps) == hash(expected)
-
-    def test_keyed_modes_must_be_subset_of_modes(self):
-        with pytest.raises(ValueError, match="not present in modes"):
-            WriteCapabilities(
-                modes=frozenset({WriteMode.REPLACE}),
-                match_keyed_modes=frozenset({WriteMode.MERGE}),
-            )
-
-    def test_match_and_idempotent_must_not_overlap(self):
-        with pytest.raises(ValueError, match="must not overlap"):
-            WriteCapabilities(
-                modes=frozenset({WriteMode.MERGE}),
-                match_keyed_modes=frozenset({WriteMode.MERGE}),
-                idempotent_modes=frozenset({WriteMode.MERGE}),
-            )
-
-
 class TestNormalizeTarget:
     def test_write_target_passes_through(self):
         target = FileTarget("out.json")
@@ -724,27 +699,7 @@ class TestResolveFormat:
             resolve_format("out.txt", None)
 
 
-class TestFileCapabilities:
-    @pytest.mark.parametrize(
-        ("dest", "appendable", "incremental"),
-        [("out.csv", True, True), ("out.geojson", False, False)],
-    )
-    def test_target_owns_format_behavior(self, dest, appendable, incremental):
-        capabilities = FileTarget(dest).get_capabilities()
-
-        assert capabilities.serializes is True
-        assert capabilities.appendable is appendable
-        assert (WriteMode.APPEND in capabilities.modes) is appendable
-        assert capabilities.incremental is incremental
-        assert WriteMode.REPLACE in capabilities.modes
-
-
 class TestValidateTargetMode:
-    def test_match_keyed_without_keys_rejected(self):
-        capabilities = RecordStore().get_capabilities()
-        with pytest.raises(ValueError, match="requires 'keys'"):
-            validate_target_mode(RecordStore(), WriteMode.MERGE, capabilities)
-
     @pytest.mark.parametrize(
         ("mode", "keys"),
         [
@@ -757,6 +712,11 @@ class TestValidateTargetMode:
         target = RecordStore()
         capabilities = target.get_capabilities()
         assert validate_target_mode(target, mode, capabilities, keys=keys) is None
+
+    def test_match_keyed_without_keys_rejected(self):
+        capabilities = RecordStore().get_capabilities()
+        with pytest.raises(ValueError, match="requires 'keys'"):
+            validate_target_mode(RecordStore(), WriteMode.MERGE, capabilities)
 
     def test_unkeyed_mode_with_keys_rejected(self):
         capabilities = FileTarget("out.csv").get_capabilities()

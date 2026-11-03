@@ -37,6 +37,8 @@ from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
+from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
+from riko.modules.fetchtext import pipe as fetchtext_pipe
 from riko.modules.filter import pipe as filter_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
@@ -50,6 +52,7 @@ from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
 from riko.modules.timeout import async_pipe as timeout_async_pipe
+from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.udf import pipe as udf_pipe
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
@@ -70,7 +73,7 @@ from riko.types.modules import (
     XpathFetchPageConf,
 )
 from tests import async_test, run_python
-from tests._lifecycle import LOOKAHEAD
+from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
@@ -136,21 +139,6 @@ class TestInput:
 
 
 class TestFetchModules:
-    @pytest.mark.parametrize("name", FETCH_MODULES)
-    def test_an_unopenable_url_raises(self, name):
-        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
-
-        with pytest.raises(OSError, match="No such file"):
-            list(pipeline)
-
-    @pytest.mark.parametrize("name", FETCH_MODULES)
-    @async_test
-    async def test_an_unopenable_url_raises_asynchronously(self, name):
-        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
-
-        with pytest.raises(OSError, match="No such file"):
-            await alist(pipeline)
-
     @async_test
     async def test_async_fetchpage_decodes_with_the_configured_encoding(self, tmp_path):
         """An async read honors ``encoding`` as the sync read does (latin-1 page)."""
@@ -166,6 +154,21 @@ class TestFetchModules:
         )
         pipeline = Pipeline.from_module("fetchpage", conf=conf)
         assert list(pipeline) == await alist(pipeline) == ["café"]
+
+    @pytest.mark.parametrize("name", FETCH_MODULES)
+    def test_an_unopenable_url_raises(self, name):
+        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
+
+        with pytest.raises(OSError, match="No such file"):
+            list(pipeline)
+
+    @pytest.mark.parametrize("name", FETCH_MODULES)
+    @async_test
+    async def test_an_unopenable_url_raises_asynchronously(self, name):
+        pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
+
+        with pytest.raises(OSError, match="No such file"):
+            await alist(pipeline)
 
 
 async def _titles(conf):
@@ -247,6 +250,32 @@ def sqlite_path(tmp_path: Path) -> Path:
         connection.close()
 
     return path
+
+
+BOM_LINES = [
+    pytest.param({}, "hello", id="stripped"),
+    pytest.param({"strip_bom": False}, "\ufeffhello", id="kept"),
+]
+
+
+class TestFetchtext:
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    def test_bom_on_the_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert list(fetchtext_pipe(conf=conf)) == [expected, "world"]
+
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    @async_test
+    async def test_async_bom_on_the_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert [line async for line in async_fetchtext_pipe(conf=conf)] == [
+            expected,
+            "world",
+        ]
 
 
 class TestFetchtable:
@@ -957,6 +986,43 @@ FOREIGN_OPTIONS = [
 ]
 
 
+PROCESSOR_FOLD_CASES = [
+    pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
+    pytest.param(
+        {"count": "all", "emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [{"title": "a b c", "w": {"content": "a"}}],
+        id="assign-first",
+    ),
+]
+
+
+IMPLICIT_FOLD_CASES = [
+    pytest.param(
+        {"emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}, {"content": "d"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "emit": True},
+        [{"content": "a"}, {"content": "c"}],
+        id="first-per-item",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [
+            {"title": "a b", "w": {"content": "a"}},
+            {"title": "c d", "w": {"content": "c"}},
+        ],
+        id="assign-first",
+    ),
+]
+
+
 class TestProcessor:
     """A ``processor`` resolves its interface, keeps call flags, and skips items."""
 
@@ -981,6 +1047,22 @@ class TestProcessor:
         pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
         result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
         assert result == [{"x": 1}, {"y": "processed"}]
+
+    @pytest.mark.parametrize(("kwargs", "expected"), PROCESSOR_FOLD_CASES)
+    def test_top_level_fold(self, kwargs, expected):
+        item = {"title": "a b c"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    @pytest.mark.parametrize(("kwargs", "expected"), IMPLICIT_FOLD_CASES)
+    def test_stream_fold_per_item(self, kwargs, expected):
+        result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    def test_single_item_is_not_double_mapped(self):
+        item = {"title": "a b"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
+        assert list(result) == [{"content": "a"}, {"content": "b"}]
 
     @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
     def test_async_named_pipe_raises(self, iscoro, isasync, reason):
@@ -1133,6 +1215,12 @@ def _exec_generated_names(*entries: NameEntry) -> dict:
     return namespace
 
 
+PROVIDER_CLASS_COLLISIONS = (
+    pytest.param("modules.foo", "transform", "Modules", id="flat-class"),
+    pytest.param("sources.bar", "source", "Sources", id="category-class"),
+)
+
+
 class TestGenerateModuleNames:
     def test_generation_is_order_independent(self):
         entries = list(gen_catalog_entries())
@@ -1177,3 +1265,23 @@ class TestGenerateModuleNames:
 
         assert repr(first) in str(excinfo.value)
         assert repr(second) in str(excinfo.value)
+
+    def test_providers_normalizing_alike_fail(self):
+        first = NameEntry(name="foo-bar.x", category="transform")
+        second = NameEntry(name="foo_bar.y", category="transform")
+
+        with pytest.raises(ValueError, match="'foo-bar' and 'foo_bar'"):
+            generate_module_names(first, second)
+
+    @pytest.mark.parametrize(
+        ("name", "category", "class_name"), PROVIDER_CLASS_COLLISIONS
+    )
+    def test_provider_class_collision_fails(self, name, category, class_name):
+        builtin = NameEntry(name="fetch", category="source")
+        entry = NameEntry(name=name, category=category)
+
+        with pytest.raises(ValueError, match="provider") as excinfo:
+            generate_module_names(builtin, entry)
+
+        assert repr(name) in str(excinfo.value)
+        assert repr(class_name) in str(excinfo.value)

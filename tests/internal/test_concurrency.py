@@ -256,10 +256,6 @@ class TestSyncPolicy:
         assert len(run_plan(plan, seed=ITEMS)) == len(ITEMS)
         assert opened == []
 
-    def test_sync_sequential_run_has_no_worker_pool(self) -> None:
-        with SyncExecution() as execution, pytest.raises(PipelineStateError):
-            _ = execution._pool
-
     @pytest.mark.slow
     def test_sync_concurrency_maps_on_a_thread_pool(self, opened, released) -> None:
         plan = build_chain_plan("hash", "hash")
@@ -440,6 +436,10 @@ class TestSyncPolicy:
             )
 
         assert released == ["terminate"]
+
+    def test_sync_sequential_run_has_no_worker_pool(self) -> None:
+        with SyncExecution() as execution, pytest.raises(PipelineStateError):
+            _ = execution._pool
 
 
 def _mark_and_block(directory: str) -> None:
@@ -883,12 +883,6 @@ class TestThreadBudget:
         assert plan.get_thread_demand("default", mapped=False) == 25
         assert len(result) == count
 
-    def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
-        monkeypatch.setattr(_async_execution, "_budgets", None)
-
-        with pytest.raises(RuntimeError, match="anyio is required"):
-            _async_execution._resolve_thread_budget()
-
     @pytest.mark.parametrize(("budget", "depth"), THREAD_BUDGET_OVERFLOWS)
     @async_test
     async def test_async_chain_over_thread_budget_raises_before_reading(
@@ -927,3 +921,9 @@ class TestThreadBudget:
                 rest = [item async for item in stream]
 
         assert rest == ITEMS[1:2]
+
+    def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
+        monkeypatch.setattr(_async_execution, "_budgets", None)
+
+        with pytest.raises(RuntimeError, match="anyio is required"):
+            _async_execution._resolve_thread_budget()

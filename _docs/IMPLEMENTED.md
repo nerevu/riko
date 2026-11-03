@@ -1301,8 +1301,9 @@ tuple and a dict as a `FrozenDict`.
   `PipelineDefinition[R]` directly (no cast); `Pipeline.map` builds a `Pipeline[R]` the same way.
 
 Regressions: `tests/public/test_callable_nodes.py::TestCallableNodes`,
-`tests/public/test_workflow.py::TestCallableNode`, and
-`tests/public/test_workflow_documents.py::TestCallableNodeDocuments`.
+`tests/public/test_workflow.py::TestCallableNode`, and the `callable` cases of
+`tests/public/test_workflow_documents.py::TestWorkflowParse`, `::TestNormalizeWorkflow`, and
+`::TestSerialize`.
 
 ## Write sessions — private seam awaiting `WriteNode`
 

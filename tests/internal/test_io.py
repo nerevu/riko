@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import socket
+import threading
+from contextlib import contextmanager, suppress
 from functools import partial
-from importlib.metadata import EntryPoint
 from io import BytesIO, StringIO
 from os import environ, linesep
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 from urllib.request import urlopen
@@ -28,13 +31,12 @@ from riko.bado.itertools import (
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.base._sentinels import MISSING
-from riko.definitions._targets import FileTarget, build_write
+from riko.definitions._targets import build_write
 from riko.definitions._write import WriteResult
 from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
 from riko.io._sync import Fetch, ReplayReader
-from riko.modules import fetchtext
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.parsing.documents import HAS_NATIVE_IJSON, IS_FASTFEEDPARSER, IS_LXML
@@ -42,7 +44,6 @@ from riko.rss.discovery import aload_rss_links, load_rss_links
 from riko.rss.feeds import parse_rss
 from riko.runtime import _write_session
 from riko.runtime._export import export
-from riko.runtime._target_registry import TargetRegistry
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
@@ -54,11 +55,11 @@ from riko.runtime._write_session import (
 from riko.types._enums import Formats
 from tests import aresolve, async_test, is_installed, run_python, skipif_issync
 from tests._lifecycle import ITEMS
-from tests._loopback import URL, ForwardOnly, loopback_url, stalled_url, stub_async_get
+from tests._loopback import ForwardOnly, loopback_url
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterator
+    from collections.abc import Awaitable, Callable, Generator, Iterator
 
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
@@ -76,6 +77,7 @@ _MERGE = partial(async_merge, [])
 _X0, _X1 = [{"x": 0}], [{"x": 1}]
 _CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
 _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+URL = "https://example.test/data"
 
 # A replace write leaves the old content until it publishes the new one whole.
 ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
@@ -83,6 +85,24 @@ ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
     raises=AssertionError,
     reason="atomic replace-write publication is not yet implemented",
 )
+
+ASYNC_GET_SCRIPT = """
+import sys
+from time import monotonic
+from riko.bado import run
+from riko.bado._backend import TimeoutException
+from riko.bado._util import async_get
+
+async def main():
+    start = monotonic()
+
+    try:
+        await async_get(sys.argv[1])
+    except TimeoutException:
+        print(monotonic() - start)
+
+run(main)
+"""
 
 
 def _never() -> bool:
@@ -109,6 +129,60 @@ def served_url():
     """Serves the loopback body over a real socket for the streamed branches."""
     with loopback_url(_LOOPBACK_BODY) as served:
         yield served
+
+
+@contextmanager
+def stalled_url(
+    prefix: bytes = b"", *, path: str = "stalled.txt", stall: float = 2
+) -> Generator[str]:
+    """
+    Serves a connection that accepts, sends *prefix*, then stalls.
+
+    *prefix* is written as is: pass response headers and a partial body to
+    simulate a stalled stream, or nothing for a stalled response. The server
+    drops each connection *stall* seconds after accepting it, so a fetch that
+    ignores its timeout fails with a connection error instead of hanging; a
+    timeout under test must be well below *stall*.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+    accepted: list[socket.socket] = []
+    timers: list[threading.Timer] = []
+    done = threading.Event()
+
+    def serve() -> None:
+        while not done.is_set():
+            try:
+                connection, _ = server.accept()
+            except OSError:
+                break
+
+            accepted.append(connection)
+            timer = threading.Timer(stall, connection.close)
+            timer.daemon = True
+            timers.append(timer)
+            timer.start()
+
+            with suppress(OSError):
+                connection.sendall(prefix)
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+
+    try:
+        yield f"http://127.0.0.1:{server.getsockname()[1]}/{path}"
+    finally:
+        done.set()
+        server.close()
+
+        for timer in timers:
+            timer.cancel()
+
+        for connection in accepted:
+            connection.close()
+
+        thread.join(timeout=1)
 
 
 class TestReplayReader:
@@ -188,11 +262,6 @@ class TestFetch:
         assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
 
     @pytest.mark.simulated_network
-    def test_timeout_stops_a_stalled_read(self):
-        with stalled_url() as url, pytest.raises(Timeout):
-            Fetch(url, timeout=0.2)
-
-    @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):
         with Fetch(served_url) as f:
             assert f.read() == _LOOPBACK_BODY
@@ -219,21 +288,6 @@ class TestFetch:
     def test_memoized_text_matches_streamed(self, served_url):
         with Fetch(served_url, memoize=True) as f:
             assert f.read() == _LOOPBACK_BODY
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="a text-mode response cache is not yet implemented",
-    )
-    def test_memoized_text_fetch_after_binary_reads_text(self, tmp_path):
-        path = tmp_path / "memo.txt"
-        path.write_text("hello")
-
-        with Fetch(path.as_uri(), memoize=True, binary=True) as f:
-            f.read()
-
-        with Fetch(path.as_uri(), memoize=True) as f:
-            assert f.read() == "hello"
 
     @pytest.mark.simulated_network
     def test_streamed_binary_read_returns_payload(self, served_url):
@@ -280,24 +334,34 @@ class TestFetch:
 
         assert [response.closed for response in responses] == [True]
 
+    @pytest.mark.simulated_network
+    def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(Timeout):
+            Fetch(url, timeout=0.2)
 
-ASYNC_GET_SCRIPT = """
-import sys
-from time import monotonic
-from riko.bado import run
-from riko.bado._backend import TimeoutException
-from riko.bado._util import async_get
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a text-mode response cache is not yet implemented",
+    )
+    def test_memoized_text_fetch_after_binary_reads_text(self, tmp_path):
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
 
-async def main():
-    start = monotonic()
+        with Fetch(path.as_uri(), memoize=True, binary=True) as f:
+            f.read()
 
-    try:
-        await async_get(sys.argv[1])
-    except TimeoutException:
-        print(monotonic() - start)
+        with Fetch(path.as_uri(), memoize=True) as f:
+            assert f.read() == "hello"
 
-run(main)
-"""
+
+def stub_async_get(content: bytes, content_type: str):
+    """Builds an async client ``get`` that answers every URL with *content*."""
+
+    async def async_get(url: str, **_: object) -> SimpleNamespace:
+        return SimpleNamespace(content=content, headers={"content-type": content_type})
+
+    return async_get
 
 
 class TestAsyncUrlOpen:
@@ -326,12 +390,6 @@ class TestAsyncUrlOpen:
         assert seen["timeout"] == settings.fetch_timeout
 
     @pytest.mark.simulated_network
-    @async_test
-    async def test_timeout_stops_a_stalled_read(self):
-        with stalled_url() as url, pytest.raises(TimeoutException):
-            await async_url_open(url, timeout=0.2)
-
-    @pytest.mark.simulated_network
     @skipif_issync
     def test_async_get_waits_the_configured_fetch_timeout(self):
         """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
@@ -341,23 +399,6 @@ class TestAsyncUrlOpen:
             run = run_python("-c", ASYNC_GET_SCRIPT, url, env=env)
 
         assert float(run.stdout) < 2
-
-    @pytest.mark.simulated_network
-    @pytest.mark.xfail(
-        strict=True,
-        raises=TimeoutException,
-        reason="streaming async URL reads are not yet implemented: async_url_open "
-        "buffers the whole body before returning, so a stalled body times out "
-        "before the lines already received can be read",
-    )
-    @async_test
-    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
-        """The first line of a stalled body is readable, as with sync ``Fetch``."""
-        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
-
-        with stalled_url(prefix) as url:
-            async with async_url_open(url, timeout=0.5) as f:
-                assert f.readline() == "first\n"
 
     @async_test
     async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
@@ -413,6 +454,29 @@ class TestAsyncUrlOpen:
 
         async with async_url_open("http_fixture.csv") as f:
             assert f.read() == "a,b"
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(TimeoutException):
+            await async_url_open(url, timeout=0.2)
+
+    @pytest.mark.simulated_network
+    @pytest.mark.xfail(
+        strict=True,
+        raises=TimeoutException,
+        reason="streaming async URL reads are not yet implemented: async_url_open "
+        "buffers the whole body before returning, so a stalled body times out "
+        "before the lines already received can be read",
+    )
+    @async_test
+    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
+        """The first line of a stalled body is readable, as with sync ``Fetch``."""
+        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
+
+        with stalled_url(prefix) as url:
+            async with async_url_open(url, timeout=0.5) as f:
+                assert f.readline() == "first\n"
 
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
@@ -654,32 +718,6 @@ class TestChunkContent:
             f.write(data)
             f.seek(0)
             assert list(_chunk_content(f, 3)) == expected
-
-
-BOM_LINES = [
-    pytest.param({}, "hello", id="stripped"),
-    pytest.param({"strip_bom": False}, "\ufeffhello", id="kept"),
-]
-
-
-class TestFetchTextBom:
-    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
-    def test_first_line(self, tmp_path, options, expected):
-        path = tmp_path / "bom.txt"
-        path.write_bytes("\ufeffhello\nworld\n".encode())
-        conf = {"url": str(path)} | options
-        assert list(fetchtext.pipe(conf=conf)) == [expected, "world"]
-
-    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
-    @async_test
-    async def test_async_first_line(self, tmp_path, options, expected):
-        path = tmp_path / "bom.txt"
-        path.write_bytes("\ufeffhello\nworld\n".encode())
-        conf = {"url": str(path)} | options
-        assert [line async for line in fetchtext.async_pipe(conf=conf)] == [
-            expected,
-            "world",
-        ]
 
 
 class TestAsyncMap:
@@ -957,25 +995,6 @@ class TestCapabilityFlags:
             assert HAS_NATIVE_IJSON is False
 
 
-class TestRegisterTarget:
-    def test_entry_point_loads_a_target_class(self) -> None:
-        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
-        assert TargetRegistry()._load(ep) is FileTarget
-
-    def test_entry_point_must_load_a_target_class(self) -> None:
-        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
-
-        with pytest.raises(TypeError, match="must load a target class"):
-            TargetRegistry()._load(ep)
-
-    def test_entry_point_key_must_match_the_backend(self, monkeypatch) -> None:
-        ep = EntryPoint("s3", "riko.definitions._targets:FileTarget", "riko.targets")
-        monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
-
-        with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
-            TargetRegistry()._load_entry_point("s3")
-
-
 class TestConverterPath:
     """The native whole-stream path and the temporary singleton path."""
 
@@ -1127,27 +1146,6 @@ class TestSessionLifecycle:
         assert session._state is _SessionState.ABORTED
         session.close()
 
-    def test_write_after_finalize_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.write(ITEMS)
-        session.finalize()
-
-        with pytest.raises(
-            PipelineStateError, match="the write session in state 'finalized'"
-        ):
-            session.write(ITEMS)
-
-        session.close()
-
-    def test_write_after_abort_rejected(self, tmp_path):
-        session = self._session(tmp_path)
-        session.abort()
-
-        with pytest.raises(PipelineStateError, match="aborted"):
-            session.write(ITEMS)
-
-        session.close()
-
     def test_close_twice_is_safe(self, tmp_path):
         session = self._session(tmp_path)
         session.close()
@@ -1169,6 +1167,27 @@ class TestSessionLifecycle:
         session.abort()
         session.close()
         assert path.read_bytes() == b'{"x": 1}\n'
+
+    def test_write_after_finalize_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+        session.finalize()
+
+        with pytest.raises(
+            PipelineStateError, match="the write session in state 'finalized'"
+        ):
+            session.write(ITEMS)
+
+        session.close()
+
+    def test_write_after_abort_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.abort()
+
+        with pytest.raises(PipelineStateError, match="aborted"):
+            session.write(ITEMS)
+
+        session.close()
 
     def test_stream_then_item_rejected(self, tmp_path):
         session = self._session(tmp_path)

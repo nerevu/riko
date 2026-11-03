@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import copy
-import pickle  # noqa: S403
 import time
 import typing
 from contextlib import contextmanager
@@ -103,7 +101,7 @@ from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
-from tests import run_python
+from tests import ROUND_TRIPS, run_python
 from tests._execution import build_workflow
 from tests._loopback import ForwardOnly
 
@@ -1051,18 +1049,6 @@ class TestAugmentEntries:
         assert isinstance(updated, struct_time)
         assert updated[:5] == (2012, 5, 12, 8, 30)
 
-    @pytest.mark.filterwarnings("error::DeprecationWarning")
-    def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
-        """Asking a feedparser entry for a missing ``updated`` key stays silent."""
-        raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
-        entry = cast("ParserRSSEntry", raw)
-        keys = ("updated_parsed", "updated", "published_parsed", "published")
-        resolved = resolve_date(entry, *keys)
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2020, 1, 2)
-        item = dict(next(augment_entries([entry])))
-        assert item["updated_parsed"] == resolved
-
 
 class TestResolveDate:
     def test_resolve_date_skips_blank_and_unparseable_values(self, caplog):
@@ -1088,6 +1074,18 @@ class TestResolveDate:
         resolved = resolve_date(raw, *keys, "created")
         assert isinstance(resolved, struct_time)
         assert resolved[:3] == (2021, 3, 4)
+
+    @pytest.mark.filterwarnings("error::DeprecationWarning")
+    def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
+        """Asking a feedparser entry for a missing ``updated`` key stays silent."""
+        raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
+        entry = cast("ParserRSSEntry", raw)
+        keys = ("updated_parsed", "updated", "published_parsed", "published")
+        resolved = resolve_date(entry, *keys)
+        assert isinstance(resolved, struct_time)
+        assert resolved[:3] == (2020, 1, 2)
+        item = dict(next(augment_entries([entry])))
+        assert item["updated_parsed"] == resolved
 
 
 def _get_seeded_order(seed: str) -> list[str]:
@@ -1373,11 +1371,6 @@ ERRORS = [
     pytest.param(errors.DuplicateReceiverError("alerts"), id="duplicate"),
     pytest.param(errors.IdentityEncodingError(set), id="encoding"),
     pytest.param(errors.CyclicIdentityError(), id="cyclic"),
-]
-ROUND_TRIPS = [
-    pytest.param(lambda error: pickle.loads(pickle.dumps(error)), id="pickle"),  # noqa: S301
-    pytest.param(copy.copy, id="copy"),
-    pytest.param(copy.deepcopy, id="deepcopy"),
 ]
 
 

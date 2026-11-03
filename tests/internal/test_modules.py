@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import itertools
 import pickle  # noqa: S403
 from collections.abc import (
@@ -75,10 +74,9 @@ from riko.types.modules import (
     OperatorReturnKind,
     SendConf,
     StrconcatRawConf,
-    TokenizerRawConf,
 )
-from tests import async_test, skipif_issync
-from tests._lifecycle import LOOKAHEAD
+from tests import ROUND_TRIPS, async_test, skipif_issync
+from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
 
 if TYPE_CHECKING:
@@ -103,8 +101,6 @@ async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Str
 
 _ASYNC_SUBPIPE = workflow()(_async_subpipe)
 _SOURCE_LEN = 5
-PARENTS = [{"title": "a b"}, {"title": "c d"}]
-TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
 BARE_ROWS = [{"content": "hi"}]
 DECORATORS = [processor, operator, splitter]
 FIXED_ROWS = [{"x": 1}]
@@ -192,15 +188,15 @@ class TestBareDecorator:
         assert_type(processor(shout), SyncProcessorWrapper)
         assert_type(processor(), processor[Literal[False]])
 
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    @pytest.mark.parametrize("decorator", DECORATORS)
+    def test_default_instance_round_trips(self, decorator, round_trip) -> None:
+        assert type(round_trip(decorator())) is decorator
+
     @pytest.mark.parametrize(("decorator", "args", "kwargs"), BARE_AND_OPTIONS)
     def test_function_with_options_raises(self, decorator, args, kwargs) -> None:
         with pytest.raises(TypeError, match="either the function to wrap or"):
             decorator(shout, *args, **kwargs)
-
-    @pytest.mark.parametrize("decorator", DECORATORS)
-    def test_default_instance_round_trips(self, decorator) -> None:
-        copies = [pickle.loads(pickle.dumps(decorator())), copy.copy(decorator())]  # noqa: S301
-        assert [type(each) for each in copies] == [decorator, decorator]
 
 
 def _fixed_processor(item: Item, extraction: object, objconf: object) -> str:
@@ -271,6 +267,13 @@ class TestNormalizeInput:
     @pytest.mark.parametrize("decorator", [operator, splitter])
     def test_reads_a_falsy_iterable(self, decorator) -> None:
         assert list(decorator().normalize_input(_FalsyRows())) == FIXED_ROWS
+
+    def test_processor_normalizes_a_none_input_to_an_empty_item(self):
+        assert processor().normalize_input(None) == {}
+
+    def test_operator_wraps_a_none_item_as_content(self):
+        items = cast("Any", [None])
+        assert next(operator().normalize_input(items)) == {"content": None}
 
 
 class TestSplitter:
@@ -374,36 +377,6 @@ class TestAsyncOperatorLaziness:
             assert await anext(stream) == {"i": 0}
 
         assert any(saw_loop)
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=RuntimeError,
-        reason="streaming an endless async input through the async loop is not yet "
-        "implemented: it reads the whole input before running the embed",
-    )
-    @async_test
-    async def test_async_loop_yields_from_an_endless_source(self) -> None:
-        """
-        Loop yields its first item without draining its source.
-
-        The source raises once it is pulled past a guard, so a draining loop fails
-        instead of running forever.
-        """
-        pulled: list[int] = []
-
-        async def source() -> AsyncStream:
-            for i in range(10_000):
-                if len(pulled) >= 100:
-                    raise RuntimeError("the source was read past its guard")
-
-                pulled.append(i)
-                await async_sleep(0)
-                yield {"title": f"a{i} b"}
-
-        stream = async_loop(
-            source(), embed=async_tok, conf=TOKENIZER_CONF, field="title"
-        )
-        assert await anext(stream) == {"content": "a0"}
 
     @pytest.mark.xfail(
         strict=True,
@@ -970,60 +943,35 @@ class TestAsyncLoop:
         assert [item async for item in stream] == PARENTS
         assert any(message in r.message for r in caplog.records)
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=RuntimeError,
+        reason="streaming an endless async input through the async loop is not yet "
+        "implemented: it reads the whole input before running the embed",
+    )
+    @async_test
+    async def test_async_loop_yields_from_an_endless_source(self) -> None:
+        """
+        Loop yields its first item without draining its source.
 
-PROCESSOR_FOLD_CASES = [
-    pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
-    pytest.param(
-        {"count": "all", "emit": True},
-        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
-        id="all",
-    ),
-    pytest.param(
-        {"count": "first", "assign": "w", "emit": False},
-        [{"title": "a b c", "w": {"content": "a"}}],
-        id="assign-first",
-    ),
-]
+        The source raises once it is pulled past a guard, so a draining loop fails
+        instead of running forever.
+        """
+        pulled: list[int] = []
 
+        async def source() -> AsyncStream:
+            for i in range(10_000):
+                if len(pulled) >= 100:
+                    raise RuntimeError("the source was read past its guard")
 
-IMPLICIT_FOLD_CASES = [
-    pytest.param(
-        {"emit": True},
-        [{"content": "a"}, {"content": "b"}, {"content": "c"}, {"content": "d"}],
-        id="all",
-    ),
-    pytest.param(
-        {"count": "first", "emit": True},
-        [{"content": "a"}, {"content": "c"}],
-        id="first-per-item",
-    ),
-    pytest.param(
-        {"count": "first", "assign": "w", "emit": False},
-        [
-            {"title": "a b", "w": {"content": "a"}},
-            {"title": "c d", "w": {"content": "c"}},
-        ],
-        id="assign-first",
-    ),
-]
+                pulled.append(i)
+                await async_sleep(0)
+                yield {"title": f"a{i} b"}
 
-
-class TestProcessor:
-    @pytest.mark.parametrize(("kwargs", "expected"), PROCESSOR_FOLD_CASES)
-    def test_top_level_fold(self, kwargs, expected):
-        item = {"title": "a b c"}
-        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", **kwargs)
-        assert list(result) == expected
-
-    @pytest.mark.parametrize(("kwargs", "expected"), IMPLICIT_FOLD_CASES)
-    def test_stream_fold_per_item(self, kwargs, expected):
-        result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
-        assert list(result) == expected
-
-    def test_single_item_is_not_double_mapped(self):
-        item = {"title": "a b"}
-        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
-        assert list(result) == [{"content": "a"}, {"content": "b"}]
+        stream = async_loop(
+            source(), embed=async_tok, conf=TOKENIZER_CONF, field="title"
+        )
+        assert await anext(stream) == {"content": "a0"}
 
 
 class TestAsyncProcessor:
@@ -1135,13 +1083,6 @@ class TestPrepare:
         pieces, _ = build_conf(conf, {}, {"extract": "N"})
         assert pieces == 1
 
-    def test_prepared_module_is_frozen(self):
-        conf = cast("Conf", {"x": {"subkey": "y"}})
-        prepared = processor(ftype="text").prepare("m", conf=conf)
-
-        with pytest.raises(attrs.exceptions.FrozenInstanceError):
-            prepared.name = "other"  # pyright: ignore[reportAttributeAccessIssue]
-
     @pytest.mark.parametrize("conf", PICKLED_CONFS)
     def test_a_pickled_prepared_module_rebuilds_its_callables(self, conf):
         prepared = processor(ftype="text").prepare("m", conf=cast("Conf", conf))
@@ -1152,6 +1093,36 @@ class TestPrepare:
         assert restored.parsers.conf_parser(item) == prepared.parsers.conf_parser(item)
         assert restored.casters.field_caster(4) == prepared.casters.field_caster(4)
         assert restored.static_conf == prepared.static_conf
+
+    @pytest.mark.parametrize(
+        ("extras", "is_dynamic"), [(("label",), True), ((), False)]
+    )
+    def test_extras_decide_whether_the_conf_is_dynamic(self, extras, is_dynamic):
+        conf = cast("Conf", {"part": {"terminal": "label", "type": "text"}})
+        prepared = processor().prepare("m", *extras, conf=conf)
+
+        assert prepared.is_dynamic is is_dynamic
+        assert prepared.extras == extras
+        assert (prepared.static_casted is None) is is_dynamic
+
+    def test_operator_passes_the_supplied_view_through(self):
+        captured = {}
+
+        @operator()
+        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
+            captured["view"] = kwargs.get("resources")
+            return stream
+
+        view = ResourceView({"resource": Connection()})
+        list(pipe([{"a": 1}], resources=view))
+        assert captured["view"] is view
+
+    def test_prepared_module_is_frozen(self):
+        conf = cast("Conf", {"x": {"subkey": "y"}})
+        prepared = processor(ftype="text").prepare("m", conf=conf)
+
+        with pytest.raises(attrs.exceptions.FrozenInstanceError):
+            prepared.name = "other"  # pyright: ignore[reportAttributeAccessIssue]
 
     @pytest.mark.parametrize(("pipe", "option"), DECORATION_OPTION_CALLS)
     def test_prepare_rejects_a_decoration_option(self, pipe, option):
@@ -1173,36 +1144,6 @@ class TestPrepare:
 
         with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
             strconcat.prepare(extra, conf={}, **kwargs)
-
-    @pytest.mark.parametrize(
-        ("extras", "is_dynamic"), [(("label",), True), ((), False)]
-    )
-    def test_extras_decide_whether_the_conf_is_dynamic(self, extras, is_dynamic):
-        conf = cast("Conf", {"part": {"terminal": "label", "type": "text"}})
-        prepared = processor().prepare("m", *extras, conf=conf)
-
-        assert prepared.is_dynamic is is_dynamic
-        assert prepared.extras == extras
-        assert (prepared.static_casted is None) is is_dynamic
-
-    def test_processor_normalizes_a_none_input_to_an_empty_item(self):
-        assert processor().normalize_input(None) == {}
-
-    def test_operator_wraps_a_none_item_as_content(self):
-        items = cast("Any", [None])
-        assert next(operator().normalize_input(items)) == {"content": None}
-
-    def test_operator_passes_the_supplied_view_through(self):
-        captured = {}
-
-        @operator()
-        def pipe(stream: Stream, objconf, tuples, **kwargs) -> Stream:
-            captured["view"] = kwargs.get("resources")
-            return stream
-
-        view = ResourceView({"resource": Connection()})
-        list(pipe([{"a": 1}], resources=view))
-        assert captured["view"] is view
 
 
 class _FalsyCaster:
@@ -1286,10 +1227,6 @@ class TestCsvParser:
 
 
 class TestExchangeRate:
-    def test_a_non_numeric_rate_raises(self):
-        with pytest.raises(TypeError, match="invalid rate"):
-            exchangerate_module.build_rates({"USD": [1]})
-
     @async_test
     async def test_data_file_starting_with_http_is_read_locally(
         self, tmp_path, monkeypatch
@@ -1305,6 +1242,10 @@ class TestExchangeRate:
             "GBP", None, ExchangeRateObjconf(conf)
         )
         assert str(rate) == "1.275201"
+
+    def test_a_non_numeric_rate_raises(self):
+        with pytest.raises(TypeError, match="invalid rate"):
+            exchangerate_module.build_rates({"USD": [1]})
 
 
 def _finite_source(consumed: list[int]) -> Stream:

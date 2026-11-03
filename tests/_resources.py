@@ -146,6 +146,7 @@ VALUE_FACTORIES = [
 
 connection = pytest.fixture(sync_callable_factory)
 sync_contextmanager = pytest.fixture(sync_cm_factory)
+async_contextmanager = pytest.fixture(async_cm_factory)
 scalar = pytest.fixture(lambda: SCALAR)
 
 

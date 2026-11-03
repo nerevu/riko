@@ -27,7 +27,6 @@ if TYPE_CHECKING:
         AsyncIterator,
         Awaitable,
         Generator,
-        Iterator,
         Mapping,
         Sequence,
     )
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
+EMPTY = Workflow(nodes=[], outputs={})
 OUTPUT_A = {"default": Endpoint("a", "out")}
 
 
@@ -210,26 +210,6 @@ def gen_closing_seed(closed: list[str]) -> Generator[Item]:
         closed.append("closed")
 
 
-class ClosingIterator:
-    """A two-item iterator with ``close`` that is not a generator."""
-
-    def __init__(self, closed: list[str]) -> None:
-        self.closed, self.index = closed, 0
-
-    def __iter__(self) -> Self:
-        return self
-
-    def __next__(self) -> Item:
-        if self.index == 2:
-            raise StopIteration
-
-        self.index += 1
-        return {"x": self.index}
-
-    def close(self) -> None:
-        self.closed.append("closed")
-
-
 def _relay(items, **_):
     """Re-yields each item with a ``for`` loop, which never closes ``items``."""
     for item in items:  # noqa: UP028
@@ -259,45 +239,6 @@ class ClosingAsyncIterator:
         self.closed.append("closed")
 
 
-class _TwoItems:
-    """A two-item iterator, or with ``fresh`` a handle that hands out a fresh one."""
-
-    def __init__(self, closed: list[str], *, fresh: bool = False) -> None:
-        self.closed, self.fresh, self.index = closed, fresh, 0
-
-    def __iter__(self) -> Iterator[Item]:
-        return iter([{"x": 1}, {"x": 2}]) if self.fresh else self
-
-    def __next__(self) -> Item:
-        if self.index == 2:
-            raise StopIteration
-
-        self.index += 1
-        return {"x": self.index}
-
-
-class AsyncCloseIterator(_TwoItems):
-    """A two-item iterator whose only close is an ``async def close``."""
-
-    async def close(self) -> None:
-        self.closed.append("closed")
-
-
-class AcloseOnlyIterator(_TwoItems):
-    """A two-item iterator whose only close is ``aclose``."""
-
-    async def aclose(self) -> None:
-        self.closed.append("closed")
-
-
-class FailingAcloseIterator(_TwoItems):
-    """A two-item iterator whose only close, ``aclose``, records itself then fails."""
-
-    async def aclose(self) -> None:
-        self.closed.append("closed")
-        raise RuntimeError("close failed")
-
-
 class AsyncCloseAsyncIterator:
     """A two-item async iterator whose only close is an ``async def close``."""
 
@@ -315,24 +256,6 @@ class AsyncCloseAsyncIterator:
         return {"x": self.index}
 
     async def close(self) -> None:
-        self.closed.append("closed")
-
-
-async def _agen_two() -> AsyncGenerator[Item]:
-    for index in (1, 2):
-        yield {"x": index}
-
-
-class ClosingAsyncHandle:
-    """An ``aclose``-able handle that hands out a fresh two-item async iterator."""
-
-    def __init__(self, closed: list[str]) -> None:
-        self.closed = closed
-
-    def __aiter__(self) -> AsyncIterator[Item]:
-        return _agen_two()
-
-    async def aclose(self) -> None:
         self.closed.append("closed")
 
 

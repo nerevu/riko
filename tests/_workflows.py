@@ -11,13 +11,20 @@ import pytest
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
-from riko.definitions._nodes import ModuleNode, PublishEdge, StreamEdge, SubscribeNode
+from riko.definitions._nodes import (
+    CallableNode,
+    ModuleNode,
+    PublishEdge,
+    StreamEdge,
+    SubscribeNode,
+)
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import register_workflow_store
+from riko.types._workflow import Endpoint
 from riko.types.modules import StrconcatRawConf
 from tests import TESTS_DIR
 
@@ -44,6 +51,7 @@ SPLIT_METHOD_PENDING = pytest.mark.xfail(
 DAG_DIR = TESTS_DIR / "dags"
 DAG_PATH = DAG_DIR / "pipe_forever.json"
 DAG = json.loads(DAG_PATH.read_text(encoding="utf-8"))
+DOCUMENT = json.loads(Workflow.parse(DAG).serialize())
 
 PIPE_DEF = {
     "modules": [
@@ -60,8 +68,11 @@ PIPE_DEF = {
 }
 
 RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}
-PARENT = [{"title": "hi"}]
-EXCLAIMED = [{"title": "hi", "strconcat": "hi!"}]
+CALLABLE_MATCH = r"callable node\(s\) \['len-1'\]"
+CALLABLE_FLOW = Workflow(
+    nodes=[CallableNode(id="len-1", name="len", fn=len)],
+    outputs={"default": Endpoint("len-1", "out")},
+)
 
 
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:

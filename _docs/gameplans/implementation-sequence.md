@@ -1886,7 +1886,7 @@ R10 therefore owns:
   boundary (repo-audit triage 2026-10-29, design note, no tripwire).
 - a sync-only loop embed under an async host honors `count="first"` lazily instead of running the
   child to completion on its worker (strict-xfail tripwire
-  `tests/internal/test_execution_plan.py::TestAsyncEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
+  `tests/internal/test_execution_plan.py::TestAsyncAdaptEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
   the worker-held stream must also enter the node-thread demand).
 
 Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`

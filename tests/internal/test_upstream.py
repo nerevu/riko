@@ -55,6 +55,12 @@ _REENCODER_CASES = [
 class TestMeza:
     """meza behaviors that riko currently works around."""
 
+    @pytest.mark.parametrize(("data", "fromenc", "n", "expected"), _REENCODER_CASES)
+    def test_reencoder_decodes_with_bom_removal(self, data, fromenc, n, expected):
+        f = BytesIO(data)
+        reencoder = Reencoder(f, fromenc=fromenc, remove_BOM=True, decode=True)
+        assert reencoder.read(n) == expected
+
     @pytest.mark.xfail(
         strict=True,
         raises=RuntimeError,
@@ -62,12 +68,6 @@ class TestMeza:
     )
     def test_read_csv_yields_nothing_for_an_empty_source(self):
         assert list(read_csv(StringIO(""))) == []
-
-    @pytest.mark.parametrize(("data", "fromenc", "n", "expected"), _REENCODER_CASES)
-    def test_reencoder_decodes_with_bom_removal(self, data, fromenc, n, expected):
-        f = BytesIO(data)
-        reencoder = Reencoder(f, fromenc=fromenc, remove_BOM=True, decode=True)
-        assert reencoder.read(n) == expected
 
     @pytest.mark.xfail(
         strict=True,

@@ -68,7 +68,7 @@ seam cleanup at R10.
 | `split` | A/B | execution-owned bounded branch channels | R7 |
 | legacy `write` | A/B | reuse bounded writer mechanics behind `WriteNode`, then remove module | R5C |
 | `forever` | B | native async repeat/source | R10 if not earlier |
-| `loop` | B | `async for` over the input, running the embed per item as it arrives (today it reads the whole async input first, so an endless source never yields; tripwire `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_loop_yields_from_an_endless_source`) | R10 if not earlier |
+| `loop` | B | `async for` over the input, running the embed per item as it arrives (today it reads the whole async input first, so an endless source never yields; tripwire `tests/internal/test_modules.py::TestAsyncLoop::test_async_loop_yields_from_an_endless_source`) | R10 if not earlier |
 | `join` | B/C | incremental/hash strategy where semantics permit | R10 if not earlier |
 | `sort` | C | collect then sort | intentionally eager |
 | `reverse` | C | collect then reverse | intentionally eager |

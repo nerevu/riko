@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides public tests for writing and exporting a ``Pipeline``'s items."""
+"""Provides public tests for write targets and for writing and exporting items."""
 
 from __future__ import annotations
 
@@ -13,8 +13,9 @@ import pytest
 from riko import export
 from riko.base._exceptions import InvalidPipelineError, UnsupportedTargetError
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
+from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
-from riko.definitions._write import WriteMode
+from riko.definitions._write import WriteCapabilities, WriteMode
 from riko.io._async import async_write
 from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.write import async_pipe, pipe
@@ -297,16 +298,16 @@ class TestPipelineWrite:
         assert path.read_bytes().startswith(b"[")
         assert path.read_bytes().endswith(b"]")
 
+    def test_write_does_not_rerun_preceding_module(self, tmp_path):
+        hashed = Pipeline().hash(options={"assign": "h"})
+        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
+        assert through == list(hashed(ITEMS))
+
     def test_non_file_target_execution_unsupported(self):
         pipeline = Pipeline().write(RecordStore())
 
         with pytest.raises(UnsupportedTargetError, match="RecordStore"):
             list(pipeline(ITEMS))
-
-    def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        hashed = Pipeline().hash(options={"assign": "h"})
-        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
-        assert through == list(hashed(ITEMS))
 
     @pytest.mark.xfail(
         strict=True,
@@ -479,3 +480,76 @@ class TestAsyncWriteIterables:
         path = tmp_path / "out.txt"
         assert await async_write(path, content, mode="w", chunksize=chunksize) == 5
         assert path.read_text(encoding="utf-8") == "héllo"
+
+
+class TestWriteMode:
+    def test_mode_values(self):
+        assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
+
+
+class TestWriteCapabilities:
+    def test_appendable_derived_from_modes(self):
+        appendable = WriteCapabilities(modes=frozenset({WriteMode.APPEND}))
+        unappendable = WriteCapabilities(modes=frozenset({WriteMode.REPLACE}))
+
+        assert appendable.appendable is True
+        assert unappendable.appendable is False
+
+    def test_serializes_derived_from_format(self):
+        serializing = WriteCapabilities(modes=frozenset(), fmt=Formats.CSV)
+        native = WriteCapabilities(modes=frozenset())
+
+        assert serializing.serializes is True
+        assert native.serializes is False
+
+    def test_keyed_modes_is_union(self):
+        caps = WriteCapabilities(
+            modes=frozenset(WriteMode),
+            match_keyed_modes=frozenset({WriteMode.MERGE}),
+            idempotent_modes=frozenset({WriteMode.APPEND}),
+        )
+
+        assert caps.keyed_modes == frozenset({WriteMode.MERGE, WriteMode.APPEND})
+
+    def test_mode_sets_are_frozen_copies_of_the_input(self):
+        modes, keyed = {WriteMode.APPEND, WriteMode.MERGE}, {WriteMode.MERGE}
+        caps = WriteCapabilities(modes=modes, match_keyed_modes=keyed)
+        modes.clear()
+        keyed.add(WriteMode.APPEND)
+
+        expected = WriteCapabilities(
+            modes=frozenset({WriteMode.APPEND, WriteMode.MERGE}),
+            match_keyed_modes=frozenset({WriteMode.MERGE}),
+        )
+        assert caps == expected
+        assert hash(caps) == hash(expected)
+
+    def test_keyed_modes_must_be_subset_of_modes(self):
+        with pytest.raises(ValueError, match="not present in modes"):
+            WriteCapabilities(
+                modes=frozenset({WriteMode.REPLACE}),
+                match_keyed_modes=frozenset({WriteMode.MERGE}),
+            )
+
+    def test_match_and_idempotent_must_not_overlap(self):
+        with pytest.raises(ValueError, match="must not overlap"):
+            WriteCapabilities(
+                modes=frozenset({WriteMode.MERGE}),
+                match_keyed_modes=frozenset({WriteMode.MERGE}),
+                idempotent_modes=frozenset({WriteMode.MERGE}),
+            )
+
+
+class TestFileTarget:
+    @pytest.mark.parametrize(
+        ("dest", "appendable", "incremental"),
+        [("out.csv", True, True), ("out.geojson", False, False)],
+    )
+    def test_target_owns_format_behavior(self, dest, appendable, incremental):
+        capabilities = FileTarget(dest).get_capabilities()
+
+        assert capabilities.serializes is True
+        assert capabilities.appendable is appendable
+        assert (WriteMode.APPEND in capabilities.modes) is appendable
+        assert capabilities.incremental is incremental
+        assert WriteMode.REPLACE in capabilities.modes

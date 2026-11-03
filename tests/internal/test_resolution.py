@@ -1,9 +1,10 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides internal tests for module and workflow resolution."""
+"""Provides internal tests for module, workflow, and write-target resolution."""
 
 from __future__ import annotations
 
 import re
+from importlib.metadata import EntryPoint
 from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, assert_type, cast
 
@@ -19,6 +20,7 @@ from riko.base._guards import is_mapping
 from riko.base._paths import TESTS_DIR
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
+from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
 from riko.modules import describe_module
 from riko.modules import regex as regex_module
@@ -148,6 +150,66 @@ BUILTIN_SHADOWS = [
 
 
 class TestModuleRegistry:
+    def test_builtin_resolves_lazily(self, fixed_registry):
+        assert fixed_registry.require("tokenizer").__name__ == "pipe"
+
+    def test_runtime_registration_takes_precedence(self, fixed_registry):
+        definition = ModuleDefinition(name="tokenizer", sync_pipe=_MARKER)
+        fixed_registry.register(definition, replace=True)
+        assert fixed_registry.require("tokenizer") is _MARKER
+
+    @pytest.mark.parametrize(("registry", "entry", "label"), BUILTIN_SHADOWS)
+    def test_register_rejects_builtin_shadow_without_replace(
+        self, registry, entry, label
+    ):
+        with pytest.raises(ValueError, match=f"shadows a built-in {label}"):
+            registry.register(entry)
+
+        assert registry.registered_names == ()
+
+    def test_registered_names_are_sorted(self, fixed_registry):
+        fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=_MARKER))
+        fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=_MARKER))
+        assert fixed_registry.registered_names == ("alpha", "zeta")
+
+    def test_falsy_callable_supplies_name(self):
+        pipe = cast("SyncModuleWrapper", _FalsyPipe())
+        assert ModuleDefinition(sync_pipe=pipe).name == "double"
+
+    def test_module_convention_snapshots_at_construction(self, fixed_registry):
+        other = _pipe_wrapper()
+        mod = SimpleNamespace(pipe=_MARKER, __name__="pkg.snap")
+        definition = ModuleDefinition.from_module(mod)
+        fixed_registry.register(definition)
+        mod.pipe = other
+        mod.__name__ = "pkg.other"
+
+        assert definition.name == "snap"
+        assert attrs.evolve(definition, description="z").name == "snap"
+        assert fixed_registry.require("snap") is _MARKER
+
+    def test_module_convention_derives_both_interfaces(self, fixed_registry):
+        mod = SimpleNamespace(pipe=_MARKER, async_pipe=_MARKER)
+        fixed_registry.register(ModuleDefinition.from_module(mod, name=_NAME))
+
+        assert fixed_registry.require(_NAME) is _MARKER
+        assert fixed_registry.require(_NAME, True) is _MARKER
+
+    def test_module_convention_description_override(self):
+        mod = SimpleNamespace(pipe=_MARKER, __doc__="Shouts.")
+        definition = ModuleDefinition.from_module(mod, description="Yells.")
+        assert definition.description == "Yells."
+
+    def test_explicit_callable_overrides_module(self, fixed_registry):
+        other = _pipe_wrapper()
+        mod = SimpleNamespace(pipe=other, async_pipe=other)
+        derived = ModuleDefinition.from_module(mod, name=_NAME)
+        definition = attrs.evolve(derived, sync_pipe=_MARKER)
+        fixed_registry.register(definition)
+
+        assert fixed_registry.require(_NAME) is _MARKER  # explicit wins
+        assert fixed_registry.require(_NAME, True) is other  # from module
+
     @pytest.mark.parametrize(
         ("method", "arg"),
         [
@@ -158,9 +220,6 @@ class TestModuleRegistry:
     def test_base_registry_requires_subclass_hooks(self, method, arg):
         with pytest.raises(NotImplementedError, match=rf"Registry\.{method} must"):
             getattr(Registry(), method)(arg)
-
-    def test_builtin_resolves_lazily(self, fixed_registry):
-        assert fixed_registry.require("tokenizer").__name__ == "pipe"
 
     @pytest.mark.parametrize("method", ["require", "require_interfaces"])
     def test_missing_module_hints_at_close_matches(self, fixed_registry, method):
@@ -206,25 +265,6 @@ class TestModuleRegistry:
 
         assert not isinstance(e.value, UnsupportedModuleError)
 
-    def test_runtime_registration_takes_precedence(self, fixed_registry):
-        definition = ModuleDefinition(name="tokenizer", sync_pipe=_MARKER)
-        fixed_registry.register(definition, replace=True)
-        assert fixed_registry.require("tokenizer") is _MARKER
-
-    @pytest.mark.parametrize(("registry", "entry", "label"), BUILTIN_SHADOWS)
-    def test_register_rejects_builtin_shadow_without_replace(
-        self, registry, entry, label
-    ):
-        with pytest.raises(ValueError, match=f"shadows a built-in {label}"):
-            registry.register(entry)
-
-        assert registry.registered_names == ()
-
-    def test_registered_names_are_sorted(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=_MARKER))
-        fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=_MARKER))
-        assert fixed_registry.registered_names == ("alpha", "zeta")
-
     def test_register_rejects_duplicate_without_replace(self, fixed_registry):
         fixed_registry.register(MOD_DEFN)
 
@@ -242,44 +282,6 @@ class TestModuleRegistry:
     def test_runtime_register_requires_name(self, fixed_registry):
         with pytest.raises(ValueError, match="needs a name"):
             fixed_registry.register(ModuleDefinition(sync_pipe=_MARKER))
-
-    def test_falsy_callable_supplies_name(self):
-        pipe = cast("SyncModuleWrapper", _FalsyPipe())
-        assert ModuleDefinition(sync_pipe=pipe).name == "double"
-
-    def test_module_convention_snapshots_at_construction(self, fixed_registry):
-        other = _pipe_wrapper()
-        mod = SimpleNamespace(pipe=_MARKER, __name__="pkg.snap")
-        definition = ModuleDefinition.from_module(mod)
-        fixed_registry.register(definition)
-        mod.pipe = other
-        mod.__name__ = "pkg.other"
-
-        assert definition.name == "snap"
-        assert attrs.evolve(definition, description="z").name == "snap"
-        assert fixed_registry.require("snap") is _MARKER
-
-    def test_module_convention_derives_both_interfaces(self, fixed_registry):
-        mod = SimpleNamespace(pipe=_MARKER, async_pipe=_MARKER)
-        fixed_registry.register(ModuleDefinition.from_module(mod, name=_NAME))
-
-        assert fixed_registry.require(_NAME) is _MARKER
-        assert fixed_registry.require(_NAME, True) is _MARKER
-
-    def test_module_convention_description_override(self):
-        mod = SimpleNamespace(pipe=_MARKER, __doc__="Shouts.")
-        definition = ModuleDefinition.from_module(mod, description="Yells.")
-        assert definition.description == "Yells."
-
-    def test_explicit_callable_overrides_module(self, fixed_registry):
-        other = _pipe_wrapper()
-        mod = SimpleNamespace(pipe=other, async_pipe=other)
-        derived = ModuleDefinition.from_module(mod, name=_NAME)
-        definition = attrs.evolve(derived, sync_pipe=_MARKER)
-        fixed_registry.register(definition)
-
-        assert fixed_registry.require(_NAME) is _MARKER  # explicit wins
-        assert fixed_registry.require(_NAME, True) is other  # from module
 
 
 class TestDescribeModule:
@@ -445,13 +447,6 @@ class TestEntryPointModules:
         assert fixed_registry.require(_NAME) is _MARKER
         assert fixed_registry._load_entry_point(_NAME).name == _NAME
 
-    def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
-        defn = ModuleDefinition(name="acme.other", sync_pipe=_MARKER)
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
-
-        with pytest.raises(ValueError, match="must match"):
-            fixed_registry.require(_NAME)
-
     def test_from_module_definition_must_name_the_entry_point(
         self, monkeypatch, fixed_registry
     ):
@@ -485,13 +480,6 @@ class TestEntryPointModules:
         assert definition.name == _NAME
         assert definition.description == "Shouts each item."
 
-    def test_entry_point_without_interfaces_raises(self, monkeypatch, fixed_registry):
-        mod = SimpleNamespace(nope=_MARKER)
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
-
-        with pytest.raises(TypeError, match="expected a ModuleDefinition"):
-            fixed_registry.require(_NAME)
-
     def test_runtime_registration_shadows_entry_point(
         self, monkeypatch, fixed_registry
     ):
@@ -502,24 +490,6 @@ class TestEntryPointModules:
         resolved = fixed_registry.require(_NAME)
         assert resolved is _MARKER
         assert resolved is not ep_marker
-
-    def test_register_rejects_entry_point_shadow_without_replace(
-        self, monkeypatch, fixed_registry
-    ):
-        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
-
-        with pytest.raises(ValueError, match="shadows an entry-point module"):
-            fixed_registry.register(MOD_DEFN)
-
-    def test_duplicate_entry_point_names_raise(self, monkeypatch, fixed_registry):
-        other = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
-        acme = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
-        globex = _FakeEntryPoint(_NAME, other, dist="globex")
-        _patch_entry_points(monkeypatch, acme, globex)
-
-        with pytest.raises(ValueError, match="acme, globex"):
-            fixed_registry.require(_NAME)
 
     def test_an_entry_point_listed_twice_resolves(self, monkeypatch, fixed_registry):
         twice = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
@@ -544,6 +514,38 @@ class TestEntryPointModules:
             fixed_registry.require(_MISSING_NAME)
 
         assert calls["n"] == 1
+
+    def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
+        defn = ModuleDefinition(name="acme.other", sync_pipe=_MARKER)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
+
+        with pytest.raises(ValueError, match="must match"):
+            fixed_registry.require(_NAME)
+
+    def test_entry_point_without_interfaces_raises(self, monkeypatch, fixed_registry):
+        mod = SimpleNamespace(nope=_MARKER)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, mod))
+
+        with pytest.raises(TypeError, match="expected a ModuleDefinition"):
+            fixed_registry.require(_NAME)
+
+    def test_register_rejects_entry_point_shadow_without_replace(
+        self, monkeypatch, fixed_registry
+    ):
+        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
+
+        with pytest.raises(ValueError, match="shadows an entry-point module"):
+            fixed_registry.register(MOD_DEFN)
+
+    def test_duplicate_entry_point_names_raise(self, monkeypatch, fixed_registry):
+        other = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
+        acme = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
+        globex = _FakeEntryPoint(_NAME, other, dist="globex")
+        _patch_entry_points(monkeypatch, acme, globex)
+
+        with pytest.raises(ValueError, match="acme, globex"):
+            fixed_registry.require(_NAME)
 
 
 EMBED_CYCLES = [
@@ -676,10 +678,6 @@ class TestWorkflowResolver:
         assert resolver._module_store is None
         assert resolver._document_store is document_store
 
-    def test_missing_stored_workflow_interfaces_raise(self):
-        with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
-            WorkflowResolver().require_interfaces("pipe_missing")
-
     @pytest.mark.parametrize(("documents", "cycle"), EMBED_CYCLES)
     def test_require_rejects_a_stored_workflow_that_embeds_itself(
         self, documents, cycle
@@ -694,6 +692,10 @@ class TestWorkflowResolver:
 
             with pytest.raises(InvalidPipelineError, match=match):
                 resolver.require("pipe_a")
+
+    def test_missing_stored_workflow_interfaces_raise(self):
+        with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
+            WorkflowResolver().require_interfaces("pipe_missing")
 
 
 class TestPackageStore:
@@ -814,6 +816,29 @@ class TestResolvedDocuments:
         pipe = dispatcher.require("pipe_exclaim")
         assert pipe(context=context) == ["strconcat"]
 
+    def test_registering_a_dispatcher_rebuilds_documents(self):
+        resolver = _document_resolver(self.workflows)
+        first = resolver.load("pipe_gigs")
+
+        resolver.register_dispatcher(dispatcher)
+        second = resolver.load("pipe_gigs")
+
+        assert second is not None
+        assert second is not first
+
+    def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
+        (tmp_path / "pipe_bad.json").write_text("{bad")
+        resolver = _document_resolver(tmp_path)
+
+        with pytest.raises(InvalidPipelineError, match="malformed"):
+            resolver.require("pipe_bad")
+
+    def test_document_without_dispatcher_raises(self):
+        resolver = WorkflowResolver(document_store=DirectoryStore(self.workflows))
+
+        with pytest.raises(UnsupportedWorkflowError, match="no dispatcher"):
+            resolver.load("pipe_gigs")
+
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
@@ -830,25 +855,21 @@ class TestResolvedDocuments:
 
         assert pipe(context=context) == {"inputs": {}, "dependencies": ["strconcat"]}
 
-    def test_malformed_document_raises_invalid_pipeline(self, tmp_path):
-        (tmp_path / "pipe_bad.json").write_text("{bad")
-        resolver = _document_resolver(tmp_path)
 
-        with pytest.raises(InvalidPipelineError, match="malformed"):
-            resolver.require("pipe_bad")
+class TestTargetRegistry:
+    def test_entry_point_loads_a_target_class(self) -> None:
+        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
+        assert TargetRegistry()._load(ep) is FileTarget
 
-    def test_document_without_dispatcher_raises(self):
-        resolver = WorkflowResolver(document_store=DirectoryStore(self.workflows))
+    def test_entry_point_must_load_a_target_class(self) -> None:
+        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
 
-        with pytest.raises(UnsupportedWorkflowError, match="no dispatcher"):
-            resolver.load("pipe_gigs")
+        with pytest.raises(TypeError, match="must load a target class"):
+            TargetRegistry()._load(ep)
 
-    def test_registering_a_dispatcher_rebuilds_documents(self):
-        resolver = _document_resolver(self.workflows)
-        first = resolver.load("pipe_gigs")
+    def test_entry_point_key_must_match_the_backend(self, monkeypatch) -> None:
+        ep = EntryPoint("s3", "riko.definitions._targets:FileTarget", "riko.targets")
+        monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
 
-        resolver.register_dispatcher(dispatcher)
-        second = resolver.load("pipe_gigs")
-
-        assert second is not None
-        assert second is not first
+        with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
+            TargetRegistry()._load_entry_point("s3")

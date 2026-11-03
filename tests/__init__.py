@@ -23,16 +23,19 @@ end through ``Pipeline``) needs no lower-level twin unless that twin checks
 something the other cannot reach.
 
 Inside a file, every test belongs to a ``Test<Subject>`` class (its async twin,
-``TestAsync<Subject>``, follows it). Helpers sit directly above the one class that
-uses them, at the top of the file when several classes do, or in a ``tests/_*.py``
-module when several files do. Module-level constants are the exception: every
-one except a ``pytest.param`` table sits at the top of the file, private names
-first, with any helper a constant needs above them. Code repeated inline three
-or more times becomes one such helper. Within a class, behavior tests come first,
-then rejection tables, then strict-xfail tripwires. A regression test goes in its
-subject's class; a tripwire goes where the real test will live once it flips.
-A strict xfail names the exception it fails with today in ``raises=``, so a setup
-error cannot satisfy it.
+``TestAsync<Subject>``, follows it). Five classes are named for a concept that spans
+several riko names instead: ``TestOverloadTypes``, ``TestTimeouts``,
+``TestWorkflowFields``, ``TestAsyncOperatorLaziness``, and
+``TestSyncPipeAsyncInput``; every other class takes a riko name. Helpers sit
+directly above the one class that uses them, at the top of the file when several
+classes do, or in a ``tests/_*.py`` module when several files do. Module-level
+constants are the exception: every one except a ``pytest.param`` table sits at the
+top of the file, private names first, with any helper a constant needs above them.
+Code repeated inline three or more times becomes one such helper. Within a class,
+behavior tests come first, then rejection tables, then strict-xfail tripwires. A
+regression test goes in its subject's class; a tripwire goes where the real test
+will live once it flips. A strict xfail names the exception it fails with today in
+``raises=``, so a setup error cannot satisfy it.
 
 Tests that share setup and assertion and differ only in data are one
 parametrized test, and a new case of an existing shape is a row, not a method.
@@ -75,7 +78,9 @@ changed.
 
 from __future__ import annotations
 
+import copy
 import os
+import pickle  # noqa: S403
 import subprocess
 import sys
 from importlib.util import find_spec
@@ -93,6 +98,17 @@ if TYPE_CHECKING:
 
 
 SCRIPT_TIMEOUT = 5
+
+
+def _pickle_round_trip[T](value: T) -> T:
+    return pickle.loads(pickle.dumps(value))  # noqa: S301
+
+
+ROUND_TRIPS = [
+    pytest.param(_pickle_round_trip, id="pickle"),
+    pytest.param(copy.copy, id="copy"),
+    pytest.param(copy.deepcopy, id="deepcopy"),
+]
 
 
 skipif_issync = pytest.mark.skipif(issync, reason="async support not available")

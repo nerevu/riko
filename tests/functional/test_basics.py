@@ -15,12 +15,14 @@ from riko.base._exceptions import UnsupportedModuleError
 from riko.base._guards import is_mapping
 from riko.coercion._sequences import listize, truncate_content
 from riko.definitions._context import Context
+from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
+from riko.types.modules import ItemBuilderConf
 from tests import TESTS_DIR, async_test
-from tests._workflows import SPLIT_PENDING, run_workflow
+from tests._workflows import SPLIT_PENDING, register_documents, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -29,6 +31,8 @@ if TYPE_CHECKING:
 type Items = ParserOutput | StatefulItem
 
 COMPARISONS = {Decimal(1): ">", Decimal(-1): "<", Decimal(0): "=="}
+EXCLAIMED = [{"title": "hi", "strconcat": "hi!"}]
+PARENT = [{"title": "hi"}]
 
 KAZEEKI1_EXAMPLE = {
     "author": {"name": "riko", "uri": "https://github.com/nerevu/riko"},
@@ -681,3 +685,40 @@ class TestStoredWorkflows:
     def test_an_unimplemented_module_is_reported_by_name(self, pipe_name, module):
         with pytest.raises(UnsupportedModuleError, match=rf"\b{module}\b"):
             self._run_example(pipe_name)
+
+
+@pytest.fixture
+def documents(tmp_path: Path) -> Path:
+    register_documents(tmp_path)
+    return tmp_path
+
+
+def build_outer() -> Pipeline:
+    conf = ItemBuilderConf({"attrs": [{"key": "title", "value": "hi"}]})
+    source = Pipeline.from_module("itembuilder", conf=conf)
+    return source.pipe(
+        "loop",
+        options={"count": "all", "emit": True},
+        embed={"name": "pipe:exclaim", "conf": {}},
+    )
+
+
+@pytest.mark.usefixtures("documents")
+class TestWorkflowDocument:
+    def test_document_runs_as_pipeline(self):
+        pipeline = Pipeline.from_module("pipe_exclaim")
+        assert list(PARENT | pipeline) == EXCLAIMED
+
+    def test_document_embeds_in_a_loop(self):
+        assert list(build_outer()) == EXCLAIMED
+
+    def test_module_wins_over_document(self):
+        pipeline = Pipeline.from_module("pipe_shout")
+        items = list(PARENT | pipeline)
+        assert items == EXCLAIMED
+
+    @async_test
+    async def test_document_runs_as_async_pipeline(self):
+        pipeline = Pipeline.from_module("pipe_exclaim")
+        assert [item async for item in PARENT | pipeline] == EXCLAIMED
+        assert [item async for item in build_outer()] == EXCLAIMED

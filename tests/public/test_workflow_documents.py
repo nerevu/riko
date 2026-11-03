@@ -15,7 +15,6 @@ import pytest
 
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._nodes import (
-    CallableNode,
     ModuleNode,
     PublishEdge,
     ReadNode,
@@ -29,14 +28,16 @@ from riko.definitions._workflow_definition import (
     normalize_workflow,
 )
 from riko.definitions._write import WriteMode
-from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, DocumentShape, Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import TruncateRawConf
 from tests._workflows import (
+    CALLABLE_FLOW,
+    CALLABLE_MATCH,
     DAG,
     DAG_DIR,
+    DOCUMENT,
     EDGE_FAMILY_MISMATCHES,
     PIPE_DEF,
     RAW_WORKFLOW,
@@ -77,12 +78,6 @@ _EXPLICIT_EMPTY = {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
 _REPEATED = [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]
 _TAKEN_ID = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
 
-_CALLABLE_FLOW = Workflow(
-    nodes=[CallableNode(id="len-1", name="len", fn=len)],
-    outputs={"default": Endpoint("len-1", "out")},
-)
-
-DOCUMENT = json.loads(Workflow.parse(DAG).serialize())
 
 MODULES: list[DagModule] = [
     {"id": "sw-1", "name": "forever"},
@@ -295,22 +290,6 @@ class TestWorkflowParse:
         """Each readable shape, detected or declared, is read as its loader would."""
         assert Workflow.parse(document, shape=declare(shape)) == loader(document)
 
-    @pytest.mark.parametrize(
-        ("document", "shape"),
-        [
-            pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
-            pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
-            pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
-            pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
-        ],
-    )
-    def test_parse_rejects_a_document_read_as_another_shape(self, document, shape):
-        """A document read as a shape it is not written in is rejected, not guessed."""
-        with pytest.raises(InvalidPipelineError):
-            Workflow.parse(document, shape=shape)
-
     def test_parse_reads_a_workflow_only_as_v2(self):
         flow = Workflow.parse(DAG)
         assert Workflow.parse(flow, shape=DocumentShape.V2) == flow
@@ -329,10 +308,32 @@ class TestWorkflowParse:
     def test_parse_reads_pipe_dag_text(self):
         assert Workflow.parse(json.dumps(DAG)) == Workflow.parse(DAG)
 
+    @pytest.mark.parametrize(
+        ("document", "shape"),
+        [
+            pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
+            pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
+            pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
+            pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
+            pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
+            pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
+        ],
+    )
+    def test_parse_rejects_a_document_read_as_another_shape(self, document, shape):
+        """A document read as a shape it is not written in is rejected, not guessed."""
+        with pytest.raises(InvalidPipelineError):
+            Workflow.parse(document, shape=shape)
+
     @pytest.mark.parametrize(("document", "shape", "match"), PARSE_REJECTIONS)
     def test_parse_rejects(self, document, shape, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse(document, shape=shape)
+
+    def test_a_document_cannot_declare_a_callable_node(self):
+        raw = {"nodes": [{"name": "len", "family": "callable"}]}
+
+        with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
+            Workflow.parse(raw)
 
 
 def _dag(name: str) -> PipeDag:
@@ -983,27 +984,9 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="CallOptions"):
             normalize_workflow(raw)
 
-
-class TestCallableNodeDocuments:
-    @pytest.mark.parametrize(
-        "write",
-        [
-            pytest.param(Workflow.serialize, id="serialize"),
-            pytest.param(normalize_workflow, id="normalize"),
-            pytest.param(partial(compile_workflow, name="pipe_len"), id="compile"),
-        ],
-    )
-    def test_a_callable_node_has_no_document_form(self, write):
-        with pytest.raises(
-            InvalidPipelineError, match=r"callable node\(s\) \['len-1'\]"
-        ):
-            write(_CALLABLE_FLOW)
-
-    def test_a_document_cannot_declare_a_callable_node(self):
-        raw = {"nodes": [{"name": "len", "family": "callable"}]}
-
-        with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
-            Workflow.parse(raw)
+    def test_a_callable_node_has_no_document_form(self):
+        with pytest.raises(InvalidPipelineError, match=CALLABLE_MATCH):
+            normalize_workflow(CALLABLE_FLOW)
 
 
 def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
@@ -1463,3 +1446,7 @@ class TestSerialize:
         }
         assert "conf" not in node
         assert Workflow.parse(flow.serialize()) == flow
+
+    def test_a_callable_node_has_no_document_form(self):
+        with pytest.raises(InvalidPipelineError, match=CALLABLE_MATCH):
+            Workflow.serialize(CALLABLE_FLOW)

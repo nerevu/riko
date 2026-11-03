@@ -156,10 +156,6 @@ class TestCallableNodes:
         assert len(items) == 1
         assert list(items[0]) == returned
 
-    def test_map_propagates_exceptions(self):
-        with pytest.raises(ValueError, match="'x': 1"):
-            list(Pipeline().map(_raise_value_error)([{"x": 1}]))
-
     def test_map_binds_keywords(self):
         pipeline = Pipeline().map(_scaled, factor=10)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [10, 20]
@@ -241,12 +237,6 @@ class TestCallableNodes:
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
 
-    def test_sync_iteration_rejects_an_awaitable_result(self):
-        pipeline = Pipeline().map(_defer_scaled)
-
-        with pytest.raises(InvalidPipelineError, match="a map function"):
-            list(pipeline([{"x": 1}]))
-
     @pytest.mark.slow
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
@@ -268,6 +258,16 @@ class TestCallableNodes:
         )
         assert pipeline.first() == {"content": 3944515045}
         assert len(runs) == 1
+
+    def test_map_propagates_exceptions(self):
+        with pytest.raises(ValueError, match="'x': 1"):
+            list(Pipeline().map(_raise_value_error)([{"x": 1}]))
+
+    def test_sync_iteration_rejects_an_awaitable_result(self):
+        pipeline = Pipeline().map(_defer_scaled)
+
+        with pytest.raises(InvalidPipelineError, match="a map function"):
+            list(pipeline([{"x": 1}]))
 
     def test_map_requires_the_context_to_provide_its_resources(self):
         pipeline = Pipeline().map(_enrich, resources="db")

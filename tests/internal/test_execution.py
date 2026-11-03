@@ -3,11 +3,8 @@
 
 from __future__ import annotations
 
-import copy
-import pickle  # noqa: S403
 from contextlib import (
     AbstractAsyncContextManager,
-    AbstractContextManager,
     asynccontextmanager,
     contextmanager,
     nullcontext,
@@ -18,18 +15,14 @@ from math import inf
 from threading import Event as ThreadEvent
 from threading import get_ident
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
 
 import pytest
 
 from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
 from riko.bado._util import asyncify, maybe_async
-from riko.base._exceptions import (
-    InvalidPipelineError,
-    PipelineStateError,
-    ResourceInterpretationWarning,
-)
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import (
     OneShotResource,
@@ -42,18 +35,16 @@ from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
 from riko.types._io import require_closer
-from tests import async_test, skipif_issync
+from tests import ROUND_TRIPS, async_test, skipif_issync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
-    CREDENTIAL,
     VALUE_FACTORIES,
     AsyncConnection,
     Connection,
     async_callable_factory,
     async_cm_factory,
     async_gen_factory,
-    check_credential_and_lazy,
     check_metadata,
     sync_cm_factory,
     sync_gen_factory,
@@ -205,15 +196,6 @@ class TestSyncExecution:
         reached.append("after")
         assert reached == ["after"]
 
-    def test_sync_enter_after_close_raises(self) -> None:
-        execution = SyncExecution()
-        execution.close()
-
-        with pytest.raises(
-            PipelineStateError, match="the execution in state 'closing'"
-        ):
-            execution.enter_context(nullcontext(1))
-
     def test_sync_repeated_close_does_not_reraise_cleanup_error(self) -> None:
         calls: list[str] = []
 
@@ -229,44 +211,6 @@ class TestSyncExecution:
 
         assert execution.close() is False
         assert calls == ["cleanup"]
-
-    def test_sync_cleanup_error_is_grouped_with_primary_error(self) -> None:
-        # A plain cleanup callback cannot replace the execution's own error: both
-        # survive, the primary first.
-        def boom() -> None:
-            raise RuntimeError("cleanup failed")
-
-        def run() -> None:
-            with SyncExecution() as execution:
-                execution.queue_callback(boom)
-                raise ValueError("primary")
-
-        with pytest.raises(ExceptionGroup) as info:
-            run()
-
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(cleanup, RuntimeError)
-
-    def test_sync_native_context_manager_may_replace_primary_error(self) -> None:
-        # A real __exit__ keeps its Python semantics: it may raise a different
-        # exception in place of the primary one, and that replacement is raised bare.
-        @contextmanager
-        def replace():
-            try:
-                yield
-            except ValueError as error:
-                raise KeyError("replaced") from error
-
-        def run() -> None:
-            with SyncExecution() as execution:
-                execution.enter_context(replace())
-                raise ValueError("primary")
-
-        with pytest.raises(KeyError, match="replaced") as info:
-            run()
-
-        assert isinstance(info.value.__cause__, ValueError)
 
     @skipif_issync
     def test_sync_portal_bridges_to_async(self) -> None:
@@ -313,6 +257,53 @@ class TestSyncExecution:
         assert SyncExecution(settings=settings).events is sink
         assert SyncExecution(events=explicit, settings=settings).events is explicit
         assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
+
+    def test_sync_enter_after_close_raises(self) -> None:
+        execution = SyncExecution()
+        execution.close()
+
+        with pytest.raises(
+            PipelineStateError, match="the execution in state 'closing'"
+        ):
+            execution.enter_context(nullcontext(1))
+
+    def test_sync_cleanup_error_is_grouped_with_primary_error(self) -> None:
+        # A plain cleanup callback cannot replace the execution's own error: both
+        # survive, the primary first.
+        def boom() -> None:
+            raise RuntimeError("cleanup failed")
+
+        def run() -> None:
+            with SyncExecution() as execution:
+                execution.queue_callback(boom)
+                raise ValueError("primary")
+
+        with pytest.raises(ExceptionGroup) as info:
+            run()
+
+        primary, cleanup = info.value.exceptions
+        assert isinstance(primary, ValueError)
+        assert isinstance(cleanup, RuntimeError)
+
+    def test_sync_native_context_manager_may_replace_primary_error(self) -> None:
+        # A real __exit__ keeps its Python semantics: it may raise a different
+        # exception in place of the primary one, and that replacement is raised bare.
+        @contextmanager
+        def replace():
+            try:
+                yield
+            except ValueError as error:
+                raise KeyError("replaced") from error
+
+        def run() -> None:
+            with SyncExecution() as execution:
+                execution.enter_context(replace())
+                raise ValueError("primary")
+
+        with pytest.raises(KeyError, match="replaced") as info:
+            run()
+
+        assert isinstance(info.value.__cause__, ValueError)
 
 
 class TestAsyncExecution:
@@ -378,23 +369,6 @@ class TestAsyncExecution:
         assert events == ["resource-closed"]
 
     @async_test
-    async def test_async_cleanup_error_is_grouped_with_primary_error(self) -> None:
-        async def boom() -> None:
-            raise RuntimeError("cleanup failed")
-
-        async def run() -> None:
-            async with AsyncExecution() as execution:
-                execution.queue_async_callback(boom)
-                raise ValueError("primary")
-
-        with pytest.raises(ExceptionGroup) as info:
-            await run()
-
-        primary, cleanup = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(cleanup, RuntimeError)
-
-    @async_test
     async def test_async_sync_callback_runs_on_close(self) -> None:
         calls: list[str] = []
 
@@ -402,46 +376,6 @@ class TestAsyncExecution:
             execution.queue_callback(calls.append, "closed")
 
         assert calls == ["closed"]
-
-    @async_test
-    async def test_async_native_context_manager_may_replace_primary_error(self) -> None:
-        @asynccontextmanager
-        async def replace():
-            try:
-                yield
-            except ValueError as error:
-                raise KeyError("replaced") from error
-
-        async def run() -> None:
-            async with AsyncExecution() as execution:
-                await execution.enter_async_context(replace())
-                raise ValueError("primary")
-
-        with pytest.raises(KeyError, match="replaced") as info:
-            await run()
-
-        assert isinstance(info.value.__cause__, ValueError)
-
-    @async_test
-    async def test_async_shutdown_timeout_expiry_is_grouped_with_primary_error(
-        self,
-    ) -> None:
-        # Exhausting the shutdown timeout during cleanup is a cleanup failure
-        # reported beside the execution's own error, not a replacement for it.
-        async def slow() -> None:
-            await async_sleep(1)
-
-        async def run() -> None:
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
-                execution.queue_async_callback(slow)
-                raise ValueError("primary")
-
-        with pytest.raises(ExceptionGroup) as info:
-            await run()
-
-        primary, expired = info.value.exceptions
-        assert isinstance(primary, ValueError)
-        assert isinstance(expired, TimeoutError)
 
     @async_test
     async def test_async_infinite_shutdown_timeout_waits_out_cleanup(self) -> None:
@@ -506,15 +440,65 @@ class TestAsyncExecution:
 
         assert sink.events == ["a", "b"]
 
+    @async_test
+    async def test_async_cleanup_error_is_grouped_with_primary_error(self) -> None:
+        async def boom() -> None:
+            raise RuntimeError("cleanup failed")
 
-def cleanup_contextmanager(_: AbstractContextManager[Connection]):
-    pass
+        async def run() -> None:
+            async with AsyncExecution() as execution:
+                execution.queue_async_callback(boom)
+                raise ValueError("primary")
+
+        with pytest.raises(ExceptionGroup) as info:
+            await run()
+
+        primary, cleanup = info.value.exceptions
+        assert isinstance(primary, ValueError)
+        assert isinstance(cleanup, RuntimeError)
+
+    @async_test
+    async def test_async_native_context_manager_may_replace_primary_error(self) -> None:
+        @asynccontextmanager
+        async def replace():
+            try:
+                yield
+            except ValueError as error:
+                raise KeyError("replaced") from error
+
+        async def run() -> None:
+            async with AsyncExecution() as execution:
+                await execution.enter_async_context(replace())
+                raise ValueError("primary")
+
+        with pytest.raises(KeyError, match="replaced") as info:
+            await run()
+
+        assert isinstance(info.value.__cause__, ValueError)
+
+    @async_test
+    async def test_async_shutdown_timeout_expiry_is_grouped_with_primary_error(
+        self,
+    ) -> None:
+        # Exhausting the shutdown timeout during cleanup is a cleanup failure
+        # reported beside the execution's own error, not a replacement for it.
+        async def slow() -> None:
+            await async_sleep(1)
+
+        async def run() -> None:
+            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+                execution.queue_async_callback(slow)
+                raise ValueError("primary")
+
+        with pytest.raises(ExceptionGroup) as info:
+            await run()
+
+        primary, expired = info.value.exceptions
+        assert isinstance(primary, ValueError)
+        assert isinstance(expired, TimeoutError)
 
 
 async_connection = pytest.fixture(async_callable_factory)
-
-
-async_contextmanager = pytest.fixture(async_cm_factory)
 
 
 WRAPPED_VALUES = [
@@ -951,39 +935,8 @@ class TestResourceAcquisition:
         check_metadata(resource, ReusableResource, external=True, reusable=True)
         _test_open_close(resource)
 
-        with pytest.raises(TypeError, match=r"credential.*lazy.*LifecycleFactory"):
-            Context().with_resource(
-                "value", external_resource, credential=CREDENTIAL, lazy=True
-            )
-
-    def test_context_manager_constructors(self, sync_contextmanager):
-        value = sync_contextmanager
-
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource.from_external(value)
-
-        lifecycle = Resource.from_lifecycle(value)
-        check_metadata(lifecycle, OneShotResource, external=False, reusable=False)
-        configured = Resource.from_lifecycle(value, credential=CREDENTIAL, lazy=True)
-        check_credential_and_lazy(configured)
-        _test_open_close(lifecycle)
-
-        with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
-            Resource.from_factory(value)
-
-        casted = cast("ValueFactory[AbstractContextManager[Connection]]", value)
-
-        with pytest.warns(ResourceInterpretationWarning, match="context manager"):
-            factory = Resource.from_factory(casted, cleanup=cleanup_contextmanager)
-
-        check_metadata(factory, ReusableResource, external=False, reusable=True)
-
-    def test_sync_acquire_lone_cleanup_error_raises_bare(self) -> None:
-        execution = SyncExecution()
-        execution.acquire(Resource(_BadClient()))
-
-        with pytest.raises(RuntimeError, match="cleanup failed"):
-            execution.close()
+    def test_context_manager_lifecycle_opens_and_closes(self, sync_contextmanager):
+        _test_open_close(Resource.from_lifecycle(sync_contextmanager))
 
     @pytest.mark.simulated_network
     def test_sync_external_http_client_cleaned_up_on_failure(self) -> None:
@@ -1046,14 +999,6 @@ class TestResourceAcquisition:
         assert events == ["cleanup"]
 
     @skipif_issync
-    @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
-    def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
-        settings = ExecutionSettings(shutdown_timeout=0.05)
-
-        with pytest.raises(TimeoutError), SyncExecution(settings=settings) as execution:
-            execution.acquire(build())
-
-    @skipif_issync
     @pytest.mark.simulated_network
     def test_sync_external_async_http_client_bridged(self) -> None:
         events: list[str] = []
@@ -1066,6 +1011,21 @@ class TestResourceAcquisition:
                 assert events == []
 
             assert events == ["closed"]
+
+    def test_sync_acquire_lone_cleanup_error_raises_bare(self) -> None:
+        execution = SyncExecution()
+        execution.acquire(Resource(_BadClient()))
+
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            execution.close()
+
+    @skipif_issync
+    @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
+    def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        with pytest.raises(TimeoutError), SyncExecution(settings=settings) as execution:
+            execution.acquire(build())
 
 
 class TestAsyncResourceAcquisition:
@@ -1333,36 +1293,18 @@ class TestAsyncResourceAcquisition:
         await _async_test_open_close(Resource.from_factory(factory, cleanup=cleanup))
 
     @async_test
-    async def test_async_constructor_contract(
+    async def test_async_constructors_open_and_close(
         self,
         async_connection: AsyncConnection,
         async_contextmanager: AbstractAsyncContextManager[AsyncConnection],
     ):
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Context().with_resource(  # pyright: ignore[reportCallIssue]
-                "value",
-                async_contextmanager,  # pyright: ignore[reportArgumentType]
-            )
-
         await _async_test_open_close(Resource(async_connection), async_connection)
 
         external = Resource.from_external(async_connection)
         await _async_test_open_close(external, async_connection)
 
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource(async_contextmanager)
-
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource.from_external(async_contextmanager)
-
         lifecycle = Resource.from_lifecycle(async_contextmanager)
-
         await _async_test_open_close(lifecycle)
-
-        with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
-            Resource.from_factory(
-                async_contextmanager  # pyright: ignore[reportArgumentType]
-            )
 
     @async_test
     async def test_async_acquire_cleanup_on_failure(self) -> None:
@@ -1429,16 +1371,9 @@ class TestAsyncResourceAcquisition:
 
 
 class TestResourceView:
-    @pytest.mark.parametrize(
-        "duplicate",
-        [
-            pytest.param(copy.copy, id="copy"),
-            pytest.param(copy.deepcopy, id="deepcopy"),
-            pytest.param(lambda view: pickle.loads(pickle.dumps(view)), id="pickle"),  # noqa: S301
-        ],
-    )
-    def test_resource_view_can_be_copied(self, duplicate):
-        assert dict(duplicate(ResourceView({"db": 1}))) == {"db": 1}
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_resource_view_can_be_copied(self, round_trip):
+        assert dict(round_trip(ResourceView({"db": 1}))) == {"db": 1}
 
     def test_resource_view_counts_its_bindings(self):
         assert len(ResourceView({"db": 1, "cache": 2})) == 2

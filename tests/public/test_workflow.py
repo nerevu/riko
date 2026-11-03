@@ -27,20 +27,16 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, IdentityMode
 from riko.types._workflow import Endpoint
-from riko.types.modules import ItemBuilderConf
-from tests import TESTS_DIR, async_test
+from tests import TESTS_DIR
 from tests._execution import OUTPUT_A
 from tests._workflows import (
+    CALLABLE_FLOW,
+    CALLABLE_MATCH,
     EDGE_FAMILY_MISMATCHES,
-    EXCLAIMED,
-    PARENT,
     RAW_WORKFLOW,
-    register_documents,
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from riko.types._pipedef import Embed
 
 
@@ -106,13 +102,6 @@ APPEND_REJECTIONS = [
 
 
 class TestWorkflow:
-    def test_workflow_mappings_are_read_only(self):
-        flow = _fetch_workflow()
-        with pytest.raises(TypeError):
-            flow.nodes["extra"] = flow.nodes["fetch-1"]  # type: ignore[index]
-        with pytest.raises(TypeError):
-            flow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
-
     @pytest.mark.parametrize(
         "build",
         [
@@ -216,6 +205,20 @@ class TestWorkflow:
         node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
         assert flow.with_node(node).resources == ("cache", "db")
 
+    def test_omitted_fields_are_empty(self):
+        """Every omitted field defaults to its empty form."""
+        flow = Workflow()
+        mappings = (flow.nodes, flow.outputs, flow.inputs)
+        assert mappings == ({}, {}, {})
+        assert (flow.edges, flow.resources) == ((), ())
+
+    def test_workflow_mappings_are_read_only(self):
+        flow = _fetch_workflow()
+        with pytest.raises(TypeError):
+            flow.nodes["extra"] = flow.nodes["fetch-1"]  # type: ignore[index]
+        with pytest.raises(TypeError):
+            flow.outputs["extra"] = Endpoint("fetch-1", "out")  # type: ignore[index]
+
     @pytest.mark.parametrize("append", APPENDS)
     def test_appending_needs_a_default_output_to_follow(self, append):
         flow = Workflow(nodes=[ModuleNode(id="a", name="fetch")])
@@ -233,13 +236,6 @@ class TestWorkflow:
 
         with pytest.raises(InvalidPipelineError, match=f"Workflow '{field}'"):
             Workflow(**fields)
-
-    def test_omitted_fields_are_empty(self):
-        """Every omitted field defaults to its empty form."""
-        flow = Workflow()
-        mappings = (flow.nodes, flow.outputs, flow.inputs)
-        assert mappings == ({}, {}, {})
-        assert (flow.edges, flow.resources) == ((), ())
 
     @pytest.mark.parametrize(("other", "match"), APPEND_REJECTIONS)
     def test_appending_a_workflow_rejects(self, other, match):
@@ -410,6 +406,20 @@ _CALLABLE_NODE_ERRORS = [
 
 class TestResourceBinding:
     @pytest.mark.parametrize(
+        ("resources", "expected"),
+        [
+            ("db", {"db": "db"}),
+            (["db", "cache"], {"db": "db", "cache": "cache"}),
+            ({"db": "primary_db"}, {"db": "primary_db"}),
+            (None, {}),
+        ],
+    )
+    def test_accepted_forms_normalize(self, resources: Any, expected: dict):
+        assert (
+            ModuleNode(id="a", name="hash", resources=resources).resources == expected
+        )
+
+    @pytest.mark.parametrize(
         ("resources", "match"),
         [
             *(
@@ -435,27 +445,8 @@ class TestResourceBinding:
         with pytest.raises(InvalidPipelineError, match="must not repeat an alias"):
             ModuleNode(id="a", name="hash", resources=["db", "db"])
 
-    @pytest.mark.parametrize(
-        ("resources", "expected"),
-        [
-            ("db", {"db": "db"}),
-            (["db", "cache"], {"db": "db", "cache": "cache"}),
-            ({"db": "primary_db"}, {"db": "primary_db"}),
-            (None, {}),
-        ],
-    )
-    def test_accepted_forms_normalize(self, resources: Any, expected: dict):
-        assert (
-            ModuleNode(id="a", name="hash", resources=resources).resources == expected
-        )
-
 
 class TestCallableNode:
-    @pytest.mark.parametrize(("kwargs", "error", "match"), _CALLABLE_NODE_ERRORS)
-    def test_construction_is_validated(self, kwargs: Any, error: Any, match: str):
-        with pytest.raises(error, match=match):
-            CallableNode(**{"id": "a", "name": "len", "fn": len, **kwargs})
-
     def test_identity_accepts_a_bare_string(self):
         node = CallableNode(id="a", name="len", fn=len, identity="preserve")
         assert node.identity is IdentityMode.PRESERVE
@@ -465,8 +456,18 @@ class TestCallableNode:
         assert node == CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
         assert node != CallableNode(id="a", name="len", fn=lambda value: value)
 
+    @pytest.mark.parametrize(("kwargs", "error", "match"), _CALLABLE_NODE_ERRORS)
+    def test_construction_is_validated(self, kwargs: Any, error: Any, match: str):
+        with pytest.raises(error, match=match):
+            CallableNode(**{"id": "a", "name": "len", "fn": len, **kwargs})
+
 
 class TestRequireRunnableOnly:
+    def test_callable_nodes_pass(self):
+        node = CallableNode(id="c", name="len", fn=len)
+        flow = Workflow(nodes=[_A, node], outputs={"default": Endpoint("c", "out")})
+        assert flow.require_runnable_only("execution") is None
+
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
@@ -475,11 +476,6 @@ class TestRequireRunnableOnly:
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
             flow.require_runnable_only("execution")
-
-    def test_callable_nodes_pass(self):
-        node = CallableNode(id="c", name="len", fn=len)
-        flow = Workflow(nodes=[_A, node], outputs={"default": Endpoint("c", "out")})
-        assert flow.require_runnable_only("execution") is None
 
 
 INVALID_WORKFLOWS = [
@@ -631,6 +627,16 @@ class TestValidate:
         flow = _workflow(nodes, edges=edges, outputs=outputs, resources=resources)
         assert flow.validate() is None
 
+    @pytest.mark.parametrize(("name", "conf", "match"), INVALID_CONFS)
+    def test_invalid_conf_rejected_before_the_source_is_read(self, name, conf, match):
+        consumed = []
+        pipeline = _counted_source(consumed) | Pipeline.from_module(name, conf=conf)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            list(pipeline)
+
+        assert consumed == []
+
     @pytest.mark.parametrize(("kwargs", "match"), INVALID_WORKFLOWS)
     def test_invalid_workflow_rejected(self, kwargs, match):
         with pytest.raises(InvalidPipelineError, match=match):
@@ -651,53 +657,6 @@ class TestValidate:
         flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
         with pytest.raises(InvalidPipelineError, match=match):
             flow.validate()
-
-    @pytest.mark.parametrize(("name", "conf", "match"), INVALID_CONFS)
-    def test_invalid_conf_rejected_before_the_source_is_read(self, name, conf, match):
-        consumed = []
-        pipeline = _counted_source(consumed) | Pipeline.from_module(name, conf=conf)
-
-        with pytest.raises(InvalidPipelineError, match=match):
-            list(pipeline)
-
-        assert consumed == []
-
-
-@pytest.fixture
-def documents(tmp_path: Path) -> Path:
-    register_documents(tmp_path)
-    return tmp_path
-
-
-def build_outer() -> Pipeline:
-    conf = ItemBuilderConf({"attrs": [{"key": "title", "value": "hi"}]})
-    source = Pipeline.from_module("itembuilder", conf=conf)
-    return source.pipe(
-        "loop",
-        options={"count": "all", "emit": True},
-        embed={"name": "pipe:exclaim", "conf": {}},
-    )
-
-
-@pytest.mark.usefixtures("documents")
-class TestWorkflowDocument:
-    def test_document_runs_as_pipeline(self):
-        pipeline = Pipeline.from_module("pipe_exclaim")
-        assert list(PARENT | pipeline) == EXCLAIMED
-
-    def test_document_embeds_in_a_loop(self):
-        assert list(build_outer()) == EXCLAIMED
-
-    def test_module_wins_over_document(self):
-        pipeline = Pipeline.from_module("pipe_shout")
-        items = list(PARENT | pipeline)
-        assert items == EXCLAIMED
-
-    @async_test
-    async def test_document_runs_as_async_pipeline(self):
-        pipeline = Pipeline.from_module("pipe_exclaim")
-        assert [item async for item in PARENT | pipeline] == EXCLAIMED
-        assert [item async for item in build_outer()] == EXCLAIMED
 
 
 def _loop_workflow() -> Workflow:
@@ -720,6 +679,10 @@ class TestCompileWorkflow:
 
         with pytest.raises(InvalidPipelineError, match="write node code generation"):
             compile_workflow(flow, "pipe_written")
+
+    def test_a_callable_node_has_no_document_form(self):
+        with pytest.raises(InvalidPipelineError, match=CALLABLE_MATCH):
+            compile_workflow(CALLABLE_FLOW, "pipe_len")
 
     @pytest.mark.xfail(
         strict=True,

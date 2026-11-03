@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides internal tests for codegen of workflows, names, ids, and configs."""
+"""Provides internal tests for codegen of workflows, names, ids, configs, and docs."""
 
 from __future__ import annotations
 
@@ -48,15 +48,16 @@ from riko.base._api_surface import (
     TYPES,
 )
 from riko.base._paths import CONFIG_PATH, MODULE_IDS_PATH, MODULE_NAMES_PATH
-from riko.base._strutils import pythonise
+from riko.base._strutils import get_codegen_note, pythonise
+from riko.cli._gen_api_surface import generate_api_surface
 from riko.cli._gen_config import objconf_structure, render
+from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
 from riko.definitions._workflow_definition import Workflow, normalize_workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
-    NameEntry,
     gen_catalog_entries,
     generate_module_ids,
     generate_module_names,
@@ -508,34 +509,6 @@ class TestModuleCategory:
         assert list_modules(category="sink") == []
 
 
-PROVIDER_CLASS_COLLISIONS = (
-    pytest.param("modules.foo", "transform", "Modules", id="flat-class"),
-    pytest.param("sources.bar", "source", "Sources", id="category-class"),
-)
-
-
-class TestProviderClassCollision:
-    def test_providers_normalizing_alike_fail(self):
-        first = NameEntry(name="foo-bar.x", category="transform")
-        second = NameEntry(name="foo_bar.y", category="transform")
-
-        with pytest.raises(ValueError, match="'foo-bar' and 'foo_bar'"):
-            generate_module_names(first, second)
-
-    @pytest.mark.parametrize(
-        ("name", "category", "class_name"), PROVIDER_CLASS_COLLISIONS
-    )
-    def test_provider_class_collision_fails(self, name, category, class_name):
-        builtin = NameEntry(name="fetch", category="source")
-        entry = NameEntry(name=name, category=category)
-
-        with pytest.raises(ValueError, match="provider") as excinfo:
-            generate_module_names(builtin, entry)
-
-        assert repr(name) in str(excinfo.value)
-        assert repr(class_name) in str(excinfo.value)
-
-
 class TestGeneratedNamesDrift:
     def test_generated_names_match(self):
         entries = gen_catalog_entries()
@@ -798,11 +771,6 @@ class TestImportSurface:
         )
         assert not leaked, f"Top-level functions leaked outside STABLE: {leaked}"
 
-    @pytest.mark.parametrize("path", REMOVED_PUBLIC_PATHS)
-    def test_removed_public_paths_are_gone(self, path):
-        with pytest.raises(ModuleNotFoundError):
-            import_module(path)
-
     def test_modules_package_drops_decorators(self):
         names = ("operator", "processor", "splitter")
         assert not any(hasattr(riko.modules, name) for name in names)
@@ -820,3 +788,44 @@ class TestImportSurface:
             if len(module.__all__) != len(set(module.__all__))
         }
         assert not duplicates, f"Duplicate __all__ entries: {duplicates}"
+
+    @pytest.mark.parametrize("path", REMOVED_PUBLIC_PATHS)
+    def test_removed_public_paths_are_gone(self, path):
+        with pytest.raises(ModuleNotFoundError):
+            import_module(path)
+
+
+VERB_TABLE_MARKERS = [
+    pytest.param("md", "<!-- verbs -->\n<!-- /verbs -->", "| `load` |", id="md"),
+    pytest.param("rst", ".. begin verbs\n.. end verbs", "| ``load`` ", id="rst"),
+    pytest.param(
+        "md",
+        "<!-- verb-rules -->\n<!-- /verb-rules -->",
+        "| `load` | Loads | **MUST** cross",
+        id="md-rules",
+    ),
+]
+
+
+class TestVerbTables:
+    """Generated function-name verb tables."""
+
+    @pytest.mark.parametrize(("fmt", "text", "row"), VERB_TABLE_MARKERS)
+    def test_generation_is_idempotent(
+        self, fmt: TableFormat, text: str, row: str
+    ) -> None:
+        generated = generate_verb_tables(text, fmt)
+        assert row in generated
+        assert get_codegen_note("--verbs") in generated.splitlines()[0]
+        assert generate_verb_tables(generated, fmt) == generated
+
+
+class TestGenerateApiSurface:
+    """The generated name blocks in the API-surface reference."""
+
+    def test_generation_names_its_command_and_is_idempotent(self) -> None:
+        text = "<!-- api-surface:export -->\n\n<!-- /api-surface:export -->"
+        generated = generate_api_surface(text)
+        assert get_codegen_note("--api") in generated.splitlines()[0]
+        assert "'export'" in generated
+        assert generate_api_surface(generated) == generated

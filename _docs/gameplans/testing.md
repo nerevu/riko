@@ -187,7 +187,9 @@ Pending: `manage lint --tests` bans only `_private` names in `public/`. The full
 allowlist first. As of the 2026-10-30 surface triage the remaining non-surface names in `public/`
 are the `SyncModuleWrapper`/`AsyncModuleWrapper` cast targets (waiting on the slot-type decision in
 [extensibility.md](extensibility.md)), the `riko.bado._backend` test primitives (`checkpoint`,
-`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, and `maybe_aclosing`.
+`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, `maybe_aclosing`, and the `TestFilter`
+seam patches `load_local_tz` and `ALLOW_INF` (patched to pin the local time zone and to
+enable infinity comparison, never imported for use).
 The 2026-10-31 sibling audit found more names that a supported signature, field, or return
 exposes but no surface exports. Publishing them is deferred (user ruling) to one surface pass:
 `SyncPolicy`/`AsyncPolicy` (`ExecutionSettings` fields), `GraphIndex`/`GraphEdge`/`RunnableNode`
