@@ -37,8 +37,9 @@ from typing import TYPE_CHECKING, Self
 from attrs import define, evolve, field
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_values
 from riko.base._guards import require_sequence
-from riko.base._iterutils import map_values, unique_everseen
+from riko.base._iterutils import unique_everseen
 from riko.base._require_guards import normalize_strs, require_instances
 from riko.base._typing import resolve_enum
 from riko.types._enums import DocumentShape

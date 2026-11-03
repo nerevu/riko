@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
-from ._iterutils import map_values, sort_stably
+from ._funcutils import map_values
+from ._iterutils import sort_stably
 
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison

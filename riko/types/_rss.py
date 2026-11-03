@@ -11,24 +11,32 @@ type RSSEntry = ExpandedRSSEntry | YahooRSSEntry | AugmentedRSSEntry
 class EntryContent(TypedDict, total=False):
     value: Required[str]
     type: str
-    language: str
-    base: str
+    language: str | None
+    base: str | None
 
 
-class Enclosure(TypedDict):
+class Enclosure(TypedDict, total=False):
+    """
+    A media enclosure.
+
+    feedparser gives ``href`` and a text ``length``; fastfeedparser gives ``url`` and an
+    int ``length``.
+    """
+
     type: str
-    length: int
+    length: int | str
     href: str
+    url: str
 
 
-class AuthorDetail(TypedDict):
+class AuthorDetail(TypedDict, total=False):
     href: str
     name: str
     email: str
 
 
 class CommonRSSEntry(TypedDict, total=False):
-    link: Required[str]
+    link: str
     author: str | None
     title: str | None
     description: str | None

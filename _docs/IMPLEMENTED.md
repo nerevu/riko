@@ -274,10 +274,15 @@ leaves `published_parsed=None` for formats such as `May 11, 2012 10:01:00 EST`, 
 Feed parsing goes through `riko/parsing/documents.py::parse_feed`: with `fastfeedparser`
 installed it reads a file source into memory first (it accepts only text or bytes);
 otherwise `feedparser` receives the open file and reads it itself, so riko never reads the
-feed twice. Its result is typed by the `ParsedFeed` protocol (`riko/types/_rss.py`).
+feed twice. Its result is typed by the `ParsedFeed` protocol (`riko/types/_rss.py`) with no
+cast: the local `typings/feedparser/` stub types `entries` (and its `items` alias) as
+`ParserRSSEntry`, whose TypedDicts follow what both parsers emit (`link` and every
+author/enclosure key optional; an enclosure carries feedparser's `href` with a text `length`
+or fastfeedparser's `url` with an int). `parse_rss` (`riko/rss/feeds.py`) closes the fetched
+file in a `finally` around `parse_feed`, so a parse error never leaks it.
 
 JSON in `any2dict` takes one of two branches with the same results. A binary stream (a `Fetch` is
-read through its file; `is_binary_readable` in `riko/io/_filelike.py` tells bytes from text)
+read through its file; `is_binary_io_like` in `riko/io/_filelike.py` tells bytes from text)
 streams through native `ijson` when it cannot seek, such as a sync HTTP body (`async_url_open`
 buffers the body into a seekable `BytesIO`, so an async fetch streams only by size), or when at least
 `STREAMING_THRESHOLD` bytes remain (`_get_ijson_source`); everything else is parsed in memory and
@@ -916,8 +921,8 @@ value-factory → cleanup callback, lifecycle → context-manager entry. Explici
 authoritative. The two executions adapt work across sync/async as mirror images, classifying async-vs-sync
 with the same predicates (`is_async_callable`, and `get_sync_closer`/`get_async_closer` in
 `riko/types/_io.py`, read through the plan records' `is_async`). Each execution registers every owned
-value's close in one place, `register_owned`, over `close_owned`/`aclose_owned`
-(`riko/execution/_resource_cleanup.py`). Under `SyncExecution`, async value *production* bridges
+value's close in one place, `register_owned`, over `run_bridged`/`maybe_async`/`asyncify`
+(`riko/bado/_util.py`). Under `SyncExecution`, async value *production* bridges
 through the portal, and so does the async cleanup of a value produced there: an async factory's async
 or awaitable-returning cleanup, and an async lifecycle, entered through
 `portal.wrap_async_context_manager` around `_BoundedExit` so its entry and exit run in one task. A
@@ -927,8 +932,7 @@ caller-made value whose only close is async (`Resource(value)`, a sync-read seed
 return, a node stream) raises it when opened or built, before any item is read (`ASYNC_CLEANUP_MSG`/
 `ASYNC_CLOSE_MSG` name the fix). Under `AsyncExecution` every async close is awaited, and blocking
 sync work is offloaded to a worker thread: a sync value factory, a resource's sync cleanup callback,
-and its owned sync `close()` run on a worker through `aclose_owned(..., inline=False)` over
-`asyncify_call` (an unguarded worker seam, because cleanup runs while the execution is closing, when
+and its owned sync `close()` run on a worker through `asyncify` (`riko/bado/_util.py`, the unguarded worker seam, because cleanup runs while the execution is closing, when
 the guarded `run_sync` would refuse; an awaitable the sync close returns is then awaited on the loop),
 a seed's sync close runs inline, a sync node's stream and raw return close on a worker, and a sync
 context-manager lifecycle is entered through a `_WorkerContext` async wrapper so both `__enter__` and
@@ -939,7 +943,7 @@ hierarchy and no field-pair invariants. `OneShotResource` / `ReusableResource` r
 marker types (`reusable` is `isinstance`); `Resource(value, cleanup=)` builds an `OwnedPlan` in its own
 `__init__` and the alternate constructors set fields through a private builder. `Resource` itself has
 no open/close behavior: the execution's `acquire`/`aacquire` drive its `_plan` and clean up (owned
-values through `close_owned`/`aclose_owned` in `riko/execution/_resource_cleanup.py`).
+values through `run_bridged`/`maybe_async`/`asyncify` in `riko/bado/_util.py`).
 `Resource`, `ReusableResource`, and `OneShotResource` are on the stable `riko` surface; `ResourceStrategy`
 is on `riko.types`, and the plan records are private (2026-10-28 ruling). A `contextmanager`/`asynccontextmanager` factory is
 recognized by the decorator's shared helper code anywhere in its `__wrapped__` chain, so another
@@ -1031,7 +1035,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   from the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
   `run_from_thread`). There are no background tasks and no channels, so backpressure is pure demand, an
   error raises at the pull that hits it after every earlier item has been yielded, and abandoning or
-  closing the async stream closes the sync pipe's item stream (when it has a `close`) off-loop through the unguarded `asyncify_call`
+  closing the async stream closes the sync pipe's item stream (when it has a `close`) off-loop through the unguarded `asyncify`
   seam (which still works while the execution is shutting down). Async input streams are typed
   `AsyncItems` (`AsyncIterable[Item]`) and outputs `AsyncStream`.
   *Design note:* the earlier plan's "bounded channel" was replaced by this demand-driven pull because
@@ -1149,7 +1153,7 @@ module. `ResolvedModule.is_async_pipe(pipe)` is a
   sync-read seed whose only close is async before any item is read), so a seed abandoned mid-run is closed when the execution exits — so `Pipeline.__call__`, `__ror__`
   (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the generated module's `pipe(item)` hand
   the raw value through and the helpers below `run` keep their wide `Items`/`Feed` parameters. The
-  async side wraps an async-iterable seed with `aclose` in `_OwnedSeed`, so the root node's own close
+  async side wraps an async-iterable seed with `aclose` in `_Owned`, so the root node's own close
   and the exit stack's reach it only once. An
   async `processor` node fed an async stream maps it lazily and in order (`_aprocess_stream` in
   `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the stream object as
@@ -1185,8 +1189,8 @@ Each run owns every node stream it builds. `SyncExecution` registers each non-ou
 `close` on its exit stack (the runner's `yield from` closes the output), so a downstream operator that
 reads with a plain `for` loop never strands its input, and a node that fails to build still closes the
 streams built before it. A sync node stream or raw return whose only close is async raises
-`InvalidPipelineError` when built. `AsyncExecution` keeps one `_NodeStreams` registry per run: it closes each
-stream once (by identity), last built first, on `_RunStream.aclose`, a failed build, or execution exit, closing through `aclose_owned` so a sync node's stream and the raw return it was drawn from (registered as soon as the node is called, so an output nobody reads still closes them) keep their worker; a sync node
+`InvalidPipelineError` when built. `AsyncExecution`'s `_RunStream` owns every stream one run builds: it closes
+each once, last built first, on `_RunStream.aclose`, a failed build, or execution exit, closing through `asyncify` so a sync node's stream and the raw return it was drawn from (registered as soon as the node is called, so an output nobody reads still closes them) keep their worker; a sync node
 on a worker closes its async inputs through it as soon as it finishes, so an upstream source is
 released before the run ends without being closed twice. Named input ports may not use a name every
 module call already takes (the `ExecutionExtras` fields `others`/`resources`/`embed`, `conf` and

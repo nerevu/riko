@@ -274,7 +274,10 @@ sync when source is moved between package groups.
   `pyright --verifytypes` does not read `stubPath`, so a meza base class of a riko
   class that reaches the verified surface is declared instead as a `TYPE_CHECKING`
   facade in the subclass's module, with the meza import in the `else:` branch
-  (`_Objectify` in `riko/coercion/_objectify.py`).
+  (`_Objectify` in `riko/coercion/_objectify.py`). feedparser is untyped too:
+  `typings/feedparser/` stubs `parse` and `FeedParserDict`, typing `entries` (and its
+  `items` alias from feedparser's `keymap`) as riko's `ParserRSSEntry`, so those entry
+  TypedDicts in `riko/types/_rss.py` must keep matching what both feed parsers emit.
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
   shortest useful form; implementation moves and private helper names do not belong
   there unless they change a supported import or command surface.

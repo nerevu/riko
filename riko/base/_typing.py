@@ -8,6 +8,7 @@ and holds the ``isinstance`` tuples behind the scalar type aliases.
 
 from __future__ import annotations
 
+from collections import ChainMap
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -137,13 +138,9 @@ def resolve_type_hints(
         collections.abc.Iterator[int]
 
     """
-    localns: dict[str, object] = {}
-
-    for namespace in namespaces:
-        localns.update(
-            vars(namespace) if isinstance(namespace, ModuleType) else namespace
-        )
-
+    localns = ChainMap(
+        *(vars(ns) if isinstance(ns, ModuleType) else dict(ns) for ns in namespaces)
+    )
     return get_type_hints(obj, localns=localns, include_extras=include_extras)
 
 

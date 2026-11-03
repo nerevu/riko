@@ -30,6 +30,7 @@ from attrs import Attribute, AttrsInstance, validators
 from typing_extensions import TypeForm
 
 from ._exceptions import InvalidPipelineError
+from ._funcutils import resolve_default
 from ._guards import is_mapping, require_mapping
 from ._iterutils import gen_instances, sort_stably
 from ._recordutils import field_names, required_attrs_keys
@@ -246,7 +247,7 @@ def require_from_keys(
         value: Mapping[str, object], what: str | None = None, **_
     ) -> dict[str, object]:
         """Confirms a mapping has only the allowed keys and all required ones."""
-        what = default_what if what is None else what
+        what = resolve_default(what, default_what)
         keys = set(value)
 
         if unknown := keys - _allowed:
@@ -313,7 +314,7 @@ def require_from_typed_dict[T](
     _required, _optional = typed_dict_keys(cls)
     required = _required.difference(exclude)
     allowed = (_required | _optional).difference(exclude).union(extra)
-    default_what = cls.__name__ if what is None else what
+    default_what = resolve_default(what, cls.__name__)
     check = require_from_keys(required, allowed, default_what, error=error)
 
     def require(value: Mapping[str, object], what: str | None = None, **_) -> T:
@@ -378,7 +379,7 @@ def require_from_attrs[T: AttrsInstance](
     excluded = frozenset(exclude)
     required = required_attrs_keys(cls) - excluded - frozenset(not_required)
     allowed = (field_names(cls) - excluded).union(extra)
-    default_what = cls.__name__ if what is None else what
+    default_what = resolve_default(what, cls.__name__)
     return require_from_keys(required, allowed, default_what, error=error)
 
 
@@ -458,10 +459,11 @@ def def_from_require[D, R](
         (0, 3)
 
     """
-    extra = kwargs if what is None else {**kwargs, "what": what}
+    extra = resolve_default(what, kwargs, {**kwargs, "what": what})
+    fallback = partial(require, *args, **extra)
 
     def optional(value: object) -> R | D | None:
-        return default if value is None else require(*args, value, **extra)
+        return default if value is None else fallback(value)
 
     return optional
 
@@ -576,9 +578,9 @@ def narrow_def_from_require[T, D, R](
         ('db',)
 
     """
+    kwargs = resolve_default(what, fallback={"what": what})
 
     def optional(value: T | None) -> R | D | None:
-        kwargs = {} if what is None else {"what": what}
         return default if value is None else require(value, **kwargs)
 
     return optional
@@ -913,7 +915,7 @@ def require_from_form[T](
         riko.base.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
 
     """
-    default_what = getattr(form, "__name__", "value") if what is None else what
+    default_what = resolve_default(what, getattr(form, "__name__", "value"))
     leaves = tuple(gen_union_members(form))
     classes = tuple(gen_instances(leaves, type))
     shapes = tuple(cls for cls in classes if not is_typeddict(cls))
@@ -963,7 +965,7 @@ def require_from_form[T](
 
     def require(value: object, what: str | None = None, **_) -> T:
         """Narrows ``value`` to ``form``."""
-        return cast("T", check(value, default_what if what is None else what))
+        return cast("T", check(value, resolve_default(what, default_what)))
 
     return require
 

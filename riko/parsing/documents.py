@@ -29,25 +29,43 @@ from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
 from riko.coercion._sequences import listize
-from riko.io._filelike import is_binary_readable
+from riko.io._filelike import is_binary_io_like
 from riko.io._sync import Fetch, ReplayReader
 
 from ._dotdict import DotDict
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping, Sequence
-    from logging import Logger
-
-    from riko.io._filelike import BinaryReadable, FileLike
-    from riko.types._rss import ParsedFeed
-    from riko.types._streams import Item, Stream
-    from riko.types._values import RikoDict, Stringy, StringyDict
 
 try:
     from lxml import etree, html
     from lxml.html import html5parser
 except ImportError:
     etree = html = html5parser = None
+
+try:
+    import fastfeedparser
+except ImportError:
+    fastfeedparser = None
+
+try:
+    import ijson
+except ImportError:
+    ijson = None
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
+    from logging import Logger
+    from xml.etree.ElementTree import Element as nativeElement
+    from xml.etree.ElementTree import ElementTree as nativeElementTree
+
+    from lxml.etree import _Element as lxmlElement
+    from lxml.etree import _ElementTree as lxmlElementTree
+
+    from riko.io._filelike import BinaryIOLike, FileLike
+    from riko.types._rss import ParsedFeed
+    from riko.types._scalars import AnyStr
+    from riko.types._streams import Item, Stream
+    from riko.types._values import RikoDict, Stringy, StringyDict
+
+if etree is None:
     IS_LXML: bool = False
     XML_PARSER = None
 else:
@@ -60,12 +78,17 @@ else:
         huge_tree=False,
     )
 
-try:
-    import fastfeedparser
-except ImportError:
-    fastfeedparser = None
+if ijson is None:
+    HAS_NATIVE_IJSON = False
+else:
+    HAS_NATIVE_IJSON = getattr(ijson, "backend", "python") != "python"
+
+IS_FASTFEEDPARSER: bool = fastfeedparser is not None
 
 logger: Logger = get_logger(__name__)
+logger.debug(f"{IS_LXML=}")
+logger.debug(f"{IS_FASTFEEDPARSER=}")
+
 
 type AnyElementTree = (
     nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
@@ -73,61 +96,6 @@ type AnyElementTree = (
 
 type AnyElement = nativeElement | lxmlElement
 type JsonEvent = tuple[str, str, object]
-
-IS_FASTFEEDPARSER: bool = fastfeedparser is not None
-
-
-def parse_feed(source: str | bytes | FileLike) -> ParsedFeed:
-    """
-    Parses an RSS or Atom feed with whichever feed parser is installed.
-
-    Args:
-
-        source: The feed document, or an open file to read it from.
-
-    Returns:
-
-        The parsed feed: its ``entries`` plus feed-level keys such as ``bozo``.
-
-    Examples:
-
-        >>> content = (
-        ...     b"<rss version='2.0'><channel><title>Example</title>"
-        ...     b"<item><title>First</title></item></channel></rss>"
-        ... )
-        >>> parse_feed(content)["entries"][0]["title"]
-        'First'
-
-    """
-    if fastfeedparser is None:
-        parsed = feedparser.parse(source)
-    else:
-        data = source if isinstance(source, str | bytes) else source.read()
-        parsed = fastfeedparser.parse(data)
-
-    return parsed
-
-
-try:
-    import ijson
-except ImportError:
-    ijson = None
-    IJSON_IS_NATIVE = False
-else:
-    IJSON_IS_NATIVE = getattr(ijson, "backend", "python") != "python"
-
-if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element as nativeElement
-    from xml.etree.ElementTree import ElementTree as nativeElementTree
-
-    from lxml.etree import _Element as lxmlElement
-    from lxml.etree import _ElementTree as lxmlElementTree
-
-
-logger.debug(f"{IS_LXML=}")
-logger.debug(f"{IS_FASTFEEDPARSER=}")
-
-HAS_IJSON = ijson is not None and IJSON_IS_NATIVE
 
 
 class LinkParser(HTMLParser):
@@ -191,6 +159,37 @@ class LinkParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         self.data.write(f"{data}\n")
+
+
+def parse_feed(source: AnyStr | FileLike) -> ParsedFeed:
+    """
+    Parses an RSS or Atom feed with whichever feed parser is installed.
+
+    Args:
+
+        source: The feed document, or an open file to read it from.
+
+    Returns:
+
+        The parsed feed: its ``entries`` plus feed-level keys such as ``bozo``.
+
+    Examples:
+
+        >>> content = (
+        ...     b"<rss version='2.0'><channel><title>Example</title>"
+        ...     b"<item><title>First</title></item></channel></rss>"
+        ... )
+        >>> parse_feed(content)["entries"][0]["title"]
+        'First'
+
+    """
+    if fastfeedparser is None:
+        parsed = feedparser.parse(source)
+    else:
+        data = source if isinstance(source, (str, bytes)) else source.read()
+        parsed = fastfeedparser.parse(data)
+
+    return parsed
 
 
 def get_text(html: str, convert_charrefs: bool = False) -> str:
@@ -516,7 +515,7 @@ def _gen_json_records(value: object, path: str) -> Stream:
         logger.warning(f"the JSON {location} is the scalar {dumps(value)}, not records")
 
 
-def _get_ijson_source(content: FileLike | str) -> BinaryReadable | None:
+def _get_ijson_source(content: FileLike | str) -> BinaryIOLike | None:
     """
     Gets the binary stream to parse incrementally, or ``None`` to parse in memory.
 
@@ -526,13 +525,14 @@ def _get_ijson_source(content: FileLike | str) -> BinaryReadable | None:
     stream = content.file if isinstance(content, Fetch) else content
     source = None
 
-    if HAS_IJSON and is_binary_readable(stream) and stream.seekable():
-        start = stream.tell()
-        size = stream.seek(0, 2) - start
-        stream.seek(start)
-        source = stream if size >= STREAMING_THRESHOLD else None
-    elif HAS_IJSON and is_binary_readable(stream):
-        source = stream
+    if HAS_NATIVE_IJSON and is_binary_io_like(stream):
+        if stream.seekable():
+            start = stream.tell()
+            size = stream.seek(0, 2) - start
+            stream.seek(start)
+            source = stream if size >= STREAMING_THRESHOLD else None
+        else:
+            source = stream
 
     return source
 
@@ -562,7 +562,7 @@ def _find_json_event(events: Iterator[JsonEvent], path: str) -> JsonEvent:
     return found
 
 
-def _gen_streamed_records(source: BinaryReadable, path: str) -> Stream:
+def _gen_streamed_records(source: BinaryIOLike, path: str) -> Stream:
     if ijson is None:
         raise ImportError("ijson is required for streamed JSON parsing")
 

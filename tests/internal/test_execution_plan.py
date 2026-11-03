@@ -552,6 +552,34 @@ class TestEmbed:
 
         assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
 
+    @skipif_issync
+    def test_run_runs_sync_only_embed_off_an_async_only_loop(self) -> None:
+        threads: list[int] = []
+
+        def up(item, **_):
+            threads.append(get_ident())
+            yield {"up": item["t"].upper()}
+
+        async def fakeloop(items, embed=passthrough_pipe, **_):
+            threads.append(get_ident())
+
+            async for row in as_async(items):
+                for value in await maybe_async(embed, row):
+                    yield value
+
+        _stamp_embed(up, isasync=False)
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
+            ModuleDefinition(
+                name="fakeloop", async_pipe=cast("AsyncModuleWrapper", fakeloop)
+            ),
+            ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+        )
+
+        assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
+        loop_thread, embed_thread = threads
+        assert embed_thread != loop_thread
+
     def test_run_forwards_embed_and_options_to_loop(self) -> None:
         seen: dict[str, object] = {}
 

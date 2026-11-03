@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
-from riko.base._iterutils import map_values
+from riko.base._funcutils import map_values
 from riko.types._frozendict import thaw
 
 if TYPE_CHECKING:

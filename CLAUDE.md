@@ -44,7 +44,7 @@ Important concrete locations:
 - executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
 - stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
 - pipelines: composition on `PipelineDefinition` in `riko/definitions/_pipeline_definition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
-- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource._plan`; owned-value cleanup: `riko/execution/_resource_cleanup.py`
+- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource._plan`; owned-value closers: `resolve_closer`/`require_closer` in `riko/types/_io.py`, closed through `run_bridged`/`maybe_async` in `riko/bado/_util.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/_exceptions.py` (public facade `riko/base/exceptions.py`) + `_api_surface.py`
@@ -217,7 +217,7 @@ new permanent bullet here.
   enforced by `manage lint imports`.
 - **Guards live beside the contract they narrow** — `riko/base/_guards.py` holds only
   guards over generic shapes (mappings, sequences, callables, protocol checks); a guard
-  for a specific contract (`is_subpipe`, `is_closeable`, `is_lifecycle_factory`,
+  for a specific contract (`is_subpipe`, `is_lifecycle_factory`,
   `is_pipe_id`) is defined in the module that defines that contract. Two exceptions keep
   a guard with its consumer: moving it would need an import the layer rules bar
   (`is_conf_rule`, `_is_seed`), or it decides between alternative forms for a single

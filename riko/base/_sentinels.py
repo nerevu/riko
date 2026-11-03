@@ -12,8 +12,6 @@ from ._strutils import replacer
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from riko.types._streams import Item
-
 
 class MissingType:
     def __repr__(self) -> str:
@@ -37,7 +35,7 @@ class Sentinel(TypedDict):
 SentinelValue: str = "terminal"
 
 
-def is_missing_type(val: Item | MissingType | None) -> TypeIs[MissingType]:
+def is_missing_type(val: object) -> TypeIs[MissingType]:
     return val is MISSING
 
 

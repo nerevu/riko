@@ -21,13 +21,8 @@ from urllib.request import urlopen
 
 import pytest
 
-from riko.bado._backend import (
-    Event,
-    async_sleep,
-    asyncify,
-    create_task_group,
-    fail_after,
-)
+from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
+from riko.bado._util import asyncify, maybe_async
 from riko.base._exceptions import (
     InvalidPipelineError,
     PipelineStateError,
@@ -41,10 +36,10 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._resource_cleanup import aclose_owned
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
+from riko.types._io import require_closer
 from tests import async_test, skipif_issync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
@@ -660,6 +655,11 @@ SYNC_ASYNC_REJECTIONS = [
         id="async-cleanup-before-producer",
     ),
     pytest.param(
+        lambda _: Resource(_SyncClient(), cleanup=_acleanup),
+        "async resource cleanup",
+        id="async-cleanup-of-owned-value",
+    ),
+    pytest.param(
         lambda _: Resource(_AsyncClient()), "only close is async", id="async-only-value"
     ),
     pytest.param(
@@ -1249,9 +1249,13 @@ class TestAsyncResourceAcquisition:
     @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
     @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
     @async_test
-    async def test_aclose_owned(self, client_class, cleanup, inline) -> None:
+    async def test_closer_runs_inline_or_on_a_worker(
+        self, client_class, cleanup, inline
+    ) -> None:
         client = client_class()
-        await aclose_owned(client, cleanup, inline=inline)
+        closer = require_closer(client, cleanup, is_async=True)
+        assert closer is not None
+        await maybe_async(closer, inline=inline)
         assert client.closed is True
 
     @pytest.mark.simulated_network
@@ -1379,7 +1383,7 @@ class TestAsyncResourceAcquisition:
             release.wait()
 
         async def aoccupy() -> None:
-            await asyncify(occupy)()
+            await asyncify(occupy)
 
         with fail_after(1):
             async with create_task_group() as tg:

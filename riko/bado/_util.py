@@ -18,8 +18,8 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from functools import partial
 from inspect import iscoroutine
 from math import inf
@@ -27,15 +27,30 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_awaitable
+from riko.base._guards import is_async_callable, is_awaitable
 from riko.base._sentinels import MISSING, MissingType
-from riko.types._io import is_async_closeable
+from riko.types._io import ASYNC_CLEANUP_MSG, get_sync_closer, resolve_closer
 
-from ._backend import AsyncClient, Path, create_task_group
+from ._backend import (
+    AsyncClient,
+    CapacityLimiter,
+    Path,
+    create_task_group,
+    run_from_thread,
+)
+from ._backend import asyncify as _asyncify
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Iterable, Mapping
+    from collections.abc import (
+        AsyncGenerator,
+        Awaitable,
+        Callable,
+        Generator,
+        Iterable,
+        Mapping,
+    )
 
+    from anyio import CapacityLimiter
     from anyio.abc import TaskGroup
 
     from riko.types._wrappers import AsyncFunc, Func
@@ -161,7 +176,10 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
 
 def require_value[T](result: T | Awaitable[T], msg: str) -> T:
     """
-    Requires ``result`` to not be awaitable, and closes any awaitable coroutine given.
+    Requires ``result`` not to be awaitable.
+
+    A rejected coroutine is closed before the error is raised. It is never left
+    unawaited.
 
     Args:
 
@@ -199,11 +217,198 @@ async def as_awaitable[T](value: T | Awaitable[T]) -> T:
     return (await value) if is_awaitable(value) else value
 
 
-async def maybe_async[T](
-    func: Func[T | Awaitable[T]], *args: object, **kwargs: object
+async def asyncify[T](
+    func: Func[T | Awaitable[T]],
+    *args: object,
+    limiter: CapacityLimiter | None = None,
+    **kwargs: object,
 ) -> T:
-    """Calls ``func`` and awaits its result only when it is awaitable."""
-    return await as_awaitable(func(*args, **kwargs))
+    """
+    Runs a blocking callable on a worker thread and awaits its result.
+
+    An async ``func`` is awaited on the event loop instead. An awaitable a blocking
+    ``func`` returns is awaited once the worker hands it back.
+
+    Args:
+
+        func: The callable to run.
+        args: Positional arguments forwarded to ``func``.
+        limiter: Caps the worker threads held at once, or ``None`` for the default.
+        kwargs: Keyword arguments forwarded to ``func``.
+
+    Returns:
+
+        The value ``func`` returns, awaited when it is awaitable.
+
+    Examples:
+
+        >>> import threading
+        >>> from riko.bado import run
+        >>>
+        >>> async def main():
+        ...     name = await asyncify(lambda: threading.current_thread().name)
+        ...     print(name == threading.main_thread().name)
+        >>>
+        >>> run(main)
+        False
+
+    """
+    if is_async_callable(func):
+        result = await func(*args, **kwargs)
+    else:
+        worker = _asyncify(partial(func, **kwargs), limiter=limiter)
+        result = await as_awaitable(await worker(*args))
+
+    return result
+
+
+def syncify[**P, T](
+    func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwargs
+) -> T:
+    """
+    Runs an awaitable-returning callable to completion on the event loop from a worker.
+
+    The worker thread must have been started from that event loop, through
+    ``asyncify`` or the backend's own worker helpers. There is no fallback to a
+    fresh event loop. The blocking twin of ``asyncify``.
+
+    Args:
+
+        func: The callable whose awaitable result is awaited on the event loop.
+        args: Positional arguments forwarded to ``func``.
+        kwargs: Keyword arguments forwarded to ``func``.
+
+    Returns:
+
+        The awaited value.
+
+    Examples:
+
+        >>> from riko.bado import run
+        >>>
+        >>> async def double(x):
+        ...     return x * 2
+        >>>
+        >>> async def main():
+        ...     print(await asyncify(syncify, double, 21))
+        >>>
+        >>> run(main)
+        42
+
+    """
+
+    async def await_func() -> T:
+        return await func(*args, **kwargs)
+
+    return run_from_thread(await_func)
+
+
+async def maybe_async[T](
+    func: Func[T | Awaitable[T]],
+    *args: object,
+    inline: bool = True,
+    limiter: CapacityLimiter | None = None,
+    **kwargs: object,
+) -> T:
+    """
+    Calls ``func`` and awaits its result only when it is awaitable.
+
+    With ``inline`` unset, a blocking ``func`` runs on a worker thread instead of the
+    event loop. An async ``func`` is awaited either way.
+
+    Args:
+
+        func: The callable to run.
+        args: Positional arguments forwarded to ``func``.
+        inline: Whether a blocking ``func`` runs on the event loop.
+        limiter: Caps the worker threads a non-inline call may hold.
+        kwargs: Keyword arguments forwarded to ``func``.
+
+    Returns:
+
+        The result, awaited when ``func`` returned an awaitable.
+
+    """
+    if inline:
+        result = await as_awaitable(func(*args, **kwargs))
+    else:
+        result = await asyncify(func, *args, limiter=limiter, **kwargs)
+
+    return result
+
+
+def run_bridged[T](
+    func: Func[T | Awaitable[T]], bridge: Callable[[Awaitable[T]], T] | None = None
+) -> None:
+    """
+    Runs ``func`` without a loop and awaits awaitable result through ``bridge``.
+
+    Args:
+
+        func: The value's close method or bound cleanup, from ``resolve_closer``.
+        bridge: Runs an awaitable to completion on the event loop that owns the value.
+
+    Raises:
+
+        InvalidPipelineError: If ``func`` returns an awaitable and there is no
+            ``bridge``.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO()
+        >>> run_bridged(f.close)
+        >>> f.closed
+        True
+
+    """
+    result = func()
+
+    if bridge is not None and is_awaitable(result):
+        bridge(result)
+    else:
+        require_value(result, ASYNC_CLEANUP_MSG)
+
+
+@contextmanager
+def maybe_closing[T: Iterator[object]](stream: T) -> Generator[T, None]:
+    """
+    Closes ``stream`` on exit when it has a ``close`` method.
+
+    Unlike :func:`contextlib.closing`, a stream with no closer (such as a plain
+    iterator) passes through untouched, so callers needn't check first.
+
+    Args:
+
+        stream: The iterator to close on exit.
+
+    Yields:
+
+        ``stream``.
+
+    Examples:
+
+        >>> def gen():
+        ...     yield 1
+        ...     yield 2
+        >>>
+        >>> def main():
+        ...     with maybe_closing(gen()) as items:
+        ...         for item in items:
+        ...             break
+        ...
+        ...     print(item, items.gi_running, items.gi_frame)
+        >>>
+        >>> main()
+        1 False None
+
+    """
+    try:
+        yield stream
+    finally:
+        if (closer := get_sync_closer(stream)) is not None:
+            run_bridged(closer)
 
 
 @asynccontextmanager
@@ -211,10 +416,10 @@ async def maybe_aclosing[T: AsyncIterator[object]](
     stream: T,
 ) -> AsyncGenerator[T, None]:
     """
-    Closes *stream* on exit when it has an ``aclose`` method.
+    Closes ``stream`` on exit when it has an ``aclose`` or ``close`` method.
 
-    Unlike :func:`contextlib.aclosing`, a stream without ``aclose`` (such as a plain
-    async iterator) passes through untouched, so callers needn't check first.
+    Unlike :func:`contextlib.aclosing`, a stream with no closer (such as a plain async
+    iterator) passes through untouched, so callers needn't check first.
 
     Args:
 
@@ -222,7 +427,7 @@ async def maybe_aclosing[T: AsyncIterator[object]](
 
     Yields:
 
-        *iterator* itself.
+        ``stream``
 
     Examples:
 
@@ -246,10 +451,14 @@ async def maybe_aclosing[T: AsyncIterator[object]](
     try:
         yield stream
     finally:
-        if is_async_closeable(stream):
-            await stream.aclose()
+        if (closer := resolve_closer(stream, is_async=True)) is not None:
+            await maybe_async(closer)
 
 
-def async_partial[T](func: Func[T | Awaitable[T]], **kwargs: object) -> AsyncFunc[T]:
-    """Applies ``kwargs`` to ``func`` for later awaiting via :func:`maybe_async`."""
-    return partial(maybe_async, func, **kwargs)
+def async_partial[T](
+    func: Func[T | Awaitable[T]], *args: object, **kwargs: object
+) -> AsyncFunc[T]:
+    """Applies ``args`` and ``kwargs`` to ``func`` for awaiting via ``maybe_async``."""
+    inline = bool(kwargs.pop("_inline", True))
+    call = partial(func, *args, **kwargs)
+    return partial(maybe_async, call, inline=inline)

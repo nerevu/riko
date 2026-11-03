@@ -1042,6 +1042,22 @@ class TestAsyncProcessor:
         assert isinstance(result, Awaitable)
         assert list(await result) == [{"content": "HI"}]
 
+    @async_test
+    async def test_closing_before_reading_ends_the_stream(self):
+        calls: list[Item] = []
+
+        def counting(item: Item, *args, **kwargs) -> str:
+            calls.append(item)
+            return "x"
+
+        stream = processor(isasync=True)(counting)([{"a": 1}], assign="a")
+
+        async with maybe_aclosing(stream):
+            pass
+
+        assert [item async for item in stream] == []
+        assert calls == []
+
     def test_wrapper_stubs_are_not_coroutine_functions(self):
         """
         Keep these stubs synchronous for async-iterator typing.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections import ChainMap
 from dataclasses import fields, is_dataclass
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
@@ -66,7 +67,7 @@ def fromdict(
     # annotations
     module = sys.modules[cls.__module__]
     caller = sys._getframe(1)
-    callerns = {**caller.f_globals, **caller.f_locals}
+    callerns = ChainMap(caller.f_locals, caller.f_globals)
     namespaces = (callerns, module, enums_module, scalars_module)
     hints = resolve_type_hints(cls, *namespaces, include_extras=True)
 

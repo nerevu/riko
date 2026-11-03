@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, ClassVar, Final, Literal, NewType, Required, T
 
 from attrs import define, field
 
+from riko.base._funcutils import map_values
 from riko.base._graph import (
     cyclic_nodes,
     descendants,
@@ -41,7 +42,6 @@ from riko.base._graph import (
     reverse_graph,
     topological_sort,
 )
-from riko.base._iterutils import map_values
 from riko.base._require_guards import (
     require_instance,
     require_nonblank_str,

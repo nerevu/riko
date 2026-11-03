@@ -17,13 +17,13 @@ import attrs
 from typing_extensions import TypeForm, TypeIs
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys_and_values, map_values, noop
 from riko.base._guards import (
     is_dataclass_inst,
     is_known_sequence,
     is_mapping,
     require_mapping,
 )
-from riko.base._iterutils import map_keys_and_values, map_values, noop
 from riko.base._require_guards import require_finite, require_instances, require_str
 
 if TYPE_CHECKING:
@@ -420,7 +420,7 @@ def normalize_mapping(
     item: object, what: str = "value", *, strict: bool = False
 ) -> dict[str, Any]:
     """
-    Normalizes an optional mapping to a new ``dict``, empty for ``None``.
+    Normalizes an optional mapping to a new ``dict`` (empty for ``None``).
 
     Args:
 

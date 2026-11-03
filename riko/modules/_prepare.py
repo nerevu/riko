@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, cast, overload
 
 from attrs import Factory, define, field
 
+from riko.base._funcutils import broadcast, dispatch
 from riko.base._guards import is_mapping
-from riko.base._iterutils import broadcast, dispatch
 from riko.base._require_guards import narrow_from_require, require_from_form
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize

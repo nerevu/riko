@@ -19,11 +19,12 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
 from attrs import asdict, define, evolve, field, fields_dict
 from typing_extensions import TypeIs
 
-from riko.bado._util import async_partial, maybe_async, require_value
+from riko.bado._util import async_partial, require_value
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_values
 from riko.base._guards import is_async_callable
-from riko.base._iterutils import gen_non_none, map_values
+from riko.base._iterutils import gen_non_none
 from riko.base._require_guards import (
     narrow_from_require,
     require_instance,
@@ -424,7 +425,8 @@ async def _agen_item_result[T](
     **kwargs: FrozenJSON,
 ) -> AsyncIterator[T]:
     """The async twin of ``_gen_item_result``: an async ``fn`` is awaited."""
-    yield await maybe_async(fn, item, **kwargs, **normalize_mapping(resources))
+    call = async_partial(fn, **kwargs, **normalize_mapping(resources))
+    yield await call(item)
 
 
 def _gen_stream_results[T](

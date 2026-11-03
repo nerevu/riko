@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
     from ._filelike import (
         BinaryFileLike,
-        BinaryReadable,
+        BinaryIOLike,
         FileLike,
         Opener,
         StringFileLike,
@@ -206,18 +206,17 @@ def get_response_encoding(
 
 
 # https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
+def auto_close[T](stream: Iterable[T], *files: FileLike | None) -> Iterator[T]:
     """
     Passes ``stream`` through so it closes ``files`` when iteration ends.
 
-    Pairs a fetched stream with the files backing it. Closing runs in a
-    ``finally``, so each file is released on exhaustion, an early ``break``, or an
-    exception. This is the tool for handles whose consumption is deferred. I.e., a
-    parser that returns a lazy iterator after opening a file keeps the file alive
-    until the caller drains it. Whereas a ``with``/``async with`` block would close
-    it before the first item is read. Pass more than one file when a ``seekable``
-    copy is read but the original fetch must still be released; closing an already
-    closed file is a harmless no-op.
+    Unconditionally closes the file backing a fetched stream so that each file is
+    released on exhaustion, an early ``break``, or an exception. This is the tool for
+    handles whose consumption is deferred. I.e., a parser that returns a lazy iterator
+    after opening a file keeps the file alive until the caller drains it. Whereas a
+    ``with``/``async with`` block would close it before the first item is read. Pass
+    multiple files when a ``seekable`` copy is read but the original fetch must still be
+    released. Closing an already closed file is a harmless no-op.
 
     Args:
 
@@ -243,7 +242,8 @@ def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
         yield from stream
     finally:
         for f in files:
-            f.close()
+            if f is not None:
+                f.close()
 
 
 def gen_rows(rows: Stream) -> Stream:
@@ -420,7 +420,7 @@ class ReplayReader(RawIOBase):
 
     """
 
-    def __init__(self, source: BinaryReadable) -> None:
+    def __init__(self, source: BinaryIOLike) -> None:
         super().__init__()
         self.source = source
         self.start = source.tell() if source.seekable() else None
@@ -599,7 +599,10 @@ def opener(
         else:
             response = BytesIO() if binary else StringIO()
 
-    content_type = get_response_content_type(r) if r else None
+        if memoize:
+            r.close()
+
+    content_type = None if r is None else get_response_content_type(r)
     return (response, content_type)
 
 

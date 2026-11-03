@@ -82,6 +82,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from riko.bado._backend import issync, run
+from riko.base._funcutils import resolve_default
 from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
 
@@ -127,7 +128,7 @@ def run_python(
     the other ``subprocess.run`` options.
     ``hash_seed`` sets ``PYTHONHASHSEED`` for the child.
     """
-    seed = {} if hash_seed is None else {"PYTHONHASHSEED": hash_seed}
+    seed = resolve_default(hash_seed, fallback={"PYTHONHASHSEED": hash_seed})
     options = {
         "capture_output": True,
         "cwd": ROOT_DIR,

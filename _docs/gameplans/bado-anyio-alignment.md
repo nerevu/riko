@@ -37,7 +37,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
-| `async_partial` | `_util.py` | **Remove** | very high | It's just `partial(maybe_async, f, **kwargs)`. Besides bado's export machinery (`riko/bado/__init__.py`) it now has one production caller, `riko/execution/_prepared.py` (2026-10-23 move audit); inline the `partial` there when deleting it. |
+| `async_partial` | `_util.py` | **Keep** | — | It's `partial(maybe_async, f, *args, **kwargs)`, the deferred-call form of `maybe_async`, with four production callers (2026-11-02: `riko/execution/_prepared.py` ×2, `riko/execution/_async_execution.py` ×2). A caller forwarding arbitrary user kwargs binds them on `f` first (`async_partial(partial(fn, **kwargs))`) so none land on `maybe_async`'s `inline`/`limiter`. |
 | `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
@@ -231,7 +231,7 @@ time."
 
 ## 5. Sequenced first changes
 
-1. **Delete `async_partial`.**
+1. ~~**Delete `async_partial`.**~~ Kept 2026-11-02 as `maybe_async`'s deferred-call form (see its table row).
 2. **Delete or rewrite `gather_results`** via AnyIO 4.14 task handles (fixes the `None`-dropping bug regardless).
 3. **Delete `async_json`;** use `response.json()` directly.
 4. **Audit `async_reduce` callers** (`sort`, `regex`); delegate to `anyio.functools.reduce` if the strict async-reducer contract suffices.

@@ -96,7 +96,7 @@ def parse_rss(
     try:
         parsed = parse_feed(source)
     finally:
-        if f:
+        if f is not None:
             f.close()
 
     bozo = parsed.get("bozo")

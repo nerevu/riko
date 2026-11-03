@@ -483,7 +483,7 @@ class Scanner(ast.NodeVisitor):
                 test,
                 "RM401",
                 "close",
-                "only generators are closed; use is_sync_closeable/is_async_closeable",
+                "only generators are closed; use get_sync_closer/get_async_closer",
             )
 
         self.generic_visit(node)

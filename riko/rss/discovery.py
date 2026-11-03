@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from riko.base._config import settings
@@ -34,6 +35,7 @@ class RSSLinkParser(LinkParser):
 def file2entries(f: StringFileLike | Iterator[str], parser: RSSLinkParser) -> Stream:
     for line in f:
         parser.feed(line)
+
         for entry in parser.entry:
             yield dict(entry)
 
@@ -54,8 +56,21 @@ def doc2entries(document: Node) -> Iterator[object]:
             yield entry
 
     for node in document.childNodes:
-        for entry in doc2entries(node):
-            yield entry
+        yield from doc2entries(node)
+
+
+def _build_parser(
+    link_type: str | Iterable[str] | None, convert_charrefs: bool, **kwargs: bool
+) -> RSSLinkParser:
+    """Builds an RSS link parser, without ``convert_charrefs`` if it is unsupported."""
+    _parser = partial(RSSLinkParser, link_type=link_type, **kwargs)
+
+    try:
+        parser = _parser(convert_charrefs=convert_charrefs)
+    except TypeError:
+        parser = _parser()
+
+    return parser
 
 
 async def aload_rss_links(
@@ -66,12 +81,7 @@ async def aload_rss_links(
     auto_sort: bool = False,
     **kwargs: bool,
 ) -> Stream:
-    try:
-        parser = RSSLinkParser(
-            convert_charrefs=convert_charrefs, link_type=link_type, **kwargs
-        )
-    except TypeError:
-        parser = RSSLinkParser(link_type=link_type, **kwargs)
+    parser = _build_parser(link_type, convert_charrefs=convert_charrefs, **kwargs)
 
     try:
         f = await async_url_open(url, timeout=TIMEOUT)
@@ -94,20 +104,14 @@ def load_rss_links(
     auto_sort: bool = False,
     **kwargs: bool,
 ) -> Stream:
-    try:
-        parser = RSSLinkParser(
-            convert_charrefs=convert_charrefs, link_type=link_type, **kwargs
-        )
-    except TypeError:
-        parser = RSSLinkParser(link_type=link_type, **kwargs)
+    parser = _build_parser(link_type, convert_charrefs=convert_charrefs, **kwargs)
 
     try:
         f = Fetch(url, timeout=TIMEOUT)
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
-        stream = file2entries(f, parser)
-        entries = auto_close(stream, f)
+        entries = auto_close(file2entries(f, parser), f)
 
     if auto_sort:
         entries = iter(sorted(entries, key=parser.keyfunc))

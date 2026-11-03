@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.fntools import dfilter
 
-from riko.base._iterutils import noop
+from riko.base._funcutils import noop
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING, StreamState, is_missing_type
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub

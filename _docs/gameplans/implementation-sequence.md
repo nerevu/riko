@@ -823,7 +823,7 @@ given). `strategy`, `async_native`, `external`, and `value` are derived properti
 `match` on the plan; `FactoryKind` no longer exists. The records are passive: calling a value factory
 and building a lifecycle's context manager live in `riko/execution/_resource_acquisition.py` (where
 the `(ctx, resources)` invocation extends them), and owned-value cleanup stays in
-`riko/execution/_resource_cleanup.py`.
+`run_bridged`/`maybe_async`/`asyncify` (`riko/bado/_util.py`).
 
 1. Classification is input machinery and not the runtime ontology. The normalization boundary
    preserves the distinctions required to acquire and adapt a resource — value factory vs
@@ -1257,6 +1257,12 @@ the same split, and the untyped `_PreparedCall.parser` behind 3 more); `isasync`
 classification here should type that split instead. `manage lint --escapes` lowers its ceilings as
 these go.
 
+Audit note (2026-11-03 triage): a `DynamicConf` objconf parses a value only on `__getitem__` or
+attribute access; its `items()`/`values()`/`get()` are the raw dict's and skip the parse.
+`riko/modules/timeout.py`'s sync/async parsers build their `timedelta` kwargs by indexing each key
+for that reason, and a plain comment there says so. The frozen typed config object above removes
+the lazy parse; drop the comment then. No tripwire (the current code is correct).
+
 **Exit:**
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
@@ -1678,15 +1684,17 @@ constraint (`_BaseExecution._resolve_node_inputs`) and the pipe-output casts in 
 and `_async_execution.py` go when port-keyed dispatch retypes the router on port streams (the
 splitter-union exit below). The `Acquisitions` map (`dict[Resource[Any], Acquisition[Any]]`) stays
 existential: `Resource` is invariant, so `Resource[object]` rejects the typed call sites until
-`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry. Two typing
-unsoundnesses ride on this (2026-10-27 triage, typing only, so no runtime tripwire): the router hands
-`DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded `T`, and the
-acquisition entries hold `Acquisition[ResolvedValue[R]]` (`R | Closeable`) while `acquire`/`aacquire`
-return `R`; retyping the router on `Stream`/`AsyncStream` port streams and dropping `| Closeable` from
-`ResolvedValue` (the `Resource(value: Closeable)` overload must bind `T`) remove both. The same
-retype lets `register_owned` (sync and async executions) type its `cleanup` as `Cleanup[V]` for the
-registered value: it is `Cleanup[Never]` today because `OwnedPlan[T]` pairs a `T | Closeable`
-value with a `Cleanup[T]` (2026-10-31 pyright signature-rules triage).
+`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry. One typing
+unsoundness rides on this (2026-10-27 triage, typing only, so no runtime tripwire): the router hands
+`DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded `T`; retyping
+the router on `Stream`/`AsyncStream` port streams removes it. The second one, acquisition entries
+holding `Acquisition[R | Closeable]` while `acquire`/`aacquire` return `R`, closed on 2026-11-02:
+the `ResolvedValue` alias is gone, `OwnedPlan[T]`/`ExternalPlan[T]` hold a plain `T`, and
+`register_owned` (sync and async executions) types its `cleanup` as `Cleanup[R]` for the registered
+value (it was `Cleanup[Never]` while the plan paired a `T | Closeable` value with a `Cleanup[T]`).
+Still open: the `Resource(value: Closeable)` overload leaves `T` unbound (a method-scoped
+`[C: Closeable]` with `cls: type[Resource[C]]` is inconsistent with the `__new__` implementation
+under pyright), so `Resource(client)` with no cleanup types as `OneShotResource[Unknown]`.
 
 Typing note (2026-10-30): the splitter exit retypes call outputs by module type, not by color.
 `PreparedInterface` (`riko/execution/_prepared.py`) is one record for both colors: its `pipe` is
@@ -1833,7 +1841,7 @@ the tag moves to its own marker read by its own guard, rather than a fourth `.ty
 Audit note (2026-10-10 structural audit): `riko/modules/_loop.py` carries twin sync/async bodies
 (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_parent`, `_run_loop`/`_arun_loop`) and
 one copy has already drifted (`module_name` vs `op_module_name`); `_take_first` re-implements
-the owned-value close now in `close_owned` (`riko/execution/_resource_cleanup.py`) and closes only
+the owned-value close now in `run_bridged` (`riko/bado/_util.py`) and closes only
 a `Generator` result while `_atake_first` closes anything async-closeable (audit 2026-11-01; no
 built-in embed returns a closeable non-generator, so no tripwire). Consolidate the pure logic into one body behind an
 iterator adapter (as the execution split did for `_resolve_inputs`) when this phase settles the embed
@@ -1894,6 +1902,20 @@ the Feed-native path. The collapsed table-reader body also owns the one narrowin
 `Item`: the local `typings/meza/` stubs type rows as `dict[str, str | None]` (`read_csv`) or `object`
 (`read`), which the invariant `Item` dict union rejects, so `csv.py` and `fetchtable.py` each carry two
 `cast("Stream", ...)` today (2026-10-27 typed-boundary triage).
+
+Audit note (2026-11-02 triage): the `rss/discovery.py` pair also diverges on input. The sync
+`load_rss_links` catches `ValueError` from `Fetch` and parses the string as inline HTML, but that
+fallback is accidental: `normalize_url` prefixes `file://` to every schemeless string, so only a
+string that happens to contain `://` reaches `urlopen`'s `ValueError`; `aload_rss_links` has no
+fallback and raises `FileNotFoundError`. Ruling: neither loader accepts inline HTML (the module docs
+say "local or remote"); the collapsed body drops the `except ValueError` branch. Tripwire (strict
+xfail): `tests/internal/test_io.py::TestLoadRssLinks::test_sync_and_async_loaders_reject_inline_html_alike`.
+Same note, spooling: `seekable()`/`buffer()` (eager spool, text or bytes, a real `seek(0)` for
+meza's headerless csv in `csv.py`/`fetchtable.py`) and `ReplayReader` (lazy spool, bytes only,
+`replay()`; streamed JSON in `parsing/documents.py`), both in `riko/io/_sync.py`, overlap. Combining
+them waits for this phase's async-fetch streaming (2026-11-01 triage, deferred), since an async
+replay would need AnyIO's spool; fold them into one lazy replay helper then, together with the
+table-reader collapse above (design note, no tripwire).
 
 Audit note (2026-10-29 repo audit): `_AsyncWrapperStream` (`riko/modules/_decorators.py`) runs the
 parser again when one result is awaited twice or awaited and then iterated, and its `aclose()` cannot

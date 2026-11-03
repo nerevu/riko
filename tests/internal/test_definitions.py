@@ -43,7 +43,7 @@ from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteCapabilities, WriteMode, WriteOperation
 from riko.types._enums import Formats
 from riko.types._frozendict import FrozenDict
-from riko.types._io import is_closeable
+from riko.types._io import get_async_closer, get_sync_closer
 from riko.types._options import CallOptions, RawCallOptions
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -339,7 +339,7 @@ class TestResource:
     @pytest.mark.parametrize("func", GENERATOR_FUNCS)
     def test_generator_object_points_to_from_lifecycle(self, func):
         started = func()
-        assert is_closeable(started)
+        assert (get_sync_closer(started), get_async_closer(started)) != (None, None)
 
         with pytest.raises(TypeError, match=r"generator object.*from_lifecycle"):
             Resource(started)

@@ -35,15 +35,14 @@ from typing import TYPE_CHECKING, Literal, TypeGuard, overload
 from attrs import define, field
 from typing_extensions import TypeIs
 
+from riko.base._funcutils import noop
 from riko.base._guards import is_async_callable
-from riko.base._iterutils import noop
 
 from ._frozendict import FrozenDict, freeze
 
 if TYPE_CHECKING:
     from types import CodeType
 
-    from ._io import Closeable
     from ._wrappers import Func
 
 type ValueFactory[T] = Func[T | Awaitable[T]]
@@ -58,7 +57,6 @@ type LifecycleFactory[T] = GeneratorFactory[T] | ContextManagerFactory[T]
 type ResourceFactory[T] = LifecycleFactory[T] | ValueFactory[T]
 type LifecycleValue[T] = AnyContextManager[T]
 type Cleanup[T] = Callable[[T], Awaitable[None] | None]
-type ResolvedValue[T] = T | Closeable
 type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
 
 type ResourcePlan[T] = (
@@ -202,7 +200,7 @@ class ExternalPlan[T]:
 
     """
 
-    value: ResolvedValue[T]
+    value: T
 
 
 @define(frozen=True, slots=True)
@@ -218,7 +216,7 @@ class OwnedPlan[T]:
 
     """
 
-    value: ResolvedValue[T]
+    value: T
     cleanup: Cleanup[T] | Literal[False] | None = None
 
 

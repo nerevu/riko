@@ -29,9 +29,9 @@ Index (file, then the subjects it owns, in file order):
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, EmbedAdaptation, Embed,
                               PreparedCall, PreparedNode
-    test_io.py                ReplayReader, Fetch, AsyncUrlOpen, Reencode,
-                              ConversionFuncs, ChunkContent, FetchTextBom,
-                              AsyncMapStream, AsyncMerge, GatherResults,
+    test_io.py                ReplayReader, LoadRssLinks, ParseRss, Fetch, AsyncUrlOpen,
+                              Reencode, ConversionFuncs, ChunkContent, FetchTextBom,
+                              AsyncMap, AsyncMapStream, AsyncMerge, GatherResults,
                               CapabilityFlags, RegisterTarget, ConverterPath, Csv,
                               Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,

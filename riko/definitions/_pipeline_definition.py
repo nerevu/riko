@@ -26,6 +26,7 @@ from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import resolve_default
 from riko.base._guards import is_mapping
 from riko.base._require_guards import (
     narrow_def_from_require,
@@ -165,7 +166,7 @@ class PipelineDefinition(Generic[T_co]):
     )
 
     def __repr__(self) -> str:
-        context = "" if self.context is None else "; context"
+        context = resolve_default(self.context, "", "; context")
         summary = self.workflow.summary
         return f"{type(self).__name__}({summary}{context})"
 
@@ -235,7 +236,7 @@ class PipelineDefinition(Generic[T_co]):
             ['fetch-1']
 
         """
-        return evolve(self, workflow=self.workflow if workflow is None else workflow)
+        return evolve(self, workflow=resolve_default(workflow, self.workflow))
 
     def pipe(
         self,
@@ -538,7 +539,7 @@ class PipelineDefinition(Generic[T_co]):
             ['db']
 
         """
-        base = Context() if self.context is None else self.context
+        base = resolve_default(self.context, Context())
         context = base.with_resource(name, definition, credential=credential, lazy=lazy)
         return evolve(self, context=context)
 
@@ -658,7 +659,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _combine_context(self, other: Context | None) -> Context | None:
         """Combines ``other``'s resources into this pipeline's context."""
-        base = Context() if self.context is None else self.context
+        base = resolve_default(self.context, Context())
         resources = {} if other is None else other.resources
         clashes = [k for k, v in resources.items() if base.resources.get(k, v) is not v]
         _run = (ExecutionMode.RUN, None, False)

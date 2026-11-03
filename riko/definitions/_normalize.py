@@ -20,9 +20,10 @@ from attrs import AttrsInstance
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._guards import is_mapping, require_mapping, require_sequence
-from riko.base._iterutils import gen_non_none, map_keys_and_values, map_values, unzip
+from riko.base._iterutils import gen_non_none, unzip
 from riko.base._recordutils import serialize_attrs
 from riko.base._require_guards import (
     normalize_strs,

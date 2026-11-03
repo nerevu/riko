@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, ClassVar, get_origin
 import attrs
 from attrs import Attribute, AttrsInstance
 
+from ._funcutils import map_values
 from ._guards import is_attrs_inst
-from ._iterutils import map_values
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance

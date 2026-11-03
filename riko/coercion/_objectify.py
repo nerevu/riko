@@ -7,8 +7,8 @@ from collections.abc import Mapping, Sequence
 from time import struct_time
 from typing import TYPE_CHECKING, overload
 
+from riko.base._funcutils import map_keys
 from riko.base._guards import is_mapping
-from riko.base._iterutils import map_keys
 
 if TYPE_CHECKING:
     from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView

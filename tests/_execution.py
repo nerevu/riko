@@ -290,6 +290,14 @@ class AcloseOnlyIterator(_TwoItems):
         self.closed.append("closed")
 
 
+class FailingAcloseIterator(_TwoItems):
+    """A two-item iterator whose only close, ``aclose``, records itself then fails."""
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+        raise RuntimeError("close failed")
+
+
 class AsyncCloseAsyncIterator:
     """A two-item async iterator whose only close is an ``async def close``."""
 

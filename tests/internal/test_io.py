@@ -9,6 +9,7 @@ from io import BytesIO, StringIO
 from os import environ, linesep
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
+from urllib.request import urlopen
 from urllib.response import addinfourl
 
 import pytest
@@ -18,9 +19,15 @@ from requests.exceptions import Timeout
 from riko.bado import as_async
 from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
 from riko.bado._util import async_return, gather_results
-from riko.bado.itertools import async_map_ordered_stream, async_map_stream, async_merge
+from riko.bado.itertools import (
+    async_map,
+    async_map_ordered_stream,
+    async_map_stream,
+    async_merge,
+)
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._sentinels import MISSING
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import WriteResult
 from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
@@ -30,14 +37,16 @@ from riko.io._sync import Fetch, ReplayReader
 from riko.modules import fetchtext
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
-from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.parsing.documents import HAS_NATIVE_IJSON, IS_FASTFEEDPARSER, IS_LXML
+from riko.rss.discovery import aload_rss_links, load_rss_links
+from riko.rss.feeds import parse_rss
 from riko.runtime import _write_session
 from riko.runtime._export import export
 from riko.runtime._target_registry import TargetRegistry
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
-    async_file_write_session,
+    afile_write_session,
     awrite_through,
     file_write_session,
     write_through,
@@ -110,6 +119,42 @@ class TestReplayReader:
             assert spool.seek(0, 2) == 4
             spool.seek(0)
             assert reader.read() == b"abcdef"
+
+
+class TestLoadRssLinks:
+    @pytest.mark.xfail(
+        strict=True,
+        reason="rejecting inline HTML in the sync rss link loader is not yet "
+        "implemented: a schemeless string containing '://' skips the file prefix, "
+        "urlopen's ValueError is caught, and the string is parsed as HTML",
+    )
+    @async_test
+    async def test_sync_and_async_loaders_reject_inline_html_alike(self):
+        html = '<link rel="alternate" type="application/rss+xml" href="http://x/feed">'
+
+        with pytest.raises((OSError, ValueError)):
+            await aload_rss_links(html)
+
+        with pytest.raises((OSError, ValueError)):
+            list(load_rss_links(html))
+
+
+class TestParseRss:
+    def test_closes_the_fetched_file_when_parsing_fails(self, tmp_path, monkeypatch):
+        path = tmp_path / "feed.xml"
+        path.write_bytes(b"<rss/>")
+        sources = []
+
+        def fail(source):
+            sources.append(source)
+            raise ValueError("unparseable")
+
+        monkeypatch.setattr("riko.rss.feeds.parse_feed", fail)
+
+        with pytest.raises(ValueError, match="unparseable"):
+            parse_rss(str(path))
+
+        assert [source.closed for source in sources] == [True]
 
 
 class TestFetch:
@@ -213,6 +258,24 @@ class TestFetch:
             fetched.read()
 
         assert handle.closed
+
+    def test_memoized_file_closes_its_response(self, tmp_path):
+        """A memoized local fetch closes the response it buffered."""
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
+        responses = []
+
+        def capture(*args, **kwargs):
+            responses.append(response := urlopen(*args, **kwargs))  # noqa: S310
+            return response
+
+        with (
+            patch("riko.io._sync.urlopen", side_effect=capture),
+            Fetch(path.as_uri(), memoize=True, binary=True) as f,
+        ):
+            f.read()
+
+        assert [response.closed for response in responses] == [True]
 
 
 ASYNC_GET_SCRIPT = """
@@ -613,6 +676,17 @@ class TestFetchTextBom:
         ]
 
 
+class TestAsyncMap:
+    @async_test
+    async def test_a_missing_result_keeps_its_slot(self):
+        """A function returning the missing sentinel still gets its slot."""
+
+        async def missing(_):
+            return MISSING
+
+        assert await async_map(missing, [1, 2]) == [MISSING, MISSING]
+
+
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
     state = {"current": 0, "peak": 0}
 
@@ -627,6 +701,17 @@ def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
 
 
 async def _forever(closed: list[bool]):
+    index = 0
+
+    try:
+        while True:
+            yield index
+            index += 1
+    finally:
+        closed.append(True)
+
+
+def _sync_forever(closed: list[bool]):
     index = 0
 
     try:
@@ -759,10 +844,16 @@ class TestAsyncMapStream:
             pytest.param(async_map_ordered_stream, {0}, id="ordered"),
         ],
     )
+    @pytest.mark.parametrize(
+        "source", [_forever, _sync_forever], ids=["async-source", "sync-source"]
+    )
     @async_test
-    async def test_early_close_stops_workers_and_closes_source(self, stream, firsts):
+    async def test_early_close_stops_workers_and_closes_source(
+        self, stream, firsts, source
+    ):
         closed: list[bool] = []
-        mapped = stream(_double, _forever(closed), limit=2)
+        items = source(closed)
+        mapped = stream(_double, items, limit=2)
         first = await anext(mapped)
         await mapped.aclose()
         assert first in firsts
@@ -856,7 +947,7 @@ class TestCapabilityFlags:
         assert IS_FASTFEEDPARSER is is_installed("fastfeedparser")
 
         if not is_installed("ijson"):
-            assert IJSON_IS_NATIVE is False
+            assert HAS_NATIVE_IJSON is False
 
 
 class TestRegisterTarget:
@@ -1164,7 +1255,7 @@ async def _asink(
     items: Feed, dest: PathLike, mode: str = "replace", **kwargs
 ) -> WriteResult:
     """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
+    async with afile_write_session(build_write(dest, mode, **kwargs)) as session:
         await session.awrite(items)
         result = await session.afinalize()
 

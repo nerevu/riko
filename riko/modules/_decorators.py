@@ -60,7 +60,7 @@ from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType
-from riko.types._io import is_async_closeable
+from riko.types._io import get_async_closer
 from riko.types._options import (
     Casted,
     ContextOverrides,
@@ -202,7 +202,7 @@ class _AsyncWrapperStream[T]:
     item with no outer await (the default ``async for item in async_pipe(...)`` path).
     Awaiting it runs the parser and returns the whole stream (the advanced
     ``await async_pipe(...)`` path). Iteration runs the parser once. Each ``await`` runs
-    it again.
+    it again. Once closed, iterating it yields nothing and never runs the parser.
 
     Attributes:
 
@@ -210,11 +210,12 @@ class _AsyncWrapperStream[T]:
 
     """
 
-    __slots__ = ("_agen", "_make")
+    __slots__ = ("_agen", "_closed", "_make")
 
     def __init__(self, make: AsyncFunc[AnyIterable[T]]) -> None:
         self._make = make
         self._agen: AsyncIterator[T] | None = None
+        self._closed = False
 
     def __await__(self) -> Generator[object, None, AnyIterable[T]]:
         return self._make().__await__()
@@ -223,15 +224,19 @@ class _AsyncWrapperStream[T]:
         return self
 
     async def __anext__(self) -> T:
-        if self._agen is None:
+        if self._closed:
+            raise StopAsyncIteration
+        elif self._agen is None:
             self._agen = as_async(await self._make())
 
         return await self._agen.__anext__()
 
     async def aclose(self) -> None:
-        """Closes the parser's stream if consumption has started."""
-        if is_async_closeable(self._agen):
-            await self._agen.aclose()
+        """Ends iteration and closes the parser's stream if consumption has started."""
+        self._closed = True
+
+        if (closer := get_async_closer(self._agen)) is not None:
+            await closer()
 
 
 class Module[B: bool]:

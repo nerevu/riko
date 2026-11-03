@@ -228,7 +228,7 @@ Fixes
 
 - Fetching in a sync run no longer garbles text with no newline or only carriage-return
   line endings, drops all but the first line of UTF-16 text, raises ``RuntimeError`` on
-  empty text, or leaves the response open after a decode failure.
+  empty text, or keeps the response open after a decode failure/memoize on a local file.
 
 - The ``fetchdata`` module now yields a dict instead of text for XML whose root holds
   only text, and yields nothing instead of an empty item or raising for an empty file.

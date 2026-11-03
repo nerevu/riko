@@ -12,7 +12,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable, Mapping
 from contextlib import AsyncExitStack, aclosing
 from functools import cached_property, partial
-from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast
+from inspect import isasyncgen
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 from attrs import Factory, define, field
 
@@ -21,13 +22,12 @@ from riko.bado._backend import (
     CapacityLimiter,
     Event,
     Semaphore,
-    asyncify,
     fail_after,
     lowlevel,
-    run_from_thread,
 )
-from riko.bado._util import as_awaitable
+from riko.bado._util import as_awaitable, async_partial, maybe_async, syncify
 from riko.bado.itertools import (
+    aauto_close,
     alist,
     as_async,
     async_map_ordered_stream,
@@ -35,8 +35,8 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._iterutils import map_values
-from riko.types._io import get_async_closer, get_sync_closer
+from riko.base._funcutils import map_values
+from riko.types._io import get_async_closer, resolve_closer
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -60,11 +60,9 @@ from ._execution import (
     _Acquired,
     _BaseExecution,
     _FailedAcquisition,
-    asyncify_call,
 )
 from ._prepared import ExecutionExtras
 from ._resource_acquisition import build_context_manager, call_factory
-from ._resource_cleanup import aclose_owned
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -76,23 +74,14 @@ if TYPE_CHECKING:
     from anyio.lowlevel import RunVar
 
     from riko.definitions._resource_definition import Resource
-    from riko.types._resource import Cleanup, ResolvedValue, ResourcePlan
+    from riko.types._resource import Cleanup, ResourcePlan
     from riko.types._streams import AnyIterable
     from riko.types._wrappers import AsyncFunc, AsyncModuleWrapperOutput, Func
 
     from ._prepared import ExecutionPlan, PreparedInterface
 
 
-def _await_from_thread[T](func: Callable[[], Awaitable[T]]) -> T:
-    """Runs ``func`` to completion on the event loop from a worker thread."""
-
-    async def await_func() -> T:
-        return await func()
-
-    return run_from_thread(await_func)
-
-
-_worker_drain = partial(async_drain, call=_await_from_thread)
+_worker_drain = partial(async_drain, call=syncify)
 
 
 @define(eq=False)
@@ -102,7 +91,7 @@ class _WorkerContext[T]:
     _cm: AbstractContextManager[T]
 
     async def __aenter__(self) -> T:
-        return await asyncify_call(self._cm.__enter__)
+        return await maybe_async(self._cm.__enter__, inline=False)
 
     async def __aexit__(
         self,
@@ -110,7 +99,8 @@ class _WorkerContext[T]:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        return bool(await asyncify_call(self._cm.__exit__, exc_type, exc, traceback))
+        _exit = async_partial(self._cm.__exit__, _inline=False)
+        return bool(await _exit(exc_type, exc, traceback))
 
 
 @define(eq=False)
@@ -192,22 +182,27 @@ def _resolve_thread_budget() -> _ThreadBudget:
 
 
 @define(eq=False)
-class _OwnedSeed[T]:
+class _Owned[T]:
     """
-    Wraps a closeable async seed so the run and the execution close it only once.
+    Wraps an owned value so it closes once with the first compatible closer.
 
-    The root node closes its source when the run stops, and the execution closes the
-    seed again on exit. If a seed closes with both ``aclose`` and an async ``close``,
-    the execution will use ``aclose``.
+    The flag is set before the close is awaited so that a failing close is not retried,
+    and a close that re-enters does nothing. An async-iterable value is read through the
+    wrapper.
     """
 
-    _seed: AsyncIterable[T]
-    _closed: bool = False
+    _value: AsyncIterable[T] | object
+    _closed: bool = field(default=False, init=False)
+    inline: bool = field(default=True, kw_only=True)
 
     @cached_property
     def _stream(self) -> AsyncIterator[T]:
-        """Iterates the seed's items."""
-        return aiter(self._seed)
+        """Iterates the value's items; only an async-iterable value has any."""
+        if not isinstance(self._value, AsyncIterable):
+            msg = "only an async-iterable owned value can be iterated"
+            raise TypeError(msg)
+
+        return aiter(self._value)
 
     def __aiter__(self) -> Self:
         return self
@@ -216,69 +211,46 @@ class _OwnedSeed[T]:
         return await anext(self._stream)
 
     async def aclose(self) -> None:
-        """Closes the seed unless it is already closed."""
-        closer = get_async_closer(self._seed)
-
-        if not self._closed and closer is not None:
-            await closer()
+        """Closes the value unless it is already closed."""
+        if not self._closed:
             self._closed = True
 
-
-@define(eq=False)
-class _NodeStreams:
-    """
-    Owns the node streams one run builds, so each one closes exactly once.
-
-    A sync node run on a worker closes its inputs as soon as it finishes. The run closes
-    whatever is still open when it ends. The execution closes whatever a run left open
-    when it exits.
-    """
-
-    _streams: list[object] = field(factory=list, init=False)
-    _closed: set[int] = field(factory=set, init=False)
-
-    def add(self, *streams: object) -> None:
-        """Adds node streams the run built, or the raw values they were drawn from."""
-        self._streams.extend(streams)
-
-    async def _aclose_one(self, stream: object) -> None:
-        if (sid := id(stream)) not in self._closed:
-            await aclose_owned(stream, inline=False)
-            self._closed.add(sid)
-
-    async def aclose(self, *streams: object) -> None:
-        """Closes each of ``streams`` that is still open, last one first."""
-        async with AsyncExitStack() as stack:
-            for stream in streams:
-                stack.push_async_callback(self._aclose_one, stream)
-
-    async def aclose_all(self, reservation: _Reservation) -> None:
-        """Closes every open node stream, last built first, then releases threads."""
-        try:
-            await self.aclose(*self._streams)
-        finally:
-            reservation.release()
+            if (closer := resolve_closer(self._value, is_async=True)) is not None:
+                await maybe_async(closer, inline=self.inline)
 
 
 @define(eq=False)
 class _RunStream[T]:
     """
-    Wraps a run's output stream so closing it closes every stream the run built.
+    One run's output stream, which owns every node stream the run built.
 
-    The node streams close in reverse build order, output first, and the run's node
-    threads return once they have.
+    Closing it closes the streams last built first, output first, then returns the run's
+    node threads. Only the first close does anything.
     """
 
-    _stream: AsyncIterator[T]
-    _node_streams: _NodeStreams
     _reservation: _Reservation
+    _steps: list[object] = field(factory=list, init=False)
+    _closed: bool = field(default=False, init=False)
+
+    @property
+    def _output(self) -> AsyncIterator[T]:
+        """The endpoint's stream, the step the run built last."""
+        if not isinstance(step := self._steps[-1], AsyncIterator):
+            msg = "the run's output must be an async iterator"
+            raise TypeError(msg)
+
+        return step
+
+    def add(self, *values: object) -> None:
+        """Adds the streams the run built, or the values they were drawn from."""
+        self._steps.extend(values)
 
     def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> T:
         try:
-            item = await anext(self._stream)
+            item = await anext(self._output)
         except BaseException:
             self._reservation.release()
             raise
@@ -286,8 +258,17 @@ class _RunStream[T]:
         return item
 
     async def aclose(self) -> None:
-        """Closes the output stream and its node streams, and releases the threads."""
-        await self._node_streams.aclose_all(self._reservation)
+        """Closes every node stream, last built first, then releases the threads."""
+        if not self._closed:
+            self._closed = True
+
+            try:
+                async with AsyncExitStack() as stack:
+                    for step in self._steps:
+                        if (closer := resolve_closer(step, is_async=True)) is not None:
+                            stack.push_async_callback(maybe_async, closer, inline=False)
+            finally:
+                self._reservation.release()
 
 
 _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
@@ -410,23 +391,6 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self._require_open("add an async callback to")
         self._stack.push_async_callback(self._arecord_cleanup_error, func, *args)
 
-    async def run_sync[R](self, func: Func[R], *args: object) -> R:
-        """
-        Runs a blocking sync callable on a worker thread through the bridge.
-
-        Args:
-
-            func: A synchronous callable to run off the event loop.
-            args: Positional arguments forwarded to ``func``.
-
-        Returns:
-
-            The value ``func`` returns.
-
-        """
-        self._require_open("run work in")
-        return await asyncify_call(func, *args)
-
     async def _reserve_threads(self, demand: int, output: str) -> _Reservation:
         """
         Reserves every node thread a run may hold at once before it reads anything.
@@ -486,12 +450,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     ) -> R:
         """Runs a sync-only node's blocking step on one of the run's node threads."""
         self._require_open("run work in")
-        return await asyncify(func, limiter=limiter)(*args)
+        return await maybe_async(func, *args, inline=False, limiter=limiter)
 
-    def register_owned(
+    def register_owned[R](
         self,
-        value: object,
-        cleanup: Cleanup[Never] | Literal[False] | None = None,
+        value: R,
+        cleanup: Cleanup[R] | Literal[False] | None = None,
         *,
         inline: bool = True,
     ) -> None:
@@ -509,21 +473,14 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 on a worker thread.
 
         """
-        if cleanup is None:
-            if not (closes := get_async_closer(value) is not None):
-                closes = get_sync_closer(value) is not None
-        else:
-            closes = cleanup is not False
-
-        if closes:
-            close = partial(aclose_owned, inline=inline)
-            self.queue_async_callback(close, value, cleanup)
+        if (closer := resolve_closer(value, cleanup, is_async=True)) is not None:
+            self.queue_async_callback(async_partial(closer, _inline=inline))
 
     async def _acall_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         if plan.is_async:
             raw = call_factory(plan)
         else:
-            raw = await asyncify_call(partial(call_factory, plan))
+            raw = await maybe_async(partial(call_factory, plan), inline=False)
 
         value = await as_awaitable(raw)
         self.register_owned(value, plan.cleanup, inline=False)
@@ -540,7 +497,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         return await self.enter_async_context(cm)
 
-    async def _aopen[R](self, plan: ResourcePlan[R]) -> ResolvedValue[R]:
+    async def _aopen[R](self, plan: ResourcePlan[R]) -> R:
         match plan:
             case ExternalPlan():
                 value = plan.value
@@ -562,13 +519,11 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         await self._shutdown()
 
-    async def _aacquire_entry[R](
-        self, resource: Resource[R]
-    ) -> Acquisition[ResolvedValue[R]]:
+    async def _aacquire_entry[R](self, resource: Resource[R]) -> Acquisition[R]:
         try:
             value = await self._aopen(resource._plan)
         except Exception as error:  # noqa: BLE001
-            entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
+            entry: Acquisition[R] = _FailedAcquisition(error)
         else:
             entry = _Acquired(value)
 
@@ -633,7 +588,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         if not isinstance(resolved, AsyncIterable):
             stream, owner = as_async(normalize_items(resolved)), resolved
         elif get_async_closer(resolved) is not None:
-            stream = owner = _OwnedSeed(resolved)
+            stream = owner = _Owned(resolved)
         else:
             stream, owner = aiter(resolved), resolved
 
@@ -713,7 +668,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         named: Mapping[str, AsyncIterator[T]],
         extras: ExecutionExtras[AsyncIterator[T]],
         limiter: Limiter,
-        node_streams: _NodeStreams,
+        run: _RunStream[T],
     ) -> AsyncIterator[T]:
         """
         Streams a sync-only node's output stream without materializing it.
@@ -729,7 +684,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             named: The streams wired to the node's named input ports.
             extras: The keyword arguments the execution adds to the node's call.
             limiter: Caps the run's node threads.
-            node_streams: The run's node streams.
+            run: The run that owns the node's streams.
 
         Returns:
 
@@ -751,12 +706,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             value = cast("Iterator[T] | Iterator[Iterator[T]]", raw)
             return raw, require_stream(value, interface.pipe)
 
-        run = partial(self._run_node_call, limiter)
-        raw, stream = await run(start)
-        owned = (stream,) if raw is stream else (raw, stream)
-        node_streams.add(*owned)
-        close = partial(node_streams.aclose, *streams, *owned)
-        return pull_stream(stream, pull=run, close=close)
+        worker = partial(self._run_node_call, limiter)
+        raw, stream = await worker(start)
+        values = (stream,) if raw is stream else (raw, stream)
+        owned = [_Owned(value, inline=False) for value in values]
+        run.add(*owned)
+        return aauto_close(pull_stream(stream, func=worker), *reversed(owned), *streams)
 
     async def _abuild_stream(
         self,
@@ -765,7 +720,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         steps: AsyncExecSteps[T],
         seed: AnyIterable[T] | None,
         limiter: Limiter,
-        node_streams: _NodeStreams,
+        run: _RunStream[T],
     ) -> AsyncIterator[T]:
         """
         Builds one node's lazy async output stream from its already-built input streams.
@@ -780,7 +735,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             steps: The streams already built for upstream nodes.
             seed: The items fed to the node's open input, if any.
             limiter: Caps the run's node threads.
-            node_streams: The run's node streams.
+            run: The run that owns the node's streams.
 
         Returns:
 
@@ -817,9 +772,15 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             stream = require_async_stream(value, interface.pipe)
 
             if value is not stream:
-                node_streams.add(value)
+                run.add(value)
+
+            if (
+                not isasyncgen(stream)
+                and resolve_closer(stream, is_async=True) is not None
+            ):
+                stream = _Owned(stream, inline=False)
         else:
-            args = (node.sync_interface, _stream, named, extras, limiter, node_streams)
+            args = (node.sync_interface, _stream, named, extras, limiter, run)
             stream = await self._run_sync_node(*args)
 
         return stream
@@ -833,26 +794,25 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """Builds the async item stream for one of the plan's workflow outputs."""
         policy = self.settings.async_policy
 
-        endpoint = plan.require_output(output)
+        plan.require_output(output)
         steps: AsyncExecSteps[T] = {}
         demand = plan.get_thread_demand(output, mapped=policy.limit is not None)
         reservation = await self._reserve_threads(demand, output)
-        node_streams = _NodeStreams()
-        self.queue_async_callback(node_streams.aclose_all, reservation)
+        run: _RunStream[T] = _RunStream(reservation)
+        self.queue_async_callback(run.aclose)
 
         try:
             stream = None if seed is None else await self._aopen_seed(seed)
 
             for node_id, node_seed in plan.gen_build_order(output, seed=stream):
-                limiter = reservation.limiter
-                args = (plan, node_id, steps, node_seed, limiter, node_streams)
+                args = (plan, node_id, steps, node_seed, reservation.limiter, run)
                 steps[node_id] = await self._abuild_stream(*args)
-                node_streams.add(steps[node_id])
+                run.add(steps[node_id])
         except BaseException:
-            await node_streams.aclose_all(reservation)
+            await run.aclose()
             raise
 
-        return _RunStream(steps[endpoint.node], node_streams, reservation)
+        return run
 
     async def arun(
         self,

@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, cast
 
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys_and_values
 from riko.base._guards import is_mapping, require_mapping, require_sequence
-from riko.base._iterutils import map_keys_and_values, partition, unzip
+from riko.base._iterutils import partition, unzip
 from riko.base._logging import get_logger
 from riko.base._require_guards import (
     def_from_require,

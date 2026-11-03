@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager
 from enum import Enum, auto
+from functools import partial
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
 from riko.bado._backend import Path as AsyncPath
-from riko.bado._backend import async_open, asyncify
+from riko.bado._backend import async_open
+from riko.bado._util import asyncify
 from riko.bado.itertools import as_async
 from riko.base._config import ENCODING
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
@@ -488,7 +490,8 @@ class _AsyncFileWriteSession(_FileWriteSession):
             collected = self._gen_csv_records(collected)
 
         kwargs = {"skip_header": await self.askip_header} if self.csv_format else {}
-        result = await asyncify(serialize_items)(collected, self.fmt, **kwargs)
+        serialize = partial(serialize_items, **kwargs)
+        result = await asyncify(serialize, collected, self.fmt)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_cast_text(result))
@@ -718,7 +721,7 @@ def build_write_resource(
 
 
 @asynccontextmanager
-async def async_file_write_session(
+async def afile_write_session(
     prepared: PreparedWrite,
 ) -> AsyncGenerator[AsyncWriteSession]:
     if not isinstance(prepared.target, FileTarget):
@@ -803,7 +806,7 @@ async def awrite_through(
         Each input item, unchanged.
 
     """
-    async with async_file_write_session(prepared) as session:
+    async with afile_write_session(prepared) as session:
         try:
             async for item in as_async(source):
                 await session.awrite(item)
