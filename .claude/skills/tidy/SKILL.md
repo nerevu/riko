@@ -35,7 +35,10 @@ diff. A diff over 25kB lands in `.claude/tidy-scope.diff`; read it in slices
 with `Read` offsets, never whole. Exit 0 means tidy already ran on this exact
 content: report "nothing to tidy" and stop. Exit 2 means the scope is empty:
 run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
-by hand.
+by hand. When the diff is mostly moved code (test reorganizations, file splits),
+`gates.py scope tidy --edits-only` lists just the added lines that no removed
+line carries, `path:line: text`; read those first and the moved spans only
+where an edit sits inside them.
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.

@@ -154,6 +154,25 @@ def test_scope_falls_back_to_the_head_and_reports_an_empty_scope(tmp_path, capsy
     assert "+a = 2" in target.read_text()
 
 
+def test_gen_edits_drops_lines_a_hunk_only_moved():
+    diff = (
+        "--- a/t.py\n+++ b/t.py\n@@ -1,2 +1,3 @@\n-def kept():\n+x = 1\n"
+        " context\n+def kept():\n"
+    )
+    assert list(gates.gen_edits(diff)) == ["t.py:1: x = 1"]
+
+
+@pytest.mark.usefixtures("repo")
+def test_scope_edits_only_prints_the_new_lines(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    (tmp_path / "a.py").write_text("a = 2\n")
+    capsys.readouterr()
+
+    assert gates.scope(path, "tidy", edits_only=True) == 1
+    assert "--- edits" in (out := capsys.readouterr().out)
+    assert "a.py:1: a = 2" in out
+
+
 @pytest.mark.usefixtures("repo")
 def test_mutating_gate_records_the_tree_it_left(tmp_path):
     path = gates.get_state_dir() / "gate-markers.json"
