@@ -12,6 +12,8 @@ every line is a lead to read, not a verdict. Sections:
   beside its one user), module-level definitions repeated across test files with
   identical source (one copy belongs in ``tests/_*.py``), one value bound to different
   names in several files, and a helper's body repeated inline in a test elsewhere.
+  A fixture also counts each other file naming it as a test parameter or a string
+  (``request.getfixturevalue``), so any string equal to its name counts as a use.
 - ``shapes`` -- test methods whose bodies are identical once literals are blanked
   (one parametrized table), within a class or across files; ``(small)`` marks short
   same-shape tests in one class; a standalone test that matches a parametrized test
@@ -954,12 +956,39 @@ def gen_inlined_helpers(root: Path, files: list[TestFile]):
                             yield text, [rel, file.rel]
 
 
+def is_fixture(stmt: ast.stmt) -> bool:
+    """Whether a statement defines a fixture by decorator or ``pytest.fixture(...)``."""
+    if isinstance(stmt, FUNCTION_NODES):
+        nodes = stmt.decorator_list
+    elif isinstance(stmt, ast.Assign):
+        nodes = [stmt.value]
+    else:
+        nodes = []
+
+    return any(
+        get_leaf(node.func if isinstance(node, ast.Call) else node) == "fixture"
+        for node in nodes
+    )
+
+
+def gen_requested(tree: ast.AST):
+    """Generates the names a file may request as fixtures: parameters and strings."""
+    for node in ast.walk(tree):
+        if isinstance(node, FUNCTION_NODES):
+            yield from (arg.arg for arg in node.args.args + node.args.kwonlyargs)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.value
+
+
 def gen_helper_issues(root: Path, files: list[TestFile]):
     users = defaultdict(set)
+    requests = defaultdict(set)
 
     for path in [*root.glob("tests/**/*.py"), *root.glob("conftest.py")]:
         tree = ast.parse(path.read_text())
         rel = path.relative_to(root).as_posix()
+        for name in set(gen_requested(tree)):
+            requests[name].add(rel)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 module = _import_module(node).rsplit(".", 1)[-1] or "tests"
@@ -969,6 +998,7 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
 
     for helper in sorted(root.glob("tests/_*.py")):
         tree = ast.parse(helper.read_text())
+        rel = helper.relative_to(root).as_posix()
         inside = Counter(
             node.id
             for node in ast.walk(tree)
@@ -984,9 +1014,10 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
                 if name.startswith(("_", "pytest_")):
                     continue
                 found = users.get((helper.stem, name), set())
+                if is_fixture(stmt):
+                    found = found | (requests[name] - {rel})
                 internal = inside[name] > 0
                 if not internal and len(found) <= 1:
-                    rel = helper.relative_to(root).as_posix()
                     who = ", ".join(sorted(found)) or "no test file"
                     yield f"{rel}:{stmt.lineno} {name}: used by {who}", [rel, *found]
 

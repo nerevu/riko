@@ -256,3 +256,31 @@ def test_is_rejection_reads_the_test_body(body, expected):
     source = "def test_x():\n" + "".join(f"    {line}\n" for line in body.splitlines())
     func = ast.parse(source).body[0]
     assert overlap_scan.is_rejection(func) is expected
+
+
+FIXTURE_PLUGIN = """\
+import pytest
+
+orphan = pytest.fixture(lambda: 1)
+
+
+@pytest.fixture
+def probes():
+    return {}
+"""
+FIXTURE_USERS = {
+    "test_a.py": "def test_a(probes):\n    assert probes == {}\n",
+    "test_b.py": 'NAMES = ["probes"]\n',
+}
+
+
+def test_a_fixture_counts_the_files_that_request_it(tmp_path):
+    tier = tmp_path / "tests" / "internal"
+    tier.mkdir(parents=True)
+    (tmp_path / "tests" / "_plugin.py").write_text(FIXTURE_PLUGIN)
+
+    for name, source in FIXTURE_USERS.items():
+        (tier / name).write_text(source)
+
+    issues = [text for text, _ in overlap_scan.gen_helper_issues(tmp_path, [])]
+    assert issues == ["tests/_plugin.py:3 orphan: used by no test file"]
