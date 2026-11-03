@@ -451,6 +451,10 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "run_import_checks", lambda *_: calls.append("imports") or 0
     )
+    monkeypatch.setattr(
+        _lint, "_lint_basenames", lambda: calls.append("basenames") or 0
+    )
+    monkeypatch.setattr(_lint, "_lint_escapes", lambda: calls.append("escapes") or 0)
     monkeypatch.setattr(_lint, "_lint_types", lambda *_: calls.append("types") or 0)
     monkeypatch.setattr(
         _lint, "_verify_types", lambda *_: calls.append("verify-types") or 0
@@ -517,6 +521,8 @@ class TestLintCommand:
                     "deps",
                     "bindings",
                     "tests",
+                    "basenames",
+                    "escapes",
                     "actions",
                     "yaml",
                     "imports",

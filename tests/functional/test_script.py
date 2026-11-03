@@ -339,7 +339,10 @@ class TestCompile:
 
 class TestBenchmark:
     def test_benchmark(self):
-        env = os.environ | {"RIKO_BENCHMARK_DELAY": "0.001"}
+        env = os.environ | {
+            "RIKO_BENCHMARK_DELAY": "0.001",
+            "RIKO_BENCHMARK_WORKERS": "2",
+        }
         ran = run_module("benchmark", entry_point=True, env=env)
         assert ran.returncode == 0, ran.stderr
         output = ran.stdout

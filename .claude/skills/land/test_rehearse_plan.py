@@ -19,18 +19,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 import rehearse_plan
 
 
-def test_full_checks_abort_without_the_riko_execution_environment(
-    tmp_path, monkeypatch
-):
-    (tmp_path / "pyproject.toml").write_text(
-        '[tool.pyright]\nexecutionEnvironments = [{ root = "." }]\n'
-    )
-    monkeypatch.setattr(rehearse_plan, "run_checks", lambda *_: "ok")
-
-    with pytest.raises(SystemExit, match=r"lacks the .* pyright execution environment"):
-        rehearse_plan.check(tmp_path, full=True)
-
-
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
     """Starts a ``topic`` branch off ``next`` and returns ``(git, commit)``."""

@@ -245,6 +245,9 @@ venv = "riko"
 pythonPlatform = "Linux"
 reportUnnecessaryCast = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
+reportMissingTypeArgument = "error"
+reportUnknownParameterType = "error"
+reportMissingParameterType = "error"
 exclude = [
     "**/pycache",
     ".cache",
@@ -257,7 +260,8 @@ exclude = [
     "dist/*",
 ]
 executionEnvironments = [
-    { root = "riko", reportMissingTypeArgument = "error", reportUnknownParameterType = "error", reportMissingParameterType = "error" },
+    { root = "tests", extraPaths = ["."], reportMissingTypeArgument = "none", reportUnknownParameterType = "none", reportMissingParameterType = "none" },
+    { root = "examples", extraPaths = ["."], reportMissingTypeArgument = "none", reportUnknownParameterType = "none", reportMissingParameterType = "none" },
     { root = "." },
 ]
 

@@ -76,8 +76,6 @@ RUFF_RULES = "F821,F401,F811"
 IMPORT_SMOKE = "import riko, riko.cli.manage"
 MANAGE = ("-m", "riko.cli.manage")
 SKILLS = ".claude/skills/"
-RIKO_ENV = '{ root = "riko", '
-RIKO_ENV_IN_PLACE = '{ root = "riko", extraPaths = ["."], '
 TAR = shutil.which("tar") or "tar"
 PBCOPY = shutil.which("pbcopy")
 
@@ -235,15 +233,6 @@ def check(root: Path, *, full: bool, skills: bool = False) -> str:
             ("verify-types", (py, *MANAGE, "lint", "--verify-types")),
         ]
         results.append(run_checks(root, lints))
-        config = root / "pyproject.toml"
-        text = config.read_text()
-
-        if RIKO_ENV not in text:
-            sys.exit(
-                f"{config} lacks the {RIKO_ENV.strip()} pyright execution environment"
-            )
-
-        config.write_text(text.replace(RIKO_ENV, RIKO_ENV_IN_PLACE))
         pyright = str(Path(py).parent / "pyright")
         results.append(
             run_checks(root, [("pyright", (pyright, "-p", "pyproject.toml"))])

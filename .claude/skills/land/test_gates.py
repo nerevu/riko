@@ -11,6 +11,7 @@ from __future__ import annotations
 import fcntl
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,14 @@ def test_tree_id_ignores_staging_and_commits_but_not_edits(repo, tmp_path):
 
     assert untracked != before
     assert untracked == staged == committed == gates.get_tree_id()
+
+
+def test_tree_id_removes_its_temporary_index(repo, tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    gates.get_tree_id()
+    assert list(scratch.iterdir()) == []
 
 
 def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):

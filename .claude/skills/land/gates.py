@@ -100,16 +100,9 @@ def get_tree_id(gate: str | None = None) -> str:
     The id leaves out what ``gate`` never reads under ``.claude/``: nothing for
     tidy, the markdown for the Ruff gates, the whole folder for the rest.
     """
-    index = Path(tempfile.mkdtemp(prefix="gates-")) / "index"
     real_index = Path(
         _git("rev-parse", "--path-format=absolute", "--git-path", "index")
     )
-
-    if real_index.exists():
-        shutil.copy2(real_index, index)
-
-    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
-    _git("add", "-A", env=env)
 
     if gate in RUFF_GATES:
         unread: tuple[str, ...] = TIDY_ONLY
@@ -118,10 +111,23 @@ def get_tree_id(gate: str | None = None) -> str:
     else:
         unread = UNGATED
 
-    if unread:
-        _git("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env)
+    with tempfile.TemporaryDirectory(prefix="gates-") as tmp:
+        index = Path(tmp) / "index"
 
-    return _git("write-tree", env=env)
+        if real_index.exists():
+            shutil.copy2(real_index, index)
+
+        env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        _git("add", "-A", env=env)
+
+        if unread:
+            _git(
+                "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env
+            )
+
+        tree = _git("write-tree", env=env)
+
+    return tree
 
 
 def load_markers(path: Path) -> dict[str, dict[str, str]]:

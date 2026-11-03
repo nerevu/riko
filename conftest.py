@@ -24,7 +24,7 @@ WORKFLOW_DIR = TESTS_DIR / "workflows"
 RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     # Subprocesses (console scripts, examples) would otherwise import riko through the
     # venv's editable install, which points at whichever checkout installed it.
     paths = [str(ROOT_DIR), os.environ.get("PYTHONPATH")]
@@ -61,7 +61,7 @@ def riko_level():
     getLogger(LOGGER_NAME).setLevel(level)
 
 
-def _skip_coroutine_runs(item) -> None:
+def _skip_coroutine_runs(item: pytest.DoctestItem) -> None:
     # Without the async backend `run` is a no-op that prints nothing, so skip just
     # those examples and keep the rest of the doctest (often a whole .rst file).
     for example in item.dtest.examples:
@@ -69,7 +69,7 @@ def _skip_coroutine_runs(item) -> None:
             example.options[doctest.SKIP] = True
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     skip_async = pytest.mark.skip(reason="async support not available")
     skip_lxml = pytest.mark.skip(reason="lxml not installed")
 
@@ -89,7 +89,7 @@ def pytest_collection_modifyitems(items):
         if finance_missing and "finance" in keywords:
             item.add_marker(skip_finance)
 
-        if not hasattr(item, "dtest"):
+        if not isinstance(item, pytest.DoctestItem):
             continue
 
         name = item.name.lower()
