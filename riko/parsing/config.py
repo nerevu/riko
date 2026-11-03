@@ -182,26 +182,10 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
         True
         >>> get_skip(item)
         False
-        >>> get_skip(item, {"field": "content"})
-        False
-        >>> get_skip(item, {"field": "content", "text": None})
-        False
-        >>> get_skip(item, {"field": "content", "text": 0})
-        False
-        >>> get_skip(item, {"field": "content", "text": ""})
-        True
-        >>> get_skip({}, {"field": "content"})
-        True
-        >>> bool(get_skip(item, {"field": "content", "include": True}))
-        True
         >>> get_skip(item, {"field": "content", "text": "some"})
         True
         >>> get_skip(item, {"field": "content", "text": "some", "include": True})
         False
-        >>> get_skip(item, {"field": "content", "text": "other"})
-        False
-        >>> get_skip(item, {"field": "content", "text": "other", "include": True})
-        True
 
     """
     item = item or {}

@@ -125,8 +125,10 @@ test folders themselves — this gameplan does not restate them:
   are named for stable concepts, never mirrored from `riko/` package paths, so package refactors
   move imports, not tests.
 - Shared helpers live in `tests/_*.py` (`_lifecycle`, `_execution`, `_workflows`, `_loopback`,
-  `_resources`, `_timeouts`; the last two load as pytest plugins from the root `conftest.py`); no
-  helper is defined in two test files.
+  `_hash_seeds`, `_resources`, `_timeouts`; the last three load as pytest plugins from the root
+  `conftest.py`); no helper is defined in two test files. A result that must not depend on
+  `PYTHONHASHSEED` joins the `_hash_seeds` probe script and asserts its slice of the
+  session-scoped `hash_seed_probes` fixture rather than launching interpreters of its own.
 
 Enforcement:
 
@@ -206,6 +208,14 @@ function or a shielded cleanup, same-subject tests whose bodies differ in more t
 test names that keep a retired verb (every flagged name still named a live function); the audit
 agents look for those by hand. A sync-only run needs no local plugin: the CI `optional=false`
 legs install no extras, and `manage test --tox -e py312` reproduces that locally.
+
+Seed close is owned twice on purpose (ruling amended 2026-11-03, superseding the 2026-10-29 "retire
+together" line): `tests/public/test_pipeline.py::TestAsyncClose::test_early_close_closes_the_seed`
+owns an async root closing each `CLOSING_SEEDS` shape, and the plan-level pair
+`TestPlanRun::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanRun::test_arun_closes_an_unfinished_seed_on_exit`
+in `tests/internal/test_plan_runs.py` keeps only what `Pipeline` never reaches: a sync-only root
+reading the seed on a worker thread, a close on execution exit without `aclose`, and one close
+across two triggers. An async-root row there would duplicate `TestAsyncClose`.
 
 ### Import-linter coverage gap
 

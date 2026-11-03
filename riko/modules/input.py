@@ -223,41 +223,11 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
     Examples:
 
-        >>> import datetime
-        >>> from datetime import datetime as dt, UTC
-        >>>
         >>> conf = {"prompt": "How old are you?", "type": "int"}
         >>> next(pipe(conf=conf, inputs={"content": "30"}))
         30
         >>> next(pipe(conf=conf, inputs={"content": "30"}, emit=False))
         {'content': 30}
-        >>> now = dt.now(UTC)
-        >>> conf = {"prompt": "When were you born?", "type": "date"}
-        >>> next(pipe(conf=conf, inputs={"content": "5/4/82"})).year
-        1982
-        >>> stream = pipe(conf={"type": "date"}, inputs={"content": "tomorrow"})
-        >>> next(stream) > now.date()
-        True
-        >>> matrix = [
-        ...     ("float", "1", 1.0),
-        ...     ("bool", "true", True),
-        ...     ("text", "hello", "hello")]
-        >>>
-        >>> for t, c, r in matrix:
-        ...     kwargs = {"conf": {"type": t}, "inputs": {"content": c}}
-        ...     next(pipe(**kwargs))
-        1.0
-        True
-        'hello'
-        >>> inputs = {"content": "google.com"}
-        >>> next(pipe(conf={"type": "url"}, inputs=inputs))
-        'http://google.com'
-        >>> inputs = {"content": "palo alto, ca"}
-        >>> result = next(pipe(conf={"type": "location"}, inputs=inputs))
-        >>> sorted(result)[:5]
-        ['admin1', 'admin2', 'admin3', 'city', 'country']
-        >>> result["city"]
-        'city'
 
     """
     return parser(*args, **kwargs)

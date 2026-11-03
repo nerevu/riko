@@ -1150,6 +1150,7 @@ class TestSessionLifecycle:
         session = self._session(tmp_path)
         session.close()
         session.close()
+        assert session._state is _SessionState.CLOSED
 
     def test_close_never_commits(self, tmp_path):
         path = tmp_path / "out.json"

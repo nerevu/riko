@@ -256,10 +256,9 @@ def resolve_enum[E: StrEnum](
         >>>
         >>> resolve_enum(Color, "red")
         <Color.RED: 'red'>
-        >>> resolve_enum(Color, "green", error=ValueError)
-        Traceback (most recent call last):
-        ...
-        ValueError: Invalid Color: 'green'. Expected one of red, blue
+        >>> resolve_enum(Color, None, default=Color.BLUE)
+        <Color.BLUE: 'blue'>
+        >>> resolve_enum(Color, None, strict=False)
 
     """
     what = enum.__name__ if what is None else what

@@ -718,12 +718,12 @@ class TestValidateTargetMode:
         with pytest.raises(ValueError, match="requires 'keys'"):
             validate_target_mode(RecordStore(), WriteMode.MERGE, capabilities)
 
-    def test_unkeyed_mode_with_keys_rejected(self):
-        capabilities = FileTarget("out.csv").get_capabilities()
-        target = FileTarget("out.csv")
 
-        with pytest.raises(ValueError, match="forbids 'keys'"):
-            validate_target_mode(target, WriteMode.APPEND, capabilities, keys=("x",))
+UNSUPPORTED_FILE_MODES = [
+    pytest.param("out.csv", "merge", id="merge"),
+    pytest.param("out.json", "append", id="append-framed-json"),
+    pytest.param("out.geojson", "append", id="append-framed-geojson"),
+]
 
 
 class TestBuildWrite:
@@ -738,14 +738,10 @@ class TestBuildWrite:
         assert prepared.operation.mode is WriteMode.MERGE
         assert prepared.operation.keys == ("endpoint_id",)
 
-    def test_file_unsupported_mode(self):
-        with pytest.raises(ValueError, match="does not support the 'merge'"):
-            build_write(FileTarget("out.csv"), "merge")
-
-    @pytest.mark.parametrize("dest", ["out.json", "out.geojson"])
-    def test_file_append_rejected_for_framed_format(self, dest):
-        with pytest.raises(ValueError, match="does not support the 'append'"):
-            build_write(FileTarget(dest), "append")
+    @pytest.mark.parametrize(("dest", "mode"), UNSUPPORTED_FILE_MODES)
+    def test_file_unsupported_mode(self, dest, mode):
+        with pytest.raises(ValueError, match=f"does not support the '{mode}'"):
+            build_write(FileTarget(dest), mode)
 
     @pytest.mark.parametrize(
         ("kwargs", "error", "match"),

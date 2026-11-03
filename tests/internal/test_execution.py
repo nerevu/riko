@@ -31,6 +31,7 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
+from riko.execution._execution import _NullEventSink
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
@@ -227,6 +228,7 @@ class TestSyncExecution:
     def test_sync_default_event_sink_is_noop(self) -> None:
         with SyncExecution() as execution:
             execution.emit("ignored")
+            assert isinstance(execution.events, _NullEventSink)
 
     def test_sync_execution_dispatches_to_event_sink(self) -> None:
         sink = RecordingSink()
@@ -429,6 +431,7 @@ class TestAsyncExecution:
     async def test_async_default_event_sink_is_noop(self) -> None:
         async with AsyncExecution() as execution:
             execution.emit("ignored")
+            assert isinstance(execution.events, _NullEventSink)
 
     @async_test
     async def test_async_execution_dispatches_to_event_sink(self) -> None:
@@ -1028,6 +1031,12 @@ class TestResourceAcquisition:
             execution.acquire(build())
 
 
+HTTP_CLIENTS = [
+    pytest.param(_sync_http_client, b"<item>", id="sync-client"),
+    pytest.param(_async_http_client, "<item>", id="async-client"),
+]
+
+
 class TestAsyncResourceAcquisition:
     @pytest.mark.parametrize("build", AWAITABLE_CLEANUPS)
     @async_test
@@ -1246,31 +1255,19 @@ class TestAsyncResourceAcquisition:
         assert client.closed is True
 
     @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("client", "marker"), HTTP_CLIENTS)
     @async_test
-    async def test_sync_external_http_client_under_async_execution(self) -> None:
+    async def test_external_http_client_under_async_execution(
+        self, client, marker
+    ) -> None:
         events: list[str] = []
 
         with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
             async with AsyncExecution() as execution:
                 response = await execution.aacquire(
-                    Resource.from_lifecycle(_sync_http_client(url, events))
+                    Resource.from_lifecycle(client(url, events))
                 )
-                assert b"<item>" in response.read()
-                assert events == []
-
-            assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    @async_test
-    async def test_async_external_http_client_under_async_execution(self) -> None:
-        events: list[str] = []
-
-        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-            async with AsyncExecution() as execution:
-                stream = await execution.aacquire(
-                    Resource.from_lifecycle(_async_http_client(url, events))
-                )
-                assert "<item>" in stream.read()
+                assert marker in response.read()
                 assert events == []
 
             assert events == ["closed"]

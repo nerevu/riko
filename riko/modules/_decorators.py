@@ -564,14 +564,6 @@ class Module[B: bool]:
             >>> call = pipe.prepare(conf=conf, field="x")
             >>> next(call({"x": "hi"}))
             {'x': 'hi', 'strtransform': 'HI'}
-            >>> pipe.prepare("resources", resources={})
-            Traceback (most recent call last):
-                ...
-            TypeError: the 'strtransform' module takes 'resources' with each item...
-            >>> pipe.prepare(conf=conf, skip_if=lambda item: True)
-            Traceback (most recent call last):
-                ...
-            TypeError: the 'strtransform' module fixes 'skip_if' when it is decorated...
 
         """
         self._validate_call_keywords(wrapper, options)

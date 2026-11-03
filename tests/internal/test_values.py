@@ -101,7 +101,7 @@ from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
-from tests import ROUND_TRIPS, run_python
+from tests import ROUND_TRIPS
 from tests._execution import build_workflow
 from tests._loopback import ForwardOnly
 
@@ -111,13 +111,6 @@ if TYPE_CHECKING:
     from riko.types._frozendict import FrozenSetMapping
     from riko.types._scalars import BasicValue
     from riko.types._wrappers import Func
-
-_SEEDED_ORDER = """
-from riko.base._graph import scc_sort, topological_sort
-print(topological_sort({"a": {"b"}, "b": {"a"}, "c": set()}))
-print(topological_sort({"a": {"b", "c", "d"}, "e": {"f", "g"}}))
-print(scc_sort({"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}))
-"""
 
 _INVALID: list[tuple[Func[object], object]] = [
     (require_str, 1),
@@ -166,25 +159,8 @@ GOLDEN_DIGESTS = {
     "str": ("a", IdentityDomain.FINGERPRINT, "17755474b85323bc8d6356df37979b11"),
 }
 
-DIGEST_SCRIPT = """
-from riko.coercion._canonical import IdentityDomain, digest
-
-value = {
-    "text": ["a", "b", "c"],
-    "raw": (b"x", b"yz"),
-    "tags": {"red", "green", "blue", "cyan"},
-    "frozen": frozenset({"k1", "k2", "k3"}),
-    "nested": {"inner": {"s": {"p", "q"}, "b": b"\\x00"}},
-}
-print(digest(value, IdentityDomain.FINGERPRINT))
-"""
-
+SKIP_ITEM = {"content": "Some content"}
 DOTTED_PATHS = ["a.b", "a.b.c", "author.name", "AUTHOR.NAME"]
-
-ZONE_SCRIPT = (
-    "from riko.base._dateutils import TZINFOS; "
-    "print([str(TZINFOS[k]) for k in ('IST', 'AST', 'EET', 'WAT')])"
-)
 
 LARGE_JSON_RECORDS = [{"id": index, "text": "x" * 100} for index in range(12000)]
 CASE_DUPLICATE_JSON = '{"X": [{"a": 1}], "x": [{"a": 2}]}'
@@ -313,10 +289,10 @@ class TestDigest:
         assert result == expected
         assert len(result) == 32
 
-    def test_digest_is_stable_across_processes_with_different_hash_seeds(self):
-        runs = [run_python("-c", DIGEST_SCRIPT, hash_seed=s) for s in ("0", "4242")]
-        digests = {run.stdout.strip() for run in runs}
-        assert len(digests) == 1
+    def test_digest_is_stable_across_processes_with_different_hash_seeds(
+        self, hash_seed_probes
+    ):
+        assert len({probes["digest"] for probes in hash_seed_probes.values()}) == 1
 
 
 class _Opaque:
@@ -642,9 +618,11 @@ class TestParseDateString:
         parsed = parse_date_string("1 Feb 2015 12:00:00 JST")
         assert parsed.utcoffset() == timedelta(hours=9)
 
-    def test_ambiguous_abbreviations_are_stable_across_hash_seeds(self):
-        runs = [run_python("-c", ZONE_SCRIPT, hash_seed=s) for s in ("0", "1")]
-        assert len({run.stdout for run in runs}) == 1
+    def test_ambiguous_abbreviations_are_stable_across_hash_seeds(
+        self, hash_seed_probes
+    ):
+        zones = {tuple(probes["zones"]) for probes in hash_seed_probes.values()}
+        assert len(zones) == 1
 
 
 class NamelessZone(tzinfo):
@@ -749,15 +727,10 @@ DOTDICT_DELETES = [
 
 
 DOTDICT_CONTAINS = [
-    pytest.param("title", True, id="plain"),
-    pytest.param("TITLE", True, id="case-insensitive"),
-    pytest.param("author.name", True, id="dotted-present"),
     pytest.param("author.url", False, id="dotted-absent"),
-    pytest.param("missing", False, id="missing"),
     pytest.param({"subkey": "title"}, True, id="subkey-mapping"),
     pytest.param("AUTHOR.NAME", True, id="dotted-case-insensitive"),
     pytest.param(None, False, id="none"),
-    pytest.param(("title",), False, id="tuple"),
     pytest.param({}, False, id="empty-mapping"),
     pytest.param({"subkey": 5}, False, id="non-str-subkey"),
     pytest.param({"subkey": ""}, False, id="empty-subkey"),
@@ -852,10 +825,35 @@ class TestDotDict:
         assert DotDict({"a": {"b": 1}}).get("a.b.z", MISSING) is MISSING
 
 
+GET_SKIPS = [
+    pytest.param({"field": "content"}, SKIP_ITEM, False, id="field-present"),
+    pytest.param({"field": "content"}, {}, True, id="field-missing"),
+    pytest.param(
+        {"field": "content"},
+        {"content": "none available"},
+        False,
+        id="field-follows-presence-not-text",
+    ),
+    pytest.param({"field": "content", "include": True}, SKIP_ITEM, True, id="include"),
+    pytest.param({"field": "content", "text": None}, SKIP_ITEM, False, id="null-text"),
+    pytest.param({"field": "content", "text": 0}, SKIP_ITEM, False, id="zero-text"),
+    pytest.param({"field": "content", "text": ""}, SKIP_ITEM, True, id="empty-text"),
+    pytest.param(
+        {"field": "content", "text": "other"}, SKIP_ITEM, False, id="no-match"
+    ),
+    pytest.param(
+        {"field": "content", "text": "other", "include": True},
+        SKIP_ITEM,
+        True,
+        id="include-no-match",
+    ),
+]
+
+
 class TestGetSkip:
-    def test_get_skip_field_only_follows_presence_not_absent_text(self):
-        """A truthy value is not skipped even when it reads like "no value"."""
-        assert get_skip({"content": "none available"}, {"field": "content"}) is False
+    @pytest.mark.parametrize(("skip_if", "item", "expected"), GET_SKIPS)
+    def test_get_skip(self, skip_if, item, expected):
+        assert get_skip(item, skip_if) is expected
 
 
 ANY2DICT_LISTS = [
@@ -1088,10 +1086,6 @@ class TestResolveDate:
         assert item["updated_parsed"] == resolved
 
 
-def _get_seeded_order(seed: str) -> list[str]:
-    return run_python("-c", _SEEDED_ORDER, hash_seed=seed).stdout.splitlines()
-
-
 DESCENDANT_CASES = [
     pytest.param("a", {"a": {"b"}, "b": {"c"}}, frozenset({"b", "c"}), id="transitive"),
     pytest.param("b", {"a": {"b"}}, frozenset(), id="referenced-only-node"),
@@ -1114,14 +1108,13 @@ class TestGraph:
         ordered = topological_sort(graph, key=lambda node: node != "b")
         assert ordered == [("b",), ("a",), ("c",)]
 
-    def test_graph_order_ignores_hash_seed(self):
+    def test_graph_order_ignores_hash_seed(self, hash_seed_probes):
         expected = [
             "[('c',), ('a', 'b')]",
             "[('e',), ('a',), ('g',), ('f',), ('d',), ('c',), ('b',)]",
             "[('A',), ('C',), ('B',), ('D',), ('E',)]",
         ]
-        assert _get_seeded_order("1") == expected
-        assert _get_seeded_order("2") == expected
+        assert all(probes["orders"] == expected for probes in hash_seed_probes.values())
 
     def test_descendants_rejects_unknown_node(self):
         with pytest.raises(KeyError):

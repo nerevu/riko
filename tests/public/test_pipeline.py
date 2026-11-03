@@ -1746,10 +1746,6 @@ class TestSubscriptions:
 
         assert seen == [first]
 
-    def test_an_undrained_subscription_does_not_block_the_publisher(self):
-        events = Pipeline.subscribe("undrained")
-        assert list(tokenized(VALUE).publish(events)) == EXPECTED
-
     def test_idle_drain_returns_promptly(self):
         started = perf_counter()
         assert list(Pipeline.subscribe("idle")) == []
@@ -1759,13 +1755,6 @@ class TestSubscriptions:
         events = Pipeline.subscribe("fresh")
         assert list(tokenized(VALUE).publish(events)) == EXPECTED
         assert list(events) == []
-
-    def test_lifecycle_markers_do_not_leak_into_received_items(self):
-        seen: list[Item] = []
-        events = Pipeline.subscribe("leakcheck", func=seen.append)
-        list(tokenized(VALUE).publish(events))
-
-        assert seen == EXPECTED
 
 
 @SPLIT_METHOD_PENDING

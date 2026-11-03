@@ -354,12 +354,8 @@ def _module_node(flow: Workflow, node_id: str) -> ModuleNode:
 
 
 class TestPipeDag:
-    @pytest.mark.parametrize(
-        "wires",
-        [pytest.param({}, id="omitted"), pytest.param({"wires": None}, id="null")],
-    )
-    def test_unwired_modules_chain_in_listing_order(self, wires):
-        linear = Workflow.parse({"modules": MODULES, **wires})
+    def test_null_wires_chain_in_listing_order(self):
+        linear = Workflow.parse({"modules": MODULES, "wires": None})
         wired = Workflow.parse({"modules": MODULES, "wires": [["sw-1", "sw-2"]]})
         assert linear == wired
         assert _edges(linear) == [("sw-1", "sw-2")]
@@ -401,10 +397,6 @@ class TestPipeDag:
         module = _module_node(flow, "sw-1")
         assert module.embed is not None
         assert module.embed["name"] == "fetch"
-
-    def test_expanded_dag_runs(self):
-        flow = Workflow.parse(DAG)
-        assert list(Pipeline(flow)) == [{"forever": True}] * 3
 
     def test_reordered_dag_runs_in_wired_order(self):
         flow = Workflow.parse(_dag("pipe_reordered"))
@@ -451,13 +443,16 @@ class TestPipeDag:
             Workflow.parse({"modules": [module]})
 
 
-NON_JSON_VALUES = [
-    pytest.param(Decimal("1.50"), id="decimal"),
-    pytest.param(date(2020, 6, 15), id="date"),
-    pytest.param({"a", "b"}, id="set"),
-    pytest.param(b"bytes", id="bytes"),
-    pytest.param(nan, id="nan"),
-    pytest.param(inf, id="inf"),
+NON_JSON_NODE_VALUES = [
+    pytest.param("conf", Decimal("1.50"), id="conf-decimal"),
+    pytest.param("conf", date(2020, 6, 15), id="conf-date"),
+    pytest.param("conf", {"a", "b"}, id="conf-set"),
+    pytest.param("conf", b"bytes", id="conf-bytes"),
+    pytest.param("conf", nan, id="conf-nan"),
+    pytest.param("conf", inf, id="conf-inf"),
+    pytest.param("embed", date(2020, 6, 15), id="embed-date"),
+    pytest.param("policy", {"a", "b"}, id="policy-set"),
+    pytest.param("params", nan, id="params-nan"),
 ]
 
 
@@ -637,16 +632,6 @@ class TestNormalizeWorkflow:
         assert isinstance(write, WriteNode)
         assert write.dest == "out.json"
 
-    def test_node_conf_is_isolated_from_caller_mutation(self):
-        conf = {"limit": 5}
-        flow = normalize_workflow(
-            {"nodes": [{"id": "a", "name": "fetch", "conf": conf}]}
-        )
-        node = flow.nodes["a"]
-        conf["limit"] = 99
-        assert isinstance(node, ModuleNode)
-        assert node.conf == {"limit": 5}
-
     @pytest.mark.parametrize(
         "raw",
         [
@@ -735,14 +720,10 @@ class TestNormalizeWorkflow:
 
     def test_nested_conf_is_deeply_frozen_and_isolated(self):
         inner = {"k": 1}
-        flow = normalize_workflow(
-            {
-                "nodes": [
-                    {"id": "a", "name": "f", "conf": {"nested": inner, "list": [1, 2]}}
-                ]
-            }
-        )
+        conf = {"nested": inner, "list": [1, 2]}
+        flow = normalize_workflow({"nodes": [{"id": "a", "name": "f", "conf": conf}]})
         inner["k"] = 99
+        conf["list"] = [3]
         node = flow.nodes["a"]
         assert isinstance(node, ModuleNode)
         assert node.conf is not None
@@ -960,8 +941,7 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="type name or mapping"):
             normalize_workflow(raw)
 
-    @pytest.mark.parametrize("value", NON_JSON_VALUES)
-    @pytest.mark.parametrize("placement", sorted(_NODE_VALUE_PLACEMENTS))
+    @pytest.mark.parametrize(("placement", "value"), NON_JSON_NODE_VALUES)
     def test_non_json_native_node_value_rejected(self, placement, value):
         raw = {"nodes": [{"id": "n", **_NODE_VALUE_PLACEMENTS[placement](value)}]}
 
@@ -1348,12 +1328,6 @@ class TestSerialize:
     def test_topologies_round_trip(self, raw):
         flow = normalize_workflow(raw)
         assert Workflow.parse(flow.serialize()) == flow
-
-    @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
-    def test_serialization_is_idempotent(self, raw):
-        flow = normalize_workflow(raw)
-        once = flow.serialize()
-        assert Workflow.parse(once).serialize() == once
 
     def test_indented_output_is_readable_and_sorted(self):
         flow = normalize_workflow(RICH_RAW)

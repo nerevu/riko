@@ -72,7 +72,7 @@ from riko.types.modules import (
     SortConfRule,
     XpathFetchPageConf,
 )
-from tests import async_test, run_python
+from tests import async_test
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
 
@@ -561,17 +561,10 @@ SLUGIFY_CASES = [
 ]
 
 
-HASH_PROBE = (
-    "from riko.modules.hash import pipe; "
-    "print(next(pipe({'content': 'hello world'}))['hash'])"
-)
-
-
 class TestHash:
-    def test_hash_is_the_same_under_every_hash_seed(self):
+    def test_hash_is_the_same_under_every_hash_seed(self, hash_seed_probes):
         """Two interpreters with different hash seeds produce the same hash."""
-        outputs = {run_python("-c", HASH_PROBE, hash_seed=seed).stdout for seed in "12"}
-        assert outputs == {"913045020\n"}
+        assert {probes["hash"] for probes in hash_seed_probes.values()} == {913045020}
 
 
 class TestSlugify:

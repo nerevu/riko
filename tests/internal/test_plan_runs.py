@@ -182,6 +182,11 @@ SEEDS = [
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
     pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
     pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
+    pytest.param(_DualSeed, [{"x": 2}], id="dual-iterable"),
+]
+ASYNC_SEEDS = [
+    pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
+    pytest.param(_DualSeed, [{"x": 200}], id="dual-iterable"),
 ]
 
 
@@ -193,12 +198,11 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
         closed.append("closed")
 
 
-# The root node reads the seed natively or on a worker thread, and the caller may close
-# the output stream before the execution exits.
+# A sync root reads the seed on a worker thread, and the caller may close the output
+# stream before the execution exits.
 SEED_READERS = [
-    pytest.param("adouble", False, id="async-root"),
-    pytest.param("double", False, id="sync-root"),
-    pytest.param("double", True, id="sync-root-closed-early"),
+    pytest.param(False, id="sync-root"),
+    pytest.param(True, id="sync-root-closed-early"),
 ]
 CLOSING_SEEDS = [
     pytest.param(gen_closing_seed, id="generator"),
@@ -811,12 +815,6 @@ class TestPlanRun:
         with SyncExecution() as execution:
             assert list(execution.run(plan, seed=make_seed())) == expected
 
-    def test_run_reads_a_dual_iterable_seed_synchronously(self) -> None:
-        plan = _doubler_plan("double")
-
-        with SyncExecution() as execution:
-            assert list(execution.run(plan, seed=_DualSeed())) == [{"x": 2}]
-
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     def test_run_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
         closed: list[str] = []
@@ -1227,30 +1225,25 @@ class TestAsyncPlanRun:
 
         assert events == ["open", "close"]
 
+    @pytest.mark.parametrize(("make_seed", "expected"), ASYNC_SEEDS)
     @async_test
-    async def test_arun_seeds_the_root_from_one_item(self) -> None:
+    async def test_arun_seeds_the_root_from_each_seed_shape(
+        self, make_seed, expected
+    ) -> None:
         plan = _doubler_plan("adouble")
 
         async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, seed={"x": 5})
-            assert [item async for item in stream] == [{"x": 10}]
-
-    @async_test
-    async def test_arun_reads_a_dual_iterable_seed_asynchronously(self) -> None:
-        plan = _doubler_plan("adouble")
-
-        async with AsyncExecution() as execution:
-            stream = await execution.arun(plan, seed=_DualSeed())
-            assert [item async for item in stream] == [{"x": 200}]
+            stream = await execution.arun(plan, seed=make_seed())
+            assert [item async for item in stream] == expected
 
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
-    @pytest.mark.parametrize(("name", "early"), SEED_READERS)
+    @pytest.mark.parametrize("early", SEED_READERS)
     @async_test
     async def test_arun_closes_an_unfinished_seed_on_exit(
-        self, make_seed, name, early
+        self, make_seed, early
     ) -> None:
         closed: list[str] = []
-        plan = _doubler_plan(name)
+        plan = _doubler_plan("double")
 
         async with AsyncExecution() as execution:
             run = await execution.arun(plan, seed=make_seed(closed))

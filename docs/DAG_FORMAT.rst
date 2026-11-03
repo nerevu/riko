@@ -170,8 +170,8 @@ Expansion rules (``Workflow.parse``)
     Endpoint(node='sw-2', port='out')
     >>> sorted({node.name for node in flow.nodes.values()})
     ['forever', 'truncate']
-    >>> len(list(Pipeline(flow)))
-    3
+    >>> list(Pipeline(flow))
+    [{'forever': True}, {'forever': True}, {'forever': True}]
 
 The result is an ordinary ``Workflow``: list the modules it uses from its ``nodes``, run
 it with ``Pipeline``, serialize it to a ``WorkflowDocument`` with

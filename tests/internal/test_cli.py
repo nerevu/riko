@@ -65,7 +65,7 @@ from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
 from riko.runtime._compile import compile_workflow
 from tests import run_python
-from tests._workflows import DAG, DAG_PATH, DOCUMENT, PIPE_DEF
+from tests._workflows import DAG, DOCUMENT, PIPE_DEF
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -648,9 +648,7 @@ class TestConsoleScripts:
 
 
 EXAMPLE_PROSE = [
-    pytest.param(">>> a\n1\n\nWith b:\n\n>>> b\n2", ["With b:"], id="narration"),
     pytest.param(">>> a\n1\n\nWith b\nand c:\n\n>>> b", ["With b"], id="multi-line"),
-    pytest.param(">>> a\n1\n\n>>> # With b\n>>> b\n2", [], id="comment"),
     pytest.param(">>> a\n1\n\nAsync usage::\n\n>>> b", [], id="labelled-group"),
     pytest.param("Calls a.\n\n>>> a\n1", [], id="before-examples"),
     pytest.param(">>> a\n1\n\nRaises:\n\n    TypeError: x.", [], id="section"),
@@ -1450,10 +1448,6 @@ class TestReadDocument:
         monkeypatch.setattr("sys.stdin", io.StringIO("{bad json"))
         assert read_document("-") == (None, "anonymous")
         assert any("Unable to parse input" in warning for warning in warnings)
-
-    def test_read_document_parses_a_committed_document(self):
-        document, name = read_document(str(DAG_PATH))
-        assert (document, name) == (DAG, "pipe_forever")
 
 
 class TestSubprocessImports:

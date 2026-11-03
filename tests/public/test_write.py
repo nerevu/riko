@@ -24,7 +24,7 @@ from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
-from tests import async_test, is_installed, run_python
+from tests import async_test, is_installed
 from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
@@ -33,13 +33,6 @@ if TYPE_CHECKING:
 
     from riko.types._streams import Item
 
-
-_SEEDED_SET_WRITE = """
-import sys
-from riko.modules.write import pipe
-items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
-list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
-"""
 
 WRITE_NODE_PENDING = pytest.mark.xfail(
     strict=True, raises=InvalidPipelineError, reason="write nodes do not execute yet"
@@ -156,14 +149,10 @@ class TestWrite:
         list(pipe(items, conf=WriteConf({"dest": path, "fmt": fmt})))
         assert path.read_bytes().strip() == expected
 
-    def test_set_values_are_written_sorted_under_any_hash_seed(self, tmp_path):
-        def write(seed: str) -> bytes:
-            path = tmp_path / f"{seed}.json"
-            run_python("-c", _SEEDED_SET_WRITE, str(path), "json", hash_seed=seed)
-            return path.read_bytes()
-
-        expected = b'"tags": ["alpha", "beta", "delta", "gamma"]'
-        assert all(expected in write(seed) for seed in ("1", "2"))
+    def test_set_values_are_written_sorted_under_any_hash_seed(self, hash_seed_probes):
+        expected = '"tags": ["alpha", "beta", "delta", "gamma"]'
+        written = [probes["set_write"] for probes in hash_seed_probes.values()]
+        assert all(expected in text for text in written)
 
     @pytest.mark.parametrize("conf", SKIPPED_TARGETS)
     def test_sync_bad_target_skips_but_passes_through(self, tmp_path, conf):

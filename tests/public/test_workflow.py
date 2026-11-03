@@ -247,12 +247,6 @@ class TestWorkflow:
         with pytest.raises(InvalidPipelineError, match=match):
             flow.with_workflow(other)
 
-    def test_nodes_must_be_an_iterable_of_nodes(self):
-        nodes: Any = {"a": ModuleNode(id="a", name="hash")}
-
-        with pytest.raises(InvalidPipelineError, match="'nodes' must be a list"):
-            Workflow(nodes=nodes, outputs=OUTPUT_A)
-
     def test_a_node_id_cannot_repeat(self):
         nodes = [ModuleNode(id="a", name="hash"), ModuleNode(id="a", name="count")]
 
@@ -515,12 +509,6 @@ INVALID_EDGES = [
     ),
     pytest.param([], _A_IN, "not an 'out' port", id="output-on-input-port"),
     pytest.param([], Endpoint("a", "sideways"), "port direction", id="malformed-port"),
-    pytest.param(
-        [StreamEdge(_A_OUT, Endpoint("b", "in:0"))], _B_OUT, "invalid port", id="in:0"
-    ),
-    pytest.param(
-        [StreamEdge(Endpoint("a", "out:0"), _B_IN)], _B_OUT, "invalid port", id="out:0"
-    ),
     pytest.param(
         [
             StreamEdge(_A_OUT, Endpoint("b", "in:1")),

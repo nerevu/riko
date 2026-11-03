@@ -610,6 +610,12 @@ def cast_value[T](
         12
         >>> cast_value(None, 'url')
         ''
+        >>> cast_value('google.com', 'url')
+        'http://google.com'
+        >>> cast_value('5/4/82', 'date').year
+        1982
+        >>> cast_value('palo alto, ca', 'location')['city']
+        'city'
 
     """
     cast_type = resolve_cast_type(type_)
