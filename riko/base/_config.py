@@ -112,6 +112,7 @@ class Settings:
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
     benchmark_delay: float = 0.1
+    benchmark_workers: int = 0
 
 
 def _env_int(
@@ -222,6 +223,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         ),
         benchmark_delay=_env_float(
             source, "RIKO_BENCHMARK_DELAY", defaults.benchmark_delay
+        ),
+        benchmark_workers=_env_int(
+            source, "RIKO_BENCHMARK_WORKERS", defaults.benchmark_workers, minimum=0
         ),
     )
 

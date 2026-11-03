@@ -435,7 +435,10 @@ module-level tables. The speed slice runs the CLI commands in-process (`run_comm
 script, one outside-checkout row, two `python -m` rows that run each command's `__main__` block,
 and the example scripts that register modules. It also cut the
 `test_demo` matrix to a four-row diagonal, set the benchmark's simulated I/O wait from
-`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations.
+`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations. `test_benchmark` also caps
+the benchmark's worker pools at two through `RIKO_BENCHMARK_WORKERS` (uncapped by default, so
+benchmark numbers stay comparable across commits): ten spawned processes each re-importing riko
+pushed the subprocess past its 5 s bound when every tox environment ran in parallel.
 
 ## 5b. Execution lifetime proofs (R4)
 
