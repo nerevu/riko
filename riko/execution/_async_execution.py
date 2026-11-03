@@ -99,7 +99,7 @@ class _WorkerContext[T]:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        _exit = async_partial(self._cm.__exit__, _inline=False)
+        _exit = async_partial(self._cm.__exit__, _inline=False, _abandon_on_cancel=True)
         return bool(await _exit(exc_type, exc, traceback))
 
 
@@ -216,7 +216,7 @@ class _Owned[T]:
             self._closed = True
 
             if (closer := resolve_closer(self._value, is_async=True)) is not None:
-                await maybe_async(closer, inline=self.inline)
+                await maybe_async(closer, inline=self.inline, abandon_on_cancel=True)
 
 
 @define(eq=False)
@@ -266,7 +266,12 @@ class _RunStream[T]:
                 async with AsyncExitStack() as stack:
                     for step in self._steps:
                         if (closer := resolve_closer(step, is_async=True)) is not None:
-                            stack.push_async_callback(maybe_async, closer, inline=False)
+                            stack.push_async_callback(
+                                maybe_async,
+                                closer,
+                                inline=False,
+                                abandon_on_cancel=True,
+                            )
             finally:
                 self._reservation.release()
 
@@ -474,7 +479,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         """
         if (closer := resolve_closer(value, cleanup, is_async=True)) is not None:
-            self.queue_async_callback(async_partial(closer, _inline=inline))
+            callback = async_partial(closer, _inline=inline, _abandon_on_cancel=True)
+            self.queue_async_callback(callback)
 
     async def _acall_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         if plan.is_async:

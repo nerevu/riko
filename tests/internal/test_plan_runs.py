@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from contextlib import aclosing
+from contextlib import aclosing, suppress
 from itertools import count
+from threading import Event as ThreadEvent
 from threading import get_ident
+from time import perf_counter
 from typing import TYPE_CHECKING, Self, cast
 
 import pytest
@@ -1531,3 +1533,29 @@ class TestAsyncPlanRun:
         ]
         assert threads
         assert loop_thread not in threads
+
+    @pytest.mark.timeout(3)
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a shutdown bound on a blocking sync seed close is not yet implemented",
+    )
+    @async_test
+    async def test_arun_bounds_a_blocking_sync_seed_close(self) -> None:
+        release = ThreadEvent()
+
+        class BlockingSeed:
+            def __iter__(self) -> Iterator[Item]:
+                return iter([{"x": 1}])
+
+            def close(self) -> None:
+                release.wait(1)
+
+        start = perf_counter()
+
+        with suppress(TimeoutError):
+            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+                run = await execution.arun(_doubler_plan("double"), seed=BlockingSeed())
+                assert await anext(cast("AsyncItemGenerator", run)) == {"x": 2}
+
+        assert perf_counter() - start < 0.25

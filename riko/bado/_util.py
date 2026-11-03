@@ -25,9 +25,12 @@ from inspect import iscoroutine
 from math import inf
 from typing import TYPE_CHECKING, Literal, overload
 
+from attrs import define, field
+
 from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable, is_awaitable
+from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING, MissingType
 from riko.types._io import ASYNC_CLEANUP_MSG, get_sync_closer, resolve_closer
 
@@ -49,6 +52,7 @@ if TYPE_CHECKING:
         Iterable,
         Mapping,
     )
+    from logging import Logger
 
     from anyio import CapacityLimiter
     from anyio.abc import TaskGroup
@@ -56,6 +60,8 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncFunc, Func
 
     from ._backend import HTTPXResponse
+
+logger: Logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -217,23 +223,48 @@ async def as_awaitable[T](value: T | Awaitable[T]) -> T:
     return (await value) if is_awaitable(value) else value
 
 
+@define(eq=False)
+class _AbandonableCall[T]:
+    """A blocking call that warns when it raises after its caller stopped waiting."""
+
+    func: Callable[..., T]
+    done: bool = field(default=False, init=False)
+    abandoned: bool = field(default=False, init=False)
+
+    def __call__(self, *args: object) -> T:
+        try:
+            return self.func(*args)
+        except Exception:
+            if self.abandoned:
+                msg = "a call abandoned at cancellation raised after its caller left"
+                logger.warning(msg, exc_info=True)
+
+            raise
+        finally:
+            self.done = True
+
+
 async def asyncify[T](
     func: Func[T | Awaitable[T]],
     *args: object,
     limiter: CapacityLimiter | None = None,
+    abandon_on_cancel: bool = False,
     **kwargs: object,
 ) -> T:
     """
     Runs a blocking callable on a worker thread and awaits its result.
 
     An async ``func`` is awaited on the event loop instead. An awaitable a blocking
-    ``func`` returns is awaited once the worker hands it back.
+    ``func`` returns is awaited once the worker hands it back. With
+    ``abandon_on_cancel`` set, cancelling the caller stops the wait while the worker
+    finishes on its own; an error it raises afterwards is logged as a warning.
 
     Args:
 
         func: The callable to run.
         args: Positional arguments forwarded to ``func``.
         limiter: Caps the worker threads held at once, or ``None`` for the default.
+        abandon_on_cancel: Whether cancellation stops the wait for a blocking ``func``.
         kwargs: Keyword arguments forwarded to ``func``.
 
     Returns:
@@ -256,8 +287,15 @@ async def asyncify[T](
     if is_async_callable(func):
         result = await func(*args, **kwargs)
     else:
-        worker = _asyncify(partial(func, **kwargs), limiter=limiter)
-        result = await as_awaitable(await worker(*args))
+        call = _AbandonableCall(partial(func, **kwargs))
+        worker = _asyncify(call, abandon_on_cancel=abandon_on_cancel, limiter=limiter)
+
+        try:
+            returned = await worker(*args)
+        finally:
+            call.abandoned = not call.done
+
+        result = await as_awaitable(returned)
 
     return result
 
@@ -308,6 +346,7 @@ async def maybe_async[T](
     *args: object,
     inline: bool = True,
     limiter: CapacityLimiter | None = None,
+    abandon_on_cancel: bool = False,
     **kwargs: object,
 ) -> T:
     """
@@ -322,6 +361,7 @@ async def maybe_async[T](
         args: Positional arguments forwarded to ``func``.
         inline: Whether a blocking ``func`` runs on the event loop.
         limiter: Caps the worker threads a non-inline call may hold.
+        abandon_on_cancel: Whether cancellation stops the wait for a non-inline call.
         kwargs: Keyword arguments forwarded to ``func``.
 
     Returns:
@@ -332,7 +372,9 @@ async def maybe_async[T](
     if inline:
         result = await as_awaitable(func(*args, **kwargs))
     else:
-        result = await asyncify(func, *args, limiter=limiter, **kwargs)
+        result = await asyncify(
+            func, *args, limiter=limiter, abandon_on_cancel=abandon_on_cancel, **kwargs
+        )
 
     return result
 
@@ -460,5 +502,8 @@ def async_partial[T](
 ) -> AsyncFunc[T]:
     """Applies ``args`` and ``kwargs`` to ``func`` for awaiting via ``maybe_async``."""
     inline = bool(kwargs.pop("_inline", True))
+    abandon_on_cancel = bool(kwargs.pop("_abandon_on_cancel", False))
     call = partial(func, *args, **kwargs)
-    return partial(maybe_async, call, inline=inline)
+    return partial(
+        maybe_async, call, inline=inline, abandon_on_cancel=abandon_on_cancel
+    )

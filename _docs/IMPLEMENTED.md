@@ -894,7 +894,11 @@ portal drain and the worker-side upstream reader are the same function with a di
 - **`AsyncExecution`** runs behind an `AsyncExitStack`; blocking sync components run on a worker
   thread. Shutdown unwinds the stack behind a cancellation shield within the shutdown timeout
   (30 s by default, `RIKO_SHUTDOWN_TIMEOUT`, `math.inf` for none), so ambient cancellation of the
-  shutdown task can never skip cleanup.
+  shutdown task can never skip cleanup. A sync close or cleanup the unwind runs on a worker thread
+  is abandoned at expiry (`asyncify(..., abandon_on_cancel=True)` in `riko/bado/_util.py`): the
+  unwind records the `TimeoutError` and returns, the call finishes on its thread, and an error it
+  raises afterwards is logged as a warning. A sync-closeable seed closes inline on the event loop
+  and is not bounded (strict xfail, owned by R11).
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic exit-stack
   LIFO. The primary execution error is threaded into the exit stack's `__exit__` / `__aexit__`, so a
   resource context manager observes, replaces, or suppresses it under normal Python semantics and the

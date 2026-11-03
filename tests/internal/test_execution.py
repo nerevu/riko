@@ -13,9 +13,11 @@ from contextlib import (
     nullcontext,
 )
 from functools import partial
+from logging import WARNING
 from math import inf
 from threading import Event as ThreadEvent
 from threading import get_ident
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 from urllib.request import urlopen
 
@@ -454,6 +456,31 @@ class TestAsyncExecution:
                 execution.queue_async_callback(slow)
 
         assert done == [True]
+
+    @pytest.mark.timeout(3)
+    @async_test
+    async def test_async_shutdown_timeout_abandons_a_blocking_sync_cleanup(
+        self, caplog
+    ) -> None:
+        release = ThreadEvent()
+
+        def fail_late(_value: object) -> None:
+            release.wait(2)
+            raise ValueError("late")
+
+        start = perf_counter()
+
+        with caplog.at_level(WARNING, logger="riko"), pytest.raises(TimeoutError):
+            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+                execution.register_owned(object(), fail_late, inline=False)
+
+        assert perf_counter() - start < 1
+        release.set()
+
+        while not caplog.records:
+            await async_sleep(0.01)
+
+        assert "abandoned" in caplog.records[0].getMessage()
 
     @async_test
     async def test_async_run_sync_bridges_to_worker(self) -> None:
