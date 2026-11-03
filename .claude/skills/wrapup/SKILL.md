@@ -173,7 +173,7 @@ slice in progress**, each headed `## <slice name>` with its branch, HEAD, and
 date. Rewrite only this session's section (add it when missing); leave other
 sections as they are, except to drop one that the step-1 evidence shows has
 landed with no successor work. A shared preamble above the sections holds only
-what is true of the whole tree (pending autosquash, unpushed commits). Each
+what is true of the whole tree (pending autosquash, unpushed commits, the Docket). Each
 section describes only its current frontier, not history:
 
 - **Where work stopped**: the slice in progress, its owning gameplan/phase,
@@ -189,6 +189,15 @@ section describes only its current frontier, not history:
   identified but deliberately did not make.
 - Dates absolute, never relative. If everything landed clean with no
   successor work, remove this session's section and say so in the report.
+
+The preamble also carries a **Docket** list: the next three items of work across the
+whole tree, in order, each with its owner (gameplan section, handoff section, or tracker
+row) and the test or xfail it flips. Derive it from the evidence, not recollection: open
+next actions in the handoff sections first, then the forward order in
+`_docs/PHASE_CHECKLISTS.md` (the M1 row) and `_docs/gameplans/implementation-sequence.md`
+§ 4. Below it, a **Suggested command** line: the one prompt to paste after `/clear` that
+starts docket item 1 cold (a skill invocation such as `/go …` or `/triage …` with the
+file, function, or test named).
 
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
@@ -223,7 +232,9 @@ session that starts before the user runs it knows to.
 
 ## 6. Report
 
-End with a short manifest: tidy's fixes and open findings, each file updated
+End with a short manifest: tidy's fixes and open findings,
+the **next three docket items** (as recorded in the handoff preamble, each with its owner),
+the **suggested command** to run after `/clear` (in a code block, ready to paste), each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
 is safe to clear, and any **script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (slicing or replaying diffs, rebuilding tables, bulk
