@@ -74,7 +74,6 @@ class Defaults(TypedDict, total=False):
     max_len: int
     memoize: bool
     mode: str
-    multi: bool
     name: str
     prompt: str
     param: dict[str, str | None]

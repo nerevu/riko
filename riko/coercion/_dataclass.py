@@ -97,7 +97,7 @@ def fromdict(
 
 
 def build_regex_conf_rule(
-    f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
+    f: str, m: str, r: str, seriesmatch: bool = True
 ) -> RegexConfRule:
     """
     Builds a parsed regex configuration rule from compact arguments.
@@ -108,7 +108,6 @@ def build_regex_conf_rule(
         m: Regular-expression pattern to match.
         r: Replacement text.
         seriesmatch: Whether later rules operate on the previous rule's result.
-        default: Value used when the source field is missing.
 
     Returns:
 
@@ -121,9 +120,7 @@ def build_regex_conf_rule(
         ('title', 'foo', 'bar', True)
 
     """
-    return RegexConfRule(
-        field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
-    )
+    return RegexConfRule(field=f, match=m, replace=r, seriesmatch=seriesmatch)
 
 
 def build_regex_rule(
@@ -142,6 +139,11 @@ def build_regex_rule(
 
         A normalized ``RegexRule`` used by regex processing modules.
 
+    Raises:
+
+        TypeError: If a mapping ``rule`` has a ``default``, which belongs on the
+            module configuration, keyed by field.
+
     Examples:
 
         >>> rule = build_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
@@ -154,6 +156,10 @@ def build_regex_rule(
 
     """
     if not is_dataclass(rule):
+        if "default" in rule:
+            msg = "a regex rule has no 'default'; set conf['default'][<field>] instead"
+            raise TypeError(msg)
+
         keys = {f.name for f in fields(RegexConfRule)}
         filtered = {k: v for k, v in rule.items() if k in keys}
         rule = RegexConfRule(**filtered)
@@ -178,7 +184,6 @@ def build_regex_rule(
         "flags": flags,
         "match": match,
         "replace": replace,
-        "default": rule.default,
         "field": rule.field,
         "series": rule.seriesmatch,
     }

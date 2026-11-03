@@ -37,8 +37,8 @@ Index (file, then the subjects it owns, in file order):
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, SyncPipeAsyncInput,
                               ReturnInference, ModuleMetadata, WrapperMeta, Loop,
-                              Processor, Prepare, Objectify, GetString, MultiSubstitute,
-                              CsvParser, ExchangeRate, AsyncSend, AsyncReceive,
+                              Processor, Prepare, Objectify, GetString, CsvParser,
+                              ExchangeRate, AsyncSend, AsyncReceive,
                               AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,

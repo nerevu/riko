@@ -178,7 +178,7 @@ class RefindObjconf(DynamicConf):
 
 class RegexObjconf(DynamicConf):
     rule: RegexConfRule | list[RegexConfRule]
-    multi: bool
+    default: dict[str, str]
 
 
 class RenameObjconf(DynamicConf):

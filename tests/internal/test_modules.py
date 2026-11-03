@@ -7,7 +7,6 @@ import asyncio
 import copy
 import itertools
 import pickle  # noqa: S403
-import re
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
@@ -31,7 +30,6 @@ from riko.base._exceptions import ReceiverUnavailableError
 from riko.base._paths import PACKAGE_DIR, get_path
 from riko.base._sentinels import MISSING
 from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
-from riko.coercion._dataclass import build_regex_rule
 from riko.coercion._objectify import objectify
 from riko.definitions._context import Context
 from riko.definitions._wrapping import stamp_wrapper_meta
@@ -43,7 +41,6 @@ from riko.modules._decorators import operator, processor, splitter
 from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
 from riko.modules._metadata import get_module_metadata
 from riko.modules._prepare import build_conf, resolve_and_cast
-from riko.modules._textops import multi_substitute
 from riko.modules.fetchpage import get_string
 from riko.modules.join import pipe as join
 from riko.modules.loop import async_pipe as async_loop
@@ -75,7 +72,6 @@ from riko.types.modules import (
     CsvConf,
     InferenceSource,
     OperatorReturnKind,
-    RegexConfRule,
     SendConf,
     StrconcatRawConf,
     TokenizerRawConf,
@@ -1224,17 +1220,6 @@ class TestGetString:
     @pytest.mark.parametrize(("content", "start", "end", "expected"), GET_STRING_CASES)
     def test_get_string_slices_between_markers(self, content, start, end, expected):
         assert get_string(content, start, end) == expected
-
-
-class TestMultiSubstitute:
-    def test_a_rule_that_closes_its_group_early_raises(self):
-        """A ``match`` that escapes its rule group leaves no rule to apply."""
-        rule = build_regex_rule(
-            RegexConfRule(field="content", match="a)|(b", replace="x")
-        )
-
-        with pytest.raises(re.error, match="no rule group matched"):
-            multi_substitute("b", [rule])
 
 
 class TestCsvParser:

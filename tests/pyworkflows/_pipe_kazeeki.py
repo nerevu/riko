@@ -33,7 +33,6 @@ match1_02 = (
 )
 match1_03 = ".*(Hourly budget:|Budget:<.*?> Hourly).*"
 match1_04 = ".*(Fixed Price budget:|Budget:<.*?> Fixed Price).*"
-match1_05 = "^(?!\\b(hourly|fixed)\\b).*"
 match1_06 = "(.*)(<b>)?(Budget):?(<.*?>)?(.*)"
 match1_07 = "(.*)(<b>Description:<.*?>)(.*?)(<.*?>)(.*)"
 match1_08 = "(.*)(<b>Proposals:<.*?>)(.*?)(<a href)(.*)"
@@ -65,7 +64,6 @@ regex_rule = [
     build_regex_conf_rule("k:marketplace", match1_02, "$3"),
     build_regex_conf_rule("k:job_type", match1_03, "hourly", seriesmatch=False),
     build_regex_conf_rule("k:job_type", match1_04, "fixed", seriesmatch=False),
-    build_regex_conf_rule("k:job_type", match1_05, "unknown"),
     build_regex_conf_rule("k:content", match1_06, "$1"),
     build_regex_conf_rule("k:content", match1_07, "$3"),
     build_regex_conf_rule("k:submissions", match1_08, "$3"),
@@ -89,8 +87,8 @@ regex_rule = [
     build_regex_conf_rule("k:tags", "^,|,$", ""),
     build_regex_conf_rule("k:due", match1_22, "$1"),
     build_regex_conf_rule("k:due", match1_23, "unknown"),
-    build_regex_conf_rule("k:budget_raw", match1_24b1, "0", seriesmatch=False),
-    build_regex_conf_rule("k:budget_raw", match1_24b2, "$5", seriesmatch=False),
+    build_regex_conf_rule("k:budget_raw", match1_24b1, "0"),
+    build_regex_conf_rule("k:budget_raw", match1_24b2, "$5"),
     build_regex_conf_rule("k:budget_raw", "k", "000"),
     build_regex_conf_rule("k:budget_raw", match1_25, "0 -"),
     build_regex_conf_rule("k:budget_raw", "or less", "- 0"),
@@ -113,4 +111,4 @@ itembuilder_attrs = [ParsedParam({"key": k, "value": v}) for k, v in my_item.ite
 itembuilder_conf = ItemBuilderConf({"attrs": itembuilder_attrs})
 fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 rename_conf = RenameConf({"rule": rename_rule})
-regex_conf = RegexConf({"rule": regex_rule})
+regex_conf = RegexConf({"rule": regex_rule, "default": {"k:job_type": "unknown"}})

@@ -8,6 +8,7 @@ import re
 import sqlite3
 from collections.abc import AsyncIterator, Generator, Iterator, Mapping
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from inspect import isawaitable
 from itertools import count
 from time import struct_time
@@ -21,6 +22,7 @@ from riko.bado.itertools import alist
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
+from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
 from riko.ext.codegen import (
     NameEntry,
@@ -349,53 +351,157 @@ class TestRename:
         assert dict(next(rename({"content": "hi"}, conf=conf))) == {"": "hi"}
 
 
-MULTI_REPLACE_CASES = [
-    pytest.param([("(hello)", "[$1]")], "say [hello] world", id="group-keeps-context"),
-    pytest.param([("l", "LL")], "say heLLLLo worLLd", id="longer-replacement-shifts"),
+_rule = partial(RegexConfRule, field="content")
+_parallel = partial(_rule, seriesmatch=False)
+_FALLBACK = {"content": "fallback"}
+
+
+# Each row: the rules, the conf's per-field ``default``, the input, and the output.
+REGEX_CASES = [
     pytest.param(
-        [("(a?)", "[$1]")],
-        "[]s[a][]y[] []h[]e[]l[]l[]o[] []w[]o[]r[]l[]d[]",
+        [_rule(match="(hello)", replace="[$1]")],
+        {},
+        "say hello world",
+        "say [hello] world",
+        id="group-keeps-context",
+    ),
+    pytest.param(
+        [_rule(match="l", replace="LL")],
+        {},
+        "say hello world",
+        "say heLLLLo worLLd",
+        id="longer-replacement-shifts",
+    ),
+    pytest.param(
+        [_rule(match="(a?)", replace="[$1]")],
+        {},
+        "say",
+        "[]s[a][]y[]",
         id="zero-width-group",
     ),
-    pytest.param([("$", "!")], "say hello world!", id="end-anchor"),
-    pytest.param([("^", "!")], "!say hello world", id="start-anchor"),
     pytest.param(
-        [("(h)(e)", "$2$1"), ("(o)", "<$1>")], "say ehll<o> w<o>rld", id="two-rules"
+        [_rule(match="$", replace="!")], {}, "say hi", "say hi!", id="end-anchor"
+    ),
+    pytest.param(
+        [_rule(match="^", replace="!")], {}, "say hi", "!say hi", id="start-anchor"
+    ),
+    pytest.param(
+        [_rule(match="(h)(e)", replace="$2$1"), _rule(match="(o)", replace="<$1>")],
+        {},
+        "say hello world",
+        "say ehll<o> w<o>rld",
+        id="two-rules",
+    ),
+    pytest.param(
+        [
+            _rule(match="a", replace="b"),
+            _rule(match="b", replace="c", casematch=True),
+            _rule(match="c", replace="d"),
+        ],
+        {},
+        "a",
+        "d",
+        id="alternating-flags-keep-order",
+    ),
+    pytest.param(
+        [_rule(match="hello.*", replace="bye")],
+        {},
+        "Hello hello",
+        "bye",
+        id="case-insensitive-by-default",
+    ),
+    pytest.param(
+        [_rule(match="hello.*", replace="bye", casematch=True)],
+        {},
+        "Hello hello",
+        "Hello bye",
+        id="casematch",
+    ),
+    pytest.param(
+        [
+            _parallel(match="a", replace="A", singlelinematch=True),
+            _parallel(match="b", replace="B", singlelinematch=True),
+        ],
+        {},
+        "aba",
+        "ABa",
+        id="first-match-limit-per-parallel-rule",
+    ),
+    pytest.param(
+        [
+            _rule(match="(?P<code>a)", replace="x"),
+            _rule(match="(?P<code>b)", replace="y"),
+        ],
+        {},
+        "ab",
+        "xy",
+        id="shared-group-name",
+    ),
+    pytest.param(
+        [_rule(match="(b)", replace="c"), _rule(match=r"(a)\1", replace="x")],
+        {},
+        "aa b",
+        "x c",
+        id="backreference",
+    ),
+    pytest.param(
+        [_parallel(match="a", replace="b"), _parallel(match="b", replace="a")],
+        {},
+        "ab",
+        "ba",
+        id="parallel-rules-swap",
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b"), _rule(match="b", replace="a")],
+        {},
+        "ab",
+        "aa",
+        id="serial-chain",
+    ),
+    pytest.param(
+        [_rule(match="z", replace="y")], _FALLBACK, "abc", "fallback", id="default"
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b")], _FALLBACK, "a", "b", id="default-unused"
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b"), _rule(match="z", replace="y")],
+        _FALLBACK,
+        "a",
+        "b",
+        id="default-unused-when-an-earlier-rule-matched",
+    ),
+    pytest.param(
+        [_parallel(match="z", replace="y"), _parallel(match="a", replace="b")],
+        _FALLBACK,
+        "a",
+        "b",
+        id="default-unused-when-a-parallel-rule-matched",
+    ),
+    pytest.param(
+        [_rule(match="z", replace="y")],
+        {"title": "fallback"},
+        "abc",
+        "abc",
+        id="default-for-another-field",
     ),
 ]
 
 
 class TestRegex:
-    @pytest.mark.parametrize(("rules", "expected"), MULTI_REPLACE_CASES)
-    def test_multi_regex_matches_single_rule_replacement(self, rules, expected):
-        """``multi`` replaces exactly as the single-rule path does."""
-        item = {"content": "say hello world"}
-        conf_rules = [
-            RegexConfRule(field="content", match=m, replace=r) for m, r in rules
-        ]
-        multi = next(regex(item, conf=RegexConf({"rule": conf_rules, "multi": True})))
-        single = next(regex(item, conf=RegexConf({"rule": conf_rules})))
-        assert multi == {"content": expected}
-        assert single == multi
+    @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
+    def test_rules_apply_as_documented(self, rules, default, text, expected):
+        conf = RegexConf({"rule": rules, "default": default})
+        assert next(regex({"content": text}, conf=conf)) == {"content": expected}
 
-    @pytest.mark.parametrize(("rules", "expected"), MULTI_REPLACE_CASES)
+    @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
     @async_test
-    async def test_async_multi_regex_matches_single_rule_replacement(
-        self, rules, expected
+    async def test_async_rules_apply_as_documented(
+        self, rules, default, text, expected
     ):
-        conf_rules = [
-            RegexConfRule(field="content", match=m, replace=r) for m, r in rules
-        ]
-        conf = RegexConf({"rule": conf_rules, "multi": True})
-        stream = async_regex({"content": "say hello world"}, conf=conf)
+        conf = RegexConf({"rule": rules, "default": default})
+        stream = async_regex({"content": text}, conf=conf)
         assert await anext(stream) == {"content": expected}
-
-    def test_multi_regex_rejects_a_missing_group_reference(self):
-        rule = RegexConfRule(field="content", match="(hello)", replace="$3")
-        conf = RegexConf({"rule": rule, "multi": True})
-
-        with pytest.raises(re.error, match="invalid group reference 3"):
-            next(regex({"content": "say hello world"}, conf=conf))
 
     def test_regex_skips_absent_field(self):
         """A regex rule naming an absent field leaves the item untouched."""
@@ -403,6 +509,19 @@ class TestRegex:
             {"rule": RegexConfRule(field="content", match="l", replace="L")}
         )
         assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
+
+    def test_regex_rejects_a_missing_group_reference(self):
+        conf = RegexConf({"rule": _rule(match="(hello)", replace="$3")})
+
+        with pytest.raises(re.error, match="invalid group reference 3"):
+            next(regex({"content": "say hello world"}, conf=conf))
+
+    def test_regex_rejects_a_rule_default(self):
+        """A ``default`` belongs on the conf, keyed by field, not on a rule."""
+        rule = {"field": "content", "match": "z", "replace": "y", "default": "x"}
+
+        with pytest.raises(TypeError, match=r"conf\['default'\]"):
+            next(regex({"content": "abc"}, conf=DynamicConf({"rule": rule})))
 
 
 SLUGIFY_CASES = [

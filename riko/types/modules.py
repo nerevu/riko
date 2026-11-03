@@ -275,7 +275,6 @@ class ParsedParam(TypedDict):
 
 class RegexRule(TypedDict):
     count: Literal[1, 0]
-    default: str
     field: str
     flags: int | RegexFlag
     match: Pattern[str]
@@ -456,7 +455,6 @@ class RefindRawConf(TypedDict):
 
 class RegexRawRule(TypedDict, total=False):
     count: Value
-    default: Value
     field: Value
     flags: Value
     match: Value
@@ -468,7 +466,7 @@ class RegexRawRule(TypedDict, total=False):
 
 class RegexRawConf(TypedDict):
     rule: RegexRawRule | list[RegexRawRule]
-    multi: NotRequired[Value]
+    default: NotRequired[dict[str, Value]]
 
 
 class RenameRawRule(TypedDict):
@@ -624,7 +622,6 @@ class SortConfRule:
 class RegexConfRule:
     field: str
     match: str
-    default: str | None = None
     casematch: bool | None = None
     singlelinematch: bool | None = None
     seriesmatch: bool = True
@@ -818,7 +815,7 @@ class RefindConf(TypedDict):
 
 class RegexConf(TypedDict, total=False):
     rule: Required[RegexConfRule | list[RegexConfRule]]
-    multi: bool
+    default: dict[str, str]
 
 
 class RenameConf(TypedDict):

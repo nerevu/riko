@@ -178,6 +178,9 @@ Changes
 
 - ``rename`` with an empty ``newval`` renames the field instead of deleting it.
 
+- The ``regex`` module applies consecutive ``seriesmatch=False`` rules to the original
+  text in one pass (leftmost match first) instead of to each rule's output.
+
 Removed
 ~~~~~~~
 
@@ -198,6 +201,9 @@ Removed
 - Removed ``convert_dag``. Use ``Workflow.parse`` instead.
 
 - Removed the ``regex`` rule's ``offset`` key. Replacement positions are now computed.
+  Moved the rule's ``default`` to the module conf for when no field rules match; a rule
+  that still has a ``default`` key raises ``TypeError``. Removed the ``multi`` conf key
+  since it had no effect.
 
 - Removed the ``submodule`` and ``verbose`` attributes and keyword arguments from
   ``Context``. Set the level on the ``"riko"`` logger instead.
@@ -241,11 +247,10 @@ Fixes
 - ``csv`` and ``fetchtable`` yield no items for an empty CSV file instead of raising
   ``RuntimeError``.
 
-- The ``regex`` module: when ``multi`` is set, no longer raises ``RuntimeError`` when a
-  rule matches the empty string (e.g., ``$``), and keeps the text around a match using
-  ``$1`` group references; correctly places replacements that change the text's length;
-  and raises ``re.error`` instead of ``RuntimeError`` when a rule has no slot for a
-  group reference.
+- The ``regex`` module now always applies rules in order, keeps each rule's first-match
+  limit, lets rules reuse a group name or a backreference, no longer raises
+  ``RuntimeError`` when a rule matches the empty string (``$``) or has no group
+  reference (``$1``) slot, and keeps the text around group reference matches.
 
 - An async processor now reads a sync iterable lazily: unbounded inputs no longer hang.
 
