@@ -20,6 +20,9 @@ backstop.
 A ``sleep`` on a function's own path (outside nested functions) must never
 last as long as that outer bound. A plain ``timeout`` marker never equals the backstop,
 a ``subprocess`` call sets ``timeout=``, and an ``async def`` test awaits something.
+A strict ``xfail`` mark in a test file or helper, whether a decorator, a
+``pytest.param`` mark, or a module-level constant, names the exception it fails with
+today in ``raises=``.
 
 The ``timeout`` and ``faulthandler_timeout`` globals sit on the ladder too.
 ``faulthandler_timeout`` must be below ``timeout``. A test must never read a tracked
@@ -462,6 +465,23 @@ def _has_await(function: FunctionNode) -> bool:
     )
 
 
+def _is_bare_strict_xfail(node: ast.Call) -> bool:
+    """Checks whether a call is a strict ``xfail`` mark that sets no ``raises=``."""
+    keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+    strict = keywords.get("strict")
+    is_strict = isinstance(strict, ast.Constant) and strict.value is True
+    return _get_leaf(node.func) == "xfail" and is_strict and "raises" not in keywords
+
+
+def _gen_xfail_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
+    """Finds the strict ``xfail`` marks in one file that set no ``raises=``."""
+    message = "strict xfail sets no raises=; name the exception it fails with today"
+
+    for node in gen_instances(ast.walk(tree), ast.Call):
+        if _is_bare_strict_xfail(node):
+            yield LayoutIssue(path, node.lineno, message)
+
+
 def _gen_idle_async_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
     """Finds the ``async def`` tests in one file that await nothing."""
     for node in tree.body:
@@ -544,6 +564,7 @@ def _gen_file_issues(
 ) -> Iterator[LayoutIssue]:
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
+    yield from _gen_xfail_issues(path, tree)
     yield from _gen_idle_async_issues(path, tree)
     yield from _gen_doc_read_issues(path, tree)
 
@@ -572,10 +593,11 @@ def _gen_file_issues(
 
 
 def _gen_helper_issues(path: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
-    """Finds the bounds and ``subprocess`` calls in a shared helper module."""
+    """Finds the bounds, ``subprocess`` calls, and ``xfail`` marks in a helper."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
+    yield from _gen_xfail_issues(path, tree)
 
 
 def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
@@ -621,8 +643,8 @@ def gen_layout_issues(tests_dir: Path, backstop: Seconds) -> Iterator[LayoutIssu
 
     Beyond the layout, each bound in a test or shared helper must sit on the bound
     ladder and nest inside its outer bound, each ``subprocess`` call must set a
-    timeout, each ``async def`` test must await something, and no test may read a
-    tracked doc.
+    timeout, each strict ``xfail`` mark must set ``raises=``, each ``async def`` test
+    must await something, and no test may read a tracked doc.
 
     Args:
 

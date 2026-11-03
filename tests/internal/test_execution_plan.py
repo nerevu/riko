@@ -310,6 +310,7 @@ class TestExecutionPlan:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="owned by the module port contracts: a positional input into a module "
         "that declares no positional ports is accepted and silently ignored",
     )
@@ -707,6 +708,7 @@ class TestAsyncEmbed:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the pending lazy sync-under-async embed work: a sync-only "
         "embed under an async loop is collected to a list on the worker before the "
         "loop takes its first result, so count='first' cannot stop the child early",

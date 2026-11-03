@@ -115,6 +115,7 @@ SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
 FANIN_PENDING = pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "concurrent pulling of fan-in branches is not available yet; a fan-in "
         "pulls its sources one at a time"
@@ -122,7 +123,9 @@ FANIN_PENDING = pytest.mark.xfail(
 )
 
 PUBSUB_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.subscribe()/publish() are not available yet"
+    strict=True,
+    raises=NotImplementedError,
+    reason="Pipeline.subscribe()/publish() are not available yet",
 )
 
 UNION_PENDING = pytest.mark.xfail(
@@ -132,7 +135,9 @@ UNION_PENDING = pytest.mark.xfail(
 )
 
 PREDICATE_PENDING = pytest.mark.xfail(
-    strict=True, reason="gating a node on a per-item predicate is not available yet"
+    strict=True,
+    raises=TypeError,
+    reason="gating a node on a per-item predicate is not available yet",
 )
 
 BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")
@@ -1415,6 +1420,7 @@ class TestContextMode:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="a Pipeline runs its modules even when its context only asks to "
         "describe it, until pipelines can declare their inputs and dependencies",
     )

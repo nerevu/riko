@@ -278,6 +278,7 @@ class TestSplitter:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=TypeError,
         reason="owned by the pending execution-owned split fan-out work: the async "
         "splitter wrapper reads its input synchronously, so handing it an async "
         "stream raises TypeError instead of yielding the branches",
@@ -291,6 +292,7 @@ class TestSplitter:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the pending execution-owned split fan-out work: the splitter "
         "wrapper does not resolve its context, so its parser receives the raw "
         "context object instead of the context's inputs",
@@ -314,6 +316,7 @@ class TestAsyncOperatorLaziness:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the pending Feed-native streaming migration of truncate and "
         "the final legacy-seam cleanup: an async operator whose parser is synchronous "
         "materializes its whole async input before parsing, so truncate pulls its "
@@ -340,6 +343,7 @@ class TestAsyncOperatorLaziness:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the pending Feed-native streaming migration of truncate and "
         "the final legacy-seam cleanup: the whole-source read never yields to the "
         "event loop, so an endless source cannot be cancelled",
@@ -1464,6 +1468,7 @@ class TestAsyncTimeoutIterator:
     @pytest.mark.timeout(3)
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="AsyncTimeoutIterator only checks its deadline between anexts. A "
         "source that stalls past the deadline is awaited to completion rather than "
         "interrupted.",

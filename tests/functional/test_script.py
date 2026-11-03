@@ -559,7 +559,9 @@ class TestExamplePipelines:
         assert expected in proc.stdout, f"{script} output: {proc.stdout!r}"
 
     @pytest.mark.xfail(
-        reason="dateformat timezone setting is not yet implemented.", strict=True
+        strict=True,
+        raises=AssertionError,
+        reason="dateformat timezone setting is not yet implemented.",
     )
     def test_unsupported_timezone(self):
         """The timezone example asks for EST but dateformat ignores it (UTC)."""

@@ -455,7 +455,9 @@ class TestCompileWorkflow:
 
 class TestPythonise:
     @pytest.mark.xfail(
-        reason="pythonise does not sanitize ids into valid identifiers yet", strict=True
+        strict=True,
+        raises=AssertionError,
+        reason="pythonise does not sanitize ids into valid identifiers yet",
     )
     def test_pythonise_yields_valid_identifiers(self):
         """
@@ -498,6 +500,7 @@ class TestModuleCategory:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="replacing the write module with write nodes is not yet implemented",
     )
     def test_no_module_is_a_sink(self):
@@ -645,6 +648,7 @@ class TestWorkflowProbes:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="a hand-written probe still reports the inputs its input node scans, "
         "not the declared inputs the pipe built from its document reports, until "
         "workflows declare their inputs",

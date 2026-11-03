@@ -79,7 +79,9 @@ _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
 
 # A replace write leaves the old content until it publishes the new one whole.
 ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
-    strict=True, reason="atomic replace-write publication is not yet implemented"
+    strict=True,
+    raises=AssertionError,
+    reason="atomic replace-write publication is not yet implemented",
 )
 
 
@@ -124,6 +126,7 @@ class TestReplayReader:
 class TestLoadRssLinks:
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="rejecting inline HTML in the sync rss link loader is not yet "
         "implemented: a schemeless string containing '://' skips the file prefix, "
         "urlopen's ValueError is caught, and the string is parsed as HTML",
@@ -342,6 +345,7 @@ class TestAsyncUrlOpen:
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
+        raises=TimeoutException,
         reason="streaming async URL reads are not yet implemented: async_url_open "
         "buffers the whole body before returning, so a stalled body times out "
         "before the lines already received can be read",
@@ -413,6 +417,7 @@ class TestAsyncUrlOpen:
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
+        raises=UnicodeDecodeError,
         reason="async_url_open ignores the Content-Type and decodes as utf-8",
     )
     @async_test
@@ -435,6 +440,7 @@ class TestAsyncUrlOpen:
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the pending encoding-precedence work: sync decoding keeps "
         "carriage returns that async decoding converts to newlines",
     )
@@ -870,6 +876,7 @@ class TestAsyncMapStream:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="sliding-window async ordered mapping is not yet implemented",
     )
     @async_test

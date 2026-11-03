@@ -294,6 +294,7 @@ class TestCallableNodes:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason=(
             "rejecting identity modes a one-to-one map cannot honor is not yet "
             "implemented"
@@ -305,6 +306,7 @@ class TestCallableNodes:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=InvalidPipelineError,
         reason=(
             "callable nodes that resolve without borrowing the registered udf module "
             "are not yet implemented"

@@ -476,6 +476,7 @@ class TestCastDatetime:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="owned by the settable date timezone work: with try_local_tz, named "
         "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
     )
@@ -670,6 +671,7 @@ class TestResolveAwareDatetime:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="resolving the local zone at the date's own daylight-saving offset is "
         "not yet implemented",
     )
@@ -826,6 +828,7 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="business data shaped like a typed value is still read as one",
     )
     def test_typed_value_shaped_business_data_reads_literally(self):
@@ -836,6 +839,7 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=KeyError,
         reason="literal DotDict keys made only of dots are not yet implemented",
     )
     def test_dot_only_key_keeps_the_empty_key(self):
@@ -843,6 +847,7 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="literal DotDict paths that stop at a scalar are not yet implemented",
     )
     def test_get_does_not_read_through_a_scalar(self):

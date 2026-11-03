@@ -359,6 +359,7 @@ class TestResolverDispatcher:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=UnsupportedWorkflowError,
         reason="a runtime-registered pipe_* module is routed to the workflow "
         "resolver by name prefix and raises UnsupportedWorkflowError.",
     )
@@ -815,7 +816,8 @@ class TestResolvedDocuments:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="describing a stored workflow's declared inputs is not yet implemented",
+        raises=AssertionError,
+        reason="a fresh stored-workflow description per call is not yet implemented",
     )
     def test_document_description_is_fresh_per_call(self, tmp_path):
         register_documents(tmp_path)

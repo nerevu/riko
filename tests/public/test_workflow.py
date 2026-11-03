@@ -60,6 +60,8 @@ _MERGE = {
     "outputs": {"default": Endpoint("c", "out")},
 }
 
+_CONF_PENDING = "module configuration is not validated against its contract yet"
+
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
     (ReadNode(id="read-1", name="read", backend=Backends.FILE), "read"),
@@ -315,6 +317,7 @@ class TestWorkflow:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="owned by the pending workflow input declarations work: a strict "
         "Workflow accepts an input declaration that is not a JSON Schema mapping",
     )
@@ -541,11 +544,35 @@ INVALID_EDGES = [
 ]
 
 
+def _conf_pending(raises: type[BaseException]) -> pytest.MarkDecorator:
+    return pytest.mark.xfail(strict=True, raises=raises, reason=_CONF_PENDING)
+
+
 INVALID_CONFS = [
-    pytest.param("filter", {"rule": _UNKNOWN_KEY_RULE}, "fieldd", id="unknown-key"),
-    pytest.param("sort", {"rule": 5}, "rule", id="wrong-type"),
-    pytest.param("simplemath", {"op": "nope", "other": {"value": 2}}, "op", id="op"),
-    pytest.param("strconcat", {}, "part", id="missing-key"),
+    pytest.param(
+        "filter",
+        {"rule": _UNKNOWN_KEY_RULE},
+        "fieldd",
+        id="unknown-key",
+        marks=_conf_pending(pytest.fail.Exception),
+    ),
+    pytest.param(
+        "sort",
+        {"rule": 5},
+        "rule",
+        id="wrong-type",
+        marks=_conf_pending(AttributeError),
+    ),
+    pytest.param(
+        "simplemath",
+        {"op": "nope", "other": {"value": 2}},
+        "op",
+        id="op",
+        marks=_conf_pending(TypeError),
+    ),
+    pytest.param(
+        "strconcat", {}, "part", id="missing-key", marks=_conf_pending(TypeError)
+    ),
 ]
 
 
@@ -625,10 +652,6 @@ class TestValidate:
         with pytest.raises(InvalidPipelineError, match=match):
             flow.validate()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="module configuration is not validated against its contract yet",
-    )
     @pytest.mark.parametrize(("name", "conf", "match"), INVALID_CONFS)
     def test_invalid_conf_rejected_before_the_source_is_read(self, name, conf, match):
         consumed = []
@@ -700,6 +723,7 @@ class TestCompileWorkflow:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason=(
             "a public import path for generated workflow modules is not yet implemented"
         ),

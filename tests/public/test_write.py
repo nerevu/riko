@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from riko import export
-from riko.base._exceptions import UnsupportedTargetError
+from riko.base._exceptions import InvalidPipelineError, UnsupportedTargetError
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
@@ -41,7 +41,7 @@ list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
 """
 
 WRITE_NODE_PENDING = pytest.mark.xfail(
-    strict=True, reason="write nodes do not execute yet"
+    strict=True, raises=InvalidPipelineError, reason="write nodes do not execute yet"
 )
 
 JSON_BYTES = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
@@ -221,6 +221,7 @@ class TestPipelineWriteDefinition:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="the write module stays reachable until write nodes execute: write() "
         "without a destination chains that module instead of requiring a destination",
     )
@@ -309,6 +310,7 @@ class TestPipelineWrite:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=InvalidPipelineError,
         reason="a write node that feeds no workflow output does not execute yet",
     )
     def test_a_write_node_off_every_output_path_still_writes(self, tmp_path):

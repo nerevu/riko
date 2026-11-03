@@ -204,6 +204,7 @@ class TestFetchdata:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=TypeError,
         reason="splitext keeps the query string in the extension ('json?token=abc'), "
         "so the JSON parser is never selected",
     )
@@ -690,6 +691,7 @@ class TestReceive:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="releasing a receive channel when its pipe is closed early is not yet "
         "implemented",
     )

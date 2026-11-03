@@ -130,6 +130,8 @@ _ROW_MARK = (
 )
 
 _DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
+_STRICT = "pytest.mark.xfail(strict=True)"
+_NO_RAISES = "strict xfail sets no raises=; name the exception it fails with today"
 _PARAMETRIZE = '@pytest.mark.parametrize("v", {})'
 _BOUND_FRAGMENTS = (
     "bound ladder",
@@ -139,6 +141,7 @@ _BOUND_FRAGMENTS = (
     "sets no timeout",
     "equals the pyproject",
     "awaits nothing",
+    "sets no raises=",
 )
 _OPTIONS = "[tool.pytest.ini_options]\n"
 _SHARED = "basename is shared; rename one or allowlist the pair"
@@ -1346,6 +1349,17 @@ BOUND_CASES = [
         "test_one awaits nothing; make it a plain def",
         id="idle-async",
     ),
+    pytest.param(_case("assert 0", f"@{_STRICT}"), _NO_RAISES, id="xfail-decorator"),
+    pytest.param(
+        _case(
+            "...", _PARAMETRIZE.format(f'[pytest.param(1, marks={_STRICT}, id="a")]')
+        ),
+        _NO_RAISES,
+        id="xfail-row-mark",
+    ),
+    pytest.param(
+        _case("...", prefix=f"X_PENDING = {_STRICT}"), _NO_RAISES, id="xfail-constant"
+    ),
 ]
 CLEAN_BOUND_CASES = [
     pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
@@ -1366,6 +1380,10 @@ CLEAN_BOUND_CASES = [
     pytest.param(_case("...", "@pytest.mark.timeout(20)"), id="marker-below-backstop"),
     pytest.param(_case("[x async for x in agen()]", kind="async def"), id="async-for"),
     pytest.param(_case("async with lock: ...", kind="async def"), id="async-with"),
+    pytest.param(
+        _case("assert 0", "@pytest.mark.xfail(strict=True, raises=AssertionError)"),
+        id="xfail-raises",
+    ),
 ]
 HELPER_BOUND_CASES = [
     pytest.param(
@@ -1379,6 +1397,7 @@ HELPER_BOUND_CASES = [
         ["subprocess.run() sets no timeout="],
         id="subprocess",
     ),
+    pytest.param(f"X_PENDING = {_STRICT}\n", [_NO_RAISES], id="xfail-constant"),
 ]
 SITE_CASES = [
     pytest.param(_case("...", _PARAMETRIZE.format("[\n1,\n]")), 1, 0, id="multi-line"),

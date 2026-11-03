@@ -1339,6 +1339,7 @@ class TestMigrate:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="migrating a pipe definition's input modules into the workflow's "
         "input declarations is not yet implemented",
     )

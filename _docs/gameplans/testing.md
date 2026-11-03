@@ -144,8 +144,9 @@ Enforcement:
   rule that Markdown is never pytest input. The bound checks also cover `tests/_*.py` helpers and
   every non-test function and method, a `communicate` timeout counts as a bound, a `timeout`
   marker may not equal the backstop, every `subprocess.run`/`check_output`/`check_call`/`call`
-  sets `timeout=` (or splats options that may carry it), and an `async def` test must await
-  something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
+  sets `timeout=` (or splats options that may carry it), a strict `xfail` mark (a decorator, a
+  `pytest.param` mark, or a module-level constant) sets `raises=`, and an `async def` test must
+  await something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
   multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without `id=`
   (`rows-without-id`), printing the sites only when a count rises. Its `Bound`/`gen_bounds`
   also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels

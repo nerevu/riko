@@ -928,7 +928,9 @@ class TestPlanRun:
             execution.run(plan, seed=[{"x": 1}])
 
     @pytest.mark.xfail(
-        strict=True, reason="declaring a node as a value source is not yet implemented"
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="declaring a node as a value source is not yet implemented",
     )
     def test_run_never_starts_an_undeclared_value_feeder_unseeded(self) -> None:
         attr = {
@@ -967,6 +969,7 @@ class TestPlanRun:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason=(
             "pending lazy resource acquisition: a lazy resource bound to a node is "
             "acquired when the run starts even though the node never reads it"

@@ -31,6 +31,8 @@ first, with any helper a constant needs above them. Code repeated inline three
 or more times becomes one such helper. Within a class, behavior tests come first,
 then rejection tables, then strict-xfail tripwires. A regression test goes in its
 subject's class; a tripwire goes where the real test will live once it flips.
+A strict xfail names the exception it fails with today in ``raises=``, so a setup
+error cannot satisfy it.
 
 Tests that share setup and assertion and differ only in data are one
 parametrized test, and a new case of an existing shape is a row, not a method.

@@ -1386,6 +1386,7 @@ class TestAsyncResourceAcquisition:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="an async execution enters and exits a sync lifecycle resource on "
         "whichever worker threads are free, so a thread-bound client can be closed "
         "on a thread other than the one that opened it",
