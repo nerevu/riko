@@ -365,7 +365,23 @@ class TestFilter:
         assert _values(filter_pipe([{"x": "nan"}], conf=nan_conf), "x") == ["nan"]
 
 
+_NESTED = {"a": {"b": 1, "c": 2}}
+
+# Each row: the input item, the rule's ``field`` and ``newval``, and the output.
+RENAME_LOOKUPS = [
+    pytest.param(_NESTED, "a.b", "x", {"a": {"c": 2}, "x": 1}, id="dotted-rename"),
+    pytest.param({"a": 1}, "A", "x", {"x": 1}, id="case-variant-rename"),
+    pytest.param(_NESTED, "a.b", None, {"a": {"c": 2}}, id="dotted-delete"),
+]
+
+
 class TestRename:
+    @pytest.mark.parametrize(("item", "field", "newval", "expected"), RENAME_LOOKUPS)
+    def test_rename_moves_the_field_it_reads(self, item, field, newval, expected):
+        """A dotted or case-variant ``field`` is removed from where it was read."""
+        conf = RenameConf({"rule": RenameConfRule(field=field, newval=newval)})
+        assert dict(next(rename(item, conf=conf))) == expected
+
     def test_rename_skips_absent_field(self):
         """A rename rule naming an absent field leaves the item untouched."""
         conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})

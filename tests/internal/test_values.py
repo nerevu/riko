@@ -838,6 +838,15 @@ class TestDotDict:
     def test_get_does_not_read_through_a_scalar(self):
         assert DotDict({"a": {"b": 1}}).get("a.b.z", MISSING) is MISSING
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal DotDict reads of a numeric-string key are not yet "
+        "implemented: the key is taken as a sequence index",
+    )
+    def test_numeric_string_key_reads_literally(self):
+        assert DotDict({"2020": "x"}).get("2020") == "x"
+
 
 GET_SKIPS = [
     pytest.param({"field": "content"}, SKIP_ITEM, False, id="field-present"),

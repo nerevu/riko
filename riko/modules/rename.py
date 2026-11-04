@@ -29,8 +29,6 @@ from __future__ import annotations
 from functools import reduce
 from typing import TYPE_CHECKING, Any, cast
 
-from meza.fntools import remove_keys
-
 from riko.bado.itertools import coop_reduce
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
@@ -54,8 +52,11 @@ DEFAULTS: Defaults = {}
 
 
 def reducer(item: Item, rule: RenameConfRule) -> Item:
-    value = DotDict(item).get(rule.field, MISSING)
-    reduced = DotDict(item if rule.copy else remove_keys(item, rule.field))
+    reduced = DotDict(item)
+    value = reduced.get(rule.field, MISSING)
+
+    if not rule.copy:
+        reduced.delete(rule.field)
 
     if rule.newval is not None and value is not MISSING:
         reduced.update({rule.newval: value})

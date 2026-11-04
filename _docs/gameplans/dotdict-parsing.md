@@ -255,3 +255,14 @@ Exact duplicate keys in fetched JSON (`any2dict`, `cast` with `JSON`, `exchanger
 last value on both branches, as `json.loads` does; only workflow documents reject them
 (audit 2026-11-01, accepted: the streamed branch cannot see a later duplicate without
 buffering the object).
+
+## Known instance: a numeric-string key reads as a sequence index
+
+Triaged 2026-11-03 (repo audit). `DotDict.get` runs `int(k)` on every path segment, so a key such as
+`"2020"` is taken as a sequence index: `DotDict({"2020": "x"}).get("2020")` returns `None` while
+`["2020"]` returns `"x"`. Every module that reads a field through `get` then sees the field as
+missing: `rename` deletes it and never re-adds it, `uniq` keeps only the first item, `filter` and
+`subelement` yield nothing, `sort` is a no-op. The literal-access boundary above owns the key
+grammar; until it lands, the strict-xfail tripwire
+`TestDotDict::test_numeric_string_key_reads_literally` in `tests/internal/test_values.py` pins the
+miss.
