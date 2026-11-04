@@ -13,10 +13,12 @@ from collections.abc import (
     Awaitable,
     Iterator,
 )
+from decimal import Decimal
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
+from json import loads
 from time import monotonic
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 
 import attrs
@@ -101,6 +103,7 @@ async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Str
 
 _ASYNC_SUBPIPE = workflow()(_async_subpipe)
 _SOURCE_LEN = 5
+_PLACES = Decimal("0.0001")
 BARE_ROWS = [{"content": "hi"}]
 DECORATORS = [processor, operator, splitter]
 FIXED_ROWS = [{"x": 1}]
@@ -1226,6 +1229,36 @@ class TestCsvParser:
         assert closed
 
 
+# Each row: a rates response document, and the error message it raises.
+MISSING_RATES = [
+    pytest.param(
+        {"error": True, "message": "invalid_app_id", "description": "Invalid App ID"},
+        "no or an empty 'rates' mapping: Invalid App ID$",
+        id="error-description",
+    ),
+    pytest.param(
+        {"error": True, "message": "not_allowed"},
+        "no or an empty 'rates' mapping: not_allowed$",
+        id="error-message",
+    ),
+    pytest.param({"base": "USD"}, "empty 'rates' mapping$", id="no-rates"),
+    pytest.param({"rates": [1]}, "empty 'rates' mapping$", id="rates-not-mapping"),
+    pytest.param([1], "empty 'rates' mapping$", id="document-not-mapping"),
+    pytest.param({"rates": {}}, "empty 'rates' mapping$", id="empty-rates"),
+]
+
+# Each row: the response's rate for the currency exchanged from, and the error raised.
+UNUSABLE_RATES = [
+    pytest.param("abc", "invalid USD/XYZ rate: 'abc'$", id="text"),
+    pytest.param([1], r"invalid USD/XYZ rate: \[1\]$", id="list"),
+    pytest.param(True, "invalid USD/XYZ rate: True$", id="bool"),
+    pytest.param("nan", "invalid USD/XYZ rate: 'nan'$", id="nan"),
+    pytest.param("inf", "USD/XYZ rate must be finite: got 'inf'$", id="infinite"),
+    pytest.param(0, "USD/XYZ rate must be positive: got 0$", id="zero"),
+    pytest.param("-1.2", "USD/XYZ rate must be positive: got '-1.2'$", id="negative"),
+]
+
+
 class TestExchangeRate:
     @async_test
     async def test_data_file_starting_with_http_is_read_locally(
@@ -1243,9 +1276,44 @@ class TestExchangeRate:
         )
         assert str(rate) == "1.275201"
 
-    def test_a_non_numeric_rate_raises(self):
-        with pytest.raises(TypeError, match="invalid rate"):
-            exchangerate_module.build_rates({"USD": [1]})
+    @async_test
+    async def test_http_response_rates_are_read(self, monkeypatch):
+        """The HTTP branch reads the ``rates`` mapping out of the response document."""
+        document = loads((PACKAGE_DIR / "data" / "quote.json").read_text())
+
+        async def async_get(url: str, **_: object) -> SimpleNamespace:
+            return SimpleNamespace(json=lambda: document)
+
+        monkeypatch.setattr(exchangerate_module, "async_get", async_get)
+        url = "https://example.com/latest.json"
+        conf = {"url": url, "currency": "USD", "precision": 6}
+        rate = await exchangerate_module.async_parser(
+            "GBP", None, ExchangeRateObjconf(conf)
+        )
+        assert str(rate) == "1.275201"
+
+    @pytest.mark.parametrize(("rate", "match"), UNUSABLE_RATES)
+    def test_an_unusable_rate_raises_naming_the_currency(self, rate, match):
+        """A rate that isn't a finite positive number raises with the raw value."""
+        rates = exchangerate_module.build_rates(USD=1, XYZ=rate)
+
+        with pytest.raises(ValueError, match=match):
+            exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
+
+    @pytest.mark.parametrize("rate", [None, MISSING], ids=["null", "absent"])
+    def test_a_missing_rate_warns_and_is_nan(self, rate, caplog):
+        """A currency with no rate in the response yields ``NaN`` and logs a warning."""
+        raw = {"USD": 1} if rate is MISSING else {"USD": 1, "XYZ": rate}
+        rates = exchangerate_module.build_rates(**raw)
+        rate = exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
+        assert rate.is_nan()
+        assert "USD/XYZ rate not found in rates" in caplog.text
+
+    @pytest.mark.parametrize(("document", "match"), MISSING_RATES)
+    def test_a_response_without_rates_raises(self, document, match):
+        """A rates response with no ``rates`` mapping raises with its own error text."""
+        with pytest.raises(ValueError, match=match):
+            exchangerate_module.require_rates(document)
 
 
 def _finite_source(consumed: list[int]) -> Stream:

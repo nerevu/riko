@@ -183,6 +183,10 @@ Changes
 - The ``regex`` module applies consecutive ``seriesmatch=False`` rules to the original
   text in one pass (leftmost match first) instead of to each rule's output.
 
+- ``exchangerate`` now raises ``ValueError`` when the response has no ``rates`` mapping
+  (e.g., an error response for a missing app id) instead of reporting ``0``. A retrieved
+  rate that isn't finite and positive also raises ``ValueError`` naming the currency.
+
 Removed
 ~~~~~~~
 
@@ -231,8 +235,17 @@ Fixes
 
 - Fixed many defects that earlier 2026 releases introduced: riko's errors; async runs
   and async I/O; writing and exporting; ``DotDict``, field assignment, and configuration
-  lookups; module decorators and their options; plugin module loading; the ``loop``
-  module; JSON and feed parsing; dates; and URL and path resolution.
+  lookups; module decorators and their options; plugin module loading and registration;
+  the ``loop`` module; ``filter`` comparisons; JSON and feed parsing; dates; and URL and
+  path resolution.
+
+- ``rename`` now renames (or, with an omitted ``newval``, deletes), instead of copying,
+  a field named by a dotted path or in a different case.
+
+- ``typecast`` to ``int`` converts ``"inf"`` or an out-of-range value to the default
+  instead of raising ``OverflowError``.
+
+- ``exchangerate`` now logs a warning when the response has no rate for a currency.
 
 - Fetching in a sync run no longer garbles text with no newline or only carriage-return
   line endings, drops all but the first line of UTF-16 text, raises ``RuntimeError`` on

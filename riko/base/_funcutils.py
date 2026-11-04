@@ -77,7 +77,9 @@ def noop[T](value: T) -> T:
     return value
 
 
-def map_values[K, V, R](func: Callable[[V], R], item: Mapping[K, V]) -> dict[K, R]:
+def map_values[K, V, R](
+    func: Callable[[V], R], item: Mapping[K, V], non_null: bool = False
+) -> dict[K, R]:
     """
     Applies a function to each value of a mapping.
 
@@ -85,6 +87,11 @@ def map_values[K, V, R](func: Callable[[V], R], item: Mapping[K, V]) -> dict[K, 
 
         func: The transform applied to each value.
         item: The source mapping.
+
+    Kwargs:
+
+        non_null: Whether to drop the keys whose value is ``None`` instead of
+            transforming them.
 
     Returns:
 
@@ -95,9 +102,16 @@ def map_values[K, V, R](func: Callable[[V], R], item: Mapping[K, V]) -> dict[K, 
 
         >>> map_values(len, {"a": "xy", "b": ""})
         {'a': 2, 'b': 0}
+        >>> map_values(len, {"a": "xy", "b": None}, non_null=True)
+        {'a': 2}
 
     """
-    return {key: func(value) for key, value in item.items()}
+    if non_null:
+        result = {key: func(value) for key, value in item.items() if value is not None}
+    else:
+        result = {key: func(value) for key, value in item.items()}
+
+    return result
 
 
 def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
@@ -127,7 +141,10 @@ def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]
 
 
 def map_keys_and_values[K, V, RK, RV](
-    key_func: Callable[[K], RK], value_func: Callable[[V], RV], item: Mapping[K, V]
+    key_func: Callable[[K], RK],
+    value_func: Callable[[V], RV],
+    item: Mapping[K, V],
+    non_null: bool = False,
 ) -> dict[RK, RV]:
     """
     Applies one function to each key of a mapping and another to each value.
@@ -137,6 +154,11 @@ def map_keys_and_values[K, V, RK, RV](
         key_func: The transform applied to each key.
         value_func: The transform applied to each value.
         item: The source mapping.
+
+    Kwargs:
+
+        non_null: Whether to drop the keys whose value is ``None`` instead of
+            transforming them.
 
     Returns:
 
@@ -150,7 +172,12 @@ def map_keys_and_values[K, V, RK, RV](
         {'a': 2, 'b': 0}
 
     """
-    return {key_func(key): value_func(value) for key, value in item.items()}
+    if non_null:
+        result = {key_func(k): value_func(v) for k, v in item.items() if v is not None}
+    else:
+        result = {key_func(key): value_func(value) for key, value in item.items()}
+
+    return result
 
 
 @overload
