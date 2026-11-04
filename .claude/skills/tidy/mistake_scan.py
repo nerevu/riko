@@ -198,7 +198,13 @@ CLASS_HISTORY = {
         4,
         "4013ebf1 empty source; 10-31 empty CSV, regex zero-width; 11-01 regex $N",
     ),
-    "hash-order": (3, "10-05 graph order; 10-31 tz abbreviations, hash module"),
+    "hash-order": (
+        4,
+        (
+            "10-05 graph order; 10-31 tz abbreviations, hash module; "
+            "11-04 docstring sections"
+        ),
+    ),
     "frozen": (3, "1906d375; 10-05 deep-frozen definitions; 10-31 WriteCapabilities"),
     "unbounded": (
         3,

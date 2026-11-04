@@ -206,8 +206,16 @@ sync when source is moved between package groups.
   there is no check. Exit codes never change. Under GitHub Actions the warning, and any
   `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
   annotations.
+- **Docstring parameter-section lint.** `manage lint --docstrings` flags a parameter
+  with a default under `Args:`, one without under `Kwargs:`, and a `**kwargs` bag
+  under `Args:` (`gen_misplaced_params`); `Args:`/`Kwargs:` entries out of signature
+  order, ignoring names that are no parameter such as bag keys
+  (`gen_unordered_params`); and a run of two or more blank lines in any docstring.
+  Built-in pipe docstrings list `item`, `conf`, and `context` under `Args:` and the
+  call options under `Kwargs:`; a pipe's signature is `*args, **kwargs`, so none of
+  those names is a parameter and the checks never see them.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
-  that ends in `is None` (`gen_none_checks`; the bare call shows a `None` result), a
+  that ends in `is None` (`gen_null_checks`; the bare call shows a `None` result), a
   doctest that imports a public name through a private `riko` module path, a module
   example in an underscore-prefixed module that defines no public name, and a missing
   one in an underscore-prefixed module whose public names include a function or a

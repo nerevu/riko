@@ -730,6 +730,42 @@ EXAMPLE_RULES = [
         ["checks for None (show the bare call instead)"],
         id="none-check",
     ),
+    pytest.param(
+        "mod.py",
+        _function("Args:\n\n    a: A.\n    b: B.\n\nKwargs:\n\n    c: C.").replace(
+            "f()", "f(a, b=1, *, c)"
+        ),
+        ["documents a parameter in the wrong section"] * 2,
+        id="misplaced-params",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("Args:\n\n    a: A.\n    c: C.\n\nKwargs:\n\n    b: B.").replace(
+            "f()", "f(a, b=1, *, c)"
+        ),
+        [],
+        id="placed-params",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("Args:\n\n    a: A.\n    kwargs: K.").replace(
+            "f()", "f(a, **kwargs)"
+        ),
+        ["documents a parameter in the wrong section"],
+        id="bag-under-args",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("Kwargs:\n\n    c: C.\n    b: B.").replace("f()", "f(*, b=1, c=2)"),
+        ["lists parameters out of signature order"],
+        id="unordered-params",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("More.\n\n\nArgs:\n\n    a: A.").replace("f()", "f(a)"),
+        ["has a run of blank lines"],
+        id="blank-run",
+    ),
 ]
 
 
