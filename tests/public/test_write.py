@@ -369,6 +369,9 @@ class TestExportFormats:
         assert collection["type"] == "FeatureCollection"
         assert collection["features"] == []
 
+    def test_empty_csv_export_is_an_empty_buffer(self):
+        assert export([], "csv").getvalue() == ""
+
     def test_finance_targets_track_csv2ofx(self):
         """``ofx``/``qif`` formats appear only when the finance extra is present."""
         finance_targets = {"ofx", "qif"}

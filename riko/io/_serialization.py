@@ -243,6 +243,6 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
         try:
             result = convert(stream, **kwargs)
         except StopIteration:
-            result = iter("")
+            result = StringIO()
 
     return result
