@@ -250,7 +250,10 @@ def build_sort_key(
 
 
 def group_by[T: Mapping[str, object] | PrimitiveValue](
-    content: Iterable[T], attr: str, default: PrimitiveValue | None = None
+    content: Iterable[T],
+    attr: str,
+    default: PrimitiveValue | None = None,
+    ignore_case: bool = False,
 ) -> ItemsView[str, list[T]]:
     """
     Groups items by the stringified value of a field.
@@ -259,16 +262,23 @@ def group_by[T: Mapping[str, object] | PrimitiveValue](
 
         content: The items to group.
         attr: The field read from each item.
+
+    Kwargs:
+
         default: The value used when an item lacks ``attr``.
+        ignore_case: Whether grouping should be case insensitive.
 
     Returns:
 
-        A view of ``(group value, items)`` pairs, one per distinct value.
+        A view of ``(group value, items)`` pairs, one per distinct value, in first-seen
+        order.
 
     Examples:
 
-        >>> items = [{"k": "a"}, {"k": "b"}, {"k": "a"}]
+        >>> items = [{"k": "a"}, {"k": "b"}, {"k": "A"}]
         >>> sorted((k, len(v)) for k, v in group_by(items, "k"))
+        [('A', 1), ('a', 1), ('b', 1)]
+        >>> [(k, len(v)) for k, v in group_by(items, "k", ignore_case=True)]
         [('a', 2), ('b', 1)]
 
     """
@@ -277,6 +287,6 @@ def group_by[T: Mapping[str, object] | PrimitiveValue](
 
     for item in content:
         key = str(keyfunc(item))
-        groups[key].append(item)
+        groups[key.lower() if ignore_case else key].append(item)
 
     return groups.items()

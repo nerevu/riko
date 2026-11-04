@@ -123,7 +123,7 @@ async def async_parser(
         return cast("DotDict[RikoValue]", result)
 
     regex_rules = map(partial(build_regex_rule, recompile=True), rules)
-    grouped = group_by(regex_rules, "field")
+    grouped = group_by(regex_rules, "field", ignore_case=True)
     field_rules = map(itemgetter(1), grouped)
     return await async_reduce(areducer, field_rules, item)
 
@@ -179,8 +179,8 @@ def parser(
         return cast("DotDict[RikoValue]", result)
 
     regex_rules = [build_regex_rule(r, recompile=True) for r in rules]
-    grouped = group_by(regex_rules, "field")
-    field_rules = [g[1] for g in grouped]
+    grouped = group_by(regex_rules, "field", ignore_case=True)
+    field_rules = map(itemgetter(1), grouped)
     return reduce(reducer, field_rules, item)
 
 

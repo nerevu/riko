@@ -532,6 +532,17 @@ REGEX_CASES = [
         "abc",
         id="default-for-another-field",
     ),
+    pytest.param(
+        [
+            _rule(match="a", replace="b"),
+            RegexConfRule(field="Content", match="b", replace="c"),
+            _rule(match="c", replace="d"),
+        ],
+        {},
+        "a",
+        "d",
+        id="case-variant-field-spellings",
+    ),
 ]
 
 
