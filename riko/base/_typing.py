@@ -120,6 +120,9 @@ def resolve_type_hints(
 
         obj: The module, class, or callable whose hints to resolve.
         namespaces: Modules or mappings whose names supplement the local namespace.
+
+    Kwargs:
+
         include_extras: Whether to keep ``Annotated`` metadata.
 
     Returns:
@@ -233,6 +236,9 @@ def resolve_enum[E: StrEnum](
 
         enum: The string enum to resolve into.
         value: A member or member value, or ``None`` when absent.
+
+    Kwargs:
+
         what: How error messages name the value (default: the enum's name).
         default: The member a missing ``value`` resolves to.
         strict: Whether a missing ``value`` with no ``default`` raises.
@@ -284,6 +290,8 @@ def import_or_else(target: str, *, strict: bool = False) -> ModuleType | None:
     Args:
 
         target: Fully qualified module name to import.
+
+    Kwargs:
 
         strict: Whether a missing parent package raises instead of returning ``None``.
             When set, only ``target`` itself may be missing.

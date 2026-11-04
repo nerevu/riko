@@ -673,7 +673,7 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
     ``**kwargs`` into the synchronous conf-parsing machinery. Each async stream is
     materialized once here so parsing consumes it like its synchronous counterpart.
 
-    Args:
+    Kwargs:
 
         **kwargs: The passthrough keyword arguments, possibly holding async streams.
 
@@ -1231,6 +1231,9 @@ class processor[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The parsed input item.
+
+        Kwargs:
+
             field: Optional field whose value replaces the whole item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 
@@ -1282,6 +1285,9 @@ class processor[B: bool](Module[B]):  # noqa: N801
             input_: The original input item to merge into.
             stream: The parser's results.
             assign: The field the result is assigned to.
+
+        Kwargs:
+
             emit: Whether to emit the result rather than assign it.
             skip: Whether the item was skipped (passed through unchanged).
             count: Optional stream-count reduction.
@@ -1545,7 +1551,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
         Non-mapping elements are placed under ``"content"``; an empty or ``None``
         input yields nothing.
 
-        Args:
+        Kwargs:
 
             items: The input items, if any.
 
@@ -1621,6 +1627,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The parsed sync or async input stream.
+
+        Kwargs:
+
             field: Optional field whose value replaces each item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 
@@ -1682,6 +1691,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
             stream: The parser's results.
             assign: The field the result is assigned to.
+
+        Kwargs:
+
             emit: Whether to emit the result rather than assign it.
 
         Returns:
@@ -1923,7 +1935,7 @@ class splitter[B: bool](Module[B]):  # noqa: N801
         Non-mapping elements are placed under ``"content"``; an empty or ``None``
         input yields nothing.
 
-        Args:
+        Kwargs:
 
             items: The input items, if any.
 
@@ -1957,6 +1969,9 @@ class splitter[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The input stream.
+
+        Kwargs:
+
             field: Optional field whose value replaces each item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 

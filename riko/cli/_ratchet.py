@@ -123,6 +123,9 @@ def build_ceiling_text(
         table: The ``[tool.riko.<table>]`` table holding the value.
         key: The value's key in that table.
         value: The ceiling or date to record.
+
+    Kwargs:
+
         after: The key whose line a missing key goes under (default: the table header).
 
     Returns:
@@ -192,6 +195,9 @@ def ratchet_ceiling(
         key: The ceiling's key in that table.
         count: The measured count.
         noun: What ``count`` counts, for the printed report.
+
+    Kwargs:
+
         today: The day of the measurement (default: the current date).
 
     Returns:

@@ -132,6 +132,9 @@ def def_itemgetter(
     Args:
 
         attr: The field read from each item.
+
+    Kwargs:
+
         default: The value used when the field is missing or uncastable.
         type_: Optional cast type applied to the value.
         fallback_tzinfo: Timezone assigned to naive datetimes before they are
@@ -215,6 +218,9 @@ def build_sort_key(
     Args:
 
         attr: The field read from each item.
+
+    Kwargs:
+
         default: The value an item lacking ``attr`` sorts by, if any.
         type_: Optional cast type applied to the value.
         fallback_tzinfo: Fallback timezone assigned to naive datetimes

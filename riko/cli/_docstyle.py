@@ -112,6 +112,9 @@ def get_name_verb(name: str, *, is_async: bool = False) -> str | None:
     Args:
 
         name: The function name.
+
+    Kwargs:
+
         is_async: Whether the function is an async function.
 
     Returns:

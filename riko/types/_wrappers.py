@@ -324,6 +324,9 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
     Args:
 
         value: The object to check.
+
+    Kwargs:
+
         what: How to name ``value`` in the error.
 
     Returns:
@@ -724,6 +727,9 @@ def require_single_output(
     Args:
 
         value: A resolved pipe wrapper.
+
+    Kwargs:
+
         what: How to name the pipe's holder in the error.
 
     Returns:

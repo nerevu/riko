@@ -55,7 +55,7 @@ def parse_rss(
     """
     Fetches or reads an RSS/Atom feed and returns its parsed entries.
 
-    Args:
+    Kwargs:
 
         url: URL, path, or source string used when ``content`` is not supplied.
         content: Feed content to parse directly instead of fetching ``url``.

@@ -137,6 +137,9 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         Args:
 
             name: Canonical module name to resolve.
+
+        Kwargs:
+
             is_async: Whether to resolve the ``async_pipe``.
 
         Returns:
@@ -236,6 +239,8 @@ def register_module(definition: ModuleDefinition, *, replace: bool = False) -> N
     Args:
 
         definition: Named module definition to register.
+
+    Kwargs:
 
         replace: Whether the definition may replace an existing runtime
             registration, or shadow an entry-point or built-in module.

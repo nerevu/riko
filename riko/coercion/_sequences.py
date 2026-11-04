@@ -109,6 +109,9 @@ def gen_items(
     Args:
 
         content: Scalar, mapping, or nested list/tuple content to emit.
+
+    Kwargs:
+
         key: Optional field name used to wrap each emitted value in a mapping.
         yield_if_none: Whether a top-level ``None`` should be emitted.
 
@@ -142,6 +145,9 @@ def truncate_content(content: object, length: int = 20) -> object:
     Args:
 
         content: A string, bytes, a mapping or sequence of values, or any other value.
+
+    Kwargs:
+
         length: The longest a string or bytes value stays before it is cut and marked
             with "…".
 

@@ -311,6 +311,8 @@ def xpath(
 
         tree: The root element to search.
 
+    Kwargs:
+
         path: An XPath-like expression. A leading ``/`` indicates an absolute
             path (sets initial *pos* to 1).
 

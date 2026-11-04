@@ -692,6 +692,9 @@ def build_write_resource(
     Args:
 
         dest: A path, ``Path``, or ``SupportsWrite`` target.
+
+    Kwargs:
+
         mode: The write mode, as a ``WriteMode`` or its string value.
         fmt: The serialization format override, else derived from the extension.
         keys: The unified keys, interpreted per the target's capabilities.
@@ -752,8 +755,6 @@ def write_through(
 
         prepared: A validated write that has been checked against its target's
             capabilities.
-
-    Kwargs:
 
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 

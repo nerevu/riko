@@ -100,6 +100,8 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncItera
 
         source: A sync or async iterable.
 
+    Kwargs:
+
         cooperative: For a sync *source*, yield control before each item so
             concurrent tasks (e.g. a timeout) can run (default: False).
 
@@ -194,6 +196,8 @@ async def async_iter[T](
 
         elements: The sync iterable to wrap.
 
+    Kwargs:
+
         cooperative: Yield control (``async_sleep(0)``) before each item
             so concurrent tasks (e.g. a timeout) can run (default: False).
 
@@ -275,6 +279,9 @@ async def aauto_close[T](
 
         stream: The items to yield.
         closeables: The values closed once iteration finishes.
+
+    Kwargs:
+
         inline: Whether a sync close runs on the event loop rather than a worker.
 
     Yields:
@@ -325,6 +332,8 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
         func: A two-argument reducer, e.g. ``lambda x, y: x + y``.
 
         content: The sequence to reduce.
+
+    Kwargs:
 
         initial: Starting accumulator value. When ``None`` (default) the first element
             is consumed as the starting value (``None`` if *content* is empty).
@@ -378,6 +387,8 @@ def async_reduce[T, S](
 
         content: The sequence to reduce.
 
+    Kwargs:
+
         initial: Starting accumulator value. When ``None`` (default) consumes the first
             element as the starting value.
 
@@ -428,6 +439,8 @@ async def async_map[T, S](
         func: An async function applied to each element.
 
         content: The items to map over.
+
+    Kwargs:
 
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``,
             16). ``0`` runs them all at once.
@@ -570,6 +583,8 @@ async def async_map_stream[T, S](
 
         source: The items to map over.
 
+    Kwargs:
+
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
         buffer: Size of the completed-results queue (default: 0).
@@ -627,6 +642,8 @@ async def async_map_ordered_stream[T, S](
         func: An async function applied to each input item.
 
         source: The items to map over.
+
+    Kwargs:
 
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
@@ -692,6 +709,8 @@ async def async_merge[S](
     Args:
 
         source: The async iterables to merge.
+
+    Kwargs:
 
         limit: Maximum number of source items drained concurrently (default:
             ``DEF_CONCURRENCY_LIMIT``).

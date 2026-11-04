@@ -183,6 +183,9 @@ def get_free_occurrence(name: str, taken: Iterable[str], start: int = 1) -> int:
 
         name: The node name the id is based on.
         taken: The ids already in use.
+
+    Kwargs:
+
         start: The first occurrence number to try.
 
     Returns:

@@ -37,6 +37,9 @@ def fromdict(
     Args:
 
         cls: Dataclass type to construct.
+
+    Kwargs:
+
         **data: Field values used to construct ``cls``.
 
     Returns:
@@ -107,6 +110,9 @@ def build_regex_conf_rule(
         f: Item field to operate on.
         m: Regular-expression pattern to match.
         r: Replacement text.
+
+    Kwargs:
+
         seriesmatch: Whether later rules operate on the previous rule's result.
 
     Returns:
@@ -132,6 +138,9 @@ def build_regex_rule(
     Args:
 
         rule: Parsed dynamic or dataclass regex rule.
+
+    Kwargs:
+
         recompile: Whether to compile the match expression and translate ``$N``
             replacement references for Python's regex engine.
 

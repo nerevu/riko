@@ -66,6 +66,8 @@ def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocume
 
         flow: The ``Workflow`` to serialize.
 
+    Kwargs:
+
         indent: Number of spaces to indent each nesting level by. Pass ``None`` for the
             compact single-line form.
 
@@ -220,6 +222,8 @@ def parse_graph(
     Args:
 
         document: The JSON input as bytes or text, or already parsed.
+
+    Kwargs:
 
         shape: The shape to read it as. Omit it to detect the shape from the input.
 

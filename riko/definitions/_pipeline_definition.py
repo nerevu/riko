@@ -188,6 +188,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             name: The module's name.
+
+        Kwargs:
+
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -255,6 +258,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             name: The module to append.
+
+        Kwargs:
+
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -324,11 +330,10 @@ class PipelineDefinition(Generic[T_co]):
         destination, it chains the ``write`` module with module arguments instead.
         Supplying both a destination and module arguments is a call-site error.
 
-        Args:
+        Kwargs:
 
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
-
             mode: How the items reconcile with the destination's contents.
             fmt: The serialization format, or ``None`` to derive one.
             keys: The match keys a keyed destination needs.
@@ -389,7 +394,7 @@ class PipelineDefinition(Generic[T_co]):
         argument keeps the current setting. An explicit ``None`` restores that setting's
         default. Settings are validated here, not when the pipeline runs.
 
-        Args:
+        Kwargs:
 
             executor: Picks where per-item work runs: ``"auto"``, ``"inline"``,
                 ``"thread"``, or ``"process"`` (default: "auto").
@@ -515,6 +520,9 @@ class PipelineDefinition(Generic[T_co]):
 
             name: The Context name the resource is provided under.
             definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
+
+        Kwargs:
+
             credential: A credential reference for a factory.
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.
@@ -551,6 +559,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:
@@ -567,6 +578,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:
@@ -583,6 +597,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:

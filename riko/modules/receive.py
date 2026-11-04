@@ -146,6 +146,8 @@ async def async_parser(
         objconf: The module configuration, containing `name`.
         tuples: Iterable of (item, objconf). Unused.
 
+    Kwargs:
+
         func: Applied to each received item. It gets the kwargs it names, or
             all of them if it accepts ``**kwargs``. The pipe's own ``conf``,
             ``assign``, and ``stream`` are always withheld (default: None).
@@ -185,6 +187,8 @@ def parser(
             and `max_len`.
 
         tuples: Iterable of (item, objconf). Unused.
+
+    Kwargs:
 
         func: Applied to each received item. It gets the kwargs it names, or
             all of them if it accepts ``**kwargs``. The pipe's own ``conf``,

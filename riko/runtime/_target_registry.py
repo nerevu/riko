@@ -122,6 +122,8 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
 
         target: The self-describing target class, keyed by its ``backend``.
 
+    Kwargs:
+
         replace: Whether the target may replace an existing runtime target for the same
             backend, or shadow an entry-point or built-in one.
 

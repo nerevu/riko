@@ -233,6 +233,9 @@ def reduce_find(word: str, rule: FindConfRule, literal: bool = False) -> str:
 
         word: The string to search.
         rule: The find criteria: ``find``, ``location`` and ``param``.
+
+    Kwargs:
+
         literal: Whether to treat ``find`` as a literal rather than a regex.
 
     Returns:

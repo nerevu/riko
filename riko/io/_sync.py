@@ -91,7 +91,7 @@ def default_user_agent(name: str = "riko") -> str:
     """
     Formats the default user agent as ``name/version``.
 
-    Args:
+    Kwargs:
 
         name: The product name in the ``name/version`` string.
 
@@ -142,6 +142,9 @@ def get_response_encoding(
     Args:
 
         r: The HTTP response to inspect.
+
+    Kwargs:
+
         def_encoding: The fallback used when no charset is declared.
 
     Returns:
@@ -280,6 +283,9 @@ def buffer(
     Args:
 
         f: The forward-only stream to copy.
+
+    Kwargs:
+
         binary: Whether the chunks are bytes. Auto-detected when omitted.
         encoding: Encoding used to decode byte chunks while buffering.
 
@@ -334,6 +340,9 @@ def seekable(
     Args:
 
         f: The file to rewind or copy.
+
+    Kwargs:
+
         binary: Whether the chunks are bytes. Auto-detected when omitted.
         encoding: Encoding used to decode byte chunks while buffering.
 
@@ -500,12 +509,14 @@ def opener(
     Args:
 
         url: The resource to open.
+
+    Kwargs:
+
         memoize: Whether to buffer the body for re-reading.
         encoding: Encoding used to decode byte streams.
         params: Query parameters for http requests.
         offline: Whether to treat a schemeless path as a local file (not an http host).
         binary: Whether to return bytes rather than decoded text.
-
         timeout: Per-request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``, 30
             seconds). ``None``, ``0``, or ``inf`` waits forever.
 
@@ -577,7 +588,7 @@ def build_opener(memoize: bool = False, **kwargs: object) -> Opener:
     """
     Builds a URL opener cached by call arguments.
 
-    Args:
+    Kwargs:
 
         memoize: Whether the returned opener buffers responses for re-reading.
 

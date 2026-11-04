@@ -53,6 +53,9 @@ def serialize_dataclass(
 
         value: The dataclass instance or class to read.
         keep_fields: Names of fields to include even when they are unset.
+
+    Kwargs:
+
         compact: Whether to leave out unset fields. When false, every field is kept.
 
     Returns:
@@ -91,6 +94,9 @@ def serialize_attrs(
 
         value: The attrs record to read.
         keep_fields: Names of fields to include even when they are unset.
+
+    Kwargs:
+
         recurse: Whether a field holding another attrs record is read into a dict too.
         compact: Whether to leave out unset fields. When false, every field is kept.
 

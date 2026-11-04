@@ -98,6 +98,9 @@ class ModuleDefinition:
         Args:
 
             module: Object having ``pipe``/``async_pipe``, e.g., a Python module import.
+
+        Kwargs:
+
             name: Declared name (default: last component of module's ``__name__``).
             description: Summary (default: first non-blank line of module's docstring).
 
@@ -166,7 +169,7 @@ class ModuleDefinition:
         """
         Selects this definition's sync or async pipe callable.
 
-        Args:
+        Kwargs:
 
             is_async: Whether to return ``async_pipe`` instead of ``pipe``.
 

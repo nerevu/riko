@@ -125,6 +125,9 @@ def resolve_closer[T](
     Args:
 
         value: The owned value.
+
+    Kwargs:
+
         cleanup: The cleanup to call with ``value``, ``False`` to leave it open, or
             ``None`` for the value's own close.
         is_async: Whether the owner closes on an event loop, or ``None`` for either.
@@ -193,6 +196,9 @@ def require_closer[T](
     Args:
 
         value: The owned resource value.
+
+    Kwargs:
+
         cleanup: The cleanup to call with ``value``, ``False`` to leave it open, or
             ``None`` for the value's own close.
         is_async: Whether the owner closes on an event loop, or ``None`` for either.

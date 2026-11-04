@@ -75,10 +75,10 @@ def parser(
         extraction: The extracted conf value. Unused.
         objconf: The module configuration: ``prompt``, ``default``, ``type``, and
             ``input_key``.
-        skip: Whether to use ``default`` instead of prompting.
 
     Kwargs:
 
+        skip: Whether to use ``default`` instead of prompting.
         inputs: Preset answers keyed by ``input_key``, used instead of prompting.
 
     Returns:

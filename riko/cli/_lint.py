@@ -138,7 +138,7 @@ def _lint_terms(where: str | None = "") -> int:
     Shipped text is held to the banned phrases, phase codes, and removed paths; the
     as-built docs only to the banned phrases, since they cite phases by design.
 
-    Args:
+    Kwargs:
 
         where: Space-separated files or directories to check instead of the
             shipped-text roots; the as-built docs are then left out.

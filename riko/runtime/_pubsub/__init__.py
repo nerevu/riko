@@ -44,7 +44,7 @@ def coroutine(
     registers it with ``sync_hub``. It is ready to be pushed to before the caller does
     anything else. The generator itself is returned, not the hub entry.
 
-    Args:
+    Kwargs:
 
         registry_name: Channel to register under. Defaults to the decorated
             function's name, which is only useful for a module-level receiver.

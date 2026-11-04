@@ -49,6 +49,9 @@ def pythonise(
     Args:
 
         content: The raw id to sanitize.
+
+    Kwargs:
+
         encoding: The encoding used to drop non-representable characters.
         replace: The substrings replaced with ``_``.
 

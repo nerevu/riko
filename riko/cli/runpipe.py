@@ -138,6 +138,9 @@ def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> N
     Args:
 
         path: The path to the ``WorkflowDocument``.
+
+    Kwargs:
+
         isasync: Whether to iterate the pipeline asynchronously.
         test: Whether to use default input values instead of prompting.
 
@@ -211,7 +214,7 @@ def resolve_target(
     or nothing, plus a ``context``; and a ``WorkflowDocument`` is a serialized
     ``Workflow``.
 
-    Args:
+    Kwargs:
 
         path: The path to a pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
         pipeid: The id of a pipe script/``WorkflowDocument`` in the example directory.
@@ -247,6 +250,8 @@ def run_target(
 
         target: The loaded pipe script or ``WorkflowModule``, or path to a
             ``WorkflowDocument``.
+
+    Kwargs:
 
         isasync: Whether to run the async pipe when the target has one.
 

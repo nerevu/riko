@@ -51,6 +51,9 @@ def conf_is_dynamic(conf: object, **kwargs: object) -> bool:
     Args:
 
         conf: Configuration value to inspect recursively.
+
+    Kwargs:
+
         **kwargs: Sentinel values used when identifying dynamic configuration.
 
     Returns:
@@ -88,7 +91,7 @@ def resolve_conf[VT](
     """
     Resolves configuration against an item by expanding subkeys and sentinels.
 
-    Args:
+    Kwargs:
 
         item: Input item used to resolve subkey references.
         conf: Configuration value to parse recursively.
@@ -169,6 +172,9 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
     Args:
 
         item: The entry to process.
+
+    Kwargs:
+
         skip_if: The skipping criteria.
 
     Returns:
@@ -219,7 +225,7 @@ def get_field(
     """
     Extracts a configured field from an item.
 
-    Args:
+    Kwargs:
 
         item: Mapping, ``DotDict``, or scalar value to inspect.
         field: Field name to extract; an empty name returns ``item`` unchanged.

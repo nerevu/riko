@@ -66,6 +66,9 @@ def build_conf(
         parsed_conf: The per-item parsed conf, or ``None``.
         defaults: The module's default conf.
         opts: The decoration options (``extract``/``listize``).
+
+    Kwargs:
+
         module: The module name, used in the error message.
 
     Returns:
@@ -397,6 +400,9 @@ def resolve_and_cast[T, E](
         opts: The resolved decoration and call options.
         parsers: The field and conf parsers.
         casters: The field, extract, and conf casters.
+
+    Kwargs:
+
         defaults: The module's default conf.
         field: Optional field whose value replaces the item.
         module: The module name, used in error messages.

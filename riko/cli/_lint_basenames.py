@@ -42,6 +42,9 @@ def gen_basename_issues(
     Args:
 
         roots: The package folders to scan.
+
+    Kwargs:
+
         allowed: Basenames that may be shared.
 
     Yields:

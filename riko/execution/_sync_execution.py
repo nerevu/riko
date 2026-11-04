@@ -238,6 +238,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
             value: The value to close.
 
+        Kwargs:
+
             cleanup: The cleanup to call with ``value`` in place of its own close, or
                 ``False`` to leave it open.
 
@@ -402,6 +404,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             plan: The prepared workflow being run.
             node_id: The node to build.
             steps: The streams already built for upstream nodes.
+
+        Kwargs:
+
             seed: The items fed to the node's open input, if any.
 
         Returns:
@@ -503,6 +508,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Args:
 
             plan: The prepared workflow to run.
+
+        Kwargs:
 
             output: The name of the workflow output to produce.
 

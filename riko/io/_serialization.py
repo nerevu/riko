@@ -86,6 +86,9 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
     Args:
 
         items: The items to serialize.
+
+    Kwargs:
+
         newline: Whether to write one JSON object per line instead of an array.
         **kwargs: Extra keyword arguments forwarded to ``json.dumps``.
 
@@ -146,6 +149,9 @@ def require_conversion_format(fmt: str, what: str = "conversion format") -> Form
     Args:
 
         fmt: A format name or ``Formats`` member.
+
+    Kwargs:
+
         what: How error messages name the value.
 
     Returns:
@@ -210,6 +216,9 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
 
         items: The items to serialize.
         fmt: The output format.
+
+    Kwargs:
+
         **kwargs: Extra keyword arguments forwarded to the converter.
 
     Returns:

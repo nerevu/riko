@@ -304,6 +304,8 @@ def build_lifecycle_plan[T](
 
         args: Positional arguments for ``factory``.
 
+    Kwargs:
+
         kwargs: Keyword arguments for ``factory``.
 
     Returns:
@@ -367,6 +369,9 @@ def build_factory_plan[T](
 
         factory: The lifecycle or value factory.
         args: Positional arguments for ``factory``.
+
+    Kwargs:
+
         cleanup: The value factory's cleanup callback, or ``False`` for none.
         kwargs: Keyword arguments for ``factory``.
 

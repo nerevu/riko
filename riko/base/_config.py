@@ -72,7 +72,7 @@ def get_worker_cnt(length: int = 0, *, threads: bool = True) -> int:
     """
     Computes a worker pool size, capped at the core count (doubled for threads).
 
-    Args:
+    Kwargs:
 
         length: The number of items to spread across the pool, or zero when unknown.
         threads: Whether the pool uses threads rather than processes.
@@ -197,7 +197,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """
     Loads ``Settings`` from defaults overlaid with ``RIKO_*`` env vars.
 
-    Args:
+    Kwargs:
 
         env: The variables to read (default: the process environment).
 

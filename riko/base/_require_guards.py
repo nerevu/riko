@@ -214,10 +214,10 @@ def require_from_keys(
 
         required: The keys that must be present.
         allowed: The keys that may be present (every required key is allowed).
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for an unknown or missing key.
 
     Returns:
@@ -278,10 +278,10 @@ def require_from_typed_dict[T](
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
-        what: The name used in error messages (default: the TypedDict's name).
 
     Kwargs:
 
+        what: The name used in error messages (default: the TypedDict's name).
         exclude: Keys of ``item`` the mapping must not have.
         extra: Keys outside ``item`` the mapping may also have.
         error: The exception raised for an unknown or missing key.
@@ -342,10 +342,10 @@ def require_from_attrs[T: AttrsInstance](
     Args:
 
         cls: The attrs class whose ``__init__`` arguments the mapping must fit.
-        what: The name used in error messages (default: the class name).
 
     Kwargs:
 
+        what: The name used in error messages (default: the class name).
         exclude: Arguments of ``cls`` the mapping must not have.
         not_required: Required arguments of ``cls`` the mapping may leave out.
         extra: Keys outside ``cls`` the mapping may also have.
@@ -484,6 +484,9 @@ def def_from_typed_dict[T, D](
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
+
+    Kwargs:
+
         default: The result for ``None``.
         what: The name used in error messages (default: the TypedDict's name).
         exclude: Keys of ``item`` the mapping must not have.
@@ -558,11 +561,11 @@ def narrow_def_from_require[T, D, R](
     Args:
 
         require: The guard to run on a value that isn't ``None``.
-        default: The result for ``None``.
-        what: The name used in the guard's error messages.
 
     Kwargs:
 
+        default: The result for ``None``.
+        what: The name used in the guard's error messages.
         accepted: The input type to advertise in place of the guard's output type.
 
     Returns:
@@ -600,6 +603,9 @@ def validator_from_require(
 
         require: The guard to run on the field's value.
         args: Positional arguments passed before the value.
+
+    Kwargs:
+
         optional: Whether ``None`` skips the check.
         kwargs: Keyword arguments passed to ``require``.
 
@@ -646,6 +652,9 @@ def validator_from_typed_dict[T](
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
+
+    Kwargs:
+
         what: The name used in error messages (default: the TypedDict's name).
         optional: Whether ``None`` skips the check.
         exclude: Keys of ``item`` the mapping must not have.
@@ -699,10 +708,10 @@ def require_instance[T](
 
         cls: The class ``value`` must be an instance of.
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` isn't a ``cls``.
 
     Returns:
@@ -763,10 +772,10 @@ def require_instances[K, T](
 
         cls: The class every value must be an instance of.
         value: The mapping or iterable to check.
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for a value that isn't a ``cls``.
 
     Returns:
@@ -816,10 +825,10 @@ def require_nonblank_str(
     Args:
 
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` isn't such a string.
 
     Returns:
@@ -875,10 +884,10 @@ def require_from_form[T](
     Args:
 
         form: The type the guard narrows to.
-        what: The name used in error messages (default: the name of ``form``).
 
     Kwargs:
 
+        what: The name used in error messages (default: the name of ``form``).
         error: The exception raised for a value that doesn't fit.
 
     Returns:
@@ -983,10 +992,10 @@ def require_strlike(
     Args:
 
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` is neither.
 
     Returns:
@@ -1038,6 +1047,9 @@ def normalize_strs(
     Args:
 
         value: One key, an iterable of keys, or ``None``.
+
+    Kwargs:
+
         what: How to name the keys in an error.
         strict: Whether ``None`` is rejected rather than read as no keys.
         type_error: The error raised when ``value`` is not a string or iterable.
@@ -1098,10 +1110,10 @@ def require_finite(
     Args:
 
         value: The float to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised for NaN or infinity.
 
     Returns:
@@ -1144,6 +1156,8 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
         name: The argument being validated, used in the error message.
 
         module: The module name, used in the error message.
+
+    Kwargs:
 
         strict: Whether to also reject a present but falsy value, e.g. an empty
             ``others`` list that would publish to nobody. Use it only where a
@@ -1198,6 +1212,8 @@ def require_conf_key[T](
         key: The conf key that must be set.
 
         module: The module name, used in the error message.
+
+    Kwargs:
 
         strict: Whether to also reject a present but falsy value, e.g. a ``url``
             set to ``""``. Use it only where a falsy value can never be

@@ -425,10 +425,10 @@ def normalize_mapping(
     Args:
 
         item: The mapping to copy, or ``None``.
-        what: The name used in the error message when ``strict``.
 
     Kwargs:
 
+        what: The name used in the error message when ``strict``.
         strict: Whether anything other than a mapping or ``None`` raises.
 
     Returns:

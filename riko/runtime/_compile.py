@@ -10,7 +10,6 @@ It is a readable, type-checkable rendering of the ``Workflow`` graph that can be
 and imported like any Python source. Once saved as ``pipe_<id>.py`` in a package
 registered as a workflow store, it can also be embedded in a ``loop`` by its name.
 
-
 Examples:
 
     Basic usage::
@@ -201,6 +200,9 @@ def compile_workflow(
     Args:
 
         flow: The ``Workflow``, or a ``RawWorkflow`` describing one.
+
+    Kwargs:
+
         name: The name the module documents itself by.
         is_async: Whether to generate the ``async_pipe``.
 

@@ -490,6 +490,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             value: The value to close.
 
+        Kwargs:
+
             cleanup: The cleanup to call with ``value`` in place of its own close, or
                 ``False`` to leave it open.
 
@@ -863,6 +865,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Args:
 
             plan: The prepared workflow to run.
+
+        Kwargs:
 
             output: The name of the workflow output to produce.
 

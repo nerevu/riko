@@ -166,6 +166,9 @@ def get_module_metadata(
     Args:
 
         name: Module name.
+
+    Kwargs:
+
         strict: Whether to raise instead of returning ``None`` when the name is not
             a module or the module declares no metadata.
 

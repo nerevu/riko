@@ -27,6 +27,9 @@ def multi_try[T, S](
 
         source: The value passed to each callable.
         zipped: Pairs of ``(callable, exception_type)`` tried in order.
+
+    Kwargs:
+
         default: The value returned when every attempt raises.
 
     Returns:
@@ -261,6 +264,9 @@ def broadcast(
 
         item: The value passed to every function.
         funcs: The functions applied to ``item``.
+
+    Kwargs:
+
         kwargs: Extra keyword arguments forwarded to each function.
 
     Returns:
@@ -348,6 +354,9 @@ def resolve_default(
     Args:
 
         value: The value to test against None.
+
+    Kwargs:
+
         default: The result when ``value`` is None (default: an empty dict).
         fallback: The result when ``value`` is present (``value`` when omitted).
 

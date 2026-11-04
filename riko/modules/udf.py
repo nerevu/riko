@@ -62,6 +62,9 @@ async def async_parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The module configuration. Unused.
+
+    Kwargs:
+
         func: The function to apply to the item. Awaited when it is an async
             function. Required.
 
@@ -106,6 +109,9 @@ def parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The module configuration. Unused.
+
+    Kwargs:
+
         func: The function to apply to the item. Required.
 
     Returns:

@@ -172,9 +172,10 @@ def stamp_wrapper_meta(
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is an ``async_pipe``.
 
+    Kwargs:
+
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
-
         prepare: Prepares a call for reuse over many items. Defaults to preparing
             ``target`` with its configuration and call options (default: None).
 

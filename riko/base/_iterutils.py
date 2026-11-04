@@ -53,6 +53,9 @@ def unique_everseen[T](
     Args:
 
         content: The source iterable.
+
+    Kwargs:
+
         keyfunc: Optional function producing a uniqueness key per element.
 
     Yields:
@@ -200,6 +203,9 @@ def betwix[T](
     Args:
 
         iterable: The initial sequence.
+
+    Kwargs:
+
         start: The fragment to begin with (inclusive).
         stop: The fragment to finish at (exclusive).
         inc: Whether stop operates inclusively (useful if reading a file and
@@ -259,6 +265,9 @@ def partition[T](
     Args:
 
         values: The source iterable.
+
+    Kwargs:
+
         predicate: The test applied to each element; defaults to truthiness.
 
     Returns:

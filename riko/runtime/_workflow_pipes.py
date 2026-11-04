@@ -188,14 +188,14 @@ def build_workflow_pipes(
         dispatcher: Finds each node's pipe by name, whether a module such as
             ``fetch`` or a stored workflow's ``pipe_<id>``.
 
+        subtype: How the pipe callables are tagged. E.g., ``"source"`` (needs no input)
+            or ``"transformer"`` (takes an item).
+
         dependencies: The names of the modules and stored workflows, such as ``fetch``
             or a ``pipe_<id>``, that the workflow's nodes use. Reported when describing
             dependencies.
 
     Kwargs:
-
-        subtype: How the pipe callables are tagged. E.g., ``"source"`` (needs no input)
-            or ``"transformer"`` (takes an item).
 
         inputs: The workflow's input declarations. Reported when describing inputs.
 

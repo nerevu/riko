@@ -66,6 +66,9 @@ class Objectify[V](_Objectify, Mapping[str, V]):
         Args:
 
             data: The attributes to set.
+
+        Kwargs:
+
             func: Optional callable applied to each value on access.
             defaults: Default attributes, used for keys absent from ``data``.
 
@@ -122,6 +125,9 @@ def objectify[T, R](
     Args:
 
         data: The value to objectify.
+
+    Kwargs:
+
         func: Optional callable applied to non-mapping values.
         defaults: Default attributes for the resulting ``Objectify``.
 

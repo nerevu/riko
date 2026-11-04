@@ -203,6 +203,8 @@ class Workflow:
 
             document: The workflow input.
 
+        Kwargs:
+
             shape: The shape to read it as (``"dag"``, ``"v1"``, or ``"v2"``). Omit it
                 to detect the shape from the input. A ``Workflow`` reads only as
                 ``"v2"``.
@@ -258,6 +260,8 @@ class Workflow:
 
             path: The file to read.
 
+        Kwargs:
+
             shape: The shape to read it as. Omit it to detect the shape from the file.
 
         Returns:
@@ -296,7 +300,7 @@ class Workflow:
         workflow. The default is the readable indented form committed files are
         stored in.
 
-        Args:
+        Kwargs:
 
             indent: Number of spaces to indent each nesting level by. Pass ``None`` for
                 the compact single-line form.

@@ -55,6 +55,9 @@ def load_interfaces(
     Args:
 
         name: Module name to load.
+
+    Kwargs:
+
         builtin: Whether ``name`` is a built-in ``riko.modules`` module.
         loader: Optional module loader overriding the default import.
 

@@ -216,7 +216,7 @@ class CallOptions:
         """
         Builds call options from keyword-argument form.
 
-        Args:
+        Kwargs:
 
             raw: The options to convert or return as is. ``None`` means no options.
             what: The name used in error messages (default: "call options").

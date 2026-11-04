@@ -213,6 +213,9 @@ def _infer_expression_kind(
 
         node: The expression to classify (a function's final return value).
         assignments: Top-level name -> value bindings a returned name may resolve to.
+
+    Kwargs:
+
         seen: Names already being resolved, used to break assignment cycles.
 
     Returns:

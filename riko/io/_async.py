@@ -98,8 +98,11 @@ def chunk(
     Args:
 
         content: The source data to split.
-        chunksize: The number of units per chunk, or ``None`` for a single chunk.
         *args: Extra positional arguments forwarded to meza.
+
+    Kwargs:
+
+        chunksize: The number of units per chunk, or ``None`` for a single chunk.
         **kwargs: Extra keyword arguments forwarded to meza.
 
     Yields:
@@ -136,6 +139,9 @@ def _chunk_content(
     Args:
 
         content: The source data to split.
+
+    Kwargs:
+
         chunksize: The number of units per chunk, or ``None`` for a single chunk.
 
     Yields:
@@ -328,6 +334,8 @@ def async_url_open(
 
         url: An ``http(s)`` URL or a local path.
 
+    Kwargs:
+
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
             30 seconds). ``0`` or ``inf`` waits forever.
 
@@ -383,6 +391,8 @@ async def async_url_read(
 
         url: An ``http(s)`` URL or a local path; resolved to an absolute path.
 
+    Kwargs:
+
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
             30 seconds). ``0`` or ``inf`` waits forever.
 
@@ -430,6 +440,9 @@ async def async_write(
 
         dest: The destination path.
         content: The data to write.
+
+    Kwargs:
+
         mode: The file mode; a ``"b"`` in it selects binary I/O.
         encoding: The text encoding used when ``mode`` is not binary.
         chunksize: The units to write per ``content`` chunk, or ``None`` for a single

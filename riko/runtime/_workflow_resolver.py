@@ -260,7 +260,7 @@ class WorkflowResolver:
         and/or ``async_pipe``). A ``DocumentStore`` returns the ``Workflow`` a
         ``WorkflowDocument`` (serialized ``Workflow``) describes.
 
-        Args:
+        Kwargs:
 
             module_store: The ``ModuleStore`` to register.
 
@@ -447,6 +447,8 @@ class WorkflowResolver:
             name: The stored workflow's ``pipe_<id>`` name (``pipe:<id>`` is accepted
                 and read as ``pipe_<id>``).
 
+        Kwargs:
+
             is_async: Whether to find ``async_pipe`` instead of ``pipe``.
 
         Returns:
@@ -539,6 +541,8 @@ class WorkflowResolver:
             name: The stored workflow's ``pipe_<id>`` name (``pipe:<id>`` is accepted
                 and read as ``pipe_<id>``).
 
+        Kwargs:
+
             directory: A directory of ``WorkflowDocument`` files to read from instead of
                 the registered ``DocumentStore``.
 
@@ -595,7 +599,7 @@ def register_workflow_store(
     """
     Registers workflow stores (``WorkflowStore``) on the process-global resolver.
 
-    Args:
+    Kwargs:
 
         package: A package, or its import path, whose ``pipe_<id>.py`` files are each
             imported as a ``ResolvedWorkflow`` (a module exposing ``pipe`` and/or

@@ -113,10 +113,10 @@ def require_binding(
     Args:
 
         value: A name, an iterable of names, or a mapping of alias to name.
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for a malformed binding.
 
     Returns:
@@ -334,8 +334,6 @@ class WriteNode(Node):
 
             prepared: The validated write to record.
 
-        Kwargs:
-
             id: The node's id.
 
         Returns:
@@ -423,6 +421,9 @@ def get_family_edges(
     Args:
 
         edges: The edges to select from.
+
+    Kwargs:
+
         family: The edge family to keep.
 
     Returns:

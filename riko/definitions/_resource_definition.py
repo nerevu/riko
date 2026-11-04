@@ -386,6 +386,8 @@ class Resource[T]:
             factory: A sync/async generator function or context manager that
                 yields the value, or a callable that produces one.
 
+        Kwargs:
+
             credential: A credential reference resolved by the connector layer.
 
             lazy: Whether entry should defer until first use. Not yet honored: a run

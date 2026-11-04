@@ -108,6 +108,8 @@ class Registry[T]:
 
             entry: The self-keying entry to register.
 
+        Kwargs:
+
             replace: Whether the entry may replace an existing runtime registration,
                 or shadow an entry-point or built-in entry.
 

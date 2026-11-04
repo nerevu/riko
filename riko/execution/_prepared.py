@@ -300,6 +300,8 @@ class ResolvedModule:
 
             name: The module name to look up.
 
+        Kwargs:
+
             conf: The configuration the resolved module runs with.
 
         Returns:
@@ -1068,6 +1070,9 @@ class ExecutionPlan:
         Args:
 
             output: The name of the workflow output being run.
+
+        Kwargs:
+
             seed: Items for the workflow output's open input.
 
         Yields:

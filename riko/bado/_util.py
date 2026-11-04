@@ -263,6 +263,9 @@ async def asyncify[T](
 
         func: The callable to run.
         args: Positional arguments forwarded to ``func``.
+
+    Kwargs:
+
         limiter: Caps the worker threads held at once, or ``None`` for the default.
         abandon_on_cancel: Whether cancellation stops the wait for a blocking ``func``.
         kwargs: Keyword arguments forwarded to ``func``.
@@ -314,6 +317,9 @@ def syncify[**P, T](
 
         func: The callable whose awaitable result is awaited on the event loop.
         args: Positional arguments forwarded to ``func``.
+
+    Kwargs:
+
         kwargs: Keyword arguments forwarded to ``func``.
 
     Returns:
@@ -359,6 +365,9 @@ async def maybe_async[T](
 
         func: The callable to run.
         args: Positional arguments forwarded to ``func``.
+
+    Kwargs:
+
         inline: Whether a blocking ``func`` runs on the event loop.
         limiter: Caps the worker threads a non-inline call may hold.
         abandon_on_cancel: Whether cancellation stops the wait for a non-inline call.
@@ -388,6 +397,9 @@ def run_bridged[T](
     Args:
 
         func: The value's close method or bound cleanup, from ``resolve_closer``.
+
+    Kwargs:
+
         bridge: Runs an awaitable to completion on the event loop that owns the value.
 
     Raises:

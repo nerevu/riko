@@ -144,7 +144,7 @@ def build_location(
     Parses ``"lat,lon"`` when given, otherwise uses the ``lat``/``lon``
     arguments; unparseable or missing coordinates default to ``0.0``.
 
-    Args:
+    Kwargs:
 
         latlon: A ``"lat,lon"`` string; used when it contains a comma.
         lat: The latitude used when ``latlon`` has no comma.
@@ -294,6 +294,9 @@ def cast_location(
     Args:
 
         address: The address, coordinate, IP, or currency code to look up.
+
+    Kwargs:
+
         loc_type: Which kind of lookup to perform.
 
     Returns:
@@ -357,6 +360,9 @@ def cast_datetime(
     Args:
 
         value: The date-like value or string shorthand to normalize.
+
+    Kwargs:
+
         as_date: Whether to return a ``date`` rather than a ``datetime``.
         as_datedict: Whether to return a ``DateDict`` of date components.
         try_local_tz: Whether to assume the local timezone for naive values.
@@ -577,6 +583,9 @@ def cast_value[T](
     Args:
 
         content: The entry to convert.
+
+    Kwargs:
+
         type_: The type to convert to.
 
     Returns:

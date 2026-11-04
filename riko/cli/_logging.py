@@ -20,7 +20,7 @@ def resolve_log_level(verbose: int = 0, quiet: bool = False) -> int:
     """
     Resolves the log level the ``-v``/``-q`` flags select.
 
-    Args:
+    Kwargs:
 
         verbose: How many times ``-v`` was given. One selects INFO, 2+ select DEBUG.
         quiet: Whether ``-q`` was given. Selects ERROR and wins over ``verbose``.

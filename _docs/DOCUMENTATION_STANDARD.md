@@ -545,15 +545,19 @@ public-path rule for example imports.
   never first among the sections — a docstring that jumps from the summary
   straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
   common miss. Never leave an empty section.
-- `Args:` documents the parameters a caller may pass positionally; `Kwargs:`
-  documents the keyword-only ones (after `*` or `*args`) and the entries of a
-  `**kwargs` bag. The signature already forces those names to be keywords, so the
-  docs mirror that split. A keyword-only parameter with its own annotation carries
-  no type label. Every entry of a `**kwargs` bag does, because the signature gives
+- `Args:` documents the parameters a caller must supply, those without a default;
+  `Kwargs:` documents every parameter with a default, whether or not it follows `*`
+  or `*args`, and the entries of a `**kwargs` bag. The split mirrors required versus
+  optional, so a positional parameter with a default (`default=None`) goes under
+  `Kwargs:` too. A `Kwargs:` parameter with its own annotation carries no type
+  label. Every entry of a `**kwargs` bag does, because the signature gives
   it no explicit hint: that includes an `Unpack[SomeTypedDict]` bag, so readers
   never have to look up the `TypedDict` to learn an entry's type (see the
-  exception above). When `Kwargs:` names a bag's entries, do not also list the bag
-  under `Args:`.
+  exception above). When `Kwargs:` names a bag's entries, do not also list the bag;
+  otherwise the bag itself is the last `Kwargs:` entry, never an `Args:` one. Both
+  sections list their entries in signature order. Pipes are the one exception: a
+  `pipe`/`async_pipe` keeps the stream, `conf`, and `context` under `Args:`, as in
+  the example above, because every caller supplies them.
 - Give every non-underscore function the sections its signature implies: `Args:`
   for its parameters, `Returns:`/`Yields:` for its output. Model it on the file's
   *fullest* docstring, not its thinnest — in `riko/io/_sync.py` that is
