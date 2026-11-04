@@ -56,9 +56,13 @@ When translating inspiration into Riko:
 | `extractor.md` | async multi-provider enrichment, allow/deny providers, HTTP cache, browser fallback, clean/upsert | `provider-integrations.md`, `enrichment-modules.md`, `highergov-feed.md` | Adopt registry/provenance/cache/upsert patterns |
 | `flogger.rst` | structured event persistence, automatic request metadata, batch/NDJSON logging, retention pruning | `extensibility.md`, `orchestration.md`, `provider-integrations.md` | Adopt structured events/retention concepts; reject bespoke logging server requirement |
 | `gcontact.md` | resource lookup by name/key/URL, OAuth, range/batch updates | `provider-integrations.md`, `artifact-conversion.md` | Adopt identity resolution and batch mutations; historical library specifics not retained |
-| `hdx-age-api.md` | async worker jobs, job/result status, timeout/result TTL/error limits | `provider-integrations.md`, `orchestration.md` | Adopt bounded operation-handle contract; RQ implementation optional |
-| `hdx-file-proxy.md` | remote CSV/Excel acquisition, normalized JSON records, chunk limits | `connectors.md`, `artifact-conversion.md` | Adopt connector + codec/chunk boundary; reject permanent proxy service requirement |
-| `hdx-scrapers.md` | many source-specific collectors sharing common normalization/output contracts | `connectors.md`, `provider-integrations.md`, `extensibility.md` | Adopt plugin pattern; source-specific scrapers stay outside core |
+| `hdx-4w.md` | config-driven who/what/where/when field roles, CKAN datastore envelope unwrapping, GeoJSON join attribute, optional date format | `riko-site.md`, `provider-integrations.md`, `artifact-conversion.md` | Adopt field-role mapping and datastore envelope unwrapping; the dc.js page stays example-level |
+| `hdx-age-api.md` | async worker jobs, job/result status, timeout/result TTL/error limits, job status → HTTP status mapping, `sync` inline execution, per-request overrides of run options, dataset freshness from age versus expected update frequency (due/overdue/delinquent thresholds, archived always delinquent, invalid frequency counted as an error), `needs_update` flag, upsert keyed by dataset id | `provider-integrations.md`, `orchestration.md`, `feed-monitoring.md` | Adopt bounded operation-handle contract and freshness classification; RQ implementation optional; reject unauthenticated mutation endpoints |
+| `hdx-file-proxy.md` | populate-then-serve snapshot of one remote CSV/Excel resource, declarative row filter, required field contract, explicit refresh by re-populating, row limits per mode | `connectors.md`, `artifact-conversion.md` | Adopt connector + materialized snapshot/refresh boundary; reject permanent proxy service requirement |
+| `hdx-gar.md` | per-key split of one dataset into per-country artifacts, chunked GeoJSON writer, batch CKAN create/update/upload/rename over a code table, production/test target switch, known script breakage | `artifact-conversion.md`, `fanout-topology.md`, `provider-integrations.md` | Adopt partition-to-artifact fan-out and batch publish with explicit target; hardcoded tool paths and in-script deletes stay historical |
+| `hdx-mimu.md` | reference-table decoding of index columns, row multiplication counts, countrywide rows fanned out per region, pcode outputs, truncation option, unescaped-quote CSV and ignored fetch errors as failure modes | `enrichment-modules.md`, `artifact-conversion.md`, `connectors.md` | Adopt lookup/explode semantics and declared CSV quoting; reject executing remotely fetched scripts as a data source |
+| `hdx-scrapers.md` | many source-specific collectors sharing common normalization/output contracts, development-mode row caps, deprecation ledger with known breakage, historical backfill window (`init --start/--end`) and replace-by-id reruns (FTS), HXL tagging with a corrections table and check-before-publish (Guinea IPC) | `connectors.md`, `provider-integrations.md`, `extensibility.md`, `feed-monitoring.md` | Adopt plugin pattern, backfill window, and corrections-table enrichment; source-specific scrapers stay outside core; the Scraper-mode daily rerun is the rejected resident polling loop |
+| `hdx-wfp.md` | shapefile reprojection and simplification pipeline, admin-level boundary outputs, non-UTF-8 tabular exports with declared location columns | `artifact-conversion.md`, `connectors.md` | Geo conversion stays an external tool step; adopt declared encoding/location-column contracts |
 | `langly.md` | JSON scenarios, semantic model tiers, tools, RAG, supervised/peer teams, evaluation, OpenAPI schema conversion | `agent-scenarios.md`, `agents.md`, `ai-inference.md`, `mcp.md` | Adopt reviewed scenario/evaluation contracts |
 | `lego.rst` | multi-source keyed enrichment, threshold comparison, cached lookups, matched/unparsed/unfound outputs | `provider-integrations.md`, `fanout-topology.md`, `enrichment-modules.md` | Adopt join/enrichment/cache/side-output patterns; domain app remains example-level |
 | `meetup.rst` | new/changed entity comparison, dedupe, dry-run, vCard output | `feed-monitoring.md`, `artifact-conversion.md` | Adopt change/dry-run semantics and contact codec boundary |
@@ -74,7 +78,7 @@ When translating inspiration into Riko:
 
 ### 4.1 Monitoring and state
 
-Sources: Chakula, AMS, email-sub-api, Meetup, CKAN tools.
+Sources: Chakula, AMS, email-sub-api, Meetup, CKAN tools, HDX age API.
 
 Carried forward:
 
@@ -95,7 +99,7 @@ Authoritative plan: `feed-monitoring.md`.
 ### 4.2 Provider integration
 
 Sources: HTTPSanction, authorizer, nerevu-api, data-hub-etl, CKAN tools, Amazon/eBay,
-extractor, HDX services, webhooks, contacts.
+extractor, HDX services, GAR publisher, webhooks, contacts.
 
 Carried forward:
 
@@ -160,7 +164,7 @@ Authoritative extension: `agent-scenarios.md` plus `agents.md`, `ai-inference.md
 ### 4.5 Conversion and rendered artifacts
 
 Sources: pyconvert, csv2vcard, csv2html, proposer, Carbone, Contacts, HDX file proxy,
-Euler.
+GAR splitter, MIMU, WFP geo, HDX 4W, Euler.
 
 Carried forward:
 
@@ -213,6 +217,9 @@ as Riko architecture:
 * pickle as durable interoperable state format;
 * arbitrary Python/function names from untrusted serialized configurations or webhook
   URLs;
+* executing remotely fetched scripts to obtain their data (MIMU's `vm.runInThisContext`);
+* unauthenticated mutation endpoints on a service's public API (the HDX age API's record
+  store);
 * unsandboxed agent code execution;
 * agent-discovered APIs becoming immediately executable without policy review;
 * materializing unbounded streams for workbook/report conversion;

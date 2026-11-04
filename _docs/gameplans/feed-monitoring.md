@@ -41,6 +41,10 @@ Relevant precedents:
 * **AMS** — named threshold rules, enable/disable/restore, firing history;
 * **Meetup** — new-versus-changed detection and dry-run;
 * **CKAN tooling** — change fingerprints used to avoid unnecessary remote writes;
+* **HDX age API** — dataset freshness classified from age against an expected update
+  frequency (due/overdue/delinquent thresholds per frequency, archived means always
+  delinquent, invalid frequency is an error that counts toward a run's error limit), with a
+  `needs_update` flag as the rule output;
 * **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state, windows,
   and explicit incremental cursors;
 * **resumable database/API change feeds** — opaque resume positions, explicit deletion
