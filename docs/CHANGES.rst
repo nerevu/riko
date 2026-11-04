@@ -65,8 +65,9 @@ New
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_SHIPPED_CALL_CACHE_SIZE``, ``RIKO_DISCOVERY_TIMEOUT``, ``RIKO_FETCH_TIMEOUT``,
   ``RIKO_PARSED_DATE_CACHE_SIZE``, ``RIKO_SHUTDOWN_TIMEOUT``, ``RIKO_BENCHMARK_DELAY``,
-  ``RIKO_BENCHMARK_WORKERS``, ``RIKO_STREAMING_THRESHOLD``, ``RIKO_ENCODING``,
-  ``RIKO_EXCHANGE_API``, and ``RIKO_NODE_THREADS``.
+  ``RIKO_BENCHMARK_WORKERS``, ``RIKO_STREAMING_THRESHOLD``, ``RIKO_NODE_THREADS``,
+  ``RIKO_ENCODING``, and ``RIKO_EXCHANGE_API``. A malformed value logs a warning and
+  keeps the default.
 
 Changes
 ~~~~~~~
@@ -452,8 +453,8 @@ New
 - Added ``currencyformat`` conf keys ``locale`` (override the currency's own locale) and
   ``clean`` (render the result's non-breaking space as a plain space).
 
-- ``encoding`` is now a declared conf key for ``fetch``, ``exchangerate``,
-  ``fetchdata``, ``fetchpage``, and ``xpathfetchpage``.
+- ``encoding`` is now a declared conf key for ``fetch``, ``fetchdata``, ``fetchpage``,
+  ``exchangerate``, and ``xpathfetchpage``.
 
 Changes
 ~~~~~~~

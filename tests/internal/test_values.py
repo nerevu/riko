@@ -1178,6 +1178,8 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "-1", "shutdown_timeout", 30.0, id="neg"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "nan", "shutdown_timeout", 30.0, id="nan"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="bad"),
+    pytest.param("RIKO_ENCODING", "bogus", "encoding", "utf-8", id="encoding-unknown"),
+    pytest.param("RIKO_ENCODING", "latin-1", "encoding", "latin-1", id="encoding"),
 ]
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from math import isnan
 from multiprocessing import cpu_count
@@ -165,6 +166,28 @@ def _env_float(env: Mapping[str, str], key: str, default: float) -> float:
     return value
 
 
+def _env_encoding(env: Mapping[str, str], key: str, default: str) -> str:
+    """
+    Reads a text encoding ``RIKO_*`` override.
+
+    An encoding Python does not know logs a warning and keeps ``default``.
+    """
+    raw = env.get(key)
+
+    if raw is None:
+        value = default
+    else:
+        try:
+            codecs.lookup(raw)
+        except LookupError:
+            logger.warning("ignoring %s=%r: unknown encoding", key, raw)
+            value = default
+        else:
+            value = raw
+
+    return value
+
+
 def _env_str(env: Mapping[str, str], key: str, default: str) -> str:
     """Reads a string ``RIKO_*`` override, falling back to the default when unset."""
     return env.get(key, default)
@@ -200,7 +223,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         streaming_threshold=_env_int(
             source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold, minimum=0
         ),
-        encoding=_env_str(source, "RIKO_ENCODING", defaults.encoding),
+        encoding=_env_encoding(source, "RIKO_ENCODING", defaults.encoding),
         discovery_timeout=_env_int(
             source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout, minimum=1
         ),
