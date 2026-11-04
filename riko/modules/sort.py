@@ -9,6 +9,9 @@ Items lacking the sort field group first ascending (last descending) whatever th
 rule ``type``, rather than being compared with the values the other items carry.
 A rule ``default`` makes them sort as that value instead.
 
+A rule without a ``type`` orders values numerically when every one is a number or
+numeric string, and as text otherwise.
+
 Examples:
 
     Basic usage::
@@ -28,11 +31,17 @@ Attributes:
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import reduce
+from itertools import chain
 from typing import TYPE_CHECKING, Any
 
 from riko.bado.itertools import async_reduce
+from riko.base._guards import is_mapping
+from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING
+from riko.coercion.cast import cast_decimal
 from riko.types._enums import SortableCastType
 from riko.types.modules import SortConfRule
 
@@ -56,10 +65,25 @@ DEFAULTS: Defaults = {
 }
 
 
+def _is_finite_number(value: object) -> bool:
+    """Checks whether a value casts to a finite ``Decimal``."""
+    number = cast_decimal(value, MISSING)
+    return isinstance(number, Decimal) and number.is_finite()
+
+
 def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     reverse = rule.dir.lower() == "desc" if rule.dir else False
-    keyfunc = build_sort_key(rule.field, rule.default, type_=rule.type)
-    return iter(sorted(stream, key=keyfunc, reverse=reverse))
+
+    if rule.type is None:
+        items = list(stream)
+        values = (i.get(rule.field) if is_mapping(i) else i for i in items)
+        numeric = all(gen_non_none(chain(values, [rule.default]), _is_finite_number))
+        type_ = "decimal" if numeric else None
+    else:
+        items, type_ = stream, rule.type
+
+    keyfunc = build_sort_key(rule.field, rule.default, type_=type_)
+    return iter(sorted(items, key=keyfunc, reverse=reverse))
 
 
 async def async_parser(

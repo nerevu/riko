@@ -171,7 +171,8 @@ Changes
   alone writes nothing and warns.
 
 - ``sort`` now groups items missing the field (a rule's ``default`` sets their sort
-  value) and logs a warning instead of raising ``TypeError`` on values it can't compare.
+  value). A rule without a ``type`` no longer raises ``TypeError`` when some items lack
+  the field and the rest hold dates or numbers.
 
 - ``hash`` now gives the same value in every process, whatever ``PYTHONHASHSEED`` is.
 
@@ -263,7 +264,7 @@ Fixes
 - ``filter`` resolves relative dates (e.g., ``"today"``) on every evaluation instead of
   reusing the first value.
 
-- ``sort`` orders numeric strings numerically.
+- ``sort`` orders strings numerically when every value is a number or numeric string.
 
 - Feed entry dates ``feedparser`` can't parse (e.g., ``May 11, 2012 10:01:00 EST``) are
   now parsed.

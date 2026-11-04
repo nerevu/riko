@@ -635,8 +635,27 @@ SORTABLE_VALUES = [
     pytest.param(SortableCastType.DATETIME, _DATES, id="datetime"),
 ]
 
+# Each row: the untyped (or typed) rule's values, its ``type``, and the ascending order.
+UNTYPED_SORTS = [
+    pytest.param(["10", "9", "100"], None, ["9", "10", "100"], id="numeric-strings"),
+    pytest.param(["10", "apple", "9"], None, ["10", "9", "apple"], id="mixed-is-text"),
+    pytest.param(["inf", "5"], None, ["5", "inf"], id="non-finite-is-text"),
+    pytest.param(["10", "9"], SortableCastType.TEXT, ["10", "9"], id="explicit-text"),
+]
+
 
 class TestSort:
+    @pytest.mark.parametrize("dir_", ["asc", "desc"])
+    @pytest.mark.parametrize(("vals", "type_", "ascending"), UNTYPED_SORTS)
+    def test_untyped_sort_is_numeric_only_when_every_value_is(
+        self, dir_, vals, type_, ascending
+    ):
+        """An untyped rule sorts numbers numerically only if all values are numbers."""
+        rule = SortConfRule(field="n", dir=dir_, type=type_)
+        items = [{"n": val} for val in vals]
+        expected = ascending if dir_ == "asc" else list(reversed(ascending))
+        assert _values(sort_pipe(items, conf=SortConf(rule=rule)), "n") == expected
+
     @pytest.mark.parametrize("dir_", ["asc", "desc"])
     @pytest.mark.parametrize(("type_", "vals"), SORTABLE_VALUES)
     def test_sort_fillers_stay_orderable(self, dir_, type_, vals: list[str]):
