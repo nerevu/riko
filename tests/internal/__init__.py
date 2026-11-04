@@ -47,7 +47,7 @@ Index (file, then the subjects it owns, in file order):
     test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
-                              CastDatetime, OverloadTypes, ResolveCastType,
+                              CastDatetime, CastValue, OverloadTypes, ResolveCastType,
                               DefItemgetter, Fromdict, ParseDateString,
                               ResolveAwareDatetime, TtToDatedict, DotDict, GetSkip,
                               Any2dict, XmlParser, AugmentEntries, ResolveDate, Graph,

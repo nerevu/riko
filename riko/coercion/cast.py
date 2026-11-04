@@ -632,12 +632,12 @@ def cast_value[T](
     elif cast_type in KWARG_TYPES:
         try:
             value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
-        except (TypeError, InvalidOperation, ValueError):
+        except (TypeError, InvalidOperation, ValueError, OverflowError):
             value = default
     else:
         try:
             value = caster(content)  # pyright: ignore[reportArgumentType]
-        except (TypeError, InvalidOperation, ValueError):
+        except (TypeError, InvalidOperation, ValueError, OverflowError):
             value = default
 
     return value

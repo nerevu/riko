@@ -464,6 +464,19 @@ class TestCastDatetime:
         assert offset.utcoffset() == named.utcoffset()
 
 
+# Each row: content whose cast overflows, and the cast type's default.
+CAST_OVERFLOWS = [
+    pytest.param("inf", CastType.INT, 0, id="int-inf"),
+    pytest.param("1e400", CastType.INT, 0, id="int-huge"),
+]
+
+
+class TestCastValue:
+    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
+    def test_overflow_degrades_to_the_default(self, content, type_, expected):
+        assert cast_value(content, type_) == expected
+
+
 class TestOverloadTypes:
     def test_unparseable_date_casts_are_none(self):
         moment = cast_value("abc", CastType.DATETIME)
