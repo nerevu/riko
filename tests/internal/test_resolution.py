@@ -332,6 +332,14 @@ class TestPublicRegister:
         expected = ["a", "b", "c"]
         assert [item.get("content") for item in stream if is_mapping(item)] == expected
 
+    def test_registered_module_metadata_matches_the_catalog(self, fixed_registry):
+        register_module(ModuleDefinition.from_module(tokenizer_module, name=_NAME))
+        metadata = get_module_metadata(_NAME)
+        catalog = {entry.name: entry for entry in list_modules(show_metadata=True)}
+        assert metadata is not None
+        assert metadata.name == _NAME
+        assert metadata == catalog[_NAME]
+
     def test_reset_registry_clears_registration(self, fixed_registry):
         register_module(MOD_DEFN)
         reset_module_registry()

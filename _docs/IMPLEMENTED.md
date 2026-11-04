@@ -119,8 +119,9 @@ import).
 `Settings`. `_env_int` takes an optional `minimum` (`RIKO_CONCURRENCY_LIMIT` and
 `RIKO_DISCOVERY_TIMEOUT` ≥ 1; `RIKO_NODE_THREADS`, `RIKO_STREAMING_THRESHOLD`,
 `RIKO_SHIPPED_CALL_CACHE_SIZE`, and `RIKO_PARSED_DATE_CACHE_SIZE` ≥ 0) and `_env_float` rejects
-negative and NaN values; a malformed or out-of-range value logs a warning and keeps the default, so
-a bad environment never fails a later run.
+negative and NaN values; `_env_encoding` rejects an encoding `codecs.lookup` does not know. A
+malformed or out-of-range value logs a warning and keeps the default, so a bad environment never
+fails a later run.
 
 Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract `Reencoder` base, whose `join_char` is the empty value of its output type. An empty source reads as empty. A decoded source whose raw first line does not end in the encoded platform newline (a single unterminated line, carriage-return-only endings, or a multi-byte newline encoding such as UTF-16, whose `\n` byte falls mid-character) is re-split lazily by `_gen_lines`: decoded chunks are buffered and split at every `\r\n`/`\r`/`\n` (`LINE_BREAKS`), a trailing `\r` is held for the next chunk, every line but the last gets the platform newline, and an empty last line is dropped, so `read()`, `read(n)`, `readline`, and iteration agree; iterating or calling `bytes()` after `read(n)` resumes with the rest of the current line. Any other source passes through untranslated, so a `\r` beside a `\n` stays raw on the sync path while async `TextIOWrapper` translates it (owned by [bado-anyio § 2c](gameplans/bado-anyio-alignment.md#2c-encoding-resolution-precedence-syncasync-parity)). Re-encoding to bytes passes the encoded stream through unsplit. `remove_BOM=True` strips one `U+FEFF` from the decoded text (`gen_without_bom`, first non-empty chunk) rather than the raw bytes, so it works for any codec. Decode errors surface on read; a failure while the reencoder is opening closes its source/owner.
 
@@ -261,6 +262,10 @@ missing field before casting and counts as present, so the item sorts among the 
 keeps the raw string. `def_itemgetter` keeps its scalar contract because `group_by`
 (`count`/`sum`/`regex`) stringifies its result.
 
+A rule without a `type` sorts as `decimal` only when every present value (and the rule's
+`default`) casts to a finite number; one text or non-finite value makes the whole rule sort as
+text, so mixed values never interleave numeric and lexical order.
+
 Feed entries resolve dates through `resolve_date` (`riko/rss/feeds.py`): the first
 usable value among the parser's `*_parsed` key and the raw string, parsed by
 `resolve_aware_datetime` when it is a string. A key is read only when the entry carries it
@@ -366,7 +371,9 @@ The runtime→compiler resolution coupling is inverted behind three **compiler-f
 one overloaded `require(name, is_async)` contract (`riko/types/_wrappers.py::Resolver`):
 `ModuleRegistry` (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/modules.py` and `riko.ext`; built-ins
 lazy per name, runtime `register_module`/`reset_module_registry`, entry
-points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in),
+points under `[project.entry-points."riko.modules"]`; precedence runtime → entry-point → built-in;
+`get_module_metadata` consults the registry before the built-in package, so a registered module's
+metadata shadows a built-in of the same name as `list_modules` does),
 `WorkflowResolver` (`riko/runtime/_workflow_resolver.py`) + injectable workflow stores (`riko/runtime/_workflow_stores.py`): every store is a
 `WorkflowStore[T]` protocol (`load(name) -> T | None`); `ModuleStore = WorkflowStore[ResolvedWorkflow]`
 (`PackageStore`, `MappingStore`, `CompositeStore`) and `DirectoryStore` is a `DocumentStore` (`WorkflowStore[Workflow]`) that
