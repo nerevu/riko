@@ -24,7 +24,7 @@ from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_async_callable
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 from riko.base._require_guards import (
     narrow_from_require,
     require_instance,
@@ -161,7 +161,7 @@ class ExecutionExtras[V]:
     def kwargs(self) -> dict[str, Sequence[V] | ResourceView | ModuleWrapper]:
         """The fields that are set, keyed by name."""
         values = asdict(self, recurse=False)
-        return {name: value for name, value in values.items() if value is not None}
+        return dict(gen_non_null(values.items(), cmp_pos=1))
 
     def map_others[R](self, func: Callable[[V], R]) -> ExecutionExtras[R]:
         """
@@ -591,7 +591,7 @@ class PreparedNode:
     @cached_property
     def extras(self) -> ExtraNames:
         """The names of the extra inputs delivered with each item, in call order."""
-        named = gen_non_none(port.name for port in self.input_ports)
+        named = gen_non_null(port.name for port in self.input_ports)
         delivered = ExecutionExtras.get_names(self.node, *self.input_ports)
         return (*named, *delivered)
 

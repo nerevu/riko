@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger
 
 from ._decorators import processor
@@ -71,7 +71,7 @@ def parser(
         'onetwo'
 
     """
-    return "".join(gen_non_none(extraction, str))
+    return "".join(gen_non_null(extraction, str))
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

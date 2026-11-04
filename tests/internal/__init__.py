@@ -50,8 +50,9 @@ Index (file, then the subjects it owns, in file order):
                               CastDatetime, CastValue, OverloadTypes, ResolveCastType,
                               DefItemgetter, Fromdict, ParseDateString,
                               ResolveAwareDatetime, TtToDatedict, DotDict, GetSkip,
-                              Any2dict, XmlParser, AugmentEntries, ResolveDate, Graph,
-                              GraphIndex, LoadSettings, RequireGuards, RequireFromForm,
-                              ResolveEnum, NormalizeStrs, FieldNames, TypedDictKeys,
-                              Logging, RikoError
+                              Any2dict, XmlParser, AugmentEntries, ResolveDate,
+                              GenNonNull, Graph, GraphIndex, LoadSettings,
+                              RequireGuards, RequireFromForm, ResolveEnum,
+                              NormalizeStrs, FieldNames, TypedDictKeys, Logging,
+                              RikoError
 """

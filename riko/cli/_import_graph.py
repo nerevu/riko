@@ -8,7 +8,7 @@ from tokenize import open as open_python
 from typing import TYPE_CHECKING, Final, Literal
 
 from riko.base._exceptions import RikoError
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -150,7 +150,7 @@ class _ImportVisitor(ast.NodeVisitor):
         for default in node.args.defaults:
             self.visit(default)
 
-        for default in gen_non_none(node.args.kw_defaults):
+        for default in gen_non_null(node.args.kw_defaults):
             self.visit(default)
 
         self._local_depth += 1

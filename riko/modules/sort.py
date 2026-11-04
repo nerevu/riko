@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 
 from riko.bado.itertools import async_reduce
 from riko.base._guards import is_mapping
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
 from riko.coercion.cast import cast_decimal
@@ -77,7 +77,7 @@ def reducer(stream: Stream, rule: SortConfRule) -> Stream:
     if rule.type is None:
         items = list(stream)
         values = (i.get(rule.field) if is_mapping(i) else i for i in items)
-        numeric = all(gen_non_none(chain(values, [rule.default]), _is_finite_number))
+        numeric = all(gen_non_null(chain(values, [rule.default]), _is_finite_number))
         type_ = "decimal" if numeric else None
     else:
         items, type_ = stream, rule.type

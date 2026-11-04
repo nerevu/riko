@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import partial
 from itertools import cycle, dropwhile, islice, takewhile
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -77,37 +78,112 @@ def unique_everseen[T](
 
 
 @overload
-def gen_non_none[T](value: Iterable[T | None]) -> Iterator[T]: ...
+def gen_non_null[T, U](
+    items: Iterable[tuple[T, U | None] | None],
+    func: None = None,
+    *,
+    cmp_pos: Literal[1],
+    arg_pos: Literal[0],
+) -> Iterator[T]: ...
 @overload
-def gen_non_none[T, R](
-    value: Iterable[T | None], func: Callable[[T], R]
+def gen_non_null[T, U, R](
+    items: Iterable[tuple[T, U | None] | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: Literal[1],
+    arg_pos: Literal[0],
 ) -> Iterator[R]: ...
-def gen_non_none[T, R](
-    value: Iterable[T | None], func: Callable[[T], R] | None = None
-) -> Iterator[T | R]:
+@overload
+def gen_non_null[T](
+    items: Iterable[T | None],
+    func: None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: None = None,
+) -> Iterator[T]: ...
+@overload
+def gen_non_null[T, R](
+    items: Iterable[T | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: None = None,
+) -> Iterator[R]: ...
+@overload
+def gen_non_null[T](
+    items: Iterable[Sequence[T] | None],
+    func: None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int = ...,
+) -> Iterator[T]: ...
+@overload
+def gen_non_null[T, R](
+    items: Iterable[Sequence[T] | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int = ...,
+) -> Iterator[R]: ...
+def gen_non_null(
+    items: Iterable[object],
+    func: Callable[..., object] | None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int | None = None,
+) -> Iterator[object]:
     """
-    Applies a function to each non-None value in an iterable.
+    Applies a function to each non-None item in an iterable.
+
+    Similar to filter(None, iterable), but it excludes ``None`` instead of falsy values.
 
     Args:
 
-        value: The source iterable.
-        func: Optional function applied to each non-None element.
+        items: The source iterable.
+
+    Kwargs:
+
+        func: Optional function applied to each non-None item.
+        cmp_pos: Item position to test for ``None`` instead of the whole item.
+        arg_pos: Item position to yield (or pass to ``func``) instead of the whole item.
 
     Yields:
 
-        Each non-None element, or ``func``'s result for it.
+        Each non-None item (or its ``arg_pos`` value), or ``func``'s result for it.
+
+    Raises:
+
+        TypeError: If ``cmp_pos``/``arg_pos`` is set and an item is not a sequence.
 
     Examples:
 
-        >>> list(gen_non_none([1, None, 0, 2]))
+        >>> list(gen_non_null([1, None, 0, 2]))
         [1, 0, 2]
-        >>> "".join(gen_non_none(["a", None, 1], str))
+        >>> "".join(gen_non_null(["a", None, 1], str))
         'a1'
+        >>> pairs = [("a", 1), ("b", None), ("c", 0)]
+        >>> list(gen_non_null(pairs, cmp_pos=1, arg_pos=0))
+        ['a', 'c']
 
     """
-    for item in value:
-        if item is not None:
-            yield item if func is None else func(item)
+
+    def _get_value(
+        item: object | Sequence[object], pos: int | None, name: str
+    ) -> object:
+        if item is None or pos is None:
+            value = item
+        elif isinstance(item, Sequence):
+            value = item[pos]
+        else:
+            msg = f"Item {item!r} is not indexable. Remove {name}={pos}"
+            raise TypeError(msg)
+
+        return value
+
+    for item in items:
+        if _get_value(item, cmp_pos, "cmp_pos") is not None:
+            arg = _get_value(item, arg_pos, "arg_pos")
+            yield arg if func is None else func(arg)
 
 
 def betwix[T](

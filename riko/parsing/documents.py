@@ -4,8 +4,8 @@ Parses feeds and XML, HTML, and JSON documents.
 
 Attributes:
 
-    XML_PARSER: Hardened lxml parser (entity, DTD, and network access
-        disabled), or ``None`` when lxml is unavailable.
+    XML_PARSER: Hardened lxml parser (entity, DTD, and network access disabled), or
+        ``None`` when lxml is unavailable.
 
 """
 
@@ -25,7 +25,7 @@ from typing_extensions import TypeIs
 
 from riko.base._config import STREAMING_THRESHOLD
 from riko.base._guards import is_mapping
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
 from riko.coercion._sequences import listize
@@ -578,7 +578,7 @@ def _gen_streamed_records(source: BinaryIOLike, path: str) -> Stream:
                     prefix = f"{prefix}.item" if prefix else "item"
 
                 items = ijson.items(reader, prefix, use_float=True)
-                yield from gen_non_none(items)
+                yield from gen_non_null(items)
             else:
                 yield from _gen_json_records(value, path)
         except ijson.JSONError as e:
@@ -615,7 +615,7 @@ def any2dict(
     elif is_mapping(content):
         yield content
     elif isinstance(content, list):
-        yield from gen_non_none(content)
+        yield from gen_non_null(content)
     elif ext and ext in {"xml", "html"}:
         if ext == "xml":
             root = xml2etree(content, xml=True, html5=html5).getroot()

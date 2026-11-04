@@ -50,6 +50,7 @@ from riko.base._exceptions import (
 )
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._guards import require_mapping, require_sequence
+from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import get_path
 from riko.base._recordutils import field_names
@@ -1107,6 +1108,20 @@ class TestResolveDate:
         assert resolved[:3] == (2020, 1, 2)
         item = dict(next(augment_entries([entry])))
         assert item["updated_parsed"] == resolved
+
+
+# Each row: the items, the position options, and the option the error names.
+UNINDEXABLE_ITEMS = [
+    pytest.param([1], {"cmp_pos": 0}, "cmp_pos=0", id="compare-position"),
+    pytest.param([1], {"arg_pos": 0}, "arg_pos=0", id="argument-position"),
+]
+
+
+class TestGenNonNull:
+    @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
+    def test_an_unindexable_item_raises(self, items, positions, match):
+        with pytest.raises(TypeError, match=match):
+            list(gen_non_null(items, **positions))
 
 
 DESCENDANT_CASES = [

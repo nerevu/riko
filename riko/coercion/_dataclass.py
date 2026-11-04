@@ -80,10 +80,10 @@ def fromdict(
         origin = get_origin(ftype)
 
         if origin is Union or origin is UnionType:
-            non_none = [a for a in get_args(ftype) if a is not type(None)]
+            non_null = [a for a in get_args(ftype) if a is not type(None)]
 
-            if len(non_none) == 1:
-                ftype = non_none[0]
+            if len(non_null) == 1:
+                ftype = non_null[0]
                 origin = get_origin(ftype)
 
         if origin is Literal:

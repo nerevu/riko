@@ -49,7 +49,7 @@ import tomllib
 from operator import itemgetter
 from typing import TYPE_CHECKING, Final, NamedTuple
 
-from riko.base._iterutils import gen_instances, gen_non_none
+from riko.base._iterutils import gen_instances, gen_non_null
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
 from ._import_graph import FUNCTION_NODES, FunctionNode
@@ -750,7 +750,7 @@ def gen_rows_without_id(tests_dir: Path) -> Iterator[LayoutIssue]:
     for path, tree in _gen_tier_trees(tests_dir):
         assignments = map(_get_assignment, tree.body)
 
-        for value in gen_non_none(assignments, itemgetter(1)):
+        for value in gen_non_null(assignments, itemgetter(1)):
             calls = gen_instances(ast.walk(value), ast.Call)
 
             for row in filter(_is_unnamed_row, calls):

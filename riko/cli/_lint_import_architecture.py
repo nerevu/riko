@@ -20,7 +20,7 @@ from riko.base._graph import (
     freeze_graph,
     gen_redundant_edges,
 )
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 
 from ._import_graph import (
     InvalidArchitectureError,
@@ -169,7 +169,7 @@ def _render_from(
         current = frozenset(layers[frozenset(current)])
         parts.append(_format_group(current))
 
-    return gen_non_none(parts)
+    return gen_non_null(parts)
 
 
 def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
@@ -208,7 +208,7 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose: bool = True) -> Iterat
             yield " < ".join(parts)
     else:
         parts = map(_format_group, layers.values())
-        yield " < ".join(gen_non_none(parts))
+        yield " < ".join(gen_non_null(parts))
 
 
 def load_architecture_report(
