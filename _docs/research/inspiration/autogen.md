@@ -1,3 +1,7 @@
+---
+source: ../../../../autogen/README.md
+---
+
 # cli_manager
 
 A command-line harness for building and running [Microsoft AutoGen](https://microsoft.github.io/autogen/)

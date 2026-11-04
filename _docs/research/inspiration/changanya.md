@@ -1,3 +1,7 @@
+---
+source: ../../../../changanya/README.md
+---
+
 # changanya
 
 Interesting (non-cryptographic) hashes implemented in pure Python 3. Included so far:

@@ -1,3 +1,5 @@
+.. source: ../../../../lego/README.rst
+
 lego
 ====
 

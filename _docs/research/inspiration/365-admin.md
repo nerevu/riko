@@ -1,3 +1,7 @@
+---
+source: ../../../../365-admin/README.md
+---
+
 # Microsoft 365 Admin Scripts
 
 A collection of PowerShell scripts for Microsoft 365 administration, focusing on Teams channel management, audit logging, and system backup operations.

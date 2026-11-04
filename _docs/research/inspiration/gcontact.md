@@ -1,3 +1,7 @@
+---
+source: ../../../../gcontact/README.md
+---
+
 # Google Contacts Python API
 
 <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=TK7NPLQ6XEPKS&lc=US&item_name=gcontact&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donate_LG%2egif%3aNonHosted" target="_blank"><img src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" /></a>

@@ -1,3 +1,7 @@
+---
+source: ../../../../ckanutils/README.md
+---
+
 # ckanutils
 
 ## Introduction

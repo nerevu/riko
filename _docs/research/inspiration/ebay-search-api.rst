@@ -1,3 +1,5 @@
+.. source: ../../../../ebay-search-api/README.rst
+
 eBay Search API |travis|
 ========================
 

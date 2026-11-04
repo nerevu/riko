@@ -259,9 +259,17 @@ The repeated projects make several invariants worth enforcing across gameplans:
 
 ## 7. Maintenance rule
 
+Each readme-derived file is a verbatim snapshot of its source, never a symlink: git would
+store only the link's absolute path, which dangles in every other clone, and a formatter run
+over `_docs/` would otherwise write into the source project. The snapshot opens with a
+`source:` line (YAML front matter in Markdown, a `.. source:` comment in reStructuredText)
+giving the readme's path relative to the snapshot itself, so it resolves only on the
+author's machine; the body after it is the source as copied. `python .claude/skills/tidy/inspiration_drift.py` compares every snapshot's body with
+its source and lists the ones that differ.
+
 When new material is added to `_docs/research/inspiration/`:
 
-1. add it to this matrix;
+1. add it to this matrix, with the `source:` line in the file;
 2. identify the reusable semantic lesson;
 3. map it to an existing authoritative gameplan when possible;
 4. create a new gameplan only for a genuinely missing architectural contract;

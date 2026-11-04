@@ -1,3 +1,5 @@
+.. source: ../../../../meetup/README.rst
+
 meetup
 ======
 

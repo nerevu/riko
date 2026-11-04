@@ -1,3 +1,7 @@
+---
+source: ../../../../nerevu-api/README.md
+---
+
 # Nerevu API
 
 Nerevu's monolith ("God") API — a [Flask](https://flask.palletsprojects.com/) service

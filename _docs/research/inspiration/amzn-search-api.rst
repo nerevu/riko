@@ -1,3 +1,5 @@
+.. source: ../../../../amzn-search-api/README.rst
+
 AMZN Search API |travis|
 ========================
 

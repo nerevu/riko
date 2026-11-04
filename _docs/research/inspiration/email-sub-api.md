@@ -1,3 +1,7 @@
+---
+source: ../../../../email-sub-api/README.md
+---
+
 # email-sub-api
 
 **Nerevu Subscription API** — a [Mailgun][mailgun]-powered Flask API to subscribe

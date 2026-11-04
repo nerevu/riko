@@ -1,3 +1,5 @@
+.. source: ../../../../chakula/README.rst
+
 chakula
 =======
 

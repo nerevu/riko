@@ -166,7 +166,10 @@ neighborhood it affects:
    is correct, never dedupe it); docstrings that explain mechanism instead of
    what the caller gets.
 8. **Doc hygiene** — duplicated table rows or sections, broken cross-references
-   the docs lint does not cover, `_docs/` paths in shipped text.
+   the docs lint does not cover, `_docs/` paths in shipped text. When the scope
+   touches `_docs/research/inspiration/`, run
+   `python .claude/skills/tidy/inspiration_drift.py`: a snapshot whose body differs
+   from its `source:` readme is a finding, and snapshot bodies are never edited.
 9. **Test ownership** — for each new or moved test (`manage lint --tests` already
    holds the file to its index row and class layout): is it in the right tier
    (functional if it runs a CLI command, `examples` pipeline, or stored fixture end

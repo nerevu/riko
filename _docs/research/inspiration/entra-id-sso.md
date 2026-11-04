@@ -1,3 +1,7 @@
+---
+source: ../../../../entra-id-sso/README.md
+---
+
 # Microsoft Entra ID SAML SSO Automation
 
 PowerShell scripts for automating Microsoft Entra ID (Azure AD) configuration for SAML-based SSO applications.

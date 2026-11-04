@@ -1,3 +1,7 @@
+---
+source: ../../../../csv2html/README.md
+---
+
 # csv2html
 
 Converts CSV files into styled HTML tables. `csv2html` reads a CSV, renders it as a

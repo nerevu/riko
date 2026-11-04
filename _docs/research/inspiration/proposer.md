@@ -1,3 +1,7 @@
+---
+source: ../../../../proposer/README.md
+---
+
 # proposer
 
 ![Image](../master/examples/company_super_awesome_project_proposal.png?raw=true)

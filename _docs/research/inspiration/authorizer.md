@@ -1,3 +1,7 @@
+---
+source: ../../../../authorizer/README.md
+---
+
 # Nerevu API
 
 A Flask-based OAuth authorization gateway and API proxy. It handles OAuth flows (OAuth1, OAuth2, API key, service account) for multiple third-party services and exposes a unified REST interface to interact with them.

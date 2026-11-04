@@ -1,3 +1,7 @@
+---
+source: ../../../../api-utils/README.md
+---
+
 # api-utils
 
 A small collection of utility functions for building JSON [Flask](https://flask.palletsprojects.com/) APIs backed by [SQLAlchemy](https://www.sqlalchemy.org/). It bundles together the boilerplate that Nerevu's APIs share: response formatting, HTTP caching headers, HATEOAS-style link generation, and SQLAlchemy model/table introspection.

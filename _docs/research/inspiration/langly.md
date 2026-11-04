@@ -1,3 +1,7 @@
+---
+source: ../../../../langly/readme.md
+---
+
 # langly
 
 A CLI for running and evaluating multi-agent AI workflows built on [LangGraph](https://langchain-ai.github.io/langgraph/) and [LangChain](https://www.langchain.com/). Supports OpenAI and Anthropic models, RAG via ChromaDB, web search, Python code execution, and JSON-defined scenarios for repeatable agent configurations.

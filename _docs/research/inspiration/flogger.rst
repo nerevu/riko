@@ -1,3 +1,5 @@
+.. source: ../../../../flogger/README.rst
+
 flogger
 =======
 

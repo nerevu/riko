@@ -1,3 +1,7 @@
+---
+source: ../../../../HTTPSanction/README.md
+---
+
 # HTTPSanction
 
 HTTPSanction is a Flask-based HTTP authentication service that centralizes OAuth and API authentication for multiple third-party providers. It exposes a versioned REST API (`/v1/`) and handles token management, caching, webhook ingestion, and headless browser flows for services that require them.

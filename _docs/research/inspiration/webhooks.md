@@ -1,3 +1,7 @@
+---
+source: ../../../../webhooks/README.md
+---
+
 # Nerevu Webhooks
 
 A Flask-based webhook receiver that validates and routes incoming webhook payloads from third-party providers (Heroku, Xero, Stripe, GitHub) to handler functions.

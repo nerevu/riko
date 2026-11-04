@@ -1,3 +1,7 @@
+---
+source: ../../../../contacts/README.md
+---
+
 # Contacts
 
 A working folder for consolidating personal contacts exported from several sources

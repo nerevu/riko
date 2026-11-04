@@ -1,3 +1,7 @@
+---
+source: ../../../../sense-hat-b-exporter/README.md
+---
+
 Waveshare Sense HAT (B) Prometheus Exporter
 ===========================================
 

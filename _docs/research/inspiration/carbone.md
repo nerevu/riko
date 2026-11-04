@@ -1,3 +1,7 @@
+---
+source: ../../../../carbone/README.md
+---
+
 # CROO Monthly Status Report Generator
 
 A small data pipeline that pulls project data from [Airtable][airtable], transforms it,

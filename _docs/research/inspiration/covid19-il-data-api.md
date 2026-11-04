@@ -1,3 +1,7 @@
+---
+source: ../../../../covid19-il-data-api/README.md
+---
+
 # COVID19 IL Data API
 
 A Flask web API and companion CLI that scrapes daily COVID-19 data published by the

@@ -1,3 +1,7 @@
+---
+source: ../../../../ams/README.md
+---
+
 # AMS
 
 **A**lert **M**onitoring **S**ystem — a command-line tool to download OECD economic

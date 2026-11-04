@@ -1,3 +1,7 @@
+---
+source: ../../../../prometheus-legacy/README.md
+---
+
 # prometheus-legacy
 
 An archive of the legacy **Prometheus** project — a [Flask](http://flask.pocoo.org)

@@ -1,3 +1,7 @@
+---
+source: ../../../../euler/README.md
+---
+
 <p align="center">
   <img src="logo.svg" alt="Euler" width="180">
 </p>
