@@ -10,20 +10,12 @@ Attributes:
 
 from __future__ import annotations
 
-import os
 from functools import partial, wraps
-from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from io import BytesIO, RawIOBase, StringIO
 from math import isinf
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.request import Request, urlopen
-
-from riko.coercion._canonical import repr_cache
-
-try:
-    import fcntl
-except ImportError:
-    fcntl = None
 
 import mezmorize
 import requests
@@ -33,6 +25,7 @@ from riko._package import __version__
 from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
 from riko.base._paths import is_http_url, normalize_url
 from riko.base._sentinels import MISSING, is_missing_type
+from riko.coercion._canonical import repr_cache
 
 from ._reencode import reencode
 
@@ -56,8 +49,6 @@ if TYPE_CHECKING:
         Opener,
         StringFileLike,
     )
-
-O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:
@@ -94,31 +85,6 @@ def ext_from_content_type(content_type: str | None) -> str | None:
         ext = content_type.split("/")[1].split(";")[0]
 
     return ext
-
-
-def set_blocking(f: RawIOBase | TextIOBase) -> None:
-    """
-    Clears the ``O_NONBLOCK`` flag on ``f`` so its reads block.
-
-    riko's readers expect blocking reads; a non-blocking descriptor would not
-    wait for data. A no-op where ``fcntl`` is unavailable (e.g. Windows).
-
-    Args:
-
-        f: The file whose descriptor is switched to blocking mode.
-
-    Raises:
-
-        io.UnsupportedOperation: If ``f`` has no underlying file descriptor.
-
-    """
-    if fcntl is not None:
-        fd = f.fileno()
-        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-
-        if flags & O_NONBLOCK:
-            blocking = flags & ~O_NONBLOCK
-            fcntl.fcntl(fd, fcntl.F_SETFL, blocking)
 
 
 def default_user_agent(name: str = "riko") -> str:

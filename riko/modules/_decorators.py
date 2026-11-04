@@ -77,6 +77,7 @@ from riko.types._streams import (
     AnyIterable,
     AsyncItemsOrValues,
     AsyncStream,
+    AsyncStreamOrValueStream,
     Item,
     ItemOrValue,
     Stream,
@@ -644,7 +645,7 @@ async def _materialize_terminal[T](value: object) -> object:
 
 async def _aprocess_stream[T](
     wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], items: AsyncIterable[T]
-) -> AsyncIterator[ItemOrValue]:
+) -> AsyncStreamOrValueStream:
     """
     Maps a processor over an async stream lazily, in order, flattening its results.
 

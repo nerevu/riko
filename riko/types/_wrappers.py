@@ -6,7 +6,6 @@ from collections.abc import (
     AsyncIterator,
     Awaitable,
     Callable,
-    Coroutine,
     Generator,
     Iterable,
     Iterator,
@@ -33,6 +32,7 @@ from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
     AsyncItems,
     AsyncStream,
+    AsyncStreamOrValueStream,
     ItemOrValue,
     ItemsOrValues,
     ItemValue,
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from riko.definitions._context import Context
 
     from ._options import RawCallOptions
-    from ._scalars import NumLike, PrimitiveValue
+    from ._scalars import PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items
     from .modules import (
         AnyModuleConf,
@@ -67,7 +67,6 @@ type Interface = Literal["pipe", "async_pipe"]
 # Input/Output
 type Func[T] = Callable[..., T]
 type AsyncFunc[T] = Func[Awaitable[T]]
-type CoroutineFunc = Func[Coroutine[object, object, object]]
 type ProcessorParserOutput[O: ItemOrValue] = O | Iterator[O]
 type OperatorParserOutput[T: ItemOrValue] = T | Iterator[T] | Stream
 type SplitterParserOutput = Cascade
@@ -78,7 +77,6 @@ type ParserOutput[T: ItemOrValue] = (
 
 type ParserMaterializedOutput = list[ItemOrValue]
 type Caster[T] = Callable[[str | int], T]
-type NumericCaster = Callable[[str | NumLike], NumLike]
 type ArgCaster[T] = Func[T]
 type ItemDispatcher[T, E] = Callable[[Item, DecorationOptions], ItemDispatch[T, E]]
 type ConversionOutput = Iterable[str] | StringIO
@@ -100,22 +98,18 @@ type SyncSplitterWrapperInput = SyncProcessorWrapperOutput | SyncOperatorWrapper
 type SyncWrapperOutput = SyncProcessorWrapperOutput | SyncOperatorWrapperOutput
 type SyncConfCastFunc = Func[DynamicConf]
 
-type SyncWrapperInput = (
-    SyncProcessorWrapperInput | SyncOperatorWrapperInput | SyncSplitterWrapperInput
-)
-
 # A keyword argument name each item call supplies, which a configuration's
 # ``terminal`` reference may name.
 type ExtraName = str
 type ExtraNames = tuple[ExtraName, ...]
 type PrepareConf = MaybeFrozenConf | DynamicConf
 type AsyncOperatorWrapperOutput = AsyncStream
-type AsyncOperatorWrapperInternalOutput = AsyncIterator[ItemOrValue]
+type AsyncOperatorWrapperInternalOutput = AsyncStreamOrValueStream
 type AsyncOperatorWrapperInput = AsyncItems | SyncOperatorWrapperInput
 type AsyncProcessorWrapperOutput = AsyncWrapperStream[Item, SyncProcessorWrapperOutput]
 
 type AsyncProcessorWrapperInternalOutput = (
-    SyncProcessorWrapperInternalOutput | AsyncIterator[ItemOrValue]
+    SyncProcessorWrapperInternalOutput | AsyncStreamOrValueStream
 )
 
 type AsyncProcessorWrapperInput = SyncProcessorWrapperInput

@@ -55,7 +55,6 @@ type AnyContextManager[T] = AbstractContextManager[T] | AbstractAsyncContextMana
 type ContextManagerFactory[T] = Func[AnyContextManager[T]]
 type LifecycleFactory[T] = GeneratorFactory[T] | ContextManagerFactory[T]
 type ResourceFactory[T] = LifecycleFactory[T] | ValueFactory[T]
-type LifecycleValue[T] = AnyContextManager[T]
 type Cleanup[T] = Callable[[T], Awaitable[None] | None]
 type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
 
