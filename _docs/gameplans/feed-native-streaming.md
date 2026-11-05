@@ -3,15 +3,17 @@
 > **Scope:** discharge the P7 bounded-memory streaming carryover by driving the legacy
 > materialization seam down to genuinely eager operators only.
 >
-> **Ownership boundary:** this plan owns per-module Feed-native migration, streaming-memory
-> behavior, streaming `write`, and sync/async streaming parity. It consumes:
+> **Ownership boundary:** this plan owns per-module Feed-native migration,
+> streaming-memory behavior, streaming `write`, and sync/async streaming parity. It
+> consumes:
 >
-> * Feed-native parser inference / `parser_mode` escape hatch -> `callable-pipes.md`;
-> * Pipeline batch semantics/backend negotiation -> `execution-semantics.md`;
-> * public fan-out/subscription semantics -> `fanout-topology.md`;
-> * canonical Workflow v2 structure/ordering -> `implementation-sequence.md` + `extensibility.md`;
-> * AnyIO helper/version audit -> `bado-anyio-alignment.md`;
-> * serialized streaming codecs -> `artifact-conversion.md`.
+> - Feed-native parser inference / `parser_mode` escape hatch -> `callable-pipes.md`;
+> - Pipeline batch semantics/backend negotiation -> `execution-semantics.md`;
+> - public fan-out/subscription semantics -> `fanout-topology.md`;
+> - canonical Workflow v2 structure/ordering -> `implementation-sequence.md` +
+>   `extensibility.md`;
+> - AnyIO helper/version audit -> `bado-anyio-alignment.md`;
+> - serialized streaming codecs -> `artifact-conversion.md`.
 
 ## 1. Reframe: which parsers can be Feed-native?
 
@@ -28,8 +30,9 @@ Acceptance target:
 > the legacy materialization seam is reached only by genuinely eager legacy operators or
 > extensions, not ordinary streaming composers/reducers.
 
-Feed-native migration is **incremental across the forward implementation sequence**. It does not
-wait wholesale for R10. Once the runtime capability a module needs is stable, that module may migrate:
+Feed-native migration is **incremental across the forward implementation sequence**. It
+does not wait wholesale for R10. Once the runtime capability a module needs is stable,
+that module may migrate:
 
 ```text
 R5A  ordinary transforms/reducers using the final _FeedItem envelope
@@ -39,16 +42,17 @@ R8   batch representation optimization
 R10  remaining legacy-seam cleanup and parity proof
 ```
 
-The fluent `write()`/`sink()` FILE path already delivers `csv`/`jsonl` incrementally through its
-write-session (framed formats stage and publish on finalize). That does **not** make every write path
-Feed-native: the legacy `riko.modules.write` operator remains the module-level migration seam until
-R5C removes it.
+The fluent `write()`/`sink()` FILE path already delivers `csv`/`jsonl` incrementally
+through its write-session (framed formats stage and publish on finalize). That does
+**not** make every write path Feed-native: the legacy `riko.modules.write` operator
+remains the module-level migration seam until R5C removes it.
 
-The R3-adjacent slice corrected only the async **operator** call boundary (operators return an
-`AsyncIterator` directly). It deliberately did **not** begin Feed-native parser migration: no
-async-generator parser inference (`isasyncgenfunction`), no `abuild_assignment()`/`aprocess()`, no lazy
-`send.async_parser`, and no aggregator/processor/splitter parser rewrites. Those remain owned by the
-phases below — ordinary transforms at R5A, `send`/`receive`/`split` at R7, and the final wrapper/parser
+The R3-adjacent slice corrected only the async **operator** call boundary (operators
+return an `AsyncIterator` directly). It deliberately did **not** begin Feed-native
+parser migration: no async-generator parser inference (`isasyncgenfunction`), no
+`abuild_assignment()`/`aprocess()`, no lazy `send.async_parser`, and no
+aggregator/processor/splitter parser rewrites. Those remain owned by the phases below —
+ordinary transforms at R5A, `send`/`receive`/`split` at R7, and the final wrapper/parser
 seam cleanup at R10.
 
 ## 2. Per-module migration audit
@@ -87,13 +91,14 @@ An operator may need EOF before it can emit without needing the entire source in
 | `write` | no | no |
 | `split` | no | no |
 
-Reducers keep one logical accumulator across any internal batches. Never change semantics to
-"reduce each chunk and emit each chunk" merely because batch execution is enabled.
+Reducers keep one logical accumulator across any internal batches. Never change
+semantics to "reduce each chunk and emit each chunk" merely because batch execution is
+enabled.
 
 ## 4. `split()` uses bounded execution-owned fan-out
 
-An unbounded tee cache is not the production contract. The target is explicit execution-owned
-branch channels with bounded buffering/backpressure:
+An unbounded tee cache is not the production contract. The target is explicit
+execution-owned branch channels with bounded buffering/backpressure:
 
 ```text
                  -> bounded branch A
@@ -102,23 +107,25 @@ source -> producer -> bounded branch B
 ```
 
 Only reachable/used outputs become active. Unused outputs allocate no queue and exert no
-backpressure. Active branches are lossless. Default buffer size is zero/rendezvous; bounded
-non-zero buffers may be supported but split never has a lossy/drop overflow mode.
+backpressure. Active branches are lossless. Default buffer size is zero/rendezvous;
+bounded non-zero buffers may be supported but split never has a lossy/drop overflow
+mode.
 
-Canonical Workflow v2 still represents split as an ordinary multi-output `ModuleNode` with
-`out`, `out:1`, `out:2`, ... ports. Runtime queues are execution state, not serialized graph objects.
+Canonical Workflow v2 still represents split as an ordinary multi-output `ModuleNode`
+with `out`, `out:1`, `out:2`, ... ports. Runtime queues are execution state, not
+serialized graph objects.
 
-The runtime provides observable branch isolation and chooses the cheapest safe copy/share
-strategy. There is no public copy-mode override initially.
+The runtime provides observable branch isolation and chooses the cheapest safe
+copy/share strategy. There is no public copy-mode override initially.
 
-This section implements semantics owned by `fanout-topology.md` / `execution-semantics.md`; it does
-not define a second split contract.
+This section implements semantics owned by `fanout-topology.md` /
+`execution-semantics.md`; it does not define a second split contract.
 
 ## 5. Streaming `write` is a passthrough effect
 
 `write` emits each logical value unchanged after performing its side effect; it is not a
-whole-stream terminal by definition. In the target graph it is a `WriteNode`, not a public module and
-not a desugared subscription callback.
+whole-stream terminal by definition. In the target graph it is a `WriteNode`, not a
+public module and not a desugared subscription callback.
 
 Incremental codec interfaces remain useful:
 
@@ -129,27 +136,29 @@ class StreamEncoder(Protocol):
     def finish(self) -> bytes: ...
 ```
 
-`STREAM_ENCODERS` is separate from whole-dataset conversion functions because the interfaces
-and framing state differ.
+`STREAM_ENCODERS` is separate from whole-dataset conversion functions because the
+interfaces and framing state differ.
 
-A writer may use bounded internal chunks while preserving Pipeline semantics. Destination
-file atomicity can use temp-write + flush/fsync/close + atomic replace where appropriate.
-Failure removes the temp artifact and does not publish it as successful.
+A writer may use bounded internal chunks while preserving Pipeline semantics.
+Destination file atomicity can use temp-write + flush/fsync/close + atomic replace where
+appropriate. Failure removes the temp artifact and does not publish it as successful.
 
-Successful write completion is reported out-of-band through the common `EventSink` as `WriteResult`;
-ordinary records continue downstream unchanged. Incremental downstream delivery cannot roll back
-later downstream side effects if a subsequent write fails, so retry/resume correctness relies on the
-common side-effect/idempotency and checkpoint/disposition rules from `execution-semantics.md`.
+Successful write completion is reported out-of-band through the common `EventSink` as
+`WriteResult`; ordinary records continue downstream unchanged. Incremental downstream
+delivery cannot roll back later downstream side effects if a subsequent write fails, so
+retry/resume correctness relies on the common side-effect/idempotency and
+checkpoint/disposition rules from `execution-semantics.md`.
 
-There is no *permanent* public `sink()` terminal in the target API. The interim fluent `sink()` that
-shipped with the R3 write-session seam is removed at the R5C clean-break; useful writer/codec
-mechanics are reused only behind `WriteNode`. Reconciliation/destructive write modes are write
-semantics of the Target/operation contract; terminality comes from graph position.
+There is no *permanent* public `sink()` terminal in the target API. The interim fluent
+`sink()` that shipped with the R3 write-session seam is removed at the R5C clean-break;
+useful writer/codec mechanics are reused only behind `WriteNode`.
+Reconciliation/destructive write modes are write semantics of the Target/operation
+contract; terminality comes from graph position.
 
 ## 6. Internal batching uses the single Pipeline batch contract
 
-The earlier separate `BatchPolicy(max_records/max_bytes/max_delay)` target is superseded.
-There is one public batch model:
+The earlier separate `BatchPolicy(max_records/max_bytes/max_delay)` target is
+superseded. There is one public batch model:
 
 ```python
 Pipeline(batch=True, batch_size=1000)(items)
@@ -157,8 +166,8 @@ Pipeline(batch=True, batch_size=1000)(items)
 
 `batch_size` is invalid without `batch=True`.
 
-Batch representation follows the execution-semantics capability/cost model, **not** a global
-Arrow/Polars/Pandas ranking:
+Batch representation follows the execution-semantics capability/cost model, **not** a
+global Arrow/Polars/Pandas ranking:
 
 ```text
 candidates = upstream representations ∩ representations the node accepts
@@ -169,9 +178,9 @@ candidates = upstream representations ∩ representations the node accepts
 4. Python objects are the universal fallback
 ```
 
-Equal-cost ties use a documented deterministic order; that order is a tiebreak, not a statement that
-one dataframe library is globally preferred. A forced unavailable/incompatible `batch_backend=`
-raises.
+Equal-cost ties use a documented deterministic order; that order is a tiebreak, not a
+statement that one dataframe library is globally preferred. A forced
+unavailable/incompatible `batch_backend=` raises.
 
 Implementation helpers such as:
 
@@ -180,14 +189,14 @@ async def batch_feed(source, *, batch_size) -> AsyncIterator[tuple[T, ...]]: ...
 def batch_stream(source, *, batch_size) -> Iterator[tuple[T, ...]]: ...
 ```
 
-may exist privately for streaming writers/fan-out/adapters, but they do not define another
-public batching API. A batch is an ordinary logical value in Pipeline batch mode; `.map(fn)`
-therefore receives that batch.
+may exist privately for streaming writers/fan-out/adapters, but they do not define
+another public batching API. A batch is an ordinary logical value in Pipeline batch
+mode; `.map(fn)` therefore receives that batch.
 
 ## 7. Sync/async streaming parity
 
-Sync and async implementations should differ primarily in how they wait/cancel, not in when
-they materialize or their asymptotic memory behavior.
+Sync and async implementations should differ primarily in how they wait/cancel, not in
+when they materialize or their asymptotic memory behavior.
 
 | Characteristic | Sync | Async |
 |---|---|---|
@@ -200,11 +209,13 @@ they materialize or their asymptotic memory behavior.
 Share runtime-neutral algorithm/state where practical (unique-state, reducers, encoders,
 identity derivation), with sync and async adapters around waiting/I/O.
 
-Memory-parity gap (2026-10-29 unboundedness audit, owned by R10's parity audit): the async URL
-readers (`async_url_open`/`async_url_read`, `riko/io/_async.py`) buffer `response.content` whole
-with no size cap, while sync `Fetch` streams `r.raw`. Tripwire (strict xfail):
+Memory-parity gap (2026-10-29 unboundedness audit, owned by R10's parity audit): the
+async URL readers (`async_url_open`/`async_url_read`, `riko/io/_async.py`) buffer
+`response.content` whole with no size cap, while sync `Fetch` streams `r.raw`. Tripwire
+(strict xfail):
 `tests/internal/test_io.py::TestAsyncUrlOpen::test_async_url_open_reads_received_lines_before_the_body_ends`
-— the first line of a stalled body is readable in sync but the async read times out first.
+— the first line of a stalled body is readable in sync but the async read times out
+first.
 
 ### 7.1 Stream-boundary source normalization
 
@@ -219,8 +230,9 @@ Classify one-item vs many-item sources consistently:
 | async iterable | async stream |
 | awaitable | await, then normalize result |
 
-The same Pipeline definition can execute sync or async. One-shot/lazy sources retain their
-native replayability semantics; Pipeline immutability does not recreate consumed sources.
+The same Pipeline definition can execute sync or async. One-shot/lazy sources retain
+their native replayability semantics; Pipeline immutability does not recreate consumed
+sources.
 
 ## 8. FeedResult and state propagation
 
@@ -230,51 +242,56 @@ Feed-native sources/parsers may return:
 FeedResult(items=..., metadata=..., state=...)
 ```
 
-Ordinary transforms propagate state/metadata while truthful. Final finite `FeedResult.state`
-is only committable after successful completion of `items`; infinite feeds require explicit
-incremental checkpoint boundaries.
+Ordinary transforms propagate state/metadata while truthful. Final finite
+`FeedResult.state` is only committable after successful completion of `items`; infinite
+feeds require explicit incremental checkpoint boundaries.
 
-Per-item provenance remains private in `_FeedItem` and is not surfaced as a second parser
-API. Fanout transports that envelope so crossing a split/publish boundary does not accidentally
-invent new item identity.
+Per-item provenance remains private in `_FeedItem` and is not surfaced as a second
+parser API. Fanout transports that envelope so crossing a split/publish boundary does
+not accidentally invent new item identity.
 
 ## 9. Pub/sub migration boundary
 
-The existing `send`/`receive` parsers may be made incremental as transitional implementation work,
-but R7 consumes those mechanics into the final object-first API and removes the Python modules:
+The existing `send`/`receive` parsers may be made incremental as transitional
+implementation work, but R7 consumes those mechanics into the final object-first API and
+removes the Python modules:
 
 ```python
 events = Pipeline.subscribe("events", func=archive)
 pipeline = pipeline.publish(events)
 ```
 
-Canonical Workflow v2 represents that relationship as a `PublishEdge` targeting a `SubscribeNode`.
-Attached local subscription branches are execution-owned; users do not drain them for cleanup.
-Async buffering/backpressure, branch error handling, isolation, multiple publishers, completion, and
-receive-time `func` semantics remain owned by the fan-out/execution contracts.
+Canonical Workflow v2 represents that relationship as a `PublishEdge` targeting a
+`SubscribeNode`. Attached local subscription branches are execution-owned; users do not
+drain them for cleanup. Async buffering/backpressure, branch error handling, isolation,
+multiple publishers, completion, and receive-time `func` semantics remain owned by the
+fan-out/execution contracts.
 
-`func` is intentionally retained: it executes when an item is received/materialized by the
-subscription, which is different from ordinary downstream UDF evaluation timing. Its return value is
-discarded and the original item remains the logical stream value.
+`func` is intentionally retained: it executes when an item is received/materialized by
+the subscription, which is different from ordinary downstream UDF evaluation timing. Its
+return value is discarded and the original item remains the logical stream value.
 
-Pre-R7 streaming fixes must not harden the old DONE/PENDING lifecycle or create a compatibility API.
-Once R7 lands, no legacy send/receive runtime/module survives behind the object-first surface.
+Pre-R7 streaming fixes must not harden the old DONE/PENDING lifecycle or create a
+compatibility API. Once R7 lands, no legacy send/receive runtime/module survives behind
+the object-first surface.
 
 ## 10. Side effects, identity, cache, and checkpoints
 
 Streaming ports must not invent replay/checkpoint semantics.
 
 - item identity/generation follows canonical `_FeedItem` propagation rules;
-- explicit `Pipeline.cache()` owns replay semantics; ordinary streaming helpers do not cache results;
-- side-effecting `write` uses the centrally derived idempotency key where the destination supports it;
+- explicit `Pipeline.cache()` owns replay semantics; ordinary streaming helpers do not
+  cache results;
+- side-effecting `write` uses the centrally derived idempotency key where the
+  destination supports it;
 - generic persistence uses `FeedState` / `StateStore` / `.checkpoint()`;
 - CAS conflicts propagate rather than causing automatic reload/rerun;
 - a streaming port cannot advance committed state beyond a failed required handoff.
 
 ## 11. Implementation order
 
-This local order is subordinate to `implementation-sequence.md`; it records module migration order,
-not a second runtime roadmap:
+This local order is subordinate to `implementation-sequence.md`; it records module
+migration order, not a second runtime roadmap:
 
 ```text
 S0  source normalization + Feed-native inference tests
@@ -290,41 +307,47 @@ S8  Pipeline batch representation optimization under R8
 
 R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempted.
 
-Tripwire for S1/S7: `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_stays_lazy_over_a_long_source`
-(strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator without an
-`async def` parser materializes its whole async input; today async `truncate` pulls its whole (finite,
-counted) source before yielding its first item, while the sync run is lazy. It flips when `truncate`
-migrates or the seam goes.
+Tripwire for S1/S7:
+`tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_stays_lazy_over_a_long_source`
+(strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator
+without an `async def` parser materializes its whole async input; today async `truncate`
+pulls its whole (finite, counted) source before yielding its first item, while the sync
+run is lazy. It flips when `truncate` migrates or the seam goes.
 
-The same seam never yields to the event loop while it drains (`materialize` reads a sync source
-through `as_async(cooperative=False)`), so async `forever | truncate` through `Pipeline` hangs, grows
-without bound, and ignores a cancel scope (2026-10-29 unboundedness audit: 566 MB after 6 s). The sync
-run returns at `concurrency=1`; under `with_execution(concurrency>1)` the sync worker pool collects
-each item's whole output before yielding it (`run_item` in `riko/execution/_concurrency.py`), so it
-hangs the same way (2026-11-03 repo-audit triage; tripwire listed under R10 in
-[implementation-sequence.md](implementation-sequence.md#r10--final-feed-native-legacy-seam-cleanup)). Tripwire (S1/S7, strict xfail, finite source so the suite never hangs):
+The same seam never yields to the event loop while it drains (`materialize` reads a sync
+source through `as_async(cooperative=False)`), so async `forever | truncate` through
+`Pipeline` hangs, grows without bound, and ignores a cancel scope (2026-10-29
+unboundedness audit: 566 MB after 6 s). The sync run returns at `concurrency=1`; under
+`with_execution(concurrency>1)` the sync worker pool collects each item's whole output
+before yielding it (`run_item` in `riko/execution/_concurrency.py`), so it hangs the
+same way (2026-11-03 repo-audit triage; tripwire listed under R10 in
+[implementation-sequence.md](implementation-sequence.md#r10--final-feed-native-legacy-seam-cleanup)).
+Tripwire (S1/S7, strict xfail, finite source so the suite never hangs):
 `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_yields_to_the_event_loop_while_draining`.
-Until it flips, the async `truncate`/`uniq`/`forever` docstrings say to bound an endless source with
-`timeout`, which does checkpoint.
+Until it flips, the async `truncate`/`uniq`/`forever` docstrings say to bound an endless
+source with `timeout`, which does checkpoint.
 
-The same seam drains async secondary inputs: async `union` drains its `others` streams (as are async
-terminal sub-sources passed as the `format`/`formatted` keywords) before the operator yields
-its first item, while the sync run chains them lazily. A strict xfail in
-`tests/internal/test_modules.py` marks it for S1/S7.
+The same seam drains async secondary inputs: async `union` drains its `others` streams
+(as are async terminal sub-sources passed as the `format`/`formatted` keywords) before
+the operator yields its first item, while the sync run chains them lazily. A strict
+xfail in `tests/internal/test_modules.py` marks it for S1/S7.
 
 ## 12. Definition of done
 
 1. Ordinary Feed-native transforms do not hit whole-source materialization.
 2. Inherently EOF-blocking reducers remain bounded-memory where possible.
 3. Sync/async laziness/order/memory/side-effect timing match semantically.
-4. `split()` uses bounded execution-owned branches, not unbounded tee or whole-source copy.
-5. `WriteNode` streams through bounded memory, passes records through, emits `WriteResult` through the
-   common EventSink, participates in common side-effect/idempotency semantics, and the legacy Python
-   `write` module is absent.
-6. Public batching is only `Pipeline(batch=True, batch_size=...)`; no `BatchPolicy` or `BatchPipe`
-   target remains and no global dataframe-backend ranking is documented.
-7. FeedResult metadata/state and private per-item provenance survive streaming ports correctly.
-8. Legacy `send`/`receive` modules are absent after R7; public pub/sub uses `publish`/`subscribe`, and
-   subscriber `func=` retains receive/materialization-time semantics distinct from downstream UDFs.
-9. Feed-native migration lands with its owning runtime capability; R10 leaves only intentionally
-   eager materialization points and legacy-seam cleanup.
+4. `split()` uses bounded execution-owned branches, not unbounded tee or whole-source
+   copy.
+5. `WriteNode` streams through bounded memory, passes records through, emits
+   `WriteResult` through the common EventSink, participates in common
+   side-effect/idempotency semantics, and the legacy Python `write` module is absent.
+6. Public batching is only `Pipeline(batch=True, batch_size=...)`; no `BatchPolicy` or
+   `BatchPipe` target remains and no global dataframe-backend ranking is documented.
+7. FeedResult metadata/state and private per-item provenance survive streaming ports
+   correctly.
+8. Legacy `send`/`receive` modules are absent after R7; public pub/sub uses
+   `publish`/`subscribe`, and subscriber `func=` retains receive/materialization-time
+   semantics distinct from downstream UDFs.
+9. Feed-native migration lands with its owning runtime capability; R10 leaves only
+   intentionally eager materialization points and legacy-seam cleanup.

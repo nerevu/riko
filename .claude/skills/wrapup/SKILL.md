@@ -31,33 +31,32 @@ each phase is one response:
 
 ## 0. Tidy (one subagent)
 
-Every agent brief ends with the mid-run self-check: past about 10 minutes or
-100k tokens with mechanical, repeated work left, stop at a consistent point, run
-the gates, and report what is done, what is left, and the helper script that
-would speed up the rest (run `date` at the start and between items). About 10
-minutes in, send it a non-stopping status ping; pause one that is grinding,
-build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
-`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
-fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
+Every agent brief ends with the mid-run self-check: past about 10 minutes or 100k tokens
+with mechanical, repeated work left, stop at a consistent point, run the gates, and
+report what is done, what is left, and the helper script that would speed up the rest
+(run `date` at the start and between items). About 10 minutes in, send it a non-stopping
+status ping; pause one that is grinding, build the script, then resume it. When an agent
+finishes, inspect any scripts it wrote for itself (scratchpad, `/tmp`, new untracked
+files) and decide for each: promote it to a shared helper, fold it into an existing one,
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or
+folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only
+by the user (agents never delete it); report the verdict.
 
-First run `python .claude/skills/land/gates.py check tidy`. When it exits 0,
-tidy already ran on this exact tree (in this or another session): skip the
-agent and report "tidy current". Otherwise run `python .claude/skills/land/require_agents.py`
-(on failure, stop and report its output) and launch one fresh `implementer`
-agent with `model: "opus"` (not a fork — it
-needs only the diff, not this session's context; pin the model so it never
-inherits a Fable session's) with: "Follow
-`.claude/skills/tidy/SKILL.md`, reproduced below, in the repo at the current
-working directory; `/wrapup` is the caller. You cannot ask the user: apply
-mechanical fixes, and return phase-owned findings and framed judgment questions
-instead of deciding them." and then the whole file pasted in
-(`cat .claude/skills/tidy/SKILL.md`), so the agent never spends a turn reading
-it. Wait for its report
-before step 1, so the evidence batch sees the tidied tree. Its judgment
-questions join step 2's single AskUserQuestion call; its phase-owned findings
-and "tidy edits not yet through the full suite" (when it edited anything) go
-in the handoff for the next `/land`. If tidy reports nothing to tidy, move on.
+First run `python .claude/skills/land/gates.py check tidy`. When it exits 0, tidy
+already ran on this exact tree (in this or another session): skip the agent and report
+"tidy current". Otherwise run `python .claude/skills/land/require_agents.py` (on
+failure, stop and report its output) and launch one fresh `implementer` agent with
+`model: "opus"` (not a fork — it needs only the diff, not this session's context; pin
+the model so it never inherits a Fable session's) with: "Follow
+`.claude/skills/tidy/SKILL.md`, reproduced below, in the repo at the current working
+directory; `/wrapup` is the caller. You cannot ask the user: apply mechanical fixes, and
+return phase-owned findings and framed judgment questions instead of deciding them." and
+then the whole file pasted in (`cat .claude/skills/tidy/SKILL.md`), so the agent never
+spends a turn reading it. Wait for its report before step 1, so the evidence batch sees
+the tidied tree. Its judgment questions join step 2's single AskUserQuestion call; its
+phase-owned findings and "tidy edits not yet through the full suite" (when it edited
+anything) go in the handoff for the next `/land`. If tidy reports nothing to tidy, move
+on.
 
 ## 1. Gather evidence (one Bash call)
 
@@ -199,10 +198,10 @@ The preamble also carries a **Docket** list: the next three items of work across
 whole tree, in order, each with its owner (gameplan section, handoff section, or tracker
 row) and the test or xfail it flips. Derive it from the evidence, not recollection: open
 next actions in the handoff sections first, then the forward order in
-`_docs/PHASE_CHECKLISTS.md` (the M1 row) and `_docs/gameplans/implementation-sequence.md`
-§ 4. Below it, a **Suggested command** line: the one prompt to paste after `/clear` that
-starts docket item 1 cold (a skill invocation such as `/go …` or `/triage …` with the
-file, function, or test named).
+`_docs/PHASE_CHECKLISTS.md` (the M1 row) and
+`_docs/gameplans/implementation-sequence.md` § 4. Below it, a **Suggested command**
+line: the one prompt to paste after `/clear` that starts docket item 1 cold (a skill
+invocation such as `/go …` or `/triage …` with the file, function, or test named).
 
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
@@ -237,16 +236,27 @@ session that starts before the user runs it knows to.
 
 ## 6. Report
 
-End with a short manifest: tidy's fixes and open findings,
-the **next three docket items** (as recorded in the handoff preamble, each with its owner),
-the **suggested command** to run after `/clear` (in a code block, ready to paste), each file updated
-and the one-line reason, anything deliberately not updated (and why), the
-number of turns used against the seven-turn budget, and confirmation the session
-is safe to clear, and any **script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (slicing or replaying diffs, rebuilding tables, bulk
-renames, rehearsing commits, auditing memory). Name each one's task, duration, and tool count, and the script it
-suggests (name, inputs, outputs, and home, such as beside the skill that launched
-the agent). Propose them only; build one when the user agrees.
-Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never deleted) — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
-(design, review, triage) is never a candidate. When fixups are pending, the manifest's last line is the
-rebase step: the user runs the clipboard line (shown for reference) only now,
-after wrapup has finished. `/land` deliberately leaves this step to wrapup.
+End with a short manifest: tidy's fixes and open findings, the
+**next three docket items** (as recorded in the handoff preamble, each with its owner),
+the **suggested command** to run after `/clear` (in a code block, ready to paste), each
+file updated and the one-line reason, anything deliberately not updated (and why), the
+number of turns used against the seven-turn budget, and confirmation the session is safe
+to clear, and any **script candidates**: candidates come from the main loop as much as
+from subagents: any helper script written this session into the scratchpad or `/tmp`
+(inline heredoc scripts included), any scan, count, or cross-check run by hand three or
+more times, and any subagent whose completion notice shows a long run (roughly 10+
+minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper
+scripts (slicing or replaying diffs, rebuilding tables, bulk renames, rehearsing
+commits, auditing memory). Name each one's task, duration, and tool count, and the
+script it suggests (name, inputs, outputs, and home, such as beside the skill that
+launched the agent). Propose them only; build one when the user agrees. Save each
+candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header
+docstring (purpose, inputs, outputs, origin date), and cite that path in the report and
+handoff. Then put every draft saved this session to the user with AskUserQuestion —
+promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a
+trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never
+deleted) — with measured numbers from running it, and record the ruling in the handoff;
+a saved draft is never left undecided. Judgment work (design, review, triage) is never a
+candidate. When fixups are pending, the manifest's last line is the rebase step: the
+user runs the clipboard line (shown for reference) only now, after wrapup has finished.
+`/land` deliberately leaves this step to wrapup.

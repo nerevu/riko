@@ -28,12 +28,12 @@ Pandas / Arrow / Polars / SQL-native batches
         item mode or batch mode
 ```
 
-Frame support must not create a parallel `BatchPipe` hierarchy or require every processor
-to become a DataFrame operator. In batch mode the current batch is simply the logical value
-seen by batch-capable transforms.
+Frame support must not create a parallel `BatchPipe` hierarchy or require every
+processor to become a DataFrame operator. In batch mode the current batch is simply the
+logical value seen by batch-capable transforms.
 
-Conversion remains explicit/inspectable where a user requests a concrete frame type and is
-subject to boundedness rules.
+Conversion remains explicit/inspectable where a user requests a concrete frame type and
+is subject to boundedness rules.
 
 ## 3. Ownership boundaries
 
@@ -135,11 +135,11 @@ Requirements:
 * prefer nullable dtypes where doing so does not create surprising coercion;
 * report materialized row/byte estimates when available.
 
-Large-data workflows should prefer Pipeline batch mode or incremental Arrow batches rather
-than one giant DataFrame.
+Large-data workflows should prefer Pipeline batch mode or incremental Arrow batches
+rather than one giant DataFrame.
 
-`to_pandas()` is a representation/materialization boundary, not one of the removed generic
-execution terminals such as `collect()`.
+`to_pandas()` is a representation/materialization boundary, not one of the removed
+generic execution terminals such as `collect()`.
 
 ## 7. Arrow input
 
@@ -185,8 +185,9 @@ Requirements:
 * schema evolution within one conversion has an explicit policy;
 * Arrow conversion does not change ordinary upstream item semantics.
 
-When the Pipeline is already in batch mode and Arrow is the negotiated representation, the
-runtime should avoid redundant conversion/copying when it can safely reuse the native batch.
+When the Pipeline is already in batch mode and Arrow is the negotiated representation,
+the runtime should avoid redundant conversion/copying when it can safely reuse the
+native batch.
 
 ## 9. Polars interoperability
 
@@ -202,10 +203,11 @@ than inventing an independent Polars record model.
 
 ## 10. Batch backend negotiation
 
-Batch representation is negotiated from operator capability and conversion cost. There is no
-global library ranking: Riko does not prefer Arrow over Polars over Pandas as a framework
-opinion, because that ordering encodes a preference most pipelines do not have. A Pandas-native
-graph should stay Pandas; a Polars graph should not convert unless an operator forces it.
+Batch representation is negotiated from operator capability and conversion cost. There
+is no global library ranking: Riko does not prefer Arrow over Polars over Pandas as a
+framework opinion, because that ordering encodes a preference most pipelines do not
+have. A Pandas-native graph should stay Pandas; a Polars graph should not convert unless
+an operator forces it.
 
 Negotiation resolves per boundary:
 
@@ -222,13 +224,13 @@ then chooses:
 
 Equal-cost ties resolve through a documented stable order so identical graphs negotiate
 identically across processes. Arrow's role is unchanged in practice — it is usually the
-cheapest zero-copy bridge between frame libraries, so cost-based negotiation picks it where it
-genuinely is the efficient path — but it wins by measured cost, not by rank.
+cheapest zero-copy bridge between frame libraries, so cost-based negotiation picks it
+where it genuinely is the efficient path — but it wins by measured cost, not by rank.
 
-Nodes declare accepted representations and conversion costs as ordinary execution metadata. A
-node accepting anything imposes no conversion. A node accepting one representation forces one
-conversion at its own boundary, not across the whole graph. Installing every backend is never
-required.
+Nodes declare accepted representations and conversion costs as ordinary execution
+metadata. A node accepting anything imposes no conversion. A node accepting one
+representation forces one conversion at its own boundary, not across the whole graph.
+Installing every backend is never required.
 
 An explicit:
 
@@ -236,8 +238,8 @@ An explicit:
 batch_backend = "arrow"
 ```
 
-forces the requested supported backend for the execution. If unavailable/incompatible, raise
-rather than silently choosing another forced representation.
+forces the requested supported backend for the execution. If unavailable/incompatible,
+raise rather than silently choosing another forced representation.
 
 `execution-semantics.md` §16.1 owns this contract; this section is the tabular-boundary
 projection of it.
@@ -261,19 +263,19 @@ pipeline.map(func)
 # func receives the current batch
 ```
 
-There is no separate `BatchPipe.map()` contract. Operators that are not batch-capable must
-have an explicit conversion/planning boundary rather than silently materializing an entire
-unbounded stream.
+There is no separate `BatchPipe.map()` contract. Operators that are not batch-capable
+must have an explicit conversion/planning boundary rather than silently materializing an
+entire unbounded stream.
 
 ## 12. Missing values and scalar normalization
 
-Frame libraries represent missing/scalar values differently. Define one conversion policy
-rather than letting each connector invent its own.
+Frame libraries represent missing/scalar values differently. Define one conversion
+policy rather than letting each connector invent its own.
 
 At ordinary item boundaries:
 
-* missing tabular values normalize to the Riko null representation (`None`) unless a typed
-  scalar is explicitly preserved;
+* missing tabular values normalize to the Riko null representation (`None`) unless a
+  typed scalar is explicitly preserved;
 * NaN versus null distinctions that cannot survive mapping conversion are documented;
 * timestamps, decimals, binary values, categorical values, and extension dtypes have
   deterministic conversion rules;
@@ -293,11 +295,13 @@ field      # write index into configured field
 metadata   # preserve as namespaced metadata when truthful/practical
 ```
 
-MultiIndex conversion requires explicit field names or a documented generated-name policy.
+MultiIndex conversion requires explicit field names or a documented generated-name
+policy.
 
 ## 14. Schema metadata
 
-Tabular boundaries may expose observed schema information through the common metadata model:
+Tabular boundaries may expose observed schema information through the common metadata
+model:
 
 ```text
 columns/fields
@@ -307,11 +311,12 @@ Arrow schema metadata
 row count when known
 ```
 
-Observation is not validation. Strict schema contracts and drift behavior remain owned by
-the schema/HigherGov gameplans.
+Observation is not validation. Strict schema contracts and drift behavior remain owned
+by the schema/HigherGov gameplans.
 
-Metadata propagates only while truthful. A representation/operator that invalidates schema
-metadata must invalidate or replace it rather than silently retaining stale values.
+Metadata propagates only while truthful. A representation/operator that invalidates
+schema metadata must invalidate or replace it rather than silently retaining stale
+values.
 
 ## 15. Chunking and boundedness
 
@@ -324,8 +329,8 @@ Pipeline.from_pandas(df, batch=True, batch_size=10_000)
 Rules:
 
 * `batch_size` requires `batch=True`;
-* logical row order is preserved unless downstream execution/operator semantics explicitly
-  choose otherwise;
+* logical row order is preserved unless downstream execution/operator semantics
+  explicitly choose otherwise;
 * batch boundaries are execution representation details unless an operator explicitly
   treats the current batch as its logical value;
 * whole-frame materialization requires a known/effectively bounded input.
@@ -342,9 +347,9 @@ CSV / XLSX / Parquet file
     serialized artifact
 ```
 
-Reading/writing CSV/XLSX/Parquet belongs to codec/connector plans. Those implementations may
-use a negotiated batch representation internally, but their public artifact contract is not
-defined here.
+Reading/writing CSV/XLSX/Parquet belongs to codec/connector plans. Those implementations
+may use a negotiated batch representation internally, but their public artifact contract
+is not defined here.
 
 ## 17. REST relationship
 
@@ -378,8 +383,9 @@ frames
 ```
 
 Batch acceleration/representation dependencies should compose with the existing `perf`
-policy where appropriate. Import/capability errors identify the missing optional dependency
-and requested boundary/backend. Core Riko remains importable without frame libraries.
+policy where appropriate. Import/capability errors identify the missing optional
+dependency and requested boundary/backend. Core Riko remains importable without frame
+libraries.
 
 ## 20. Observability
 
@@ -438,5 +444,5 @@ T6  optional Polars conveniences
 6. Large finite inputs can cross boundaries as bounded batches.
 7. Batch backend negotiation and forced-backend behavior match execution semantics.
 8. Null, index, metadata, and typed-scalar behavior is deterministic/documented.
-9. REST, connector, artifact, SQL, and application plans reference this contract rather than
-   redefining it.
+9. REST, connector, artifact, SQL, and application plans reference this contract rather
+   than redefining it.

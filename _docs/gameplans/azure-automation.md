@@ -3,12 +3,12 @@
 ## 1. Mission
 
 Define the Microsoft-specific execution adapters Riko needs for Azure, Microsoft Graph,
-Exchange Online, Teams, Intune, Entra, and PowerShell without creating a second execution,
-credential, retry, capability, or administrative-policy framework.
+Exchange Online, Teams, Intune, Entra, and PowerShell without creating a second
+execution, credential, retry, capability, or administrative-policy framework.
 
-This plan owns **Microsoft adapter mechanics**. It does not own generic credential storage,
-retry policy, capability metadata, long-running-operation waiting, or desired-state
-administration.
+This plan owns **Microsoft adapter mechanics**. It does not own generic credential
+storage, retry policy, capability metadata, long-running-operation waiting, or
+desired-state administration.
 
 Related authoritative plans:
 
@@ -16,15 +16,18 @@ Related authoritative plans:
 * `rest-incremental.md` — REST pagination and collection semantics;
 * `execution-semantics.md` — retry, timeout, cancellation, and error policy;
 * `mcp.md` — common capability catalog, effects, schemas, and execution policy;
-* `provider-integrations.md` — provider auth lifecycle and `OperationHandle`/operation wait;
-* `microsoft-administration.md` — ChangePlan, desired state, dry-run, approval, verification,
-  audit evidence, certificate workflows, and handoffs.
+* `provider-integrations.md` — provider auth lifecycle and `OperationHandle`/operation
+  wait;
+* `microsoft-administration.md` — ChangePlan, desired state, dry-run, approval,
+  verification, audit evidence, certificate workflows, and handoffs.
 
-Downstream *scenarios* that consume these adapters (they specialize, they do not redefine them):
+Downstream *scenarios* that consume these adapters (they specialize, they do not
+redefine them):
 
 * `autopilot-provisioning.md` — Windows Autopilot new-device provisioning;
-* `monthly-dashboard.md` — MSP monthly reconciliation/dashboard, which uses the Graph adapter
-  (`signIns`, `managedDevices`, `subscribedSkus`, users) as its Microsoft data sources.
+* `monthly-dashboard.md` — MSP monthly reconciliation/dashboard, which uses the Graph
+  adapter (`signIns`, `managedDevices`, `subscribedSkus`, users) as its Microsoft data
+  sources.
 
 ## 2. Ownership boundary
 
@@ -93,19 +96,19 @@ class MicrosoftContext:
     correlation_id: str | None = None
 ```
 
-`credential` is a **reference** resolved through `connectors.md`; this type does not contain
-secret material.
+`credential` is a **reference** resolved through `connectors.md`; this type does not
+contain secret material.
 
-The context is immutable and execution-scoped. Never store the active tenant, subscription,
-credential, or PowerShell session in process-global mutable state because MSP workloads may
-run several client operations concurrently.
+The context is immutable and execution-scoped. Never store the active tenant,
+subscription, credential, or PowerShell session in process-global mutable state because
+MSP workloads may run several client operations concurrently.
 
 ### Multi-tenant MSP application model
 
-An MSP serving many customer tenants does not register one application (and one secret) per
-customer. It registers **one multitenant application in the MSP tenant**; after admin consent
-in each customer tenant, Microsoft creates a service principal representing that application
-there:
+An MSP serving many customer tenants does not register one application (and one secret)
+per customer. It registers **one multitenant application in the MSP tenant**; after
+admin consent in each customer tenant, Microsoft creates a service principal
+representing that application there:
 
 ```text
                  MSP tenant
@@ -119,23 +122,24 @@ there:
   principal      principal      principal
 ```
 
-One installation therefore carries **one credential reference and many tenant ids**; each
-execution selects the customer explicitly:
+One installation therefore carries **one credential reference and many tenant ids**;
+each execution selects the customer explicitly:
 
 ```python
 MicrosoftContext(tenant_id=customer.tenant_id, credential="msp-microsoft")
 ```
 
 and token acquisition targets that customer's tenant. This is why tenant and credential
-state are execution-scoped rather than global: concurrent operations for different customers
-must not leak one customer's tenant or session into another.
+state are execution-scoped rather than global: concurrent operations for different
+customers must not leak one customer's tenant or session into another.
 
-**GDAP is not consent.** A partner relationship (GDAP) by itself does not authorize app-only
-Graph calls in a customer tenant; the partner-managed application still needs the customer
-(or an admin acting for the customer) to consent, which gives the customer traceability over
-that access. GDAP with App+User/MFA patterns is Microsoft's recommendation for delegated,
-interactive partner administration. Unattended automation should rely on properly consented
-application permissions rather than a technician authenticating every run.
+**GDAP is not consent.** A partner relationship (GDAP) by itself does not authorize
+app-only Graph calls in a customer tenant; the partner-managed application still needs
+the customer (or an admin acting for the customer) to consent, which gives the customer
+traceability over that access. GDAP with App+User/MFA patterns is Microsoft's
+recommendation for delegated, interactive partner administration. Unattended automation
+should rely on properly consented application permissions rather than a technician
+authenticating every run.
 
 ## 5. PowerShell runner
 
@@ -180,11 +184,12 @@ Python
 This gives process isolation, straightforward timeout/cancellation, and no accidental
 persistent shell state.
 
-A later persistent-runspace implementation may reduce repeated Exchange/module/auth startup
-cost but must implement the same runner contract and execution-resource lifecycle.
+A later persistent-runspace implementation may reduce repeated Exchange/module/auth
+startup cost but must implement the same runner contract and execution-resource
+lifecycle.
 
-Optional remote implementations may include WinRM/SSH, Azure Automation, Azure Functions,
-or Hybrid Runbook Worker.
+Optional remote implementations may include WinRM/SSH, Azure Automation, Azure
+Functions, or Hybrid Runbook Worker.
 
 ## 6. Structured PowerShell I/O
 
@@ -200,8 +205,8 @@ errors
 exit_code
 ```
 
-Raw stdout/stderr remain diagnostic fields and are subject to the same redaction policy as
-other connector logs.
+Raw stdout/stderr remain diagnostic fields and are subject to the same redaction policy
+as other connector logs.
 
 PowerShell exceptions should normalize at least:
 
@@ -212,13 +217,13 @@ target
 script stack where available
 ```
 
-The wrapping/serialization behavior belongs inside the adapter so every PowerShell-backed
-capability behaves consistently.
+The wrapping/serialization behavior belongs inside the adapter so every
+PowerShell-backed capability behaves consistently.
 
 ## 7. Microsoft credential adapters
 
-Do not define a Microsoft-only `TokenProvider` protocol. Implement the credential-provider
-contract from `connectors.md`.
+Do not define a Microsoft-only `TokenProvider` protocol. Implement the
+credential-provider contract from `connectors.md`.
 
 Useful Microsoft implementations include:
 
@@ -243,8 +248,8 @@ managed/workload identity when hosted appropriately
 Interactive/delegated setup and provider-facing status/refresh/revoke behavior follow
 `provider-integrations.md`. Serialized workflows carry only named credential references.
 
-Delegated login stays available as an **operator mode**, for example through the external
-package's CLI:
+Delegated login stays available as an **operator mode**, for example through the
+external package's CLI:
 
 ```bash
 riko-ms auth login --tenant customer-a
@@ -290,8 +295,8 @@ pipe.graph(
 )
 ```
 
-Graph collection/pagination should reuse the REST collection machinery where its semantics
-fit rather than maintain a second paginator implementation.
+Graph collection/pagination should reuse the REST collection machinery where its
+semantics fit rather than maintain a second paginator implementation.
 
 Graph results become ordinary Riko records or action results for downstream processing.
 
@@ -313,15 +318,18 @@ pipe.azure(
 )
 ```
 
-Direct ARM REST is the preferred generic path because it has a small dependency footprint,
-uses the same credential/session model, and exposes Azure API behavior directly.
+Direct ARM REST is the preferred generic path because it has a small dependency
+footprint, uses the same credential/session model, and exposes Azure API behavior
+directly.
 
-Use Az PowerShell when a mature cmdlet is materially safer or more complete than reproducing
-its behavior. Azure CLI may be a fallback adapter, not the primary public abstraction.
+Use Az PowerShell when a mature cmdlet is materially safer or more complete than
+reproducing its behavior. Azure CLI may be a fallback adapter, not the primary public
+abstraction.
 
 ## 10. Exchange, Teams, Intune, and Entra
 
-Choose the adapter per operation rather than forcing one technology across Microsoft 365:
+Choose the adapter per operation rather than forcing one technology across Microsoft
+365:
 
 ```text
 Microsoft Graph
@@ -350,7 +358,8 @@ Exchange APIs.
 Microsoft operations project into the common capability model owned by `mcp.md`.
 
 PowerShell advanced functions are useful discovery sources because `Get-Command` and
-`Get-Help` expose parameter names, types, required flags, validation sets, and descriptions.
+`Get-Help` expose parameter names, types, required flags, validation sets, and
+descriptions.
 
 The projection flow is:
 
@@ -368,11 +377,11 @@ Administrative extensions such as required scopes or `supports_what_if` are desc
 
 ## 12. Long-running Microsoft operations
 
-ARM deployments, Azure Automation jobs, Intune actions, exports, provisioning, and similar
-operations often return provider-specific status URLs or IDs.
+ARM deployments, Azure Automation jobs, Intune actions, exports, provisioning, and
+similar operations often return provider-specific status URLs or IDs.
 
-Microsoft adapters normalize those responses into the `OperationHandle` contract owned by
-`provider-integrations.md` and expose an authoritative status capability.
+Microsoft adapters normalize those responses into the `OperationHandle` contract owned
+by `provider-integrations.md` and expose an authoritative status capability.
 
 Example mapping:
 
@@ -390,8 +399,8 @@ The Microsoft adapter owns:
 * provider terminal-state mapping;
 * provider request/correlation IDs.
 
-It does **not** implement another generic `.poll()` loop, timeout type, event-wait protocol,
-or subscription abstraction.
+It does **not** implement another generic `.poll()` loop, timeout type, event-wait
+protocol, or subscription abstraction.
 
 ## 13. Retry and throttling classification
 
@@ -417,12 +426,13 @@ invalid command parameters
 missing resources unless documented eventual consistency applies
 ```
 
-An adapter may supply provider delay hints such as `Retry-After`; it must not silently add a
-second retry loop around a Riko operation already governed by `RetryPolicy`.
+An adapter may supply provider delay hints such as `Retry-After`; it must not silently
+add a second retry loop around a Riko operation already governed by `RetryPolicy`.
 
 ## 14. Connector and event integration
 
-The Microsoft integrations implement the same shared connector boundaries as other integrations:
+The Microsoft integrations implement the same shared connector boundaries as other
+integrations:
 
 ```text
 Graph / ARM
@@ -438,9 +448,9 @@ Key Vault / managed identity / certificate services
     credential-provider adapters
 ```
 
-Broker and webhook sessions are execution-scoped resources. Event subscriptions may wake an
-operation waiter, but authoritative completion still comes from the Microsoft status API as
-defined by `provider-integrations.md`.
+Broker and webhook sessions are execution-scoped resources. Event subscriptions may wake
+an operation waiter, but authoritative completion still comes from the Microsoft status
+API as defined by `provider-integrations.md`.
 
 ## 15. Package layout
 
@@ -473,8 +483,8 @@ teams
 all
 ```
 
-A subprocess PowerShell runner may need no Python package beyond the standard library, but
-requires a compatible `pwsh` executable.
+A subprocess PowerShell runner may need no Python package beyond the standard library,
+but requires a compatible `pwsh` executable.
 
 ## 16. Testing strategy
 
@@ -512,8 +522,8 @@ AZ8  cross-adapter lifecycle/throttle tests
 
 1. Microsoft-specific dependencies remain outside core Riko.
 2. Tenant/cloud/subscription context is explicit and execution-scoped.
-3. Credential material is resolved by the shared connector contract, not a Microsoft-only
-   secret system.
+3. Credential material is resolved by the shared connector contract, not a
+   Microsoft-only secret system.
 4. PowerShell results are structured rather than parsed from console formatting.
 5. Graph and ARM expose ordinary Riko records/actions.
 6. Microsoft long-running jobs normalize to the shared `OperationHandle` contract.

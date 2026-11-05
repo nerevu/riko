@@ -75,17 +75,19 @@ Before fanning out, estimate the cost: lines to read × about 12 tokens × the n
 agents rereading them. Size each file group to fit a 100k-token agent: about 1k test
 lines. An `auditor` agent starts with about 23k of fixed context (a `general-purpose`
 one with about 50k, so never use it here), and verifying costs about 23 tokens per
-assigned line in tool results plus about 500 per turn (2–4.5k-line groups ran all
-eight agents of the 2026-10-29 audit to 145–189k). Run `python .claude/skills/land/require_agents.py` first (on failure, stop
-and report its output). Split `auditor` agents by file
-group (`model: "opus"`), give each agent the scan leads for its files, and require both
-sides of every suspected duplicate to be read. Tag each lead CONFIRMED or DROPPED,
-with the reason. Every brief ends with: "Run `date` at the start and between items. If
-you pass about 10 minutes or 100k tokens and the remaining work is mechanical, stop at
-a consistent point and report what is done, what is left, and the script that would
-finish it." Ping each agent for status at about 10 minutes. When an agent finishes,
-inspect any scripts it wrote and promote each one, fold it into
-`overlap_scan.py`/`move_tests.py`, park it in `.claude/skills/drafts/`, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it).
+assigned line in tool results plus about 500 per turn (2–4.5k-line groups ran all eight
+agents of the 2026-10-29 audit to 145–189k). Run
+`python .claude/skills/land/require_agents.py` first (on failure, stop and report its
+output). Split `auditor` agents by file group (`model: "opus"`), give each agent the
+scan leads for its files, and require both sides of every suspected duplicate to be
+read. Tag each lead CONFIRMED or DROPPED, with the reason. Every brief ends with: "Run
+`date` at the start and between items. If you pass about 10 minutes or 100k tokens and
+the remaining work is mechanical, stop at a consistent point and report what is done,
+what is left, and the script that would finish it." Ping each agent for status at about
+10 minutes. When an agent finishes, inspect any scripts it wrote and promote each one,
+fold it into `overlap_scan.py`/`move_tests.py`, park it in `.claude/skills/drafts/`, or
+drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is
+git-ignored and cleared only by the user (agents never delete it).
 
 ## 3. Dimensions, in risk order
 
@@ -142,10 +144,10 @@ inspect any scripts it wrote and promote each one, fold it into
    test of it (`testing.md` §1).
 7. **Helpers.** Single-user `tests/_*.py` names, identical definitions across
    files, 3+ inline copies that should be one helper, and placement.
-8. **Timeout bounds.** `manage lint --tests` checks ladder membership and
-   nesting; the audit measures the fit (`fit_bounds.py`): every bound is the smallest ladder step
-   at least five times the worst of the three `--durations` runs above. Map a
-   marker to the `def` that *follows* it, never by line range.
+8. **Timeout bounds.** `manage lint --tests` checks ladder membership and nesting; the
+   audit measures the fit (`fit_bounds.py`): every bound is the smallest ladder step at
+   least five times the worst of the three `--durations` runs above. Map a marker to the
+   `def` that *follows* it, never by line range.
 9. **Stale citations and names.** Test names that cite nothing (`test_documented_*`),
    old verbs in test names, and `_docs/` citations of tests that moved or were
    deleted (`lint --docs` checks `path::Class::test`; it misses prose mentions).
@@ -178,9 +180,9 @@ Drop a lead that matches one of these unless something else confirms it:
   logged warning, or the pytest copy was stricter than the doctest, so the doctest
   had to be strengthened first.
 
-Protected (report, never propose deleting): every strict xfail and its owner, the
-tests `testing.md` §5 protects (`test_parallel` and the core lifecycle tests), sync/async mirrors, and tests a
-gameplan cites by name as a guard.
+Protected (report, never propose deleting): every strict xfail and its owner, the tests
+`testing.md` §5 protects (`test_parallel` and the core lifecycle tests), sync/async
+mirrors, and tests a gameplan cites by name as a guard.
 
 ## 5. Verify before reporting
 
@@ -191,8 +193,8 @@ gameplan cites by name as a guard.
   run `--runxfail`) and show the test still passes, or fails for the wrong reason.
 - **Fold:** list the rows, the ids, and the estimated lines saved. Every removed
   test maps to a row, and no row's data changes silently.
-- **Deletion:** flag any line that only the cut test executes (`covdiff.py`). The ratchet total
-  can't see a deleted test whose lines other tests also reach, and earlier
+- **Deletion:** flag any line that only the cut test executes (`covdiff.py`). The
+  ratchet total can't see a deleted test whose lines other tests also reach, and earlier
   "mechanical" slices lost 14 lines that way.
 - **Speed and bounds:** cite the measured times, not estimates.
 
@@ -228,5 +230,11 @@ Close with:
 - **Tool gaps**: leads the scanner missed that you found by hand, with the
   `overlap_scan.py` section or lint that would catch them, so the next pass can
   build that check.
-- **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts, with the script each suggests.
-  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff.
+- **Script candidates**: candidates come from the main loop as much as from subagents:
+  any helper script written this session into the scratchpad or `/tmp` (inline heredoc
+  scripts included), any scan, count, or cross-check run by hand three or more times,
+  and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+
+  tool calls) on mechanical, repeatable work or that wrote its own helper scripts, with
+  the script each suggests. Save each candidate's draft (or the agent's own script) in
+  `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin
+  date), and cite that path in the report and handoff.

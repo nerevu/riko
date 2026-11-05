@@ -3,20 +3,20 @@
 ## 1. Mission
 
 Give riko's static currency and location tables a **single internal source of truth**
-(`riko/base/_reference.py`) while keeping `riko.base.currencies` and `riko.base.locations`
-as thin, public compatibility facades. This is a maintainability refactor, not a behavior change:
-`LOCATIONS`, `CURRENCY_CODES`, and `CURRENCY_SYMBOLS` must be byte-for-byte equivalent
-before and after.
+(`riko/base/_reference.py`) while keeping `riko.base.currencies` and
+`riko.base.locations` as thin, public compatibility facades. This is a maintainability
+refactor, not a behavior change: `LOCATIONS`, `CURRENCY_CODES`, and `CURRENCY_SYMBOLS`
+must be byte-for-byte equivalent before and after.
 
 It is **not** a runtime defect and does **not** gate the `features` → `main` merge — no
 pipe misbehaves today. It maps onto the correctness taxonomy only as **C6** (redundant
-weaker duplicates: three data files no runtime code reads) and a documentation-clarity item; see
-[correctness-audit.md](correctness-audit.md). Keep it out of the R-register.
+weaker duplicates: three data files no runtime code reads) and a documentation-clarity
+item; see [correctness-audit.md](correctness-audit.md). Keep it out of the R-register.
 
 ## 2. Current state (verified)
 
-No runtime code reads the three files under `riko/data/`; only `countries.csv` has a test
-consumer:
+No runtime code reads the three files under `riko/data/`; only `countries.csv` has a
+test consumer:
 
 | File | Shape | Live consumer |
 |---|---|---|
@@ -26,18 +26,19 @@ consumer:
 
 The behavioral source of truth is the two hand-maintained runtime dicts:
 
-- `riko/base/locations.py::LOCATIONS` — keyed by continent **and** country. The 6 continent
-  records (`code_2`/`continent` only) exist **only here**; `countries.csv` has no
-  continent rows to regenerate them from.
+- `riko/base/locations.py::LOCATIONS` — keyed by continent **and** country. The 6
+  continent records (`code_2`/`continent` only) exist **only here**; `countries.csv` has
+  no continent rows to regenerate them from.
 - `riko/base/currencies.py::CURRENCY_CODES` (code → record) + `CURRENCY_SYMBOLS`
   (symbol → code). `CURRENCY_CODES` already merges location, display metadata, and the
   runtime-important `locale`, which `currencies.json` lacks entirely.
 
 Two consumers anchor the behavior to lock:
 
-- `riko/coercion/cast.py:287` `cast_location` joins a currency's `location` into `LOCATIONS` via a
-  **tolerant** `LOCATIONS.get(location, {})` — a miss (e.g. EUR's `"European Union"`,
-  which is neither continent nor country) degrades to no enrichment, by design.
+- `riko/coercion/cast.py:287` `cast_location` joins a currency's `location` into
+  `LOCATIONS` via a **tolerant** `LOCATIONS.get(location, {})` — a miss (e.g. EUR's
+  `"European Union"`, which is neither continent nor country) degrades to no enrichment,
+  by design.
 - `riko/modules/currencyformat.py:82` reads the default locale from
   `CURRENCY_CODES.get(currency, {})` and hands it to Babel — Babel owns the formatting
   rules, so `decimal_digits`/`rounding` are not needed downstream.
@@ -47,12 +48,12 @@ Two consumers anchor the behavior to lock:
 `riko/types/_geo.py` defines
 both as `TypedDict(total=False)`:
 
-- `Region` — `Required[code_2]`, `Required[continent]`, optional `code_3`/`country`/`num`.
-  The optional trio is **intentional**: the one type covers both the continent shape and
-  the country shape. Do **not** "fix" it into a union or split it into `CountryRegion`
-  during this refactor — that is an unrelated type-system change. Add a docstring line:
-  *"Country records always contain all five fields; the optional keys accommodate the
-  continent shape."*
+- `Region` — `Required[code_2]`, `Required[continent]`, optional
+  `code_3`/`country`/`num`. The optional trio is **intentional**: the one type covers
+  both the continent shape and the country shape. Do **not** "fix" it into a union or
+  split it into `CountryRegion` during this refactor — that is an unrelated type-system
+  change. Add a docstring line: *"Country records always contain all five fields; the
+  optional keys accommodate the continent shape."*
 - `CurrencyCode` — `Required[code]`, `Required[location]`, everything else optional
   (a handful of withdrawn currencies omit `locale`/name/symbol — `EEK`, `HRK`, `LTL`,
   `LVL`, `VEF`, `ZMK`, `ZWL`).
@@ -68,16 +69,16 @@ refactor that "corrects" them is out of scope and would change output:
 - `LOCATIONS["Saint Vincent and the Grenadines"]["country"]` has doubled internal spaces
   (`"...and the   Grenadines"`).
 - `"Spratly Islands"` carries literal string `"null"` for `code_3` and `num`.
-- No continent-shaped `"Antarctica"` exists; `LOCATIONS["Antarctica"]` is the **country**
-  record (`code_2=AQ`, `code_3=ATA`, `continent="Antarctica"`). The merge policy must
-  preserve exactly this — see §6.
+- No continent-shaped `"Antarctica"` exists; `LOCATIONS["Antarctica"]` is the
+  **country** record (`code_2=AQ`, `code_3=ATA`, `continent="Antarctica"`). The merge
+  policy must preserve exactly this — see §6.
 
 ## 5. Phase RD0 — lock the contracts first
 
 Add focused invariant tests **before** moving anything (`tests/internal/`), asserting:
 
-- every country record has `code_2`/`code_3`/`continent`/`country`/`num`; every continent
-  record has exactly `code_2`/`continent`;
+- every country record has `code_2`/`code_3`/`continent`/`country`/`num`; every
+  continent record has exactly `code_2`/`continent`;
 - country key == `country` field, **except** the §4 whitelist;
 - `CURRENCY_CODES[k]["code"] == k` for all `k`;
 - every `CURRENCY_SYMBOLS` value exists in `CURRENCY_CODES` (`$→USD`, `£→GBP`, `€→EUR`,
@@ -107,34 +108,35 @@ Rules:
   the `gen-*` codegen surfaces; `_reference.py` is hand-maintained, not generated.)
 - Keeping `CONTINENTS`/`COUNTRIES` separate makes the two `Region` shapes explicit and
   makes the Antarctica collision policy *code*, not merge-order accident: there is no
-  continent Antarctica, so `{**CONTINENTS, **COUNTRIES}` yields the country record — lock
-  it with the §4 regression assertion.
+  continent Antarctica, so `{**CONTINENTS, **COUNTRIES}` yields the country record —
+  lock it with the §4 regression assertion.
 - **Do not derive `CURRENCY_SYMBOLS` mechanically.** `$` maps to several currencies;
   symbol→code must stay a small explicit preference map.
-- Reconcile the three legacy representations **against the runtime dicts as the baseline**,
-  not the files. Treat `decimal_digits`/`rounding` from `currencies.json` as **dropped on
-  purpose** (not in `CurrencyCode`; Babel supplies formatting) unless a consumer is shown
-  to need them.
+- Reconcile the three legacy representations
+  **against the runtime dicts as the baseline**, not the files. Treat
+  `decimal_digits`/`rounding` from `currencies.json` as **dropped on purpose** (not in
+  `CurrencyCode`; Babel supplies formatting) unless a consumer is shown to need them.
 
 Then reduce the facades to re-exports so every existing import keeps working
 (`from riko.base.currencies import CURRENCY_CODES`,
 `from riko.base.locations import LOCATIONS`, consumed by `cast.py`/`currencyformat.py`):
 
-- `riko/base/currencies.py` → re-export `CURRENCY_CODES`, `CURRENCY_SYMBOLS` from `_reference`.
-- `riko/base/locations.py` → re-export `LOCATIONS`. Keep the continent/country docstring,
-  adjusted to say the records now originate in `_reference`.
+- `riko/base/currencies.py` → re-export `CURRENCY_CODES`, `CURRENCY_SYMBOLS` from
+  `_reference`.
+- `riko/base/locations.py` → re-export `LOCATIONS`. Keep the continent/country
+  docstring, adjusted to say the records now originate in `_reference`.
 
 Commit: `[REFACTOR] Consolidate currency and location reference data`.
 
 ## 7. Phase RD2 — delete the dead files
 
-Because §2 established no runtime code reads the files, deletion is low-risk. First repoint
-the csv close regression in `tests/internal/test_io.py` (`get_path("countries.csv")`) at
-another bundled CSV, so the delete stays test-neutral. Still, before
-removing, run a one-off comparison that reports keys/values unique to each file vs the
-runtime dicts, so anything worth salvaging is a deliberate keep, not a silent loss. Do
-**not** require every currency `location` to resolve through `LOCATIONS` (EUR's
-`"European Union"` legitimately does not; `cast_location` tolerates it).
+Because §2 established no runtime code reads the files, deletion is low-risk. First
+repoint the csv close regression in `tests/internal/test_io.py`
+(`get_path("countries.csv")`) at another bundled CSV, so the delete stays test-neutral.
+Still, before removing, run a one-off comparison that reports keys/values unique to each
+file vs the runtime dicts, so anything worth salvaging is a deliberate keep, not a
+silent loss. Do **not** require every currency `location` to resolve through `LOCATIONS`
+(EUR's `"European Union"` legitimately does not; `cast_location` tolerates it).
 
 Remove `riko/data/countries.csv`, `riko/data/currencies.csv`,
 `riko/data/currencies.json`.
@@ -145,8 +147,8 @@ Commit: `[CLEANUP] Remove duplicate currency and country data files`.
 
 1. `_reference.py` is the only place currency/location data is defined; `currencies.py`
    and `locations.py` are re-export facades.
-2. `LOCATIONS`, `CURRENCY_CODES`, `CURRENCY_SYMBOLS` are provably unchanged (before/after
-   equality check + the RD0 invariants pass).
+2. `LOCATIONS`, `CURRENCY_CODES`, `CURRENCY_SYMBOLS` are provably unchanged
+   (before/after equality check + the RD0 invariants pass).
 3. `Region`/`CurrencyCode` are untouched; the two-shape `Region` is documented, not
    redesigned.
 4. The three `riko/data/` files are gone and nothing imports them.
@@ -156,5 +158,5 @@ Commit: `[CLEANUP] Remove duplicate currency and country data files`.
 
 `reference-data.md` owns the currency/location reference tables and their facades.
 [enrichment-modules.md § 6b](enrichment-modules.md) keeps geolocate's `currency` lookup
-(the only real `type`), which *consumes* `CURRENCY_CODES` but does not own it. Types stay
-owned by `riko/types/_geo.py`. See [ownership.md](ownership.md).
+(the only real `type`), which *consumes* `CURRENCY_CODES` but does not own it. Types
+stay owned by `riko/types/_geo.py`. See [ownership.md](ownership.md).

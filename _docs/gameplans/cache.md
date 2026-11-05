@@ -2,23 +2,25 @@
 
 ## 1. Mission
 
-Define Riko's explicit pipeline-result replay contract without creating a second persistence or cache
-backend hierarchy inside Core.
+Define Riko's explicit pipeline-result replay contract without creating a second
+persistence or cache backend hierarchy inside Core.
 
-This plan owns `Pipeline.cache()`, `CacheNode` runtime semantics, cache identity, fill/replay,
-invalidation, and the Riko-to-Mezmoize boundary. It consumes:
+This plan owns `Pipeline.cache()`, `CacheNode` runtime semantics, cache identity,
+fill/replay, invalidation, and the Riko-to-Mezmoize boundary. It consumes:
 
 - canonical node/Workflow v2 structure from `extensibility.md`;
-- value freezing/fingerprints and private execution lifetime from `execution-semantics.md`;
+- value freezing/fingerprints and private execution lifetime from
+  `execution-semantics.md`;
 - Resource ownership from `execution-semantics.md`;
 - implementation ordering from `implementation-sequence.md`.
 
-It does **not** own `StateStore`/checkpoint recovery, HTTP/provider transport caching, or generic
-materialization semantics outside an explicit cache boundary.
+It does **not** own `StateStore`/checkpoint recovery, HTTP/provider transport caching,
+or generic materialization semantics outside an explicit cache boundary.
 
 ## 2. Architecture
 
-Riko already depends on `reubano/mezmorize`; use it rather than reimplementing cache stores:
+Riko already depends on `reubano/mezmorize`; use it rather than reimplementing cache
+stores:
 
 ```text
 Pipeline.cache()
@@ -28,19 +30,20 @@ Pipeline.cache()
     -> CacheLib/backend
 ```
 
-There is no Riko `CacheStore` hierarchy. Generally useful backend/cache behavior should move
-upstream to Mezmoize rather than being duplicated in Riko; any interim riko workaround gets an
-entry in [upstream-fixes.md](upstream-fixes.md).
+There is no Riko `CacheStore` hierarchy. Generally useful backend/cache behavior should
+move upstream to Mezmoize rather than being duplicated in Riko; any interim riko
+workaround gets an entry in [upstream-fixes.md](upstream-fixes.md).
 
-The private integration module may follow the same pattern as `_reencode.py`, for example
-`_mezmorize.py`: a runtime subclass of the upstream class, typed through a local `.pyi` stub under
-`typings/`. If the subclass reaches the surface `pyright --verifytypes` checks, which does not read
-local stubs, type its base through a `TYPE_CHECKING` facade instead, as `_objectify.py` does.
+The private integration module may follow the same pattern as `_reencode.py`, for
+example `_mezmorize.py`: a runtime subclass of the upstream class, typed through a local
+`.pyi` stub under `typings/`. If the subclass reaches the surface
+`pyright --verifytypes` checks, which does not read local stubs, type its base through a
+`TYPE_CHECKING` facade instead, as `_objectify.py` does.
 
 ## 3. Definition versus contents
 
-The Pipeline/CacheNode owns **semantic cache identity and policy**. Mutable cached contents belong to
-the cache service/resource.
+The Pipeline/CacheNode owns **semantic cache identity and policy**. Mutable cached
+contents belong to the cache service/resource.
 
 Consequences:
 
@@ -50,9 +53,10 @@ Consequences:
 - seekability/replayability of a source is distinct from caching;
 - temporary buffering used by an operator is not cross-execution caching;
 - provider/HTTP transport caches do not satisfy `Pipeline.cache()` semantics;
-- an incrementally retained dataset (keep what earlier runs fetched, fetch only what is missing)
-  is a write-then-read composition over durable Targets plus `StateStore`, never a `CacheNode`
-  mode; deciding what is already local belongs to push-down planning in `database-transforms.md`.
+- an incrementally retained dataset (keep what earlier runs fetched, fetch only what is
+  missing) is a write-then-read composition over durable Targets plus `StateStore`,
+  never a `CacheNode` mode; deciding what is already local belongs to push-down planning
+  in `database-transforms.md`.
 
 ## 4. Default cache
 
@@ -76,13 +80,14 @@ with private chunk size:
 _CACHE_CHUNK_SIZE = ByteSize(kibibytes=256)
 ```
 
-The default has no semantic TTL (`timeout=0`/no expiry at the backend). Capacity eviction is an
-ordinary cache miss, not a correctness failure or retention guarantee.
+The default has no semantic TTL (`timeout=0`/no expiry at the backend). Capacity
+eviction is an ordinary cache miss, not a correctness failure or retention guarantee.
 
-`ByteSize` is the public size value type. It subclasses `int`, supports decimal SI and binary IEC
-constructors, and canonicalizes to bytes.
+`ByteSize` is the public size value type. It subclasses `int`, supports decimal SI and
+binary IEC constructors, and canonicalizes to bytes.
 
-Capacity belongs to the configured cache Resource/backend, not to a `.cache(limit=...)` option.
+Capacity belongs to the configured cache Resource/backend, not to a `.cache(limit=...)`
+option.
 
 ## 5. Explicit cache resource
 
@@ -92,9 +97,10 @@ Capacity belongs to the configured cache Resource/backend, not to a `.cache(limi
 cache
 ```
 
-If unbound, execution supplies the built-in process-local Mezmoize resource. An explicitly bound
-Resource may provide persistent/shared behavior through any Mezmoize/CacheLib-supported backend,
-including suitable filesystem, Redis, or Memcached configurations.
+If unbound, execution supplies the built-in process-local Mezmoize resource. An
+explicitly bound Resource may provide persistent/shared behavior through any
+Mezmoize/CacheLib-supported backend, including suitable filesystem, Redis, or Memcached
+configurations.
 
 Riko does not infer persistent/shared cache selection from environment variables.
 
@@ -106,15 +112,15 @@ Python API:
 ttl: datetime.timedelta | None = None
 ```
 
-`None` means no semantic expiry. Workflow v2 canonical form stores TTL as integer milliseconds and
-rejects durations that cannot be represented exactly in milliseconds.
+`None` means no semantic expiry. Workflow v2 canonical form stores TTL as integer
+milliseconds and rejects durations that cannot be represented exactly in milliseconds.
 
 No TTL does **not** promise retention: bounded backends may evict entries.
 
 ## 7. Fill and replay semantics
 
-A cache fill streams values downstream while staging them, but publishes a replayable entry only
-after the upstream traversal completes successfully.
+A cache fill streams values downstream while staging them, but publishes a replayable
+entry only after the upstream traversal completes successfully.
 
 ```text
 upstream item
@@ -132,8 +138,8 @@ An incomplete traversal must never become a cache hit.
 
 ### 7.1 Chunk + manifest protocol
 
-Cache values are stored in bounded chunks plus one manifest. The manifest is the publication point:
-it becomes visible only after every referenced chunk exists.
+Cache values are stored in bounded chunks plus one manifest. The manifest is the
+publication point: it becomes visible only after every referenced chunk exists.
 
 On replay:
 
@@ -142,16 +148,17 @@ On replay:
 - stale manifest/chunks are cleaned up best-effort;
 - incomplete unpublished generations are unreachable.
 
-This prevents a backend that stores individual values atomically from exposing a partially filled
-logical stream as a valid cache entry.
+This prevents a backend that stores individual values atomically from exposing a
+partially filled logical stream as a valid cache entry.
 
 ## 8. Concurrency
 
-Concurrent executions filling the same semantic cache key may both proceed. Each fill uses an
-isolated generation; whichever complete generation becomes current may serve later reads.
+Concurrent executions filling the same semantic cache key may both proceed. Each fill
+uses an isolated generation; whichever complete generation becomes current may serve
+later reads.
 
-There is no initial single-flight/coalescing requirement. Duplicate computation is acceptable;
-partial or cross-generation replay is not.
+There is no initial single-flight/coalescing requirement. Duplicate computation is
+acceptable; partial or cross-generation replay is not.
 
 ## 9. Invalidation
 
@@ -161,15 +168,16 @@ A cached Pipeline view supports:
 cached.invalidate()
 ```
 
-Invalidation rotates the semantic cache generation/namespace. Old entries immediately become
-unreachable without requiring eager deletion or repopulation. Best-effort backend cleanup may happen
-later.
+Invalidation rotates the semantic cache generation/namespace. Old entries immediately
+become unreachable without requiring eager deletion or repopulation. Best-effort backend
+cleanup may happen later.
 
 Invalidation does not execute the upstream Pipeline.
 
 ## 10. Backend failure
 
-Cache infrastructure is an optimization boundary, not a reason to fail otherwise valid dataflow.
+Cache infrastructure is an optimization boundary, not a reason to fail otherwise valid
+dataflow.
 
 If cache get/set/delete/manifest operations fail:
 
@@ -178,27 +186,29 @@ If cache get/set/delete/manifest operations fail:
 3. continue normal upstream/downstream processing;
 4. retry cache infrastructure normally on the next independent execution.
 
-An **upstream/dataflow failure** is not a cache failure and still fails according to normal execution
-policy.
+An **upstream/dataflow failure** is not a cache failure and still fails according to
+normal execution policy.
 
 ## 11. Identity
 
-Cache keys use the common canonical freezing/fingerprint system from `execution-semantics.md`. Do not
-invent cache-only serializers/hashes.
+Cache keys use the common canonical freezing/fingerprint system from
+`execution-semantics.md`. Do not invent cache-only serializers/hashes.
 
-Encoder cost note (measured 2026-10-16): `canonical_bytes` dumps each child once per enclosing
-sorted container plus once for the whole tree (a three-rule module conf: 18 JSON dumps, 1.6 KB
-dumped for a 621-byte result, 68 µs per call). After prepare-once that is one call per node per
-plan build, so the simpler encoder was kept. If this gameplan fingerprints per item, rewrite the
-encoder bytes-first (child bytes serve as both the sort key and the output; `canonicalize` becomes
-`json.loads` of those bytes) and keep the golden-byte tests as the identity guard.
+Encoder cost note (measured 2026-10-16): `canonical_bytes` dumps each child once per
+enclosing sorted container plus once for the whole tree (a three-rule module conf: 18
+JSON dumps, 1.6 KB dumped for a 621-byte result, 68 µs per call). After prepare-once
+that is one call per node per plan build, so the simpler encoder was kept. If this
+gameplan fingerprints per item, rewrite the encoder bytes-first (child bytes serve as
+both the sort key and the output; `canonicalize` becomes `json.loads` of those bytes)
+and keep the golden-byte tests as the identity guard.
 
-Automatic semantic fingerprints are appropriate for process-local default caching. Where a shared or
-persistent cache must remain correct across deploy/dependency changes, explicit node/resource
-`version=` follows the same durability guidance as other identity-sensitive boundaries.
+Automatic semantic fingerprints are appropriate for process-local default caching. Where
+a shared or persistent cache must remain correct across deploy/dependency changes,
+explicit node/resource `version=` follows the same durability guidance as other
+identity-sensitive boundaries.
 
-The cache backend implementation itself is infrastructure and does not change the logical output of
-the node.
+The cache backend implementation itself is infrastructure and does not change the
+logical output of the node.
 
 ## 12. Non-goals
 
@@ -217,7 +227,8 @@ Initial cache work does not add:
 
 Required contracts:
 
-1. first complete traversal fills and second execution replays without consuming upstream;
+1. first complete traversal fills and second execution replays without consuming
+   upstream;
 2. early close/cancellation/failure never publishes an incomplete entry;
 3. missing chunk degrades to miss and stale cleanup;
 4. process-local default respects bounded capacity behavior;
@@ -228,10 +239,12 @@ Required contracts:
 9. next execution retries a previously failed backend;
 10. upstream failure still propagates;
 11. sync and async execution observe the same logical replay behavior;
-12. Workflow v2 round-trips CacheNode semantic policy but never cache contents/live backend handles.
+12. Workflow v2 round-trips CacheNode semantic policy but never cache contents/live
+    backend handles.
 
 ## 14. Definition of done
 
-`Pipeline.cache()` is an explicit, deterministic replay boundary backed through Mezmoize, incomplete
-fills are unobservable, invalidation is generation-based, backend failures are safely bypassed, and
-no competing cache persistence abstraction exists in Core.
+`Pipeline.cache()` is an explicit, deterministic replay boundary backed through
+Mezmoize, incomplete fills are unobservable, invalidation is generation-based, backend
+failures are safely bypassed, and no competing cache persistence abstraction exists in
+Core.

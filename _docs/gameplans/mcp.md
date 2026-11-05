@@ -2,8 +2,8 @@
 
 ## 1. Mission
 
-Create an optional `riko-mcp` package that allows Riko to discover, validate, and execute
-external capabilities while preserving the immutable `Pipeline` execution model.
+Create an optional `riko-mcp` package that allows Riko to discover, validate, and
+execute external capabilities while preserving the immutable `Pipeline` execution model.
 
 The package must support:
 
@@ -19,16 +19,17 @@ The package must support:
 10. Deterministic evaluation and telemetry.
 11. A later MCP server exposing stable Riko capabilities.
 
-AI ranking, decomposition, synthesis, and verification belong in `riko-ai`, not `riko-mcp`.
-Agent-oriented workflows reuse ordinary Riko `Pipeline` definitions; MCP does not provide an
-agent graph/runtime.
+AI ranking, decomposition, synthesis, and verification belong in `riko-ai`, not
+`riko-mcp`. Agent-oriented workflows reuse ordinary Riko `Pipeline` definitions; MCP
+does not provide an agent graph/runtime.
 
-Operations as Code consumes this package's common capability discovery/catalog/policy/approval
-contracts; it does not create an operation-specific capability catalog or security policy engine.
+Operations as Code consumes this package's common capability
+discovery/catalog/policy/approval contracts; it does not create an operation-specific
+capability catalog or security policy engine.
 
 ---
 
-# 2. Prerequisites
+## 2. Prerequisites
 
 Assume Riko provides:
 
@@ -45,9 +46,9 @@ Do not add a second async runtime or private per-package event loop.
 
 ---
 
-# 3. Package boundaries
+## 3. Package boundaries
 
-## `nerevu/riko`
+### `nerevu/riko`
 
 Riko core owns:
 
@@ -61,7 +62,7 @@ Riko core owns:
 
 There is no public `ExecutionContext`.
 
-## `nerevu/riko-mcp`
+### `nerevu/riko-mcp`
 
 `riko-mcp` owns:
 
@@ -75,22 +76,23 @@ There is no public `ExecutionContext`.
 * audit/telemetry/evaluation;
 * future MCP-server projection.
 
-## `nerevu/riko-ai`
+### `nerevu/riko-ai`
 
-`riko-ai` owns model providers, semantic retrieval, AI capability selection, decomposition,
-verification, summarization/research, and model routing. It consumes public `riko-mcp`
-contracts.
+`riko-ai` owns model providers, semantic retrieval, AI capability selection,
+decomposition, verification, summarization/research, and model routing. It consumes
+public `riko-mcp` contracts.
 
-## `nerevu/riko-ops`
+### `nerevu/riko-ops`
 
-Operations as Code owns `OperationSpec`, `OperationPlan`, Git/repository semantics, operation-level
-validate/plan/apply/verify coordination, import/normalization, compatibility, deployment identity,
-and automation drift. It consumes `CapabilityCatalog`, `CapabilityPlan`, effects, policy, and
-approval from this plan rather than duplicating them.
+Operations as Code owns `OperationSpec`, `OperationPlan`, Git/repository semantics,
+operation-level validate/plan/apply/verify coordination, import/normalization,
+compatibility, deployment identity, and automation drift. It consumes
+`CapabilityCatalog`, `CapabilityPlan`, effects, policy, and approval from this plan
+rather than duplicating them.
 
 ---
 
-# 4. Source design retained from Langly and AutoGen
+## 4. Source design retained from Langly and AutoGen
 
 Retain declarative discovery, APIs.guru as an API directory, OpenAPI as executable HTTP
 contract, explicit tool availability, scenario-based evaluation, structured results,
@@ -112,9 +114,9 @@ OpenAPI document
 
 ---
 
-# 5. Non-negotiable architecture decisions
+## 5. Non-negotiable architecture decisions
 
-## 5.1 MCP client before server
+### 5.1 MCP client before server
 
 ```text
 client foundation
@@ -126,29 +128,31 @@ client foundation
 → MCP server
 ```
 
-## 5.2 MCP v2 only
+### 5.2 MCP v2 only
 
-Pin the exact tested v2 prerelease during development, then use a bounded stable-v2 range.
-Direct SDK imports stay under `riko_mcp/sdk/`; SDK classes do not leak into public APIs.
+Pin the exact tested v2 prerelease during development, then use a bounded stable-v2
+range. Direct SDK imports stay under `riko_mcp/sdk/`; SDK classes do not leak into
+public APIs.
 
-## 5.3 Stdio first
+### 5.3 Stdio first
 
 Spike in-memory, stdio, and Streamable HTTP. Ship stdio first, Streamable HTTP second,
 then remote auth/OAuth. Transport choices never create their own event loop.
 
-## 5.4 One unified capability catalog
+### 5.4 One unified capability catalog
 
 The catalog includes native Riko modules/exports, MCP tools/resources/templates, OpenAPI
-operations, and provider-projected capabilities. Multi-step AI planning belongs in `riko-ai`.
-Operations as Code resolves required capabilities from this same catalog; operation compatibility
-may consume catalog facts but does not create another catalog.
+operations, and provider-projected capabilities. Multi-step AI planning belongs in
+`riko-ai`. Operations as Code resolves required capabilities from this same catalog;
+operation compatibility may consume catalog facts but does not create another catalog.
 
-## 5.5 No independently persisted derived tags
+### 5.5 No independently persisted derived tags
 
 Origin/kind/effect/runtime facets are computed from typed fields. Only non-derivable
-operator labels such as `approved-vendor`, `preferred`, or `production-tested` are stored.
+operator labels such as `approved-vendor`, `preferred`, or `production-tested` are
+stored.
 
-## 5.6 Discovery, selection, and execution stay separate
+### 5.6 Discovery, selection, and execution stay separate
 
 ```text
 discover
@@ -160,11 +164,11 @@ discover
 → execute
 ```
 
-Selection never performs execution implicitly. An Operations as Code `plan` may reference one or
-more validated `CapabilityPlan` values, but the operation lifecycle uses `apply` for the operation
-phase; capability `execute` remains this package's term.
+Selection never performs execution implicitly. An Operations as Code `plan` may
+reference one or more validated `CapabilityPlan` values, but the operation lifecycle
+uses `apply` for the operation phase; capability `execute` remains this package's term.
 
-## 5.7 Context precedence
+### 5.7 Context precedence
 
 ```text
 package defaults
@@ -173,13 +177,13 @@ package defaults
 → Context overrides
 ```
 
-A same-name server/resource definition supplied through `Context` replaces the file-defined
-entry rather than deep-merging it.
+A same-name server/resource definition supplied through `Context` replaces the
+file-defined entry rather than deep-merging it.
 
-`Context` stores immutable definitions/configuration. Live MCP sessions are execution-owned resolved
-resource values, not values mutated onto Context.
+`Context` stores immutable definitions/configuration. Live MCP sessions are
+execution-owned resolved resource values, not values mutated onto Context.
 
-## 5.8 Approval
+### 5.8 Approval
 
 ```python
 class ExecutionApproval(StrEnum):
@@ -188,31 +192,33 @@ class ExecutionApproval(StrEnum):
     ALWAYS = "always"
 ```
 
-Default is policy-driven. Known read-only actions may run automatically; unknown effects and
-writes require confirmation by default; destructive actions require explicit policy plus
-appropriate confirmation/unattended authorization. Model confidence never overrides policy.
+Default is policy-driven. Known read-only actions may run automatically; unknown effects
+and writes require confirmation by default; destructive actions require explicit policy
+plus appropriate confirmation/unattended authorization. Model confidence never overrides
+policy.
 
-Operations as Code approval may be bound to an `OperationPlan` fingerprint by its owner; the
-underlying capability/domain plan identities must remain part of that binding so an operation
-cannot use one approval to execute a materially changed capability plan.
+Operations as Code approval may be bound to an `OperationPlan` fingerprint by its owner;
+the underlying capability/domain plan identities must remain part of that binding so an
+operation cannot use one approval to execute a materially changed capability plan.
 
-## 5.9 Sessions are execution resources
+### 5.9 Sessions are execution resources
 
-Never establish a new MCP session/subprocess per item. Declare MCP client/session resources
-in `Context`; the private execution resolves and owns the live session once per execution.
-Externally supplied resources use `Resource.from_external(...)` and are never closed by Riko.
+Never establish a new MCP session/subprocess per item. Declare MCP client/session
+resources in `Context`; the private execution resolves and owns the live session once
+per execution. Externally supplied resources use `Resource.from_external(...)` and are
+never closed by Riko.
 
 A module that needs the MCP manager declares it through common `resources=` metadata and
 receives the execution-bound resource view through existing wrapper preparation.
 
-## 5.10 MCP is not internal Riko transport
+### 5.10 MCP is not internal Riko transport
 
-Do not route ordinary `rename`, `filter`, `sort`, `map`, pub/sub, export edges, or operation
-repository/deployment metadata through MCP.
+Do not route ordinary `rename`, `filter`, `sort`, `map`, pub/sub, export edges, or
+operation repository/deployment metadata through MCP.
 
 ---
 
-# 6. Core domain model
+## 6. Core domain model
 
 Use frozen, slotted, keyword-only public dataclasses. Do not expose MCP SDK models.
 
@@ -300,12 +306,12 @@ class CapabilityCatalog:
     created_at: datetime
 ```
 
-Catalog serialization/fingerprinting must be deterministic. Computed facets are not stored
-independently or accepted as configuration overrides.
+Catalog serialization/fingerprinting must be deterministic. Computed facets are not
+stored independently or accepted as configuration overrides.
 
 ---
 
-# 7. Capability providers
+## 7. Capability providers
 
 ```python
 class CapabilityProvider(Protocol):
@@ -329,16 +335,16 @@ ApisGuruProvider
 OpenApiProvider
 ```
 
-Provider integrations may also project provider-native resources/actions through this same contract;
-provider-specific discovery mechanics remain in `provider-integrations.md` while catalog identity and
-conflict resolution remain here.
+Provider integrations may also project provider-native resources/actions through this
+same contract; provider-specific discovery mechanics remain in
+`provider-integrations.md` while catalog identity and conflict resolution remain here.
 
 Catalog construction validates identity conflicts and creates one deterministic catalog
 fingerprint using the common Riko fingerprinting contract where applicable.
 
 ---
 
-# 8. Plan model
+## 8. Plan model
 
 ```python
 type CapabilityPlan = (
@@ -353,23 +359,23 @@ type CapabilityPlan = (
 type SelectionOutcome = CapabilityPlan | CapabilityDiscoveryPlan | NoCapabilityMatch
 ```
 
-Plans are immutable and carry capability/catalog/schema identity needed for revalidation.
-The model may not inject a new base URL/schema URL, undeclared headers, raw credentials,
-HTTP method, or schema-invalid arguments.
+Plans are immutable and carry capability/catalog/schema identity needed for
+revalidation. The model may not inject a new base URL/schema URL, undeclared headers,
+raw credentials, HTTP method, or schema-invalid arguments.
 
 Discovery plans may expand a catalog but may not execute the final user task.
 
-An `OperationPlan` may reference `CapabilityPlan` values, but it remains a distinct higher-level
-contract owned by `operations-as-code.md`; do not broaden `CapabilityPlan` into a generic operation
-plan.
+An `OperationPlan` may reference `CapabilityPlan` values, but it remains a distinct
+higher-level contract owned by `operations-as-code.md`; do not broaden `CapabilityPlan`
+into a generic operation plan.
 
 ---
 
-# 9. Configuration
+## 9. Configuration
 
-File configuration contains transport/server definitions and credential **references**, not
-resolved secrets. Environment interpolation resolves at configuration assembly without
-serializing secrets back into plans/catalogs/audit records/items.
+File configuration contains transport/server definitions and credential **references**,
+not resolved secrets. Environment interpolation resolves at configuration assembly
+without serializing secrets back into plans/catalogs/audit records/items.
 
 Example Context override:
 
@@ -379,15 +385,16 @@ context = Context(
 )
 ```
 
-The resource definition/factory may carry immutable MCP server configuration. Live sessions,
-secret-provider clients, HTTP clients, and artifact-store clients are resolved by execution.
+The resource definition/factory may carry immutable MCP server configuration. Live
+sessions, secret-provider clients, HTTP clients, and artifact-store clients are resolved
+by execution.
 
 Do not describe already-open sessions or mutable runtime credentials as ordinary Context
 values.
 
 ---
 
-# 10. Public Riko modules
+## 10. Public Riko modules
 
 MCP/capability modules are ordinary `Pipeline` modules and use the same definition under
 sync and async execution:
@@ -419,15 +426,15 @@ capabilitydiscover
 capabilityexecute
 ```
 
-AI-backed capability selection belongs in `riko-ai`. Legacy `SyncPipe` examples may remain
-only in compatibility docs, not this target API.
+AI-backed capability selection belongs in `riko-ai`. Legacy `SyncPipe` examples may
+remain only in compatibility docs, not this target API.
 
-All modules that need MCP/HTTP/provider clients declare resource bindings in module metadata;
-they do not fetch live clients by mutating `Context.resources`.
+All modules that need MCP/HTTP/provider clients declare resource bindings in module
+metadata; they do not fetch live clients by mutating `Context.resources`.
 
 ---
 
-# 11. APIs.guru progressive discovery
+## 11. APIs.guru progressive discovery
 
 For a task such as `Convert 100 USD to GBP`:
 
@@ -443,13 +450,14 @@ For a task such as `Convert 100 USD to GBP`:
 `ApiSummary`, `ApiCandidateSet`, `ApiExpansionPolicy`, and `OpenApiOperationSpec` remain
 immutable domain types. Directory summaries are not executable capabilities.
 
-Initial OpenAPI support: 2.0/3.0/3.1, GET, path/query/schema-declared headers, JSON/text,
-no-auth/API-key/bearer auth, local/internal refs and explicitly permitted remote refs.
-Writes/uploads/callbacks/custom signing may follow after read-only execution is stable.
+Initial OpenAPI support: 2.0/3.0/3.1, GET, path/query/schema-declared headers,
+JSON/text, no-auth/API-key/bearer auth, local/internal refs and explicitly permitted
+remote refs. Writes/uploads/callbacks/custom signing may follow after read-only
+execution is stable.
 
 ---
 
-# 12. Result model
+## 12. Result model
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -463,52 +471,57 @@ class CapabilityResult:
     artifact: CapabilityArtifact | None = None
 ```
 
-Extraction modes may include raw/structured/text/content/records/artifact. Never silently
-discard non-text blocks.
+Extraction modes may include raw/structured/text/content/records/artifact. Never
+silently discard non-text blocks.
 
-Keep transport failure, protocol failure, tool-level error, schema failure, policy rejection,
-approval requirement, and result-conversion failure distinct.
+Keep transport failure, protocol failure, tool-level error, schema failure, policy
+rejection, approval requirement, and result-conversion failure distinct.
 
-When a capability is exposed as a Riko source/parser, rich stream metadata/state should map
-through the common `FeedResult` model rather than introducing a second source-result envelope.
+When a capability is exposed as a Riko source/parser, rich stream metadata/state should
+map through the common `FeedResult` model rather than introducing a second source-result
+envelope.
 
 ---
 
-# 13. Security policies
+## 13. Security policies
 
-Execution policy controls allowed servers/capabilities, trust/effects, open-world/private
-network access, approval, maximum result size, and timeout.
+Execution policy controls allowed servers/capabilities, trust/effects,
+open-world/private network access, approval, maximum result size, and timeout.
 
-Schema-discovery policy bounds catalogs/candidates/schema count/schema bytes/redirects and
-remote refs.
+Schema-discovery policy bounds catalogs/candidates/schema count/schema bytes/redirects
+and remote refs.
 
-API policy bounds host/method/private-network/response-size/timeout/approval. A discovered
-OpenAPI URL is never automatically added to an execution allowlist.
+API policy bounds host/method/private-network/response-size/timeout/approval. A
+discovered OpenAPI URL is never automatically added to an execution allowlist.
 
-Stdio commands come only from trusted operator configuration. AI output cannot define the
-executable/arguments. Use executable/working-directory allowlists, minimal environment,
-bounded stderr, and deterministic child-process cleanup.
+Stdio commands come only from trusted operator configuration. AI output cannot define
+the executable/arguments. Use executable/working-directory allowlists, minimal
+environment, bounded stderr, and deterministic child-process cleanup.
 
 Operations as Code must pass through the same policy boundary:
 
 * an imported script/workflow is **data**, not permission to execute it;
-* importer/compatibility output cannot add a host, credential, capability, method, executable, or
-  effect to an allowlist;
-* an operation's required capabilities must resolve through the shared catalog before apply;
-* target deployment/export is a side effect and receives normal effect/policy/approval treatment;
-* AI-assisted operation normalization or target mapping is a proposal and cannot reduce policy;
+* importer/compatibility output cannot add a host, credential, capability, method,
+  executable, or effect to an allowlist;
+* an operation's required capabilities must resolve through the shared catalog before
+  apply;
+* target deployment/export is a side effect and receives normal effect/policy/approval
+  treatment;
+* AI-assisted operation normalization or target mapping is a proposal and cannot reduce
+  policy;
 * operation/source/deployment fingerprints do not substitute for authorization;
-* plan-bound approval is rejected after `OperationPlan` or referenced `CapabilityPlan` identity
-  changes.
+* plan-bound approval is rejected after `OperationPlan` or referenced `CapabilityPlan`
+  identity changes.
 
-The Operations as Code layer may be more restrictive, but it cannot silently weaken this policy.
+The Operations as Code layer may be more restrictive, but it cannot silently weaken this
+policy.
 
 ---
 
-# 14. Session lifecycle
+## 14. Session lifecycle
 
-MCP session management is an execution-resource implementation detail, not a second public
-lifecycle system.
+MCP session management is an execution-resource implementation detail, not a second
+public lifecycle system.
 
 Requirements:
 
@@ -519,13 +532,13 @@ Requirements:
 * do not close externally supplied resources;
 * do not expose MCP SDK session types through Riko public APIs.
 
-If call/pipe/pipeline session scopes are useful internally, they remain policies of the MCP
-resource implementation; normal public lifetime is still anchored to the owning Riko
+If call/pipe/pipeline session scopes are useful internally, they remain policies of the
+MCP resource implementation; normal public lifetime is still anchored to the owning Riko
 execution.
 
 ---
 
-# 15. Large-result artifactization
+## 15. Large-result artifactization
 
 Formalize oversized response redirection:
 
@@ -537,22 +550,22 @@ class ResultDisposition(StrEnum):
     STREAM = "stream"
 ```
 
-Stream large data directly to storage where possible, hash while streaming, preserve binary
-content/provenance, return bounded previews, support later partial reads, and avoid full
-memory materialization.
+Stream large data directly to storage where possible, hash while streaming, preserve
+binary content/provenance, return bounded previews, support later partial reads, and
+avoid full memory materialization.
 
-Artifact content hashes are artifact identities; do not confuse them with Riko's canonical
-BLAKE2b-128 semantic identity/fingerprint digest contract.
+Artifact content hashes are artifact identities; do not confuse them with Riko's
+canonical BLAKE2b-128 semantic identity/fingerprint digest contract.
 
 ---
 
-# 16. Retry and deterministic recovery
+## 16. Retry and deterministic recovery
 
-Use the common `RetryPolicy` from `execution-semantics.md`. Do **not** create an independent
-`ExecutionRecoveryPolicy` retry loop for MCP/OpenAPI calls.
+Use the common `RetryPolicy` from `execution-semantics.md`. Do **not** create an
+independent `ExecutionRecoveryPolicy` retry loop for MCP/OpenAPI calls.
 
-MCP/provider adapters classify transport/rate-limit/tool failures and provide hints such as
-`Retry-After`; common execution owns retry ordering/backoff/count.
+MCP/provider adapters classify transport/rate-limit/tool failures and provide hints such
+as `Retry-After`; common execution owns retry ordering/backoff/count.
 
 Rules:
 
@@ -562,16 +575,16 @@ Rules:
 * write capability without genuine destination idempotency fails retryable/resumable
   validation unless explicitly opted out;
 * state-store `CheckpointConflictError` is not automatically reloaded/rerun;
-* deterministic verification may validate JSON Schema, status/media type, required fields,
-  numeric/code/freshness/size bounds, and catalog/schema fingerprints;
+* deterministic verification may validate JSON Schema, status/media type, required
+  fields, numeric/code/freshness/size bounds, and catalog/schema fingerprints;
 * automatic capability reselection belongs in `riko-ai`, not retry handling.
 
-An Operations as Code caller must not treat capability retry/reselection as permission to re-plan an
-already-approved `OperationPlan` silently.
+An Operations as Code caller must not treat capability retry/reselection as permission
+to re-plan an already-approved `OperationPlan` silently.
 
 ---
 
-# 17. Parallel execution
+## 17. Parallel execution
 
 Independent capability calls may be bounded concurrently. Preserve per-plan structured
 results/exceptions and server-specific concurrency limits.
@@ -582,51 +595,53 @@ Where this maps directly onto Pipeline execution, prefer the common execution se
 pipeline.with_execution(concurrency=8, ordered=False)
 ```
 
-Capability-level fan-out that has additional `fail_fast`/collect/minimum-success semantics
-may retain an MCP service policy, but it must not create an unbounded task set or alternate
-runtime.
+Capability-level fan-out that has additional `fail_fast`/collect/minimum-success
+semantics may retain an MCP service policy, but it must not create an unbounded task set
+or alternate runtime.
 
 ---
 
-# 18. Capability indexing
+## 18. Capability indexing
 
-`riko-mcp` may provide deterministic keyword/index contracts without requiring embeddings.
-Semantic indexing/retrieval belongs in `riko-ai`.
+`riko-mcp` may provide deterministic keyword/index contracts without requiring
+embeddings. Semantic indexing/retrieval belongs in `riko-ai`.
 
-Index identity uses catalog/capability fingerprints and deterministic content hashes. Do not
-silently alter ranking based on execution history.
+Index identity uses catalog/capability fingerprints and deterministic content hashes. Do
+not silently alter ranking based on execution history.
 
 ---
 
-# 19. Telemetry and history
+## 19. Telemetry and history
 
 Normalize capability usage with capability id/origin/server/transport, request/response
 bytes, latency, retry count, status, rate-limit observations, and optional cost.
 
 Execution history may record task/plan/catalog fingerprints, status, latency/cost,
-validation result, and reviewer outcome. History is telemetry/audit data, not hidden planner
-state.
+validation result, and reviewer outcome. History is telemetry/audit data, not hidden
+planner state.
 
-Operation-level evidence may reference this telemetry through stable capability/plan/run IDs; MCP
-history does not become the canonical operation repository or deployment record.
-
----
-
-# 20. Sandboxed computation
-
-Never expose an in-process Python REPL. Sandboxed computation is an external MCP capability
-with isolated filesystem/process/network/resource limits and explicit artifact inputs/outputs.
-Default approval is `always` initially.
-
-Imported operation source does not become a sandboxed-computation request automatically; it must be
-resolved to an explicitly allowed capability through normal Operations as Code validation/planning.
+Operation-level evidence may reference this telemetry through stable capability/plan/run
+IDs; MCP history does not become the canonical operation repository or deployment
+record.
 
 ---
 
-# 21. Initial integrations
+## 20. Sandboxed computation
 
-Use the MCP Everything test server for protocol/CI coverage, not as production integration.
-First production targets:
+Never expose an in-process Python REPL. Sandboxed computation is an external MCP
+capability with isolated filesystem/process/network/resource limits and explicit
+artifact inputs/outputs. Default approval is `always` initially.
+
+Imported operation source does not become a sandboxed-computation request automatically;
+it must be resolved to an explicitly allowed capability through normal Operations as
+Code validation/planning.
+
+---
+
+## 21. Initial integrations
+
+Use the MCP Everything test server for protocol/CI coverage, not as production
+integration. First production targets:
 
 1. read-only filesystem MCP over stdio;
 2. read-only Git MCP over stdio;
@@ -638,7 +653,7 @@ First production targets:
 
 ---
 
-# 22. Proposed repository layout
+## 22. Proposed repository layout
 
 ```text
 riko_mcp/
@@ -663,7 +678,7 @@ contracts; it is not a competing Riko execution runtime.
 
 ---
 
-# 23. Implementation phases
+## 23. Implementation phases
 
 ```text
 M0   architecture + MCP v2/in-memory/stdio/HTTP spikes
@@ -686,16 +701,17 @@ M16  prompt support
 M17  MCP server after client contracts stabilize
 ```
 
-M0/M2 must explicitly verify execution-owned resource cleanup in both sync and async Pipeline
-execution and ensure no production code depends on public `ExecutionContext`.
+M0/M2 must explicitly verify execution-owned resource cleanup in both sync and async
+Pipeline execution and ensure no production code depends on public `ExecutionContext`.
 
-Operations as Code integration requires no new MCP phase: once M1/M7 are stable, `riko-ops` consumes
-catalog/policy/approval as an external package. M14 should include imported-operation security
-fixtures proving an importer/AI proposal cannot widen policy.
+Operations as Code integration requires no new MCP phase: once M1/M7 are stable,
+`riko-ops` consumes catalog/policy/approval as an external package. M14 should include
+imported-operation security fixtures proving an importer/AI proposal cannot widen
+policy.
 
 ---
 
-# 24. Testing requirements
+## 24. Testing requirements
 
 Unit/contract coverage includes:
 
@@ -713,18 +729,18 @@ Unit/contract coverage includes:
 * SSRF/private-network/redirect/size controls;
 * stale catalog/schema plans;
 * malicious schemas/invalid results;
-* imported operation/compatibility proposals cannot expand allowlists or bypass effect/approval
-  policy;
-* changed referenced `CapabilityPlan` identity invalidates an operation-level approval supplied by a
-  caller;
+* imported operation/compatibility proposals cannot expand allowlists or bypass
+  effect/approval policy;
+* changed referenced `CapabilityPlan` identity invalidates an operation-level approval
+  supplied by a caller;
 * strict Pyright for all public APIs.
 
-Use fake MCP servers and golden catalogs/plans/operation lists/audit/artifact/candidate fixtures.
-Keep SDK compatibility `Any` values inside `riko_mcp/sdk/`.
+Use fake MCP servers and golden catalogs/plans/operation lists/audit/artifact/candidate
+fixtures. Keep SDK compatibility `Any` values inside `riko_mcp/sdk/`.
 
 ---
 
-# 24.1 SaaS gateways and credential brokers
+## 24.1 SaaS gateways and credential brokers
 
 A token vending service is a credential provider behind a named resource/reference:
 
@@ -735,19 +751,19 @@ credential reference
 → connector/OpenAPI executor
 ```
 
-Token values never enter capability plans, catalog records, workflow documents, operation specs,
-compatibility reports, artifacts, or normal items.
+Token values never enter capability plans, catalog records, workflow documents,
+operation specs, compatibility reports, artifacts, or normal items.
 
-An authorizer-style API proxy is represented as configured OpenAPI capability providers, not
-a special core module. Tenant/provider configuration comes from immutable `Context` /
-declared resources; approval/SSRF/host/schema-size policy is unchanged.
+An authorizer-style API proxy is represented as configured OpenAPI capability providers,
+not a special core module. Tenant/provider configuration comes from immutable `Context`
+/ declared resources; approval/SSRF/host/schema-size policy is unchanged.
 
 Stable connector operations may project into the unified capability catalog; connector
 packages still own protocol sessions/data streaming.
 
 ---
 
-# 25. Explicit non-goals
+## 25. Explicit non-goals
 
 Do not initially implement:
 
@@ -767,7 +783,7 @@ Do not initially implement:
 
 ---
 
-# 26. Initial implementation prompt requirements
+## 26. Initial implementation prompt requirements
 
 Phase M0 implementation work must:
 
@@ -780,11 +796,12 @@ Phase M0 implementation work must:
    exchange-rate scenario without executing the third-party API;
 7. record request counts/bytes/schema sizes;
 8. write architecture decisions;
-9. stop before production modules, OAuth, server, AI selection, or third-party execution.
+9. stop before production modules, OAuth, server, AI selection, or third-party
+   execution.
 
 ---
 
-# 27. Operations as Code boundary summary
+## 27. Operations as Code boundary summary
 
 Use these terms consistently across gameplans:
 
@@ -802,5 +819,6 @@ ChangePlan
     microsoft-administration.md
 ```
 
-The security rule is equally simple: **import/discovery proposes what exists; policy decides what is
-allowed; approval authorizes an exact permitted plan; execution never widens policy itself.**
+The security rule is equally simple: **import/discovery proposes what exists; policy
+decides what is allowed; approval authorizes an exact permitted plan; execution never
+widens policy itself.**

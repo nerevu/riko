@@ -1,18 +1,18 @@
 # Inspiration coverage
 
-> Research traceability index. This document is non-authoritative; semantic ownership remains in
-> the active gameplans named below.
+> Research traceability index. This document is non-authoritative; semantic ownership
+> remains in the active gameplans named below.
 
 ## 1. Purpose
 
-The `_docs/research/inspiration/` directory preserves earlier Nerevu projects and external design
-experiments. This index records which ideas are being carried forward into Riko gameplans,
-where they belong, and which implementation patterns are intentionally **not** being
-revived.
+The `_docs/research/inspiration/` directory preserves earlier Nerevu projects and
+external design experiments. This index records which ideas are being carried forward
+into Riko gameplans, where they belong, and which implementation patterns are
+intentionally **not** being revived.
 
-The purpose is traceability, not a commitment to reimplement every legacy feature. A source
-is relevant when it demonstrates a reusable contract, user workflow, failure mode, or
-architectural boundary that improves Riko's current plans.
+The purpose is traceability, not a commitment to reimplement every legacy feature. A
+source is relevant when it demonstrates a reusable contract, user workflow, failure
+mode, or architectural boundary that improves Riko's current plans.
 
 ## 2. Decision rules
 
@@ -184,8 +184,8 @@ Authoritative extension: `artifact-conversion.md`.
 
 ### 4.6 Performance measurement
 
-Sources: the benchmark implementation brief and the supplied `benchmark-commits` runner; profiler
-landscape notes in `profiling-tools.md`.
+Sources: the benchmark implementation brief and the supplied `benchmark-commits` runner;
+profiler landscape notes in `profiling-tools.md`.
 
 Carried forward:
 
@@ -204,8 +204,8 @@ Authoritative plan: `performance.md`.
 
 ## 5. Explicitly rejected legacy patterns
 
-The inspiration directory contains useful history, but the following should **not** return
-as Riko architecture:
+The inspiration directory contains useful history, but the following should **not**
+return as Riko architecture:
 
 * Flask monoliths as the mandatory integration layer;
 * one standalone proxy web service per external provider;
@@ -217,7 +217,8 @@ as Riko architecture:
 * pickle as durable interoperable state format;
 * arbitrary Python/function names from untrusted serialized configurations or webhook
   URLs;
-* executing remotely fetched scripts to obtain their data (MIMU's `vm.runInThisContext`);
+* executing remotely fetched scripts to obtain their data (MIMU's
+  `vm.runInThisContext`);
 * unauthenticated mutation endpoints on a service's public API (the HDX age API's record
   store);
 * unsandboxed agent code execution;
@@ -227,9 +228,10 @@ as Riko architecture:
 * platform-specific notification systems in core;
 * treating HTTP cache state as correctness/checkpoint state;
 * treating approximate duplicate detection as exact;
-* a Bash rewrite of the benchmark runner, a Rich-bench dependency, or a benchmark registry/tag
-  selector beside pytest's own selectors;
-* a performance dashboard, or comparing whole-command and in-process timings as one series;
+* a Bash rewrite of the benchmark runner, a Rich-bench dependency, or a benchmark
+  registry/tag selector beside pytest's own selectors;
+* a performance dashboard, or comparing whole-command and in-process timings as one
+  series;
 * profiled durations as regression evidence, or mass profiling of historical commits.
 
 ## 6. Cross-plan invariants revealed by the corpus
@@ -238,24 +240,27 @@ The repeated projects make several invariants worth enforcing across gameplans:
 
 1. **State has a type.** Source cursor, HTTP cache, identity map, observation history,
    approval state, and artifact version are different things.
-2. **Finite work is composable.** Persistent systems should generally repeat bounded Riko
-   operations rather than make every connector/process permanently resident.
-3. **Side effects need identity.** Upserts, notifications, webhooks, admin mutations, and
-   artifact publication require explicit idempotency/change semantics.
-4. **Credentials are resources, not record fields.** Serialized workflows carry references.
-5. **Provider adapters should expose records/capabilities.** They should not hide a second
-   ETL engine.
-6. **Artifacts are durable boundaries.** Reports, large documents, cross-process handoffs,
-   and rerenderable contexts should be referenced rather than pushed through memory as
-   opaque blobs.
-7. **Inspection precedes execution.** Pipelines, providers, agent scenarios, admin changes,
-   and external dependencies should all be describable without performing side effects.
+2. **Finite work is composable.** Persistent systems should generally repeat bounded
+   Riko operations rather than make every connector/process permanently resident.
+3. **Side effects need identity.** Upserts, notifications, webhooks, admin mutations,
+   and artifact publication require explicit idempotency/change semantics.
+4. **Credentials are resources, not record fields.** Serialized workflows carry
+   references.
+5. **Provider adapters should expose records/capabilities.** They should not hide a
+   second ETL engine.
+6. **Artifacts are durable boundaries.** Reports, large documents, cross-process
+   handoffs, and rerenderable contexts should be referenced rather than pushed through
+   memory as opaque blobs.
+7. **Inspection precedes execution.** Pipelines, providers, agent scenarios, admin
+   changes, and external dependencies should all be describable without performing side
+   effects.
 8. **Verification matters.** Remote mutation success should be checked when provider
    behavior can be asynchronous or ambiguous.
-9. **Approximation is declared.** Bloom filters, model judges, inferred schemas, and cost
-   estimates must identify their uncertainty.
+9. **Approximation is declared.** Bloom filters, model judges, inferred schemas, and
+   cost estimates must identify their uncertainty.
 10. **One capability, many surfaces.** Python, CLI, workflow JSON, MCP, and agent tools
-    should project shared underlying services rather than duplicate implementation logic.
+    should project shared underlying services rather than duplicate implementation
+    logic.
 
 ## 7. Maintenance rule
 
@@ -276,5 +281,5 @@ When new material is added to `_docs/research/inspiration/`:
 5. document any tempting legacy pattern that is intentionally rejected;
 6. keep implementation details out of core when they belong to optional adapters.
 
-This index should therefore remain a compact architecture traceability document rather than
-an archive summary.
+This index should therefore remain a compact architecture traceability document rather
+than an archive summary.

@@ -22,19 +22,20 @@ The system must allow Riko to:
    * Pelican;
    * Staticjinja.
 
-The architecture must not make Mithril, Jinja, htpy, Lektor, or Pelican the canonical site model. `SiteSpec` is the canonical boundary.
+The architecture must not make Mithril, Jinja, htpy, Lektor, or Pelican the canonical
+site model. `SiteSpec` is the canonical boundary.
 
-Pipeline definition/execution, Context/resource lifecycle, sync/async adaptation, and source
-replayability are owned by [execution-semantics.md](execution-semantics.md). `riko-site` consumes
-those contracts and does not define a second pipeline lifecycle.
+Pipeline definition/execution, Context/resource lifecycle, sync/async adaptation, and
+source replayability are owned by [execution-semantics.md](execution-semantics.md).
+`riko-site` consumes those contracts and does not define a second pipeline lifecycle.
 
 ---
 
-# 2. Repositories and package boundaries
+## 2. Repositories and package boundaries
 
 Work across three repositories.
 
-## `nerevu/riko`
+### `nerevu/riko`
 
 Branch from `features`.
 
@@ -51,7 +52,7 @@ Only add the minimum generic extension infrastructure required by `riko-site`.
 
 Do not add site-specific domain types to Riko core.
 
-## `nerevu/riko-site`
+### `nerevu/riko-site`
 
 Create this as a separate distributable package.
 
@@ -92,7 +93,7 @@ riko-site[staticjinja]
 riko-site[all]
 ```
 
-## `nerevu/wei-app`
+### `nerevu/wei-app`
 
 Add only the consumer-side changes needed for:
 
@@ -107,11 +108,11 @@ Do not rewrite the entire application during the compatibility phase.
 
 ---
 
-# 3. Non-negotiable architecture decisions
+## 3. Non-negotiable architecture decisions
 
 Implement these decisions as stated.
 
-## 3.1 Named modules, not arbitrary application callables
+### 3.1 Named modules, not arbitrary application callables
 
 Website transformations must use named Riko modules.
 
@@ -131,7 +132,8 @@ Do not add:
 pipeline.pipe(callable)
 ```
 
-Keep `aggregate(func=...)` as an explicit low-level escape hatch, but do not use it in the canonical examples or implementation.
+Keep `aggregate(func=...)` as an explicit low-level escape hatch, but do not use it in
+the canonical examples or implementation.
 
 Use existing modules such as:
 
@@ -147,7 +149,7 @@ union
 
 for ordinary normalization.
 
-## 3.2 Static-site rendering is an export format
+### 3.2 Static-site rendering is an export format
 
 Canonical public API:
 
@@ -175,21 +177,22 @@ The site export format may accept either:
 * a stream of `SiteArtifact` records; or
 * a single assembled `SiteSpec`.
 
-This plan owns the site-specific export format and renderer contracts. It does not redefine the
-core Pipeline execution API; final placement of export convenience on the Pipeline surface follows
-the core export/artifact API when that surface is finalized.
+This plan owns the site-specific export format and renderer contracts. It does not
+redefine the core Pipeline execution API; final placement of export convenience on the
+Pipeline surface follows the core export/artifact API when that surface is finalized.
 
-## 3.3 Pipeline definitions are reusable; executions are one-shot
+### 3.3 Pipeline definitions are reusable; executions are one-shot
 
-`Pipeline` is an immutable reusable definition. Each `iter(pipeline)` or `aiter(pipeline)` creates a fresh
-private one-shot execution; an exhausted execution is never cached on the definition.
+`Pipeline` is an immutable reusable definition. Each `iter(pipeline)` or
+`aiter(pipeline)` creates a fresh private one-shot execution; an exhausted execution is
+never cached on the definition.
 
-Replayability follows the source itself. A definition backed by replayable inputs may be executed
-again. A generator instance or other one-shot source remains consumed and is never secretly buffered
-to make the definition replayable.
+Replayability follows the source itself. A definition backed by replayable inputs may be
+executed again. A generator instance or other one-shot source remains consumed and is
+never secretly buffered to make the definition replayable.
 
-For multiple render targets, materialize the canonical `SiteSpec` once when that is the desired
-boundary:
+For multiple render targets, materialize the canonical `SiteSpec` once when that is the
+desired boundary:
 
 ```python
 pipeline = site_artifacts().sitespec(
@@ -201,11 +204,11 @@ site.render("mithril", ...)
 site.render("html", engine="htpy", ...)
 ```
 
-If the site pipeline itself must be evaluated again, iterate the same definition again only when
-its sources are replayable; otherwise provide fresh one-shot sources. Do not reconstruct the
-Pipeline definition merely because a previous execution finished.
+If the site pipeline itself must be evaluated again, iterate the same definition again
+only when its sources are replayable; otherwise provide fresh one-shot sources. Do not
+reconstruct the Pipeline definition merely because a previous execution finished.
 
-## 3.4 Component types declare runtimes
+### 3.4 Component types declare runtimes
 
 Component types remain semantic:
 
@@ -232,7 +235,7 @@ The compiled `SiteSpec` must always contain a fully resolved runtime:
 
 Instance-level runtime settings may override definition defaults.
 
-## 3.5 htpy is the default direct HTML engine
+### 3.5 htpy is the default direct HTML engine
 
 The direct HTML renderer uses:
 
@@ -250,7 +253,7 @@ htpy integration is initially limited to:
 * Starlette;
 * FastAPI.
 
-## 3.6 Lektor uses hybrid record ownership
+### 3.6 Lektor uses hybrid record ownership
 
 Use record-level ownership:
 
@@ -271,7 +274,7 @@ One physical field must have one writer.
 
 Riko must never overwrite editor-owned records.
 
-## 3.7 `wei-app` uses hybrid blog materialization
+### 3.7 `wei-app` uses hybrid blog materialization
 
 The data API is build-time:
 
@@ -293,7 +296,7 @@ At build time, Riko generates a blog snapshot for:
 
 At runtime, Mithril fetches current blog content and replaces or merges the snapshot.
 
-## 3.8 AI publication policy is configurable
+### 3.8 AI publication policy is configurable
 
 Supported policies:
 
@@ -310,9 +313,10 @@ Users approve generated content through either:
 * an editorial system; or
 * a JSON approval store.
 
-Approvals must be tied to content hashes so regenerated output invalidates stale approvals.
+Approvals must be tied to content hashes so regenerated output invalidates stale
+approvals.
 
-## 3.9 Component rendering is pure
+### 3.9 Component rendering is pure
 
 `ComponentContext` provides read-only services and resolvers.
 
@@ -343,7 +347,7 @@ Routes must be generated before rendering through `SiteArtifact` records.
 
 ---
 
-# 4. Target public API
+## 4. Target public API
 
 The implementation should support code shaped like this.
 
@@ -455,7 +459,7 @@ result = site_artifacts().export(
 
 ---
 
-# 5. Core domain model
+## 5. Core domain model
 
 Use Python 3.12+ typing.
 
@@ -465,7 +469,7 @@ Do not use Pydantic.
 
 Use snake_case in Python and camelCase in canonical JSON serialization.
 
-## 5.1 Required types
+### 5.1 Required types
 
 Implement at minimum:
 
@@ -502,7 +506,7 @@ ComponentContext
 PageContext
 ```
 
-## 5.2 Materialization
+### 5.2 Materialization
 
 ```python
 class Materialization(StrEnum):
@@ -517,7 +521,7 @@ Meaning:
 * `RUNTIME`: only source and query definitions are generated.
 * `HYBRID`: initial snapshot is generated, followed by runtime refresh.
 
-## 5.3 Publication state
+### 5.3 Publication state
 
 ```python
 class PublicationStatus(StrEnum):
@@ -538,7 +542,7 @@ reason
 
 as applicable.
 
-## 5.4 Runtime resolution
+### 5.4 Runtime resolution
 
 Authoring data may omit `runtime`.
 
@@ -554,7 +558,7 @@ Validation must fail when:
 
 ---
 
-# 6. Proposed `riko-site` layout
+## 6. Proposed `riko-site` layout
 
 Representative layout:
 
@@ -634,23 +638,25 @@ riko_site/
     └── pelican.py
 ```
 
-Adapt paths to existing repository conventions, but preserve these responsibility boundaries.
+Adapt paths to existing repository conventions, but preserve these responsibility
+boundaries.
 
 ---
 
-# 7. Implementation phases
+## 7. Implementation phases
 
 Complete one phase per pull request unless a phase is explicitly split.
 
-Do not begin framework adapters before the canonical model and compatibility exporter are stable.
+Do not begin framework adapters before the canonical model and compatibility exporter
+are stable.
 
-## Phase 0: Baseline and architecture records
+### Phase 0: Baseline and architecture records
 
-### Goal
+#### Goal
 
 Capture current behavior and lock the agreed decisions before implementation.
 
-### Tasks
+#### Tasks
 
 1. Run the full existing Riko test suite.
 2. Run Pyright using the repository’s current configuration.
@@ -668,9 +674,10 @@ Capture current behavior and lock the agreed decisions before implementation.
    * `renderer and runtime model`;
    * `publication approval and content ownership`;
    * `reusable Pipeline definition and private one-shot execution lifecycle`.
-5. Record current `wei-app` `pages.json` and collection-loading behavior as compatibility fixtures.
+5. Record current `wei-app` `pages.json` and collection-loading behavior as
+   compatibility fixtures.
 
-### Acceptance criteria
+#### Acceptance criteria
 
 * Existing tests pass before feature work.
 * Compatibility fixtures are committed.
@@ -678,16 +685,18 @@ Capture current behavior and lock the agreed decisions before implementation.
 
 ---
 
-## Phase 1: Generic Riko export-target registry
+### Phase 1: Generic Riko export-target registry
 
-### Goal
+#### Goal
 
-Replace the hardcoded conversion-function assumption with a generic export-target abstraction without breaking existing exports.
+Replace the hardcoded conversion-function assumption with a generic export-target
+abstraction without breaking existing exports.
 
-This is a compatibility refactor over the currently shipped export surface. It must not introduce a
-second Pipeline execution/terminal contract; final Pipeline/export placement remains owned by core.
+This is a compatibility refactor over the currently shipped export surface. It must not
+introduce a second Pipeline execution/terminal contract; final Pipeline/export placement
+remains owned by core.
 
-### Core API
+#### Core API
 
 ```python
 class ExportFormat(Protocol):
@@ -705,11 +714,12 @@ class ExportRegistry:
     def names(self) -> tuple[str, ...]: ...
 ```
 
-### Tasks
+#### Tasks
 
 1. Introduce `ExportRegistry`.
 2. Wrap existing conversion functions in a `FunctionExportFormat`.
-3. Preserve all current public `export()` signatures and behavior during this registry refactor.
+3. Preserve all current public `export()` signatures and behavior during this registry
+   refactor.
 4. Add entry-point discovery:
 
 ```toml
@@ -720,9 +730,10 @@ site = "riko_site.exports.site:target"
 5. Load entry points lazily.
 6. Make duplicate registrations fail unless `replace=True`.
 7. Preserve useful invalid-target errors.
-8. Add typed overload support for third-party targets where practical without overcomplicating core typing.
+8. Add typed overload support for third-party targets where practical without
+   overcomplicating core typing.
 
-### Tests
+#### Tests
 
 * Every legacy export returns exactly the previous type.
 * File-writing behavior remains unchanged.
@@ -732,7 +743,7 @@ site = "riko_site.exports.site:target"
 * Broken entry points report the responsible target.
 * Plugin discovery happens once and is deterministic.
 
-### Non-goals
+#### Non-goals
 
 * No site types.
 * No renderer registry.
@@ -741,13 +752,13 @@ site = "riko_site.exports.site:target"
 
 ---
 
-## Phase 2: Canonical `SiteArtifact` and `SiteSpec`
+### Phase 2: Canonical `SiteArtifact` and `SiteSpec`
 
-### Goal
+#### Goal
 
 Implement the versioned framework-neutral site model.
 
-### Tasks
+#### Tasks
 
 1. Create the `riko-site` package.
 2. Implement immutable domain types.
@@ -782,18 +793,21 @@ site-spec-v1.json
     * ascending/descending ordering;
     * limit.
 12. Implement `BuildResult`.
-13. Implement `SiteSpec.render()` as a convenience wrapper over the site renderer registry.
+13. Implement `SiteSpec.render()` as a convenience wrapper over the site renderer
+    registry.
 
-### Required invariants
+#### Required invariants
 
 * Artifact order does not affect final output except explicit component ordering.
-* Duplicate site, page, component, route, or collection keys fail with contextual errors.
+* Duplicate site, page, component, route, or collection keys fail with contextual
+  errors.
 * Routes are fully known before rendering.
 * Compiled components always contain a runtime.
 * Canonical serialization is deterministic.
-* Re-serializing equivalent specifications produces byte-stable JSON when pretty-printing settings match.
+* Re-serializing equivalent specifications produces byte-stable JSON when
+  pretty-printing settings match.
 
-### Tests
+#### Tests
 
 * Complete artifact-to-spec assembly.
 * Duplicate-key behavior.
@@ -808,13 +822,13 @@ site-spec-v1.json
 
 ---
 
-## Phase 3: Named site modules and publication review
+### Phase 3: Named site modules and publication review
 
-### Goal
+#### Goal
 
 Expose site construction through normal Riko modules.
 
-### Modules
+#### Modules
 
 Implement:
 
@@ -828,13 +842,14 @@ sitepublish
 siteartifacts
 ```
 
-### `sitestructure`
+#### `sitestructure`
 
-An operator that expands one or more declarative structure documents into artifact records.
+An operator that expands one or more declarative structure documents into artifact
+records.
 
 It replaces application functions such as `structure_to_artifacts`.
 
-### `siteartifact`
+#### `siteartifact`
 
 A processor that wraps normalized records as artifacts.
 
@@ -851,11 +866,11 @@ pipeline.siteartifact(
 )
 ```
 
-### `sitespec`
+#### `sitespec`
 
 An aggregator/operator that consumes artifact records and emits one `SiteSpec`.
 
-### `siteroutes`
+#### `siteroutes`
 
 Produces route artifacts before rendering.
 
@@ -865,7 +880,7 @@ Example:
 pipeline.siteroutes(conf={"collection": "blog", "pattern": "/news/{id}"})
 ```
 
-### `review`
+#### `review`
 
 Applies publication state after AI or other generated transformations.
 
@@ -881,17 +896,18 @@ pipeline.review(
 )
 ```
 
-### Requirements
+#### Requirements
 
 * Use concrete frozen/slotted config dataclasses.
 * Do not use `Objconf` in new site modules.
 * Infer module config type from parser annotations.
-* Do not manually specify stream return kinds where generator/annotation inference is sufficient.
+* Do not manually specify stream return kinds where generator/annotation inference is
+  sufficient.
 * Use the common Pipeline module contract; do not create sync-only site-pipeline APIs.
-* Native sync and/or async parser implementations may be supplied as appropriate; the common
-  execution bridge provides parity when only one side exists.
+* Native sync and/or async parser implementations may be supplied as appropriate; the
+  common execution bridge provides parity when only one side exists.
 
-### Tests
+#### Tests
 
 * Each module independently.
 * Complete chained public Pipeline API in sync and async execution where applicable.
@@ -902,13 +918,13 @@ pipeline.review(
 
 ---
 
-## Phase 4: JSON approval store
+### Phase 4: JSON approval store
 
-### Goal
+#### Goal
 
 Support Git-managed review decisions without requiring an editorial system.
 
-### Store format
+#### Store format
 
 ```json
 {
@@ -925,7 +941,7 @@ Support Git-managed review decisions without requiring an editorial system.
 }
 ```
 
-### Rules
+#### Rules
 
 1. Every generated field requiring approval gets:
 
@@ -942,14 +958,14 @@ Support Git-managed review decisions without requiring an editorial system.
 9. Production exporters exclude drafts and rejected records by default.
 10. Preview exporters may include them with visible labels.
 
-### Store protocol
+#### Store protocol
 
 ```python
 class ApprovalStore(Protocol):
     def get(self, review_id: str) -> ApprovalDecision | None: ...
 ```
 
-### Tests
+#### Tests
 
 * Valid approval.
 * Missing approval.
@@ -963,13 +979,14 @@ class ApprovalStore(Protocol):
 
 ---
 
-## Phase 5: `wei-app` compatibility exporter
+### Phase 5: `wei-app` compatibility exporter
 
-### Goal
+#### Goal
 
-Generate data consumable by the existing application without making the legacy schema canonical.
+Generate data consumable by the existing application without making the legacy schema
+canonical.
 
-### Pipeline
+#### Pipeline
 
 ```text
 SiteArtifact
@@ -978,7 +995,7 @@ SiteArtifact
 → pages.json and collection artifacts
 ```
 
-### Generated outputs
+#### Generated outputs
 
 At minimum:
 
@@ -994,7 +1011,7 @@ wei-app/app/
 
 Adapt paths to the current build system where necessary.
 
-### Compatibility mapping
+#### Compatibility mapping
 
 Map canonical values into legacy fields:
 
@@ -1019,9 +1036,10 @@ Where the existing app requires named JavaScript filter functions, initially emi
 }
 ```
 
-The compatibility field preserves current behavior while the canonical query evaluator is introduced incrementally.
+The compatibility field preserves current behavior while the canonical query evaluator
+is introduced incrementally.
 
-### Blog materialization
+#### Blog materialization
 
 Generate:
 
@@ -1051,7 +1069,7 @@ Generate:
 }
 ```
 
-### `wei-app` changes
+#### `wei-app` changes
 
 1. Load the generated snapshot immediately.
 2. Populate the collection and render.
@@ -1061,7 +1079,7 @@ Generate:
 6. Merge or replace the snapshot.
 7. Redraw only when the visible result changes.
 
-### Snapshot merge rules
+#### Snapshot merge rules
 
 Use stable IDs.
 
@@ -1077,7 +1095,7 @@ For newly published runtime items:
 * do not run AI in the browser;
 * fall back to native excerpt/description fields until the next site build.
 
-### Tests
+#### Tests
 
 * Golden-file test against the current `pages.json` shape.
 * Page/component ordering.
@@ -1093,13 +1111,13 @@ For newly published runtime items:
 
 ---
 
-## Phase 6: Direct htpy renderer
+### Phase 6: Direct htpy renderer
 
-### Goal
+#### Goal
 
 Render complete static sites directly from `SiteSpec` using typed Python components.
 
-### Public API
+#### Public API
 
 ```python
 site_artifacts().export(
@@ -1112,7 +1130,7 @@ site_artifacts().export(
 )
 ```
 
-### Component registry
+#### Component registry
 
 ```python
 @component(
@@ -1129,7 +1147,7 @@ def dashboard(...):
     ...
 ```
 
-### Read-only context
+#### Read-only context
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -1144,7 +1162,7 @@ class ComponentContext:
 
 Do not expose mutable registration APIs through the context.
 
-### Component return contract
+#### Component return contract
 
 ```python
 type ComponentOutput = Renderable | ComponentRenderResult
@@ -1161,7 +1179,7 @@ class ComponentRenderResult:
 
 Normalize simple outputs internally.
 
-### Raw HTML policy
+#### Raw HTML policy
 
 Ordinary strings are escaped.
 
@@ -1169,9 +1187,10 @@ Raw HTML must be represented explicitly and passed through the configured `Sanit
 
 Do not silently trust API-generated or AI-generated HTML.
 
-Use a sanitizer protocol rather than hard-coding a specific third-party implementation into the domain layer.
+Use a sanitizer protocol rather than hard-coding a specific third-party implementation
+into the domain layer.
 
-### Renderer responsibilities
+#### Renderer responsibilities
 
 * resolve routes;
 * render components;
@@ -1186,7 +1205,7 @@ Use a sanitizer protocol rather than hard-coding a specific third-party implemen
 * clean stale generated files only;
 * preserve non-generated files.
 
-### Tests
+#### Tests
 
 * Static page rendering.
 * Nested components.
@@ -1204,13 +1223,13 @@ Use a sanitizer protocol rather than hard-coding a specific third-party implemen
 
 ---
 
-## Phase 7: Mithril island activation
+### Phase 7: Mithril island activation
 
-### Goal
+#### Goal
 
 Allow htpy-rendered static pages to activate selected Mithril components.
 
-### Island output
+#### Island output
 
 Static HTML marker:
 
@@ -1238,7 +1257,7 @@ Manifest:
 }
 ```
 
-### Supported loading strategies
+#### Supported loading strategies
 
 ```text
 eager
@@ -1248,7 +1267,7 @@ interaction
 media
 ```
 
-### Loader responsibilities
+#### Loader responsibilities
 
 * discover island roots;
 * load the manifest;
@@ -1263,15 +1282,16 @@ This is activation, not true DOM hydration.
 
 Mithril may replace or redraw the island root.
 
-Do not describe this as hydration unless a real reconciliation layer is later implemented.
+Do not describe this as hydration unless a real reconciliation layer is later
+implemented.
 
-### Cross-island communication
+#### Cross-island communication
 
 Use DOM custom events for loose coupling.
 
 For highly coupled components, prefer one larger island rather than a global SPA store.
 
-### Tests
+#### Tests
 
 * Each loading strategy.
 * Unknown module.
@@ -1284,13 +1304,13 @@ For highly coupled components, prefer one larger island rather than a global SPA
 
 ---
 
-## Phase 8: Django adapter
+### Phase 8: Django adapter
 
-### Goal
+#### Goal
 
 Reuse htpy layouts and components in Django responses.
 
-### Requirements
+#### Requirements
 
 * Render a complete `SiteSpec` page to `HttpResponse`.
 * Support static asset and route resolvers provided by Django.
@@ -1313,7 +1333,7 @@ def page_view(request, path):
     )
 ```
 
-### Tests
+#### Tests
 
 * Normal response.
 * Streaming response.
@@ -1324,13 +1344,13 @@ def page_view(request, path):
 
 ---
 
-## Phase 9: Starlette and FastAPI adapters
+### Phase 9: Starlette and FastAPI adapters
 
-### Goal
+#### Goal
 
 Reuse the same htpy component system for ASGI applications.
 
-### Requirements
+#### Requirements
 
 * `HTMLResponse` support.
 * `StreamingResponse` support.
@@ -1338,7 +1358,7 @@ Reuse the same htpy component system for ASGI applications.
 * Shared implementation for Starlette and FastAPI where practical.
 * No FastAPI-specific types in the canonical domain layer.
 
-### Tests
+#### Tests
 
 * Starlette route.
 * FastAPI route.
@@ -1349,13 +1369,13 @@ Reuse the same htpy component system for ASGI applications.
 
 ---
 
-## Phase 10: Lektor exporter
+### Phase 10: Lektor exporter
 
-### Goal
+#### Goal
 
 Implement record-level hybrid ownership and sidecar enrichment.
 
-### Ownership configuration
+#### Ownership configuration
 
 ```python
 site_artifacts().export(
@@ -1368,7 +1388,7 @@ site_artifacts().export(
 )
 ```
 
-### Rules
+#### Rules
 
 * Write generated records only beneath the configured generated root.
 * Never modify editor-owned records.
@@ -1379,13 +1399,13 @@ site_artifacts().export(
 * Remove stale generated records only when the manifest proves ownership.
 * Lektor editorial approval may act as an `ApprovalStore`.
 
-### First-release rendering rule
+#### First-release rendering rule
 
 Use Lektor’s native templates and Flow behavior.
 
 Do not render Lektor components through htpy in this phase.
 
-### Tests
+#### Tests
 
 * Generated record creation.
 * Editor-owned record preservation.
@@ -1398,13 +1418,13 @@ Do not render Lektor components through htpy in this phase.
 
 ---
 
-## Phase 11: Pelican exporter
+### Phase 11: Pelican exporter
 
-### Goal
+#### Goal
 
 Map publication-oriented SiteSpec content to Pelican pages and articles.
 
-### Mapping
+#### Mapping
 
 ```text
 SiteSpec page                   → Pelican Page
@@ -1413,7 +1433,7 @@ other collection                → generated data/context
 assets                          → Pelican static assets
 ```
 
-### Requirements
+#### Requirements
 
 * Article metadata.
 * Dates.
@@ -1432,7 +1452,7 @@ Use Pelican’s native template system.
 
 Do not embed htpy component rendering in the first release.
 
-### Tests
+#### Tests
 
 * Page generation.
 * Article generation.
@@ -1444,13 +1464,13 @@ Do not embed htpy component rendering in the first release.
 
 ---
 
-## Phase 12: Staticjinja adapter
+### Phase 12: Staticjinja adapter
 
-### Goal
+#### Goal
 
 Provide an optional Jinja-based static renderer consuming the same `SiteSpec`.
 
-### Requirements
+#### Requirements
 
 * Use the same route compiler.
 * Use the same asset resolver.
@@ -1460,7 +1480,7 @@ Provide an optional Jinja-based static renderer consuming the same `SiteSpec`.
 * Keep it optional.
 * Do not make Staticjinja a dependency of direct htpy rendering.
 
-### Tests
+#### Tests
 
 * Page rendering.
 * Component dispatch.
@@ -1471,7 +1491,7 @@ Provide an optional Jinja-based static renderer consuming the same `SiteSpec`.
 
 ---
 
-# 8. Renderer and extension registries
+## 8. Renderer and extension registries
 
 Use entry points.
 
@@ -1510,7 +1530,7 @@ Errors must name:
 
 ---
 
-# 9. Error hierarchy
+## 9. Error hierarchy
 
 Add a site-specific hierarchy in `riko-site`.
 
@@ -1561,9 +1581,9 @@ Avoid generic `ValueError` for domain failures.
 
 ---
 
-# 10. Testing strategy
+## 10. Testing strategy
 
-## Unit tests
+### Unit tests
 
 Cover:
 
@@ -1577,7 +1597,7 @@ Cover:
 * each renderer component;
 * asset and manifest behavior.
 
-## Contract tests
+### Contract tests
 
 Create public-contract tests that import only supported APIs.
 
@@ -1590,7 +1610,7 @@ from riko import Pipeline
 from riko_site import SiteSpec
 ```
 
-## Golden tests
+### Golden tests
 
 Use golden fixtures for:
 
@@ -1604,7 +1624,7 @@ Use golden fixtures for:
 
 Normalize nondeterministic values such as timestamps before comparison.
 
-## Integration tests
+### Integration tests
 
 At minimum:
 
@@ -1618,7 +1638,7 @@ At minimum:
 8. htpy export.
 9. Runtime blog refresh fixture.
 
-## Type checking
+### Type checking
 
 New public code must pass strict Pyright checks.
 
@@ -1626,7 +1646,7 @@ Avoid broad `Any`.
 
 `Any` is acceptable only at deliberate compatibility boundaries and must be localized.
 
-## Performance tests
+### Performance tests
 
 Add focused tests for:
 
@@ -1641,19 +1661,21 @@ Do not require full benchmark infrastructure in the first pull request.
 
 ---
 
-# 11. Backward compatibility
+## 11. Backward compatibility
 
-## Riko
+### Riko
 
-* Existing export formats must behave identically during the compatibility registry refactor.
-* Existing dynamic module chaining must continue working while it remains part of the shipped API.
-* Do not implement or fork core Pipeline lifecycle semantics in these PRs; consume the target
-  contract from `execution-semantics.md` as it lands.
+* Existing export formats must behave identically during the compatibility registry
+  refactor.
+* Existing dynamic module chaining must continue working while it remains part of the
+  shipped API.
+* Do not implement or fork core Pipeline lifecycle semantics in these PRs; consume the
+  target contract from `execution-semantics.md` as it lands.
 * Do not remove `aggregate`.
 * Do not add `.pipe(callable)`.
 * Do not require site dependencies for base Riko installation.
 
-## `wei-app`
+### `wei-app`
 
 * Existing component IDs remain valid through the compatibility exporter.
 * Existing named filterers and sorters continue working initially.
@@ -1662,7 +1684,7 @@ Do not require full benchmark infrastructure in the first pull request.
 
 ---
 
-# 11.1 Source and connector boundary
+## 11.1 Source and connector boundary
 
 The site pipeline may consume modules supplied by `riko-connect`, `riko-sql`, or
 `riko-mcp`, but `riko-site` does not own protocol detection, authentication, database
@@ -1684,7 +1706,7 @@ fingerprints, never resolved credentials or access tokens.
 Long-lived feed monitors and webhook servers are orchestration inputs that trigger a
 site build; they are not renderers or `SiteSpec` components.
 
-# 12. Explicit non-goals
+## 12. Explicit non-goals
 
 Do not implement these during the initial sequence:
 
@@ -1702,17 +1724,17 @@ Do not implement these during the initial sequence:
 
 ---
 
-# 13. Pull request sequence
+## 13. Pull request sequence
 
 Use small, reviewable pull requests.
 
-## Riko
+### Riko
 
 1. `export-target-registry`
 2. `export-target-entry-points`
 3. Any required generic module-registry fixes, isolated from site features
 
-## `riko-site`
+### `riko-site`
 
 1. `site-domain-types`
 2. `site-assembly-and-schema`
@@ -1727,7 +1749,7 @@ Use small, reviewable pull requests.
 11. `pelican-exporter`
 12. `staticjinja-exporter`
 
-## `wei-app`
+### `wei-app`
 
 1. `generated-site-data`
 2. `hybrid-content-snapshot`
@@ -1738,7 +1760,7 @@ Do not combine unrelated core refactors with renderer work.
 
 ---
 
-# 14. Claude Code execution rules
+## 14. Claude Code execution rules
 
 For every phase:
 
@@ -1747,7 +1769,8 @@ For every phase:
 3. State the exact files that will change.
 4. Implement only the current phase.
 5. Add or update tests in the same change.
-6. Run formatting, linting, type checking, and tests using repository-configured commands.
+6. Run formatting, linting, type checking, and tests using repository-configured
+   commands.
 7. Report:
 
    * files changed;
@@ -1766,11 +1789,12 @@ For every phase:
 11. Do not commit generated build output unless it is an explicit fixture.
 12. Stop the phase when its acceptance criteria are met.
 
-When implementation details conflict with the current repository, preserve the architectural intent and document the smallest necessary adaptation.
+When implementation details conflict with the current repository, preserve the
+architectural intent and document the smallest necessary adaptation.
 
 ---
 
-# 15. First Claude Code prompt
+## 15. First Claude Code prompt
 
 Begin with Phase 0 and Phase 1 only.
 
@@ -1817,4 +1841,5 @@ After editing, provide:
 Stop after Phase 1 is complete.
 ```
 
-After Phase 1 is reviewed and merged, proceed to the `riko-site` domain-types phase rather than asking Claude Code to implement the entire roadmap in one pass.
+After Phase 1 is reviewed and merged, proceed to the `riko-site` domain-types phase
+rather than asking Claude Code to implement the entire roadmap in one pass.
