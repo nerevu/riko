@@ -332,38 +332,46 @@ decorator-set wrapper attributes (`type`, `subtype`, `subtypes` as a `frozenset`
 discoverable too. Unqualified names are reserved for built-ins; dotted namespaces for extensions.
 
 **Typed discovery (P9A, shipped).** `list_modules(*, type, subtype, category)` and
-`describe_module(name) -> ModuleDefinition | None` (both in `riko/modules/_metadata.py`, both on the stable `riko` surface) give filtered runtime truth. **The three filter axes are all lowercase
-`Literal` strings, not enums** — `ModuleType = Literal["operator","processor","splitter"]`,
-`ModuleSubtype`, and `ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
-return value) — so `list_modules(category="sink")` → `["write"]`. These are a **separate axis** from
-the discovery-tree identifier enums (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value`
-is the module id, for `Pipeline.from_module(...)`/`|` chaining): don't confuse them. In particular
-`category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`, lowercase singular.
-(The codegen maps the three category strings to the plural bucket **class** names via `_CANONICAL`
-= `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`get_module_category` (`riko/modules/_metadata.py`, on `riko.ext`) buckets each module by **data-flow capability only**.
-`SINK_NAMES` (`{"output","write"}`) is the *criterion*, not the
-membership: a module is a `Sink` iff its name is in that set. The one built-in match is `write`
-(`riko/modules/write.py`) — a pass-through operator that serializes the stream to `conf['dest']` via a
-`Formats` converter and yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** —
-serializing needs the whole stream, so `parser`/`async_parser` do `items = list(stream)` and the
-pass-through replays that list (contract §2/§3 streaming does not hold through a `write`). `output` stays
-unmatched (compiler-local passthrough node, not a `riko/modules/*.py` pipe). `write` is the
-in-pipeline counterpart of the one-shot `Formats`/`export` surface (see §25); it is distinct from the
-private write-session architecture (see § Write sessions), and
-is the module removed at the R5C clean-break once `Pipeline.write()` / `WriteNode` lands. `riko.ext.codegen` generates the byte-stable
-`riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing bucket members so
-`Modules.FILTER is Transforms.FILTER`) + `Sources`/`Transforms`/`Sinks` bucket enums (member
-`.value` = canonical id; collisions raise). Regenerate with `gen-names`/`manage codegen` (drift guard
-`test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`.
-A module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider` /
-`get_module_provider` in `riko/types/modules.py`: the first dotted segment, `BUILTIN_PROVIDER` =
-`"riko"` when unqualified). `NameEntry` (`riko/ext/codegen.py`) derives `provider`/`class_name`/
-`member`/`alias` from its name and category: built-ins group by category into the bucket classes;
-a provider's modules form one class per provider whose members drop the prefix (`Example.LOOKUP`),
-and the flat `Modules` alias keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`).
-Provider classes come from the plugin's own codegen run, never riko's `_names.py`;
-`list_modules(provider=)` filters by provider.
+`describe_module(name) -> ModuleDefinition | None` (both in `riko/modules/_metadata.py`,
+both on the stable `riko` surface) give filtered runtime truth.
+**The three filter axes are all lowercase `Literal` strings, not enums** —
+`ModuleType = Literal["operator","processor","splitter"]`, `ModuleSubtype`, and
+`ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
+return value) — so `list_modules(category="sink")` → `["write"]`. These are a
+**separate axis** from the discovery-tree identifier enums
+(`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value` is the module id, for
+`Pipeline.from_module(...)`/`|` chaining): don't confuse them. In particular
+`category="Sinks"` (the bucket class name) returns `[]` — the value is `"sink"`,
+lowercase singular. (The codegen maps the three category strings to the plural bucket
+**class** names via `_CANONICAL` =
+`{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
+`get_module_category` (`riko/modules/_metadata.py`, on `riko.ext`) buckets each module
+by **data-flow capability only**. `SINK_NAMES` (`{"output","write"}`) is the
+*criterion*, not the membership: a module is a `Sink` iff its name is in that set. The
+one built-in match is the `write` module (`riko/modules/write.py`) — a pass-through
+operator that serializes the stream to `conf['dest']` via a `Formats` converter and
+yields items unchanged (`Modules.WRITE`/`Sinks.WRITE`). It is **not lazy** — serializing
+needs the whole stream, so `parser`/`async_parser` do `items = list(stream)` and the
+pass-through replays that list (contract §2/§3 streaming does not hold through a
+`write`). `output` stays unmatched (compiler-local passthrough node, not a
+`riko/modules/*.py` pipe). `write` is the in-pipeline counterpart of the one-shot
+`Formats`/`export` surface (see §25); it is distinct from the private write-session
+architecture (see § Write sessions), and is the module removed at the R5C clean-break
+once `Pipeline.write()` / `WriteNode` lands. `riko.ext.codegen` generates the
+byte-stable `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing
+bucket members so `Modules.FILTER is Transforms.FILTER`) +
+`Sources`/`Transforms`/`Sinks` bucket enums (member `.value` = canonical id; collisions
+raise). Regenerate with `gen-names`/`manage codegen` (drift guard
+`test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`. A
+module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider`
+/ `get_module_provider` in `riko/types/modules.py`: the first dotted segment,
+`BUILTIN_PROVIDER` = `"riko"` when unqualified). `NameEntry` (`riko/ext/codegen.py`)
+derives `provider`/`class_name`/ `member`/`alias` from its name and category: built-ins
+group by category into the bucket classes; a provider's modules form one class per
+provider whose members drop the prefix (`Example.LOOKUP`), and the flat `Modules` alias
+keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`). Provider classes come
+from the plugin's own codegen run, never riko's `_names.py`; `list_modules(provider=)`
+filters by provider.
 
 ## Module registry & pipe resolution (P8, shipped)
 

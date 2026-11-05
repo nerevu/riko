@@ -826,6 +826,20 @@ class TestCitationLint:
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
         assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
 
+    @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
+    def test_history_words_exempt_their_wrapped_sentence_only(
+        self,
+        scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
+        template: str,
+        kept: str,
+    ) -> None:
+        gone = template.format("gone")
+        text = (
+            f"`{gone}` and its\nneighbors were deleted. See\n`{gone}`.\n\n"
+            f"- `{gone}` stays.\n- Another was removed.\n"
+        )
+        assert list(scan(text, (kept,))) == [(3, gone), (5, gone)]
+
     def test_test_symbols_cover_files_classes_and_tests(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
