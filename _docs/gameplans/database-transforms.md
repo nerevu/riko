@@ -128,9 +128,12 @@ replace
 merge/upsert
 ```
 
-`merge` requires explicit keys. Destructive replacement/schema change passes the
-applicable policy or approval checks. Transactions, partial failure, and commit
-boundaries are explicit.
+`merge` requires explicit keys. A merge that deletes rows absent from its input, and a
+replace-by-snapshot, take the complete-snapshot and match-key uniqueness preconditions
+from [effects.md § 11](effects.md#11-write-modes-and-reconciliation); this plan adds no
+SQL-specific variant. Destructive replacement/schema change passes the applicable
+policy or approval checks. Transactions, partial failure, and commit boundaries are
+explicit.
 
 `write()` keeps its generic pass-through contract; SQL completion metadata is emitted as
 `WriteResult` through EventSink. There is no separate SQL `sink()` or `export()` effect
@@ -251,6 +254,12 @@ D1  dbt-core adapter + artifact normalization
 D2  orchestration + CLI plugins
 D3  optional dbt-ibis evaluation
 ```
+
+S3 exits with benchmark evidence: the pushed-down subset (DuckDB and Ibis-backed) timed
+against ordinary Python execution of the same representative transformations, measured
+through the harness `performance.md` owns and with no frozen workload added there.
+Duckstring's published DuckDB results are the comparison point, not a reason to make a
+relational engine the default substrate (`_docs/research/duckstring-evaluation.md`).
 
 ## 14. Definition of done
 

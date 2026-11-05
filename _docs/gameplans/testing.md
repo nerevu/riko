@@ -657,3 +657,13 @@ Implementation scaffolding should add tests in the same order as the correspondi
 owners land: provider hooks → operations services → orchestration/CLI adapters →
 cross-package fixtures. The `testing.md` layer rules remain unchanged; Operations as
 Code is another consumer of them, not a fifth test layer.
+
+### Workflow scenario fixtures
+
+Deterministic fixtures substituted through `Context`/`Resource` serve every workflow
+scenario test: recorded API responses, files, and database adapters replace the live
+resources, and the unchanged `Workflow` runs under the ordinary runtime against
+bootstrap, unchanged-source, changed-source, expired-cursor, retry, and
+incomplete-output fixtures. There is no second fixture runtime or workflow simulator
+(what Duckstring's Puddles provide is a usability pattern, not an execution model to
+copy).

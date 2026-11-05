@@ -128,6 +128,8 @@ checkpoint/state CAS outcome
 retry/disposition
 cancellation/deadline
 artifact publication
+failure attribution (the node whose failure ended the run, and the downstream nodes the
+                     graph index shows were left unfed or cancelled as a consequence)
 aggregate counters (per-node input/output counts, active time, upstream/downstream wait time,
                     queue occupancy, active workers)
 ```

@@ -306,7 +306,14 @@ Key rules:
 - unsupported modes fail preparation rather than silently degrading;
 - destructive provider operations may additionally require plan/approval policy from
   higher-level provider/Operations-as-Code owners;
-- a Target's supported capabilities do not make every operation safe by default.
+- a Target's supported capabilities do not make every operation safe by default;
+- a mode that deletes or replaces records absent from the input (merge with deletion,
+  replace-by-snapshot) requires the input to be declared a complete snapshot and
+  validates match-key uniqueness before any destructive step; a partial or paginated
+  input never implies completeness (Duckstring's `merge_table` treats every missing key
+  as a deletion and skips the duplicate-key check, which is the failure mode this rule
+  excludes). Which observations count as complete snapshots is owned by
+  [feed-monitoring.md § 9.3](feed-monitoring.md#93-tombstones).
 
 Do not create a second public `sink()` API to distinguish these modes.
 
@@ -322,6 +329,12 @@ write may stage internally
 successful publication -> WriteResult
 failed/cancelled publication -> no successful result; clean partial artifact best-effort
 ```
+
+A replacing publication keeps the previous complete output readable until the
+replacement publishes, so a consumer sees either the last successful output or the new
+one, never a partial one (the last-good rule Duckstring applies to every published
+data product; here it holds at durable output boundaries only, not at every item a
+node yields).
 
 Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace`
 destinations for writing when the session is acquired, truncating the file before any

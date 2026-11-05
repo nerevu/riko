@@ -325,6 +325,17 @@ Only one layer should retry a given failure domain. A `CheckpointConflictError`
 propagates; the Riko state-store adapter does not automatically reload/rerun a
 conflicting operation.
 
+Note (2026-11-05, Duckstring evaluation triage): a consumer-freshness policy, where a
+downstream run asks how fresh its input data must be and the orchestrator decides which
+upstream runs that requires, is a possible opt-in adapter policy, not a core feature
+and not a scheduler (§ 4 stands). Its shape is a deterministic decision function over
+the published output state, the requested freshness, and the workflow dependency graph
+that returns the runs required; the adapter schedules and persists, and the function
+owns no worker pools, clients, or resource lifetimes, so it is testable with simulated
+time and completion events. It is reliable only once R6 state and R5C publication can
+say what was published, what changed, and what a consumer may reuse, so it is not
+sequenced before them (`_docs/research/duckstring-evaluation.md`).
+
 ## 15. Events and observability
 
 Normalize run-level events such as:

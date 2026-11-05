@@ -47,7 +47,16 @@ Relevant precedents:
 * **HDX age API** — dataset freshness classified from age against an expected update
   frequency (due/overdue/delinquent thresholds per frequency, archived means always
   delinquent, invalid frequency is an error that counts toward a run's error limit),
-  with a `needs_update` flag as the rule output;
+  with a `needs_update` flag as the rule output; `age` is the days between the
+  dataset's `last_updated` (when its data last changed) and the update run (when the
+  source was last observed), so the two timestamps are already separate inputs, and
+  each run upserts its record by dataset id without deleting anything;
+* **Duckstring** — a run that successfully checked a source is recorded separately from
+  a run that produced changed data, so freshness propagates to consumers without
+  rerunning them when their inputs are unchanged; ETags, modification timestamps, and
+  content fingerprints avoid redundant acquisition, and only a declared complete
+  snapshot may turn absent keys into deletions
+  (`_docs/research/duckstring-evaluation.md`);
 * **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state,
   windows, and explicit incremental cursors;
 * **resumable database/API change feeds** — opaque resume positions, explicit deletion
@@ -241,6 +250,19 @@ A source may use an owner-level `StateKey[T]` (`item_key=None`, `generation=None
 intrinsic source progress. Explicit incremental recovery boundaries use `.checkpoint()`
 and the enclosing stateful owner's identity rules from `execution-semantics.md`.
 
+`observation` separates **when the source was last checked** from **when its contents
+last changed**. A successful observation that finds nothing new commits updated
+observation metadata (observed-at, and the source's own last-modified/version where it
+exposes one), records no content change, yields no items, and lets a downstream
+consumer skip work whose input data is unchanged. A derived cursor (a
+`max(updated_at)`-style position) stays where it was; a source-issued resume token
+returned with an empty result is still stored as the checkpoint, per the opaque-cursor
+rule below. ETags, `Last-Modified`, and content fingerprints may short-circuit
+acquisition, but they stay transport optimizations recorded as observation metadata:
+they never stand in for the checkpoint and never become correctness state (the HDX age
+API's `last_updated` versus run time, and Duckstring's checked-versus-changed runs,
+§ 2).
+
 An opaque cursor is treated as an uninterpreted source token. When a checkpoint payload
 is opaque, generic monitoring/state code must:
 
@@ -249,7 +271,9 @@ is opaque, generic monitoring/state code must:
 * return it to the same source contract when resuming;
 * never increment it;
 * never numerically or lexicographically compare it;
-* never infer ordering from its textual/JSON representation.
+* never infer ordering from its textual/JSON representation;
+* store a token the source returns even when the observation yields no items, since a
+  new token can accompany an empty result.
 
 A source adapter may understand its own cursor format, but that knowledge does not leak
 into generic state logic.
@@ -396,7 +420,17 @@ The monitoring layer must not silently convert an explicit tombstone into ordina
 absence.
 
 Snapshot sources that cannot emit tombstones may still derive deletions through
-completed snapshot comparison; those feeds declare `deletion="absent"`.
+complete-snapshot comparison; those feeds declare `deletion="absent"`.
+
+An observation is a complete snapshot only when the source contract says so and the
+observation ran to completion: every page of a paginated listing was fetched, no
+filter narrowed the membership, and the run did not stop early. A partial, filtered,
+or interrupted observation is never compared for absence, and a feed that cannot
+assert completeness declares `deletion="unsupported"` rather than inferring it. Entity
+keys compared for absence must be unique within the snapshot; a duplicate entity key
+fails the comparison instead of silently collapsing. The write-side half of this rule,
+which destructive modes require of their input, is
+[effects.md § 11](effects.md#11-write-modes-and-reconciliation).
 
 ### 9.4 Replay and idempotency
 
@@ -833,7 +867,13 @@ Required tests include:
 23. deterministic threshold/z-score fixtures;
 24. transition/cooldown firing semantics;
 25. dry-run performs no external mutation;
-26. in-process and orchestrated finite observation produce equivalent logical deltas.
+26. in-process and orchestrated finite observation produce equivalent logical deltas;
+27. an unchanged observation commits new observation metadata without recording a
+    content change (a source-issued resume token is still stored), yields nothing, and
+    lets a downstream consumer skip work (recorded source fixtures substituted through
+    `Context`/`Resource`);
+28. a partial, filtered, or interrupted observation never yields absence-derived
+    deletions, and a duplicate entity key fails the snapshot comparison.
 
 ## 24. Phases
 
