@@ -125,8 +125,10 @@ test folders themselves — this gameplan does not restate them:
   are named for stable concepts, never mirrored from `riko/` package paths, so package refactors
   move imports, not tests.
 - Shared helpers live in `tests/_*.py` (`_lifecycle`, `_execution`, `_workflows`, `_loopback`,
-  `_resources`, `_timeouts`; the last two load as pytest plugins from the root `conftest.py`); no
-  helper is defined in two test files.
+  `_hash_seeds`, `_resources`, `_timeouts`; the last three load as pytest plugins from the root
+  `conftest.py`); no helper is defined in two test files. A result that must not depend on
+  `PYTHONHASHSEED` joins the `_hash_seeds` probe script and asserts its slice of the
+  session-scoped `hash_seed_probes` fixture rather than launching interpreters of its own.
 
 Enforcement:
 
@@ -144,8 +146,9 @@ Enforcement:
   rule that Markdown is never pytest input. The bound checks also cover `tests/_*.py` helpers and
   every non-test function and method, a `communicate` timeout counts as a bound, a `timeout`
   marker may not equal the backstop, every `subprocess.run`/`check_output`/`check_call`/`call`
-  sets `timeout=` (or splats options that may carry it), and an `async def` test must await
-  something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
+  sets `timeout=` (or splats options that may carry it), a strict `xfail` mark (a decorator, a
+  `pytest.param` mark, or a module-level constant) sets `raises=`, and an `async def` test must
+  await something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
   multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without `id=`
   (`rows-without-id`), printing the sites only when a count rises. Its `Bound`/`gen_bounds`
   also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels
@@ -186,7 +189,17 @@ Pending: `manage lint --tests` bans only `_private` names in `public/`. The full
 allowlist first. As of the 2026-10-30 surface triage the remaining non-surface names in `public/`
 are the `SyncModuleWrapper`/`AsyncModuleWrapper` cast targets (waiting on the slot-type decision in
 [extensibility.md](extensibility.md)), the `riko.bado._backend` test primitives (`checkpoint`,
-`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, and `maybe_aclosing`.
+`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, `maybe_aclosing`, and the `TestFilter`
+seam patches `load_local_tz` and `ALLOW_INF` (patched to pin the local time zone and to
+enable infinity comparison, never imported for use).
+The 2026-10-31 sibling audit found more names that a supported signature, field, or return
+exposes but no surface exports. Publishing them is deferred (user ruling) to one surface pass:
+`SyncPolicy`/`AsyncPolicy` (`ExecutionSettings` fields), `GraphIndex`/`GraphEdge`/`RunnableNode`
+(`Workflow.index`/`graph_edges`/`runnable_nodes`), `ModuleCategory` (`get_module_category`,
+`list_modules(category=)`), `FrozenDict`/`FrozenConf` (`Workflow`/`ModuleNode` fields),
+`PreparedModule` (`prepare`/`setup`), the underscore names `_AsyncURLStream`/`NamedTextIOWrapper`
+(returned by `async_url_open`) and `_Destination` (`export`'s `f`), `DotDict` (an `Item` member),
+and the `*RawConf` family plus `OptionValues` (`riko.types.Conf`, `CallOptionsLike`).
 
 No static check fits rows shadowed by an earlier branch in the code under test (needs a
 mutation-style check), xfail comparisons that are false on their face, xfail worst times that
@@ -195,6 +208,14 @@ function or a shielded cleanup, same-subject tests whose bodies differ in more t
 test names that keep a retired verb (every flagged name still named a live function); the audit
 agents look for those by hand. A sync-only run needs no local plugin: the CI `optional=false`
 legs install no extras, and `manage test --tox -e py312` reproduces that locally.
+
+Seed close is owned twice on purpose (ruling amended 2026-11-03, superseding the 2026-10-29 "retire
+together" line): `tests/public/test_pipeline.py::TestAsyncClose::test_early_close_closes_the_seed`
+owns an async root closing each `CLOSING_SEEDS` shape, and the plan-level pair
+`TestPlanRun::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanRun::test_arun_closes_an_unfinished_seed_on_exit`
+in `tests/internal/test_plan_runs.py` keeps only what `Pipeline` never reaches: a sync-only root
+reading the seed on a worker thread, a close on execution exit without `aclose`, and one close
+across two triggers. An async-root row there would duplicate `TestAsyncClose`.
 
 ### Import-linter coverage gap
 
@@ -427,7 +448,10 @@ module-level tables. The speed slice runs the CLI commands in-process (`run_comm
 script, one outside-checkout row, two `python -m` rows that run each command's `__main__` block,
 and the example scripts that register modules. It also cut the
 `test_demo` matrix to a four-row diagonal, set the benchmark's simulated I/O wait from
-`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations.
+`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations. `test_benchmark` also caps
+the benchmark's worker pools at two through `RIKO_BENCHMARK_WORKERS` (uncapped by default, so
+benchmark numbers stay comparable across commits): ten spawned processes each re-importing riko
+pushed the subprocess past its 5 s bound when every tox environment ran in parallel.
 
 ## 5b. Execution lifetime proofs (R4)
 
@@ -441,7 +465,7 @@ modes:
 | | sync Pipeline execution | async Pipeline execution |
 |---|---|---|
 | `@contextmanager` sync resource | native entry | worker-adapted entry |
-| `@asynccontextmanager` async resource | portal entry | native entry |
+| `@asynccontextmanager` async resource | portal entry, exit bounded by `shutdown_timeout` | native entry |
 
 Each cell proves eager open, lazy open, mid-execution failure rollback, early consumer abandonment,
 cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.

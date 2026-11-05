@@ -61,6 +61,21 @@ def parse_key(key: Key | None = None) -> list[str]:
     return keys
 
 
+def parse_item_key(key: Key | None = None) -> list[str]:
+    """
+    Parses an item key into its path, reading ``""`` as the literal empty key.
+
+    Examples:
+
+        >>> parse_item_key("")
+        ['']
+        >>> parse_item_key("a.b")
+        ['a', 'b']
+
+    """
+    return [""] if key == "" else parse_key(key)
+
+
 def match_key(data: object, key: str) -> str | None:
     """
     Case insensitively finds the ``data`` key named by ``key``.
@@ -495,7 +510,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'bar'
 
         """
-        keys = parse_key(key)
+        keys = parse_item_key(key)
         value = raw_get(self, keys[0])
 
         if len(keys) > 1:
@@ -579,7 +594,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self", existing)
 
-        keys = parse_key(key)
+        keys = parse_item_key(key)
 
         if len(keys) == 1:
             CaseInsensitiveDict.__setitem__(self, key, value)
@@ -670,7 +685,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'verse2'
 
         """
-        keys = parse_key(key)
+        keys = parse_item_key(key)
         item = self
 
         if keys:
@@ -715,7 +730,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
             return cast("Self | None", value)
 
-        keys = parse_key(key)
+        keys = parse_item_key(key)
         rest, last = keys[:-1], keys[-1]
 
         if len(keys) == 1 and match_key(self, key):

@@ -62,6 +62,9 @@ def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str
     Args:
 
         url: A URL, host, or file name.
+
+    Kwargs:
+
         absolute: Whether to resolve a relative ``file://`` path.
         offline: Whether a bare name is a bundled data file rather than a web host.
 

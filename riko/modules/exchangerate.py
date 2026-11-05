@@ -29,14 +29,16 @@ Attributes:
 
 from __future__ import annotations
 
-from decimal import Decimal
+from contextlib import suppress
+from decimal import Decimal, InvalidOperation
 from json import load, loads
 from os import getenv
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
 from riko.bado._util import async_get, async_json
 from riko.base._config import ENCODING, settings
-from riko.base._guards import require_mapping
+from riko.base._funcutils import map_values
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.base._paths import is_http_url
 from riko.io._async import async_url_read
@@ -54,6 +56,8 @@ if TYPE_CHECKING:
 
 logger: Logger = get_logger(__name__)
 
+type _ParsedRate = tuple[Decimal, object]
+
 EXCHANGE_API = settings.exchange_api
 PARAMS = {"app_id": getenv("OPEN_EXCHANGE_RATES_ID")}
 OPTS: DecorationOptions = {"ftype": BasicCastType.TEXT, "field": "content"}
@@ -68,40 +72,88 @@ DEFAULTS: Defaults = {
 }
 
 
-class RatesJson(TypedDict):
-    rates: Mapping[str, str]
+def _parse_rate(value: object, verbose: bool = False) -> _ParsedRate:
+    """Parses a currency rate, a number or numeric string, into a ``Decimal``."""
+    rate, msg = Decimal("nan"), f"invalid rate: {value!r}"
+
+    if not isinstance(value, bool):
+        with suppress(TypeError, ValueError, InvalidOperation):
+            rate = Decimal(value)  # pyright: ignore[reportArgumentType]
+
+    if verbose and rate.is_nan():
+        logger.warning(msg)
+
+    return rate, value
 
 
-def _require_rate(value: object) -> str | float:
-    """Requires a currency rate to be a number or numeric string."""
-    if not isinstance(value, str | float | int):
-        raise TypeError(f"invalid rate: {value!r}")
+def build_rates(**rates: object) -> dict[str, _ParsedRate]:
+    """
+    Builds the parsed rates of a rates response.
 
-    return value
+    Kwargs:
 
+        rates (object): The raw rate of each currency, keyed by currency code.
 
-def build_rates(rates: Mapping[str, object]) -> dict[str, Decimal]:
-    if rates:
-        resp = {k: Decimal(_require_rate(v)) for k, v in rates.items() if v}
-    else:
-        logger.warning("invalid json response:")
-        logger.warning(rates)
-        resp = {}
+    Returns:
 
-    return resp
+        Each currency's ``Decimal`` rate (``NaN`` when unparseable) paired with
+        its raw value. Excludes ``None`` rates. They read as absent.
+
+    """
+    return map_values(_parse_rate, rates, non_null=True)
 
 
-def get_rate(currency: str, **rates: Decimal) -> Decimal:
-    rate = rates.get(currency, Decimal("nan"))
+def require_rates(document: object) -> Mapping[str, object]:
+    """
+    Requires the ``rates`` mapping of a rates response document.
 
-    if not rate:
-        logger.warning(f"rate USD/{currency} not found in rates")
+    Args:
+
+        document: The decoded rates response.
+
+    Returns:
+
+        The response's non-empty ``rates`` mapping of currency to raw rate.
+
+    Raises:
+
+        ValueError: If the document has no ``rates`` mapping or an empty one. The
+            message carries the response's own error ``description`` (or ``message``)
+            when it has one.
+
+    """
+    found: Mapping[str, object] = document if is_mapping(document) else {}
+
+    if not (is_mapping(rates := found.get("rates")) and rates):
+        detail = found.get("description", found.get("message"))
+        reason = "" if detail is None else f": {detail}"
+        raise ValueError(f"rates response has no or an empty 'rates' mapping{reason}")
+
+    return rates
+
+
+def get_rate(currency: str, **rates: _ParsedRate) -> Decimal:
+    rate_text = f"USD/{currency} rate"
+    rate, raw = rates.get(currency, (None, None))
+
+    if rate is None:
+        logger.warning(f"{rate_text} not found in rates")
+        rate = Decimal("NaN")
+    elif rate.is_nan():
+        raise ValueError(f"invalid {rate_text}: {raw!r}")
+    elif not rate.is_finite():
+        raise ValueError(f"{rate_text} must be finite: got {raw!r}")
+    elif rate <= 0:
+        raise ValueError(f"{rate_text} must be positive: got {raw!r}")
 
     return rate
 
 
 def get_cross_rate(
-    from_cur: str, to_cur: str, places: Decimal = Decimal("0.0001"), **rates: Decimal
+    from_cur: str,
+    to_cur: str,
+    places: Decimal = Decimal("0.0001"),
+    **rates: _ParsedRate,
 ) -> Decimal:
     if from_cur == to_cur:
         rate = Decimal(1)
@@ -152,22 +204,20 @@ async def async_parser(
 
     """
     same_currency = base == objconf.currency
-    rates = None
-    rate = Decimal(0)
+    _rates, rate = None, Decimal("nan")
 
     if same_currency:
         rate = Decimal(1)
     elif is_http_url(objconf.url):
         r = await async_get(objconf.url, params=objconf.param)
-        rates = await async_json(r)
+        _rates = require_rates(await async_json(r))
     else:
-        content = await async_url_read(objconf.url)
-        loaded = loads(content).get("rates", {})
-        rates = require_mapping(loaded, "rates", error=TypeError)
+        content = await async_url_read(objconf.url, encoding=objconf.encoding)
+        _rates = require_rates(loads(content))
 
-    if rates and not same_currency:
+    if _rates is not None:
         places = Decimal(10) ** -objconf.precision
-        rates = build_rates(rates)
+        rates = build_rates(**_rates)
         rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
@@ -205,19 +255,16 @@ def parser(
         Decimal('1.275201')
 
     """
-    rates = None
-    rate = Decimal(0)
+    rate = Decimal("nan")
 
     if base == objconf.currency:
         rate = Decimal(1)
     else:
         with Fetch(objconf.url, encoding=objconf.encoding, params=objconf.param) as f:
-            json = load(f)
-
-            if rates := json.get("rates", {}):
-                places = Decimal(10) ** -objconf.precision
-                rates = build_rates(rates)
-                rate = get_cross_rate(base, objconf.currency, places=places, **rates)
+            _rates = require_rates(load(f))
+            places = Decimal(10) ** -objconf.precision
+            rates = build_rates(**_rates)
+            rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
 

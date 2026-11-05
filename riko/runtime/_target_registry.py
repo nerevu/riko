@@ -27,7 +27,7 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Final
 
 from riko.base._exceptions import UnsupportedTargetError
 from riko.definitions._targets import FileTarget
@@ -37,7 +37,10 @@ from riko.types._target_protocols import Target, is_target_class
 from ._registry import Registry
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from importlib.metadata import EntryPoint
+
+_BUILTIN_TARGETS: Final[Mapping[str, type[Target]]] = {Backends.FILE: FileTarget}
 
 
 class TargetRegistry(Registry[type[Target]]):
@@ -45,14 +48,17 @@ class TargetRegistry(Registry[type[Target]]):
     Resolves a backend to its target class.
 
     Precedence is runtime registration, then entry point
-    (``[project.entry-points."riko.targets"]``), then built-in. Each stored entry is a
-    self-describing target class keyed by its ``backend``. The class is its own
-    factory, so resolution returns config-agnostic behavior the caller then constructs.
+    (``[project.entry-points."riko.targets"]``), then built-in. A runtime registration
+    shadows an entry-point or built-in target only when registered with
+    ``replace=True``. Each stored entry is a self-describing target class keyed by its
+    ``backend``. The class is its own factory, so resolution returns config-agnostic
+    behavior the caller then constructs.
 
     """
 
     entry_point_group = "riko.targets"
     label = "target"
+    builtin_names: ClassVar[frozenset[str]] = frozenset(_BUILTIN_TARGETS)
 
     def _key(self, entry: type[Target]) -> str:
         return str(entry.backend)
@@ -67,9 +73,7 @@ class TargetRegistry(Registry[type[Target]]):
         return loaded
 
     def _resolve_builtin(self, backend: BackendLike) -> type[Target]:
-        if str(backend) == Backends.FILE:
-            target: type[Target] = FileTarget
-        else:
+        if (target := _BUILTIN_TARGETS.get(str(backend))) is None:
             raise UnsupportedTargetError(str(backend))
 
         return target
@@ -117,8 +121,11 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
     Args:
 
         target: The self-describing target class, keyed by its ``backend``.
-        replace: Whether an existing runtime target for the same backend may be
-            replaced.
+
+    Kwargs:
+
+        replace: Whether the target may replace an existing runtime target for the same
+            backend, or shadow an entry-point or built-in one.
 
     Returns:
 
@@ -126,8 +133,8 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
 
     Raises:
 
-        ValueError: If a target for the same backend is already registered and
-            ``replace`` is False.
+        ValueError: If a target for the same backend is already registered, an
+            entry-point, or built-in target; and ``replace`` is False.
 
     Examples:
 

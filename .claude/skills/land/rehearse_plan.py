@@ -2,7 +2,7 @@
 Builds, checks, and rehearses a /land commit plan without touching the user's tree.
 
 Usage: python .claude/skills/land/rehearse_plan.py PLAN [--out DIR] [-U N]
-       [--full-checks] [--copy]
+       [--full-checks] [--tests] [--copy]
 
 PLAN is a text file of steps, in order. A step starts with a header line and lists
 the ids it takes (from ``split_hunks.py list``; ``path``, ``path:N``, ``path:N-M``):
@@ -27,8 +27,13 @@ index and committed with ``git commit-tree`` (no hooks; the gates already ran). 
    the working tree; that equality is confirmed by tree hash.
 2. **Build checks** per step, on an extracted copy of its tree: ruff's
    undefined/unused-name rules and ``import riko, riko.cli.manage``.
-   ``--full-checks`` adds pyright on the step's Python files and
-   ``manage lint imports --all`` (bisect-safe commits).
+   ``--full-checks`` adds, on a git-initialized copy (several lints call
+   ``git ls-files``), ``manage lint --all`` (which carries the import contracts),
+   ``manage lint --verify-types``, and full-project pyright with ``import riko``
+   resolved to the copy rather than the venv's editable install (bisect-safe
+   commits). ``--tests`` then runs ``manage test --ratchet`` on each step, one at a
+   time, since the suite must run alone. A step that touches ``.claude/skills/``
+   also runs the skill scripts' smoke tests (``pytest .claude/skills``).
 3. **Autosquash**: when there are fixups, a throwaway worktree replays
    ``rebase -i --autosquash`` from the oldest target, counting the targets of the
    branch's pending ``fixup!`` commits too (an older one left unmoved would collide
@@ -69,6 +74,8 @@ from split_hunks import (
 DESCRIPTION = "Build, check, and rehearse a /land commit plan."
 RUFF_RULES = "F821,F401,F811"
 IMPORT_SMOKE = "import riko, riko.cli.manage"
+MANAGE = ("-m", "riko.cli.manage")
+SKILLS = ".claude/skills/"
 TAR = shutil.which("tar") or "tar"
 PBCOPY = shutil.which("pbcopy")
 
@@ -103,6 +110,28 @@ def read_plan(path: Path) -> list[Step]:
             steps[-1].entries.append(line)
 
     return steps
+
+
+def load_branch_commits() -> dict[str, str]:
+    """Loads the branch's commits past its merge point, none when it has no base."""
+    verify = ("rev-parse", "--verify", "--quiet")
+    bases = [b for b in fixup_map.BASE_BRANCHES if fixup_map.git(*verify, b)]
+    return fixup_map.branch_commits(fixup_map.merge_point()) if bases else {}
+
+
+def require_targets(steps: list[Step]) -> None:
+    """Requires every fixup target to be in HEAD's history, naming any rewritten one."""
+    current = {subject: sha for sha, subject in load_branch_commits().items()}
+
+    for step in (s for s in steps if s.kind == "fixup"):
+        cmd = (GIT, "merge-base", "--is-ancestor", step.arg, "HEAD")
+        missing = subprocess.run(cmd, capture_output=True, check=False).returncode
+
+        if missing:
+            subject = git("log", "-1", "--format=%s", step.arg).strip()
+            match = current.get(subject)
+            hint = f"; that subject is now {match[:8]}" if match else ""
+            sys.exit(f"fixup target {step.arg} is not in HEAD's history{hint}")
 
 
 def assign(steps: list[Step], files: list) -> None:
@@ -157,47 +186,22 @@ def build_commits(steps: list[Step], files: list, plan_dir: Path) -> None:
         parent = step.commit
 
 
-def changed_py(step: Step, parent: str) -> list[str]:
-    names = git("diff", "--name-only", "--diff-filter=AMR", parent, step.commit)
-    return [n for n in names.split() if n.endswith(".py")]
-
-
-def check(step: Step, parent: str, *, full: bool) -> str:
-    """Runs the build checks on an extracted copy of the step's tree."""
+def extract(step: Step) -> Path:
+    """Extracts the step's tree into a fresh git-initialized folder."""
     root = Path(tempfile.mkdtemp(prefix="plan-check-"))
     archive = subprocess.run(
         (GIT, "archive", step.commit), capture_output=True, check=True
     )
     subprocess.run((TAR, "-x", "-C", root), input=archive.stdout, check=True)
+
+    for command in ((GIT, "init", "-q"), (GIT, "add", "-A")):
+        subprocess.run(command, cwd=root, capture_output=True, check=True)
+
+    return root
+
+
+def run_checks(root: Path, commands: list[tuple[str, tuple[str, ...]]]) -> str:
     env = {**os.environ, "PYTHONPATH": str(root)}
-    py = sys.executable
-    commands = [
-        (
-            "ruff",
-            (
-                py,
-                "-m",
-                "ruff",
-                "check",
-                "--no-cache",
-                "-q",
-                "--select",
-                RUFF_RULES,
-                "riko",
-            ),
-        ),
-        ("import", (py, "-c", IMPORT_SMOKE)),
-    ]
-
-    if full:
-        commands.append(
-            ("imports", (py, "-m", "riko.cli.manage", "lint", "imports", "--all"))
-        )
-
-        if files := changed_py(step, parent):
-            pyright = Path(py).parent / "pyright"
-            commands.append(("pyright", (str(pyright), *files)))
-
     failures = []
 
     for label, command in commands:
@@ -212,17 +216,46 @@ def check(step: Step, parent: str, *, full: bool) -> str:
     return "; ".join(failures) or "ok"
 
 
+def check(root: Path, *, full: bool, skills: bool = False) -> str:
+    """Runs the build checks on an extracted copy of the step's tree."""
+    py = sys.executable
+    ruff = (py, "-m", "ruff", "check", "--no-cache", "-q", "--select", RUFF_RULES)
+    build = [("ruff", (*ruff, "riko")), ("import", (py, "-c", IMPORT_SMOKE))]
+
+    if skills:
+        pytest = (py, "-m", "pytest", "-q", "--no-cov", "-p", "no:cacheprovider")
+        build.append(("skill-tests", (*pytest, "-o", "addopts=", SKILLS)))
+    results = [run_checks(root, build)]
+
+    if full:
+        lints = [
+            ("lint", (py, *MANAGE, "lint", "--all")),
+            ("verify-types", (py, *MANAGE, "lint", "--verify-types")),
+        ]
+        results.append(run_checks(root, lints))
+        pyright = str(Path(py).parent / "pyright")
+        results.append(
+            run_checks(root, [("pyright", (pyright, "-p", "pyproject.toml"))])
+        )
+
+    return "; ".join(r for r in results if r != "ok") or "ok"
+
+
+def run_suite(root: Path) -> str:
+    """Runs the full suite with the coverage ratchet on one extracted tree."""
+    suite = (sys.executable, *MANAGE, "test", "--ratchet", "--quiet")
+    return run_checks(root, [("tests", suite)])
+
+
 def oldest(shas: list[str]) -> str:
     order = git("rev-list", "--topo-order", "HEAD").split()
     full = [git("rev-parse", s).strip() for s in shas]
     return max(full, key=order.index)
 
 
-def get_pending_targets() -> list[str]:
-    """Gets the targets of the branch's pending ``fixup!`` commits, if it has a base."""
-    verify = ("rev-parse", "--verify", "--quiet")
-    bases = [b for b in fixup_map.BASE_BRANCHES if fixup_map.git(*verify, b)]
-    commits = fixup_map.branch_commits(fixup_map.merge_point()) if bases else {}
+def load_pending_targets() -> list[str]:
+    """Loads the targets of the branch's pending ``fixup!`` commits."""
+    commits = load_branch_commits()
     fixups = (sha for sha, subject in commits.items() if subject.startswith("fixup! "))
     targets = {fixup_map.resolve_target(sha, commits) for sha in fixups}
     return sorted(t for t in targets if t is not None)
@@ -233,7 +266,7 @@ def rehearse_autosquash(steps: list[Step]) -> str:
     result = "no fixups"
 
     if targets:
-        targets.extend(get_pending_targets())
+        targets.extend(load_pending_targets())
         worktree = Path(tempfile.mkdtemp(prefix="plan-squash-")) / "wt"
         git("worktree", "add", "-q", "--detach", str(worktree), steps[-1].commit)
         env = {**os.environ, "GIT_SEQUENCE_EDITOR": ":"}
@@ -328,13 +361,15 @@ def main() -> None:
     parser.add_argument("plan", type=Path)
     parser.add_argument("--out", type=Path, help="output folder (default: temp)")
     parser.add_argument("-U", type=int, default=0, dest="context", help="diff context")
-    parser.add_argument("--full-checks", action="store_true", help="pyright + imports")
+    parser.add_argument("--full-checks", action="store_true", help="lint + types")
+    parser.add_argument("--tests", action="store_true", help="suite per step, alone")
     parser.add_argument("--copy", action="store_true", help="pbcopy the chain")
     args = parser.parse_args()
 
     out = args.out or Path(tempfile.mkdtemp(prefix="plan-out-"))
     files = load_change(args.context)
     steps = read_plan(args.plan)
+    require_targets(steps)
     assign(steps, files)
     skipped = [s for s in steps if s.kind == "skip"]
     steps = [s for s in steps if s.kind != "skip"]
@@ -347,21 +382,22 @@ def main() -> None:
     if stray != left_out and not stray < left_out:
         sys.exit(f"final tree differs from the working tree outside skip: {stray}")
 
-    parents = [git("rev-parse", "HEAD").strip(), *(s.commit for s in steps[:-1])]
+    roots = [extract(step) for step in steps]
+    skills = [any(i.startswith(SKILLS) for i in step.ids) for step in steps]
+
+    def _check(root: Path, touches: bool) -> str:
+        return check(root, full=args.full_checks, skills=touches)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        checks = list(
-            pool.map(
-                lambda pair: check(pair[0], pair[1], full=args.full_checks),
-                zip(steps, parents, strict=True),
-            )
-        )
+        checks = list(pool.map(_check, roots, skills))
 
+    suites = [run_suite(root) for root in roots] if args.tests else []
     squash = rehearse_autosquash(steps)
     rows = write_outputs(steps, out, files)
 
-    for (header, details), result in zip(rows, checks, strict=True):
-        print(f"{header}  check: {result}")
+    for n, ((header, details), result) in enumerate(zip(rows, checks, strict=True)):
+        tests = f"  tests: {suites[n]}" if suites else ""
+        print(f"{header}  check: {result}{tests}")
         print("\n".join(details))
 
     kept = f"; left uncommitted: {', '.join(sorted(left_out))}" if left_out else ""
@@ -373,7 +409,10 @@ def main() -> None:
         subprocess.run((PBCOPY,), input=(out / "chain.txt").read_bytes(), check=True)
         print("chain copied to the clipboard")
 
-    failed = any(c != "ok" for c in checks) or squash not in {"ok", "no fixups"}
+    failed = any(c != "ok" for c in (*checks, *suites)) or squash not in {
+        "ok",
+        "no fixups",
+    }
     sys.exit(1 if failed else 0)
 
 

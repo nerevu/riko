@@ -4,7 +4,7 @@ Records which gates passed on which tree, so any session can skip a repeat.
 Usage:
     python .claude/skills/land/gates.py fingerprint
     python .claude/skills/land/gates.py check GATE
-    python .claude/skills/land/gates.py scope GATE [--max-inline BYTES]
+    python .claude/skills/land/gates.py scope GATE [--max-inline BYTES] [--edits-only]
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
@@ -38,6 +38,9 @@ current content tree, so untracked files are inside it. ``uv.lock`` and the
 generated files are left out. A diff over ``--max-inline`` bytes (default 25000)
 goes to ``.claude/<gate>-scope.diff`` instead, to be read in slices. It exits 0
 when the gate already passed on this tree, 2 when the scope is empty, 1 otherwise.
+``--edits-only`` prints, in place of the diff, each added line whose text no removed
+line carries (``path:line: text``): a change that mostly moves code shrinks to its
+real edits.
 
 ``run`` echoes the command's output and keeps its last pytest summary line
 (``1851 passed, 62 xfailed in 70s``) in the marker; ``summary`` prints it with
@@ -56,8 +59,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 DESCRIPTION = "Skip gates that already passed on the current tree."
 GIT = shutil.which("git") or "git"
@@ -65,6 +73,7 @@ BUSY = 75
 EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
+HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
 RUFF_GATES = frozenset({"lint", "prettify"})
 TIDY_ONLY = (":(glob).claude/**/*.md",)
 UNGATED = (".claude",)
@@ -100,16 +109,9 @@ def get_tree_id(gate: str | None = None) -> str:
     The id leaves out what ``gate`` never reads under ``.claude/``: nothing for
     tidy, the markdown for the Ruff gates, the whole folder for the rest.
     """
-    index = Path(tempfile.mkdtemp(prefix="gates-")) / "index"
     real_index = Path(
         _git("rev-parse", "--path-format=absolute", "--git-path", "index")
     )
-
-    if real_index.exists():
-        shutil.copy2(real_index, index)
-
-    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
-    _git("add", "-A", env=env)
 
     if gate in RUFF_GATES:
         unread: tuple[str, ...] = TIDY_ONLY
@@ -118,10 +120,23 @@ def get_tree_id(gate: str | None = None) -> str:
     else:
         unread = UNGATED
 
-    if unread:
-        _git("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env)
+    with tempfile.TemporaryDirectory(prefix="gates-") as tmp:
+        index = Path(tmp) / "index"
 
-    return _git("write-tree", env=env)
+        if real_index.exists():
+            shutil.copy2(real_index, index)
+
+        env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        _git("add", "-A", env=env)
+
+        if unread:
+            _git(
+                "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env
+            )
+
+        tree = _git("write-tree", env=env)
+
+    return tree
 
 
 def load_markers(path: Path) -> dict[str, dict[str, str]]:
@@ -228,7 +243,37 @@ def resolve_base(marker: dict[str, str] | None) -> tuple[str, str]:
     return base, case
 
 
-def scope(path: Path, gate: str, max_inline: int = MAX_INLINE) -> int:
+def gen_edits(diff: str) -> Iterator[str]:
+    """Generates each added line no removed line carries, as ``path:line: text``."""
+    lines = diff.splitlines()
+    removed = Counter(
+        line[1:].strip()
+        for line in lines
+        if line.startswith("-") and not line.startswith("---")
+    )
+    current, lineno = None, 0
+
+    for line in lines:
+        if line.startswith("+++ "):
+            current = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("@@"):
+            start = HUNK_START.search(line)
+            lineno = 0 if start is None else int(start[1]) - 1
+        elif not line.startswith("-"):
+            lineno += 1
+            text = line[1:].strip()
+
+            if not line.startswith("+") or current is None or not text:
+                pass
+            elif removed[text] > 0:
+                removed[text] -= 1
+            else:
+                yield f"{current}:{lineno}: {line[1:]}"
+
+
+def scope(
+    path: Path, gate: str, max_inline: int = MAX_INLINE, *, edits_only: bool = False
+) -> int:
     """
     Prints everything ``gate`` still has to look at; exit 0 skips, 2 means empty.
 
@@ -249,6 +294,8 @@ def scope(path: Path, gate: str, max_inline: int = MAX_INLINE) -> int:
         stat = _git("diff", "--stat", base, tree, *pathspec)
         diff = _git("diff", base, tree, *pathspec)
         untracked = _git("ls-files", "--others", "--exclude-standard")
+        shown = "\n".join(gen_edits(diff)) if edits_only else diff
+        label = "edits" if edits_only else "diff"
         print(f"scope {gate}: {case}")
         print(f"base: {base}")
         print(f"--- stat\n{stat or '(none)'}")
@@ -257,16 +304,17 @@ def scope(path: Path, gate: str, max_inline: int = MAX_INLINE) -> int:
         if not diff:
             print(f"--- diff\n(empty: record {gate} and stop)")
             code = EMPTY
-        elif len(diff) > max_inline:
-            target = path.with_name(f"{gate}-scope.diff")
+        elif len(shown) > max_inline:
+            target = path.with_name(f"{gate}-scope.{label}")
             target.parent.mkdir(exist_ok=True)
-            target.write_text(diff + "\n")
+            target.write_text(shown + "\n")
             print(
-                f"--- diff ({len(diff)} bytes) written to {target}; read it in slices"
+                f"--- {label} ({len(shown)} bytes) written to {target}; "
+                "read it in slices"
             )
             code = 1
         else:
-            print(f"--- diff ({len(diff)} bytes)\n{diff}")
+            print(f"--- {label} ({len(shown)} bytes)\n{shown}")
             code = 1
 
     return code
@@ -351,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     scope_parser = sub.add_parser("scope")
     scope_parser.add_argument("gate")
     scope_parser.add_argument("--max-inline", type=int, default=MAX_INLINE)
+    scope_parser.add_argument("--edits-only", action="store_true")
     run_parser = sub.add_parser("run")
     run_parser.add_argument("gate")
     run_parser.add_argument("--mutates", action="store_true")
@@ -367,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "check":
         code = check(path, args.gate)
     elif args.action == "scope":
-        code = scope(path, args.gate, args.max_inline)
+        code = scope(path, args.gate, args.max_inline, edits_only=args.edits_only)
     elif args.action == "summary":
         code = print_summary(path, args.gate)
     elif args.action == "record":

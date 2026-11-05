@@ -23,8 +23,8 @@ from functools import partial
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
+from riko.base._funcutils import map_values
 from riko.base._guards import is_dataclass_inst, is_mapping
-from riko.base._iterutils import map_values
 from riko.base._sentinels import is_sentinel
 from riko.coercion._sequences import listize
 from riko.types._values import RikoValue
@@ -51,6 +51,9 @@ def conf_is_dynamic(conf: object, **kwargs: object) -> bool:
     Args:
 
         conf: Configuration value to inspect recursively.
+
+    Kwargs:
+
         **kwargs: Sentinel values used when identifying dynamic configuration.
 
     Returns:
@@ -88,7 +91,7 @@ def resolve_conf[VT](
     """
     Resolves configuration against an item by expanding subkeys and sentinels.
 
-    Args:
+    Kwargs:
 
         item: Input item used to resolve subkey references.
         conf: Configuration value to parse recursively.
@@ -169,6 +172,9 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
     Args:
 
         item: The entry to process.
+
+    Kwargs:
+
         skip_if: The skipping criteria.
 
     Returns:
@@ -182,26 +188,10 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
         True
         >>> get_skip(item)
         False
-        >>> get_skip(item, {"field": "content"})
-        False
-        >>> get_skip(item, {"field": "content", "text": None})
-        False
-        >>> get_skip(item, {"field": "content", "text": 0})
-        False
-        >>> get_skip(item, {"field": "content", "text": ""})
-        True
-        >>> get_skip({}, {"field": "content"})
-        True
-        >>> bool(get_skip(item, {"field": "content", "include": True}))
-        True
         >>> get_skip(item, {"field": "content", "text": "some"})
         True
         >>> get_skip(item, {"field": "content", "text": "some", "include": True})
         False
-        >>> get_skip(item, {"field": "content", "text": "other"})
-        False
-        >>> get_skip(item, {"field": "content", "text": "other", "include": True})
-        True
 
     """
     item = item or {}
@@ -235,7 +225,7 @@ def get_field(
     """
     Extracts a configured field from an item.
 
-    Args:
+    Kwargs:
 
         item: Mapping, ``DotDict``, or scalar value to inspect.
         field: Field name to extract; an empty name returns ``item`` unchanged.

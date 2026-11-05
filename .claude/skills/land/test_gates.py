@@ -11,6 +11,7 @@ from __future__ import annotations
 import fcntl
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 import gates
+import require_agents
 
 
 @pytest.fixture
@@ -51,6 +53,14 @@ def test_tree_id_ignores_staging_and_commits_but_not_edits(repo, tmp_path):
 
     assert untracked != before
     assert untracked == staged == committed == gates.get_tree_id()
+
+
+def test_tree_id_removes_its_temporary_index(repo, tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    gates.get_tree_id()
+    assert list(scratch.iterdir()) == []
 
 
 def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):
@@ -144,6 +154,25 @@ def test_scope_falls_back_to_the_head_and_reports_an_empty_scope(tmp_path, capsy
     assert "+a = 2" in target.read_text()
 
 
+def test_gen_edits_drops_lines_a_hunk_only_moved():
+    diff = (
+        "--- a/t.py\n+++ b/t.py\n@@ -1,2 +1,3 @@\n-def kept():\n+x = 1\n"
+        " context\n+def kept():\n"
+    )
+    assert list(gates.gen_edits(diff)) == ["t.py:1: x = 1"]
+
+
+@pytest.mark.usefixtures("repo")
+def test_scope_edits_only_prints_the_new_lines(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    (tmp_path / "a.py").write_text("a = 2\n")
+    capsys.readouterr()
+
+    assert gates.scope(path, "tidy", edits_only=True) == 1
+    assert "--- edits" in (out := capsys.readouterr().out)
+    assert "a.py:1: a = 2" in out
+
+
 @pytest.mark.usefixtures("repo")
 def test_mutating_gate_records_the_tree_it_left(tmp_path):
     path = gates.get_state_dir() / "gate-markers.json"
@@ -194,3 +223,28 @@ def test_run_keeps_the_last_pytest_summary_line(capsys):
     assert "ratchet ok" in capsys.readouterr().out
     assert gates.print_summary(path, "test") == 0
     assert capsys.readouterr().out.startswith("3 passed, 2 xfailed in 9s (current;")
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        pytest.param({}, ["auditor.md is", "implementer.md is"], id="none"),
+        pytest.param(
+            {"auditor": "Bash, Read", "implementer": "Bash, Read, Edit"},
+            ["implementer.md: grant the tools Write"],
+            id="short-grant",
+        ),
+        pytest.param(
+            {"auditor": "Bash, Read", "implementer": "Bash, Read, Edit, Write"},
+            [],
+            id="complete",
+        ),
+    ],
+)
+def test_require_agents(tmp_path, files, expected):
+    for name, tools in files.items():
+        (tmp_path / f"{name}.md").write_text(f"---\ntools: {tools}\n---\n")
+
+    problems = require_agents.get_problems(tmp_path)
+    assert len(problems) == len(expected)
+    assert all(want in got for want, got in zip(expected, problems, strict=True))

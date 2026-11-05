@@ -26,6 +26,7 @@ from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import resolve_default
 from riko.base._guards import is_mapping
 from riko.base._require_guards import (
     narrow_def_from_require,
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
+    from riko.types._wrappers import Func
     from riko.types.modules import AnyModuleConf, Conf
 
     from ._nodes import CallableVersion
@@ -164,7 +166,7 @@ class PipelineDefinition(Generic[T_co]):
     )
 
     def __repr__(self) -> str:
-        context = "" if self.context is None else "; context"
+        context = resolve_default(self.context, "", "; context")
         summary = self.workflow.summary
         return f"{type(self).__name__}({summary}{context})"
 
@@ -186,6 +188,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             name: The module's name.
+
+        Kwargs:
+
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -234,7 +239,7 @@ class PipelineDefinition(Generic[T_co]):
             ['fetch-1']
 
         """
-        return evolve(self, workflow=self.workflow if workflow is None else workflow)
+        return evolve(self, workflow=resolve_default(workflow, self.workflow))
 
     def pipe(
         self,
@@ -253,6 +258,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             name: The module to append.
+
+        Kwargs:
+
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -322,11 +330,10 @@ class PipelineDefinition(Generic[T_co]):
         destination, it chains the ``write`` module with module arguments instead.
         Supplying both a destination and module arguments is a call-site error.
 
-        Args:
+        Kwargs:
 
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
-
             mode: How the items reconcile with the destination's contents.
             fmt: The serialization format, or ``None`` to derive one.
             keys: The match keys a keyed destination needs.
@@ -387,7 +394,7 @@ class PipelineDefinition(Generic[T_co]):
         argument keeps the current setting. An explicit ``None`` restores that setting's
         default. Settings are validated here, not when the pipeline runs.
 
-        Args:
+        Kwargs:
 
             executor: Picks where per-item work runs: ``"auto"``, ``"inline"``,
                 ``"thread"``, or ``"process"`` (default: "auto").
@@ -513,6 +520,9 @@ class PipelineDefinition(Generic[T_co]):
 
             name: The Context name the resource is provided under.
             definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
+
+        Kwargs:
+
             credential: A credential reference for a factory.
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.
@@ -537,7 +547,7 @@ class PipelineDefinition(Generic[T_co]):
             ['db']
 
         """
-        base = Context() if self.context is None else self.context
+        base = resolve_default(self.context, Context())
         context = base.with_resource(name, definition, credential=credential, lazy=lazy)
         return evolve(self, context=context)
 
@@ -549,6 +559,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:
@@ -565,6 +578,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:
@@ -581,6 +597,9 @@ class PipelineDefinition(Generic[T_co]):
         Args:
 
             args: The not-yet-settled positional arguments.
+
+        Kwargs:
+
             kwargs: The not-yet-settled keyword arguments.
 
         Raises:
@@ -623,7 +642,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _build_callable_workflow(
         self,
-        fn: Callable[..., object],
+        fn: Func[object],
         *,
         resources: ResourcesLike = (),
         version: CallableVersion = MISSING,
@@ -637,7 +656,7 @@ class PipelineDefinition(Generic[T_co]):
         node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **_kwargs)
         return flow.with_node(node)
 
-    def __getattr__(self, name: str) -> Callable[..., PipelineDefinition[Item]]:
+    def __getattr__(self, name: str) -> Func[PipelineDefinition[Item]]:
         """
         Chains a module by attribute. E.g., ``.sort()`` appends the sort module.
 
@@ -657,7 +676,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _combine_context(self, other: Context | None) -> Context | None:
         """Combines ``other``'s resources into this pipeline's context."""
-        base = Context() if self.context is None else self.context
+        base = resolve_default(self.context, Context())
         resources = {} if other is None else other.resources
         clashes = [k for k, v in resources.items() if base.resources.get(k, v) is not v]
         _run = (ExecutionMode.RUN, None, False)

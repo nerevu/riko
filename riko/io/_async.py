@@ -19,6 +19,7 @@ Examples:
 
 from __future__ import annotations
 
+from codecs import getincrementaldecoder
 from io import BufferedIOBase, BytesIO, StringIO, TextIOBase, TextIOWrapper
 from typing import TYPE_CHECKING, Literal, overload
 
@@ -97,8 +98,11 @@ def chunk(
     Args:
 
         content: The source data to split.
-        chunksize: The number of units per chunk, or ``None`` for a single chunk.
         *args: Extra positional arguments forwarded to meza.
+
+    Kwargs:
+
+        chunksize: The number of units per chunk, or ``None`` for a single chunk.
         **kwargs: Extra keyword arguments forwarded to meza.
 
     Yields:
@@ -135,6 +139,9 @@ def _chunk_content(
     Args:
 
         content: The source data to split.
+
+    Kwargs:
+
         chunksize: The number of units per chunk, or ``None`` for a single chunk.
 
     Yields:
@@ -165,13 +172,28 @@ def _chunk_content(
         yield from content
 
 
-def _normalize_chunk(raw: AnyStr, binary: bool, encoding: str) -> AnyStr:
-    if isinstance(raw, str):
-        result: AnyStr = raw.encode(encoding) if binary else raw
-    else:
-        result = raw if binary else raw.decode(encoding)
+def _gen_normalized_chunks(
+    chunks: Iterable[AnyStr], binary: bool, encoding: str
+) -> Iterator[AnyStr]:
+    """
+    Normalizes chunks into ``str`` or ``bytes`` for writing.
 
-    return result
+    Examples:
+
+        >>> list(_gen_normalized_chunks([b"h\\xc3", b"\\xa9"], False, "utf-8"))
+        ['h', 'é', '']
+
+    """
+    decoder = getincrementaldecoder(encoding)()
+
+    for raw in chunks:
+        if isinstance(raw, str):
+            yield raw.encode(encoding) if binary else raw
+        else:
+            yield raw if binary else decoder.decode(raw)
+
+    if not binary:
+        yield decoder.decode(b"", final=True)
 
 
 class NamedTextIOWrapper(TextIOWrapper):
@@ -312,6 +334,8 @@ def async_url_open(
 
         url: An ``http(s)`` URL or a local path.
 
+    Kwargs:
+
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
             30 seconds). ``0`` or ``inf`` waits forever.
 
@@ -367,6 +391,8 @@ async def async_url_read(
 
         url: An ``http(s)`` URL or a local path; resolved to an absolute path.
 
+    Kwargs:
+
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
             30 seconds). ``0`` or ``inf`` waits forever.
 
@@ -414,6 +440,9 @@ async def async_write(
 
         dest: The destination path.
         content: The data to write.
+
+    Kwargs:
+
         mode: The file mode; a ``"b"`` in it selects binary I/O.
         encoding: The text encoding used when ``mode`` is not binary.
         chunksize: The units to write per ``content`` chunk, or ``None`` for a single
@@ -449,13 +478,13 @@ async def async_write(
     opener = async_open(dest, mode, encoding=open_encoding)
 
     async with await opener as f:
-        for normalized in _chunk_content(content, chunksize):
-            data = _normalize_chunk(normalized, binary, encoding)
-            await f.write(data)  # pyright: ignore[reportArgumentType]
-            progress += len(data)
+        chunks = _chunk_content(content, chunksize)
 
-    written = progress
-    return written
+        for normalized in _gen_normalized_chunks(chunks, binary, encoding):
+            await f.write(normalized)  # pyright: ignore[reportArgumentType]
+            progress += len(normalized)
+
+    return progress
 
 
 def async_get_temp_file() -> NamedTemporaryFile[bytes]:

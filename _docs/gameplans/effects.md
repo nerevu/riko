@@ -155,11 +155,17 @@ and its `dest` when it has one; a native target object without `dest` (for examp
 `WriteNode` carries such a live target, presumably as a Context resource binding (extensibility
 E3.7: "Resource bindings to live clients are separate"). Tripwire:
 `tests/public/test_write.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
-(under the class-level write-node xfail).
+(under the class-level write-node xfail). Its sibling
+`tests/public/test_write.py::TestPipelineWrite::test_non_file_target_execution_unsupported` makes
+the same call but expects `UnsupportedTargetError`, so when R5C flips `WRITE_NODE_PENDING` it must
+be rewritten against a target that stays unreachable, or retired.
 
 **Composed and wrapped writes (R5C).** `a | Pipeline().write(dest)` already composes (`|` appends
 any workflow); running it waits on `WriteNode` execution, pinned by
-`tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`. The private
+`tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`.
+`tests/public/test_write.py::TestPipelineWrite::test_jsonl_has_no_array` is contained in
+`tests/public/test_write.py::TestPipelineWrite::test_replace_defers_truncation_until_consumed`
+(same `.jsonl` bytes) and merges into it at the flip. The private
 `write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their input stream `source`
 (the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
 caller rather than ahead of it (triage 2026-10-25). When `WriteNode` execution lands and the `WRITE_NODE_PENDING` tripwires in

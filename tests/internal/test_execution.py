@@ -3,36 +3,26 @@
 
 from __future__ import annotations
 
-import copy
-import pickle  # noqa: S403
 from contextlib import (
     AbstractAsyncContextManager,
-    AbstractContextManager,
     asynccontextmanager,
     contextmanager,
     nullcontext,
 )
 from functools import partial
+from logging import WARNING
 from math import inf
 from threading import Event as ThreadEvent
 from threading import get_ident
-from typing import TYPE_CHECKING, Any, cast
+from time import perf_counter
+from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
 
 import pytest
 
-from riko.bado._backend import (
-    Event,
-    async_sleep,
-    asyncify,
-    create_task_group,
-    fail_after,
-)
-from riko.base._exceptions import (
-    InvalidPipelineError,
-    PipelineStateError,
-    ResourceInterpretationWarning,
-)
+from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
+from riko.bado._util import asyncify, maybe_async
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._resource_definition import (
     OneShotResource,
@@ -41,22 +31,21 @@ from riko.definitions._resource_definition import (
 )
 from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._resource_cleanup import aclose_resource
+from riko.execution._execution import _NullEventSink
 from riko.execution._resource_view import ResourceView
 from riko.execution._sync_execution import SyncExecution
 from riko.io import async_url_open
-from tests import async_test, skipif_issync
+from riko.types._io import require_closer
+from tests import ROUND_TRIPS, async_test, skipif_issync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
-    CREDENTIAL,
     VALUE_FACTORIES,
     AsyncConnection,
     Connection,
     async_callable_factory,
     async_cm_factory,
     async_gen_factory,
-    check_credential_and_lazy,
     check_metadata,
     sync_cm_factory,
     sync_gen_factory,
@@ -116,6 +105,16 @@ class _AsyncClient:
         self.closed = True
 
 
+class _AsyncCloseClient:
+    """A client whose only ``close()`` is an async function."""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    async def close(self) -> None:
+        self.events.append("close")
+
+
 CLIENT_CLASSES = [
     pytest.param(_SyncClient, id="sync-client"),
     pytest.param(_AsyncClient, id="async-client"),
@@ -124,7 +123,7 @@ CLIENT_CLASSES = [
 
 def _check_opened(acquired: object, value: object | None) -> None:
     if value is None:
-        assert acquired
+        assert isinstance(acquired, Connection)
     else:
         assert acquired is value
 
@@ -132,8 +131,8 @@ def _check_opened(acquired: object, value: object | None) -> None:
         assert acquired.opened
 
 
-def _check_closed(resource, acquired: object, value: object | None) -> None:
-    if value is not None and isinstance(acquired, Connection):
+def _check_closed(resource, acquired: object) -> None:
+    if isinstance(acquired, Connection):
         assert acquired.closed is not resource.external
         acquired.opened = True  # reopen so the same value can be acquired again
 
@@ -198,15 +197,6 @@ class TestSyncExecution:
         reached.append("after")
         assert reached == ["after"]
 
-    def test_sync_enter_after_close_raises(self) -> None:
-        execution = SyncExecution()
-        execution.close()
-
-        with pytest.raises(
-            PipelineStateError, match="the execution in state 'closing'"
-        ):
-            execution.enter_context(nullcontext(1))
-
     def test_sync_repeated_close_does_not_reraise_cleanup_error(self) -> None:
         calls: list[str] = []
 
@@ -222,6 +212,62 @@ class TestSyncExecution:
 
         assert execution.close() is False
         assert calls == ["cleanup"]
+
+    @skipif_issync
+    def test_sync_portal_bridges_to_async(self) -> None:
+        result = None
+
+        async def double(value: int) -> int:
+            return value * 2
+
+        with SyncExecution() as execution:
+            result = execution.run_async(double, 21)
+
+        assert result == 42
+
+    def test_sync_default_event_sink_is_noop(self) -> None:
+        with SyncExecution() as execution:
+            execution.emit("ignored")
+            assert isinstance(execution.events, _NullEventSink)
+
+    def test_sync_execution_dispatches_to_event_sink(self) -> None:
+        sink = RecordingSink()
+
+        with SyncExecution(events=sink) as execution:
+            execution.emit("a")
+            execution.emit("b")
+
+        assert sink.events == ["a", "b"]
+
+    def test_each_execution_owns_its_event_sink(self) -> None:
+        first = RecordingSink()
+        second = RecordingSink()
+
+        with (
+            SyncExecution(events=first) as outer,
+            SyncExecution(events=second) as inner,
+        ):
+            outer.emit("one")
+            inner.emit("two")
+            outer.emit("three")
+
+        assert (first.events, second.events) == (["one", "three"], ["two"])
+
+    def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
+        sink, explicit = RecordingSink(), RecordingSink()
+        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
+        assert SyncExecution(settings=settings).events is sink
+        assert SyncExecution(events=explicit, settings=settings).events is explicit
+        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
+
+    def test_sync_enter_after_close_raises(self) -> None:
+        execution = SyncExecution()
+        execution.close()
+
+        with pytest.raises(
+            PipelineStateError, match="the execution in state 'closing'"
+        ):
+            execution.enter_context(nullcontext(1))
 
     def test_sync_cleanup_error_is_grouped_with_primary_error(self) -> None:
         # A plain cleanup callback cannot replace the execution's own error: both
@@ -260,52 +306,6 @@ class TestSyncExecution:
             run()
 
         assert isinstance(info.value.__cause__, ValueError)
-
-    @skipif_issync
-    def test_sync_portal_bridges_to_async(self) -> None:
-        result = None
-
-        async def double(value: int) -> int:
-            return value * 2
-
-        with SyncExecution() as execution:
-            result = execution.run_async(double, 21)
-
-        assert result == 42
-
-    def test_sync_default_event_sink_is_noop(self) -> None:
-        with SyncExecution() as execution:
-            execution.emit("ignored")
-
-    def test_sync_execution_dispatches_to_event_sink(self) -> None:
-        sink = RecordingSink()
-
-        with SyncExecution(events=sink) as execution:
-            execution.emit("a")
-            execution.emit("b")
-
-        assert sink.events == ["a", "b"]
-
-    def test_each_execution_owns_its_event_sink(self) -> None:
-        first = RecordingSink()
-        second = RecordingSink()
-
-        with (
-            SyncExecution(events=first) as outer,
-            SyncExecution(events=second) as inner,
-        ):
-            outer.emit("one")
-            inner.emit("two")
-            outer.emit("three")
-
-        assert (first.events, second.events) == (["one", "three"], ["two"])
-
-    def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
-        sink, explicit = RecordingSink(), RecordingSink()
-        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
-        assert SyncExecution(settings=settings).events is sink
-        assert SyncExecution(events=explicit, settings=settings).events is explicit
-        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
 
 
 class TestAsyncExecution:
@@ -371,6 +371,79 @@ class TestAsyncExecution:
         assert events == ["resource-closed"]
 
     @async_test
+    async def test_async_sync_callback_runs_on_close(self) -> None:
+        calls: list[str] = []
+
+        async with AsyncExecution() as execution:
+            execution.queue_callback(calls.append, "closed")
+
+        assert calls == ["closed"]
+
+    @async_test
+    async def test_async_infinite_shutdown_timeout_waits_out_cleanup(self) -> None:
+        done: list[bool] = []
+
+        async def slow() -> None:
+            await async_sleep(0.1)
+            done.append(True)
+
+        with fail_after(1):
+            async with AsyncExecution(shutdown_timeout=inf) as execution:
+                execution.queue_async_callback(slow)
+
+        assert done == [True]
+
+    @pytest.mark.timeout(3)
+    @async_test
+    async def test_async_shutdown_timeout_abandons_a_blocking_sync_cleanup(
+        self, caplog
+    ) -> None:
+        release = ThreadEvent()
+
+        def fail_late(_value: object) -> None:
+            release.wait(2)
+            raise ValueError("late")
+
+        start = perf_counter()
+
+        with caplog.at_level(WARNING, logger="riko"), pytest.raises(TimeoutError):
+            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+                execution.register_owned(object(), fail_late, inline=False)
+
+        assert perf_counter() - start < 1
+        release.set()
+
+        while not caplog.records:
+            await async_sleep(0.01)
+
+        assert "abandoned" in caplog.records[0].getMessage()
+
+    @async_test
+    async def test_async_run_sync_bridges_to_worker(self) -> None:
+        result = None
+
+        async with AsyncExecution() as execution:
+            result = await execution.run_sync(pow, 2, 10)
+
+        assert result == 1024
+
+    @async_test
+    async def test_async_default_event_sink_is_noop(self) -> None:
+        async with AsyncExecution() as execution:
+            execution.emit("ignored")
+            assert isinstance(execution.events, _NullEventSink)
+
+    @async_test
+    async def test_async_execution_dispatches_to_event_sink(self) -> None:
+        sink = RecordingSink()
+
+        async with AsyncExecution(events=sink) as execution:
+            execution.emit("a")
+            execution.emit("b")
+
+        assert sink.events == ["a", "b"]
+
+    @async_test
     async def test_async_cleanup_error_is_grouped_with_primary_error(self) -> None:
         async def boom() -> None:
             raise RuntimeError("cleanup failed")
@@ -386,15 +459,6 @@ class TestAsyncExecution:
         primary, cleanup = info.value.exceptions
         assert isinstance(primary, ValueError)
         assert isinstance(cleanup, RuntimeError)
-
-    @async_test
-    async def test_async_sync_callback_runs_on_close(self) -> None:
-        calls: list[str] = []
-
-        async with AsyncExecution() as execution:
-            execution.queue_callback(calls.append, "closed")
-
-        assert calls == ["closed"]
 
     @async_test
     async def test_async_native_context_manager_may_replace_primary_error(self) -> None:
@@ -436,53 +500,8 @@ class TestAsyncExecution:
         assert isinstance(primary, ValueError)
         assert isinstance(expired, TimeoutError)
 
-    @async_test
-    async def test_async_infinite_shutdown_timeout_waits_out_cleanup(self) -> None:
-        done: list[bool] = []
-
-        async def slow() -> None:
-            await async_sleep(0.1)
-            done.append(True)
-
-        with fail_after(1):
-            async with AsyncExecution(shutdown_timeout=inf) as execution:
-                execution.queue_async_callback(slow)
-
-        assert done == [True]
-
-    @async_test
-    async def test_async_run_sync_bridges_to_worker(self) -> None:
-        result = None
-
-        async with AsyncExecution() as execution:
-            result = await execution.run_sync(pow, 2, 10)
-
-        assert result == 1024
-
-    @async_test
-    async def test_async_default_event_sink_is_noop(self) -> None:
-        async with AsyncExecution() as execution:
-            execution.emit("ignored")
-
-    @async_test
-    async def test_async_execution_dispatches_to_event_sink(self) -> None:
-        sink = RecordingSink()
-
-        async with AsyncExecution(events=sink) as execution:
-            execution.emit("a")
-            execution.emit("b")
-
-        assert sink.events == ["a", "b"]
-
-
-def cleanup_contextmanager(_: AbstractContextManager[Connection]):
-    pass
-
 
 async_connection = pytest.fixture(async_callable_factory)
-
-
-async_contextmanager = pytest.fixture(async_cm_factory)
 
 
 WRAPPED_VALUES = [
@@ -567,7 +586,7 @@ def _test_open_close(resource, value: object | None = None):
         acquired = execution.acquire(resource)
         _check_opened(acquired, value)
 
-    _check_closed(resource, acquired, value)
+    _check_closed(resource, acquired)
 
 
 async def _async_test_open_close(resource, value: object | None = None):
@@ -577,13 +596,14 @@ async def _async_test_open_close(resource, value: object | None = None):
         acquired = await execution.aacquire(resource)
         _check_opened(acquired, value)
 
-    _check_closed(resource, acquired, value)
+    _check_closed(resource, acquired)
 
 
 ACLOSE_CASES = [
-    pytest.param(False, False, id="left-open"),
-    pytest.param(_SyncClient.close, True, id="sync-cleanup"),
-    pytest.param(None, True, id="sync-close"),
+    pytest.param(_SyncClient, _SyncClient.close, id="sync-cleanup"),
+    pytest.param(_SyncClient, None, id="sync-close"),
+    pytest.param(_AsyncClient, _AsyncClient.aclose, id="async-cleanup"),
+    pytest.param(_AsyncClient, None, id="async-close"),
 ]
 
 
@@ -613,8 +633,22 @@ AFAILED_ACQUISITIONS = [
 ]
 
 
-async def _adb() -> AsyncGenerator[str]:
-    yield "value"
+async def _adb(events: list[str]) -> AsyncGenerator[str]:
+    try:
+        yield "value"
+    finally:
+        events.append("cleanup")
+
+
+async def _ahang(_value: object) -> None:
+    await async_sleep(1)
+
+
+async def _ahang_db() -> AsyncGenerator[str]:
+    try:
+        yield "value"
+    finally:
+        await async_sleep(1)
 
 
 async def _acleanup(_value: object) -> None:
@@ -627,7 +661,6 @@ def _counted(produced: list[int]) -> object:
 
 
 SYNC_ASYNC_REJECTIONS = [
-    pytest.param(lambda _: Resource.from_lifecycle(_adb), None, id="async-lifecycle"),
     pytest.param(
         lambda produced: Resource.from_factory(
             partial(_counted, produced), cleanup=_acleanup
@@ -636,9 +669,17 @@ SYNC_ASYNC_REJECTIONS = [
         id="async-cleanup-before-producer",
     ),
     pytest.param(
-        lambda _: Resource(_AsyncClient()),
-        "closing an async-only",
-        id="async-only-value",
+        lambda _: Resource(_SyncClient(), cleanup=_acleanup),
+        "async resource cleanup",
+        id="async-cleanup-of-owned-value",
+    ),
+    pytest.param(
+        lambda _: Resource(_AsyncClient()), "only close is async", id="async-only-value"
+    ),
+    pytest.param(
+        lambda _: Resource(_AsyncCloseClient()),
+        "only close is async",
+        id="async-close-value",
     ),
 ]
 
@@ -653,6 +694,35 @@ def _awaitable_cleanup(events: list[str]):
     return cleanup
 
 
+def _async_cleanup(events: list[str]):
+    async def acleanup(_value: object) -> None:
+        events.append("cleanup")
+
+    return acleanup
+
+
+SYNC_BRIDGED_CLEANUPS = [
+    pytest.param(
+        lambda events: Resource.from_lifecycle(partial(_adb, events)),
+        id="async-lifecycle",
+    ),
+    pytest.param(
+        lambda events: Resource.from_factory(_value, cleanup=_async_cleanup(events)),
+        id="async-cleanup",
+    ),
+    pytest.param(
+        lambda events: Resource.from_factory(
+            _value, cleanup=_awaitable_cleanup(events)
+        ),
+        id="awaitable-cleanup-result",
+    ),
+]
+SYNC_HANGING_CLEANUPS = [
+    pytest.param(
+        lambda: Resource.from_factory(_value, cleanup=_ahang), id="async-cleanup"
+    ),
+    pytest.param(lambda: Resource.from_lifecycle(_ahang_db), id="async-lifecycle"),
+]
 AWAITABLE_CLEANUPS = [
     pytest.param(lambda cleanup: Resource(_SyncClient(), cleanup=cleanup), id="owned"),
     pytest.param(
@@ -671,6 +741,12 @@ class _DualClient:
 
     async def aclose(self) -> None:
         self.events.append("aclose")
+
+
+ASYNC_NATIVE_CLOSES = [
+    pytest.param(_DualClient, ["aclose"], id="dual-client-aclose"),
+    pytest.param(_AsyncCloseClient, ["close"], id="async-close"),
+]
 
 
 class TestResourceAcquisition:
@@ -862,39 +938,8 @@ class TestResourceAcquisition:
         check_metadata(resource, ReusableResource, external=True, reusable=True)
         _test_open_close(resource)
 
-        with pytest.raises(TypeError, match=r"credential.*lazy.*LifecycleFactory"):
-            Context().with_resource(
-                "value", external_resource, credential=CREDENTIAL, lazy=True
-            )
-
-    def test_context_manager_constructors(self, sync_contextmanager):
-        value = sync_contextmanager
-
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource.from_external(value)
-
-        lifecycle = Resource.from_lifecycle(value)
-        check_metadata(lifecycle, OneShotResource, external=False, reusable=False)
-        configured = Resource.from_lifecycle(value, credential=CREDENTIAL, lazy=True)
-        check_credential_and_lazy(configured)
-        _test_open_close(lifecycle)
-
-        with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
-            Resource.from_factory(value)
-
-        casted = cast("ValueFactory[AbstractContextManager[Connection]]", value)
-
-        with pytest.warns(ResourceInterpretationWarning, match="context manager"):
-            factory = Resource.from_factory(casted, cleanup=cleanup_contextmanager)
-
-        check_metadata(factory, ReusableResource, external=False, reusable=True)
-
-    def test_sync_acquire_lone_cleanup_error_raises_bare(self) -> None:
-        execution = SyncExecution()
-        execution.acquire(Resource(_BadClient()))
-
-        with pytest.raises(RuntimeError, match="cleanup failed"):
-            execution.close()
+    def test_context_manager_lifecycle_opens_and_closes(self, sync_contextmanager):
+        _test_open_close(Resource.from_lifecycle(sync_contextmanager))
 
     @pytest.mark.simulated_network
     def test_sync_external_http_client_cleaned_up_on_failure(self) -> None:
@@ -943,14 +988,53 @@ class TestResourceAcquisition:
 
         assert events == []
 
+    @skipif_issync
+    @pytest.mark.parametrize("build", SYNC_BRIDGED_CLEANUPS)
+    def test_sync_bridges_the_cleanup_of_an_async_produced_value(self, build) -> None:
+        events: list[str] = []
+        acquired = None
+
+        with SyncExecution() as execution:
+            acquired = execution.acquire(build(events))
+            assert events == []
+
+        assert acquired == "value"
+        assert events == ["cleanup"]
+
+    @skipif_issync
     @pytest.mark.simulated_network
-    def test_sync_external_async_http_client_rejected(self) -> None:
-        with (
-            loopback_url(_BODY, content_type=_CONTENT_TYPE) as url,
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="async-native"),
-        ):
-            execution.acquire(Resource.from_lifecycle(_async_http_client(url, [])))
+    def test_sync_external_async_http_client_bridged(self) -> None:
+        events: list[str] = []
+
+        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
+            with SyncExecution() as execution:
+                execution.acquire(
+                    Resource.from_lifecycle(_async_http_client(url, events))
+                )
+                assert events == []
+
+            assert events == ["closed"]
+
+    def test_sync_acquire_lone_cleanup_error_raises_bare(self) -> None:
+        execution = SyncExecution()
+        execution.acquire(Resource(_BadClient()))
+
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            execution.close()
+
+    @skipif_issync
+    @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
+    def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        with pytest.raises(TimeoutError), SyncExecution(settings=settings) as execution:
+            execution.acquire(build())
+
+
+HTTP_CLIENTS = [
+    pytest.param(_sync_http_client, b"<item>", id="sync-client"),
+    pytest.param(_async_http_client, "<item>", id="async-client"),
+]
 
 
 class TestAsyncResourceAcquisition:
@@ -964,14 +1048,15 @@ class TestAsyncResourceAcquisition:
 
         assert events == ["cleanup"]
 
+    @pytest.mark.parametrize(("build", "expected"), ASYNC_NATIVE_CLOSES)
     @async_test
-    async def test_async_cleanup_closes_a_dual_client_with_aclose(self) -> None:
-        client = _DualClient()
+    async def test_async_cleanup_closes_an_owned_value_natively(self, build, expected):
+        client = build()
 
         async with AsyncExecution() as execution:
             await execution.aacquire(Resource(client))
 
-        assert client.events == ["aclose"]
+        assert client.events == expected
 
     @pytest.mark.parametrize(("build", "error"), AFAILED_ACQUISITIONS)
     @async_test
@@ -1157,39 +1242,32 @@ class TestAsyncResourceAcquisition:
         assert events == ["x"]
         assert client.closed is False
 
-    @pytest.mark.parametrize(("cleanup", "closed"), ACLOSE_CASES)
+    @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
+    @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
     @async_test
-    async def test_aclose_resource(self, cleanup, closed) -> None:
-        client = _SyncClient()
-        await aclose_resource(cleanup, client)
-        assert client.closed is closed
+    async def test_closer_runs_inline_or_on_a_worker(
+        self, client_class, cleanup, inline
+    ) -> None:
+        client = client_class()
+        closer = require_closer(client, cleanup, is_async=True)
+        assert closer is not None
+        await maybe_async(closer, inline=inline)
+        assert client.closed is True
 
     @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("client", "marker"), HTTP_CLIENTS)
     @async_test
-    async def test_sync_external_http_client_under_async_execution(self) -> None:
+    async def test_external_http_client_under_async_execution(
+        self, client, marker
+    ) -> None:
         events: list[str] = []
 
         with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
             async with AsyncExecution() as execution:
                 response = await execution.aacquire(
-                    Resource.from_lifecycle(_sync_http_client(url, events))
+                    Resource.from_lifecycle(client(url, events))
                 )
-                assert b"<item>" in response.read()
-                assert events == []
-
-            assert events == ["closed"]
-
-    @pytest.mark.simulated_network
-    @async_test
-    async def test_async_external_http_client_under_async_execution(self) -> None:
-        events: list[str] = []
-
-        with loopback_url(_BODY, content_type=_CONTENT_TYPE) as url:
-            async with AsyncExecution() as execution:
-                stream = await execution.aacquire(
-                    Resource.from_lifecycle(_async_http_client(url, events))
-                )
-                assert "<item>" in stream.read()
+                assert marker in response.read()
                 assert events == []
 
             assert events == ["closed"]
@@ -1212,36 +1290,18 @@ class TestAsyncResourceAcquisition:
         await _async_test_open_close(Resource.from_factory(factory, cleanup=cleanup))
 
     @async_test
-    async def test_async_constructor_contract(
+    async def test_async_constructors_open_and_close(
         self,
         async_connection: AsyncConnection,
         async_contextmanager: AbstractAsyncContextManager[AsyncConnection],
     ):
-        with pytest.raises(TypeError, match="Invalid resource factory"):
-            Context().with_resource(  # pyright: ignore[reportCallIssue]
-                "value",
-                async_contextmanager,  # pyright: ignore[reportArgumentType]
-            )
-
         await _async_test_open_close(Resource(async_connection), async_connection)
 
         external = Resource.from_external(async_connection)
         await _async_test_open_close(external, async_connection)
 
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource(async_contextmanager)
-
-        with pytest.raises(TypeError, match="Expected a resolved resource"):
-            Resource.from_external(async_contextmanager)
-
         lifecycle = Resource.from_lifecycle(async_contextmanager)
-
         await _async_test_open_close(lifecycle)
-
-        with pytest.raises(TypeError, match=r"ValueFactory.*cleanup function"):
-            Resource.from_factory(
-                async_contextmanager  # pyright: ignore[reportArgumentType]
-            )
 
     @async_test
     async def test_async_acquire_cleanup_on_failure(self) -> None:
@@ -1265,6 +1325,7 @@ class TestAsyncResourceAcquisition:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="an async execution enters and exits a sync lifecycle resource on "
         "whichever worker threads are free, so a thread-bound client can be closed "
         "on a thread other than the one that opened it",
@@ -1289,7 +1350,7 @@ class TestAsyncResourceAcquisition:
             release.wait()
 
         async def aoccupy() -> None:
-            await asyncify(occupy)()
+            await asyncify(occupy)
 
         with fail_after(1):
             async with create_task_group() as tg:
@@ -1307,16 +1368,9 @@ class TestAsyncResourceAcquisition:
 
 
 class TestResourceView:
-    @pytest.mark.parametrize(
-        "duplicate",
-        [
-            pytest.param(copy.copy, id="copy"),
-            pytest.param(copy.deepcopy, id="deepcopy"),
-            pytest.param(lambda view: pickle.loads(pickle.dumps(view)), id="pickle"),  # noqa: S301
-        ],
-    )
-    def test_resource_view_can_be_copied(self, duplicate):
-        assert dict(duplicate(ResourceView({"db": 1}))) == {"db": 1}
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_resource_view_can_be_copied(self, round_trip):
+        assert dict(round_trip(ResourceView({"db": 1}))) == {"db": 1}
 
     def test_resource_view_counts_its_bindings(self):
         assert len(ResourceView({"db": 1, "cache": 2})) == 2

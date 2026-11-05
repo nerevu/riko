@@ -42,6 +42,7 @@ from riko.types._options import CallOptions
 from riko.types._workflow import Endpoint, GraphIndex
 from tests import async_test, skipif_issync
 from tests._execution import (
+    EMPTY,
     OUTPUT_A,
     arun_plan,
     build_chain,
@@ -91,7 +92,6 @@ _DYNAMIC_REPLACE = cast(
 )
 
 _UPPER = cast("Conf", {"rule": {"transform": "upper"}})
-_EMPTY = Workflow(nodes=[], outputs={})
 _HASH_FLOW = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=OUTPUT_A)
 _LOOP_NODE = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
 _LOOP_FLOW = Workflow(nodes=[_LOOP_NODE], outputs=OUTPUT_A)
@@ -153,9 +153,9 @@ BUILD_REJECTIONS = [
 
 CONSTRUCTION_REJECTIONS = [
     pytest.param({"nodes": []}, {}, {}, "ExecutionPlan 'workflow'", id="workflow"),
-    pytest.param(_EMPTY, {"n": 1}, {}, "ExecutionPlan module 'n'", id="unresolved"),
-    pytest.param(_EMPTY, "abc", {}, "ExecutionPlan 'modules'", id="modules-str"),
-    pytest.param(_EMPTY, None, {}, "ExecutionPlan 'modules'", id="modules-none"),
+    pytest.param(EMPTY, {"n": 1}, {}, "ExecutionPlan module 'n'", id="unresolved"),
+    pytest.param(EMPTY, "abc", {}, "ExecutionPlan 'modules'", id="modules-str"),
+    pytest.param(EMPTY, None, {}, "ExecutionPlan 'modules'", id="modules-none"),
     pytest.param(_HASH_FLOW, {}, {}, "modules must match", id="missing"),
     pytest.param(_HASH_FLOW, _HASH_AB, {}, "modules must match", id="extra"),
     pytest.param(_LOOP_FLOW, _HASH_A, {}, "embeds must match", id="embed-missing"),
@@ -310,8 +310,9 @@ class TestExecutionPlan:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="owned by the module port contracts: a positional input into a module "
-        "that declares no positional ports is accepted and silently ignored",
+        raises=pytest.fail.Exception,
+        reason="rejecting a positional input into a module that declares no positional "
+        "ports is not yet implemented: the input is accepted and silently ignored",
     )
     def test_build_plan_rejects_undeclared_positional_input(self) -> None:
         dispatcher = build_dispatcher(
@@ -359,11 +360,6 @@ INVALID_MODULES = [
 
 
 class TestResolvedModule:
-    @pytest.mark.parametrize(("pipes", "match"), INVALID_MODULES)
-    def test_resolved_module_refuses_invalid_pipes(self, pipes, match) -> None:
-        with pytest.raises(InvalidPipelineError, match=match):
-            ResolvedModule("m", {}, **pipes)
-
     def test_resolved_module_reads_mode_from_the_slot(self) -> None:
         # Plain undecorated callables carry no mode marker, so the slot decides.
         module = ResolvedModule(
@@ -376,6 +372,11 @@ class TestResolvedModule:
         assert module.is_async_pipe(module.select_async())
         assert not sync_only.is_async_pipe(sync_only.select_async())
         assert async_only.is_async_pipe(async_only.select_sync())
+
+    @pytest.mark.parametrize(("pipes", "match"), INVALID_MODULES)
+    def test_resolved_module_refuses_invalid_pipes(self, pipes, match) -> None:
+        with pytest.raises(InvalidPipelineError, match=match):
+            ResolvedModule("m", {}, **pipes)
 
 
 class _EmbedStub:
@@ -414,43 +415,6 @@ ADAPTERS = [
         id="for-async",
     ),
 ]
-
-
-class TestEmbedAdaptation:
-    @pytest.mark.parametrize(("adapt", "isasync"), ADAPTERS)
-    def test_adapt_embed_copies_metadata(self, adapt, isasync: bool) -> None:
-        stub = _EmbedStub()
-        stub.isasync = isasync
-        adapted = adapt(stub)
-
-        assert adapted.name == "up"
-        assert adapted.type == "processor"
-        assert adapted.subtype == "transformer"
-        assert adapted.subtypes == frozenset({"transformer"})
-        assert adapted.pollable is False
-        assert adapted.loopable is True
-        assert adapted.isasync is not isasync
-        assert not hasattr(adapted, "__wrapped__")
-
-    def test_require_stream_refuses_a_splitter_pipe_without_consuming(self) -> None:
-        # The execution-side boundary earns its narrowing from the pipe's declared
-        # type, so a splitter's output is refused before any of it is read.
-        consumed: list[int] = []
-
-        def src():
-            consumed.append(1)
-            yield {"x": 1}
-
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            require_stream(split_pipe(src()), split_pipe)
-
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            require_async_stream(async_split(src()), async_split)
-
-        assert consumed == []
-        assert list(require_stream(passthrough_pipe([{"x": 1}]), passthrough_pipe)) == [
-            {"x": 1}
-        ]
 
 
 def _lone_loop(embed_conf=None):
@@ -503,7 +467,37 @@ EMBED_ADAPTATIONS = [
 ]
 
 
-class TestEmbed:
+def _sync_child(produced: list[int], closed: list[str]):
+    def child(tag: str):
+        try:
+            for index in range(50):
+                produced.append(index)
+                yield {"content": f"{tag}{index}"}
+        finally:
+            closed.append(tag)
+
+    def _sub(item, context=None, **_):
+        return child(str(item["title"]))
+
+    return workflow()(_sub)
+
+
+class TestAdaptEmbed:
+    @pytest.mark.parametrize(("adapt", "isasync"), ADAPTERS)
+    def test_adapt_embed_copies_metadata(self, adapt, isasync: bool) -> None:
+        stub = _EmbedStub()
+        stub.isasync = isasync
+        adapted = adapt(stub)
+
+        assert adapted.name == "up"
+        assert adapted.type == "processor"
+        assert adapted.subtype == "transformer"
+        assert adapted.subtypes == frozenset({"transformer"})
+        assert adapted.pollable is False
+        assert adapted.loopable is True
+        assert adapted.isasync is not isasync
+        assert not hasattr(adapted, "__wrapped__")
+
     @pytest.mark.parametrize(("loop", "embed", "select", "expected"), EMBED_ADAPTATIONS)
     def test_build_adapts_an_embed_to_the_loop_mode(
         self, loop, embed, select, expected
@@ -551,6 +545,34 @@ class TestEmbed:
         )
 
         assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
+
+    @skipif_issync
+    def test_run_runs_sync_only_embed_off_an_async_only_loop(self) -> None:
+        threads: list[int] = []
+
+        def up(item, **_):
+            threads.append(get_ident())
+            yield {"up": item["t"].upper()}
+
+        async def fakeloop(items, embed=passthrough_pipe, **_):
+            threads.append(get_ident())
+
+            async for row in as_async(items):
+                for value in await maybe_async(embed, row):
+                    yield value
+
+        _stamp_embed(up, isasync=False)
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
+            ModuleDefinition(
+                name="fakeloop", async_pipe=cast("AsyncModuleWrapper", fakeloop)
+            ),
+            ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+        )
+
+        assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
+        loop_thread, embed_thread = threads
+        assert embed_thread != loop_thread
 
     def test_run_forwards_embed_and_options_to_loop(self) -> None:
         seen: dict[str, object] = {}
@@ -604,22 +626,7 @@ class TestEmbed:
         assert closed == ["a", "b"]
 
 
-def _sync_child(produced: list[int], closed: list[str]):
-    def child(tag: str):
-        try:
-            for index in range(50):
-                produced.append(index)
-                yield {"content": f"{tag}{index}"}
-        finally:
-            closed.append(tag)
-
-    def _sub(item, context=None, **_):
-        return child(str(item["title"]))
-
-    return workflow()(_sub)
-
-
-class TestAsyncEmbed:
+class TestAsyncAdaptEmbed:
     @async_test
     async def test_arun_runs_sync_only_embed_off_the_event_loop(self) -> None:
         threads: list[int] = []
@@ -679,9 +686,10 @@ class TestAsyncEmbed:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="owned by the pending lazy sync-under-async embed work: a sync-only "
-        "embed under an async loop is collected to a list on the worker before the "
-        "loop takes its first result, so count='first' cannot stop the child early",
+        raises=AssertionError,
+        reason="lazy sync-only embeds under an async loop are not yet implemented: the "
+        "embed is collected to a list on the worker before the loop takes its first "
+        "result, so count='first' cannot stop the child early",
     )
     @async_test
     async def test_arun_count_first_stays_lazy_for_a_sync_only_embed(self) -> None:
@@ -701,6 +709,28 @@ class TestAsyncEmbed:
         ]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
+
+
+class TestRequireStream:
+    def test_require_stream_refuses_a_splitter_pipe_without_consuming(self) -> None:
+        # The execution-side boundary earns its narrowing from the pipe's declared
+        # type, so a splitter's output is refused before any of it is read.
+        consumed: list[int] = []
+
+        def src():
+            consumed.append(1)
+            yield {"x": 1}
+
+        with pytest.raises(InvalidPipelineError, match="splitter"):
+            require_stream(split_pipe(src()), split_pipe)
+
+        with pytest.raises(InvalidPipelineError, match="splitter"):
+            require_async_stream(async_split(src()), async_split)
+
+        assert consumed == []
+        assert list(require_stream(passthrough_pipe([{"x": 1}]), passthrough_pipe)) == [
+            {"x": 1}
+        ]
 
 
 @tag_source

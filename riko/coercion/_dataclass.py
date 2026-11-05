@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections import ChainMap
 from dataclasses import fields, is_dataclass
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, Union, get_args, get_origin
@@ -36,6 +37,9 @@ def fromdict(
     Args:
 
         cls: Dataclass type to construct.
+
+    Kwargs:
+
         **data: Field values used to construct ``cls``.
 
     Returns:
@@ -66,7 +70,7 @@ def fromdict(
     # annotations
     module = sys.modules[cls.__module__]
     caller = sys._getframe(1)
-    callerns = {**caller.f_globals, **caller.f_locals}
+    callerns = ChainMap(caller.f_locals, caller.f_globals)
     namespaces = (callerns, module, enums_module, scalars_module)
     hints = resolve_type_hints(cls, *namespaces, include_extras=True)
 
@@ -79,10 +83,10 @@ def fromdict(
         origin = get_origin(ftype)
 
         if origin is Union or origin is UnionType:
-            non_none = [a for a in get_args(ftype) if a is not type(None)]
+            non_null = [a for a in get_args(ftype) if a is not type(None)]
 
-            if len(non_none) == 1:
-                ftype = non_none[0]
+            if len(non_null) == 1:
+                ftype = non_null[0]
                 origin = get_origin(ftype)
 
         if origin is Literal:
@@ -96,7 +100,7 @@ def fromdict(
 
 
 def build_regex_conf_rule(
-    f: str, m: str, r: str, seriesmatch: bool = True, default: str | None = None
+    f: str, m: str, r: str, seriesmatch: bool = True
 ) -> RegexConfRule:
     """
     Builds a parsed regex configuration rule from compact arguments.
@@ -106,8 +110,10 @@ def build_regex_conf_rule(
         f: Item field to operate on.
         m: Regular-expression pattern to match.
         r: Replacement text.
+
+    Kwargs:
+
         seriesmatch: Whether later rules operate on the previous rule's result.
-        default: Value used when the source field is missing.
 
     Returns:
 
@@ -120,9 +126,7 @@ def build_regex_conf_rule(
         ('title', 'foo', 'bar', True)
 
     """
-    return RegexConfRule(
-        field=f, match=m, replace=r, seriesmatch=seriesmatch, default=default
-    )
+    return RegexConfRule(field=f, match=m, replace=r, seriesmatch=seriesmatch)
 
 
 def build_regex_rule(
@@ -134,12 +138,20 @@ def build_regex_rule(
     Args:
 
         rule: Parsed dynamic or dataclass regex rule.
+
+    Kwargs:
+
         recompile: Whether to compile the match expression and translate ``$N``
             replacement references for Python's regex engine.
 
     Returns:
 
         A normalized ``RegexRule`` used by regex processing modules.
+
+    Raises:
+
+        TypeError: If a mapping ``rule`` has a ``default``, which belongs on the
+            module configuration, keyed by field.
 
     Examples:
 
@@ -153,6 +165,10 @@ def build_regex_rule(
 
     """
     if not is_dataclass(rule):
+        if "default" in rule:
+            msg = "a regex rule has no 'default'; set conf['default'][<field>] instead"
+            raise TypeError(msg)
+
         keys = {f.name for f in fields(RegexConfRule)}
         filtered = {k: v for k, v in rule.items() if k in keys}
         rule = RegexConfRule(**filtered)
@@ -177,9 +193,7 @@ def build_regex_rule(
         "flags": flags,
         "match": match,
         "replace": replace,
-        "default": rule.default,
         "field": rule.field,
-        "offset": rule.offset or 0,
         "series": rule.seriesmatch,
     }
 

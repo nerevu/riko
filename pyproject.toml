@@ -35,7 +35,7 @@ dependencies = [
     "feedparser>=5.2.1,<7.0.0",
     "html5lib>=1.0.1,<2.0.0",
     "jinja2>=3.1.6",
-    "meza>=0.42.5",
+    "meza>=0.47.1",
     "mezmorize>=0.27.0",
     "networkx>=3.4.2",
     "pygogo>=0.12.0,<2.0.0",
@@ -105,6 +105,8 @@ gen-api-surface = "riko.cli._gen_api_surface:main"
 # Resolve only releases at least a week old, so a broken or hijacked release never
 # reaches the lock. `exclude-newer-package` admits an urgent one early.
 exclude-newer = "1 week"
+# meza is maintained alongside riko, so its releases are trusted on publication.
+exclude-newer-package = { meza = false }
 
 # Rebuild the local `riko` install when any source file changes, not just when
 # pyproject.toml/setup.py change (uv's default). Without this, edits under
@@ -116,8 +118,10 @@ cache-keys = [{ file = "pyproject.toml" }, { file = "riko/**/*.py" }]
 malware-check = true
 
 [tool.ruff]
+force-exclude = true
 extend-exclude = [
     "**/pycache",
+    "_docs/research/inspiration",
     ".cache",
     ".ruff_cache",
     ".tox/*",
@@ -243,8 +247,12 @@ venv = "riko"
 pythonPlatform = "Linux"
 reportUnnecessaryCast = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
+reportMissingTypeArgument = "error"
+reportUnknownParameterType = "error"
+reportMissingParameterType = "error"
 exclude = [
     "**/pycache",
+    "_docs/research/inspiration",
     ".cache",
     ".claude",
     ".ruff_cache",
@@ -253,6 +261,11 @@ exclude = [
     "tmp",
     "build/*",
     "dist/*",
+]
+executionEnvironments = [
+    { root = "tests", extraPaths = ["."], reportMissingTypeArgument = "none", reportUnknownParameterType = "none", reportMissingParameterType = "none" },
+    { root = "examples", extraPaths = ["."], reportMissingTypeArgument = "none", reportUnknownParameterType = "none", reportMissingParameterType = "none" },
+    { root = "." },
 ]
 
 [tool.pytest.ini_options]
@@ -312,8 +325,8 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 395
-uncovered-lowered = 2026-10-29
+uncovered = 361
+uncovered-lowered = 2026-11-03
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
@@ -321,15 +334,15 @@ uncovered-lowered = 2026-10-29
 # day as `<key>-lowered`.
 any = 128
 any-lowered = 2026-10-27
-cast = 91
-cast-lowered = 2026-10-27
+cast = 86
+cast-lowered = 2026-11-03
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the
 # `pytest.param` rows without `id=` in `tests/`. Each only goes down: a run fails above
 # either and lowers it on a gain. It records the day as `<key>-lowered`.
-inline-tables = 72
-inline-tables-lowered = 2026-10-30
+inline-tables = 70
+inline-tables-lowered = 2026-11-03
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30
 
@@ -410,8 +423,6 @@ commands = [
 module-name = "riko"
 module-root = ""
 
-[tool.uv.sources]
-meza = { git = "https://github.com/reubano/meza.git", rev = "aa584e56edcd20e038b58379ab833e796dcf92df" }
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.13.0"]

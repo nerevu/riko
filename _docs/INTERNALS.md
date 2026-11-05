@@ -45,8 +45,8 @@ at call sites.
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
 - **Verb tables** — `riko/cli/_gen_verbs.py` (`manage codegen --verbs`) rewrites the
-  marked `verbs`/`verb-pairs` blocks in `CLAUDE.md` (Markdown) and `CONTRIBUTING.rst`
-  (grid tables) from `riko/base/_verbs.py`, which `manage lint --docstrings` also
+  marked blocks in `CONTRIBUTING.rst` (`verbs`/`verb-pairs`, grid tables) and
+  `CLAUDE.md` (the compact `verb-rules`/`verb-pairs`, Markdown) from `riko/base/_verbs.py`, which `manage lint --docstrings` also
   reads to match each summary's verb to its function name; `manage lint --docs`
   flags stale blocks. Surrounding prose stays hand-maintained.
 - **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) generates each
@@ -206,8 +206,16 @@ sync when source is moved between package groups.
   there is no check. Exit codes never change. Under GitHub Actions the warning, and any
   `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
   annotations.
+- **Docstring parameter-section lint.** `manage lint --docstrings` flags a parameter
+  with a default under `Args:`, one without under `Kwargs:`, and a `**kwargs` bag
+  under `Args:` (`gen_misplaced_params`); `Args:`/`Kwargs:` entries out of signature
+  order, ignoring names that are no parameter such as bag keys
+  (`gen_unordered_params`); and a run of two or more blank lines in any docstring.
+  Built-in pipe docstrings list `item`, `conf`, and `context` under `Args:` and the
+  call options under `Kwargs:`; a pipe's signature is `*args, **kwargs`, so none of
+  those names is a parameter and the checks never see them.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
-  that ends in `is None` (`gen_none_checks`; the bare call shows a `None` result), a
+  that ends in `is None` (`gen_null_checks`; the bare call shows a `None` result), a
   doctest that imports a public name through a private `riko` module path, a module
   example in an underscore-prefixed module that defines no public name, and a missing
   one in an underscore-prefixed module whose public names include a function or a
@@ -261,18 +269,32 @@ sync when source is moved between package groups.
   with the item's top-level keys. The single-key set and the plain-dict `update`
   loop call `CaseInsensitiveDict.__setitem__` directly: routing them through
   `raw_set` doubles their cost.
-- **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
-  the lower-level conversion semantics referenced by the runtime contract.
+- **`meza` resolves from PyPI releases only.** riko declares a `meza>=` floor and no
+  git source, so the lockfile and a user's install see the same meza; a riko change
+  that needs unreleased meza waits for a meza release (`exclude-newer-package` admits
+  it before the one-week release-age rule would). Meza owns the lower-level conversion
+  semantics referenced by the runtime contract. Defects riko works around in meza and
+  its other dependencies are tracked in
+  [gameplans/upstream-fixes.md](gameplans/upstream-fixes.md).
 - **Local type stubs.** meza ships no type information, so `typings/meza/` holds
   hand-written `.pyi` stubs that pyright reads from its default `stubPath`. They cover
   only the meza names riko imports, so a new meza import needs its stub here first.
   `pyright --verifytypes` does not read `stubPath`, so a meza base class of a riko
   class that reaches the verified surface is declared instead as a `TYPE_CHECKING`
   facade in the subclass's module, with the meza import in the `else:` branch
-  (`_Objectify` in `riko/coercion/_objectify.py`).
+  (`_Objectify` in `riko/coercion/_objectify.py`). feedparser is untyped too:
+  `typings/feedparser/` stubs `parse` and `FeedParserDict`, typing `entries` (and its
+  `items` alias from feedparser's `keymap`) as riko's `ParserRSSEntry`, so those entry
+  TypedDicts in `riko/types/_rss.py` must keep matching what both feed parsers emit.
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
   shortest useful form; implementation moves and private helper names do not belong
   there unless they change a supported import or command surface.
+- **2026-introduced defects share one bullet.** A fix for a defect that first
+  shipped after v0.67.0 (whose code predates the 2026 rewrite) gets no bullet of its
+  own: the general **Fixes** bullet covers it. Fixes for behavior v0.67.0 already had
+  keep their own bullets. The general bullet names
+  classes of fixes (async runs, dates, …) but no release and no individual fix; a new
+  2026-origin fix whose class is missing extends the list.
 - **Unreleased features get one entry, not a history.** The changelog describes the
   delta against the *last release*, so a feature that has never shipped (today:
   `Pipeline` and the workflow model) is one "Added …" bullet under **New** that
@@ -308,8 +330,10 @@ sync when source is moved between package groups.
   only in a run of methods on a receiver the same sentence just named. The verb names
   what the method acts on: attribute chaining "chains a module", never "a workflow".
 - **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
-  maps old to new names. Other bullets, **New** included, use the new name bare, with no
-  "(formerly …)", so **New** preceding **Changes** needs no forward reference.
+  maps old to new names, as one "Renamed (old → new):" paragraph of `old` → `new`
+  pairs separated by semicolons. Other bullets, **New** included, use the new name
+  bare, with no "(formerly …)", so **New** preceding **Changes** needs no forward
+  reference.
 - **No cross-section pointers.** Never write "see above/below". A bullet that only makes
   sense alongside a rename or removal folds into that bullet instead (e.g., an attribute
   added to a renamed exception, or the new behavior of a removed argument's

@@ -25,7 +25,7 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from functools import partial
 from itertools import filterfalse
 from keyword import iskeyword
@@ -69,6 +69,7 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from riko.types._scalars import NonNullHashable
     from riko.types._workflow import EdgeFamily, NodeFamily
+    from riko.types._wrappers import Func
 
     from ._write import PreparedWrite
 
@@ -112,10 +113,10 @@ def require_binding(
     Args:
 
         value: A name, an iterable of names, or a mapping of alias to name.
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for a malformed binding.
 
     Returns:
@@ -287,7 +288,7 @@ class CallableNode[T](Node):
     """
 
     family: ClassVar[NodeFamily] = "callable"
-    fn: Callable[..., T] = field(eq=id, validator=is_callable())
+    fn: Func[T] = field(eq=id, validator=is_callable())
     version: CallableVersion = field(default=MISSING, validator=_is_version)
     identity: IdentityMode | None = field(default=None, converter=_normalize_identity)
     kwargs: FrozenKwargs = field(default=_FROZEN_PARAMS, converter=_kw_converter)
@@ -332,8 +333,6 @@ class WriteNode(Node):
         Args:
 
             prepared: The validated write to record.
-
-        Kwargs:
 
             id: The node's id.
 
@@ -422,6 +421,9 @@ def get_family_edges(
     Args:
 
         edges: The edges to select from.
+
+    Kwargs:
+
         family: The edge family to keep.
 
     Returns:

@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import gc
+import re
 import sqlite3
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncIterator, Generator, Iterator, Mapping
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from inspect import isawaitable
 from itertools import count
 from time import struct_time
@@ -14,10 +16,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from riko.bado._backend import create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
+from riko.base._config import DEF_CONCURRENCY_LIMIT
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
+from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
 from riko.ext.codegen import (
     NameEntry,
@@ -31,25 +37,33 @@ from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
+from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
+from riko.modules.fetchtext import pipe as fetchtext_pipe
 from riko.modules.filter import pipe as filter_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
+from riko.modules.receive import async_pipe as async_receive_pipe
 from riko.modules.receive import pipe as receive_pipe
+from riko.modules.regex import async_pipe as async_regex
 from riko.modules.regex import pipe as regex
 from riko.modules.rename import pipe as rename
+from riko.modules.send import async_pipe as async_send_pipe
 from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
 from riko.modules.timeout import async_pipe as timeout_async_pipe
+from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.udf import pipe as udf_pipe
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
+    FetchPageConf,
     FilterConf,
     FilterConfRule,
     InputConf,
     JoinConf,
+    ReceiveConf,
     RegexConf,
     RegexConfRule,
     RenameConf,
@@ -59,7 +73,7 @@ from riko.types.modules import (
     XpathFetchPageConf,
 )
 from tests import async_test
-from tests._lifecycle import LOOKAHEAD
+from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
@@ -125,6 +139,22 @@ class TestInput:
 
 
 class TestFetchModules:
+    @async_test
+    async def test_async_fetchpage_decodes_with_the_configured_encoding(self, tmp_path):
+        """An async read honors ``encoding`` as the sync read does (latin-1 page)."""
+        path = tmp_path / "latin1.html"
+        path.write_bytes("<title>café</title>".encode("latin-1"))
+        conf = FetchPageConf(
+            {
+                "url": str(path),
+                "start": "<title>",
+                "end": "</title>",
+                "encoding": "latin-1",
+            }
+        )
+        pipeline = Pipeline.from_module("fetchpage", conf=conf)
+        assert list(pipeline) == await alist(pipeline) == ["café"]
+
     @pytest.mark.parametrize("name", FETCH_MODULES)
     def test_an_unopenable_url_raises(self, name):
         pipeline = Pipeline.from_module(name, conf={"url": MISSING_URL})
@@ -177,8 +207,9 @@ class TestFetchdata:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=TypeError,
         reason="splitext keeps the query string in the extension ('json?token=abc'), "
-        "so the JSON parser is never selected ",
+        "so the JSON parser is never selected",
     )
     @pytest.mark.simulated_network
     @async_test
@@ -194,8 +225,8 @@ class TestFetchdata:
     @pytest.mark.xfail(
         strict=True,
         raises=UnicodeDecodeError,
-        reason="owned by the pending encoding-precedence work: XML is decoded with "
-        "the configured encoding instead of the encoding its declaration names",
+        reason="encoding precedence is not yet implemented: XML is decoded with the "
+        "configured encoding instead of the encoding its declaration names",
     )
     def test_declared_encoding_is_honored(self, tmp_path):
         path = tmp_path / "latin1.xml"
@@ -221,13 +252,39 @@ def sqlite_path(tmp_path: Path) -> Path:
     return path
 
 
+BOM_LINES = [
+    pytest.param({}, "hello", id="stripped"),
+    pytest.param({"strip_bom": False}, "\ufeffhello", id="kept"),
+]
+
+
+class TestFetchtext:
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    def test_bom_on_the_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert list(fetchtext_pipe(conf=conf)) == [expected, "world"]
+
+    @pytest.mark.parametrize(("options", "expected"), BOM_LINES)
+    @async_test
+    async def test_async_bom_on_the_first_line(self, tmp_path, options, expected):
+        path = tmp_path / "bom.txt"
+        path.write_bytes("\ufeffhello\nworld\n".encode())
+        conf = {"url": str(path)} | options
+        assert [line async for line in async_fetchtext_pipe(conf=conf)] == [
+            expected,
+            "world",
+        ]
+
+
 class TestFetchtable:
     @pytest.mark.xfail(
         strict=True,
         raises=(TypeError, UnicodeDecodeError),
-        reason="owned by the connectors work: fetchtable forwards the csv-only"
-        " delimiter option to the sqlite reader (TypeError) and opens the binary"
-        " source as text (UnicodeDecodeError); xlsx follows the same path",
+        reason="binary tabular connectors are not yet implemented: fetchtable forwards "
+        "the csv-only delimiter option to the sqlite reader (TypeError) and opens "
+        "the binary source as text (UnicodeDecodeError); xlsx follows the same path",
     )
     @pytest.mark.filterwarnings("ignore::ResourceWarning")
     def test_fetchtable_reads_sqlite_fixture(self, sqlite_path: Path):
@@ -308,7 +365,23 @@ class TestFilter:
         assert _values(filter_pipe([{"x": "nan"}], conf=nan_conf), "x") == ["nan"]
 
 
+_NESTED = {"a": {"b": 1, "c": 2}}
+
+# Each row: the input item, the rule's ``field`` and ``newval``, and the output.
+RENAME_LOOKUPS = [
+    pytest.param(_NESTED, "a.b", "x", {"a": {"c": 2}, "x": 1}, id="dotted-rename"),
+    pytest.param({"a": 1}, "A", "x", {"x": 1}, id="case-variant-rename"),
+    pytest.param(_NESTED, "a.b", None, {"a": {"c": 2}}, id="dotted-delete"),
+]
+
+
 class TestRename:
+    @pytest.mark.parametrize(("item", "field", "newval", "expected"), RENAME_LOOKUPS)
+    def test_rename_moves_the_field_it_reads(self, item, field, newval, expected):
+        """A dotted or case-variant ``field`` is removed from where it was read."""
+        conf = RenameConf({"rule": RenameConfRule(field=field, newval=newval)})
+        assert dict(next(rename(item, conf=conf))) == expected
+
     def test_rename_skips_absent_field(self):
         """A rename rule naming an absent field leaves the item untouched."""
         conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
@@ -319,8 +392,175 @@ class TestRename:
         conf = RenameConf({"rule": RenameConfRule(field="content", newval="greeting")})
         assert next(rename({"content": ""}, conf=conf)) == {"greeting": ""}
 
+    def test_rename_to_the_empty_key(self):
+        """An empty ``newval`` renames to the empty key; an omitted one deletes."""
+        conf = RenameConf({"rule": RenameConfRule(field="content", newval="")})
+        assert dict(next(rename({"content": "hi"}, conf=conf))) == {"": "hi"}
+
+
+_rule = partial(RegexConfRule, field="content")
+_parallel = partial(_rule, seriesmatch=False)
+_FALLBACK = {"content": "fallback"}
+
+
+# Each row: the rules, the conf's per-field ``default``, the input, and the output.
+REGEX_CASES = [
+    pytest.param(
+        [_rule(match="(hello)", replace="[$1]")],
+        {},
+        "say hello world",
+        "say [hello] world",
+        id="group-keeps-context",
+    ),
+    pytest.param(
+        [_rule(match="l", replace="LL")],
+        {},
+        "say hello world",
+        "say heLLLLo worLLd",
+        id="longer-replacement-shifts",
+    ),
+    pytest.param(
+        [_rule(match="(a?)", replace="[$1]")],
+        {},
+        "say",
+        "[]s[a][]y[]",
+        id="zero-width-group",
+    ),
+    pytest.param(
+        [_rule(match="$", replace="!")], {}, "say hi", "say hi!", id="end-anchor"
+    ),
+    pytest.param(
+        [_rule(match="^", replace="!")], {}, "say hi", "!say hi", id="start-anchor"
+    ),
+    pytest.param(
+        [_rule(match="(h)(e)", replace="$2$1"), _rule(match="(o)", replace="<$1>")],
+        {},
+        "say hello world",
+        "say ehll<o> w<o>rld",
+        id="two-rules",
+    ),
+    pytest.param(
+        [
+            _rule(match="a", replace="b"),
+            _rule(match="b", replace="c", casematch=True),
+            _rule(match="c", replace="d"),
+        ],
+        {},
+        "a",
+        "d",
+        id="alternating-flags-keep-order",
+    ),
+    pytest.param(
+        [_rule(match="hello.*", replace="bye")],
+        {},
+        "Hello hello",
+        "bye",
+        id="case-insensitive-by-default",
+    ),
+    pytest.param(
+        [_rule(match="hello.*", replace="bye", casematch=True)],
+        {},
+        "Hello hello",
+        "Hello bye",
+        id="casematch",
+    ),
+    pytest.param(
+        [
+            _parallel(match="a", replace="A", singlelinematch=True),
+            _parallel(match="b", replace="B", singlelinematch=True),
+        ],
+        {},
+        "aba",
+        "ABa",
+        id="first-match-limit-per-parallel-rule",
+    ),
+    pytest.param(
+        [
+            _rule(match="(?P<code>a)", replace="x"),
+            _rule(match="(?P<code>b)", replace="y"),
+        ],
+        {},
+        "ab",
+        "xy",
+        id="shared-group-name",
+    ),
+    pytest.param(
+        [_rule(match="(b)", replace="c"), _rule(match=r"(a)\1", replace="x")],
+        {},
+        "aa b",
+        "x c",
+        id="backreference",
+    ),
+    pytest.param(
+        [_parallel(match="a", replace="b"), _parallel(match="b", replace="a")],
+        {},
+        "ab",
+        "ba",
+        id="parallel-rules-swap",
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b"), _rule(match="b", replace="a")],
+        {},
+        "ab",
+        "aa",
+        id="serial-chain",
+    ),
+    pytest.param(
+        [_rule(match="z", replace="y")], _FALLBACK, "abc", "fallback", id="default"
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b")], _FALLBACK, "a", "b", id="default-unused"
+    ),
+    pytest.param(
+        [_rule(match="a", replace="b"), _rule(match="z", replace="y")],
+        _FALLBACK,
+        "a",
+        "b",
+        id="default-unused-when-an-earlier-rule-matched",
+    ),
+    pytest.param(
+        [_parallel(match="z", replace="y"), _parallel(match="a", replace="b")],
+        _FALLBACK,
+        "a",
+        "b",
+        id="default-unused-when-a-parallel-rule-matched",
+    ),
+    pytest.param(
+        [_rule(match="z", replace="y")],
+        {"title": "fallback"},
+        "abc",
+        "abc",
+        id="default-for-another-field",
+    ),
+    pytest.param(
+        [
+            _rule(match="a", replace="b"),
+            RegexConfRule(field="Content", match="b", replace="c"),
+            _rule(match="c", replace="d"),
+        ],
+        {},
+        "a",
+        "d",
+        id="case-variant-field-spellings",
+    ),
+]
+
 
 class TestRegex:
+    @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
+    def test_rules_apply_as_documented(self, rules, default, text, expected):
+        conf = RegexConf({"rule": rules, "default": default})
+        assert next(regex({"content": text}, conf=conf)) == {"content": expected}
+
+    @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
+    @async_test
+    async def test_async_rules_apply_as_documented(
+        self, rules, default, text, expected
+    ):
+        conf = RegexConf({"rule": rules, "default": default})
+        stream = async_regex({"content": text}, conf=conf)
+        assert await anext(stream) == {"content": expected}
+
     def test_regex_skips_absent_field(self):
         """A regex rule naming an absent field leaves the item untouched."""
         conf = RegexConf(
@@ -328,11 +568,30 @@ class TestRegex:
         )
         assert next(regex({"title": "hi"}, conf=conf)) == {"title": "hi"}
 
+    def test_regex_rejects_a_missing_group_reference(self):
+        conf = RegexConf({"rule": _rule(match="(hello)", replace="$3")})
+
+        with pytest.raises(re.error, match="invalid group reference 3"):
+            next(regex({"content": "say hello world"}, conf=conf))
+
+    def test_regex_rejects_a_rule_default(self):
+        """A ``default`` belongs on the conf, keyed by field, not on a rule."""
+        rule = {"field": "content", "match": "z", "replace": "y", "default": "x"}
+
+        with pytest.raises(TypeError, match=r"conf\['default'\]"):
+            next(regex({"content": "abc"}, conf=DynamicConf({"rule": rule})))
+
 
 SLUGIFY_CASES = [
     pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
     pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
 ]
+
+
+class TestHash:
+    def test_hash_is_the_same_under_every_hash_seed(self, hash_seed_probes):
+        """Two interpreters with different hash seeds produce the same hash."""
+        assert {probes["hash"] for probes in hash_seed_probes.values()} == {913045020}
 
 
 class TestSlugify:
@@ -376,8 +635,27 @@ SORTABLE_VALUES = [
     pytest.param(SortableCastType.DATETIME, _DATES, id="datetime"),
 ]
 
+# Each row: the untyped (or typed) rule's values, its ``type``, and the ascending order.
+UNTYPED_SORTS = [
+    pytest.param(["10", "9", "100"], None, ["9", "10", "100"], id="numeric-strings"),
+    pytest.param(["10", "apple", "9"], None, ["10", "9", "apple"], id="mixed-is-text"),
+    pytest.param(["inf", "5"], None, ["5", "inf"], id="non-finite-is-text"),
+    pytest.param(["10", "9"], SortableCastType.TEXT, ["10", "9"], id="explicit-text"),
+]
+
 
 class TestSort:
+    @pytest.mark.parametrize("dir_", ["asc", "desc"])
+    @pytest.mark.parametrize(("vals", "type_", "ascending"), UNTYPED_SORTS)
+    def test_untyped_sort_is_numeric_only_when_every_value_is(
+        self, dir_, vals, type_, ascending
+    ):
+        """An untyped rule sorts numbers numerically only if all values are numbers."""
+        rule = SortConfRule(field="n", dir=dir_, type=type_)
+        items = [{"n": val} for val in vals]
+        expected = ascending if dir_ == "asc" else list(reversed(ascending))
+        assert _values(sort_pipe(items, conf=SortConf(rule=rule)), "n") == expected
+
     @pytest.mark.parametrize("dir_", ["asc", "desc"])
     @pytest.mark.parametrize(("type_", "vals"), SORTABLE_VALUES)
     def test_sort_fillers_stay_orderable(self, dir_, type_, vals: list[str]):
@@ -444,6 +722,60 @@ class TestSort:
         assert _values(sort_pipe(items, conf=conf), "d") == expected
 
 
+class _FalsyFunc:
+    """A receive ``func`` whose truth value is False."""
+
+    def __len__(self) -> int:
+        return 0
+
+    def __call__(self, item: Item) -> dict[str, object]:
+        return {**item, "seen": True}
+
+
+class TestReceive:
+    def test_receive_applies_a_falsy_func(self):
+        conf = ReceiveConf(name="falsy-func", wait=0.01, max_wait=2)
+        receiver = receive_pipe(conf=conf, func=_FalsyFunc())
+        next(receiver)
+        list(send_pipe([{"x": 0}], others=["falsy-func"]))
+        received = next(item for item in receiver if "state" not in item)
+        assert received == {"x": 0, "seen": True}
+
+    @async_test
+    async def test_async_receive_applies_a_falsy_func(self):
+        received: list[Item] = []
+
+        async def collect() -> None:
+            conf = ReceiveConf(name="async-falsy-func")
+            stream = async_receive_pipe(conf=conf, func=_FalsyFunc())
+            received.extend([item async for item in stream])
+
+        with fail_after(1):
+            async with create_task_group() as tg:
+                tg.start_soon(collect)
+                await alist(async_send_pipe([{"x": 0}], others=["async-falsy-func"]))
+
+        assert received == [{"x": 0, "seen": True}]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="releasing a receive channel when its pipe is closed early is not yet "
+        "implemented",
+    )
+    def test_receive_closed_early_releases_its_channel(self):
+        conf = ReceiveConf(name="closed-early", wait=0.01, max_wait=2)
+        first = receive_pipe(conf=conf)
+        assert isinstance(first, Generator)
+        next(first)
+        first.close()
+        second = receive_pipe(conf=conf, func=_FalsyFunc())
+        next(second)
+        list(send_pipe([{"x": 0}], others=["closed-early"]))
+        received = next((item for item in second if "state" not in item), None)
+        assert received == {"x": 0, "seen": True}
+
+
 class TestSend:
     def test_send_populates_ids_when_given(self):
         """The explicit ``ids`` parameter records each target's delivery id."""
@@ -488,6 +820,18 @@ MISSING_OPERANDS = [
     pytest.param(join_pipe, "other", [], id="join-empty"),
     pytest.param(send_pipe, "others", [], id="send-empty"),
 ]
+
+
+class TestUdf:
+    def test_sync_call_rejects_an_awaitable_result(self):
+        async def double(item):
+            return {"y": item["x"] * 2}
+
+        def deferred(item):
+            return double(item)
+
+        with pytest.raises(InvalidPipelineError, match="udf func"):
+            list(udf_pipe([{"x": 1}], func=deferred))
 
 
 class TestRequiredOperands:
@@ -681,6 +1025,43 @@ FOREIGN_OPTIONS = [
 ]
 
 
+PROCESSOR_FOLD_CASES = [
+    pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
+    pytest.param(
+        {"count": "all", "emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [{"title": "a b c", "w": {"content": "a"}}],
+        id="assign-first",
+    ),
+]
+
+
+IMPLICIT_FOLD_CASES = [
+    pytest.param(
+        {"emit": True},
+        [{"content": "a"}, {"content": "b"}, {"content": "c"}, {"content": "d"}],
+        id="all",
+    ),
+    pytest.param(
+        {"count": "first", "emit": True},
+        [{"content": "a"}, {"content": "c"}],
+        id="first-per-item",
+    ),
+    pytest.param(
+        {"count": "first", "assign": "w", "emit": False},
+        [
+            {"title": "a b", "w": {"content": "a"}},
+            {"title": "c d", "w": {"content": "c"}},
+        ],
+        id="assign-first",
+    ),
+]
+
+
 class TestProcessor:
     """A ``processor`` resolves its interface, keeps call flags, and skips items."""
 
@@ -705,6 +1086,22 @@ class TestProcessor:
         pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
         result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
         assert result == [{"x": 1}, {"y": "processed"}]
+
+    @pytest.mark.parametrize(("kwargs", "expected"), PROCESSOR_FOLD_CASES)
+    def test_top_level_fold(self, kwargs, expected):
+        item = {"title": "a b c"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    @pytest.mark.parametrize(("kwargs", "expected"), IMPLICIT_FOLD_CASES)
+    def test_stream_fold_per_item(self, kwargs, expected):
+        result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
+        assert list(result) == expected
+
+    def test_single_item_is_not_double_mapped(self):
+        item = {"title": "a b"}
+        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
+        assert list(result) == [{"content": "a"}, {"content": "b"}]
 
     @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
     def test_async_named_pipe_raises(self, iscoro, isasync, reason):
@@ -738,7 +1135,6 @@ class TestAsyncProcessor:
         _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
         assert seen == [True, True]
 
-    @pytest.mark.timeout(1)
     @async_test
     async def test_async_sync_iterable_streams_before_exhaustion(self):
         """Keep an unbounded sync iterable from being read whole up front."""
@@ -756,7 +1152,7 @@ class TestAsyncProcessor:
 
         async with maybe_aclosing(async_pipe(unbounded(), test=True)) as stream:
             assert await anext(stream)
-            assert len(pulled) <= 1000
+            assert len(pulled) <= DEF_CONCURRENCY_LIMIT
 
     @async_test
     async def test_async(self):
@@ -858,6 +1254,12 @@ def _exec_generated_names(*entries: NameEntry) -> dict:
     return namespace
 
 
+PROVIDER_CLASS_COLLISIONS = (
+    pytest.param("modules.foo", "transform", "Modules", id="flat-class"),
+    pytest.param("sources.bar", "source", "Sources", id="category-class"),
+)
+
+
 class TestGenerateModuleNames:
     def test_generation_is_order_independent(self):
         entries = list(gen_catalog_entries())
@@ -902,3 +1304,23 @@ class TestGenerateModuleNames:
 
         assert repr(first) in str(excinfo.value)
         assert repr(second) in str(excinfo.value)
+
+    def test_providers_normalizing_alike_fail(self):
+        first = NameEntry(name="foo-bar.x", category="transform")
+        second = NameEntry(name="foo_bar.y", category="transform")
+
+        with pytest.raises(ValueError, match="'foo-bar' and 'foo_bar'"):
+            generate_module_names(first, second)
+
+    @pytest.mark.parametrize(
+        ("name", "category", "class_name"), PROVIDER_CLASS_COLLISIONS
+    )
+    def test_provider_class_collision_fails(self, name, category, class_name):
+        builtin = NameEntry(name="fetch", category="source")
+        entry = NameEntry(name=name, category=category)
+
+        with pytest.raises(ValueError, match="provider") as excinfo:
+            generate_module_names(builtin, entry)
+
+        assert repr(name) in str(excinfo.value)
+        assert repr(class_name) in str(excinfo.value)

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from riko.runtime._pipeline import Pipeline
-from riko.types.modules import ItemBuilderConf
+from riko.types.modules import ItemBuilderConf, TokenizerRawConf
 
 VALUE = "once is 1x,twice is 2x,thrice is 3x"
 
@@ -16,6 +16,8 @@ EXPECTED = [
 
 ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 LOOKAHEAD = 2
+PARENTS = [{"title": "a b"}, {"title": "c d"}]
+TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
 
 
 def tokenized(value: str = "a,b,c", *, hashed: bool = False) -> Pipeline:

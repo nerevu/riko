@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, cast, overload
 
 from attrs import Factory, define, field
 
+from riko.base._funcutils import broadcast, dispatch
 from riko.base._guards import is_mapping
-from riko.base._iterutils import broadcast, dispatch
 from riko.base._require_guards import narrow_from_require, require_from_form
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
@@ -66,6 +66,9 @@ def build_conf(
         parsed_conf: The per-item parsed conf, or ``None``.
         defaults: The module's default conf.
         opts: The decoration options (``extract``/``listize``).
+
+    Kwargs:
+
         module: The module name, used in the error message.
 
     Returns:
@@ -397,6 +400,9 @@ def resolve_and_cast[T, E](
         opts: The resolved decoration and call options.
         parsers: The field and conf parsers.
         casters: The field, extract, and conf casters.
+
+    Kwargs:
+
         defaults: The module's default conf.
         field: Optional field whose value replaces the item.
         module: The module name, used in error messages.

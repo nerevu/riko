@@ -77,7 +77,7 @@ class SupportsWrite(Target, Protocol):
         returned capabilities merely report that decision. A native target ignores
         ``fmt``.
 
-        Args:
+        Kwargs:
 
             fmt: The serialization format, used by a serializing target to resolve
                 its capabilities; ignored by a native target.

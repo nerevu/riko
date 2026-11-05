@@ -34,7 +34,7 @@ from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
-from riko.io._sync import Fetch, auto_close, seekable
+from riko.io._sync import Fetch, auto_close, gen_rows, seekable
 
 from ._decorators import processor
 
@@ -106,7 +106,7 @@ async def async_parser(
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    content = cast("Stream", read(source, ext, **rkwargs))
+    content = gen_rows(cast("Stream", read(source, ext, **rkwargs)))
     return auto_close(content, source, r)
 
 
@@ -152,7 +152,7 @@ def parser(
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
-    content = cast("Stream", read(source, ext, **rkwargs))
+    content = gen_rows(cast("Stream", read(source, ext, **rkwargs)))
     return auto_close(content, source, f)
 
 

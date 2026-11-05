@@ -39,11 +39,12 @@ minutes in, send it a non-stopping status ping; pause one that is grinding,
 build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
 `/tmp`, new untracked files) and decide for each: promote it to a shared helper,
 fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
 
 First run `python .claude/skills/land/gates.py check tidy`. When it exits 0,
 tidy already ran on this exact tree (in this or another session): skip the
-agent and report "tidy current". Otherwise launch one fresh `general-purpose`
+agent and report "tidy current". Otherwise run `python .claude/skills/land/require_agents.py`
+(on failure, stop and report its output) and launch one fresh `implementer`
 agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow
@@ -123,7 +124,12 @@ Owner semantics — each concept has one owner, update it there and nowhere else
   ask rather than guess which status doc it belongs in. Batch every such
   question into a single AskUserQuestion call in this phase.
 - **`docs/CHANGES.rst`** — user-observable changes only. No private
-  implementation-move journaling; internal refactors don't get entries.
+  implementation-move journaling; internal refactors don't get entries. When the
+  session changed a public `__init__.py`, run
+  `python .claude/skills/wrapup/surface_diff.py`: it exits 1 and names each public
+  name removed since the last release tag that neither `CHANGES.rst` nor
+  `MIGRATION.rst` mentions; add each one to the release's old→new rename list or its
+  removal bullet.
 - **`_docs/ROADMAP.md`** — only if routing/ownership itself changed.
 - **riko skill snapshot** (`~/.claude/skills/riko/references/`) — only if the
   session changed something the references describe (API surfaces, node/edge
@@ -172,7 +178,7 @@ slice in progress**, each headed `## <slice name>` with its branch, HEAD, and
 date. Rewrite only this session's section (add it when missing); leave other
 sections as they are, except to drop one that the step-1 evidence shows has
 landed with no successor work. A shared preamble above the sections holds only
-what is true of the whole tree (pending autosquash, unpushed commits). Each
+what is true of the whole tree (pending autosquash, unpushed commits, the Docket). Each
 section describes only its current frontier, not history:
 
 - **Where work stopped**: the slice in progress, its owning gameplan/phase,
@@ -188,6 +194,15 @@ section describes only its current frontier, not history:
   identified but deliberately did not make.
 - Dates absolute, never relative. If everything landed clean with no
   successor work, remove this session's section and say so in the report.
+
+The preamble also carries a **Docket** list: the next three items of work across the
+whole tree, in order, each with its owner (gameplan section, handoff section, or tracker
+row) and the test or xfail it flips. Derive it from the evidence, not recollection: open
+next actions in the handoff sections first, then the forward order in
+`_docs/PHASE_CHECKLISTS.md` (the M1 row) and `_docs/gameplans/implementation-sequence.md`
+§ 4. Below it, a **Suggested command** line: the one prompt to paste after `/clear` that
+starts docket item 1 cold (a skill invocation such as `/go …` or `/triage …` with the
+file, function, or test named).
 
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
@@ -222,14 +237,16 @@ session that starts before the user runs it knows to.
 
 ## 6. Report
 
-End with a short manifest: tidy's fixes and open findings, each file updated
+End with a short manifest: tidy's fixes and open findings,
+the **next three docket items** (as recorded in the handoff preamble, each with its owner),
+the **suggested command** to run after `/clear` (in a code block, ready to paste), each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
 is safe to clear, and any **script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (slicing or replaying diffs, rebuilding tables, bulk
 renames, rehearsing commits, auditing memory). Name each one's task, duration, and tool count, and the script it
 suggests (name, inputs, outputs, and home, such as beside the skill that launched
 the agent). Propose them only; build one when the user agrees.
-Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
+Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never deleted) — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
 (design, review, triage) is never a candidate. When fixups are pending, the manifest's last line is the
 rebase step: the user runs the clipboard line (shown for reference) only now,
 after wrapup has finished. `/land` deliberately leaves this step to wrapup.

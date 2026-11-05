@@ -35,6 +35,11 @@ Search for the phase that owns the behavior, in authority order:
 Grep the gameplans for the module, concept, and failure vocabulary — owners
 are often stated in a phase you wouldn't guess from the file that misbehaves.
 
+A defect in a dependency (meza, mezmorize, …) that riko works around belongs to
+`_docs/gameplans/upstream-fixes.md`: the local workaround is the repair, and it
+ships with an entry there plus a strict-xfail canary in
+`tests/internal/test_upstream.py` that calls the dependency directly.
+
 ## 3. Decide the disposition
 
 - **Local repair** — no phase owns the behavior, or the owning phase has
@@ -108,7 +113,9 @@ phase cannot land without tripping it:
 
 ```python
 @pytest.mark.xfail(
-    strict=True, reason="<the pending capability, in plain English> is not yet implemented"
+    strict=True,
+    raises=<the exception it fails with today>,
+    reason="<the pending capability, in plain English> is not yet implemented",
 )
 ```
 
@@ -121,6 +128,10 @@ phase cannot land without tripping it:
   id so a future session finds the contract.
 - Place it in the existing test module for that area; follow the placements
   already used for tripwires in `tests/internal/`.
+- `raises=` names the exception the probe fails with today (`AssertionError` for a
+  wrong value, `pytest.fail.Exception` for a `pytest.raises` that does not raise), so
+  a typo or setup error cannot pass as the expected failure; run the test with
+  `--runxfail` to see it. `manage lint --tests` fails a strict xfail without it.
 - `strict=True` is the point: when the phase lands and behavior corrects, the
   XPASS fails the suite, forcing the tripwire's removal and a real test.
 

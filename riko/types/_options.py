@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from ._enums import BasicCastType, ExecutionMode, FmtLike
     from ._scalars import PrimitiveValue
-    from ._streams import Item
+    from ._streams import Item, ItemOrValue
     from ._values import BasicArg, Inputs, RikoList
     from ._wrappers import ParserOutput
     from .modules import AnyConfRule, OptionValues, Skip
@@ -74,7 +74,6 @@ class Defaults(TypedDict, total=False):
     max_len: int
     memoize: bool
     mode: str
-    multi: bool
     name: str
     prompt: str
     param: dict[str, str | None]
@@ -92,6 +91,7 @@ class Defaults(TypedDict, total=False):
     start: int
     stop: bool
     strict: bool
+    strip_bom: bool
     sum_key: str
     test: bool
     token_key: str
@@ -106,7 +106,7 @@ class DecorationOptions(TypedDict, total=False):
     ptype: BasicCastType
     assign: str
     count: CountValues
-    emit: bool | Callable[[ParserOutput], bool] | None
+    emit: bool | Callable[[ParserOutput[ItemOrValue]], bool] | None
     extract: str
     field: str
     listize: bool
@@ -135,7 +135,7 @@ class OperatorDecorationOptions(SharedDecorationOptions, total=False):
     """Decoration options the ``operator`` decorator reads."""
 
     pollable: bool
-    emit: bool | Callable[[ParserOutput], bool] | None
+    emit: bool | Callable[[ParserOutput[ItemOrValue]], bool] | None
 
 
 class ProcessorDecorationOptions(OperatorDecorationOptions, total=False):
@@ -216,7 +216,7 @@ class CallOptions:
         """
         Builds call options from keyword-argument form.
 
-        Args:
+        Kwargs:
 
             raw: The options to convert or return as is. ``None`` means no options.
             what: The name used in error messages (default: "call options").

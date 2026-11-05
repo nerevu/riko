@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._streams import InputLike, PipelineRun, PipelineStream
+    from riko.types._wrappers import Func
     from riko.types.modules import Conf
 
 
@@ -120,7 +121,7 @@ class Pipeline(PipelineDefinition[T_co]):
         The returned stream is a sync or async iterator. If you need to ``break`` out of
         iteration, use ``.open`` instead, which returns a context manager.
 
-        Args:
+        Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
                 async item stream, or an awaitable resolving to one of those. ``None``
@@ -232,7 +233,7 @@ class Pipeline(PipelineDefinition[T_co]):
         closes the run in the task that opened it. If you want a direct stream instead,
         call the pipeline.
 
-        Args:
+        Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
                 async item stream, or an awaitable resolving to one of those. ``None``
@@ -331,6 +332,9 @@ class Pipeline(PipelineDefinition[T_co]):
         Args:
 
             name: The module to append.
+
+        Kwargs:
+
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
             embed: The module a loop runs per item, with its configuration, if any.
@@ -351,7 +355,7 @@ class Pipeline(PipelineDefinition[T_co]):
         )
         return Pipeline[Item](flow, context=self.context, settings=self.settings)
 
-    def __getattr__(self, name: str) -> Callable[..., Pipeline[Item]]:
+    def __getattr__(self, name: str) -> Func[Pipeline[Item]]:
         """Chains a built-in module by attribute. E.g., ``.sort()`` appends sort."""
         return partial(self.pipe, self._require_attribute(name))
 
@@ -413,13 +417,11 @@ class Pipeline(PipelineDefinition[T_co]):
 
         The run is closed as soon as the item is read.
 
-        Args:
+        Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
                 async item stream, or an awaitable resolving to one of those. ``None``
                 means no seed (default: None).
-
-        Kwargs:
 
             default: The value returned when the pipeline produces no items.
 
@@ -463,13 +465,11 @@ class Pipeline(PipelineDefinition[T_co]):
 
         The run is closed as soon as the item is read.
 
-        Args:
+        Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
                 async item stream, or an awaitable resolving to one of those. ``None``
                 means no seed (default: None).
-
-        Kwargs:
 
             default: The value returned when the pipeline produces no items.
 

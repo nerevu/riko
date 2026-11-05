@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterable
 from contextlib import aclosing
 from functools import partial
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._config import DEF_CONCURRENCY_LIMIT
-from riko.base._sentinels import MISSING, MissingType
+from riko.types._io import resolve_closer
 
 from ._backend import (
     CapacityLimiter,
@@ -40,7 +40,7 @@ from ._backend import (
     checkpoint,
     create_memory_object_stream,
 )
-from ._util import maybe_aclosing, maybe_async, open_task_group
+from ._util import maybe_aclosing, maybe_async, maybe_closing, open_task_group
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -53,6 +53,8 @@ if TYPE_CHECKING:
     )
 
     from riko.types._streams import AnyIterable
+
+    from ._backend import MemoryObjectReceiveStream
 
 
 def _cap[T, S](
@@ -97,6 +99,8 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncItera
     Args:
 
         source: A sync or async iterable.
+
+    Kwargs:
 
         cooperative: For a sync *source*, yield control before each item so
             concurrent tasks (e.g. a timeout) can run (default: False).
@@ -185,9 +189,14 @@ async def async_iter[T](
     """
     Converts a sync iterable into an async generator.
 
+    Closing the generator early also closes the sync iterator, just as closing
+    :func:`as_async` of an async iterable closes that iterable.
+
     Args:
 
         elements: The sync iterable to wrap.
+
+    Kwargs:
 
         cooperative: Yield control (``async_sleep(0)``) before each item
             so concurrent tasks (e.g. a timeout) can run (default: False).
@@ -207,11 +216,101 @@ async def async_iter[T](
         [0, 1, 2]
 
     """
-    for item in elements:
-        if cooperative:
-            await async_sleep(0)
+    with maybe_closing(iter(elements)) as items:
+        for item in items:
+            if cooperative:
+                await async_sleep(0)
 
-        yield item
+            yield item
+
+
+async def aiter_sentinel[T, R, S](
+    func: Callable[[Iterator[T]], Awaitable[R | S]],
+    items: Iterable[T],
+    sentinel_type: type[S],
+) -> AsyncIterator[R]:
+    """
+    Streams each ``func`` result from ``items`` until ``func`` returns a sentinel.
+
+    The two-argument ``iter`` for an async ``func``, except the sentinel is matched by
+    type rather than by equality.
+
+    Args:
+
+        func: Returns the next result from the iterator over ``items``.
+        items: The items ``func`` reads.
+        sentinel_type: The sentinel result type.
+
+    Yields:
+
+        Each ``func`` result before the sentinel.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def pull(items):
+        ...     return next(items, None)
+        >>>
+        >>> async def main():
+        ...     items = aiter_sentinel(pull, [1, 2, None, 3], type(None))
+        ...     print([x async for x in items])
+        >>>
+        >>> run(main)
+        [1, 2]
+
+    """
+    stream = iter(items)
+
+    while not isinstance(item := await func(stream), sentinel_type):
+        yield cast("R", item)
+
+
+async def aauto_close[T](
+    stream: AsyncIterable[T], *closeables: object, inline: bool = True
+) -> AsyncIterator[T]:
+    """
+    Passes ``stream`` through so it closes ``closeables`` when iteration ends.
+
+    Each closeable is closed on exhaustion, an early close, or an exception. A value
+    with no close is skipped. The async twin of ``auto_close``.
+
+    Args:
+
+        stream: The items to yield.
+        closeables: The values closed once iteration finishes.
+
+    Kwargs:
+
+        inline: Whether a sync close runs on the event loop rather than a worker.
+
+    Yields:
+
+        Each ``stream`` item.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>> from riko import run
+        >>>
+        >>> async def read(f):
+        ...     yield f.read()
+        >>>
+        >>> async def main():
+        ...     f = StringIO("hi")
+        ...     print([x async for x in aauto_close(read(f), f)], f.closed)
+        >>>
+        >>> run(main)
+        ['hi'] True
+
+    """
+    try:
+        async for item in stream:
+            yield item
+    finally:
+        for closeable in closeables:
+            if (closer := resolve_closer(closeable, is_async=True)) is not None:
+                await maybe_async(closer, inline=inline)
 
 
 @overload
@@ -233,6 +332,8 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
         func: A two-argument reducer, e.g. ``lambda x, y: x + y``.
 
         content: The sequence to reduce.
+
+    Kwargs:
 
         initial: Starting accumulator value. When ``None`` (default) the first element
             is consumed as the starting value (``None`` if *content* is empty).
@@ -262,11 +363,19 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
     return value
 
 
+@overload
+def async_reduce[T, S](
+    func: Callable[[T, S], T | Awaitable[T]], content: Iterable[S], initial: T
+) -> Awaitable[T]: ...
+@overload
+def async_reduce[T](
+    func: Callable[[T, T], T | Awaitable[T]], content: Iterable[T], initial: None = ...
+) -> Awaitable[T]: ...
 def async_reduce[T, S](
     func: Callable[[T, S], T | Awaitable[T]],
     content: Iterable[S],
     initial: T | None = None,
-) -> Awaitable[T]:
+) -> Awaitable[T | S]:
     """
     Reduces *content* with *func*.
 
@@ -277,6 +386,8 @@ def async_reduce[T, S](
         func: A two-argument reducer.
 
         content: The sequence to reduce.
+
+    Kwargs:
 
         initial: Starting accumulator value. When ``None`` (default) consumes the first
             element as the starting value.
@@ -299,7 +410,11 @@ def async_reduce[T, S](
     content = iter(content)
     value = next(content) if initial is None else initial
 
-    async def work(async_func, content, value):
+    async def work(
+        async_func: Callable[[T, S], T | Awaitable[T]],
+        content: Iterator[S],
+        value: T | S,
+    ) -> T | S:
         for item in content:
             value = await maybe_async(async_func, value, item)
 
@@ -324,6 +439,8 @@ async def async_map[T, S](
         func: An async function applied to each element.
 
         content: The items to map over.
+
+    Kwargs:
 
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``,
             16). ``0`` runs them all at once.
@@ -356,21 +473,21 @@ async def async_map[T, S](
 
     _func = _cap(partial(func, **kwargs) if kwargs else func, budget)
     items = list(content)
-    results: list[S | MissingType] = [MISSING] * len(items)
+    results: dict[int, S] = {}
     limiter = CapacityLimiter(limit) if limit else None
 
-    async def work(index: int, item: T) -> None:
+    async def work(pos: int, item: T) -> None:
         if limiter is None:
-            results[index] = await _func(item)
+            results[pos] = await _func(item)
         else:
             async with limiter:
-                results[index] = await _func(item)
+                results[pos] = await _func(item)
 
     async with open_task_group() as tg:
-        for index, item in enumerate(items):
-            tg.start_soon(work, index, item)
+        for pos, item in enumerate(items):
+            tg.start_soon(work, pos, item)
 
-    return [r for r in results if not isinstance(r, MissingType)]
+    return [results[pos] for pos in range(len(items))]
 
 
 async def _pool_stream[T, S](
@@ -421,7 +538,9 @@ async def _pool_stream[T, S](
             async for item in items:
                 await item_send.send(item)
 
-    async def worker(results, items) -> None:
+    async def worker(
+        results: MemoryObjectSendStream[S], items: MemoryObjectReceiveStream[T]
+    ) -> None:
         async with results, items:
             async for item in items:
                 await drain(item, results)
@@ -463,6 +582,8 @@ async def async_map_stream[T, S](
         func: An async function applied to each input item.
 
         source: The items to map over.
+
+    Kwargs:
 
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
@@ -521,6 +642,8 @@ async def async_map_ordered_stream[T, S](
         func: An async function applied to each input item.
 
         source: The items to map over.
+
+    Kwargs:
 
         limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
 
@@ -587,6 +710,8 @@ async def async_merge[S](
 
         source: The async iterables to merge.
 
+    Kwargs:
+
         limit: Maximum number of source items drained concurrently (default:
             ``DEF_CONCURRENCY_LIMIT``).
 
@@ -620,5 +745,8 @@ async def async_merge[S](
             async for item in _items:
                 await results.send(item)
 
-    async for item in _pool_stream(source, drain, limit=limit, buffer=buffer):
-        yield item
+    stream = _pool_stream(source, drain, limit=limit, buffer=buffer)
+
+    async with aclosing(stream) as results:
+        async for item in results:
+            yield item

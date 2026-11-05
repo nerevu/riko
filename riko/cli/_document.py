@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import require_mapping
 from riko.base._logging import get_logger
-from riko.definitions._serialize import get_document_shape
+from riko.definitions._serialize import get_document_shape, require_unique_keys
 from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
 
@@ -55,8 +55,14 @@ def read_document(path: PathLike) -> tuple[object | None, str]:
 
     Examples:
 
-        >>> read_document("no-such-flow.json")
-        (None, 'no-such-flow')
+        >>> from pathlib import Path
+        >>> from tempfile import TemporaryDirectory
+        >>>
+        >>> with TemporaryDirectory() as tmp:
+        ...     path = Path(tmp) / "flow.json"
+        ...     _ = path.write_text('{"modules": [{"name": "forever"}]}')
+        ...     read_document(path)
+        ({'modules': [{'name': 'forever'}]}, 'flow')
 
     """
     if path == "-":
@@ -78,8 +84,8 @@ def read_document(path: PathLike) -> tuple[object | None, str]:
 
     if text is not None:
         try:
-            document = loads(text)
-        except ValueError as e:
+            document = loads(text, object_pairs_hook=require_unique_keys)
+        except (ValueError, InvalidPipelineError) as e:
             logger.warning("Unable to parse input: %s", e)
 
     return document, name

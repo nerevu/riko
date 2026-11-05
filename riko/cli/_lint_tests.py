@@ -8,7 +8,8 @@ Each test tier folder (``public``, ``internal``, ``functional``) ends its
 check fails when an index is stale, a test sits outside a ``Test<Subject>`` class, a
 subject is owned by two files in one tier, a file or folder is misplaced, or a
 public test imports a private name. File sizes outside the split/merge bounds are
-reported as advice rather than failures.
+reported as advice rather than failures; a file named in ``SIZE_EXEMPT`` keeps its
+size on purpose (the dependency canaries are cited by path and stay one file).
 
 Every bound in a test file or a ``tests/_*.py`` helper (a ``timeout`` marker, a
 ``fail_after``/``move_on_after`` bound, or a ``wait``/``join``/``result``/
@@ -20,6 +21,9 @@ backstop.
 A ``sleep`` on a function's own path (outside nested functions) must never
 last as long as that outer bound. A plain ``timeout`` marker never equals the backstop,
 a ``subprocess`` call sets ``timeout=``, and an ``async def`` test awaits something.
+A strict ``xfail`` mark in a test file or helper, whether a decorator, a
+``pytest.param`` mark, or a module-level constant, names the exception it fails with
+today in ``raises=``.
 
 The ``timeout`` and ``faulthandler_timeout`` globals sit on the ladder too.
 ``faulthandler_timeout`` must be below ``timeout``. A test must never read a tracked
@@ -45,7 +49,7 @@ import tomllib
 from operator import itemgetter
 from typing import TYPE_CHECKING, Final, NamedTuple
 
-from riko.base._iterutils import gen_instances, gen_non_none
+from riko.base._iterutils import gen_instances, gen_non_null
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
 from ._import_graph import FUNCTION_NODES, FunctionNode
@@ -57,6 +61,7 @@ if TYPE_CHECKING:
 FIXTURE_DIRS = frozenset({"workflows", "pyworkflows", "dags", "typing"})
 SPLIT_LINES = 2000
 MERGE_LINES = 300
+SIZE_EXEMPT: Final[frozenset[str]] = frozenset({"test_upstream.py"})
 HISTORY_NAMES = re.compile(r"^test_(regressions?|fixes|bugs?|misc)\b")
 TIMEOUT_LADDER: Final[frozenset[int]] = frozenset({1, 2, 3, 5, 8, 10, 15, 20, 30})
 LADDER_TEXT: Final = f"{', '.join(map(str, sorted(TIMEOUT_LADDER)))} s"
@@ -462,6 +467,23 @@ def _has_await(function: FunctionNode) -> bool:
     )
 
 
+def _is_bare_strict_xfail(node: ast.Call) -> bool:
+    """Checks whether a call is a strict ``xfail`` mark that sets no ``raises=``."""
+    keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+    strict = keywords.get("strict")
+    is_strict = isinstance(strict, ast.Constant) and strict.value is True
+    return _get_leaf(node.func) == "xfail" and is_strict and "raises" not in keywords
+
+
+def _gen_xfail_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
+    """Finds the strict ``xfail`` marks in one file that set no ``raises=``."""
+    message = "strict xfail sets no raises=; name the exception it fails with today"
+
+    for node in gen_instances(ast.walk(tree), ast.Call):
+        if _is_bare_strict_xfail(node):
+            yield LayoutIssue(path, node.lineno, message)
+
+
 def _gen_idle_async_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
     """Finds the ``async def`` tests in one file that await nothing."""
     for node in tree.body:
@@ -544,6 +566,7 @@ def _gen_file_issues(
 ) -> Iterator[LayoutIssue]:
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
+    yield from _gen_xfail_issues(path, tree)
     yield from _gen_idle_async_issues(path, tree)
     yield from _gen_doc_read_issues(path, tree)
 
@@ -560,7 +583,9 @@ def _gen_file_issues(
                         message = f"public tests import supported names: {alias.name}"
                         yield LayoutIssue(path, node.lineno, message)
 
-    if lines > SPLIT_LINES:
+    if path.name in SIZE_EXEMPT:
+        pass
+    elif lines > SPLIT_LINES:
         message = (
             f"{lines} lines; move its largest Test<Subject> class into its own file, "
             "then check both files for overlaps, misfits, and move candidates"
@@ -572,10 +597,11 @@ def _gen_file_issues(
 
 
 def _gen_helper_issues(path: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
-    """Finds the bounds and ``subprocess`` calls in a shared helper module."""
+    """Finds the bounds, ``subprocess`` calls, and ``xfail`` marks in a helper."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
+    yield from _gen_xfail_issues(path, tree)
 
 
 def _gen_index_issues(tier: Path) -> Iterator[LayoutIssue]:
@@ -621,8 +647,8 @@ def gen_layout_issues(tests_dir: Path, backstop: Seconds) -> Iterator[LayoutIssu
 
     Beyond the layout, each bound in a test or shared helper must sit on the bound
     ladder and nest inside its outer bound, each ``subprocess`` call must set a
-    timeout, each ``async def`` test must await something, and no test may read a
-    tracked doc.
+    timeout, each strict ``xfail`` mark must set ``raises=``, each ``async def`` test
+    must await something, and no test may read a tracked doc.
 
     Args:
 
@@ -724,7 +750,7 @@ def gen_rows_without_id(tests_dir: Path) -> Iterator[LayoutIssue]:
     for path, tree in _gen_tier_trees(tests_dir):
         assignments = map(_get_assignment, tree.body)
 
-        for value in gen_non_none(assignments, itemgetter(1)):
+        for value in gen_non_null(assignments, itemgetter(1)):
             calls = gen_instances(ast.walk(value), ast.Call)
 
             for row in filter(_is_unnamed_row, calls):

@@ -32,8 +32,16 @@ def _terminate_lines[S: (str, bytes)](lines: list[S], newline: S) -> Iterator[S]
     return chain((line + newline for line in lines[:-1]), filter(len, lines[-1:]))
 
 
-def _strip_bom(chunks: Iterable[str]) -> Iterator[str]:
-    """Drops a byte order mark from the start of the decoded text."""
+def gen_without_bom(chunks: Iterable[str]) -> Iterator[str]:
+    """
+    Generates decoded text chunks without a leading byte order mark (BOM).
+
+    Examples:
+
+        >>> list(gen_without_bom(["", "\\ufeffhi", "\\ufeffthere"]))
+        ['', 'hi', '\\ufeffthere']
+
+    """
     started = False
 
     for chunk in chunks:
@@ -76,7 +84,7 @@ def _decode(
             proper_newline = first_line.endswith(linesep)
 
         if remove_BOM:
-            decoded = _strip_bom(decoded)
+            decoded = gen_without_bom(decoded)
 
     return decoded, proper_newline
 

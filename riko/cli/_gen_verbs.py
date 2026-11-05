@@ -25,6 +25,7 @@ _NOTE = get_codegen_note("--verbs")
 
 _RST_WIDTHS: dict[str, tuple[int, ...]] = {
     "verbs": (13, 11, 22, 24, 20, 30, 22),
+    "verb-rules": (13, 11, 60),
     "verb-pairs": (27, 88),
 }
 
@@ -33,12 +34,11 @@ _BEGINS: dict[TableFormat, str] = {
     "rst": ".. begin {key}: {note}\n",
 }
 
-VERB_BLOCKS: frozenset[str] = frozenset({"verbs", "verb-pairs"})
-_KEY = rf"(?P<key>{'|'.join(sorted(VERB_BLOCKS, reverse=True))})"
+_KEY = rf"(?P<key>{'|'.join(sorted(_RST_WIDTHS, key=len, reverse=True))})"
 
-VERB_DOCS: dict[Path, TableFormat] = {
-    ROOT_DIR / "CONTRIBUTING.rst": "rst",
-    ROOT_DIR / "CLAUDE.md": "md",
+VERB_DOCS: dict[Path, tuple[TableFormat, frozenset[str]]] = {
+    ROOT_DIR / "CONTRIBUTING.rst": ("rst", frozenset({"verbs", "verb-pairs"})),
+    ROOT_DIR / "CLAUDE.md": ("md", frozenset({"verb-rules", "verb-pairs"})),
 }
 
 VERB_PATTERNS: dict[TableFormat, Pattern[str]] = {
@@ -72,6 +72,9 @@ def _get_table(key: str) -> Sequence[Sequence[str]]:
             for v in VERBS
         ]
         table = [(*header, "Rule", "Example"), *rows]
+    elif key == "verb-rules":
+        rows = [(f"`{v.verb}`", v.lead, v.rule) for v in VERBS]
+        table = [("Verb", "Summary starts with", "Rule"), *rows]
     else:
         pairs = [(f"`{p.first}` / `{p.second}`", p.test) for p in VERB_PAIRS]
         table = [("Mistaken pair", "Test"), *pairs]
@@ -137,7 +140,7 @@ def generate_verb_tables(text: str, fmt: TableFormat) -> str:
 
     Args:
 
-        text: The document, with marked ``verbs`` and ``verb-pairs`` blocks.
+        text: The document with ``verbs``, ``verb-rules``, or ``verb-pairs`` blocks.
         fmt: The document's markup.
 
     Returns:
@@ -168,7 +171,7 @@ def generate_verb_tables(text: str, fmt: TableFormat) -> str:
 
 def main() -> int:
     """Regenerates the verb tables in the contributing guide and ``CLAUDE.md``."""
-    for path, fmt in VERB_DOCS.items():
+    for path, (fmt, _) in VERB_DOCS.items():
         path.write_text(generate_verb_tables(path.read_text(), fmt))
 
     return 0

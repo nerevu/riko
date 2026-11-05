@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
     from riko.types._values import BasicArg
-    from riko.types._wrappers import PreCaster
+    from riko.types._wrappers import Func, PreCaster
 
 logger: Logger = get_logger(__name__)
 
@@ -144,7 +144,7 @@ def build_location(
     Parses ``"lat,lon"`` when given, otherwise uses the ``lat``/``lon``
     arguments; unparseable or missing coordinates default to ``0.0``.
 
-    Args:
+    Kwargs:
 
         latlon: A ``"lat,lon"`` string; used when it contains a comma.
         lat: The latitude used when ``latlon`` has no comma.
@@ -294,6 +294,9 @@ def cast_location(
     Args:
 
         address: The address, coordinate, IP, or currency code to look up.
+
+    Kwargs:
+
         loc_type: Which kind of lookup to perform.
 
     Returns:
@@ -357,6 +360,9 @@ def cast_datetime(
     Args:
 
         value: The date-like value or string shorthand to normalize.
+
+    Kwargs:
+
         as_date: Whether to return a ``date`` rather than a ``datetime``.
         as_datedict: Whether to return a ``DateDict`` of date components.
         try_local_tz: Whether to assume the local timezone for naive values.
@@ -547,11 +553,11 @@ def cast_value(
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.DATETIME], **kwargs: object
-) -> dt: ...
+) -> dt | None: ...
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.DATE], **kwargs: object
-) -> date: ...
+) -> date | None: ...
 @overload
 def cast_value(
     content: object, type_: Literal[CastType.URL], **kwargs: object
@@ -577,6 +583,9 @@ def cast_value[T](
     Args:
 
         content: The entry to convert.
+
+    Kwargs:
+
         type_: The type to convert to.
 
     Returns:
@@ -610,6 +619,12 @@ def cast_value[T](
         12
         >>> cast_value(None, 'url')
         ''
+        >>> cast_value('google.com', 'url')
+        'http://google.com'
+        >>> cast_value('5/4/82', 'date').year
+        1982
+        >>> cast_value('palo alto, ca', 'location')['city']
+        'city'
 
     """
     cast_type = resolve_cast_type(type_)
@@ -626,18 +641,18 @@ def cast_value[T](
     elif cast_type in KWARG_TYPES:
         try:
             value = caster(content, **kwargs)  # pyright: ignore[reportArgumentType]
-        except (TypeError, InvalidOperation, ValueError):
+        except (TypeError, InvalidOperation, ValueError, OverflowError):
             value = default
     else:
         try:
             value = caster(content)  # pyright: ignore[reportArgumentType]
-        except (TypeError, InvalidOperation, ValueError):
+        except (TypeError, InvalidOperation, ValueError, OverflowError):
             value = default
 
     return value
 
 
-cast_none: Callable[..., None] = partial(cast_value, type_=CastType.NONE)
+cast_none: Func[None] = partial(cast_value, type_=CastType.NONE)
 
 
 def cast_pass[T](content: T, **_: object) -> T:

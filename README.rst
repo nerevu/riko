@@ -260,7 +260,7 @@ convenience method.
     >>> item = {'title': 'riko pt. 1'}
     >>> pipeline = Pipeline.from_module(Transforms.HASH, options={'field': 'title'})
     >>> pipeline.first(item)['hash']
-    1104819838
+    2894317996
 
 Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
@@ -373,7 +373,7 @@ input stream of the next.
     >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
     >>> item = pipeline.hash().first()
     >>> item['content'], item['hash']
-    ("Let's talk about riko!", 197222720)
+    ("Let's talk about riko!", 456903819)
 
 To chain a ``module`` name held in a variable, a discovery enum such as
 ``Transforms.REVERSE``, or a dotted extension name such as ``example.shout``, use the
@@ -388,7 +388,7 @@ To chain a ``module`` name held in a variable, a discovery enum such as
     >>> module_name = 'hash'
     >>> item = pipeline.pipe(module_name).first()
     >>> item['content'], item['hash']
-    ("Let's talk about riko!", 197222720)
+    ("Let's talk about riko!", 456903819)
 
 The ``|`` operator chains the same way. A ``Pipeline`` on the left side feeds ``items``
 to a module name or another ``Pipeline`` on the right side. A module name may be a plain
@@ -402,7 +402,7 @@ string or a discovery enum (e.g., ``Transforms``).
     >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
     >>> item = (pipeline | Transforms.HASH).first()
     >>> item['content'], item['hash']
-    ("Let's talk about riko!", 197222720)
+    ("Let's talk about riko!", 456903819)
 
 ``items`` on the left of ``|`` seed a ``pipeline``.
 
@@ -602,9 +602,9 @@ the run down.
     2
     >>> with pipeline.open(items) as stream:
     ...     next(stream)
-    {'content': 'a', 'hash': 1267964084}
+    {'content': 'a', 'hash': 393565300}
     >>> export(pipeline(items), 'csv').getvalue()
-    'content,hash\r\na,1267964084\r\nb,2297772648\r\n'
+    'content,hash\r\na,393565300\r\nb,1183997491\r\n'
 
 ``export`` serializes a ``pipeline`` (or any ``stream``) to one of the ``Formats``;
 see `exporting a stream`_ in the `Cookbook`_.

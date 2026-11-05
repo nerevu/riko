@@ -66,6 +66,8 @@ def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocume
 
         flow: The ``Workflow`` to serialize.
 
+    Kwargs:
+
         indent: Number of spaces to indent each nesting level by. Pass ``None`` for the
             compact single-line form.
 
@@ -164,11 +166,43 @@ def get_document_shape(document: Mapping[str, object]) -> DocumentShape:
     return shape
 
 
+def require_unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """
+    Requires a decoded JSON object's keys to be unique.
+
+    Args:
+
+        pairs: The object's key/value pairs, in document order.
+
+    Returns:
+
+        The object as a dict.
+
+    Raises:
+
+        InvalidPipelineError: If a key appears more than once.
+
+    Examples:
+
+        >>> json.loads('{"a": 1}', object_pairs_hook=require_unique_keys)
+        {'a': 1}
+
+    """
+    result = dict(pairs)
+
+    if len(result) < len(pairs):
+        keys = [key for key, _ in pairs]
+        duplicate = next(key for key in keys if keys.count(key) > 1)
+        raise InvalidPipelineError(f"duplicate key {duplicate!r} in JSON input")
+
+    return result
+
+
 def _parse_mapping(document: object) -> Mapping[str, object]:
     """Decodes a JSON document, or passes a parsed one through, as a mapping."""
     if isinstance(document, (bytes, str)):
         try:
-            raw: object = json.loads(document)
+            raw: object = json.loads(document, object_pairs_hook=require_unique_keys)
         except ValueError as e:
             raise InvalidPipelineError(f"malformed JSON input: {e}") from e
     else:
@@ -188,6 +222,8 @@ def parse_graph(
     Args:
 
         document: The JSON input as bytes or text, or already parsed.
+
+    Kwargs:
 
         shape: The shape to read it as. Omit it to detect the shape from the input.
 
@@ -223,5 +259,6 @@ __all__ = [
     "is_pipedeflike",
     "is_raw_workflow",
     "parse_graph",
+    "require_unique_keys",
     "serialize_graph",
 ]

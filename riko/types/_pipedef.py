@@ -67,6 +67,14 @@ class PipeModule(EmbedRef, total=False):
     embed: EmbedRef
 
 
+class OutputModule(TypedDict):
+    """A bare ``PipeDef`` ``output`` node: ``type``/``id`` only, ``conf`` empty."""
+
+    type: object
+    id: object
+    conf: NotRequired[object]
+
+
 class EmbedKwargs(TypedDict, total=False):
     """Kwargs a loop passes to its embed per parent — not a full module descriptor."""
 
@@ -76,12 +84,12 @@ class EmbedKwargs(TypedDict, total=False):
 
 
 class WireEndpoint(TypedDict):
-    id: str
+    id: NotRequired[str]
     moduleid: str
 
 
 class Wire(TypedDict):
-    id: str
+    id: NotRequired[str]
     src: WireEndpoint
     tgt: WireEndpoint
 
@@ -94,7 +102,7 @@ class PipeDef(TypedDict):
     """
 
     modules: list[PipeModule]
-    wires: list[Wire]
+    wires: NotRequired[list[Wire]]
     layout: NotRequired[Sequence[Mapping[str, object]]]
     terminaldata: NotRequired[Sequence[Mapping[str, object]]]
 

@@ -28,10 +28,12 @@ Attributes:
 
 from __future__ import annotations
 
-from functools import reduce
+from functools import partial, reduce
+from operator import itemgetter
 from typing import TYPE_CHECKING, Any, cast
 
 from riko.bado.itertools import async_reduce, coop_reduce
+from riko.base._funcutils import resolve_default
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING
 from riko.coercion._dataclass import build_regex_rule
@@ -39,7 +41,7 @@ from riko.parsing._dotdict import DotDict
 
 from ._decorators import processor
 from ._sortutils import group_by
-from ._textops import multi_substitute, substitute
+from ._textops import Substitution, gen_rule_passes, substitute_pass
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,7 +56,12 @@ if TYPE_CHECKING:
 logger: Logger = get_logger(__name__)
 
 OPTS: DecorationOptions = {"listize": True, "extract": "rule", "emit": True}
-DEFAULTS: Defaults = {"multi": False}
+DEFAULTS: Defaults = {}
+
+
+def _resolve_text(result: Substitution, default: str | None) -> str:
+    """Resolves a field's rewritten text, falling back when no rule matched."""
+    return result.text if result.replacements or default is None else default
 
 
 async def async_parser(
@@ -69,7 +76,7 @@ async def async_parser(
 
         item: The entry to process.
         rules: The parsed replacement rules.
-        objconf: The module configuration, containing `multi`.
+        objconf: The module configuration.
 
     Returns:
 
@@ -86,7 +93,7 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     rule = {"field": "content", "match": match, "replace": replace}
-        ...     conf = {"rule": rule, "multi": False}
+        ...     conf = {"rule": rule}
         ...     objconf = Objectify(conf)
         ...     rules = [Objectify(rule)]
         ...     kwargs = {"stream": item, "conf": conf}
@@ -97,8 +104,7 @@ async def async_parser(
         worldwide
 
     """
-    multi = objconf.multi
-    recompile = not multi
+    defaults = resolve_default(objconf.default)
 
     async def areducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = rules[0]["field"]
@@ -106,20 +112,19 @@ async def async_parser(
 
         if word is MISSING or word is None:
             replacement = word
-        elif multi:
-            grouped = group_by(rules, "flags")
-            group_rules = [g[1] for g in grouped]
-            replacement = await coop_reduce(multi_substitute, group_rules, str(word))
         else:
-            replacement = await coop_reduce(substitute, rules, str(word))
+            passes = list(gen_rule_passes(rules))
+            initial = Substitution(str(word))
+            result = await coop_reduce(substitute_pass, passes, initial)
+            replacement = _resolve_text(result, defaults.get(field))
 
         rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = [build_regex_rule(r, recompile=recompile) for r in rules]
-    grouped = group_by(regex_rules, "field")
-    field_rules = [g[1] for g in grouped]
+    regex_rules = map(partial(build_regex_rule, recompile=True), rules)
+    grouped = group_by(regex_rules, "field", ignore_case=True)
+    field_rules = map(itemgetter(1), grouped)
     return await async_reduce(areducer, field_rules, item)
 
 
@@ -135,7 +140,7 @@ def parser(
 
         item: The entry to process.
         rules: The parsed replacement rules.
-        objconf: The module configuration, containing `multi`.
+        objconf: The module configuration.
 
     Returns:
 
@@ -148,19 +153,15 @@ def parser(
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
         >>> match = r"(\\w+)\\s(\\w+)"
         >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
-        >>> conf = {"rule": rule, "multi": False}
+        >>> conf = {"rule": rule}
         >>> objconf = Objectify(conf)
         >>> rules = [Objectify(rule)]
         >>> kwargs = {"stream": item, "conf": conf}
         >>> parser(item, rules, objconf, **kwargs)
         {'content': 'worldwide', 'title': 'greeting'}
-        >>> conf["multi"] = True
-        >>> parser(item, rules, objconf, **kwargs)
-        {'content': 'worldwide', 'title': 'greeting'}
 
     """
-    multi = objconf.multi
-    recompile = not multi
+    defaults = resolve_default(objconf.default)
 
     def reducer(item: Item, rules: Sequence[RegexRule]) -> DotDict[RikoValue]:
         field = str(rules[0]["field"])
@@ -168,20 +169,18 @@ def parser(
 
         if word is MISSING or word is None:
             replacement = word
-        elif multi:
-            grouped = group_by(rules, "flags")
-            group_rules = [g[1] for g in grouped]
-            replacement = reduce(multi_substitute, group_rules, str(word))
         else:
-            replacement = reduce(substitute, rules, str(word))
+            initial = Substitution(str(word))
+            result = reduce(substitute_pass, gen_rule_passes(rules), initial)
+            replacement = _resolve_text(result, defaults.get(field))
 
         rewritten = {} if replacement is MISSING else {field: replacement}
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = [build_regex_rule(r, recompile=recompile) for r in rules]
-    grouped = group_by(regex_rules, "field")
-    field_rules = [g[1] for g in grouped]
+    regex_rules = [build_regex_rule(r, recompile=True) for r in rules]
+    grouped = group_by(regex_rules, "field", ignore_case=True)
+    field_rules = map(itemgetter(1), grouped)
     return reduce(reducer, field_rules, item)
 
 
@@ -208,9 +207,6 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
                 replace (str): Replacement text. ``$1``, ``$2``, ... refer to
                     capture groups.
 
-                default (str): Value to use when nothing matches (default:
-                    None, i.e. keep the original).
-
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
@@ -218,11 +214,13 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
                     and confine ``^``, ``$`` and ``.`` to one line
                     (default: False).
 
-                seriesmatch (bool): Whether to apply this rule in series with
-                    the others (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous
+                    rule's output. Consecutive rules with ``seriesmatch`` False
+                    all match the original text in one pass, leftmost match
+                    first (default: True).
 
-            multi (bool): Whether to combine rules sharing a flag set into one
-                pass (default: False).
+            default (dict): Value per field to use when none of the field's
+                rules matches (default: {}, i.e. keep the original).
 
         context (Context): the run environment
 
@@ -242,6 +240,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
     Raises:
 
         TypeError: If ``conf`` has no ``rule`` key.
+        re.error: If a rule's ``replace`` refers to a group its ``match`` lacks.
 
     Notes:
 
@@ -257,7 +256,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>>
         >>> async def main():
         ...     rule = {"field": "content", "match": match, "replace": "$2wide"}
-        ...     conf = {"rule": rule, "multi": False}
+        ...     conf = {"rule": rule}
         ...     result = async_pipe(item, conf=conf)
         ...     print((await anext(result))["content"])
         >>>
@@ -291,9 +290,6 @@ def pipe(*args: Any, **kwargs: object) -> Item:
                 replace (str): Replacement text. ``$1``, ``$2``, ... refer to
                     capture groups.
 
-                default (str): Value to use when nothing matches (default:
-                    None, i.e. keep the original).
-
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
@@ -301,11 +297,13 @@ def pipe(*args: Any, **kwargs: object) -> Item:
                     and confine ``^``, ``$`` and ``.`` to one line
                     (default: False).
 
-                seriesmatch (bool): Whether to apply this rule in series with
-                    the others (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous
+                    rule's output. Consecutive rules with ``seriesmatch`` False
+                    all match the original text in one pass, leftmost match
+                    first (default: True).
 
-            multi (bool): Whether to combine rules sharing a flag set into one
-                pass (default: False).
+            default (dict): Value per field to use when none of the field's
+                rules matches (default: {}, i.e. keep the original).
 
         context (Context): the run environment
 
@@ -325,6 +323,7 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     Raises:
 
         TypeError: If ``conf`` has no ``rule`` key.
+        re.error: If a rule's ``replace`` refers to a group its ``match`` lacks.
 
     Notes:
 
@@ -333,26 +332,11 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
     Examples:
 
-        >>> # default matching
         >>> item = {"content": "hello world", "title": "greeting"}
         >>> match = r"(\\w+)\\s(\\w+)"
         >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
-        >>> conf = {"rule": rule, "multi": False}
-        >>> next(pipe(item, conf=conf))
+        >>> next(pipe(item, conf={"rule": rule}))
         {'content': 'worldwide', 'title': 'greeting'}
-        >>> # multiple regex mode
-        >>> conf["multi"] = True
-        >>> next(pipe(item, conf=conf))
-        {'content': 'worldwide', 'title': 'greeting'}
-        >>> # case insensitive matching
-        >>> item = {"content": "Hello hello"}
-        >>> rule.update({"match": r"hello.*", "replace": "bye"})
-        >>> next(pipe(item, conf=conf))["content"]
-        'bye'
-        >>> # case sensitive matching
-        >>> rule["casematch"] = True
-        >>> next(pipe(item, conf=conf))["content"]
-        'Hello bye'
 
     """
     return parser(*args, **kwargs)

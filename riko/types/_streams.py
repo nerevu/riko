@@ -55,20 +55,17 @@ type ItemGenerator = Generator[Item, None]
 # Async
 type AsyncStream = AsyncIterator[Item]
 type AsyncCascade = AsyncIterator[Stream]
-type AsyncItemOrStream = ItemOrStream | AsyncStream
 type AsyncItems = AsyncIterable[Item]
 type AsyncStreams = AsyncIterable[Stream]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
 type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
 type AsyncItemGenerator = AsyncGenerator[Item, None]
-type StreamGenerator = Generator[object, None, Stream]
 
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
 type ValueFeed = AnyIterable[ItemValue]
 type InputLike = Item | ValueFeed | Awaitable[Item | ValueFeed]
-type OthersLike = Iterable[str | AsyncStream] | Streams | AsyncStreams
 
 
 # Item/value

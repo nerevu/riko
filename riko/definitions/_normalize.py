@@ -20,9 +20,10 @@ from attrs import AttrsInstance
 
 from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._guards import is_mapping, require_mapping, require_sequence
-from riko.base._iterutils import gen_non_none, map_keys_and_values, map_values, unzip
+from riko.base._iterutils import gen_non_null, unzip
 from riko.base._recordutils import serialize_attrs
 from riko.base._require_guards import (
     normalize_strs,
@@ -182,6 +183,9 @@ def get_free_occurrence(name: str, taken: Iterable[str], start: int = 1) -> int:
 
         name: The node name the id is based on.
         taken: The ids already in use.
+
+    Kwargs:
+
         start: The first occurrence number to try.
 
     Returns:
@@ -214,7 +218,7 @@ def _gen_node_info(
 def _gen_nodes(raw_nodes: Iterable[object]) -> Iterator[RawNode]:
     """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
     _taken, nodes = unzip(_gen_node_info(raw_nodes))
-    taken = set(gen_non_none(_taken))
+    taken = set(gen_non_null(_taken))
     counts: dict[str, int] = defaultdict(int)
 
     for node in nodes:

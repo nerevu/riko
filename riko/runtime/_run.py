@@ -44,6 +44,8 @@ def run_pipeline[T](
         dispatcher: Finds each node's pipe by name, whether a module such as ``fetch``
             or a stored workflow's ``pipe_<id>``.
 
+    Kwargs:
+
         seed: Items for the definition's open input: one item, an item stream, an async
             item stream, or an awaitable resolving to one of those. Omit it when the
             definition is self-starting (default: None).
@@ -92,6 +94,8 @@ async def arun_pipeline[T](
 
         dispatcher: Finds each node's pipe by name, whether a module such as ``fetch``
             or a stored workflow's ``pipe_<id>``.
+
+    Kwargs:
 
         seed: Items for the definition's open input: one item, an item stream, an async
             item stream, or an awaitable resolving to one of those. Omit it when the

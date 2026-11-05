@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
-from ._iterutils import map_values, sort_stably
+from ._funcutils import map_values
+from ._iterutils import sort_stably
 
 if TYPE_CHECKING:
     from _typeshed import SupportsRichComparison
@@ -30,7 +31,7 @@ type AnyGraph[T] = Graph[T] | FrozenGraph[T]
 type SortKey[T] = Callable[[T], SupportsRichComparison] | None
 
 
-def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph:
+def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph[T]:
     return nx.DiGraph(map_values(sort_stably, graph))
 
 
@@ -161,6 +162,9 @@ def topological_sort[T: Hashable](
     Args:
 
         graph: Each node mapped to the nodes that come after it.
+
+    Kwargs:
+
         reverse: Whether to return the groups last first.
         strict: Whether a cycle raises instead of falling back to components.
         key: Orders the nodes that become ready together in an acyclic graph.
@@ -222,6 +226,9 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     Args:
 
         graph: Each node mapped to the nodes that come after it.
+
+    Kwargs:
+
         groups: The graph's ``topological_sort`` groups, when already computed.
 
     Returns:

@@ -159,6 +159,7 @@ async def async_parser(
         2
 
     """
+    # objconf only parses on __getitem__
     td_kwargs: dict[str, int] = {k: objconf[k] for k in objconf if k}
     time_ms = timedelta(**td_kwargs) // timedelta(milliseconds=1)
     return await AsyncTimeoutIterator(stream, time_ms)

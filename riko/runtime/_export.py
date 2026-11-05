@@ -213,12 +213,12 @@ def export(
 
         items: The stream to convert.
 
+    Kwargs:
+
         type_: The export type. ``list``/``tuple`` return ``items``. A ``Formats`` value
             serializes.
 
         f: The path or file the serialized output is written to.
-
-    Kwargs:
 
         mode: The mode a destination path is opened in (default: "wb+"). Only valid with
             ``f``, like the other writer options below.

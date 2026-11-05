@@ -354,7 +354,7 @@ also accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"
     >>>
     >>> # chain a module by name
     >>> (pipeline | Transforms.HASH).first(items)
-    {'content': 'a', 'hash': 1267964084}
+    {'content': 'a', 'hash': 393565300}
 
 A ``pipeline`` holds no ``items`` of its own. Every run takes a ``seed`` as its first
 argument, whether you call it (``pipeline(items)``), pipe it (``items | pipeline``),
@@ -474,7 +474,7 @@ can serve as the prefix of several ``pipelines``.
     >>> list(pipeline.count())
     [{'count': 1}]
     >>> list(pipeline.hash())
-    [{'content': "Let's talk about riko!", 'hash': 197222720}]
+    [{'content': "Let's talk about riko!", 'hash': 456903819}]
     >>> sorted(pipeline.workflow.nodes)
     ['itembuilder-1']
 
@@ -491,7 +491,7 @@ them into a concrete list you can index, measure, and reuse.
     >>> pipeline = Pipeline.from_module("hash")
     >>> items = export(pipeline([{'content': 'a'}, {'content': 'b'}]))
     >>> len(items), items[0]['hash']      # unlike the pipeline, indexable & measurable
-    (2, 1267964084)
+    (2, 393565300)
 
 You can pass an export type as the second argument ``list`` (the default) and ``tuple``
 return the items, and a format serializes them. A format may be a plain string or a
@@ -508,9 +508,9 @@ optional ``csv2ofx`` dependency). A format returns a ``StringIO`` buffer.
     >>> {"csv", "geojson", "json", "jsonl"}.issubset(list_formats())
     True
     >>> export(pipeline(items), "tuple")
-    ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
+    ({'title': 'a', 'hash': 393565300}, {'title': 'b', 'hash': 1183997491})
     >>> export(pipeline(items), Formats.JSON).getvalue()
-    '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
+    '[{"hash": 393565300, "title": "a"}, {"hash": 1183997491, "title": "b"}]'
 
 
 For serialized output, you can pass a file path or file like object as the third
@@ -673,6 +673,21 @@ Under ``async for`` native async work runs inline and synchronous work runs on w
 threads (or on the event-loop thread with the inline executor). The ``source`` is
 pulled only as workers free up. Under ``for`` a thread or process pool likewise pulls
 the ``source`` no further ahead than it has workers.
+
+``with_execution`` also takes ``shutdown_timeout``: the number of seconds a run's
+cleanup may take (and, under ``for``, how long stopped worker processes get before
+being killed). Settings a ``pipeline`` carries are readable as ``pipeline.settings``
+(an ``ExecutionSettings``).
+
+.. code-block:: python
+
+    >>> from riko import Pipeline
+    >>>
+    >>> pipeline = Pipeline.from_module('hash').with_execution(
+    ...     concurrency=2, shutdown_timeout=5.0
+    ... )
+    >>> pipeline.settings.concurrency, pipeline.settings.shutdown_timeout
+    (2, 5.0)
 
 Advanced recipes
 ----------------
@@ -847,6 +862,10 @@ callable that returns the value should use ``Resource.from_factory`` with an exp
     >>> pipeline.context.resources['client'].value is client
     True
 
+Under ``for``, a resource value whose only close is async (an ``aclose`` with no
+``close``) is rejected with a message naming the fix. Produce it with an async factory
+or lifecycle (riko runs the async cleanup) or iterate with ``async for``.
+
 Fanning out a stream
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -996,6 +1015,23 @@ operators such as ``union``/``join`` expressible too.
     >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]
+
+A ``Workflow`` composes like a ``Pipeline``: ``flow.with_node(node)`` appends a node
+after the default output, and ``flow.with_workflow(other)`` appends a whole workflow.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Workflow
+    >>> from riko.ext import ModuleNode
+    >>>
+    >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
+    >>> flow = Workflow.parse({'modules': [{'name': 'itembuilder', 'conf': conf}]})
+    >>> counted = flow.with_node(ModuleNode(id='count', name='count'))
+    >>> list(Pipeline(counted))
+    [{'count': 1}]
+    >>> hashed = flow.with_workflow(Pipeline.from_module('hash').workflow)
+    >>> sorted(node.name for node in hashed.nodes.values())
+    ['hash', 'itembuilder']
 
 ``compile_workflow`` turns the same ``Workflow`` into a workflow module
 (``WorkflowModule``): the Python source of a module that rebuilds it. The module

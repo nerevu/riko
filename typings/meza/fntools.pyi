@@ -1,9 +1,17 @@
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from json import JSONEncoder
 from typing import Protocol, overload
 
 class _Reader[T](Protocol):
     def read(self, size: int = ..., /) -> T: ...
+
+class Objectify:
+    def __init__(
+        self,
+        kwargs: Mapping[str, object],
+        func: Callable[[object], object] | None = None,
+        **defaults: object,
+    ) -> None: ...
 
 class CustomEncoder(JSONEncoder):
     def default(self, obj: object) -> object: ...  # pyright: ignore[reportIncompatibleMethodOverride]

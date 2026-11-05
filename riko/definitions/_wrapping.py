@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Unpack
 from riko.types._wrappers import is_wrapper_meta
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable
 
     from riko.types._options import RawCallOptions
     from riko.types._wrappers import (
@@ -143,7 +143,7 @@ def build_call(
 
 
 def stamp_wrapper_meta(
-    target: Callable[..., object],
+    target: Func[object],
     *,
     name: str,
     module_type: ModuleType | str,
@@ -172,9 +172,10 @@ def stamp_wrapper_meta(
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is an ``async_pipe``.
 
+    Kwargs:
+
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
-
         prepare: Prepares a call for reuse over many items. Defaults to preparing
             ``target`` with its configuration and call options (default: None).
 

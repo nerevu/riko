@@ -158,9 +158,12 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             url (str): The file to fetch, local or remote. Its extension selects
                 the document format. Required.
 
-            path (str | list[str]): Dotted path into the fetched document to the
-                records, e.g. ``"value.items"``. The whole document is returned when
-                empty (default: None).
+            path (str | list[str]): Dotted path into the fetched document's records,
+                e.g., ``"value.items"`` (default: None). The whole document is returned
+                when empty. Keys match case-insensitively. With ``ijson`` (the ``perf``
+                extra), a JSON document is streamed when it is
+                ``RIKO_STREAMING_THRESHOLD`` bytes or more. When two keys differ only
+                in case, streamed parsing selects the first and in-memory the last.
 
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
@@ -218,9 +221,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             url (str): The file to fetch, local or remote. Its extension selects
                 the document format. Required.
 
-            path (str | list[str]): Dotted path into the fetched document to the
-                records, e.g. ``"value.items"``. The whole document is returned when
-                empty (default: None).
+            path (str | list[str]): Dotted path into the fetched document's records,
+                e.g., ``"value.items"`` (default: None). The whole document is returned
+                when empty. Keys match case-insensitively. With ``ijson`` (the ``perf``
+                extra), a JSON document is streamed when it is an HTTP response or
+                ``RIKO_STREAMING_THRESHOLD`` bytes or more. When two keys differ only
+                in case, streamed parsing selects the first and in-memory the last.
 
             html5 (bool): Whether to use the HTML5 parser (default: False).
 

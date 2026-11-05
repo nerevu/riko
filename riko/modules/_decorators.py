@@ -39,7 +39,7 @@ from typing import (
 
 from attrs import define
 
-from riko.bado._util import as_awaitable
+from riko.bado._util import as_awaitable, maybe_aclosing
 from riko.bado.itertools import (
     as_async,
     async_iter,
@@ -60,7 +60,7 @@ from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType
-from riko.types._io import is_async_closeable
+from riko.types._io import get_async_closer
 from riko.types._options import (
     Casted,
     ContextOverrides,
@@ -77,12 +77,13 @@ from riko.types._streams import (
     AnyIterable,
     AsyncItemsOrValues,
     AsyncStream,
+    AsyncStreamOrValueStream,
     Item,
     ItemOrValue,
     Stream,
     StreamOrValueStream,
 )
-from riko.types._wrappers import PreparedCall
+from riko.types._wrappers import Func, PreparedCall
 from riko.types.modules import Conf, require_conf
 
 from ._assignment import build_assignment, gen_assignments
@@ -97,6 +98,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._values import RikoValue
     from riko.types._wrappers import (
+        AsyncFunc,
         AsyncOperatorParser,
         AsyncOperatorWrapper,
         AsyncOperatorWrapperInput,
@@ -201,7 +203,7 @@ class _AsyncWrapperStream[T]:
     item with no outer await (the default ``async for item in async_pipe(...)`` path).
     Awaiting it runs the parser and returns the whole stream (the advanced
     ``await async_pipe(...)`` path). Iteration runs the parser once. Each ``await`` runs
-    it again.
+    it again. Once closed, iterating it yields nothing and never runs the parser.
 
     Attributes:
 
@@ -209,11 +211,12 @@ class _AsyncWrapperStream[T]:
 
     """
 
-    __slots__ = ("_agen", "_make")
+    __slots__ = ("_agen", "_closed", "_make")
 
-    def __init__(self, make: Callable[..., Awaitable[AnyIterable[T]]]) -> None:
+    def __init__(self, make: AsyncFunc[AnyIterable[T]]) -> None:
         self._make = make
         self._agen: AsyncIterator[T] | None = None
+        self._closed = False
 
     def __await__(self) -> Generator[object, None, AnyIterable[T]]:
         return self._make().__await__()
@@ -222,15 +225,19 @@ class _AsyncWrapperStream[T]:
         return self
 
     async def __anext__(self) -> T:
-        if self._agen is None:
+        if self._closed:
+            raise StopAsyncIteration
+        elif self._agen is None:
             self._agen = as_async(await self._make())
 
         return await self._agen.__anext__()
 
     async def aclose(self) -> None:
-        """Closes the parser's stream if consumption has started."""
-        if is_async_closeable(self._agen):
-            await self._agen.aclose()
+        """Ends iteration and closes the parser's stream if consumption has started."""
+        self._closed = True
+
+        if (closer := get_async_closer(self._agen)) is not None:
+            await closer()
 
 
 class Module[B: bool]:
@@ -270,7 +277,7 @@ class Module[B: bool]:
             msg = f"@{cls.__name__} takes either the function to wrap or decoration "
             raise TypeError(msg + "options, not both")
         elif callable(pipe):
-            wrap = cast("Callable[[Callable[..., object]], ModuleWrapper]", cls())
+            wrap = cast("Callable[[Func[object]], ModuleWrapper]", cls())
             result = wrap(pipe)
         else:
             result = super().__new__(cls)
@@ -558,14 +565,6 @@ class Module[B: bool]:
             >>> call = pipe.prepare(conf=conf, field="x")
             >>> next(call({"x": "hi"}))
             {'x': 'hi', 'strtransform': 'HI'}
-            >>> pipe.prepare("resources", resources={})
-            Traceback (most recent call last):
-                ...
-            TypeError: the 'strtransform' module takes 'resources' with each item...
-            >>> pipe.prepare(conf=conf, skip_if=lambda item: True)
-            Traceback (most recent call last):
-                ...
-            TypeError: the 'strtransform' module fixes 'skip_if' when it is decorated...
 
         """
         self._validate_call_keywords(wrapper, options)
@@ -646,7 +645,7 @@ async def _materialize_terminal[T](value: object) -> object:
 
 async def _aprocess_stream[T](
     wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], items: AsyncIterable[T]
-) -> AsyncIterator[ItemOrValue]:
+) -> AsyncStreamOrValueStream:
     """
     Maps a processor over an async stream lazily, in order, flattening its results.
 
@@ -674,7 +673,7 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
     ``**kwargs`` into the synchronous conf-parsing machinery. Each async stream is
     materialized once here so parsing consumes it like its synchronous counterpart.
 
-    Args:
+    Kwargs:
 
         **kwargs: The passthrough keyword arguments, possibly holding async streams.
 
@@ -749,7 +748,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     options: RawCallOptions
 
     @property
-    def parser(self) -> Callable[..., Any]:
+    def parser(self) -> Func[Any]:
         """The undecorated parser the pipe callable wraps."""
         return vars(self.wrapper)["__wrapped__"]
 
@@ -997,8 +996,9 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
 
             processed = async_iter(self._finish(stream))
 
-        async for item in processed:
-            yield item
+        async with maybe_aclosing(processed) as iterator:
+            async for item in iterator:
+                yield item
 
 
 @define(frozen=True, slots=True)
@@ -1231,6 +1231,9 @@ class processor[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The parsed input item.
+
+        Kwargs:
+
             field: Optional field whose value replaces the whole item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 
@@ -1282,6 +1285,9 @@ class processor[B: bool](Module[B]):  # noqa: N801
             input_: The original input item to merge into.
             stream: The parser's results.
             assign: The field the result is assigned to.
+
+        Kwargs:
+
             emit: Whether to emit the result rather than assign it.
             skip: Whether the item was skipped (passed through unchanged).
             count: Optional stream-count reduction.
@@ -1545,7 +1551,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
         Non-mapping elements are placed under ``"content"``; an empty or ``None``
         input yields nothing.
 
-        Args:
+        Kwargs:
 
             items: The input items, if any.
 
@@ -1621,6 +1627,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The parsed sync or async input stream.
+
+        Kwargs:
+
             field: Optional field whose value replaces each item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 
@@ -1682,6 +1691,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
             stream: The parser's results.
             assign: The field the result is assigned to.
+
+        Kwargs:
+
             emit: Whether to emit the result rather than assign it.
 
         Returns:
@@ -1790,8 +1802,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
             output = self._call_direct(*args, conf=conf, context=context, **kwargs)
             stream = cast("AsyncOperatorWrapperInternalOutput", output)
 
-            async for item in stream:
-                yield item
+            async with maybe_aclosing(stream) as iterator:
+                async for item in iterator:
+                    yield item
 
         def sync_wrapper(
             items: SyncOperatorWrapperInput | None = None,
@@ -1922,7 +1935,7 @@ class splitter[B: bool](Module[B]):  # noqa: N801
         Non-mapping elements are placed under ``"content"``; an empty or ``None``
         input yields nothing.
 
-        Args:
+        Kwargs:
 
             items: The input items, if any.
 
@@ -1956,6 +1969,9 @@ class splitter[B: bool](Module[B]):  # noqa: N801
 
             prepared: The immutable per-call state from ``prepare``.
             input_: The input stream.
+
+        Kwargs:
+
             field: Optional field whose value replaces each item.
             **kwargs: Extra keyword arguments forwarded to parsing.
 

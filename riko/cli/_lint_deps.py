@@ -222,6 +222,8 @@ def gen_import_issues(
 
         pyproject: The ``pyproject.toml`` declaring the dependencies.
 
+    Kwargs:
+
         distributions: Maps each top-level module name to the providing distributions
             (default: the installed environment's mapping).
 

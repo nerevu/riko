@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
-from riko.base._iterutils import map_values
+from riko.base._funcutils import map_values
 from riko.types._frozendict import thaw
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable
     from contextlib import AbstractAsyncContextManager, AbstractContextManager
 
     from riko.types._resource import (
@@ -17,9 +17,10 @@ if TYPE_CHECKING:
         SyncLifecyclePlan,
         ValueFactoryPlan,
     )
+    from riko.types._wrappers import Func
 
 
-def _call_thawed[R](func: Callable[..., R], *args: object, **kwargs: object) -> R:
+def _call_thawed[R](func: Func[R], *args: object, **kwargs: object) -> R:
     return func(*map(thaw, args), **map_values(thaw, kwargs))
 
 

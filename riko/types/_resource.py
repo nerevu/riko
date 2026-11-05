@@ -30,35 +30,32 @@ from contextlib import (
 from enum import Enum, auto
 from functools import partial
 from inspect import isasyncgenfunction, isgeneratorfunction, unwrap
-from typing import TYPE_CHECKING, Literal, TypeGuard
+from typing import TYPE_CHECKING, Literal, TypeGuard, overload
 
 from attrs import define, field
 from typing_extensions import TypeIs
 
+from riko.base._funcutils import noop
 from riko.base._guards import is_async_callable
-from riko.base._iterutils import noop
 
 from ._frozendict import FrozenDict, freeze
-from ._io import is_async_closeable, is_sync_closeable
 
 if TYPE_CHECKING:
     from types import CodeType
 
-    from ._io import Closeable
+    from ._wrappers import Func
 
-type ValueFactory[T] = Callable[..., T | Awaitable[T]]
+type ValueFactory[T] = Func[T | Awaitable[T]]
 
 type GeneratorFactory[T] = Callable[
     ..., Generator[T, None, None] | AsyncGenerator[T, None]
 ]
 
 type AnyContextManager[T] = AbstractContextManager[T] | AbstractAsyncContextManager[T]
-type ContextManagerFactory[T] = Callable[..., AnyContextManager[T]]
+type ContextManagerFactory[T] = Func[AnyContextManager[T]]
 type LifecycleFactory[T] = GeneratorFactory[T] | ContextManagerFactory[T]
 type ResourceFactory[T] = LifecycleFactory[T] | ValueFactory[T]
-type LifecycleValue[T] = AnyContextManager[T]
 type Cleanup[T] = Callable[[T], Awaitable[None] | None]
-type ResolvedValue[T] = T | Closeable
 type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
 
 type ResourcePlan[T] = (
@@ -97,25 +94,25 @@ def _is_built_by(val: object, code: CodeType) -> bool:
 
 def _is_sync_cm_factory[T](
     val: LifecycleFactory[T],
-) -> TypeGuard[Callable[..., AbstractContextManager[T]]]:
+) -> TypeGuard[Func[AbstractContextManager[T]]]:
     return _is_built_by(val, _SYNC_CM_CODE)
 
 
 def _is_async_cm_factory[T](
     val: LifecycleFactory[T],
-) -> TypeGuard[Callable[..., AbstractAsyncContextManager[T]]]:
+) -> TypeGuard[Func[AbstractAsyncContextManager[T]]]:
     return _is_built_by(val, _ASYNC_CM_CODE)
 
 
 def _is_sync_gen_factory[T](
     val: LifecycleFactory[T],
-) -> TypeGuard[Callable[..., Generator[T, None, None]]]:
+) -> TypeGuard[Func[Generator[T, None, None]]]:
     return isgeneratorfunction(unwrap(val))
 
 
 def _is_async_gen_factory[T](
     val: LifecycleFactory[T],
-) -> TypeGuard[Callable[..., AsyncGenerator[T, None]]]:
+) -> TypeGuard[Func[AsyncGenerator[T, None]]]:
     return isasyncgenfunction(unwrap(val))
 
 
@@ -131,11 +128,17 @@ def _is_async_context_manager[T](
     return isinstance(val, AbstractAsyncContextManager)
 
 
-def is_context_manager(val: object) -> TypeIs[AnyContextManager]:
+def is_context_manager(val: object) -> TypeIs[AnyContextManager[object]]:
     return isinstance(val, (AbstractContextManager, AbstractAsyncContextManager))
 
 
-def is_lifecycle_factory(val: object) -> TypeGuard[LifecycleFactory]:
+@overload
+def is_lifecycle_factory[T](
+    val: ResourceFactory[T],
+) -> TypeGuard[LifecycleFactory[T]]: ...
+@overload
+def is_lifecycle_factory(val: object) -> TypeGuard[LifecycleFactory[object]]: ...
+def is_lifecycle_factory(val: object) -> TypeGuard[LifecycleFactory[object]]:
     """
     Detects a factory that manages a lifecycle around the value it yields.
 
@@ -174,13 +177,13 @@ def _is_value_factory[T](val: ResourceFactory[T]) -> TypeGuard[ValueFactory[T]]:
 
 
 def _enter_sync_gen[T](
-    func: Callable[..., Generator[T, None, None]], /, *args: object, **kwargs: object
+    func: Func[Generator[T, None, None]], /, *args: object, **kwargs: object
 ) -> AbstractContextManager[T]:
     return contextmanager(func)(*args, **kwargs)
 
 
 def _enter_async_gen[T](
-    func: Callable[..., AsyncGenerator[T, None]], /, *args: object, **kwargs: object
+    func: Func[AsyncGenerator[T, None]], /, *args: object, **kwargs: object
 ) -> AbstractAsyncContextManager[T]:
     return asynccontextmanager(func)(*args, **kwargs)
 
@@ -196,12 +199,7 @@ class ExternalPlan[T]:
 
     """
 
-    value: ResolvedValue[T]
-
-    @property
-    def requires_async_cleanup(self) -> bool:
-        """Whether cleaning up the resource needs the event loop. Never."""
-        return False
+    value: T
 
 
 @define(frozen=True, slots=True)
@@ -217,30 +215,8 @@ class OwnedPlan[T]:
 
     """
 
-    value: ResolvedValue[T]
+    value: T
     cleanup: Cleanup[T] | Literal[False] | None = None
-
-    @property
-    def requires_async_cleanup(self) -> bool:
-        """Whether cleaning up the resource needs the event loop."""
-        value = self.value
-
-        if self.cleanup is None:
-            is_async = is_async_closeable(value) and not is_sync_closeable(value)
-        else:
-            is_async = is_async_callable(self.cleanup)
-
-        return is_async
-
-    @property
-    def has_async_cleanup(self) -> bool:
-        """Whether the resource can clean up natively async."""
-        if self.cleanup is None:
-            is_async = is_async_closeable(self.value)
-        else:
-            is_async = is_async_callable(self.cleanup)
-
-        return is_async
 
 
 @define(frozen=True, slots=True)
@@ -267,11 +243,6 @@ class ValueFactoryPlan[T]:
         """Whether ``func`` is natively async."""
         return is_async_callable(self.func)
 
-    @property
-    def requires_async_cleanup(self) -> bool:
-        """Whether cleaning up the resource needs the event loop."""
-        return is_async_callable(self.cleanup)
-
 
 @define(frozen=True, slots=True)
 class SyncLifecyclePlan[T]:
@@ -290,14 +261,9 @@ class SyncLifecyclePlan[T]:
     """
 
     source: object
-    enter: Callable[..., AbstractContextManager[T]]
+    enter: Func[AbstractContextManager[T]]
     args: tuple[object, ...] = field(default=(), converter=freeze)
     kwargs: FrozenDict[str, object] = field(factory=FrozenDict, converter=FrozenDict)
-
-    @property
-    def requires_async_cleanup(self) -> bool:
-        """Whether cleaning up the resource needs the event loop. Never."""
-        return False
 
 
 @define(frozen=True, slots=True)
@@ -317,14 +283,9 @@ class AsyncLifecyclePlan[T]:
     """
 
     source: object
-    enter: Callable[..., AbstractAsyncContextManager[T]]
+    enter: Func[AbstractAsyncContextManager[T]]
     args: tuple[object, ...] = field(default=(), converter=freeze)
     kwargs: FrozenDict[str, object] = field(factory=FrozenDict, converter=FrozenDict)
-
-    @property
-    def requires_async_cleanup(self) -> bool:
-        """Whether cleaning up the resource needs the event loop. Always."""
-        return True
 
 
 def build_lifecycle_plan[T](
@@ -342,6 +303,8 @@ def build_lifecycle_plan[T](
             with ``contextmanager``/``asynccontextmanager``, or a context manager.
 
         args: Positional arguments for ``factory``.
+
+    Kwargs:
 
         kwargs: Keyword arguments for ``factory``.
 
@@ -406,6 +369,9 @@ def build_factory_plan[T](
 
         factory: The lifecycle or value factory.
         args: Positional arguments for ``factory``.
+
+    Kwargs:
+
         cleanup: The value factory's cleanup callback, or ``False`` for none.
         kwargs: Keyword arguments for ``factory``.
 

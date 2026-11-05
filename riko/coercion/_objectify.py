@@ -7,14 +7,13 @@ from collections.abc import Mapping, Sequence
 from time import struct_time
 from typing import TYPE_CHECKING, overload
 
+from riko.base._funcutils import map_keys
 from riko.base._guards import is_mapping
-from riko.base._iterutils import map_keys
 
 if TYPE_CHECKING:
     from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView
     from typing import Protocol
 
-    from riko.types._streams import ItemOrValue
     from riko.types._wrappers import ArgCaster
 
     class _Valued[V](Protocol):
@@ -67,6 +66,9 @@ class Objectify[V](_Objectify, Mapping[str, V]):
         Args:
 
             data: The attributes to set.
+
+        Kwargs:
+
             func: Optional callable applied to each value on access.
             defaults: Default attributes, used for keys absent from ``data``.
 
@@ -107,22 +109,25 @@ def objectify[T](data: Mapping[str, T]) -> Objectify[T]: ...
 @overload
 def objectify[T](data: T) -> T: ...
 @overload
-def objectify[T](data: Mapping[str, T], func: ArgCaster) -> Objectify[T]: ...
+def objectify[T](data: Mapping[str, T], func: ArgCaster[object]) -> Objectify[T]: ...
 @overload
-def objectify[T](
-    data: Sequence[T], func: ArgCaster
-) -> list[ItemOrValue | Objectify[object]]: ...
+def objectify[T, R](
+    data: Sequence[T], func: ArgCaster[R]
+) -> list[R | Objectify[object]]: ...
 @overload
-def objectify[T](data: T, func: ArgCaster) -> T | ItemOrValue: ...
-def objectify[T](
-    data: T, func: ArgCaster | None = None, **defaults: object
-) -> T | ItemOrValue | Objectify[T] | list[T] | list[ItemOrValue | Objectify[object]]:
+def objectify[T, R](data: T, func: ArgCaster[R]) -> T | R: ...
+def objectify[T, R](
+    data: T, func: ArgCaster[R] | None = None, **defaults: object
+) -> T | R | Objectify[T] | Objectify[object] | list[R | Objectify[object]]:
     """
     Wraps a mapping as ``Objectify`` and applies ``func`` to any other value.
 
     Args:
 
         data: The value to objectify.
+
+    Kwargs:
+
         func: Optional callable applied to non-mapping values.
         defaults: Default attributes for the resulting ``Objectify``.
 
@@ -134,7 +139,7 @@ def objectify[T](
     """
     if is_mapping(data):
         objectified = Objectify(data, func=func, **defaults)
-    elif func:
+    elif func is not None:
         if isinstance(data, (str, struct_time)):
             objectified = func(data)
         elif isinstance(data, Sequence):

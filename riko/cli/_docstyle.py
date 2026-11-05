@@ -10,6 +10,7 @@ from ast import (
     AsyncFunctionDef,
     Attribute,
     ClassDef,
+    FunctionDef,
     ImportFrom,
     Module,
     Name,
@@ -21,10 +22,12 @@ from ast import (
     walk,
 )
 from doctest import DocTestParser
+from itertools import chain, pairwise
+from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
-from riko.base._iterutils import gen_instances
+from riko.base._iterutils import gen_instances, gen_non_null
 from riko.base._verbs import VERBS
 
 from ._import_graph import FUNCTION_NODES
@@ -35,6 +38,7 @@ if TYPE_CHECKING:
 
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
+_ENTRY: re.Pattern[str] = re.compile(r"\*{0,2}(?P<name>\w+)( \(.*\))?:(\s|$)")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
@@ -112,6 +116,9 @@ def get_name_verb(name: str, *, is_async: bool = False) -> str | None:
     Args:
 
         name: The function name.
+
+    Kwargs:
+
         is_async: Whether the function is an async function.
 
     Returns:
@@ -235,7 +242,129 @@ def gen_malformed_raises(doc: str) -> Iterator[str]:
                 yield line
 
 
-def gen_none_checks(doc: str) -> Iterator[str]:
+def gen_section_names(doc: str, section: str) -> Iterator[str]:
+    """
+    Finds the parameter names a docstring section documents.
+
+    Args:
+
+        doc: A cleaned docstring.
+        section: The section header without its colon, e.g. ``"Kwargs"``.
+
+    Yields:
+
+        Each entry's name, without any ``*``/``**`` prefix or type label.
+
+    Examples:
+
+        >>> doc = "Args:\\n\\n    a: One.\\n        More.\\n    *rest (int): Two.\\n"
+        >>> list(gen_section_names(doc, "Args"))
+        ['a', 'rest']
+
+    """
+    start: int | None = None
+    entry: int | None = None
+
+    for raw in doc.splitlines():
+        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+
+        if line == f"{section}:":
+            start, entry = indent, None
+        elif start is None or not line:
+            continue
+        elif indent <= start:
+            start = None
+        elif (entry is None or indent <= entry) and (match := _ENTRY.match(line)):
+            entry = indent
+            yield match["name"]
+
+
+def gen_misplaced_params(node: FunctionDef | AsyncFunctionDef) -> Iterator[str]:
+    """
+    Finds parameters documented in the wrong one of ``Args:`` and ``Kwargs:``.
+
+    A parameter with a default belongs under ``Kwargs:``. One without a default belongs
+    under ``Args:``, whether or not it is keyword-only. A ``**kwargs`` bag belongs
+    under ``Kwargs:``.
+
+    Args:
+
+        node: The function whose signature and docstring are compared.
+
+    Yields:
+
+        A ``name under Section: (move to Section:)`` note per misplaced parameter.
+
+    Examples:
+
+        >>> from ast import parse
+        >>>
+        >>> source = "def f(a, b=1, *, c):\\n '''S.\\n\\n Args:\\n\\n  a: A.\\n"
+        >>> source += "  b: B.\\n\\n Kwargs:\\n\\n  c: C.\\n '''\\n"
+        >>> list(gen_misplaced_params(parse(source).body[0]))
+        ['b under Args: (move to Kwargs:)', 'c under Kwargs: (move to Args:)']
+
+    """
+    get_arg = attrgetter("arg")
+    args = node.args
+    positional = [*args.posonlyargs, *args.args]
+    pairs = zip(args.kwonlyargs, args.kw_defaults, strict=True)
+    positional_args = positional[len(positional) - len(args.defaults) :]
+    paired_args = gen_non_null(pairs, cmp_pos=1, arg_pos=0)
+    defaulted = set(map(get_arg, chain(positional_args, paired_args)))
+    required = set(map(get_arg, chain(positional, args.kwonlyargs))) - defaulted
+    doc = get_docstring(node) or ""
+
+    for name in filter(defaulted.__contains__, gen_section_names(doc, "Args")):
+        yield f"{name} under Args: (move to Kwargs:)"
+
+    for name in filter(required.__contains__, gen_section_names(doc, "Kwargs")):
+        yield f"{name} under Kwargs: (move to Args:)"
+
+    if args.kwarg is not None and args.kwarg.arg in gen_section_names(doc, "Args"):
+        yield f"{args.kwarg.arg} under Args: (move to Kwargs:)"
+
+
+def gen_unordered_params(node: FunctionDef | AsyncFunctionDef) -> Iterator[str]:
+    """
+    Finds ``Args:`` and ``Kwargs:`` entries listed out of signature order.
+
+    Entries that name no parameter, such as the keys of a ``**kwargs`` bag, are not
+    compared.
+
+    Args:
+
+        node: The function whose signature and docstring are compared.
+
+    Yields:
+
+        A ``Section: earlier before later`` note per out-of-order pair.
+
+    Examples:
+
+        >>> from ast import parse
+        >>>
+        >>> source = "def f(a, *, b=1, c=2):\\n '''S.\\n\\n Kwargs:\\n\\n"
+        >>> source += "  c: C.\\n  b: B.\\n '''\\n"
+        >>> list(gen_unordered_params(parse(source).body[0]))
+        ['Kwargs: c before b']
+
+    """
+    args = node.args
+    variadic = gen_non_null([args.vararg, args.kwarg])
+    params = [*args.posonlyargs, *args.args, *args.kwonlyargs, *variadic]
+    position = {param.arg: index for index, param in enumerate(params)}
+    doc = get_docstring(node) or ""
+
+    for section in ("Args", "Kwargs"):
+        listed = [*filter(position.__contains__, gen_section_names(doc, section))]
+
+        for earlier, later in pairwise(listed):
+            if position[later] < position[earlier]:
+                yield f"{section}: {earlier} before {later}"
+
+
+def gen_null_checks(doc: str) -> Iterator[str]:
     """
     Finds doctest lines that check for ``None`` instead of showing the result.
 
@@ -253,7 +382,7 @@ def gen_none_checks(doc: str) -> Iterator[str]:
     Examples:
 
         >>> doc = ">>> f(1) is None\\nTrue\\n>>> f(2)\\n"
-        >>> list(gen_none_checks(doc))
+        >>> list(gen_null_checks(doc))
         ['>>> f(1) is None']
 
     """
@@ -422,8 +551,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     Function summaries must not lead with the output or with a different general-purpose
     verb than the function name. No docstring may narrate between its doctest examples,
     check a result with ``is None``, or import a public name through a private module.
-    A private module without a public API carries no module example, and one with a
-    public runtime API carries one.
+
+    A parameter with a default is documented under ``Kwargs:``, one without under
+    ``Args:``. A private module without a public API carries no module example, and one
+    with a public runtime API carries one.
 
     Args:
 
@@ -462,6 +593,20 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                         problem += name_verb
                         yield DocstringIssue(path, lineno, name, problem, summary)
 
+                if is_function:
+                    for note in gen_misplaced_params(node):
+                        problem = "documents a parameter in the wrong section"
+                        yield DocstringIssue(path, lineno, name, problem, note)
+
+                    for note in gen_unordered_params(node):
+                        problem = "lists parameters out of signature order"
+                        yield DocstringIssue(path, lineno, name, problem, note)
+
+                if "\n\n\n" in doc:
+                    problem = "has a run of blank lines"
+                    excerpt = doc.split("\n\n\n", 1)[0].rsplit("\n", 1)[-1]
+                    yield DocstringIssue(path, lineno, name, problem, excerpt)
+
                 for entry in gen_malformed_raises(doc):
                     problem = "Raises: entry does not start with 'SomeError:'"
                     yield DocstringIssue(path, lineno, name, problem, entry)
@@ -470,7 +615,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     problem = "narrates between examples (use a >>> # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
 
-                for check in gen_none_checks(doc):
+                for check in gen_null_checks(doc):
                     problem = "checks for None (show the bare call instead)"
                     yield DocstringIssue(path, lineno, name, problem, check)
 
@@ -491,8 +636,11 @@ __all__ = [
     "gen_docstring_issues",
     "gen_example_prose",
     "gen_malformed_raises",
-    "gen_none_checks",
+    "gen_misplaced_params",
+    "gen_null_checks",
     "gen_private_imports",
+    "gen_section_names",
+    "gen_unordered_params",
     "get_name_verb",
     "get_summary_verb",
     "resolve_public_path",

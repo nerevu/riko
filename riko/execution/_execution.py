@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any, Never, overload
 
 from attrs import Factory, define, field
 
-from riko.bado._backend import asyncify
+from riko.bado._util import maybe_async
 from riko.base._config import FOREVER_ITEM
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
-from riko.base._iterutils import map_values
+from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._frozendict import FrozenDict
 from riko.types._workflow import parse_port
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
     from riko.types._workflow import GraphEdge
+    from riko.types._wrappers import Func
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
@@ -62,26 +63,6 @@ _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
 
 
-async def asyncify_call[T](func: Callable[..., T], *args: object) -> T:
-    """
-    Runs a blocking callable on a worker thread from the current event loop.
-
-    No execution's open check applies, so resource cleanup and stream closing can
-    still offload work while an execution is shutting down.
-
-    Args:
-
-        func: The blocking callable to offload.
-        args: Positional arguments forwarded to ``func``.
-
-    Returns:
-
-        The value ``func`` returns.
-
-    """
-    return await asyncify(func)(*args)
-
-
 @define(frozen=True, slots=True)
 class _Acquired[T]:
     """Holds a successfully acquired resource value for single-flight replay."""
@@ -104,9 +85,8 @@ class _FailedAcquisition:
         raise self.error
 
 
-def _event_sink(self: _BaseExecution) -> EventSink:
-    sink = self.settings.event_sink
-    return _NULL_EVENT_SINK if sink is None else sink
+def _event_sink[S: (ExitStack, AsyncExitStack)](self: _BaseExecution[S]) -> EventSink:
+    return resolve_default(self.settings.event_sink, _NULL_EVENT_SINK)
 
 
 events = Factory(_event_sink, takes_self=True)
@@ -115,11 +95,12 @@ events = Factory(_event_sink, takes_self=True)
 @define(eq=False)
 class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
     """
-    Shares the state and checks both executions run without awaiting.
+    Shares the state and checks both executions run, plus their one worker-thread call.
 
     That covers the context and settings, the closed-state guard, synchronous
     exit-stack entry, cleanup-error reporting, the resolved-resource cache,
-    resource-binding checks, and input wiring.
+    resource-binding checks, input wiring, and ``run_sync``, which runs a blocking
+    callable on a worker thread from whichever event loop is running.
     """
 
     context: Context | None = None
@@ -145,14 +126,14 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         if self._closing:
             raise PipelineStateError("closing", action, subject="execution")
 
-    def _record_cleanup_error(self, func: Callable, *args: object) -> None:
+    def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
         """Runs a cleanup callback and saves its failure for the shutdown report."""
         try:
             func(*args)
         except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
 
-    def queue_callback(self, func: Callable, *args: object) -> None:
+    def queue_callback(self, func: Func[object], *args: object) -> None:
         """
         Registers a synchronous ``func`` to run during exit-stack unwind.
 
@@ -164,6 +145,23 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         """
         self._require_open("add a callback to")
         self._stack.callback(self._record_cleanup_error, func, *args)
+
+    async def run_sync[R](self, func: Func[R], *args: object) -> R:
+        """
+        Runs a blocking sync callable on a worker thread from the running event loop.
+
+        Args:
+
+            func: A synchronous callable to run off the event loop.
+            args: Positional arguments forwarded to ``func``.
+
+        Returns:
+
+            The value ``func`` returns.
+
+        """
+        self._require_open("run work in")
+        return await maybe_async(func, *args, inline=False)
 
     @overload
     def enter_context(

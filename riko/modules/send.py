@@ -80,6 +80,8 @@ async def async_parser(
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
 
+    Kwargs:
+
         others: Receivers to push to. Required.
 
     Returns:
@@ -129,6 +131,8 @@ def parser(
 
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.
+
+    Kwargs:
 
         others: Receivers to push to. Required.
 

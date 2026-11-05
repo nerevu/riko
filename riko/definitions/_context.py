@@ -145,7 +145,7 @@ class Context:
         original. To modify ``resources``, use ``with_resource`` instead of passing
         a ``resources`` argument.
 
-        Args:
+        Kwargs:
 
             mode: Replacement execution mode, or ``None`` to keep the current one.
             inputs: Replacement input overrides, or ``None`` to keep the current ones.
@@ -209,6 +209,9 @@ class Context:
 
             name: The Context name the resource is provided under.
             definition: A ``Resource``/``LifecycleFactory`` that wraps a resource value.
+
+        Kwargs:
+
             credential: A credential reference for a factory.
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.

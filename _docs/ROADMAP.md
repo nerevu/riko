@@ -175,10 +175,11 @@ The complete `§0–27` routing map:
 | [fanout-topology.md](gameplans/fanout-topology.md) | Explicit StreamEdge/PublishEdge topology, SubscribeNode, publish/subscribe, split, branch/route ports, fan-in indexed inputs, buffering/isolation/lifecycle. |
 | [feed-native-streaming.md](gameplans/feed-native-streaming.md) | Per-module Feed-native migration and streaming-memory/encoder work, staged with owning runtime phases; R10 is final cleanup rather than bulk migration start. |
 | [feed-monitoring.md](gameplans/feed-monitoring.md) | Repeated finite observation, resumable change-feed semantics, bootstrap/backfill, dedupe/change/anomaly/alert policy using common state/pub-sub contracts. |
-| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | `bado` <-> AnyIO helper audit/benchmarking; runtime semantics stay with execution owner. |
+| [bado-anyio-alignment.md](gameplans/bado-anyio-alignment.md) | `bado` <-> AnyIO helper audit; runtime semantics stay with execution owner, measurement with `performance.md`. |
 | [twisted-protocol-servers.md](gameplans/twisted-protocol-servers.md) | Server-side protocol adapters; current §23 runtime remains in contract. |
 | [dotdict-parsing.md](gameplans/dotdict-parsing.md) | DotDict/business-data key handling. |
 | [release-readiness.md](gameplans/release-readiness.md) | Pre-1.0 API/DX/release gate. |
+| [upstream-fixes.md](gameplans/upstream-fixes.md) | Dependency defects riko works around: per-defect workaround, direct-call canary test, and what riko deletes when the dependency fixes it. |
 | [correctness-audit.md](gameplans/correctness-audit.md) | Cross-repo correctness taxonomy/open defect register and merge-gate work. |
 | [v1-cutover.md](gameplans/v1-cutover.md) | Ordered R4B clean-break checklist retiring `SyncPipe`/`AsyncPipe`/collections and the v1 compiler: P10 mechanics migrate first, generated-pipeline/CLI flips, deletion steps, drift guards; forward order stays with `implementation-sequence.md`. |
 
@@ -203,6 +204,7 @@ The complete `§0–27` routing map:
 | [module-registry.md](gameplans/module-registry.md) | P8 registry/resolution seam. |
 | [module-enums.md](gameplans/module-enums.md) | Generated module enum/tree/discovery naming. |
 | [cli.md](gameplans/cli.md) | Click-native CLI/plugin API, Context assembly, EventSink/output/approval/exit codes, PipelineRef run adapters, Operations-as-Code adapters. |
+| [performance.md](gameplans/performance.md) | Benchmark harness and its output-line contract, the historical-commit regression runner (`benchmark-commits`), profiler methodology; no runtime semantics. |
 | [ownership.md](gameplans/ownership.md) | One-owner-per-contract map and canonical boundary calls. |
 | [implementation-sequence.md](gameplans/implementation-sequence.md) | Authoritative forward dependency graph; orders owner contracts without replacing them. |
 

@@ -8,11 +8,11 @@ results are emitted or assigned back to that same parent item.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Generator
+from collections.abc import AsyncIterable
 from functools import partial
 from typing import TYPE_CHECKING, cast
 
-from riko.bado._util import maybe_aclosing, maybe_async
+from riko.bado._util import maybe_aclosing, maybe_async, maybe_closing
 from riko.bado.itertools import as_async
 from riko.base._logging import get_logger
 from riko.types._wrappers import is_subpipe
@@ -43,15 +43,10 @@ def _take_first(results: Items) -> Stream:
     child generator holding resources would otherwise linger until GC; closing it
     releases those resources as soon as the loop moves to the next parent.
     """
-    iterator = iter(results)
-
-    try:
+    with maybe_closing(iter(results)) as iterator:
         for item in iterator:
             yield item
             break
-    finally:
-        if isinstance(iterator, Generator):
-            iterator.close()
 
 
 async def _atake_first(results: AsyncItems) -> AsyncStream:
@@ -102,9 +97,10 @@ async def _afold_parent(
 ) -> AsyncStream:
     yielded = False
 
-    async for value in as_async(results):
-        yielded = True
-        yield value if emit else cast("Item", {**parent, assign: value})
+    async with maybe_aclosing(as_async(results)) as iterator:
+        async for value in iterator:
+            yielded = True
+            yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -145,8 +141,11 @@ async def _arun_loop(
         items = await maybe_async(embedder, parent)
         stream = _take(items, count)
 
-        async for value in _afold_parent(parent, stream, assign, emit):
-            yield value
+        async with maybe_aclosing(
+            _afold_parent(parent, stream, assign, emit)
+        ) as folded:
+            async for value in folded:
+                yield value
 
 
 def loop_embed_sync(

@@ -12,6 +12,8 @@ from ._sync import SyncPubSubHub
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from riko.types._wrappers import Func
+
     from ._types import Receiver
 
 sync_hub = SyncPubSubHub()
@@ -34,7 +36,7 @@ def reset_pubsub() -> None:
 
 def coroutine(
     registry_name: str | None = None, maxlen: int | None = None
-) -> Callable[[Callable[..., Receiver]], Callable[..., Receiver]]:
+) -> Callable[[Func[Receiver]], Func[Receiver]]:
     """
     Builds a decorator that registers a generator as a sync receiver.
 
@@ -42,7 +44,7 @@ def coroutine(
     registers it with ``sync_hub``. It is ready to be pushed to before the caller does
     anything else. The generator itself is returned, not the hub entry.
 
-    Args:
+    Kwargs:
 
         registry_name: Channel to register under. Defaults to the decorated
             function's name, which is only useful for a module-level receiver.
@@ -59,7 +61,7 @@ def coroutine(
     if maxlen is not None and maxlen < 1:
         raise ValueError("maxlen must be greater than 0")
 
-    def decorator(func: Callable[..., Receiver]) -> Callable[..., Receiver]:
+    def decorator(func: Func[Receiver]) -> Func[Receiver]:
         name = registry_name or func.__name__
 
         @wraps(func)

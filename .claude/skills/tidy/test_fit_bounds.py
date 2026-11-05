@@ -73,3 +73,51 @@ def test_end_to_end(tmp_path: Path) -> None:
     }
     lines = list(fit_bounds.gen_report([path], durations, root=tmp_path))
     assert [line.split()[0] for line in lines] == ["LOOSE", "TIGHT"]
+
+
+CAPPED_MODULE = """\
+import pytest
+
+_STOP = 8
+_BLOCK = 10
+
+
+def _block():
+    sleep(_BLOCK)
+
+
+class TestZ:
+    @pytest.mark.timeout(2)
+    def test_capped(self):
+        t.join(timeout=1)
+
+    def test_block(self):
+        with fail_after(2):
+            t.join(timeout=1)
+
+    @pytest.mark.timeout(15)
+    def test_chain(self):
+        start = perf_counter()
+        _block()
+        assert perf_counter() - start < _STOP
+"""
+
+
+def test_capped_bounds_and_chains(tmp_path: Path) -> None:
+    path = tmp_path / "test_z.py"
+    path.write_text(CAPPED_MODULE)
+    durations = {
+        "test_z.py::TestZ::test_capped": 0.3,
+        "test_z.py::TestZ::test_block": 0.3,
+        "test_z.py::TestZ::test_chain": 0.99,
+    }
+    lines = list(fit_bounds.gen_report([path], durations, root=tmp_path))
+    rows = [(line.split()[0], line.split()[-1]) for line in lines]
+    assert rows == [
+        ("ok", "fit=2"),
+        ("ok", "cap=timeout(2)"),
+        ("ok", "fit=2"),
+        ("ok", "cap=fail_after(2)"),
+        ("LOOSE", "fit=10"),
+        ("LOOSE", "fit=5<8<10"),
+    ]

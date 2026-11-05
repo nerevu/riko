@@ -11,16 +11,17 @@ from itertools import repeat
 from time import struct_time
 from typing import TYPE_CHECKING, Self, overload
 
+from riko.base._funcutils import map_values, multi_try
 from riko.base._guards import is_known_sequence, is_listlike, is_mapping
-from riko.base._iterutils import map_values, multi_try
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Iterable, Mapping
 
     from requests.structures import CaseInsensitiveDict
 
     from riko.types._streams import Item, Stream, StreamOrValueStream, ValueStream
     from riko.types._values import BasicDict, RikoValue, StringyDict
+    from riko.types._wrappers import Func
 
 
 @overload
@@ -35,6 +36,10 @@ def listize[T](value: dict[str, T]) -> list[dict[str, T]]: ...
 def listize[T](value: CaseInsensitiveDict[T]) -> list[CaseInsensitiveDict[T]]: ...
 @overload
 def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...
+@overload
+def listize(value: str) -> list[str]: ...
+@overload
+def listize(value: bytes) -> list[bytes]: ...
 @overload
 def listize[T](value: Sequence[T]) -> Sequence[T]: ...
 @overload
@@ -104,6 +109,9 @@ def gen_items(
     Args:
 
         content: Scalar, mapping, or nested list/tuple content to emit.
+
+    Kwargs:
+
         key: Optional field name used to wrap each emitted value in a mapping.
         yield_if_none: Whether a top-level ``None`` should be emitted.
 
@@ -137,6 +145,9 @@ def truncate_content(content: object, length: int = 20) -> object:
     Args:
 
         content: A string, bytes, a mapping or sequence of values, or any other value.
+
+    Kwargs:
+
         length: The longest a string or bytes value stays before it is cut and marked
             with "…".
 
@@ -185,10 +196,10 @@ class Chainable:
     """
 
     data: object
-    method: Callable | None
+    method: Func[object] | None
     list: builtins.list[object]
 
-    def __init__(self, data: object, method: Callable | None = None) -> None:
+    def __init__(self, data: object, method: Func[object] | None = None) -> None:
         self.data = data
         self.method = method
         self.list = listize(data)

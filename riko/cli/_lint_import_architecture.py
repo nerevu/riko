@@ -20,7 +20,7 @@ from riko.base._graph import (
     freeze_graph,
     gen_redundant_edges,
 )
-from riko.base._iterutils import gen_non_none
+from riko.base._iterutils import gen_non_null
 
 from ._import_graph import (
     InvalidArchitectureError,
@@ -169,7 +169,7 @@ def _render_from(
         current = frozenset(layers[frozenset(current)])
         parts.append(_format_group(current))
 
-    return gen_non_none(parts)
+    return gen_non_null(parts)
 
 
 def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
@@ -189,7 +189,7 @@ def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
         raise InvalidArchitectureError(f"redundant dependency: {source} -> {target}")
 
 
-def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
+def _gen_layers(name: str, graph: AnyGraph[str], verbose: bool = True) -> Iterator[str]:
     """Render the dependency DAG as compact chained expressions."""
     _validate_graph(name, graph)
     layers: dict[frozenset[str], set[str]] = defaultdict(set)
@@ -208,7 +208,7 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
             yield " < ".join(parts)
     else:
         parts = map(_format_group, layers.values())
-        yield " < ".join(gen_non_none(parts))
+        yield " < ".join(gen_non_null(parts))
 
 
 def load_architecture_report(

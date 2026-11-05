@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator, Sequence
 from functools import partial
 from itertools import chain
 from multiprocessing import Pool
@@ -21,24 +20,26 @@ from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.modules.regex import pipe as regex
 from riko.runtime._pipeline import Pipeline
-from riko.types._rss import RSSEntry
 from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import Item, Items
     from riko.types._workflow import RawEdge, RawNode, RawWorkflow
     from riko.types._wrappers import (
+        AsyncFunc,
         ParserMaterializedOutput,
         SyncProcessorWrapperOutput,
     )
 
-type AsyncFunc = Callable[..., Awaitable[Iterator[RSSEntry]]]
-type AsyncTest = Callable[[], Awaitable[object]]
+type AsyncTest = AsyncFunc[object]
 
 NUMBER = 1
 LOOPS = 1
 DELAY = settings.benchmark_delay
+WORKERS = settings.benchmark_workers
 UNION_ID = "union-1"
 
 REGEX_RULE = RegexRawRule(
@@ -71,6 +72,7 @@ files: list[str] = [
 urls: list[str] = [get_path(f) for f in files]
 confs: list[FetchConf] = [FetchConf({"url": url}) for url in urls]
 length: int = len(files)
+pool_length: int = min(length, WORKERS) if WORKERS else length
 iterable: list[float] = [DELAY for _ in files]
 
 items: list[Item] = [{"title": f"a{i}"} for i in range(200)]
@@ -128,17 +130,23 @@ def baseline_sync() -> list[None]:
 
 
 def baseline_threads() -> list[None]:
-    workers = get_worker_cnt(length)
+    workers = get_worker_cnt(pool_length)
     chunksize = get_chunksize(length, workers)
-    pool = ThreadPool(workers)
-    return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
+
+    with ThreadPool(workers) as pool:
+        result = list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
+
+    return result
 
 
 def baseline_procs() -> list[None]:
-    workers = get_worker_cnt(length, threads=False)
+    workers = get_worker_cnt(pool_length, threads=False)
     chunksize = get_chunksize(length, workers)
-    pool = Pool(workers)
-    return list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
+
+    with Pool(workers) as pool:
+        result = list(pool.imap_unordered(sleep, iterable, chunksize=chunksize))
+
+    return result
 
 
 def sync_module() -> ParserMaterializedOutput:

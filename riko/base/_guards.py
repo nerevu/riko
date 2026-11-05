@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Mapping
+from collections.abc import AsyncIterable, Awaitable, Iterable, Mapping
 from dataclasses import is_dataclass
 from inspect import (
     Parameter,
@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, TypeGuard, overload
 
 import attrs
 from requests.structures import CaseInsensitiveDict
-from typing_extensions import TypeIs
+from typing_extensions import TypeIs, TypeVar
 
 from ._exceptions import InvalidPipelineError
 from ._sentinels import MISSING
@@ -30,10 +30,11 @@ if TYPE_CHECKING:
     from riko.types._scalars import BasicValue
     from riko.types._streams import AnyIterable
     from riko.types._values import BasicList
+    from riko.types._wrappers import AsyncFunc, Func
     from riko.types.modules import Conf
 
 
-def _protocol_signature(method: Callable) -> Signature:
+def _protocol_signature(method: Func[object]) -> Signature:
     sig = signature(method)
     params = list(sig.parameters.values())
 
@@ -117,7 +118,11 @@ def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeI
     return match
 
 
-def is_mapping[K, V](val: Mapping[K, V] | object) -> TypeIs[Mapping[K, V]]:
+_KT = TypeVar("_KT", default=str)
+_VT = TypeVar("_VT", default=object)
+
+
+def is_mapping(val: Mapping[_KT, _VT] | object) -> TypeIs[Mapping[_KT, _VT]]:
     failure = False
 
     # Delay calling isinstance(val, Mapping) as much as possible
@@ -165,7 +170,9 @@ def require_mapping[K, V](
     return value
 
 
-def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
+def is_known_sequence(
+    val: list[_VT] | tuple[_VT, ...] | object,
+) -> TypeIs[list[_VT] | tuple[_VT, ...]]:
     return isinstance(val, (list, tuple))
 
 
@@ -181,7 +188,11 @@ def is_value_seq(
     return bool(val and isinstance(val[0], BasicValueType))
 
 
-def is_listlike[T](value: Iterable[T] | object) -> TypeGuard[Iterable[T]]:
+@overload
+def is_listlike[T](value: Iterable[T] | None) -> TypeGuard[Iterable[T]]: ...
+@overload
+def is_listlike[T](value: Iterable[T] | T) -> TypeGuard[Iterable[T]]: ...
+def is_listlike(value: object) -> bool:
     """
     Reports whether a value is listlike (a multi-item iterable).
 
@@ -235,7 +246,11 @@ def require_sequence(
     return value
 
 
-def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]]:
+@overload
+def is_streamlike[T](value: AnyIterable[T] | None) -> TypeGuard[AnyIterable[T]]: ...
+@overload
+def is_streamlike[T](value: AnyIterable[T] | T) -> TypeGuard[AnyIterable[T]]: ...
+def is_streamlike(value: object) -> bool:
     """
     Reports whether a value represents a sync or async stream of values.
 
@@ -269,11 +284,9 @@ def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]
 
 
 @overload
-def is_async_callable[T](
-    val: Callable[..., T | Awaitable[T]],
-) -> TypeGuard[Callable[..., Awaitable[T]]]: ...
+def is_async_callable[T](val: Func[T | Awaitable[T]]) -> TypeGuard[AsyncFunc[T]]: ...
 @overload
-def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
+def is_async_callable(val: object) -> TypeGuard[AsyncFunc[object]]: ...
 def is_async_callable(val: object) -> bool:
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
@@ -309,5 +322,17 @@ def is_awaitable[T](value: T | Awaitable[T]) -> TypeIs[Awaitable[T]]:
     return isawaitable(value)
 
 
-def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:
+@overload
+def is_sync_callable[T](val: Func[T] | None) -> TypeGuard[Func[T]]: ...
+@overload
+def is_sync_callable(val: object) -> TypeGuard[Func[object]]: ...
+def is_sync_callable(val: object) -> bool:
     return callable(val) and not is_async_callable(val)
+
+
+@overload
+def is_callable[T](val: Func[T] | None) -> TypeGuard[Func[T]]: ...
+@overload
+def is_callable(val: object) -> TypeGuard[Func[object]]: ...
+def is_callable(val: object) -> bool:
+    return callable(val)

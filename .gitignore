@@ -72,6 +72,7 @@ build/*
 .claude/*
 !.claude/skills/
 .claude/skills/drafts/
+.claude/skills/disposed/
 .serena/memories
 .vscode
 callgraph.svg

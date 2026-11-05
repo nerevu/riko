@@ -53,6 +53,9 @@ def validate_target_mode(
         target: The resolved target, named in error messages.
         mode: The resolved write mode.
         capabilities: The resolved ``(target × fmt)`` capabilities.
+
+    Kwargs:
+
         keys: The normalized keys.
 
     Raises:
@@ -154,7 +157,7 @@ class FileTarget:
         incremental; a whole-document format supports ``replace`` only and is not,
         because appending would concatenate two documents into invalid output.
 
-        Args:
+        Kwargs:
 
             fmt: The serialization format override, else ``fmt``, else derived
                 from the path extension.
@@ -199,6 +202,9 @@ def normalize_target(dest: Destination, **kwargs: str) -> SupportsWrite:
     Args:
 
         dest: The destination location.
+
+    Kwargs:
+
         kwargs: Extra keyword configuration for a constructed ``FileTarget``.
 
     Returns:
@@ -244,6 +250,9 @@ def build_write(
     Args:
 
         dest: A path, ``Path``, or ``SupportsWrite`` target.
+
+    Kwargs:
+
         mode: The write mode, as a ``WriteMode`` or its string value.
         fmt: The serialization format override for a serializing target.
         keys: The unified keys, interpreted per the target's capabilities.

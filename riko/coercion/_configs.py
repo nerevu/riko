@@ -13,13 +13,14 @@ from typing import TYPE_CHECKING, Literal
 from ._dynamic_conf import DynamicConf
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from riko.types._enums import CastType, FmtLike, LocationType
     from riko.types._io import PathLike
     from riko.types.modules import (
         FilterConfRule,
         FindConfRule,
+        Func,
         ParsedParam,
         RegexConfRule,
         RenameConfRule,
@@ -73,7 +74,7 @@ class RssItemBuilderObjconf(DynamicConf):
 
 
 class AggregateObjconf(DynamicConf):
-    func: Callable
+    func: Func[object]
 
 
 class CountObjconf(DynamicConf):
@@ -144,6 +145,7 @@ class FetchTableObjconf(CsvObjconf):
 class FetchTextObjconf(DynamicConf):
     url: str
     encoding: str
+    strip_bom: bool
 
 
 class FilterObjconf(DynamicConf):
@@ -176,7 +178,7 @@ class RefindObjconf(DynamicConf):
 
 class RegexObjconf(DynamicConf):
     rule: RegexConfRule | list[RegexConfRule]
-    multi: bool
+    default: dict[str, str]
 
 
 class RenameObjconf(DynamicConf):
@@ -260,7 +262,7 @@ class TypecastObjconf(DynamicConf):
 
 
 class UdfObjconf(DynamicConf):
-    func: Callable
+    func: Func[object]
 
 
 class UniqObjconf(DynamicConf):

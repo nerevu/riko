@@ -3,12 +3,16 @@
 
 from __future__ import annotations
 
+import socket
+import threading
+from contextlib import contextmanager, suppress
 from functools import partial
-from importlib.metadata import EntryPoint
 from io import BytesIO, StringIO
-from os import linesep
+from os import environ, linesep
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
+from urllib.request import urlopen
 from urllib.response import addinfourl
 
 import pytest
@@ -18,37 +22,44 @@ from requests.exceptions import Timeout
 from riko.bado import as_async
 from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
 from riko.bado._util import async_return, gather_results
-from riko.bado.itertools import async_map_ordered_stream, async_map_stream, async_merge
+from riko.bado.itertools import (
+    async_map,
+    async_map_ordered_stream,
+    async_map_stream,
+    async_merge,
+)
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
-from riko.definitions._targets import FileTarget, build_write
+from riko.base._sentinels import MISSING
+from riko.definitions._targets import build_write
 from riko.definitions._write import WriteResult
 from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
-from riko.io._sync import Fetch
+from riko.io._sync import Fetch, ReplayReader
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
-from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.parsing.documents import HAS_NATIVE_IJSON, IS_FASTFEEDPARSER, IS_LXML
+from riko.rss.discovery import aload_rss_links, load_rss_links
+from riko.rss.feeds import parse_rss
 from riko.runtime import _write_session
 from riko.runtime._export import export
-from riko.runtime._target_registry import TargetRegistry
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
-    async_file_write_session,
+    afile_write_session,
     awrite_through,
     file_write_session,
     write_through,
 )
 from riko.types._enums import Formats
-from tests import aresolve, async_test, is_installed, skipif_issync
+from tests import aresolve, async_test, is_installed, run_python, skipif_issync
 from tests._lifecycle import ITEMS
-from tests._loopback import URL, loopback_url, stalled_url, stub_async_get
+from tests._loopback import ForwardOnly, loopback_url
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterator
+    from collections.abc import Awaitable, Callable, Generator, Iterator
 
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
@@ -66,11 +77,32 @@ _MERGE = partial(async_merge, [])
 _X0, _X1 = [{"x": 0}], [{"x": 1}]
 _CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
 _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+URL = "https://example.test/data"
 
 # A replace write leaves the old content until it publishes the new one whole.
 ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
-    strict=True, reason="atomic replace-write publication is not yet implemented"
+    strict=True,
+    raises=AssertionError,
+    reason="atomic replace-write publication is not yet implemented",
 )
+
+ASYNC_GET_SCRIPT = """
+import sys
+from time import monotonic
+from riko.bado import run
+from riko.bado._backend import TimeoutException
+from riko.bado._util import async_get
+
+async def main():
+    start = monotonic()
+
+    try:
+        await async_get(sys.argv[1])
+    except TimeoutException:
+        print(monotonic() - start)
+
+run(main)
+"""
 
 
 def _never() -> bool:
@@ -99,6 +131,109 @@ def served_url():
         yield served
 
 
+@contextmanager
+def stalled_url(
+    prefix: bytes = b"", *, path: str = "stalled.txt", stall: float = 2
+) -> Generator[str]:
+    """
+    Serves a connection that accepts, sends *prefix*, then stalls.
+
+    *prefix* is written as is: pass response headers and a partial body to
+    simulate a stalled stream, or nothing for a stalled response. The server
+    drops each connection *stall* seconds after accepting it, so a fetch that
+    ignores its timeout fails with a connection error instead of hanging; a
+    timeout under test must be well below *stall*.
+    """
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+    accepted: list[socket.socket] = []
+    timers: list[threading.Timer] = []
+    done = threading.Event()
+
+    def serve() -> None:
+        while not done.is_set():
+            try:
+                connection, _ = server.accept()
+            except OSError:
+                break
+
+            accepted.append(connection)
+            timer = threading.Timer(stall, connection.close)
+            timer.daemon = True
+            timers.append(timer)
+            timer.start()
+
+            with suppress(OSError):
+                connection.sendall(prefix)
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+
+    try:
+        yield f"http://127.0.0.1:{server.getsockname()[1]}/{path}"
+    finally:
+        done.set()
+        server.close()
+
+        for timer in timers:
+            timer.cancel()
+
+        for connection in accepted:
+            connection.close()
+
+        thread.join(timeout=1)
+
+
+class TestReplayReader:
+    def test_forward_only_source_spools_only_what_was_read(self):
+        with ReplayReader(ForwardOnly(b"abcdef")) as reader:
+            assert reader.read(4) == b"abcd"
+            reader.replay()
+            spool = reader.spool
+            assert spool is not None
+            assert spool.seek(0, 2) == 4
+            spool.seek(0)
+            assert reader.read() == b"abcdef"
+
+
+class TestLoadRssLinks:
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="rejecting inline HTML in the sync rss link loader is not yet "
+        "implemented: a schemeless string containing '://' skips the file prefix, "
+        "urlopen's ValueError is caught, and the string is parsed as HTML",
+    )
+    @async_test
+    async def test_sync_and_async_loaders_reject_inline_html_alike(self):
+        html = '<link rel="alternate" type="application/rss+xml" href="http://x/feed">'
+
+        with pytest.raises((OSError, ValueError)):
+            await aload_rss_links(html)
+
+        with pytest.raises((OSError, ValueError)):
+            list(load_rss_links(html))
+
+
+class TestParseRss:
+    def test_closes_the_fetched_file_when_parsing_fails(self, tmp_path, monkeypatch):
+        path = tmp_path / "feed.xml"
+        path.write_bytes(b"<rss/>")
+        sources = []
+
+        def fail(source):
+            sources.append(source)
+            raise ValueError("unparseable")
+
+        monkeypatch.setattr("riko.rss.feeds.parse_feed", fail)
+
+        with pytest.raises(ValueError, match="unparseable"):
+            parse_rss(str(path))
+
+        assert [source.closed for source in sources] == [True]
+
+
 class TestFetch:
     def test_unified_http_backend(self):
         """Route parameterless HTTP URLs through the requests backend."""
@@ -125,11 +260,6 @@ class TestFetch:
             Fetch("http://example.com/feed.txt", binary=True)
 
         assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
-
-    @pytest.mark.simulated_network
-    def test_timeout_stops_a_stalled_read(self):
-        with stalled_url() as url, pytest.raises(Timeout):
-            Fetch(url, timeout=0.2)
 
     @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):
@@ -186,6 +316,53 @@ class TestFetch:
 
         assert handle.closed
 
+    def test_memoized_file_closes_its_response(self, tmp_path):
+        """A memoized local fetch closes the response it buffered."""
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
+        responses = []
+
+        def capture(*args, **kwargs):
+            responses.append(response := urlopen(*args, **kwargs))  # noqa: S310
+            return response
+
+        with (
+            patch("riko.io._sync.urlopen", side_effect=capture),
+            Fetch(path.as_uri(), memoize=True, binary=True) as f,
+        ):
+            f.read()
+
+        assert [response.closed for response in responses] == [True]
+
+    @pytest.mark.simulated_network
+    def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(Timeout):
+            Fetch(url, timeout=0.2)
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a text-mode response cache is not yet implemented",
+    )
+    def test_memoized_text_fetch_after_binary_reads_text(self, tmp_path):
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
+
+        with Fetch(path.as_uri(), memoize=True, binary=True) as f:
+            f.read()
+
+        with Fetch(path.as_uri(), memoize=True) as f:
+            assert f.read() == "hello"
+
+
+def stub_async_get(content: bytes, content_type: str):
+    """Builds an async client ``get`` that answers every URL with *content*."""
+
+    async def async_get(url: str, **_: object) -> SimpleNamespace:
+        return SimpleNamespace(content=content, headers={"content-type": content_type})
+
+    return async_get
+
 
 class TestAsyncUrlOpen:
     @async_test
@@ -213,26 +390,15 @@ class TestAsyncUrlOpen:
         assert seen["timeout"] == settings.fetch_timeout
 
     @pytest.mark.simulated_network
-    @async_test
-    async def test_timeout_stops_a_stalled_read(self):
-        with stalled_url() as url, pytest.raises(TimeoutException):
-            await async_url_open(url, timeout=0.2)
+    @skipif_issync
+    def test_async_get_waits_the_configured_fetch_timeout(self):
+        """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
+        env = environ | {"RIKO_FETCH_TIMEOUT": "0.2"}
 
-    @pytest.mark.simulated_network
-    @pytest.mark.xfail(
-        strict=True,
-        reason="streaming async URL reads are not yet implemented: async_url_open "
-        "buffers the whole body before returning, so a stalled body times out "
-        "before the lines already received can be read",
-    )
-    @async_test
-    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
-        """The first line of a stalled body is readable, as with sync ``Fetch``."""
-        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
+        with stalled_url() as url:
+            run = run_python("-c", ASYNC_GET_SCRIPT, url, env=env)
 
-        with stalled_url(prefix) as url:
-            async with async_url_open(url, timeout=0.5) as f:
-                assert f.readline() == "first\n"
+        assert float(run.stdout) < 2
 
     @async_test
     async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
@@ -290,8 +456,32 @@ class TestAsyncUrlOpen:
             assert f.read() == "a,b"
 
     @pytest.mark.simulated_network
+    @async_test
+    async def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(TimeoutException):
+            await async_url_open(url, timeout=0.2)
+
+    @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
+        raises=TimeoutException,
+        reason="streaming async URL reads are not yet implemented: async_url_open "
+        "buffers the whole body before returning, so a stalled body times out "
+        "before the lines already received can be read",
+    )
+    @async_test
+    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
+        """The first line of a stalled body is readable, as with sync ``Fetch``."""
+        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
+
+        with stalled_url(prefix) as url:
+            async with async_url_open(url, timeout=0.5) as f:
+                assert f.readline() == "first\n"
+
+    @pytest.mark.simulated_network
+    @pytest.mark.xfail(
+        strict=True,
+        raises=UnicodeDecodeError,
         reason="async_url_open ignores the Content-Type and decodes as utf-8",
     )
     @async_test
@@ -314,8 +504,10 @@ class TestAsyncUrlOpen:
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
-        reason="owned by the pending encoding-precedence work: sync decoding keeps "
-        "carriage returns that async decoding converts to newlines",
+        raises=AssertionError,
+        reason="decoding line endings alike in sync and async reads is not yet "
+        "implemented: sync decoding keeps carriage returns that async decoding "
+        "converts to newlines",
     )
     @async_test
     async def test_sync_and_async_decode_line_endings_alike(self):
@@ -529,6 +721,17 @@ class TestChunkContent:
             assert list(_chunk_content(f, 3)) == expected
 
 
+class TestAsyncMap:
+    @async_test
+    async def test_a_missing_result_keeps_its_slot(self):
+        """A function returning the missing sentinel still gets its slot."""
+
+        async def missing(_):
+            return MISSING
+
+        assert await async_map(missing, [1, 2]) == [MISSING, MISSING]
+
+
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
     state = {"current": 0, "peak": 0}
 
@@ -543,6 +746,17 @@ def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
 
 
 async def _forever(closed: list[bool]):
+    index = 0
+
+    try:
+        while True:
+            yield index
+            index += 1
+    finally:
+        closed.append(True)
+
+
+def _sync_forever(closed: list[bool]):
     index = 0
 
     try:
@@ -675,10 +889,16 @@ class TestAsyncMapStream:
             pytest.param(async_map_ordered_stream, {0}, id="ordered"),
         ],
     )
+    @pytest.mark.parametrize(
+        "source", [_forever, _sync_forever], ids=["async-source", "sync-source"]
+    )
     @async_test
-    async def test_early_close_stops_workers_and_closes_source(self, stream, firsts):
+    async def test_early_close_stops_workers_and_closes_source(
+        self, stream, firsts, source
+    ):
         closed: list[bool] = []
-        mapped = stream(_double, _forever(closed), limit=2)
+        items = source(closed)
+        mapped = stream(_double, items, limit=2)
         first = await anext(mapped)
         await mapped.aclose()
         assert first in firsts
@@ -695,6 +915,7 @@ class TestAsyncMapStream:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="sliding-window async ordered mapping is not yet implemented",
     )
     @async_test
@@ -724,6 +945,15 @@ async def _gen_items(items, delay=0.0):
 
 
 class TestAsyncMerge:
+    @async_test
+    async def test_early_close_closes_every_source(self):
+        """Closing the merge after one item closes every source cleanly."""
+        closed: list[bool] = []
+        merged = async_merge([_forever(closed), _forever(closed)], limit=2)
+        await anext(merged)
+        await merged.aclose()
+        assert closed == [True, True]
+
     @skipif_issync
     def test_async_merge_yields_every_value(self):
         """More iterables than ``limit`` still merge in full."""
@@ -763,26 +993,7 @@ class TestCapabilityFlags:
         assert IS_FASTFEEDPARSER is is_installed("fastfeedparser")
 
         if not is_installed("ijson"):
-            assert IJSON_IS_NATIVE is False
-
-
-class TestRegisterTarget:
-    def test_entry_point_loads_a_target_class(self) -> None:
-        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
-        assert TargetRegistry()._load(ep) is FileTarget
-
-    def test_entry_point_must_load_a_target_class(self) -> None:
-        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
-
-        with pytest.raises(TypeError, match="must load a target class"):
-            TargetRegistry()._load(ep)
-
-    def test_entry_point_key_must_match_the_backend(self, monkeypatch) -> None:
-        ep = EntryPoint("s3", "riko.definitions._targets:FileTarget", "riko.targets")
-        monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
-
-        with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
-            TargetRegistry()._load_entry_point("s3")
+            assert HAS_NATIVE_IJSON is False
 
 
 class TestConverterPath:
@@ -936,6 +1147,29 @@ class TestSessionLifecycle:
         assert session._state is _SessionState.ABORTED
         session.close()
 
+    def test_close_twice_is_safe(self, tmp_path):
+        session = self._session(tmp_path)
+        session.close()
+        session.close()
+        assert session._state is _SessionState.CLOSED
+
+    def test_close_never_commits(self, tmp_path):
+        path = tmp_path / "out.json"
+        session = _SyncFileWriteSession(build_write(path))
+        session.acquire()
+        session.write(ITEMS)
+        session.close()
+        assert not path.exists()
+
+    def test_incremental_abort_keeps_written_bytes(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        session = _SyncFileWriteSession(build_write(path))
+        session.acquire()
+        session.write({"x": 1})
+        session.abort()
+        session.close()
+        assert path.read_bytes() == b'{"x": 1}\n'
+
     def test_write_after_finalize_rejected(self, tmp_path):
         session = self._session(tmp_path)
         session.write(ITEMS)
@@ -956,28 +1190,6 @@ class TestSessionLifecycle:
             session.write(ITEMS)
 
         session.close()
-
-    def test_close_twice_is_safe(self, tmp_path):
-        session = self._session(tmp_path)
-        session.close()
-        session.close()
-
-    def test_close_never_commits(self, tmp_path):
-        path = tmp_path / "out.json"
-        session = _SyncFileWriteSession(build_write(path))
-        session.acquire()
-        session.write(ITEMS)
-        session.close()
-        assert not path.exists()
-
-    def test_incremental_abort_keeps_written_bytes(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        session = _SyncFileWriteSession(build_write(path))
-        session.acquire()
-        session.write({"x": 1})
-        session.abort()
-        session.close()
-        assert path.read_bytes() == b'{"x": 1}\n'
 
     def test_stream_then_item_rejected(self, tmp_path):
         session = self._session(tmp_path)
@@ -1071,7 +1283,7 @@ async def _asink(
     items: Feed, dest: PathLike, mode: str = "replace", **kwargs
 ) -> WriteResult:
     """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
+    async with afile_write_session(build_write(dest, mode, **kwargs)) as session:
         await session.awrite(items)
         result = await session.afinalize()
 

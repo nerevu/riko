@@ -8,13 +8,26 @@ import ast
 from riko.base._paths import CONFIG_PATH, PACKAGE_DIR
 from riko.base._strutils import get_codegen_note, ruff_format
 
+type _Structure = dict[str, tuple[str, dict[str, str]]]
+
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
 _IOS = {"PathLike"}
 _NAMES = {"CastType", "FmtLike", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
 _ABC_TYPES = {"Callable", "Sequence"}
-_BUILTINS = {"str", "int", "float", "bool", "list", "dict", "tuple", "set", "None"}
+_BUILTINS = {
+    "str",
+    "int",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "tuple",
+    "set",
+    "None",
+    "object",
+}
 _DOCSTRING = f'''# {get_codegen_note("--config")}
 
 """
@@ -25,10 +38,10 @@ Edit ``riko.types.modules``, then regenerate this module.
 
 
 class _Deref(ast.NodeTransformer):
-    def __init__(self):
+    def __init__(self) -> None:
         self.in_literal = 0
 
-    def visit_Subscript(self, node):
+    def visit_Subscript(self, node: ast.Subscript) -> ast.Subscript:
         is_literal = isinstance(node.value, ast.Name) and node.value.id == "Literal"
         node.value = self.visit(node.value)
         self.in_literal += is_literal
@@ -36,7 +49,7 @@ class _Deref(ast.NodeTransformer):
         self.in_literal -= is_literal
         return node
 
-    def visit_Constant(self, node):
+    def visit_Constant(self, node: ast.Constant) -> ast.Name | ast.Constant:
         if self.in_literal == 0 and isinstance(node.value, str):
             result = ast.Name(id=node.value, ctx=ast.Load())
         else:
@@ -45,16 +58,20 @@ class _Deref(ast.NodeTransformer):
         return result
 
 
-def _strip_required(annotation):
-    wrapped = (
+def _strip_required(annotation: ast.expr) -> ast.expr:
+    if (
         isinstance(annotation, ast.Subscript)
         and isinstance(annotation.value, ast.Name)
         and annotation.value.id in {"Required", "NotRequired"}
-    )
-    return annotation.slice if wrapped else annotation
+    ):
+        result = annotation.slice
+    else:
+        result = annotation
+
+    return result
 
 
-def _render_annotation(annotation) -> str:
+def _render_annotation(annotation: ast.expr) -> str:
     inner = _strip_required(annotation)
     module = ast.parse("")
     module.body = [ast.Expr(value=inner)]
@@ -86,14 +103,14 @@ def own_fields(node: ast.ClassDef) -> dict[str, str]:
     }
 
 
-def objconf_structure() -> dict[str, tuple[str, dict[str, str]]]:
+def objconf_structure() -> _Structure:
     return {
         f"{node.name[:-4]}Objconf": (_base(node), own_fields(node))
         for node in _nonraw_confs()
     }
 
 
-def _referenced_names(structure) -> set[str]:
+def _referenced_names(structure: _Structure) -> set[str]:
     return {
         name.id
         for _, fields in structure.values()
@@ -103,7 +120,7 @@ def _referenced_names(structure) -> set[str]:
     }
 
 
-def _import_block(structure) -> str:
+def _import_block(structure: _Structure) -> str:
     referenced = _referenced_names(structure)
     abc = sorted(_ABC_TYPES & referenced)
     typing = ["TYPE_CHECKING", *sorted(_TYPING_TYPES & referenced)]

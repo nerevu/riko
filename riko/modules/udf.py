@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.bado._util import maybe_async
+from riko.bado._util import maybe_async, require_value
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_arg
 
@@ -62,6 +62,9 @@ async def async_parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The module configuration. Unused.
+
+    Kwargs:
+
         func: The function to apply to the item. Awaited when it is an async
             function. Required.
 
@@ -95,7 +98,7 @@ def parser(
     extraction: object,
     objconf: UdfObjconf,
     *,
-    func: Callable[[Item], Item] | None = None,
+    func: Callable[[Item], Item | Awaitable[Item]] | None = None,
     **kwargs: object,
 ) -> Item:
     """
@@ -106,6 +109,9 @@ def parser(
         item: The entry to process.
         extraction: The extracted ``field`` value. Unused.
         objconf: The module configuration. Unused.
+
+    Kwargs:
+
         func: The function to apply to the item. Required.
 
     Returns:
@@ -115,6 +121,9 @@ def parser(
     Raises:
 
         TypeError: If ``func`` is not given.
+
+        InvalidPipelineError: If ``func`` returns an awaitable (only asynchronous
+            iteration can await it).
 
     Examples:
 
@@ -126,7 +135,8 @@ def parser(
 
     """
     func = require_arg(func, "func", "udf", strict=True)
-    return func(item)
+    msg = "udf func returned an awaitable; iterate with `async for` to await it"
+    return require_value(func(item), msg)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -223,6 +233,9 @@ def pipe(*args: Any, **kwargs: object) -> Item:
     Raises:
 
         TypeError: If ``func`` is not given.
+
+        InvalidPipelineError: If ``func`` returns an awaitable (only asynchronous
+            iteration can await it).
 
     Examples:
 

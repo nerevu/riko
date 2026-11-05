@@ -81,6 +81,8 @@ def parser(
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
+    Kwargs:
+
         other: The stream to join against. Required.
 
     Returns:

@@ -61,17 +61,31 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    breaks a gate, fixing the code is the default; holding a package back is a
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
+   **When meza's locked version changed** (`git diff -- uv.lock` shows a new
+   meza version, from this step or from the change itself), sync
+   `_docs/gameplans/upstream-fixes.md` before moving on; the user never edits
+   it by hand. Run `uv run --active pytest -p no:cacheprovider --no-cov
+   tests/internal/test_upstream.py -rX`. For each unexpected pass: raise the
+   `meza>=` floor in `pyproject.toml` to the locked version (users on an older
+   meza still need the workaround), delete the workaround the entry names, its
+   canary, and the entry, and re-run that area's tests. Then update the entry
+   header's floor line, and set each remaining entry's **Upstream branch/PR**
+   line from `git -C ~/Documents/Projects/meza branch -a` and `gh pr list -R
+   reubano/meza` (a merged or deleted branch reads "none yet" again). Name
+   every deleted workaround in the report.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
-   subagent (`model: "opus"`, so it never inherits a Fable session's model),
-   never as an in-loop grep pass. Run `python $G check tidy` first and skip
+   `implementer` subagent (`model: "opus"`, so it never inherits a Fable
+   session's model), never as an in-loop grep pass. Run `python $G check tidy` first and skip
    the agent when it exits 0 (tidy already ran on this tree, in any session).
+   Before spawning, run `python .claude/skills/land/require_agents.py`; when it fails, stop and
+   report its output (the user-level agent definitions are missing).
    The brief opens "Follow `.claude/skills/tidy/SKILL.md`, reproduced below;
    `/land` is the caller, so skip its verify step" and then **pastes the whole
    file** (`cat .claude/skills/tidy/SKILL.md`) — the agent must never spend a
    turn reading it — plus the mid-run self-check (past about 10 minutes or
    100k tokens with mechanical work left: pause, report, and name the helper
    script; afterwards inspect any scripts it wrote for itself and promote, fold, park in
-   `.claude/skills/drafts/`, or drop each). Its mechanical fixes
+   `.claude/skills/drafts/`, or drop each; a dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user, never deleted by an agent). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
 2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`. Never hand-fix
@@ -189,7 +203,9 @@ to an agent, which repeats their work by hand for many minutes.
    user's index or tree), refuses a plan where any id is in no step or in two,
    confirms the last tree equals the working tree, runs build checks on each
    step (ruff's undefined/unused names and `import riko`; `--full-checks` adds
-   pyright and the import contracts for bisect-safe commits), and replays the
+   `lint --all`, `--verify-types`, and full-project pyright on the step's own
+   tree for bisect-safe commits; `--tests` runs the suite with the ratchet on each
+   step, one at a time, so run it alone), and replays the
    autosquash in a throwaway worktree. It writes `NN.patch`/`NN.msg`,
    `commands.txt` (always led by `git reset -q`),
    `chain.txt`, and each step's files with `+added/-removed` line counts (plus
@@ -228,4 +244,4 @@ End with:
   commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (the tidy agent included). Name the task, its duration and tool count, and the script it
   suggests (name, inputs, outputs, home); propose it, never build it unasked.
-  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.
+  Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop (a dropped or folded draft moves to `.claude/skills/disposed/`, never deleted) — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.

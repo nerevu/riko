@@ -32,13 +32,14 @@ from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.io._async import async_url_open
+from riko.io._reencode import gen_without_bom
 from riko.io._sync import Fetch, auto_close
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from logging import Logger
 
     from riko.coercion._configs import FetchTextObjconf
@@ -48,7 +49,20 @@ if TYPE_CHECKING:
 logger: Logger = get_logger(__name__)
 
 OPTS: DecorationOptions = {"ftype": BasicCastType.NONE, "assign": "content"}
-DEFAULTS: Defaults = {"encoding": ENCODING}
+DEFAULTS: Defaults = {"encoding": ENCODING, "strip_bom": True}
+
+
+def _gen_stripped_lines(lines: Iterable[str], strip_bom: bool) -> Iterator[str]:
+    """
+    Generates each line stripped of surrounding whitespace and, optionally, a BOM.
+
+    Examples:
+
+        >>> list(_gen_stripped_lines(["\\ufeffhi\\n", "there\\n"], True))
+        ['hi', 'there']
+
+    """
+    yield from map(str.strip, gen_without_bom(lines) if strip_bom else lines)
 
 
 async def async_parser(
@@ -61,7 +75,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url` and `encoding`.
+        objconf: The module configuration with `url`, `encoding`, and `strip_bom`.
 
     Returns:
 
@@ -78,7 +92,8 @@ async def async_parser(
         >>>
         >>> async def main():
         ...     url = get_path("lorem.txt")
-        ...     objconf = Objectify({"url": url, "encoding": ENCODING})
+        ...     conf = {"url": url, "encoding": ENCODING, "strip_bom": True}
+        ...     objconf = Objectify(conf)
         ...     result = await async_parser(None, None, objconf, assign="content")
         ...     print(next(result))
         >>>
@@ -88,7 +103,7 @@ async def async_parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchtext")
     f = await async_url_open(url, encoding=objconf.encoding)
-    return auto_close(map(str.strip, f), f)
+    return auto_close(_gen_stripped_lines(f, objconf.strip_bom), f)
 
 
 def parser(
@@ -101,7 +116,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url` and `encoding`.
+        objconf: The module configuration with `url`, `encoding`, and `strip_bom`.
 
     Returns:
 
@@ -117,7 +132,8 @@ def parser(
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path("lorem.txt")
-        >>> objconf = Objectify({"url": url, "encoding": ENCODING})
+        >>> conf = {"url": url, "encoding": ENCODING, "strip_bom": True}
+        >>> objconf = Objectify(conf)
         >>> result = parser(None, None, objconf, assign="content")
         >>> next(result)
         'What is Lorem Ipsum?'
@@ -125,7 +141,7 @@ def parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchtext")
     f = Fetch(url, encoding=objconf.encoding)
-    return auto_close(map(str.strip, f), f)
+    return auto_close(_gen_stripped_lines(f, objconf.strip_bom), f)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -140,7 +156,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         conf (dict): The module configuration.
 
             url (str): The file to fetch, local or remote. Required.
+
             encoding (str): File encoding (default: "utf-8").
+
+            strip_bom (bool): Whether to remove a byte order mark (BOM) from the first
+                line (default: True).
 
         context (Context): the run environment
 
@@ -191,7 +211,11 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         conf (dict): The module configuration.
 
             url (str): The file to fetch, local or remote. Required.
+
             encoding (str): File encoding (default: "utf-8").
+
+            strip_bom (bool): Whether to remove a byte order mark (BOM) from the first
+                line (default: True).
 
         context (Context): the run environment
 

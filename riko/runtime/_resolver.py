@@ -148,6 +148,9 @@ class ResolverDispatcher:
         Args:
 
             name: Module name or ``pipe_<id>`` name to inspect.
+
+        Kwargs:
+
             is_async: Whether to check the ``async_pipe``.
 
         Returns:
@@ -180,6 +183,9 @@ class ResolverDispatcher:
         Args:
 
             name: Module name or ``pipe_<id>`` name to inspect.
+
+        Kwargs:
+
             is_async: Whether to check the ``async_pipe``.
 
         Returns:

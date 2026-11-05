@@ -24,7 +24,7 @@ from riko.base._paths import (
 )
 
 from ._gen_api_surface import API_SURFACE_BLOCK, generate_api_surface
-from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
+from ._gen_verbs import VERB_DOCS, VERB_PATTERNS, generate_verb_tables
 from ._import_graph import FUNCTION_NODES
 from ._lint_terms import BANNED_TERMS
 
@@ -708,11 +708,11 @@ def _api_surface_offenders() -> list[str]:
 
 def _gen_verb_table_offenders() -> Iterator[str]:
     """Finds verb tables that drift from the verb declaration."""
-    for path, fmt in VERB_DOCS.items():
+    for path, (fmt, blocks) in VERB_DOCS.items():
         text = _read(path)
         present = {match["key"] for match in VERB_PATTERNS[fmt].finditer(text)}
 
-        if missing := sorted(VERB_BLOCKS - present):
+        if missing := sorted(blocks - present):
             yield f"{path.name}: missing verb tables {missing}"
         elif generate_verb_tables(text, fmt) != text:
             yield f"{path.name}: verb tables are stale; run `manage codegen --verbs`"

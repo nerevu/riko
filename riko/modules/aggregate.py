@@ -81,6 +81,8 @@ async def async_parser(
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
 
+    Kwargs:
+
         func: The function to apply to the stream. An async function is awaited and
             receives ``stream`` as is. A sync function given an async stream receives
             its collected items. Required.
@@ -144,6 +146,8 @@ def parser(
         tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
             `stream` as well.
+
+    Kwargs:
 
         func: The function to apply to the stream. Required.
 

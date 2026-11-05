@@ -11,19 +11,19 @@ private to the runtime and belong to no supported surface.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
+from functools import partial
 from typing import TYPE_CHECKING, Protocol, cast
 
+from riko.bado.itertools import aiter_sentinel
 from riko.base._guards import is_listlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
-from riko.types._io import is_sync_closeable
 from riko.types._wrappers import (
+    Func,
     require_async_wrapper,
     require_single_output,
     require_sync_wrapper,
 )
-
-from ._execution import asyncify_call
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -140,12 +140,6 @@ def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
     return value if is_listlike(value) else [cast("T", value)]
 
 
-def _maybe_close(value: object) -> None:
-    """Closes closeable ``value``s so they release anything they hold."""
-    if is_sync_closeable(value):
-        value.close()
-
-
 def async_drain[T](items: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
@@ -178,38 +172,25 @@ def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
     return next(stream, MISSING)
 
 
-async def pull_stream[T](
-    stream: Iterator[T], *, pull: WorkerCall, close: Callable[[], Awaitable[object]]
-) -> AsyncIterator[T]:
+def pull_stream[T](stream: Iterator[T], *, func: WorkerCall) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
     Args:
 
-        stream: The synchronous item stream to read that is closed once reading stops.
+        stream: The synchronous item stream to read.
+        func: Runs a blocking callable off the event loop.
 
-        pull: Runs a blocking callable off the event loop.
+    Returns:
 
-        close: Closes the node streams ``stream`` reads. Called once ``stream`` is
-            closed.
-
-    Yields:
-
-        Each item ``stream`` produces, in order.
+        The async stream over ``stream``'s items, pulled one per request.
 
     """
-    try:
-        while not isinstance(item := await pull(_next_or_missing, stream), MissingType):
-            yield item
-    finally:
-        try:
-            await asyncify_call(_maybe_close, stream)
-        finally:
-            await close()
+    return aiter_sentinel(partial(func, _next_or_missing), stream, MissingType)
 
 
 def _copy_wrapper_meta(
-    target: Callable[..., object], source: ModuleWrapper, *, isasync: bool
+    target: Func[object], source: ModuleWrapper, *, isasync: bool
 ) -> None:
     """
     Stamps ``source``'s discovery metadata onto ``target`` as sync or async.

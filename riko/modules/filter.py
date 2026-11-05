@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._streams import Item, Stream
-    from riko.types._wrappers import SyncPipeTuples
+    from riko.types._wrappers import Func, SyncPipeTuples
     from riko.types.modules import FilterConfRule
 
 logger: Logger = get_logger(__name__)
@@ -90,7 +90,7 @@ def _ordered[T](
     return wrapped
 
 
-SWITCH: dict[str, Callable[..., bool]] = {
+SWITCH: dict[str, Func[bool]] = {
     "after": op.gt,
     "atleast": _ordered(op.ge),
     "atmost": _ordered(op.le),

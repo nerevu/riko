@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Literal, Protocol, Unpack, cast
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from riko.types._wrappers import Func
+
 type AsyncBackend = Literal["anyio", "empty"]
 
 
@@ -38,7 +40,6 @@ try:
     from httpx import Response as HTTPXResponse
 except ImportError:
     AsyncClient: object = None
-    USE_CLIENT_DEFAULT: object = None
     BlockingPortal: object = None
     CancelScope: type | None = None
     CapacityLimiter: type | None = None
@@ -50,18 +51,18 @@ except ImportError:
     Path: object = None
     Semaphore: type | None = None
     TimeoutException: type[Exception] | None = None
-    async_chain: Callable[..., object] = lambda *_, **_kw: None
-    async_open: Callable[..., object] = lambda *_, **_kw: None
-    async_sleep: Callable[..., object] = lambda *_, **_kw: None
-    asyncify: Callable[..., object] = lambda *_, **_kw: None
+    async_chain: Func[object] = lambda *_, **_kw: None
+    async_open: Func[object] = lambda *_, **_kw: None
+    async_sleep: Func[object] = lambda *_, **_kw: None
+    asyncify: Func[object] = lambda *_, **_kw: None
     backend: AsyncBackend = "empty"
-    create_memory_object_stream: Callable[..., object] | None = None
-    create_task_group: Callable[..., object] | None = None
-    fail_after: Callable[..., object] | None = None
-    gather_results: Callable[..., object] = lambda *_, **_kw: None
+    create_memory_object_stream: Func[object] | None = None
+    create_task_group: Func[object] | None = None
+    fail_after: Func[object] | None = None
+    gather_results: Func[object] = lambda *_, **_kw: None
     lowlevel: object = None
-    run_from_thread: Callable[..., object] = lambda *_, **_kw: None
-    start_blocking_portal: Callable[..., object] = lambda *_, **_kw: None
+    run_from_thread: Func[object] = lambda *_, **_kw: None
+    start_blocking_portal: Func[object] = lambda *_, **_kw: None
 
     async def checkpoint() -> None:
         return None
@@ -93,7 +94,7 @@ else:
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from asyncer import asyncify
-    from httpx import USE_CLIENT_DEFAULT, AsyncClient, TimeoutException
+    from httpx import AsyncClient, TimeoutException
 
     backend = "anyio"
     run: Run = anyio.run
@@ -102,7 +103,6 @@ issync: bool = backend == "empty"
 isasync: bool = not issync
 
 __all__ = [
-    "USE_CLIENT_DEFAULT",
     "AsyncClient",
     "BlockingPortal",
     "CancelScope",

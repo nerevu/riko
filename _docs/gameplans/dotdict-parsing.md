@@ -223,3 +223,46 @@ processor run over the entry rewrites the field on output, whether or not it tou
 `TestDotDict::test_typed_value_shaped_business_data_reads_literally` in
 `tests/internal/test_values.py` pins the collapse. (A nested `DotDict` write does not re-read
 sibling fields, so a write is not a second trigger.)
+
+## Known instance: keys made only of dots alias the empty key
+
+Triaged 2026-10-31. `parse_key` strips trailing dots, so `"."` and `".."` parse to `[""]` and
+`"a."` to `["a"]`. `d["."] = 5` stores a literal `"."` key that `d["."]` then cannot read
+(`KeyError: ''`), `DotDict({"": 1}).get(".")` returns `1`, and `update`'s subkey-precedence
+skip turns `"."` into a skip of `""`, so `DotDict({"": 1, ".": 2})` drops the `""` key.
+`parse_item_key` reads only the exact empty string `""` literally. The literal-access boundary
+above owns the key grammar; until it lands, the strict-xfail tripwire
+`TestDotDict::test_dot_only_key_keeps_the_empty_key` in `tests/internal/test_values.py` pins
+the drop.
+
+## Known instance: a path past a scalar returns the scalar
+
+Triaged 2026-10-31. `DotDict({"a": {"b": 1}}).get("a.b.z")` returns `1`: `_parse_value` returns any
+non-`None` value for a leftover key instead of the default, so a path that runs past a scalar reads as
+the scalar. Streamed JSON in `any2dict` reports the same path as missing; both branches yield no records,
+so only the warning differs. The literal-access boundary above owns it; until it lands, the strict-xfail
+tripwire `TestDotDict::test_get_does_not_read_through_a_scalar` in `tests/internal/test_values.py` pins it.
+
+## Known instance: keys that differ only in case resolve to different duplicates
+
+Triaged 2026-11-01. `DotDict` lowercases keys as it builds its store, so of two keys that differ only
+in case the last one wins, as in Python's `dict`; streamed JSON in `any2dict` matches the first
+`map_key` event and cannot see a later duplicate without buffering the whole object. The two
+branches therefore read `{"X": …, "x": …}` differently. Accepted as a documented difference: the
+characterization rows `TestAny2dict::test_case_duplicate_keys_pick_a_branch_specific_value` in
+`tests/internal/test_values.py` pin each branch's current pick so a change in either shows up.
+Exact duplicate keys in fetched JSON (`any2dict`, `cast` with `JSON`, `exchangerate`) keep the
+last value on both branches, as `json.loads` does; only workflow documents reject them
+(audit 2026-11-01, accepted: the streamed branch cannot see a later duplicate without
+buffering the object).
+
+## Known instance: a numeric-string key reads as a sequence index
+
+Triaged 2026-11-03 (repo audit). `DotDict.get` runs `int(k)` on every path segment, so a key such as
+`"2020"` is taken as a sequence index: `DotDict({"2020": "x"}).get("2020")` returns `None` while
+`["2020"]` returns `"x"`. Every module that reads a field through `get` then sees the field as
+missing: `rename` deletes it and never re-adds it, `uniq` keeps only the first item, `filter` and
+`subelement` yield nothing, `sort` is a no-op. The literal-access boundary above owns the key
+grammar; until it lands, the strict-xfail tripwire
+`TestDotDict::test_numeric_string_key_reads_literally` in `tests/internal/test_values.py` pins the
+miss.

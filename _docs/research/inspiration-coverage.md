@@ -38,6 +38,7 @@ When translating inspiration into Riko:
 | `api-utils.md` | stable serialization, HTTP validators/cache headers, discoverable link index, dependency ordering | `provider-integrations.md`, `connectors.md`, `agents.md` | Adopt validators/catalog concepts; Flask helpers remain historical |
 | `authorizer.md` | OAuth1/OAuth2/API-key/service-account providers, uniform resource CRUD, auth callbacks/status | `provider-integrations.md`, `connectors.md` | Adopt normalized auth/resource capabilities; reject monolith |
 | `autogen.md` | declarative scenarios, agent teams, RAG, OpenAPI tools, model tiers, generated profiles | `agent-scenarios.md`, `agents.md`, `mcp.md` | Adopt declarative/evaluation ideas; reject self-authorized dynamic tools and unsandboxed code |
+| `benchmark-commits-click.py` | first-parent merge selection, seeded sampling, detached worktrees, historical `uv` environments, `git bisect run`-style forwarding, exit-125 skips, resumable CSV, output-line parsing | `performance.md` | Adopt as the runner's starting point; evolve, never rewrite in Bash |
 | `carbone.md` | durable source/parsed-data/render stages, Jinja/Markdown/HTML/PDF, alternate DOCX templates | `artifact-conversion.md`, `orchestration.md` | Adopt artifact/render boundary and rerenderability |
 | `chakula.rst` | RSS tailing, poll interval, finite iterations, initial/backfill, newer cutoff, cache, unique, fail policy | `feed-monitoring.md` | Adopt monitoring semantics; reject endless CLI loop as core scheduler |
 | `changanya.md` | Simhash near-duplicates, Bloom approximate membership, Nilsimsa, explicit similarity/error characteristics | `enrichment-modules.md`, `feed-monitoring.md` | Adopt optional near/approx dedupe with explicit semantics; geohash only if a use case appears |
@@ -65,6 +66,7 @@ When translating inspiration into Riko:
 | `prometheus-legacy.md` | separation of application/API/data layers; historical domain model | `riko-site.md`, `orchestration.md` | No new core feature; reinforces service/UI separation |
 | `proposer.md` | structured YAML context + template → HTML/PDF/Markdown/PNG | `artifact-conversion.md` | Adopt generic RenderPlan/multi-format artifact model |
 | `pyconvert.md` | codec inference/override, tabular readers/writers, stdin/stdout, Unicode, chunks, header normalization | `artifact-conversion.md`, `connectors.md` | Adopt codec registry/stream boundaries; optional formats stay extras |
+| `riko_benchmark_implementation_brief.md` | native vs. whole-command measurement boundaries, result identity, versioned CSV schema, status taxonomy, warmup/calibration outside timing, profiling as a diagnostic follow-on | `performance.md` | Adopt boundaries/identity contracts; reject frozen workloads (`--benchmark-ref`), registries, dashboards, cross-engine comparison |
 | `sense-hat-b-exporter.md` | long-running metrics exporter consumed by Prometheus | `connectors.md`, `feed-monitoring.md`, `orchestration.md` | Prometheus scrape remains finite connector/observation; exporter/service lifecycle stays deployment-level |
 | `webhooks.md` | provider signature verification, payload normalization, dispatch, cache/admin endpoints | `provider-integrations.md`, `orchestration.md` | Adopt verified EventEnvelope; reject arbitrary URL-to-function dispatch |
 
@@ -176,6 +178,26 @@ if-changed publishing
 
 Authoritative extension: `artifact-conversion.md`.
 
+### 4.6 Performance measurement
+
+Sources: the benchmark implementation brief and the supplied `benchmark-commits` runner; profiler
+landscape notes in `profiling-tools.md`.
+
+Carried forward:
+
+```text
+declared measurement boundary
+each commit runs its own workload
+result identity
+versioned result schema
+explicit skipped/incompatible status
+warmup outside timing
+benchmark first, profile second
+profiles as diagnostics, never evidence
+```
+
+Authoritative plan: `performance.md`.
+
 ## 5. Explicitly rejected legacy patterns
 
 The inspiration directory contains useful history, but the following should **not** return
@@ -197,7 +219,11 @@ as Riko architecture:
 * domain-specific application schemas in generic Riko modules;
 * platform-specific notification systems in core;
 * treating HTTP cache state as correctness/checkpoint state;
-* treating approximate duplicate detection as exact.
+* treating approximate duplicate detection as exact;
+* a Bash rewrite of the benchmark runner, a Rich-bench dependency, or a benchmark registry/tag
+  selector beside pytest's own selectors;
+* a performance dashboard, or comparing whole-command and in-process timings as one series;
+* profiled durations as regression evidence, or mass profiling of historical commits.
 
 ## 6. Cross-plan invariants revealed by the corpus
 

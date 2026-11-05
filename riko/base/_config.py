@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from math import isnan
 from multiprocessing import cpu_count
@@ -71,7 +72,7 @@ def get_worker_cnt(length: int = 0, *, threads: bool = True) -> int:
     """
     Computes a worker pool size, capped at the core count (doubled for threads).
 
-    Args:
+    Kwargs:
 
         length: The number of items to spread across the pool, or zero when unknown.
         threads: Whether the pool uses threads rather than processes.
@@ -112,6 +113,7 @@ class Settings:
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
     benchmark_delay: float = 0.1
+    benchmark_workers: int = 0
 
 
 def _env_int(
@@ -164,6 +166,28 @@ def _env_float(env: Mapping[str, str], key: str, default: float) -> float:
     return value
 
 
+def _env_encoding(env: Mapping[str, str], key: str, default: str) -> str:
+    """
+    Reads a text encoding ``RIKO_*`` override.
+
+    An encoding Python does not know logs a warning and keeps ``default``.
+    """
+    raw = env.get(key)
+
+    if raw is None:
+        value = default
+    else:
+        try:
+            codecs.lookup(raw)
+        except LookupError:
+            logger.warning("ignoring %s=%r: unknown encoding", key, raw)
+            value = default
+        else:
+            value = raw
+
+    return value
+
+
 def _env_str(env: Mapping[str, str], key: str, default: str) -> str:
     """Reads a string ``RIKO_*`` override, falling back to the default when unset."""
     return env.get(key, default)
@@ -173,7 +197,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """
     Loads ``Settings`` from defaults overlaid with ``RIKO_*`` env vars.
 
-    Args:
+    Kwargs:
 
         env: The variables to read (default: the process environment).
 
@@ -199,7 +223,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         streaming_threshold=_env_int(
             source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold, minimum=0
         ),
-        encoding=_env_str(source, "RIKO_ENCODING", defaults.encoding),
+        encoding=_env_encoding(source, "RIKO_ENCODING", defaults.encoding),
         discovery_timeout=_env_int(
             source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout, minimum=1
         ),
@@ -222,6 +246,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         ),
         benchmark_delay=_env_float(
             source, "RIKO_BENCHMARK_DELAY", defaults.benchmark_delay
+        ),
+        benchmark_workers=_env_int(
+            source, "RIKO_BENCHMARK_WORKERS", defaults.benchmark_workers, minimum=0
         ),
     )
 

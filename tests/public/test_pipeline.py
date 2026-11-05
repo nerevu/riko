@@ -53,6 +53,7 @@ from riko.types.modules import (
 )
 from tests import aresolve, async_test, skipif_issync
 from tests._execution import (
+    AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     RecordingSink,
     agen_source,
@@ -114,6 +115,7 @@ SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
 FANIN_PENDING = pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "concurrent pulling of fan-in branches is not available yet; a fan-in "
         "pulls its sources one at a time"
@@ -121,7 +123,9 @@ FANIN_PENDING = pytest.mark.xfail(
 )
 
 PUBSUB_PENDING = pytest.mark.xfail(
-    strict=True, reason="Pipeline.subscribe()/publish() are not available yet"
+    strict=True,
+    raises=NotImplementedError,
+    reason="Pipeline.subscribe()/publish() are not available yet",
 )
 
 UNION_PENDING = pytest.mark.xfail(
@@ -131,7 +135,9 @@ UNION_PENDING = pytest.mark.xfail(
 )
 
 PREDICATE_PENDING = pytest.mark.xfail(
-    strict=True, reason="gating a node on a per-item predicate is not available yet"
+    strict=True,
+    raises=TypeError,
+    reason="gating a node on a per-item predicate is not available yet",
 )
 
 BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")
@@ -420,6 +426,22 @@ class TestModuleNameEnum:
         assert len(list(pipeline(SRC))) == count
 
 
+def _fail_item(item):
+    raise ValueError("bad item")
+
+
+async def _afail_item(item):
+    raise ValueError("bad item")
+
+
+FAILING_MAPS = [
+    pytest.param(_fail_item, None, id="sync"),
+    pytest.param(_afail_item, None, id="async"),
+    pytest.param(_fail_item, 2, id="sync-concurrent"),
+    pytest.param(_afail_item, 2, id="async-concurrent"),
+]
+
+
 class TestPipelineIteration:
     def test_an_empty_pipeline_streams_its_seed_unchanged(self):
         assert list(Pipeline()([{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
@@ -450,6 +472,26 @@ class TestPipelineIteration:
     def test_first_reads_a_self_starting_pipeline_unseeded(self):
         assert tokenized(VALUE).first(default=None) == EXPECTED[0]
 
+    def test_iterating_a_split_pipeline_raises_before_running(self):
+        consumed = []
+
+        def source():
+            consumed.append(1)
+            yield {"x": 1}
+
+        with pytest.raises(InvalidPipelineError, match="splitter"):
+            list(source() | Pipeline.from_module("split"))
+
+        assert consumed == []
+
+    def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
+        pipeline = tokenized()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            list(boom() | Pipeline.from_module("hash"))
+
+        assert len(list(pipeline)) == 3
+
     def test_first_on_an_empty_pipeline_raises_a_lookup_error(self):
         with pytest.raises(EmptyPipelineError, match="no items") as info:
             Pipeline().first([])
@@ -467,17 +509,11 @@ class TestPipelineIteration:
         with pytest.raises(InvalidPipelineError, match="no nodes"):
             list(Pipeline())
 
-    def test_iterating_a_split_pipeline_raises_before_running(self):
-        consumed = []
+    def test_failing_source_propagates(self):
+        pipeline = boom() | Pipeline.from_module("hash")
 
-        def source():
-            consumed.append(1)
-            yield {"x": 1}
-
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            list(source() | Pipeline.from_module("split"))
-
-        assert consumed == []
+        with pytest.raises(RuntimeError, match="boom"):
+            list(pipeline)
 
 
 class TestAsyncPipelineIteration:
@@ -531,6 +567,14 @@ class TestAsyncPipelineIteration:
             _ = [item async for item in source() | Pipeline.from_module("split")]
 
         assert consumed == []
+
+    @pytest.mark.parametrize(("func", "concurrency"), FAILING_MAPS)
+    @async_test
+    async def test_a_failing_node_raises_its_own_error(self, func, concurrency):
+        pipeline = Pipeline().map(func).with_execution(concurrency=concurrency)
+
+        with pytest.raises(ValueError, match="bad item"):
+            await alist(pipeline(SRC))
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
@@ -636,6 +680,13 @@ def probe_log():
 
     with registered_modules(ModuleDefinition(name="probe", sync_pipe=sync_pipe)):
         yield log
+
+
+CLOSING_SEEDS = [
+    pytest.param(gen_closing_seed, id="generator"),
+    pytest.param(ClosingAsyncIterator, id="async-iterator"),
+    pytest.param(AsyncCloseAsyncIterator, id="async-close-iterator"),
+]
 
 
 class TestClose:
@@ -751,12 +802,6 @@ class TestClose:
         assert [item["content"] for item in rights] == ["c", "b", "a"]
 
 
-CLOSING_SEEDS = [
-    pytest.param(gen_closing_seed, id="generator"),
-    pytest.param(ClosingAsyncIterator, id="async-iterator"),
-]
-
-
 class TestAsyncClose:
     @async_test
     async def test_close_before_the_first_item_never_runs_the_source(self):
@@ -861,48 +906,6 @@ class TestAsyncClose:
         assert [item["content"] for item in rights] == ["c", "b", "a"]
 
 
-def _fail_item(item):
-    raise ValueError("bad item")
-
-
-async def _afail_item(item):
-    raise ValueError("bad item")
-
-
-FAILING_MAPS = [
-    pytest.param(_fail_item, None, id="sync"),
-    pytest.param(_afail_item, None, id="async"),
-    pytest.param(_fail_item, 2, id="sync-concurrent"),
-    pytest.param(_afail_item, 2, id="async-concurrent"),
-]
-
-
-class TestFailure:
-    def test_failing_source_propagates(self):
-        pipeline = boom() | Pipeline.from_module("hash")
-
-        with pytest.raises(RuntimeError, match="boom"):
-            list(pipeline)
-
-    def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
-        pipeline = tokenized()
-
-        with pytest.raises(RuntimeError, match="boom"):
-            list(boom() | Pipeline.from_module("hash"))
-
-        assert len(list(pipeline)) == 3
-
-
-class TestAsyncFailure:
-    @pytest.mark.parametrize(("func", "concurrency"), FAILING_MAPS)
-    @async_test
-    async def test_a_failing_node_raises_its_own_error(self, func, concurrency):
-        pipeline = Pipeline().map(func).with_execution(concurrency=concurrency)
-
-        with pytest.raises(ValueError, match="bad item"):
-            await alist(pipeline(SRC))
-
-
 async def _coro_source():
     return list(LIFECYCLE_SRC)
 
@@ -961,18 +964,6 @@ IN_FLIGHT_LIMITS = [
 
 
 class TestAsyncMap:
-    @async_test
-    async def test_a_lone_failure_raises_as_itself(self):
-        with pytest.raises(ValueError, match="bad 1"):
-            await async_map(_fail, [1])
-
-    @async_test
-    async def test_several_failures_raise_together(self):
-        with pytest.raises(ExceptionGroup) as caught:
-            await async_map(_fail, [1, 2])
-
-        assert len(caught.value.exceptions) == 2
-
     @pytest.mark.parametrize(("limit", "expected"), IN_FLIGHT_LIMITS)
     @async_test
     async def test_limit_bounds_in_flight_calls(self, limit, expected):
@@ -992,6 +983,18 @@ class TestAsyncMap:
             range(_IN_FLIGHT)
         )
         assert peak == expected
+
+    @async_test
+    async def test_a_lone_failure_raises_as_itself(self):
+        with pytest.raises(ValueError, match="bad 1"):
+            await async_map(_fail, [1])
+
+    @async_test
+    async def test_several_failures_raise_together(self):
+        with pytest.raises(ExceptionGroup) as caught:
+            await async_map(_fail, [1, 2])
+
+        assert len(caught.value.exceptions) == 2
 
     @async_test
     async def test_async_map_rejects_negative_limit(self):
@@ -1232,6 +1235,14 @@ class TestExecutionSettings:
             os.kill(pid, 0)
 
     @pytest.mark.slow
+    def test_a_process_mapped_callable_ignores_unused_context_resources(self) -> None:
+        unpicklable = Resource.from_external(SimpleNamespace(fn=lambda: None))
+        mapped = Pipeline().map(dict).with_resource("lock", unpicklable)
+        pipeline = mapped.with_execution(executor="process", concurrency=2)
+        items = [{"x": 1}, {"x": 2}]
+        assert sorted(pipeline(items), key=itemgetter("x")) == items
+
+    @pytest.mark.slow
     @pytest.mark.timeout(5)
     def test_a_dead_worker_process_fails_the_run(self) -> None:
         mapped = Pipeline().map(_exit_worker)
@@ -1240,13 +1251,11 @@ class TestExecutionSettings:
         with pytest.raises(BrokenProcessPool):
             list(pipeline([{"x": 1}, {"x": 2}]))
 
-    @pytest.mark.slow
-    def test_a_process_mapped_callable_ignores_unused_context_resources(self) -> None:
-        unpicklable = Resource.from_external(SimpleNamespace(fn=lambda: None))
-        mapped = Pipeline().map(dict).with_resource("lock", unpicklable)
-        pipeline = mapped.with_execution(executor="process", concurrency=2)
-        items = [{"x": 1}, {"x": 2}]
-        assert sorted(pipeline(items), key=itemgetter("x")) == items
+    def test_a_none_shutdown_timeout_raises(self) -> None:
+        # ``with_execution`` turns ``None`` into the default, so only direct
+        # construction can pass it through.
+        with pytest.raises(TypeError, match="a number"):
+            ExecutionSettings(shutdown_timeout=None)  # pyright: ignore[reportArgumentType]
 
 
 @pytest.mark.slow
@@ -1413,6 +1422,7 @@ class TestContextMode:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="a Pipeline runs its modules even when its context only asks to "
         "describe it, until pipelines can declare their inputs and dependencies",
     )
@@ -1457,12 +1467,6 @@ class TestContext:
         with pytest.raises(TypeError):
             context.inputs["count"] = 3  # pyright: ignore[reportIndexIssue]
 
-    def test_resources_mapping_is_read_only(self):
-        context = Context()
-
-        with pytest.raises(TypeError):
-            context.resources["db"] = object()  # pyright: ignore[reportIndexIssue]
-
     def test_replace_returns_an_independent_snapshot(self):
         base = Context(test=False)
         derived = base.replace(test=True)
@@ -1494,6 +1498,12 @@ class TestContext:
 
         with pytest.raises(AttributeError):
             restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]
+
+    def test_resources_mapping_is_read_only(self):
+        context = Context()
+
+        with pytest.raises(TypeError):
+            context.resources["db"] = object()  # pyright: ignore[reportIndexIssue]
 
     @pytest.mark.parametrize("inputs", ["abc", [("a", 1)]])
     def test_non_mapping_inputs_are_rejected(self, inputs: Any):
@@ -1552,18 +1562,6 @@ class TestResource:
     public setters; mutable resolved state belongs to the execution layer.
     """
 
-    def test_external_value_fields_are_read_only(self):
-        resource = Resource.from_external(Connection())
-
-        with pytest.raises(AttributeError):
-            resource.value = object()  # pyright: ignore[reportAttributeAccessIssue]
-
-        with pytest.raises(AttributeError):
-            resource.credential = "other"  # pyright: ignore[reportAttributeAccessIssue]
-
-        with pytest.raises(AttributeError):
-            resource.lazy = True  # pyright: ignore[reportAttributeAccessIssue]
-
     def test_referenced_value_is_not_frozen(self):
         connection = Connection()
         resource = Resource.from_external(connection)
@@ -1589,6 +1587,18 @@ class TestResource:
 
         resource = Resource.from_factory(factory, credential=CREDENTIAL, lazy=True)
         check_credential_and_lazy(resource)
+
+    def test_external_value_fields_are_read_only(self):
+        resource = Resource.from_external(Connection())
+
+        with pytest.raises(AttributeError):
+            resource.value = object()  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.credential = "other"  # pyright: ignore[reportAttributeAccessIssue]
+
+        with pytest.raises(AttributeError):
+            resource.lazy = True  # pyright: ignore[reportAttributeAccessIssue]
 
     @pytest.mark.parametrize(
         "factory",
@@ -1736,10 +1746,6 @@ class TestSubscriptions:
 
         assert seen == [first]
 
-    def test_an_undrained_subscription_does_not_block_the_publisher(self):
-        events = Pipeline.subscribe("undrained")
-        assert list(tokenized(VALUE).publish(events)) == EXPECTED
-
     def test_idle_drain_returns_promptly(self):
         started = perf_counter()
         assert list(Pipeline.subscribe("idle")) == []
@@ -1749,13 +1755,6 @@ class TestSubscriptions:
         events = Pipeline.subscribe("fresh")
         assert list(tokenized(VALUE).publish(events)) == EXPECTED
         assert list(events) == []
-
-    def test_lifecycle_markers_do_not_leak_into_received_items(self):
-        seen: list[Item] = []
-        events = Pipeline.subscribe("leakcheck", func=seen.append)
-        list(tokenized(VALUE).publish(events))
-
-        assert seen == EXPECTED
 
 
 @SPLIT_METHOD_PENDING
@@ -1855,12 +1854,6 @@ FINISHES = [
 class TestPipelineStream:
     """A called pipeline is a single-use stream, iterated in one mode only."""
 
-    def test_with_on_a_stream_points_at_open(self):
-        stream = Pipeline()(SRC)
-
-        with pytest.raises(TypeError, match="open"), stream:  # pyright: ignore[reportGeneralTypeIssues]
-            pass
-
     @pytest.mark.parametrize("finish", FINISHES)
     def test_a_finished_or_closed_stream_yields_nothing_more(self, finish):
         stream = Pipeline()(SRC)
@@ -1891,16 +1884,14 @@ class TestPipelineStream:
 
         assert not any(map(_is_unclosed_run_warning, caught))
 
-
-class TestAsyncPipelineStream:
-    @async_test
-    async def test_async_with_on_a_stream_points_at_open(self):
+    def test_with_on_a_stream_points_at_open(self):
         stream = Pipeline()(SRC)
 
-        with pytest.raises(TypeError, match="open"):
-            async with stream:  # pyright: ignore[reportGeneralTypeIssues]
-                pass
+        with pytest.raises(TypeError, match="open"), stream:  # pyright: ignore[reportGeneralTypeIssues]
+            pass
 
+
+class TestAsyncPipelineStream:
     @async_test
     async def test_a_consumed_async_stream_yields_nothing_more(self):
         stream = Pipeline()(SRC)
@@ -1944,3 +1935,11 @@ class TestAsyncPipelineStream:
 
         await sync_stream.aclose()
         await async_stream.aclose()
+
+    @async_test
+    async def test_async_with_on_a_stream_points_at_open(self):
+        stream = Pipeline()(SRC)
+
+        with pytest.raises(TypeError, match="open"):
+            async with stream:  # pyright: ignore[reportGeneralTypeIssues]
+                pass

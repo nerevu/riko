@@ -15,6 +15,7 @@ Index
 - `What do processor, operator, and splitter mean`_
 - `How does a processor map over items`_
 - `What file types are supported`_
+- `How does fetchdata locate records`_
 - `What protocols are supported`_
 - `Which optional dependencies are available`_
 - `How do synchronous and asynchronous pipelines differ`_
@@ -46,7 +47,7 @@ configuration, and a ``pipeline`` is a chain of ``nodes``.
     ...     'hash', options={'field': 'title', 'assign': 'title_hash'}
     ... )
     >>> pipeline.first(items)
-    {'title': 'alpha', 'title_hash': 863334096}
+    {'title': 'alpha', 'title_hash': 786896514}
     >>> len(list(pipeline(items)))
     2
 
@@ -82,7 +83,9 @@ Which imports are public?
   (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats`` bucket enums), and the
   pipeline exceptions.
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
-  the ``processor``/``operator``/``splitter`` decorators and the module-metadata types.
+  the ``processor``/``operator``/``splitter`` decorators; the module-metadata types;
+  the registration functions for modules, workflow stores, and write targets; and the
+  ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name.
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
@@ -267,7 +270,7 @@ as the ``options`` mapping.
     >>> sorted(result)
     ['hash', 'title']
     >>> result['hash']
-    1104819838
+    2894317996
 
 A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
 example is ``split``.
@@ -482,11 +485,11 @@ seed the same ``stream``.
     >>> options = {"field": "x"}
     >>> pipeline = Pipeline.from_module('hash', options=options)
     >>> pipeline.first(iter(items))
-    {'x': 0, 'hash': 2328942002}
+    {'x': 0, 'hash': 1711317344}
     >>> pipeline.first(items)
-    {'x': 0, 'hash': 2328942002}
+    {'x': 0, 'hash': 1711317344}
     >>> pipeline.first(items[0])
-    {'x': 0, 'hash': 2328942002}
+    {'x': 0, 'hash': 1711317344}
 
 ``udf`` is not reachable this way, because a ``Pipeline``'s ``options`` must be
 JSON-native and a callable is not. ``map`` chains a callable as its own node instead.
@@ -522,6 +525,16 @@ SQLite               sqlite                   fetchtable
 Fixed width          fixed                    fetchtable
 ===================  =======================  ===========================================
 
+How does ``fetchdata`` locate records?
+--------------------------------------
+
+The ``fetchdata`` module's ``path`` is a dotted path into the fetched document's
+records, e.g. ``value.items``. The whole document is returned when ``path`` is empty.
+Keys match case-insensitively. With ``ijson`` (the ``perf`` extra), a JSON document is
+streamed when it is ``RIKO_STREAMING_THRESHOLD`` bytes or more, or is an HTTP response
+in a sync run. Otherwise it is parsed in memory. The two agree except on keys that
+differ only in case: streamed parsing selects the first and in-memory the last.
+
 What protocols are supported?
 -----------------------------
 
@@ -543,13 +556,13 @@ a general application data directory.
 Which optional dependencies are available?
 ------------------------------------------
 
-===========  ============================  ======================================
+===========  ============================  =============================================
 Extra        Packages                      Capability
-===========  ============================  ======================================
+===========  ============================  =============================================
 ``async``    AnyIO, httpx                  Asynchronous execution and HTTP paths
-``perf``     fastfeedparser, ijson, lxml   Faster, streaming XML and feed parsing
+``perf``     fastfeedparser, ijson, lxml   Faster; streaming XML, JSON, and feed parsing
 ``finance``  csv2ofx                       OFX and QIF export formats
-===========  ============================  ======================================
+===========  ============================  =============================================
 
 From a checkout, install an ``extra`` with a quoted, editable command such as
 ``python -m pip install -e ".[async]"``. Use ``list_formats()`` to discover the export

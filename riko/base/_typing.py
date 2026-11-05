@@ -8,6 +8,7 @@ and holds the ``isinstance`` tuples behind the scalar type aliases.
 
 from __future__ import annotations
 
+from collections import ChainMap
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -119,6 +120,9 @@ def resolve_type_hints(
 
         obj: The module, class, or callable whose hints to resolve.
         namespaces: Modules or mappings whose names supplement the local namespace.
+
+    Kwargs:
+
         include_extras: Whether to keep ``Annotated`` metadata.
 
     Returns:
@@ -137,13 +141,9 @@ def resolve_type_hints(
         collections.abc.Iterator[int]
 
     """
-    localns: dict[str, object] = {}
-
-    for namespace in namespaces:
-        localns.update(
-            vars(namespace) if isinstance(namespace, ModuleType) else namespace
-        )
-
+    localns = ChainMap(
+        *(vars(ns) if isinstance(ns, ModuleType) else dict(ns) for ns in namespaces)
+    )
     return get_type_hints(obj, localns=localns, include_extras=include_extras)
 
 
@@ -236,6 +236,9 @@ def resolve_enum[E: StrEnum](
 
         enum: The string enum to resolve into.
         value: A member or member value, or ``None`` when absent.
+
+    Kwargs:
+
         what: How error messages name the value (default: the enum's name).
         default: The member a missing ``value`` resolves to.
         strict: Whether a missing ``value`` with no ``default`` raises.
@@ -259,10 +262,9 @@ def resolve_enum[E: StrEnum](
         >>>
         >>> resolve_enum(Color, "red")
         <Color.RED: 'red'>
-        >>> resolve_enum(Color, "green", error=ValueError)
-        Traceback (most recent call last):
-        ...
-        ValueError: Invalid Color: 'green'. Expected one of red, blue
+        >>> resolve_enum(Color, None, default=Color.BLUE)
+        <Color.BLUE: 'blue'>
+        >>> resolve_enum(Color, None, strict=False)
 
     """
     what = enum.__name__ if what is None else what
@@ -288,6 +290,8 @@ def import_or_else(target: str, *, strict: bool = False) -> ModuleType | None:
     Args:
 
         target: Fully qualified module name to import.
+
+    Kwargs:
 
         strict: Whether a missing parent package raises instead of returning ``None``.
             When set, only ``target`` itself may be missing.

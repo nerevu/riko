@@ -91,7 +91,7 @@ def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
     # abbreviation (``CST``/``EST``/...) resolves to its US zone rather than a foreign
     # one (e.g. Asia/Taipei).
     common = available_timezones().intersection(pytz.common_timezones)
-    yield from _add_zones(*common.difference(_PREFERRED_ZONES))
+    yield from _add_zones(*sorted(common.difference(_PREFERRED_ZONES)))
     yield from _add_zones(*_PREFERRED_ZONES)
 
 
@@ -109,7 +109,7 @@ def load_local_tz(
     """
     Loads the host's local timezone, or a fallback timezone.
 
-    Args:
+    Kwargs:
 
         try_local_tz: Whether to inspect the host's local timezone.
         fallback_tzinfo: Timezone returned when local lookup is disabled or fails.
@@ -175,6 +175,9 @@ def resolve_tt_tzinfo(
     Args:
 
         tt: ``struct_time`` value to inspect.
+
+    Kwargs:
+
         def_tzinfo: Fallback timezone when ``tt`` has no timezone information.
 
     Returns:
@@ -211,6 +214,9 @@ def resolve_tzinfo(
     Args:
 
         _date: Date-like value to inspect.
+
+    Kwargs:
+
         def_tzinfo: Fallback timezone for naive datetime or ``struct_time`` values.
 
     Returns:

@@ -60,15 +60,23 @@ async def async_callable_factory():
 def sync_gen_factory(credential: str | None = None):
     connection = Connection()
     print(f"\nCreating a fresh sync db using {connection}")
-    yield connection
-    print("\nClosing sync db...")
+
+    try:
+        yield connection
+    finally:
+        print("\nClosing sync db...")
+        connection.close()
 
 
 async def async_gen_factory(credential: str | None = None):
     connection = AsyncConnection()
     print(f"\nCreating a fresh async db using {connection}")
-    yield connection
-    print("\nClosing async db...")
+
+    try:
+        yield connection
+    finally:
+        print("\nClosing async db...")
+        await connection.aclose()
 
 
 @contextmanager
@@ -80,6 +88,7 @@ def sync_cm_factory(credential: str | None = None):
         yield connection
     finally:
         print("Cleaning sync db...")
+        connection.close()
 
 
 @asynccontextmanager
@@ -91,6 +100,7 @@ async def async_cm_factory(credential: str | None = None):
         yield connection
     finally:
         print("Cleaning async db...")
+        await connection.aclose()
 
 
 def _passthrough[**P, R](func: Callable[P, R]) -> Callable[P, R]:
@@ -136,6 +146,7 @@ VALUE_FACTORIES = [
 
 connection = pytest.fixture(sync_callable_factory)
 sync_contextmanager = pytest.fixture(sync_cm_factory)
+async_contextmanager = pytest.fixture(async_cm_factory)
 scalar = pytest.fixture(lambda: SCALAR)
 
 

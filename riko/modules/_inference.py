@@ -7,7 +7,7 @@ import ast
 import builtins
 import textwrap
 from ast import AsyncFunctionDef, FunctionDef
-from collections.abc import Awaitable, Callable, Coroutine, Iterator
+from collections.abc import Awaitable, Coroutine, Iterator
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
 from typing import TYPE_CHECKING, Any, NamedTuple, get_args, get_origin
 
@@ -25,6 +25,8 @@ from riko.types.modules import (
 
 if TYPE_CHECKING:
     from logging import Logger
+
+    from riko.types._wrappers import Func
 
 logger: Logger = get_logger(__name__)
 
@@ -211,6 +213,9 @@ def _infer_expression_kind(
 
         node: The expression to classify (a function's final return value).
         assignments: Top-level name -> value bindings a returned name may resolve to.
+
+    Kwargs:
+
         seen: Names already being resolved, used to break assignment cycles.
 
     Returns:
@@ -259,7 +264,7 @@ def _is_function_def(node: ast.AST) -> TypeIs[FunctionDef | AsyncFunctionDef]:
     return isinstance(node, (FunctionDef, AsyncFunctionDef))
 
 
-def infer_from_source(pipe: Callable) -> ReturnInference:
+def infer_from_source(pipe: Func[object]) -> ReturnInference:
     """
     Infers the return kind of a short, unannotated pipe from its source.
 
@@ -326,7 +331,7 @@ def infer_from_source(pipe: Callable) -> ReturnInference:
     return result
 
 
-def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
+def gen_return_inferences(pipe: Func[object]) -> Iterator[ReturnInference]:
     """
     Infers a pipe's return kind using the most reliable evidence.
 
@@ -386,7 +391,7 @@ def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
             yield infer_from_source(pipe)
 
 
-def gen_operator_return_kinds(pipe: Callable) -> Iterator[OperatorReturnKind]:
+def gen_operator_return_kinds(pipe: Func[object]) -> Iterator[OperatorReturnKind]:
     """
     Reduces the full inferences to their bare return kinds.
 

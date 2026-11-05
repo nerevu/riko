@@ -21,7 +21,7 @@ from tests._execution import registered_modules
 from tests._lifecycle import VALUE, tokenized
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator, Mapping
+    from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
 
     from riko.types._wrappers import SyncModuleWrapper
 
@@ -46,6 +46,10 @@ def _upper_content(item: Mapping[str, object]) -> str:
 async def _ascaled(item: Mapping[str, Any], *, factor: int = 2) -> int:
     await checkpoint()
     return item["x"] * factor
+
+
+def _defer_scaled(item: Mapping[str, Any]) -> Awaitable[int]:
+    return _ascaled(item)
 
 
 def _raise_value_error(item: object) -> NoReturn:
@@ -79,7 +83,7 @@ def _count(value: Iterable[object]) -> int:
 _LISTLIKE_ITEMS = [
     pytest.param(_to_list, {}, id="list-inline"),
     pytest.param(_to_list, _THREAD, id="list-thread"),
-    pytest.param(_to_list, _PROCESS, id="list-process"),
+    pytest.param(_to_list, _PROCESS, id="list-process", marks=pytest.mark.slow),
     pytest.param(_to_tuple, {}, id="tuple-inline"),
     pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
     pytest.param(_to_generator, {}, id="generator-inline"),
@@ -120,7 +124,7 @@ _BAD_VERSIONS = [
 _EXECUTIONS = [
     pytest.param({}, id="inline"),
     pytest.param(_THREAD, id="thread"),
-    pytest.param(_PROCESS, id="process"),
+    pytest.param(_PROCESS, id="process", marks=pytest.mark.slow),
 ]
 
 
@@ -151,10 +155,6 @@ class TestCallableNodes:
         items = list(Pipeline().map(lambda _: iter(returned))([{"x": 1}]))
         assert len(items) == 1
         assert list(items[0]) == returned
-
-    def test_map_propagates_exceptions(self):
-        with pytest.raises(ValueError, match="'x': 1"):
-            list(Pipeline().map(_raise_value_error)([{"x": 1}]))
 
     def test_map_binds_keywords(self):
         pipeline = Pipeline().map(_scaled, factor=10)
@@ -237,6 +237,7 @@ class TestCallableNodes:
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
 
+    @pytest.mark.slow
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
@@ -255,8 +256,18 @@ class TestCallableNodes:
             .hash(options={"assign": "content"})
             .map(record)
         )
-        assert pipeline.first() == {"content": 396558121}
+        assert pipeline.first() == {"content": 3944515045}
         assert len(runs) == 1
+
+    def test_map_propagates_exceptions(self):
+        with pytest.raises(ValueError, match="'x': 1"):
+            list(Pipeline().map(_raise_value_error)([{"x": 1}]))
+
+    def test_sync_iteration_rejects_an_awaitable_result(self):
+        pipeline = Pipeline().map(_defer_scaled)
+
+        with pytest.raises(InvalidPipelineError, match="a map function"):
+            list(pipeline([{"x": 1}]))
 
     def test_map_requires_the_context_to_provide_its_resources(self):
         pipeline = Pipeline().map(_enrich, resources="db")
@@ -283,6 +294,7 @@ class TestCallableNodes:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason=(
             "rejecting identity modes a one-to-one map cannot honor is not yet "
             "implemented"
@@ -294,6 +306,7 @@ class TestCallableNodes:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=InvalidPipelineError,
         reason=(
             "callable nodes that resolve without borrowing the registered udf module "
             "are not yet implemented"

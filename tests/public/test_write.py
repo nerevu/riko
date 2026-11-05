@@ -1,19 +1,21 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides public tests for writing and exporting a ``Pipeline``'s items."""
+"""Provides public tests for write targets and for writing and exporting items."""
 
 from __future__ import annotations
 
 import json
 import re
+from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from riko import export
-from riko.base._exceptions import UnsupportedTargetError
+from riko.base._exceptions import InvalidPipelineError, UnsupportedTargetError
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
+from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
-from riko.definitions._write import WriteMode
+from riko.definitions._write import WriteCapabilities, WriteMode
 from riko.io._async import async_write
 from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.write import async_pipe, pipe
@@ -22,7 +24,7 @@ from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
-from tests import async_test, is_installed, run_python
+from tests import async_test, is_installed
 from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
@@ -32,15 +34,8 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
 
 
-_SEEDED_SET_WRITE = """
-import sys
-from riko.modules.write import pipe
-items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
-list(pipe(items, conf={"dest": sys.argv[1], "fmt": sys.argv[2]}))
-"""
-
 WRITE_NODE_PENDING = pytest.mark.xfail(
-    strict=True, reason="write nodes do not execute yet"
+    strict=True, raises=InvalidPipelineError, reason="write nodes do not execute yet"
 )
 
 JSON_BYTES = b'[{"x": 0}, {"x": 1}, {"x": 2}]'
@@ -154,14 +149,10 @@ class TestWrite:
         list(pipe(items, conf=WriteConf({"dest": path, "fmt": fmt})))
         assert path.read_bytes().strip() == expected
 
-    def test_set_values_are_written_sorted_under_any_hash_seed(self, tmp_path):
-        def write(seed: str) -> bytes:
-            path = tmp_path / f"{seed}.json"
-            run_python("-c", _SEEDED_SET_WRITE, str(path), "json", hash_seed=seed)
-            return path.read_bytes()
-
-        expected = b'"tags": ["alpha", "beta", "delta", "gamma"]'
-        assert all(expected in write(seed) for seed in ("1", "2"))
+    def test_set_values_are_written_sorted_under_any_hash_seed(self, hash_seed_probes):
+        expected = '"tags": ["alpha", "beta", "delta", "gamma"]'
+        written = [probes["set_write"] for probes in hash_seed_probes.values()]
+        assert all(expected in text for text in written)
 
     @pytest.mark.parametrize("conf", SKIPPED_TARGETS)
     def test_sync_bad_target_skips_but_passes_through(self, tmp_path, conf):
@@ -220,6 +211,7 @@ class TestPipelineWriteDefinition:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
         reason="the write module stays reachable until write nodes execute: write() "
         "without a destination chains that module instead of requiring a destination",
     )
@@ -295,19 +287,20 @@ class TestPipelineWrite:
         assert path.read_bytes().startswith(b"[")
         assert path.read_bytes().endswith(b"]")
 
+    def test_write_does_not_rerun_preceding_module(self, tmp_path):
+        hashed = Pipeline().hash(options={"assign": "h"})
+        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
+        assert through == list(hashed(ITEMS))
+
     def test_non_file_target_execution_unsupported(self):
         pipeline = Pipeline().write(RecordStore())
 
         with pytest.raises(UnsupportedTargetError, match="RecordStore"):
             list(pipeline(ITEMS))
 
-    def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        hashed = Pipeline().hash(options={"assign": "h"})
-        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
-        assert through == list(hashed(ITEMS))
-
     @pytest.mark.xfail(
         strict=True,
+        raises=InvalidPipelineError,
         reason="a write node that feeds no workflow output does not execute yet",
     )
     def test_a_write_node_off_every_output_path_still_writes(self, tmp_path):
@@ -375,6 +368,9 @@ class TestExportFormats:
         collection = json.loads(path.read_text())
         assert collection["type"] == "FeatureCollection"
         assert collection["features"] == []
+
+    def test_empty_csv_export_is_an_empty_buffer(self):
+        assert export([], "csv").getvalue() == ""
 
     def test_finance_targets_track_csv2ofx(self):
         """``ofx``/``qif`` formats appear only when the finance extra is present."""
@@ -447,6 +443,13 @@ ASYNC_WRITE_ITERABLES = [
 ]
 
 
+SPLIT_MULTIBYTE_WRITES = [
+    pytest.param(iter([b"h\xc3", b"\xa9llo"]), None, id="iterator"),
+    pytest.param("héllo".encode(), 2, id="bytes"),
+    pytest.param(BytesIO("héllo".encode()), 2, id="bytes-io"),
+]
+
+
 class TestAsyncWriteIterables:
     """``async_write`` writes each ``str``/``bytes`` element of an iterable."""
 
@@ -460,3 +463,85 @@ class TestAsyncWriteIterables:
         path = tmp_path / "out.txt"
         assert await async_write(path, content, mode=mode) == written
         assert path.read_bytes() == expected
+
+    @pytest.mark.parametrize(("content", "chunksize"), SPLIT_MULTIBYTE_WRITES)
+    @async_test
+    async def test_decodes_a_character_split_across_chunks(
+        self, tmp_path, content, chunksize
+    ):
+        path = tmp_path / "out.txt"
+        assert await async_write(path, content, mode="w", chunksize=chunksize) == 5
+        assert path.read_text(encoding="utf-8") == "héllo"
+
+
+class TestWriteMode:
+    def test_mode_values(self):
+        assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
+
+
+class TestWriteCapabilities:
+    def test_appendable_derived_from_modes(self):
+        appendable = WriteCapabilities(modes=frozenset({WriteMode.APPEND}))
+        unappendable = WriteCapabilities(modes=frozenset({WriteMode.REPLACE}))
+
+        assert appendable.appendable is True
+        assert unappendable.appendable is False
+
+    def test_serializes_derived_from_format(self):
+        serializing = WriteCapabilities(modes=frozenset(), fmt=Formats.CSV)
+        native = WriteCapabilities(modes=frozenset())
+
+        assert serializing.serializes is True
+        assert native.serializes is False
+
+    def test_keyed_modes_is_union(self):
+        caps = WriteCapabilities(
+            modes=frozenset(WriteMode),
+            match_keyed_modes=frozenset({WriteMode.MERGE}),
+            idempotent_modes=frozenset({WriteMode.APPEND}),
+        )
+
+        assert caps.keyed_modes == frozenset({WriteMode.MERGE, WriteMode.APPEND})
+
+    def test_mode_sets_are_frozen_copies_of_the_input(self):
+        modes, keyed = {WriteMode.APPEND, WriteMode.MERGE}, {WriteMode.MERGE}
+        caps = WriteCapabilities(modes=modes, match_keyed_modes=keyed)
+        modes.clear()
+        keyed.add(WriteMode.APPEND)
+
+        expected = WriteCapabilities(
+            modes=frozenset({WriteMode.APPEND, WriteMode.MERGE}),
+            match_keyed_modes=frozenset({WriteMode.MERGE}),
+        )
+        assert caps == expected
+        assert hash(caps) == hash(expected)
+
+    def test_keyed_modes_must_be_subset_of_modes(self):
+        with pytest.raises(ValueError, match="not present in modes"):
+            WriteCapabilities(
+                modes=frozenset({WriteMode.REPLACE}),
+                match_keyed_modes=frozenset({WriteMode.MERGE}),
+            )
+
+    def test_match_and_idempotent_must_not_overlap(self):
+        with pytest.raises(ValueError, match="must not overlap"):
+            WriteCapabilities(
+                modes=frozenset({WriteMode.MERGE}),
+                match_keyed_modes=frozenset({WriteMode.MERGE}),
+                idempotent_modes=frozenset({WriteMode.MERGE}),
+            )
+
+
+class TestFileTarget:
+    @pytest.mark.parametrize(
+        ("dest", "appendable", "incremental"),
+        [("out.csv", True, True), ("out.geojson", False, False)],
+    )
+    def test_target_owns_format_behavior(self, dest, appendable, incremental):
+        capabilities = FileTarget(dest).get_capabilities()
+
+        assert capabilities.serializes is True
+        assert capabilities.appendable is appendable
+        assert (WriteMode.APPEND in capabilities.modes) is appendable
+        assert capabilities.incremental is incremental
+        assert WriteMode.REPLACE in capabilities.modes

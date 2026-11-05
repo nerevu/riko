@@ -17,6 +17,11 @@ the empty context and are never reported. Output is one line per file, relative
 to the repository root, e.g. ``riko/x.py [12, 13, 40]``. Exits 1 when a line is
 reported, 0 when the covering tests execute everything the cut tests do, and 2 on
 a usage error or a missing data file.
+
+A module first imported during a test charges its import-time lines to that test,
+so whichever selected test runs first appears to own them. Run the covering
+doctests before the cut tests (list them first on the pytest command line), or a
+cut test's import lines are reported as uncovered.
 """
 
 from __future__ import annotations

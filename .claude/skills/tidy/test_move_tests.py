@@ -102,3 +102,31 @@ def test_with_helpers_carries_only_the_moved_methods_helpers(
     assert dest.index("TABLE = [1]") < dest.index("def _only_moved")
     assert dest.index("def _only_moved") < dest.index("class TestDest")
     assert "NOT moved: _shared" in capsys.readouterr().out
+
+
+SPLIT_SOURCE = """\
+SHARED = 1
+ONLY_A = [
+    1,
+]
+
+
+class TestA:
+    def test_a(self):
+        assert ONLY_A and SHARED
+
+
+class TestB:
+    def test_b(self):
+        assert SHARED
+"""
+
+
+def test_plan_split_prints_footprints_and_shared_helpers(tmp_path):
+    path = tmp_path / "test_split.py"
+    path.write_text(SPLIT_SOURCE)
+    assert list(move_tests.gen_split_plan(path)) == [
+        f"shared {path}:1 1 lines: TestA, TestB",
+        f"TestA {path}:7 class=3 helpers=3",
+        f"TestB {path}:12 class=3 helpers=0",
+    ]

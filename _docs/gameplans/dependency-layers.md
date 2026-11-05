@@ -56,7 +56,7 @@ DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 | `riko/io/` | `io` | sync/async I/O, serialization, re-encoding |
 | `riko/parsing/` | `parsing` | config parsing, `DotDict`, HTML/XML/document parsing |
 | `riko/rss/` | `rss` | feed discovery, entry normalization, RSS/Atom parsing |
-| `riko/execution/` | `execution` | execution planning (`_prepared.py`), one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource cleanup (`_resource_cleanup.py`), the resolved-resource mapping handed to modules (`_resource_view.py`), event sink |
+| `riko/execution/` | `execution` | execution planning (`_prepared.py`), one-shot sync/async executions, lifetime primitives, execution-local resource acquisition and owned-resource cleanup (the generic `run_bridged`/`maybe_async`/`asyncify` helpers live below it, in `riko/bado/_util.py`), the resolved-resource mapping handed to modules (`_resource_view.py`), event sink |
 | `riko/runtime/` | `runtime` | collections, compiler, pipelines, the pipeline runners (`_run.py`), resolver/registry, pub/sub, write sessions |
 | `riko/modules/` | `modules` | built-in pipe implementations and module metadata/decorator internals |
 | `riko/ext/` | `modules` | supported extension-author facade and codegen helpers; same dependency layer as modules |
@@ -73,7 +73,8 @@ state:
 
 - `riko/definitions/` contains descriptions of what a module/resource/write is.
 - `riko/execution/` is the `execution` layer: resource acquisition and cleanup
-  (`_resource_cleanup.py`) and the resolved-resource view (`_resource_view.py`) live alongside the one-shot executions and lifetime primitives.
+  (closing through `run_bridged`/`maybe_async`/`asyncify`, which live in the lower `bado` layer's
+  `riko/bado/_util.py`) and the resolved-resource view (`_resource_view.py`) live alongside the one-shot executions and lifetime primitives.
 - `riko/runtime/` orchestrates streams, compilation, resolution, pub/sub, and
   write sessions around those contracts, and holds the pipeline runners (`_run.py`), which
   build the frozen `ExecutionPlan` through `ExecutionPlan.from_workflow` in
@@ -178,8 +179,9 @@ New pipeline behavior that only composes the graph belongs on
 ## Folder regrouping
 
 1. Put the implementation in the lowest layer that owns its responsibility.
-2. Update `_PREFIX_LAYERS` or `_EXACT_LAYERS` only when a genuinely new mapping is
-   needed; do not make an exception merely to silence an upward import.
+2. Update `PREFIX_LAYERS` or `EXACT_LAYERS` (`riko/base/_config.py`) only when a
+   genuinely new mapping is needed; do not make an exception merely to silence an
+   upward import.
 3. Prefer moving a shared contract downward over importing a higher runtime layer
    from a lower package.
 4. Keep definition objects immutable; execution-owned mutable state stays in the

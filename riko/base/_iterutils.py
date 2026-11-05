@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import partial
 from itertools import cycle, dropwhile, islice, takewhile
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Callable, Iterable, Iterator
 
 
 def gen_instances[T](
@@ -34,72 +35,6 @@ def gen_instances[T](
     return (item for item in items if isinstance(item, accepted))
 
 
-def noop[T](value: T) -> T:
-    """
-    Passes a value through unchanged.
-
-    Args:
-
-        value: Value to pass through.
-
-    Returns:
-
-        The original ``value``.
-
-    Examples:
-
-        >>> noop({"value": 1})
-        {'value': 1}
-
-    """
-    return value
-
-
-def multi_try[T, S](
-    source: object,
-    zipped: Iterable[tuple[Callable[..., T], type[Exception]]],
-    default: S = None,
-) -> T | S:
-    """
-    Tries each callable on a source until one does not raise.
-
-    Each entry pairs a callable with the exception type to swallow for it; the
-    first call that avoids its paired exception wins. When every attempt raises,
-    ``default`` is returned.
-
-    Args:
-
-        source: The value passed to each callable.
-        zipped: Pairs of ``(callable, exception_type)`` tried in order.
-        default: The value returned when every attempt raises.
-
-    Returns:
-
-        The first successful result, or ``default`` if none succeed.
-
-    Examples:
-
-        >>> from itertools import repeat
-        >>>
-        >>> multi_try("abc", zip([int, str.upper], repeat(ValueError)))
-        'ABC'
-        >>> multi_try("abc", zip([int], repeat(ValueError)), default=-1)
-        -1
-
-    """
-    for func, error in zipped:
-        try:
-            value = func(source)
-        except error:
-            pass
-        else:
-            break
-    else:
-        value = default
-
-    return value
-
-
 @overload
 def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...
 @overload
@@ -118,6 +53,9 @@ def unique_everseen[T](
     Args:
 
         content: The source iterable.
+
+    Kwargs:
+
         keyfunc: Optional function producing a uniqueness key per element.
 
     Yields:
@@ -143,37 +81,112 @@ def unique_everseen[T](
 
 
 @overload
-def gen_non_none[T](value: Iterable[T | None]) -> Iterator[T]: ...
+def gen_non_null[T, U](
+    items: Iterable[tuple[T, U | None] | None],
+    func: None = None,
+    *,
+    cmp_pos: Literal[1],
+    arg_pos: Literal[0],
+) -> Iterator[T]: ...
 @overload
-def gen_non_none[T, R](
-    value: Iterable[T | None], func: Callable[[T], R]
+def gen_non_null[T, U, R](
+    items: Iterable[tuple[T, U | None] | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: Literal[1],
+    arg_pos: Literal[0],
 ) -> Iterator[R]: ...
-def gen_non_none[T, R](
-    value: Iterable[T | None], func: Callable[[T], R] | None = None
-) -> Iterator[T | R]:
+@overload
+def gen_non_null[T](
+    items: Iterable[T | None],
+    func: None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: None = None,
+) -> Iterator[T]: ...
+@overload
+def gen_non_null[T, R](
+    items: Iterable[T | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: None = None,
+) -> Iterator[R]: ...
+@overload
+def gen_non_null[T](
+    items: Iterable[Sequence[T] | None],
+    func: None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int = ...,
+) -> Iterator[T]: ...
+@overload
+def gen_non_null[T, R](
+    items: Iterable[Sequence[T] | None],
+    func: Callable[[T], R],
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int = ...,
+) -> Iterator[R]: ...
+def gen_non_null(
+    items: Iterable[object],
+    func: Callable[..., object] | None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int | None = None,
+) -> Iterator[object]:
     """
-    Applies a function to each non-None value in an iterable.
+    Applies a function to each non-None item in an iterable.
+
+    Similar to filter(None, iterable), but it excludes ``None`` instead of falsy values.
 
     Args:
 
-        value: The source iterable.
-        func: Optional function applied to each non-None element.
+        items: The source iterable.
+
+    Kwargs:
+
+        func: Optional function applied to each non-None item.
+        cmp_pos: Item position to test for ``None`` instead of the whole item.
+        arg_pos: Item position to yield (or pass to ``func``) instead of the whole item.
 
     Yields:
 
-        Each non-None element, or ``func``'s result for it.
+        Each non-None item (or its ``arg_pos`` value), or ``func``'s result for it.
+
+    Raises:
+
+        TypeError: If ``cmp_pos``/``arg_pos`` is set and an item is not a sequence.
 
     Examples:
 
-        >>> list(gen_non_none([1, None, 0, 2]))
+        >>> list(gen_non_null([1, None, 0, 2]))
         [1, 0, 2]
-        >>> "".join(gen_non_none(["a", None, 1], str))
+        >>> "".join(gen_non_null(["a", None, 1], str))
         'a1'
+        >>> pairs = [("a", 1), ("b", None), ("c", 0)]
+        >>> list(gen_non_null(pairs, cmp_pos=1, arg_pos=0))
+        ['a', 'c']
 
     """
-    for item in value:
-        if item is not None:
-            yield item if func is None else func(item)
+
+    def _get_value(
+        item: object | Sequence[object], pos: int | None, name: str
+    ) -> object:
+        if item is None or pos is None:
+            value = item
+        elif isinstance(item, Sequence):
+            value = item[pos]
+        else:
+            msg = f"Item {item!r} is not indexable. Remove {name}={pos}"
+            raise TypeError(msg)
+
+        return value
+
+    for item in items:
+        if _get_value(item, cmp_pos, "cmp_pos") is not None:
+            arg = _get_value(item, arg_pos, "arg_pos")
+            yield arg if func is None else func(arg)
 
 
 def betwix[T](
@@ -190,6 +203,9 @@ def betwix[T](
     Args:
 
         iterable: The initial sequence.
+
+    Kwargs:
+
         start: The fragment to begin with (inclusive).
         stop: The fragment to finish at (exclusive).
         inc: Whether stop operates inclusively (useful if reading a file and
@@ -249,6 +265,9 @@ def partition[T](
     Args:
 
         values: The source iterable.
+
+    Kwargs:
+
         predicate: The test applied to each element; defaults to truthiness.
 
     Returns:
@@ -336,189 +355,6 @@ def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:
     return left, right
 
 
-def map_values[K, V, R](func: Callable[[V], R], item: Mapping[K, V]) -> dict[K, R]:
-    """
-    Applies a function to each value of a mapping.
-
-    Args:
-
-        func: The transform applied to each value.
-        item: The source mapping.
-
-    Returns:
-
-        A new dict with the same keys, in the same order, holding the
-        transformed values.
-
-    Examples:
-
-        >>> map_values(len, {"a": "xy", "b": ""})
-        {'a': 2, 'b': 0}
-
-    """
-    return {key: func(value) for key, value in item.items()}
-
-
-def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
-    """
-    Applies a function to each key of a mapping.
-
-    Args:
-
-        func: The transform applied to each key.
-        item: The source mapping.
-
-    Returns:
-
-        A new dict with the transformed keys, in the same order, holding the
-        original values. When two keys transform to the same key, the later
-        value wins.
-
-    Examples:
-
-        >>> map_keys(str.lower, {"A": 1, "b": 2})
-        {'a': 1, 'b': 2}
-        >>> map_keys(str.lower, {"A": 1, "a": 2})
-        {'a': 2}
-
-    """
-    return {func(key): value for key, value in item.items()}
-
-
-def map_keys_and_values[K, V, RK, RV](
-    key_func: Callable[[K], RK], value_func: Callable[[V], RV], item: Mapping[K, V]
-) -> dict[RK, RV]:
-    """
-    Applies one function to each key of a mapping and another to each value.
-
-    Args:
-
-        key_func: The transform applied to each key.
-        value_func: The transform applied to each value.
-        item: The source mapping.
-
-    Returns:
-
-        A new dict with the transformed keys, in the same order, holding the
-        transformed values. When two keys transform to the same key, the later
-        value wins.
-
-    Examples:
-
-        >>> map_keys_and_values(str.lower, len, {"A": "xy", "b": ""})
-        {'a': 2, 'b': 0}
-
-    """
-    return {key_func(key): value_func(value) for key, value in item.items()}
-
-
-@overload
-def dispatch[T, U, X, Y](
-    split: tuple[T, U],
-    f1: Callable[[T], X],
-    f2: Callable[[U], Y],
-    /,  # stops ruff from collapsing this line
-) -> tuple[X, Y]: ...
-@overload
-def dispatch[T, U, V, X, Y, Z](
-    split: tuple[T, U, V],
-    f1: Callable[[T], X],
-    f2: Callable[[U], Y],
-    f3: Callable[[V], Z],
-    /,
-) -> tuple[X, Y, Z]: ...
-@overload
-def dispatch[T](
-    split: Sequence[T], *funcs: Callable[[T], object]
-) -> tuple[object, ...]: ...
-def dispatch(
-    split: Sequence[object], *funcs: Callable[..., object]
-) -> tuple[object, ...]:
-    r"""
-    Delivers each item of a sequence to a different function.
-
-    Differs from ``map``, which applies multiple items to the same function::
-
-           /--> item1 --> double(item1) -----> \
-          /                                     \
-    split ----> item2 --> oct(item2) -------->  _OUTPUT
-          \                                     /
-           \--> item3 --> max(item3) --------> /
-
-    Args:
-
-        split: The items to distribute.
-        funcs: One function per item, applied positionally.
-
-    Returns:
-
-        The result of each function, in order.
-
-    Examples:
-
-        >>> split = (3, 8365641317588141140, ["a", "b", "r"])
-        >>> double = lambda item: item * 2
-        >>> dispatch(split, double, oct, max)
-        (6, '0o720305647221513002124', 'r')
-
-    """
-    return tuple(func(item) for item, func in zip(split, funcs, strict=False))
-
-
-@overload
-def broadcast[W, X](
-    item: object, f1: Callable[..., W], f2: Callable[..., X], **kwargs: object
-) -> tuple[W, X]: ...
-@overload
-def broadcast[W, X, Y](
-    item: object,
-    f1: Callable[..., W],
-    f2: Callable[..., X],
-    f3: Callable[..., Y],
-    **kwargs: object,
-) -> tuple[W, X, Y]: ...
-@overload
-def broadcast[W, X, Y, Z](
-    item: object,
-    f1: Callable[..., W],
-    f2: Callable[..., X],
-    f3: Callable[..., Y],
-    f4: Callable[..., Z],
-    **kwargs: object,
-) -> tuple[W, X, Y, Z]: ...
-def broadcast(
-    item: object, *funcs: Callable[..., object], **kwargs: object
-) -> tuple[object, ...]:
-    r"""
-    Delivers the same item to different functions.
-
-    Differs from ``map``, which applies multiple items to the same function::
-
-           /--> item --> len(item) ----------> \
-          /                                     \
-    item -----> item --> str.upper(item) ---->  split
-          \                                     /
-           \--> item --> sorted(item) --------> /
-
-    Args:
-
-        item: The value passed to every function.
-        funcs: The functions applied to ``item``.
-        kwargs: Extra keyword arguments forwarded to each function.
-
-    Returns:
-
-        The result of each function, in order.
-
-    Examples:
-
-        >>> broadcast("bar", len, str.upper, sorted)
-        (3, 'BAR', ['a', 'b', 'r'])
-
-    """
-    return tuple(func(item, **kwargs) for func in funcs)
-
-
 def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
     """
     Interleaves multiple iterables into a single stream, round-robin.
@@ -549,24 +385,3 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
         except StopIteration:
             active -= 1
             nexts = cycle(islice(nexts, active))
-
-
-def invert_dict[K, V](item: dict[K, V]) -> dict[V, K]:
-    """
-    Swaps a dict's keys and values.
-
-    Args:
-
-        item: The dict to invert; its values must be hashable and unique.
-
-    Returns:
-
-        A new dict mapping each value back to its key.
-
-    Examples:
-
-        >>> invert_dict({"a": 1, "b": 2})
-        {1: 'a', 2: 'b'}
-
-    """
-    return {v: k for k, v in item.items()}

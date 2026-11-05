@@ -15,13 +15,14 @@ class Registry[T]:
     A three-tier name registry with a hybrid lifetime.
 
     Precedence is runtime registration, then entry point, then built-in. Subclasses
-    provide the entry-point group, a human ``label`` for messages, and how to turn a
-    loaded entry point into a concrete entry.
+    provide the entry-point group, a ``label`` for messages, the built-in names, and how
+    to turn a loaded entry point into a concrete entry.
 
     """
 
     entry_point_group: ClassVar[str]
     label: ClassVar[str]
+    builtin_names: ClassVar[frozenset[str]]
 
     def __init__(self) -> None:
         self._runtime: dict[str, T] = {}
@@ -70,7 +71,13 @@ class Registry[T]:
             raise ValueError(msg + f"plugin ({', '.join(dists)}); keep one")
 
     def _load_entry_point(self, name: str) -> T | None:
-        """Loads the entry-point tier's entry for ``name`` once, if one declares it."""
+        """
+        Loads the entry-point tier's entry for ``name``, if one declares it.
+
+        Every caller gets the same entry. Threads racing on a first load may each run
+        the entry point, but only the first result is kept. Loading one must not have
+        side effects.
+        """
         ep = self._entry_points.get(name)
 
         if name not in self._loaded and ep is not None:
@@ -81,7 +88,7 @@ class Registry[T]:
                 msg = f"entry point {name!r} declares a {self.label} named {key!r}; "
                 raise ValueError(msg + "the two must match")
 
-            self._loaded[name] = loaded
+            self._loaded.setdefault(name, loaded)
 
         return self._loaded.get(name)
 
@@ -92,7 +99,7 @@ class Registry[T]:
 
     def register(self, entry: T, *, replace: bool = False) -> None:
         """
-        Adds a self-keying entry to the runtime tier that shadows lower tiers.
+        Adds a self-keying entry to the runtime tier without shadowing existing names.
 
         The registry key is derived from ``entry`` by ``_key``, so an entry carries
         its own identity rather than being registered under a separate name.
@@ -100,20 +107,36 @@ class Registry[T]:
         Args:
 
             entry: The self-keying entry to register.
-            replace: Whether an existing runtime entry with the same key may be
-                replaced.
+
+        Kwargs:
+
+            replace: Whether the entry may replace an existing runtime registration,
+                or shadow an entry-point or built-in entry.
 
         Raises:
 
             ValueError: If ``entry`` has no derivable key, or its key is already
-                registered and ``replace`` is False.
+                registered or names an entry-point or built-in entry and ``replace``
+                is False.
 
         """
         if not (name := self._key(entry)):
             raise ValueError(f"a runtime-registered {self.label} needs a name")
 
-        if name in self._runtime and not replace:
+        if replace:
+            tier = None
+        elif name in self._runtime:
             raise ValueError(f"{self.label} {name!r} is already registered")
+        elif name in self._entry_points:
+            tier = "an entry-point"
+        elif name in self.builtin_names:
+            tier = "a built-in"
+        else:
+            tier = None
+
+        if tier is not None:
+            msg = f"{self.label} {name!r} shadows {tier} {self.label}; "
+            raise ValueError(msg + "pass replace=True to override it")
 
         self._runtime[name] = entry
 

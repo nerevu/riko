@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, ClassVar, get_origin
 import attrs
 from attrs import Attribute, AttrsInstance
 
+from ._funcutils import map_values
 from ._guards import is_attrs_inst
-from ._iterutils import map_values
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -53,6 +53,9 @@ def serialize_dataclass(
 
         value: The dataclass instance or class to read.
         keep_fields: Names of fields to include even when they are unset.
+
+    Kwargs:
+
         compact: Whether to leave out unset fields. When false, every field is kept.
 
     Returns:
@@ -91,6 +94,9 @@ def serialize_attrs(
 
         value: The attrs record to read.
         keep_fields: Names of fields to include even when they are unset.
+
+    Kwargs:
+
         recurse: Whether a field holding another attrs record is read into a dict too.
         compact: Whether to leave out unset fields. When false, every field is kept.
 

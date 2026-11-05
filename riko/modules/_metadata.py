@@ -22,6 +22,7 @@ from pkgutil import iter_modules as iter_package_modules
 from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._config import SINK_NAMES
+from riko.base._guards import is_callable
 from riko.base._typing import import_or_else
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
@@ -90,8 +91,7 @@ def _metadata_from_targets(
 
     if len(targets) == 2:
         for attr in attrs:
-            actual = getattr(targets[0], attr)
-            expected = getattr(targets[1], attr)
+            actual, expected = [getattr(targets[pos], attr) for pos in [0, 1]]
 
             if actual != expected:
                 msg = f"{label} has inconsistent sync/async metadata: "
@@ -128,6 +128,25 @@ def _metadata_from_targets(
     return metadata
 
 
+def _load_registry_metadata(name: str) -> ModuleMetadata | None:
+    if definition := module_registry.load_definition(name):
+        pipes = filter(is_callable, map(definition.get_pipe, (True, False)))
+    else:
+        pipes = ()
+
+    require = partial(require_wrapper_meta, what=f"{name} pipe")
+
+    try:
+        args = (name, tuple(map(require, pipes)))
+        metadata = _metadata_from_targets(*args, label=name, strict_naming=False)
+    except (AttributeError, TypeError):
+        # a callable that isn't a metadata-carrying pipe wrapper (e.g. a
+        # bare lambda) — resolvable, but not catalogable
+        metadata = None
+
+    return metadata
+
+
 @overload
 def get_module_metadata(
     name: ModuleNameLike, strict: Literal[False] = ...
@@ -140,13 +159,18 @@ def get_module_metadata(
     name: ModuleNameLike, strict: bool = False
 ) -> ModuleMetadata | None:
     """
-    Derives a built-in module's metadata from its pipe callables.
+    Derives a module's metadata from its pipe callables.
+
+    A registered module shadows a built-in of the same name.
 
     Args:
 
-        name: Built-in module name.
+        name: Module name.
+
+    Kwargs:
+
         strict: Whether to raise instead of returning ``None`` when the name is not
-            a built-in module or the module declares no metadata.
+            a module or the module declares no metadata.
 
     Returns:
 
@@ -166,16 +190,23 @@ def get_module_metadata(
         >>> get_module_metadata("does-not-exist")
 
     """
-    canonical = normalize_module_name(name)
-    module = import_or_else(f"{_PACKAGE}.{canonical}") if canonical else None
+    if canonical := normalize_module_name(name):
+        definition = module_registry.load_definition(canonical)
+        builtin = definition is None
+        module = import_or_else(f"{_PACKAGE}.{canonical}") if builtin else None
+    else:
+        builtin, module = False, None
 
-    if module is None:
+    if not builtin:
+        metadata = _load_registry_metadata(canonical)
+    elif module is None:
         metadata = None
     else:
-        pipes = (getattr(module, target, None) for target in ("pipe", "async_pipe"))
+        names = ("pipe", "async_pipe")
+        pipes = filter(is_callable, (getattr(module, name, None) for name in names))
         label = module.__name__
         require = partial(require_wrapper_meta, what=f"{label} pipe")
-        args = (canonical, tuple(require(pipe) for pipe in pipes if callable(pipe)))
+        args = (canonical, tuple(map(require, pipes)))
         metadata = _metadata_from_targets(*args, label=label, strict_naming=True)
 
     if strict and metadata is None:
@@ -202,22 +233,8 @@ def gen_registry_catalog() -> Iterator[ModuleMetadata]:
     explicit show-everything operation. Definitions whose callables lack module
     metadata, such as bare lambdas, are skipped.
     """
-    is_async = (True, False)
-
     for name in module_registry.discovered_names:
-        definition = module_registry.load_definition(name)
-        pipes = map(definition.get_pipe, is_async) if definition else ()
-        targets = tuple(pipe for pipe in pipes if callable(pipe))
-        args = (name, targets)
-
-        try:
-            metadata = _metadata_from_targets(*args, label=name, strict_naming=False)
-        except (AttributeError, TypeError):
-            # a callable that isn't a metadata-carrying pipe wrapper (e.g. a
-            # bare lambda) — resolvable, but not catalogable
-            metadata = None
-
-        if metadata:
+        if metadata := _load_registry_metadata(name):
             yield metadata
 
 

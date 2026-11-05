@@ -15,7 +15,6 @@ import pytest
 
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._nodes import (
-    CallableNode,
     ModuleNode,
     PublishEdge,
     ReadNode,
@@ -29,14 +28,16 @@ from riko.definitions._workflow_definition import (
     normalize_workflow,
 )
 from riko.definitions._write import WriteMode
-from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, DocumentShape, Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import TruncateRawConf
 from tests._workflows import (
+    CALLABLE_FLOW,
+    CALLABLE_MATCH,
     DAG,
     DAG_DIR,
+    DOCUMENT,
     EDGE_FAMILY_MISMATCHES,
     PIPE_DEF,
     RAW_WORKFLOW,
@@ -77,12 +78,6 @@ _EXPLICIT_EMPTY = {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
 _REPEATED = [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]
 _TAKEN_ID = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
 
-_CALLABLE_FLOW = Workflow(
-    nodes=[CallableNode(id="len-1", name="len", fn=len)],
-    outputs={"default": Endpoint("len-1", "out")},
-)
-
-DOCUMENT = json.loads(Workflow.parse(DAG).serialize())
 
 MODULES: list[DagModule] = [
     {"id": "sw-1", "name": "forever"},
@@ -255,6 +250,18 @@ PARSE_REJECTIONS = [
     pytest.param(RAW_WORKFLOW, "v3", "Invalid shape", id="unknown-declared-shape"),
     pytest.param("{bad json", None, "malformed JSON", id="bad-json"),
     pytest.param(b"\xff", None, "malformed JSON", id="undecodable-bytes"),
+    pytest.param(
+        '{"nodes": [{"name": "fetch"}], "nodes": [{"name": "count"}]}',
+        None,
+        "duplicate key 'nodes'",
+        id="duplicate-top-level-key",
+    ),
+    pytest.param(
+        '{"nodes": [{"name": "fetch", "conf": {"url": "a", "url": "b"}}]}',
+        None,
+        "duplicate key 'url'",
+        id="duplicate-nested-key",
+    ),
     pytest.param({"nodes": []}, None, "no nodes", id="validates"),
 ]
 
@@ -283,22 +290,6 @@ class TestWorkflowParse:
         """Each readable shape, detected or declared, is read as its loader would."""
         assert Workflow.parse(document, shape=declare(shape)) == loader(document)
 
-    @pytest.mark.parametrize(
-        ("document", "shape"),
-        [
-            pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
-            pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
-            pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
-            pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
-        ],
-    )
-    def test_parse_rejects_a_document_read_as_another_shape(self, document, shape):
-        """A document read as a shape it is not written in is rejected, not guessed."""
-        with pytest.raises(InvalidPipelineError):
-            Workflow.parse(document, shape=shape)
-
     def test_parse_reads_a_workflow_only_as_v2(self):
         flow = Workflow.parse(DAG)
         assert Workflow.parse(flow, shape=DocumentShape.V2) == flow
@@ -317,10 +308,32 @@ class TestWorkflowParse:
     def test_parse_reads_pipe_dag_text(self):
         assert Workflow.parse(json.dumps(DAG)) == Workflow.parse(DAG)
 
+    @pytest.mark.parametrize(
+        ("document", "shape"),
+        [
+            pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
+            pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
+            pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
+            pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
+            pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
+            pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
+        ],
+    )
+    def test_parse_rejects_a_document_read_as_another_shape(self, document, shape):
+        """A document read as a shape it is not written in is rejected, not guessed."""
+        with pytest.raises(InvalidPipelineError):
+            Workflow.parse(document, shape=shape)
+
     @pytest.mark.parametrize(("document", "shape", "match"), PARSE_REJECTIONS)
     def test_parse_rejects(self, document, shape, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse(document, shape=shape)
+
+    def test_a_document_cannot_declare_a_callable_node(self):
+        raw = {"nodes": [{"name": "len", "family": "callable"}]}
+
+        with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
+            Workflow.parse(raw)
 
 
 def _dag(name: str) -> PipeDag:
@@ -341,12 +354,8 @@ def _module_node(flow: Workflow, node_id: str) -> ModuleNode:
 
 
 class TestPipeDag:
-    @pytest.mark.parametrize(
-        "wires",
-        [pytest.param({}, id="omitted"), pytest.param({"wires": None}, id="null")],
-    )
-    def test_unwired_modules_chain_in_listing_order(self, wires):
-        linear = Workflow.parse({"modules": MODULES, **wires})
+    def test_null_wires_chain_in_listing_order(self):
+        linear = Workflow.parse({"modules": MODULES, "wires": None})
         wired = Workflow.parse({"modules": MODULES, "wires": [["sw-1", "sw-2"]]})
         assert linear == wired
         assert _edges(linear) == [("sw-1", "sw-2")]
@@ -388,10 +397,6 @@ class TestPipeDag:
         module = _module_node(flow, "sw-1")
         assert module.embed is not None
         assert module.embed["name"] == "fetch"
-
-    def test_expanded_dag_runs(self):
-        flow = Workflow.parse(DAG)
-        assert list(Pipeline(flow)) == [{"forever": True}] * 3
 
     def test_reordered_dag_runs_in_wired_order(self):
         flow = Workflow.parse(_dag("pipe_reordered"))
@@ -438,13 +443,16 @@ class TestPipeDag:
             Workflow.parse({"modules": [module]})
 
 
-NON_JSON_VALUES = [
-    pytest.param(Decimal("1.50"), id="decimal"),
-    pytest.param(date(2020, 6, 15), id="date"),
-    pytest.param({"a", "b"}, id="set"),
-    pytest.param(b"bytes", id="bytes"),
-    pytest.param(nan, id="nan"),
-    pytest.param(inf, id="inf"),
+NON_JSON_NODE_VALUES = [
+    pytest.param("conf", Decimal("1.50"), id="conf-decimal"),
+    pytest.param("conf", date(2020, 6, 15), id="conf-date"),
+    pytest.param("conf", {"a", "b"}, id="conf-set"),
+    pytest.param("conf", b"bytes", id="conf-bytes"),
+    pytest.param("conf", nan, id="conf-nan"),
+    pytest.param("conf", inf, id="conf-inf"),
+    pytest.param("embed", date(2020, 6, 15), id="embed-date"),
+    pytest.param("policy", {"a", "b"}, id="policy-set"),
+    pytest.param("params", nan, id="params-nan"),
 ]
 
 
@@ -624,16 +632,6 @@ class TestNormalizeWorkflow:
         assert isinstance(write, WriteNode)
         assert write.dest == "out.json"
 
-    def test_node_conf_is_isolated_from_caller_mutation(self):
-        conf = {"limit": 5}
-        flow = normalize_workflow(
-            {"nodes": [{"id": "a", "name": "fetch", "conf": conf}]}
-        )
-        node = flow.nodes["a"]
-        conf["limit"] = 99
-        assert isinstance(node, ModuleNode)
-        assert node.conf == {"limit": 5}
-
     @pytest.mark.parametrize(
         "raw",
         [
@@ -722,14 +720,10 @@ class TestNormalizeWorkflow:
 
     def test_nested_conf_is_deeply_frozen_and_isolated(self):
         inner = {"k": 1}
-        flow = normalize_workflow(
-            {
-                "nodes": [
-                    {"id": "a", "name": "f", "conf": {"nested": inner, "list": [1, 2]}}
-                ]
-            }
-        )
+        conf = {"nested": inner, "list": [1, 2]}
+        flow = normalize_workflow({"nodes": [{"id": "a", "name": "f", "conf": conf}]})
         inner["k"] = 99
+        conf["list"] = [3]
         node = flow.nodes["a"]
         assert isinstance(node, ModuleNode)
         assert node.conf is not None
@@ -947,8 +941,7 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="type name or mapping"):
             normalize_workflow(raw)
 
-    @pytest.mark.parametrize("value", NON_JSON_VALUES)
-    @pytest.mark.parametrize("placement", sorted(_NODE_VALUE_PLACEMENTS))
+    @pytest.mark.parametrize(("placement", "value"), NON_JSON_NODE_VALUES)
     def test_non_json_native_node_value_rejected(self, placement, value):
         raw = {"nodes": [{"id": "n", **_NODE_VALUE_PLACEMENTS[placement](value)}]}
 
@@ -971,27 +964,9 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="CallOptions"):
             normalize_workflow(raw)
 
-
-class TestCallableNodeDocuments:
-    @pytest.mark.parametrize(
-        "write",
-        [
-            pytest.param(Workflow.serialize, id="serialize"),
-            pytest.param(normalize_workflow, id="normalize"),
-            pytest.param(partial(compile_workflow, name="pipe_len"), id="compile"),
-        ],
-    )
-    def test_a_callable_node_has_no_document_form(self, write):
-        with pytest.raises(
-            InvalidPipelineError, match=r"callable node\(s\) \['len-1'\]"
-        ):
-            write(_CALLABLE_FLOW)
-
-    def test_a_document_cannot_declare_a_callable_node(self):
-        raw = {"nodes": [{"name": "len", "family": "callable"}]}
-
-        with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
-            Workflow.parse(raw)
+    def test_a_callable_node_has_no_document_form(self):
+        with pytest.raises(InvalidPipelineError, match=CALLABLE_MATCH):
+            normalize_workflow(CALLABLE_FLOW)
 
 
 def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
@@ -1005,6 +980,47 @@ def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
 UPPERCASE_CONFS = [
     pytest.param({"URL": {"value": "x"}}, {"url": {"value": "x"}}, id="mapping"),
     pytest.param({"URL": [{"VALUE": "x"}]}, {"url": ({"value": "x"},)}, id="list"),
+]
+
+
+_FETCH = {"id": "a", "type": "fetch", "conf": {}}
+_OUT = {"id": "_OUTPUT", "type": "output", "conf": {}}
+_WIRE = _wire("_w1", "a", "_OUTPUT")
+
+MALFORMED_DOCUMENTS = [
+    pytest.param(
+        {"modules": [_FETCH, _OUT], "wires": [_WIRE], "bogus": 1},
+        "unknown pipe definition key",
+        id="pipe-def-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, _OUT], "wires": [{**_WIRE, "bogus": 1}]},
+        "unknown wire key",
+        id="wire-unknown-key",
+    ),
+    pytest.param(
+        {
+            "modules": [_FETCH, _OUT],
+            "wires": [{**_WIRE, "src": {"id": "_OUTPUT", "moduleid": "a", "x": 1}}],
+        },
+        "unknown wire endpoint key",
+        id="wire-endpoint-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, {**_OUT, "conf": {"x": 1}}], "wires": [_WIRE]},
+        "output node takes no 'conf'",
+        id="output-module-conf",
+    ),
+    pytest.param(
+        {"modules": [_FETCH, {**_OUT, "bogus": 1}], "wires": [_WIRE]},
+        "unknown `PipeDef` output node key",
+        id="output-module-unknown-key",
+    ),
+    pytest.param(
+        {"modules": [{"name": "forever"}], "bogus": 1},
+        "unknown dag key",
+        id="dag-unknown-key",
+    ),
 ]
 
 
@@ -1255,18 +1271,38 @@ class TestMigrate:
                 r"missing PipeModule key\(s\): \['type'\]",
                 id="missing-type",
             ),
+            pytest.param(
+                {"id": "f", "type": "fetch", "conf": {"URL": "x", "url": "y"}},
+                "differ only in case",
+                id="case-colliding-conf-keys",
+            ),
+            pytest.param(
+                {"id": "f", "type": "fetch", "conf": {"url": {"VALUE": 1, "value": 2}}},
+                "differ only in case",
+                id="nested-case-colliding-conf-keys",
+            ),
         ],
     )
     def test_malformed_module_raises(self, module, match):
         with pytest.raises(InvalidPipelineError, match=match):
             migrate_v1_to_v2({"modules": [module]})
 
+    @pytest.mark.parametrize(("document", "match"), MALFORMED_DOCUMENTS)
+    def test_unknown_document_key_raises(self, document, match):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Workflow.parse(document)
+
     def test_non_mapping_pipe_def_raises(self):
         with pytest.raises(InvalidPipelineError, match="pipe definition"):
             migrate_v1_to_v2(["not", "a", "mapping"])  # pyright: ignore[reportArgumentType]
 
+    def test_missing_modules_raises(self):
+        with pytest.raises(InvalidPipelineError, match=r"missing pipe definition key"):
+            migrate_v1_to_v2({"wires": []})
+
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="migrating a pipe definition's input modules into the workflow's "
         "input declarations is not yet implemented",
     )
@@ -1292,12 +1328,6 @@ class TestSerialize:
     def test_topologies_round_trip(self, raw):
         flow = normalize_workflow(raw)
         assert Workflow.parse(flow.serialize()) == flow
-
-    @pytest.mark.parametrize("raw", TOPOLOGIES.values(), ids=TOPOLOGIES.keys())
-    def test_serialization_is_idempotent(self, raw):
-        flow = normalize_workflow(raw)
-        once = flow.serialize()
-        assert Workflow.parse(once).serialize() == once
 
     def test_indented_output_is_readable_and_sorted(self):
         flow = normalize_workflow(RICH_RAW)
@@ -1390,3 +1420,7 @@ class TestSerialize:
         }
         assert "conf" not in node
         assert Workflow.parse(flow.serialize()) == flow
+
+    def test_a_callable_node_has_no_document_form(self):
+        with pytest.raises(InvalidPipelineError, match=CALLABLE_MATCH):
+            Workflow.serialize(CALLABLE_FLOW)

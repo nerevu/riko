@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 
-import copy
-import pickle  # noqa: S403
 import time
 import typing
+from contextlib import contextmanager
 from dataclasses import dataclass, make_dataclass
 from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
@@ -14,9 +13,10 @@ from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO, StringIO
+from json import dumps
 from logging import ERROR, WARNING
 from math import inf
-from operator import methodcaller
+from operator import itemgetter, methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
 from types import MappingProxyType
@@ -27,6 +27,7 @@ from typing import (
     NotRequired,
     Required,
     TypedDict,
+    assert_type,
     cast,
 )
 from uuid import UUID
@@ -36,9 +37,10 @@ import pytest
 from attrs import define
 from dateutil.relativedelta import relativedelta
 from feedparser import FeedParserDict
+from urllib3.response import HTTPResponse
 
 from riko.base import _exceptions as errors
-from riko.base._config import load_settings
+from riko.base._config import STREAMING_THRESHOLD, load_settings
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import (
@@ -48,18 +50,22 @@ from riko.base._exceptions import (
 )
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._guards import require_mapping, require_sequence
+from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import get_path
 from riko.base._recordutils import field_names
 from riko.base._require_guards import (
     normalize_strs,
     require_finite,
+    require_from_attrs,
     require_from_form,
+    require_from_keys,
     require_from_typed_dict,
     require_str,
     require_strlike,
     typed_dict_keys,
 )
+from riko.base._sentinels import MISSING
 from riko.base._typing import resolve_enum
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
@@ -78,39 +84,36 @@ from riko.coercion._dates import (
     resolve_aware_datetime,
     tt_to_datedict,
 )
-from riko.coercion.cast import cast_datetime, resolve_cast_type
+from riko.coercion._sequences import listize
+from riko.coercion.cast import cast_datetime, cast_value, resolve_cast_type
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode, require_binding
 from riko.definitions._write import WriteMode
 from riko.io._sync import Fetch
 from riko.modules._sortutils import def_itemgetter
+from riko.parsing import documents
 from riko.parsing._dotdict import DotDict, match_key, raw_get
 from riko.parsing.config import get_skip, resolve_conf
 from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
 from riko.types._enums import CastType, Executor
+from riko.types._frozendict import FrozenDict, freeze
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Edge as EdgeBase
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
-from tests import run_python
+from tests import ROUND_TRIPS
 from tests._execution import build_workflow
+from tests._loopback import ForwardOnly
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Generator, Sequence
 
     from riko.types._frozendict import FrozenSetMapping
     from riko.types._scalars import BasicValue
+    from riko.types._wrappers import Func
 
-
-_SEEDED_ORDER = """
-from riko.base._graph import scc_sort, topological_sort
-print(topological_sort({"a": {"b"}, "b": {"a"}, "c": set()}))
-print(topological_sort({"a": {"b", "c", "d"}, "e": {"f", "g"}}))
-print(scc_sort({"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}))
-"""
-
-_INVALID: list[tuple[Callable[..., object], object]] = [
+_INVALID: list[tuple[Func[object], object]] = [
     (require_str, 1),
     (require_strlike, 1),
     (require_finite, float("nan")),
@@ -118,6 +121,7 @@ _INVALID: list[tuple[Callable[..., object], object]] = [
     (require_sequence, "abc"),
 ]
 
+_UNSORTABLE = object()
 NOON_UTC = datetime(2020, 6, 15, 12, tzinfo=UTC)
 NOON_TT = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
 NOON_EST = datetime(2020, 6, 15, 7, tzinfo=timezone(timedelta(hours=-5)))
@@ -156,20 +160,11 @@ GOLDEN_DIGESTS = {
     "str": ("a", IdentityDomain.FINGERPRINT, "17755474b85323bc8d6356df37979b11"),
 }
 
-DIGEST_SCRIPT = """
-from riko.coercion._canonical import IdentityDomain, digest
-
-value = {
-    "text": ["a", "b", "c"],
-    "raw": (b"x", b"yz"),
-    "tags": {"red", "green", "blue", "cyan"},
-    "frozen": frozenset({"k1", "k2", "k3"}),
-    "nested": {"inner": {"s": {"p", "q"}, "b": b"\\x00"}},
-}
-print(digest(value, IdentityDomain.FINGERPRINT))
-"""
-
+SKIP_ITEM = {"content": "Some content"}
 DOTTED_PATHS = ["a.b", "a.b.c", "author.name", "AUTHOR.NAME"]
+
+LARGE_JSON_RECORDS = [{"id": index, "text": "x" * 100} for index in range(12000)]
+CASE_DUPLICATE_JSON = '{"X": [{"a": 1}], "x": [{"a": 2}]}'
 
 
 class Color(Enum):
@@ -295,10 +290,10 @@ class TestDigest:
         assert result == expected
         assert len(result) == 32
 
-    def test_digest_is_stable_across_processes_with_different_hash_seeds(self):
-        runs = [run_python("-c", DIGEST_SCRIPT, hash_seed=s) for s in ("0", "4242")]
-        digests = {run.stdout.strip() for run in runs}
-        assert len(digests) == 1
+    def test_digest_is_stable_across_processes_with_different_hash_seeds(
+        self, hash_seed_probes
+    ):
+        assert len({probes["digest"] for probes in hash_seed_probes.values()}) == 1
 
 
 class _Opaque:
@@ -376,15 +371,24 @@ class TestResolveConf:
         assert first is not second
 
 
-@pytest.fixture
-def tokyo(monkeypatch):
+@contextmanager
+def _local_zone(name: str) -> Generator[None]:
     if not hasattr(time, "tzset"):
         pytest.skip("tzset is POSIX-only")
 
-    monkeypatch.setenv("TZ", "Asia/Tokyo")
-    time.tzset()
-    yield
-    time.tzset()
+    try:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("TZ", name)
+            time.tzset()
+            yield
+    finally:
+        time.tzset()
+
+
+@pytest.fixture
+def tokyo():
+    with _local_zone("Asia/Tokyo"):
+        yield
 
 
 ABSOLUTE_DATES = [
@@ -447,8 +451,10 @@ class TestCastDatetime:
 
     @pytest.mark.xfail(
         strict=True,
-        reason="owned by the settable date timezone work: with try_local_tz, named "
-        "days ('now') use the local zone but counted offsets ('+1 seconds') stay UTC",
+        raises=AssertionError,
+        reason="a settable date timezone is not yet implemented: with try_local_tz, "
+        "named days ('now') use the local zone but counted offsets ('+1 seconds') "
+        "stay UTC",
     )
     @pytest.mark.usefixtures("tokyo")
     def test_relative_offsets_share_the_named_day_zone(self):
@@ -457,6 +463,57 @@ class TestCastDatetime:
         assert named is not None
         assert offset is not None
         assert offset.utcoffset() == named.utcoffset()
+
+
+# Each row: content whose cast overflows, and the cast type's default.
+CAST_OVERFLOWS = [
+    pytest.param("inf", CastType.INT, 0, id="int-inf"),
+    pytest.param("1e400", CastType.INT, 0, id="int-huge"),
+]
+
+
+class TestCastValue:
+    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
+    def test_overflow_degrades_to_the_default(self, content, type_, expected):
+        assert cast_value(content, type_) == expected
+
+
+class TestOverloadTypes:
+    def test_unparseable_date_casts_are_none(self):
+        moment = cast_value("abc", CastType.DATETIME)
+        day = cast_value("abc", CastType.DATE)
+
+        assert_type(moment, datetime | None)
+        assert_type(day, date | None)
+        assert (moment, day) == (None, None)
+
+    def test_freeze_types_nested_containers_as_frozen(self):
+        listed = freeze({"a": [1, 2]})
+        nested = freeze({"a": {"c": 1}})
+        records = freeze([{"a": 1}])
+
+        assert_type(listed, FrozenDict[str, tuple[int, ...]])
+        assert_type(nested, FrozenDict[str, FrozenDict[str, int]])
+        assert_type(records, tuple[FrozenDict[str, int], ...])
+        assert listed["a"] == (1, 2)
+        assert isinstance(nested["a"], FrozenDict)
+        assert isinstance(records[0], FrozenDict)
+
+    def test_listize_wraps_strings_and_bytes(self):
+        text = listize("ab")
+        data = listize(b"ab")
+
+        assert_type(text, list[str])
+        assert_type(data, list[bytes])
+        assert (text, data) == (["ab"], [b"ab"])
+
+    def test_key_guards_return_object_values(self):
+        point = require_from_keys({"x"}, {"y"}, "point")({"x": 1})
+        endpoint = require_from_attrs(Endpoint)({"node": "a", "port": "out"})
+
+        assert_type(point, dict[str, object])
+        assert_type(endpoint, dict[str, object])
+        assert (point, endpoint) == ({"x": 1}, {"node": "a", "port": "out"})
 
 
 class TestResolveCastType:
@@ -474,13 +531,14 @@ SORT_KEY_WARNINGS = [
     pytest.param("bogus", 1, id="unknown"),
 ]
 
-
 INVALID_CAST_KEYS = [
     pytest.param("abc", "abc", id="str"),
     pytest.param(7, 7, id="int"),
     pytest.param(time.gmtime(0), time.gmtime(0), id="struct_time"),
     pytest.param({"a": 1}, "x", id="mapping"),
     pytest.param([1], "x", id="sequence"),
+    pytest.param(1.5, 1.5, id="float"),
+    pytest.param(_UNSORTABLE, "x", id="unsortable"),
 ]
 
 
@@ -500,6 +558,13 @@ class TestDefItemgetter:
     ):
         keyfunc = def_itemgetter("n", default="x", type_="location")
         assert keyfunc({"n": value}) == expected
+
+    def test_an_unsortable_value_warns_and_sorts_by_the_default(self, caplog):
+        with caplog.at_level(WARNING, logger="riko"):
+            key = def_itemgetter("n", default="x")({"n": _UNSORTABLE})
+
+        assert key == "x"
+        assert "non-sortable object" in caplog.text
 
 
 @dataclass
@@ -568,6 +633,12 @@ class TestParseDateString:
         parsed = parse_date_string("1 Feb 2015 12:00:00 JST")
         assert parsed.utcoffset() == timedelta(hours=9)
 
+    def test_ambiguous_abbreviations_are_stable_across_hash_seeds(
+        self, hash_seed_probes
+    ):
+        zones = {tuple(probes["zones"]) for probes in hash_seed_probes.values()}
+        assert len(zones) == 1
+
 
 class NamelessZone(tzinfo):
     def tzname(self, dt: datetime | None) -> None:
@@ -588,6 +659,23 @@ class TestResolveAwareDatetime:
         )
         assert isinstance(result, datetime)
         assert result.tzinfo is zone
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="resolving the local zone at the date's own daylight-saving offset is "
+        "not yet implemented",
+    )
+    def test_local_zone_uses_the_dates_own_offset(self):
+        zone = ZoneInfo("America/New_York")
+        in_dst = bool(datetime.now(zone).dst())
+        naive = datetime(2020, 1, 15, 12) if in_dst else datetime(2020, 7, 15, 12)
+
+        with _local_zone("America/New_York"):
+            result = resolve_aware_datetime(naive, try_local_tz=True)
+
+        assert isinstance(result, datetime)
+        assert result.utcoffset() == naive.replace(tzinfo=zone).utcoffset()
 
 
 class TestTtToDatedict:
@@ -649,19 +737,15 @@ DOTDICT_DELETES = [
         {"author": {"name": "bar"}},
         id="missing-intermediate-noop",
     ),
+    pytest.param({"": 1, "a": 2}, "", {"a": 2}, id="empty-key"),
 ]
 
 
 DOTDICT_CONTAINS = [
-    pytest.param("title", True, id="plain"),
-    pytest.param("TITLE", True, id="case-insensitive"),
-    pytest.param("author.name", True, id="dotted-present"),
     pytest.param("author.url", False, id="dotted-absent"),
-    pytest.param("missing", False, id="missing"),
     pytest.param({"subkey": "title"}, True, id="subkey-mapping"),
     pytest.param("AUTHOR.NAME", True, id="dotted-case-insensitive"),
     pytest.param(None, False, id="none"),
-    pytest.param(("title",), False, id="tuple"),
     pytest.param({}, False, id="empty-mapping"),
     pytest.param({"subkey": 5}, False, id="non-str-subkey"),
     pytest.param({"subkey": ""}, False, id="empty-subkey"),
@@ -680,6 +764,13 @@ NESTED_WRITES = [
     pytest.param(methodcaller("delete", "A.B.C"), id="delete"),
 ]
 
+EMPTY_KEY_READS = [
+    pytest.param(itemgetter(""), 1, id="getitem"),
+    pytest.param(methodcaller("get", ""), 1, id="get"),
+    pytest.param(dict, {"": 1}, id="dict"),
+    pytest.param(repr, "{'': 1}", id="repr"),
+]
+
 
 class TestDotDict:
     @pytest.mark.parametrize(("key", "expected"), DOTDICT_CONTAINS)
@@ -695,6 +786,15 @@ class TestDotDict:
     def test_dotted_getitem_matches_get(self, key):
         d = DotDict({"a": {"b": {"c": 1}}, "Author": {"Name": "x"}})
         assert d[key] == d.get(key)
+
+    @pytest.mark.parametrize(("read", "expected"), EMPTY_KEY_READS)
+    def test_empty_key_reads_literally(self, read, expected):
+        assert read(DotDict({"": 1})) == expected
+
+    def test_empty_key_set(self):
+        d = DotDict({"a": 1})
+        d[""] = 2
+        assert d.asdict() == {"a": 1, "": 2}
 
     @pytest.mark.parametrize(("source", "key", "expected"), DOTDICT_DELETES)
     def test_delete(self, source, key, expected):
@@ -714,6 +814,7 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="business data shaped like a typed value is still read as one",
     )
     def test_typed_value_shaped_business_data_reads_literally(self):
@@ -722,6 +823,62 @@ class TestDotDict:
             "summary_detail": detail
         }
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=KeyError,
+        reason="literal DotDict keys made only of dots are not yet implemented",
+    )
+    def test_dot_only_key_keeps_the_empty_key(self):
+        assert DotDict({"": 1, ".": 2}).asdict() == {"": 1, ".": 2}
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal DotDict paths that stop at a scalar are not yet implemented",
+    )
+    def test_get_does_not_read_through_a_scalar(self):
+        assert DotDict({"a": {"b": 1}}).get("a.b.z", MISSING) is MISSING
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal DotDict reads of a numeric-string key are not yet "
+        "implemented: the key is taken as a sequence index",
+    )
+    def test_numeric_string_key_reads_literally(self):
+        assert DotDict({"2020": "x"}).get("2020") == "x"
+
+
+GET_SKIPS = [
+    pytest.param({"field": "content"}, SKIP_ITEM, False, id="field-present"),
+    pytest.param({"field": "content"}, {}, True, id="field-missing"),
+    pytest.param(
+        {"field": "content"},
+        {"content": "none available"},
+        False,
+        id="field-follows-presence-not-text",
+    ),
+    pytest.param({"field": "content", "include": True}, SKIP_ITEM, True, id="include"),
+    pytest.param({"field": "content", "text": None}, SKIP_ITEM, False, id="null-text"),
+    pytest.param({"field": "content", "text": 0}, SKIP_ITEM, False, id="zero-text"),
+    pytest.param({"field": "content", "text": ""}, SKIP_ITEM, True, id="empty-text"),
+    pytest.param(
+        {"field": "content", "text": "other"}, SKIP_ITEM, False, id="no-match"
+    ),
+    pytest.param(
+        {"field": "content", "text": "other", "include": True},
+        SKIP_ITEM,
+        True,
+        id="include-no-match",
+    ),
+]
+
+
+class TestGetSkip:
+    @pytest.mark.parametrize(("skip_if", "item", "expected"), GET_SKIPS)
+    def test_get_skip(self, skip_if, item, expected):
+        assert get_skip(item, skip_if) is expected
+
 
 ANY2DICT_LISTS = [
     pytest.param([{"a": 1}, None, {"b": 0}], None, None, id="list-skips-null"),
@@ -729,11 +886,42 @@ ANY2DICT_LISTS = [
     pytest.param('{"x": [{"a": 1}, {"b": 0}]}', "json", "x", id="json-path"),
 ]
 
+LARGE_JSON_DOCUMENTS = [
+    pytest.param(LARGE_JSON_RECORDS, "", id="array"),
+    pytest.param({"x": LARGE_JSON_RECORDS}, "x", id="array-at-path"),
+    pytest.param({"x": {"records": LARGE_JSON_RECORDS}}, "x", id="mapping-at-path"),
+    pytest.param({"X": LARGE_JSON_RECORDS}, "x", id="case-insensitive-path"),
+]
 
-class TestGetSkip:
-    def test_get_skip_field_only_follows_presence_not_absent_text(self):
-        """A truthy value is not skipped even when it reads like "no value"."""
-        assert get_skip({"content": "none available"}, {"field": "content"}) is False
+JSON_WITHOUT_RECORDS = [
+    pytest.param("5", None, "document is the scalar 5", id="number"),
+    pytest.param("true", None, "document is the scalar true", id="boolean"),
+    pytest.param(
+        '{"x": null}', "x", "value at 'x' is the scalar null", id="null-at-path"
+    ),
+    pytest.param('{"x": 1}', "y", "no value at 'y'", id="missing-path"),
+    pytest.param('{"x": [1]}', "x.item", "no value at 'x.item'", id="item-path"),
+    pytest.param('[{"x": 1}]', "x", "no value at 'x'", id="path-into-list"),
+]
+
+JSON_READERS = [
+    pytest.param(str, id="str"),
+    pytest.param(StringIO, id="file"),
+    pytest.param(
+        lambda text: BytesIO(text.encode()), id="streamed", marks=pytest.mark.perf
+    ),
+]
+
+STREAMED_JSON_SOURCES = [
+    pytest.param(lambda url: Fetch(url, binary=True), True, id="fetched-file"),
+    pytest.param(lambda url: Fetch(url, binary=False), False, id="fetched-text"),
+    pytest.param(lambda url: HTTPResponse(body=BytesIO(b"[]")), True, id="http-body"),
+    pytest.param(lambda url: StringIO("[]"), False, id="text"),
+]
+CASE_DUPLICATE_READERS = [
+    pytest.param(str, [{"a": 2}], id="in-memory-takes-the-last"),
+    pytest.param(lambda text: BytesIO(text.encode()), [{"a": 1}], id="streamed-first"),
+]
 
 
 class TestAny2dict:
@@ -769,6 +957,46 @@ class TestAny2dict:
     def test_any2dict_yields_list_entries(self, content, ext, path):
         result = list(any2dict(content, ext=ext, path=path))
         assert result == [{"a": 1}, {"b": 0}]
+
+    @pytest.mark.perf
+    @pytest.mark.parametrize("source", [BytesIO, ForwardOnly])
+    @pytest.mark.parametrize(("document", "path"), LARGE_JSON_DOCUMENTS)
+    def test_large_json_streams_the_same_records(self, source, document, path):
+        text = dumps(document)
+        assert len(text) >= STREAMING_THRESHOLD
+        streamed = list(any2dict(source(text.encode()), ext="json", path=path))
+        assert streamed == list(any2dict(text, ext="json", path=path))
+
+    @pytest.mark.parametrize("read", JSON_READERS)
+    @pytest.mark.parametrize(("content", "path", "match"), JSON_WITHOUT_RECORDS)
+    def test_any2dict_warns_on_json_without_records(
+        self, monkeypatch, caplog, read, content, path, match
+    ):
+        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
+
+        with caplog.at_level(WARNING, logger="riko"):
+            assert list(any2dict(read(content), ext="json", path=path)) == []
+
+        assert match in caplog.text
+
+    @pytest.mark.parametrize(("build", "streams"), STREAMED_JSON_SOURCES)
+    def test_only_binary_sources_stream_json(self, monkeypatch, build, streams):
+        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
+
+        with build(get_path("gigs.json")) as source:
+            assert (documents._get_ijson_source(source) is not None) is streams
+
+    def test_a_small_seekable_source_is_parsed_in_memory(self):
+        with Fetch(get_path("gigs.json"), binary=True) as f:
+            assert documents._get_ijson_source(f) is None
+
+    @pytest.mark.parametrize(("read", "expected"), CASE_DUPLICATE_READERS)
+    def test_case_duplicate_keys_pick_a_branch_specific_value(
+        self, monkeypatch, read, expected
+    ):
+        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
+        records = any2dict(read(CASE_DUPLICATE_JSON), ext="json", path="x")
+        assert list(records) == expected
 
     def test_any2dict_wraps_leaf_xml_root(self):
         assert list(any2dict(StringIO("<a>hi</a>"), ext="xml")) == [{"content": "hi"}]
@@ -843,18 +1071,6 @@ class TestAugmentEntries:
         assert isinstance(updated, struct_time)
         assert updated[:5] == (2012, 5, 12, 8, 30)
 
-    @pytest.mark.filterwarnings("error::DeprecationWarning")
-    def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
-        """Asking a feedparser entry for a missing ``updated`` key stays silent."""
-        raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
-        entry = cast("ParserRSSEntry", raw)
-        keys = ("updated_parsed", "updated", "published_parsed", "published")
-        resolved = resolve_date(entry, *keys)
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2020, 1, 2)
-        item = dict(next(augment_entries([entry])))
-        assert item["updated_parsed"] == resolved
-
 
 class TestResolveDate:
     def test_resolve_date_skips_blank_and_unparseable_values(self, caplog):
@@ -881,9 +1097,31 @@ class TestResolveDate:
         assert isinstance(resolved, struct_time)
         assert resolved[:3] == (2021, 3, 4)
 
+    @pytest.mark.filterwarnings("error::DeprecationWarning")
+    def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
+        """Asking a feedparser entry for a missing ``updated`` key stays silent."""
+        raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
+        entry = cast("ParserRSSEntry", raw)
+        keys = ("updated_parsed", "updated", "published_parsed", "published")
+        resolved = resolve_date(entry, *keys)
+        assert isinstance(resolved, struct_time)
+        assert resolved[:3] == (2020, 1, 2)
+        item = dict(next(augment_entries([entry])))
+        assert item["updated_parsed"] == resolved
 
-def _get_seeded_order(seed: str) -> list[str]:
-    return run_python("-c", _SEEDED_ORDER, hash_seed=seed).stdout.splitlines()
+
+# Each row: the items, the position options, and the option the error names.
+UNINDEXABLE_ITEMS = [
+    pytest.param([1], {"cmp_pos": 0}, "cmp_pos=0", id="compare-position"),
+    pytest.param([1], {"arg_pos": 0}, "arg_pos=0", id="argument-position"),
+]
+
+
+class TestGenNonNull:
+    @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
+    def test_an_unindexable_item_raises(self, items, positions, match):
+        with pytest.raises(TypeError, match=match):
+            list(gen_non_null(items, **positions))
 
 
 DESCENDANT_CASES = [
@@ -908,14 +1146,13 @@ class TestGraph:
         ordered = topological_sort(graph, key=lambda node: node != "b")
         assert ordered == [("b",), ("a",), ("c",)]
 
-    def test_graph_order_ignores_hash_seed(self):
+    def test_graph_order_ignores_hash_seed(self, hash_seed_probes):
         expected = [
             "[('c',), ('a', 'b')]",
             "[('e',), ('a',), ('g',), ('f',), ('d',), ('c',), ('b',)]",
             "[('A',), ('C',), ('B',), ('D',), ('E',)]",
         ]
-        assert _get_seeded_order("1") == expected
-        assert _get_seeded_order("2") == expected
+        assert all(probes["orders"] == expected for probes in hash_seed_probes.values())
 
     def test_descendants_rejects_unknown_node(self):
         with pytest.raises(KeyError):
@@ -970,6 +1207,7 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_FETCH_TIMEOUT", "2.5", "fetch_timeout", 2.5, id="fetch"),
     pytest.param("RIKO_FETCH_TIMEOUT", "-1", "fetch_timeout", 30.0, id="fetch-neg"),
     pytest.param("RIKO_BENCHMARK_DELAY", "0", "benchmark_delay", 0.0, id="delay-0"),
+    pytest.param("RIKO_BENCHMARK_WORKERS", "2", "benchmark_workers", 2, id="workers"),
     pytest.param(
         "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
     ),
@@ -977,6 +1215,8 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "-1", "shutdown_timeout", 30.0, id="neg"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "nan", "shutdown_timeout", 30.0, id="nan"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="bad"),
+    pytest.param("RIKO_ENCODING", "bogus", "encoding", "utf-8", id="encoding-unknown"),
+    pytest.param("RIKO_ENCODING", "latin-1", "encoding", "latin-1", id="encoding"),
 ]
 
 
@@ -1164,11 +1404,6 @@ ERRORS = [
     pytest.param(errors.DuplicateReceiverError("alerts"), id="duplicate"),
     pytest.param(errors.IdentityEncodingError(set), id="encoding"),
     pytest.param(errors.CyclicIdentityError(), id="cyclic"),
-]
-ROUND_TRIPS = [
-    pytest.param(lambda error: pickle.loads(pickle.dumps(error)), id="pickle"),  # noqa: S301
-    pytest.param(copy.copy, id="copy"),
-    pytest.param(copy.deepcopy, id="deepcopy"),
 ]
 
 

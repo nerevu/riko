@@ -68,16 +68,16 @@ class SubPipes(NamedTuple):
 class _WorkflowTagger(Protocol):
     @overload
     def __call__(  # pyright: ignore[reportOverlappingOverload]
-        self, pipe: AsyncFunc
+        self, pipe: AsyncFunc[object]
     ) -> AsyncSubPipe: ...
     @overload
-    def __call__(self, pipe: Func) -> SyncSubPipe: ...
+    def __call__(self, pipe: Func[object]) -> SyncSubPipe: ...
 
 
 @overload
 def workflow(  # pyright: ignore[reportOverlappingOverload]
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: Literal[True]
-) -> Callable[[Func], AsyncSubPipe]: ...
+) -> Callable[[Func[object]], AsyncSubPipe]: ...
 @overload
 def workflow(
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: bool | None = ...
@@ -87,7 +87,7 @@ def workflow(
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,
     isasync: bool | None = None,
-) -> Callable[[Func], SubPipe]:
+) -> Callable[[Func[object]], SubPipe]:
     """
     Tags a hand-written workflow module's pipe as a stored workflow's pipe.
 
@@ -136,7 +136,7 @@ def workflow(
         msg += "to run a Workflow, pass it to Pipeline"
         raise TypeError(msg)
 
-    def tag(pipe: Func) -> SubPipe:
+    def tag(pipe: Func[object]) -> SubPipe:
         tagged = partial(pipe)
         update_wrapper(tagged, pipe)
 
@@ -188,14 +188,14 @@ def build_workflow_pipes(
         dispatcher: Finds each node's pipe by name, whether a module such as
             ``fetch`` or a stored workflow's ``pipe_<id>``.
 
+        subtype: How the pipe callables are tagged. E.g., ``"source"`` (needs no input)
+            or ``"transformer"`` (takes an item).
+
         dependencies: The names of the modules and stored workflows, such as ``fetch``
             or a ``pipe_<id>``, that the workflow's nodes use. Reported when describing
             dependencies.
 
     Kwargs:
-
-        subtype: How the pipe callables are tagged. E.g., ``"source"`` (needs no input)
-            or ``"transformer"`` (takes an item).
 
         inputs: The workflow's input declarations. Reported when describing inputs.
 

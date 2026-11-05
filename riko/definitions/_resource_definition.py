@@ -23,7 +23,7 @@ from attrs import define, field
 
 from riko.base._exceptions import ResourceInterpretationWarning
 from riko.types._frozendict import FrozenDict
-from riko.types._io import is_closeable
+from riko.types._io import require_closer
 from riko.types._resource import (
     AnyContextManager,
     AsyncLifecyclePlan,
@@ -31,7 +31,6 @@ from riko.types._resource import (
     ExternalPlan,
     LifecycleFactory,
     OwnedPlan,
-    ResolvedValue,
     ResourceFactory,
     ResourcePlan,
     ResourceStrategy,
@@ -120,7 +119,7 @@ class Resource[T]:
     @overload
     def __new__(
         cls,
-        value: ResolvedValue[T],
+        value: T,
         *,
         cleanup: Cleanup[T] | Literal[False],
         credential: str | None = ...,
@@ -159,7 +158,7 @@ class Resource[T]:
 
     def __init__(
         self,
-        value: ResolvedValue[T],
+        value: T,
         *,
         cleanup: Cleanup[T] | Literal[False] | None = None,
         credential: str | None = None,
@@ -173,12 +172,8 @@ class Resource[T]:
             msg += "a generator as setup and cleanup, pass the generator "
             msg += "function to Resource.from_lifecycle(...) instead."
             raise TypeError(msg)
-        elif cleanup is None and not is_closeable(value):
-            msg = "Must provide a Closeable value or cleanup function for riko "
-            msg += f"owned resources. Not a {type(value).__name__}. If this "
-            msg += "value's lifecycle is externally managed, use "
-            msg += "Resource.from_external(...) instead."
-            raise TypeError(msg)
+        else:
+            require_closer(value, cleanup)
 
         self._set_fields(OwnedPlan(value, cleanup), credential, lazy)
 
@@ -220,7 +215,7 @@ class Resource[T]:
         return isinstance(self._plan, ExternalPlan)
 
     @property
-    def value(self) -> ResolvedValue[T]:
+    def value(self) -> T:
         """
         The resolved value an external or owned resource carries.
 
@@ -333,11 +328,11 @@ class Resource[T]:
     @overload
     @classmethod
     def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
-        cls, value: ResolvedValue[T]
+        cls, value: T
     ) -> ReusableResource[T]: ...
     @classmethod
-    def from_external[T](  # pyright: ignore[reportInconsistentOverload,reportGeneralTypeIssues]
-        cls, value: ResolvedValue[T]
+    def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
+        cls, value: T
     ) -> ReusableResource[T]:
         """
         Creates a resource whose lifecycle remains owned by the caller.
@@ -390,6 +385,8 @@ class Resource[T]:
 
             factory: A sync/async generator function or context manager that
                 yields the value, or a callable that produces one.
+
+        Kwargs:
 
             credential: A credential reference resolved by the connector layer.
 

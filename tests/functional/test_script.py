@@ -43,7 +43,8 @@ ENTRY_POINTS = {
 }
 DEMO_TEXT = "Deadline to clear up health law eligibility near\n682\n"
 ITEM_ATTRS = {"key": "title", "value": "riko"}
-TIMEZONE_TEXT = "{'date': '5/4/1982', 'dateformat': 'May 04, 1982 UTC'}\n"
+FARECHART_DOCUMENT = "pipe_a3d1afa31f0a24cc51dcbe79f1590343"
+FARECHART_TEXT = "{'url': 'farechart'}\n"
 
 RAISING_SCRIPT = (
     "from riko import UnsupportedModuleError\n\n"
@@ -57,6 +58,8 @@ BENCHMARK_LABELS = [
     "baseline_threads",
     "baseline_procs",
     "sync_module",
+    "sync_module_per_item",
+    "sync_prepared_per_item",
     "sync_pipeline",
     "sync_workflow",
 ]
@@ -72,8 +75,10 @@ DEMO_RUNS = [
         marks=skipif_issync,
         id="simple1-async",
     ),
-    pytest.param("pipe_timezone", TIMEZONE_TEXT, [], "in-process", id="document"),
-    pytest.param("pipe_timezone", TIMEZONE_TEXT, [], "outside", id="outside-checkout"),
+    pytest.param(FARECHART_DOCUMENT, FARECHART_TEXT, [], "in-process", id="document"),
+    pytest.param(
+        FARECHART_DOCUMENT, FARECHART_TEXT, [], "outside", id="outside-checkout"
+    ),
 ]
 RIKO_ERRORS = [
     pytest.param("pipe.py", RAISING_SCRIPT, "module: x", id="pipe-script"),
@@ -175,7 +180,7 @@ class TestRunPipe:
         """The usage example still runs through the CLI."""
         ran = run_command("runpipe", "usage")
         assert ran.returncode == 0, ran.stderr
-        assert "'hash': 197222720" in ran.stdout
+        assert "'hash': 456903819" in ran.stdout
 
     def test_run_pipe_workflow_document(self, tmp_path):
         workflow_file = tmp_path / "flow.json"
@@ -339,7 +344,10 @@ class TestCompile:
 
 class TestBenchmark:
     def test_benchmark(self):
-        env = os.environ | {"RIKO_BENCHMARK_DELAY": "0.001"}
+        env = os.environ | {
+            "RIKO_BENCHMARK_DELAY": "0.001",
+            "RIKO_BENCHMARK_WORKERS": "2",
+        }
         ran = run_module("benchmark", entry_point=True, env=env)
         assert ran.returncode == 0, ran.stderr
         output = ran.stdout
@@ -551,7 +559,9 @@ class TestExamplePipelines:
         assert expected in proc.stdout, f"{script} output: {proc.stdout!r}"
 
     @pytest.mark.xfail(
-        reason="dateformat timezone setting is not yet implemented.", strict=True
+        strict=True,
+        raises=AssertionError,
+        reason="dateformat timezone setting is not yet implemented.",
     )
     def test_unsupported_timezone(self):
         """The timezone example asks for EST but dateformat ignores it (UTC)."""

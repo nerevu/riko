@@ -6,8 +6,7 @@ A real socket server on ``127.0.0.1`` so tests drive the actual HTTP stack
 (``requests``, streaming vs. buffered reads, gzip, response close) without
 touching the internet. Prefer this over monkeypatching the client whenever a
 test cares about transport; reach for a mock only when the point is pure logic
-that does not depend on how the bytes arrive; ``stub_async_get`` is that mock
-for the async fetch client.
+that does not depend on how the bytes arrive.
 
 Basic usage::
 
@@ -17,15 +16,16 @@ Basic usage::
         pipeline = Pipeline.from_module("fetch", conf={"url": url})
 
 Tests that use this should carry ``@pytest.mark.simulated_network``.
+``ForwardOnly`` stands in for a fetched response body (``r.raw``) when a test needs a
+binary stream that cannot seek, without a server.
 """
 
 from __future__ import annotations
 
-import socket
 import threading
 from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from types import SimpleNamespace
+from io import BytesIO, RawIOBase
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -35,16 +35,20 @@ if TYPE_CHECKING:
 
 
 CHUNK = 8192
-URL = "https://example.test/data"
 
 
-def stub_async_get(content: bytes, content_type: str):
-    """Builds an async client ``get`` that answers every URL with *content*."""
+class ForwardOnly(RawIOBase):
+    """A binary stream that reads ``data`` once and cannot seek."""
 
-    async def async_get(url: str, **_: object) -> SimpleNamespace:
-        return SimpleNamespace(content=content, headers={"content-type": content_type})
+    def __init__(self, data: bytes) -> None:
+        super().__init__()
+        self.inner = BytesIO(data)
 
-    return async_get
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b) -> int:
+        return self.inner.readinto(b)
 
 
 class _Server(ThreadingHTTPServer):
@@ -101,46 +105,4 @@ def loopback_url(
     finally:
         server.shutdown()
         server.server_close()
-        thread.join(timeout=1)
-
-
-@contextmanager
-def stalled_url(prefix: bytes = b"", *, path: str = "stalled.txt") -> Generator[str]:
-    """
-    Serves a connection that accepts, sends *prefix*, then never finishes.
-
-    The server never closes the connection on its own, so a fetch without a
-    timeout blocks forever. *prefix* is written as is: pass response headers and
-    a partial body to simulate a stalled stream, or nothing for a stalled response.
-    """
-    server = socket.socket()
-    server.bind(("127.0.0.1", 0))
-    server.listen()
-    accepted: list[socket.socket] = []
-    done = threading.Event()
-
-    def serve() -> None:
-        while not done.is_set():
-            try:
-                connection, _ = server.accept()
-            except OSError:
-                break
-
-            accepted.append(connection)
-
-            with suppress(OSError):
-                connection.sendall(prefix)
-
-    thread = threading.Thread(target=serve, daemon=True)
-    thread.start()
-
-    try:
-        yield f"http://127.0.0.1:{server.getsockname()[1]}/{path}"
-    finally:
-        done.set()
-        server.close()
-
-        for connection in accepted:
-            connection.close()
-
         thread.join(timeout=1)

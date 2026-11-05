@@ -35,7 +35,10 @@ diff. A diff over 25kB lands in `.claude/tidy-scope.diff`; read it in slices
 with `Read` offsets, never whole. Exit 0 means tidy already ran on this exact
 content: report "nothing to tidy" and stop. Exit 2 means the scope is empty:
 run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
-by hand.
+by hand. When the diff is mostly moved code (test reorganizations, file splits),
+`gates.py scope tidy --edits-only` lists just the added lines that no removed
+line carries, `path:line: text`; read those first and the moved spans only
+where an edit sits inside them.
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.
@@ -47,7 +50,7 @@ minutes in, send it a non-stopping status ping; pause one that is grinding,
 build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
 `/tmp`, new untracked files) and decide for each: promote it to a shared helper,
 fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
 diff renamed, removed, or changed in meaning. One call lists them:
@@ -93,6 +96,23 @@ cannot. Independent probes go in one response as parallel tool calls, or in one
 chained Bash command — never one grep per turn — and `sed -n` ranges of several
 files go in the same call.
 
+In the same response, scan the added lines for the defect classes past fix
+sessions kept repairing (closing, last-wins, truthiness, sync/async drift,
+chunk decoding, `next()` without a default, hash-seed order, frozen-record
+mutability, unbounded timeouts, `find()` slicing):
+
+```bash
+python .claude/skills/land/gates.py scope tidy | uv run --active --no-sync python .claude/skills/tidy/mistake_scan.py --diff-file -
+```
+
+Its leads come most-often-fixed class first. They are leads, not findings:
+verify each against check 4's bar (truthiness is a finding only when a falsy
+value is realistic for that field; a `0` the docstring names as a sentinel is
+not) and the rule's own message, then sort into §4's buckets. A lead you rule
+safe gets a trailing `# mistake-ok: RMnnn` only when it would recur on every
+edit of that line; otherwise just drop it. When a fix lands for a class, bump
+its `CLASS_HISTORY` count and refs in the script.
+
 For each file in scope, and only the lines the change introduced or the
 neighborhood it affects:
 
@@ -135,8 +155,10 @@ neighborhood it affects:
 6. **Changelog and journaling** — a `docs/CHANGES.rst` bullet that is not a
    user-visible change against the last release, a "gained/now" delta where the
    unreleased bullet should be edited, a missing bullet for a user-visible
-   change, fix narratives in CLAUDE.md or `_docs/`, per-release renames in
-   `docs/MIGRATION.rst`, untracked scratch docs cited from stable docs.
+   change (a fix for a 2026-introduced defect needs none: the general Fixes
+   bullet covers it, per `_docs/INTERNALS.md`), fix narratives in CLAUDE.md or
+   `_docs/`, per-release renames in `docs/MIGRATION.rst`, untracked scratch
+   docs cited from stable docs.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define
@@ -184,7 +206,8 @@ neighborhood it affects:
    tests and standalone tests that fit a table, `pytest.param` rows a few columns
    too long for one line, shared literals, doctest calls
    repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
-   doctests of six or more examples whose callee has a table, same-named tests,
+   test messages a doctest also pins, doctests of six or more examples whose callee
+   has a table, tests with no assertion or asserts only inside a loop, same-named tests,
    unsupported names in public and supported-only internal classes, out-of-order
    or misplaced classes and helpers, classes that never name their riko-named subject,
    functional classes with no end-to-end marker, tests that start a process
@@ -195,7 +218,8 @@ neighborhood it affects:
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
-   `--with-helpers` so a moved method carries the helpers only it used;
+   `--with-helpers` so a moved method carries the helpers only it used,
+   `--plan-split` for each class's footprint before a split;
    moves repoint doc citations), and find a test's current home with
    `overlap_scan.py --where NAME`. Module constants that a move strands below
    code go back to the top with `python .claude/skills/tidy/lift_constants.py

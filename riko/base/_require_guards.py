@@ -30,6 +30,7 @@ from attrs import Attribute, AttrsInstance, validators
 from typing_extensions import TypeForm
 
 from ._exceptions import InvalidPipelineError
+from ._funcutils import resolve_default
 from ._guards import is_mapping, require_mapping
 from ._iterutils import gen_instances, sort_stably
 from ._recordutils import field_names, required_attrs_keys
@@ -38,6 +39,7 @@ from ._typing import gen_union_members
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._enums import StrLike
+    from riko.types._wrappers import Func
 
 type AttrsValidator[T] = Callable[[AttrsInstance, Attribute[Any], T], None]
 type DefFunc[T, R] = Callable[[T | None], R]
@@ -84,7 +86,7 @@ def narrow_from_require[T, R](
 ) -> Callable[[R], R]: ...
 def narrow_from_require[T, R](
     require: Require[T, R], *args: object, accepted: object = None, **kwargs: object
-) -> Callable[..., R]:
+) -> Func[R]:
     """
     Advertises a typed converter to callers but validates any object at runtime.
 
@@ -195,13 +197,13 @@ def typed_dict_keys[T](item: TypeForm[T]) -> tuple[frozenset[str], frozenset[str
     return frozenset(required), frozenset(optional)
 
 
-def require_from_keys[V](
+def require_from_keys(
     required: Collection[str],
     allowed: Collection[str],
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
-) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+) -> TypeRequire[Mapping[str, object], dict[str, object]]:
     """
     Builds a guard that requires a mapping's keys to fit explicit key sets.
 
@@ -212,10 +214,10 @@ def require_from_keys[V](
 
         required: The keys that must be present.
         allowed: The keys that may be present (every required key is allowed).
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for an unknown or missing key.
 
     Returns:
@@ -241,9 +243,11 @@ def require_from_keys[V](
     _allowed = _required.union(allowed)
     default_what = what
 
-    def require(value: Mapping[str, V], what: str | None = None, **_) -> dict[str, V]:
+    def require(
+        value: Mapping[str, object], what: str | None = None, **_
+    ) -> dict[str, object]:
         """Confirms a mapping has only the allowed keys and all required ones."""
-        what = default_what if what is None else what
+        what = resolve_default(what, default_what)
         keys = set(value)
 
         if unknown := keys - _allowed:
@@ -261,26 +265,24 @@ def require_from_typed_dict[T](
     what: str | None = None,
     *,
     exclude: Collection[str] = (),
-    not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
 ) -> TypeRequire[Mapping[str, object], T]:
     """
     Builds a guard that requires a mapping's keys to fit a TypedDict.
 
-    Equivalent to ``require_from_form`` if you don't need ``exclude``, ``not_required``,
-    or ``extra``. Use ``require_from_form`` instead if you need to check against
-    a tuple of TypedDicts.
+    Equivalent to ``require_from_form`` if you don't need ``exclude`` or ``extra``.
+    Use ``require_from_form`` instead if you need to check against a tuple of
+    TypedDicts.
 
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
-        what: The name used in error messages (default: the TypedDict's name).
 
     Kwargs:
 
+        what: The name used in error messages (default: the TypedDict's name).
         exclude: Keys of ``item`` the mapping must not have.
-        not_required: Required keys of ``item`` the mapping may leave out.
         extra: Keys outside ``item`` the mapping may also have.
         error: The exception raised for an unknown or missing key.
 
@@ -300,8 +302,8 @@ def require_from_typed_dict[T](
         ...     x: int
         ...     y: int
         >>>
-        >>> require_from_typed_dict(Point, not_required={"y"})({"x": 1})
-        {'x': 1}
+        >>> require_from_typed_dict(Point)({"x": 1, "y": 2})
+        {'x': 1, 'y': 2}
         >>> require_from_typed_dict(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
@@ -310,9 +312,9 @@ def require_from_typed_dict[T](
     """
     cls = _require_typed_dict_class(item)
     _required, _optional = typed_dict_keys(cls)
-    required = _required.difference(exclude, not_required)
+    required = _required.difference(exclude)
     allowed = (_required | _optional).difference(exclude).union(extra)
-    default_what = cls.__name__ if what is None else what
+    default_what = resolve_default(what, cls.__name__)
     check = require_from_keys(required, allowed, default_what, error=error)
 
     def require(value: Mapping[str, object], what: str | None = None, **_) -> T:
@@ -322,7 +324,7 @@ def require_from_typed_dict[T](
     return require
 
 
-def require_from_attrs[T: AttrsInstance, V](
+def require_from_attrs[T: AttrsInstance](
     cls: type[T],
     what: str | None = None,
     *,
@@ -330,7 +332,7 @@ def require_from_attrs[T: AttrsInstance, V](
     not_required: Collection[str] = (),
     extra: Collection[str] = (),
     error: type[Exception] = InvalidPipelineError,
-) -> TypeRequire[Mapping[str, V], dict[str, V]]:
+) -> TypeRequire[Mapping[str, object], dict[str, object]]:
     """
     Builds a guard that requires a mapping's keys to fit an attrs ``__init__``.
 
@@ -340,10 +342,10 @@ def require_from_attrs[T: AttrsInstance, V](
     Args:
 
         cls: The attrs class whose ``__init__`` arguments the mapping must fit.
-        what: The name used in error messages (default: the class name).
 
     Kwargs:
 
+        what: The name used in error messages (default: the class name).
         exclude: Arguments of ``cls`` the mapping must not have.
         not_required: Required arguments of ``cls`` the mapping may leave out.
         extra: Keys outside ``cls`` the mapping may also have.
@@ -377,7 +379,7 @@ def require_from_attrs[T: AttrsInstance, V](
     excluded = frozenset(exclude)
     required = required_attrs_keys(cls) - excluded - frozenset(not_required)
     allowed = (field_names(cls) - excluded).union(extra)
-    default_what = cls.__name__ if what is None else what
+    default_what = resolve_default(what, cls.__name__)
     return require_from_keys(required, allowed, default_what, error=error)
 
 
@@ -414,12 +416,12 @@ def def_from_require[T, D, R](
     **kwargs: object,
 ) -> DefFunc[T, R | D]: ...
 def def_from_require[D, R](
-    require: Callable[..., R],
+    require: Func[R],
     *args: object,
     default: D | None = None,
     what: str | None = None,
     **kwargs: object,
-) -> Callable[..., R | D | None]:
+) -> Func[R | D | None]:
     """
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
 
@@ -457,10 +459,11 @@ def def_from_require[D, R](
         (0, 3)
 
     """
-    extra = kwargs if what is None else {**kwargs, "what": what}
+    extra = resolve_default(what, kwargs, {**kwargs, "what": what})
+    fallback = partial(require, *args, **extra)
 
     def optional(value: object) -> R | D | None:
-        return default if value is None else require(*args, value, **extra)
+        return default if value is None else fallback(value)
 
     return optional
 
@@ -471,8 +474,6 @@ def def_from_typed_dict[T, D](
     what: str | None = None,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
-    *,
-    not_required: Collection[str] = (),
 ) -> DefFunc[Mapping[str, object], T | D | None]:
     """
     Adapts a TypedDict to an attrs converter that ignores ``None``s.
@@ -483,14 +484,13 @@ def def_from_typed_dict[T, D](
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
+
+    Kwargs:
+
         default: The result for ``None``.
         what: The name used in error messages (default: the TypedDict's name).
         exclude: Keys of ``item`` the mapping must not have.
         extra: Keys outside ``item`` the mapping may also have.
-
-    Kwargs:
-
-        not_required: Required keys of ``item`` the mapping may leave out.
 
     Returns:
 
@@ -508,9 +508,7 @@ def def_from_typed_dict[T, D](
         ({'x': 0}, {'x': 1})
 
     """
-    require = require_from_typed_dict(
-        item, what, exclude=exclude, not_required=not_required, extra=extra
-    )
+    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
     return def_from_require(require, default=default, what=what)
 
 
@@ -552,7 +550,7 @@ def narrow_def_from_require[T, D, R](
     what: str | None = None,
     *,
     accepted: object = None,
-) -> Callable[..., R | D | None]:
+) -> Func[R | D | None]:
     """
     Adapts a ``require_*`` guard to a typed attrs converter that ignores ``None``s.
 
@@ -563,11 +561,11 @@ def narrow_def_from_require[T, D, R](
     Args:
 
         require: The guard to run on a value that isn't ``None``.
-        default: The result for ``None``.
-        what: The name used in the guard's error messages.
 
     Kwargs:
 
+        default: The result for ``None``.
+        what: The name used in the guard's error messages.
         accepted: The input type to advertise in place of the guard's output type.
 
     Returns:
@@ -583,19 +581,16 @@ def narrow_def_from_require[T, D, R](
         ('db',)
 
     """
+    kwargs = resolve_default(what, fallback={"what": what})
 
     def optional(value: T | None) -> R | D | None:
-        kwargs = {} if what is None else {"what": what}
         return default if value is None else require(value, **kwargs)
 
     return optional
 
 
 def validator_from_require(
-    require: Callable[..., object],
-    *args: object,
-    optional: bool = False,
-    **kwargs: object,
+    require: Func[object], *args: object, optional: bool = False, **kwargs: object
 ) -> AttrsValidator[object]:
     """
     Adapts a ``require_*`` guard into an attrs field validator.
@@ -608,6 +603,9 @@ def validator_from_require(
 
         require: The guard to run on the field's value.
         args: Positional arguments passed before the value.
+
+    Kwargs:
+
         optional: Whether ``None`` skips the check.
         kwargs: Keyword arguments passed to ``require``.
 
@@ -647,8 +645,6 @@ def validator_from_typed_dict[T](
     optional: bool = False,
     exclude: Collection[str] = (),
     extra: Collection[str] = (),
-    *,
-    not_required: Collection[str] = (),
 ) -> AttrsValidator[object]:
     """
     Builds an attrs validator that checks a mapping's keys against a TypedDict.
@@ -656,14 +652,13 @@ def validator_from_typed_dict[T](
     Args:
 
         item: The TypedDict whose keys the mapping must fit.
+
+    Kwargs:
+
         what: The name used in error messages (default: the TypedDict's name).
         optional: Whether ``None`` skips the check.
         exclude: Keys of ``item`` the mapping must not have.
         extra: Keys outside ``item`` the mapping may also have.
-
-    Kwargs:
-
-        not_required: Required keys of ``item`` the mapping may leave out.
 
     Returns:
 
@@ -690,9 +685,7 @@ def validator_from_typed_dict[T](
         riko.base.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
 
     """
-    require = require_from_typed_dict(
-        item, what, exclude=exclude, not_required=not_required, extra=extra
-    )
+    require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
     return validator_from_require(require, optional=optional)
 
 
@@ -715,10 +708,10 @@ def require_instance[T](
 
         cls: The class ``value`` must be an instance of.
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` isn't a ``cls``.
 
     Returns:
@@ -779,10 +772,10 @@ def require_instances[K, T](
 
         cls: The class every value must be an instance of.
         value: The mapping or iterable to check.
-        what: The name used in error messages.
 
     Kwargs:
 
+        what: The name used in error messages.
         error: The exception raised for a value that isn't a ``cls``.
 
     Returns:
@@ -832,10 +825,10 @@ def require_nonblank_str(
     Args:
 
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` isn't such a string.
 
     Returns:
@@ -886,16 +879,15 @@ def require_from_form[T](
 
     Use ``require_instance`` instead to build a validator or converter for one class,
     e.g., ``validator_from_require(require_instance, bool)``. Use
-    ``require_from_typed_dict`` instead when you need ``exclude``, ``not_required``,
-    or ``extra``.
+    ``require_from_typed_dict`` instead when you need ``exclude`` or ``extra``.
 
     Args:
 
         form: The type the guard narrows to.
-        what: The name used in error messages (default: the name of ``form``).
 
     Kwargs:
 
+        what: The name used in error messages (default: the name of ``form``).
         error: The exception raised for a value that doesn't fit.
 
     Returns:
@@ -932,7 +924,7 @@ def require_from_form[T](
         riko.base.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
 
     """
-    default_what = getattr(form, "__name__", "value") if what is None else what
+    default_what = resolve_default(what, getattr(form, "__name__", "value"))
     leaves = tuple(gen_union_members(form))
     classes = tuple(gen_instances(leaves, type))
     shapes = tuple(cls for cls in classes if not is_typeddict(cls))
@@ -982,7 +974,7 @@ def require_from_form[T](
 
     def require(value: object, what: str | None = None, **_) -> T:
         """Narrows ``value`` to ``form``."""
-        return cast("T", check(value, default_what if what is None else what))
+        return cast("T", check(value, resolve_default(what, default_what)))
 
     return require
 
@@ -1000,10 +992,10 @@ def require_strlike(
     Args:
 
         value: The value to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised when ``value`` is neither.
 
     Returns:
@@ -1055,6 +1047,9 @@ def normalize_strs(
     Args:
 
         value: One key, an iterable of keys, or ``None``.
+
+    Kwargs:
+
         what: How to name the keys in an error.
         strict: Whether ``None`` is rejected rather than read as no keys.
         type_error: The error raised when ``value`` is not a string or iterable.
@@ -1115,10 +1110,10 @@ def require_finite(
     Args:
 
         value: The float to check.
-        what: The name used in the error message.
 
     Kwargs:
 
+        what: The name used in the error message.
         error: The exception raised for NaN or infinity.
 
     Returns:
@@ -1161,6 +1156,8 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
         name: The argument being validated, used in the error message.
 
         module: The module name, used in the error message.
+
+    Kwargs:
 
         strict: Whether to also reject a present but falsy value, e.g. an empty
             ``others`` list that would publish to nobody. Use it only where a
@@ -1215,6 +1212,8 @@ def require_conf_key[T](
         key: The conf key that must be set.
 
         module: The module name, used in the error message.
+
+    Kwargs:
 
         strict: Whether to also reject a present but falsy value, e.g. a ``url``
             set to ``""``. Use it only where a falsy value can never be

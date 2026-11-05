@@ -29,6 +29,7 @@ from riko.types._wrappers import is_subpipe
 from ._document import read_document, require_workflow
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from types import ModuleType
 
     from riko.types._io import PathLike
@@ -109,7 +110,9 @@ def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
 
 
 async def runner(
-    async_pipe: AsyncModuleWrapper, test: bool = False, cb: Callable | None = None
+    async_pipe: AsyncModuleWrapper,
+    test: bool = False,
+    cb: Callable[[Sequence[object]], object] | None = None,
 ) -> None:
     stream = async_pipe(**build_pipe_kwargs(async_pipe, test))
     result = await alist(stream)
@@ -135,6 +138,9 @@ def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> N
     Args:
 
         path: The path to the ``WorkflowDocument``.
+
+    Kwargs:
+
         isasync: Whether to iterate the pipeline asynchronously.
         test: Whether to use default input values instead of prompting.
 
@@ -208,7 +214,7 @@ def resolve_target(
     or nothing, plus a ``context``; and a ``WorkflowDocument`` is a serialized
     ``Workflow``.
 
-    Args:
+    Kwargs:
 
         path: The path to a pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
         pipeid: The id of a pipe script/``WorkflowDocument`` in the example directory.
@@ -244,6 +250,8 @@ def run_target(
 
         target: The loaded pipe script or ``WorkflowModule``, or path to a
             ``WorkflowDocument``.
+
+    Kwargs:
 
         isasync: Whether to run the async pipe when the target has one.
 

@@ -2,8 +2,8 @@
 
 > **Scope:** An unsequenced refinement — not yet a P-track phase; touches the
 > P7 (true async streaming) and P10 (bounded parallelism/backpressure) as-built primitives without
-> changing their contract. Purely a cleanup + measurement plan: trim `bado` helpers that AnyIO 4.14
-> now subsumes, and stand up an async benchmark/profile harness to justify any primitive change.
+> changing their contract. Purely a cleanup plan: trim `bado` helpers that AnyIO 4.14 now subsumes,
+> measured through the harness [performance.md](performance.md) owns before any primitive changes.
 >
 > **Prerequisite:** AnyIO **4.14** (task return handles, `anyio.functools.reduce`, async
 > `itertools`). `pyproject.toml` currently pins `anyio>=4.0.0` — the replacements below require
@@ -13,9 +13,11 @@
 >
 > **Ownership boundary.** [execution-semantics.md](execution-semantics.md) Appendix A owns the
 > *runtime semantics* of the async primitives (`async_map`/`async_map_stream`/`async_merge`/
-> `_pool_stream` — bounded concurrency, ordering, shared budgets, backpressure). **This** gameplan
-> owns only the *AnyIO-version alignment audit* (which `bado` helpers to remove/replace/keep) and the
-> *async benchmarking/profiling methodology*. It changes no primitive contract.
+> `_pool_stream` — bounded concurrency, ordering, shared budgets, backpressure).
+> [performance.md](performance.md) owns the benchmark harness, the historical regression runner, and
+> the profiler methodology. **This** gameplan owns only the *AnyIO-version alignment audit* (which
+> `bado` helpers to remove/replace/keep) and how a measurement gates a helper replacement (§3, §4).
+> It changes no primitive contract.
 
 ## 1. AnyIO 4.14 — what changed the calculus
 
@@ -37,7 +39,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
-| `async_partial` | `_util.py` | **Remove** | very high | It's just `partial(maybe_async, f, **kwargs)`. Besides bado's export machinery (`riko/bado/__init__.py`) it now has one production caller, `riko/execution/_prepared.py` (2026-10-23 move audit); inline the `partial` there when deleting it. |
+| `async_partial` | `_util.py` | **Keep** | — | It's `partial(maybe_async, f, *args, **kwargs)`, the deferred-call form of `maybe_async`, with four production callers (2026-11-02: `riko/execution/_prepared.py` ×2, `riko/execution/_async_execution.py` ×2). A caller forwarding arbitrary user kwargs binds them on `f` first (`async_partial(partial(fn, **kwargs))`) so none land on `maybe_async`'s `inline`/`limiter`. |
 | `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
@@ -64,6 +66,13 @@ missing — one a sync/async parity gap, one absent from both paths.
 `memoize` is declared in the `Defaults` TypedDict, in `ExchangeRateConf`, and is exercised by
 `fetch`'s own doctest — but only the sync path honors it. An async pipeline that re-fetches the
 same url pays full cost every time, with no warning.
+
+The sync path is broken too (2026-10-31 sibling audit). `fetch.parser` forwards only `encoding`, so the
+`fetch` module ignores `memoize` in both modes. A direct sync text-mode `Fetch(url, memoize=True)` for a
+local or `urlopen` URL raises `TypeError: cannot pickle 'TextIOWrapper'` and leaks the opener's
+`SpooledTemporaryFile` (HTTP text memoize works through `StringIO(r.text)`), and the cache key is the URL
+alone, so a text fetch after a binary fetch of the same URL returns bytes. Tripwire:
+`tests/internal/test_io.py::TestFetch::test_memoized_text_fetch_after_binary_reads_text`.
 
 Design notes:
 
@@ -169,47 +178,13 @@ So `Riko 41.2 µs` vs `AnyIO 42.0 µs` can still favor AnyIO if it removes 60 li
 machinery — but `Riko 40 µs` vs `AnyIO 30 µs` does **not** justify replacing `_pool_stream` if the
 AnyIO version loses backpressure or nested-budget semantics.
 
-## 4. Async benchmarking & profiling methodology
+## 4. Measuring a helper replacement
 
 **Benchmark first, profile second.** A profiler shows where time goes; an A/B benchmark shows
-whether swapping a Riko abstraction for an AnyIO primitive actually helps. Today's
-`riko/cli/benchmark.py` (`NUMBER=1`, `LOOPS=1`, `time()` timing) is a smoke benchmark.
-
-### The current harness measures less than it appears to
-
-Audited while removing `delay`; **fix these before trusting any sync-vs-async number**:
-
-| Group | Benchmarks | State |
-|---|---|---|
-| Pure sleep | `baseline*`, pool variants, `baseline_async` | Fine — they call `sleep`/`async_sleep` directly over `iterable`. |
-| Collections | `sync_workflow`, `async_workflow` | **Real work, no latency.** One Workflow v2 graph fans a fetch of every feed into a single `union` node and runs it through the v2 execution. The old `sync_collection`/`par_sync_collection`/`async_collection` rows and their dead `sleep=` kwarg are gone; there is no parallel variant because the execution has no concurrency option yet. |
-| Fetch | `sync_module`, `sync_pipeline`, `async_module`, `async_pipeline` | **Was asymmetric.** `delay` was honored only by `async_url_read`; the sync path never forwarded it (`parse_rss(url, encoding=...)`) and `_io.opener`'s delay was a `logger.debug` stub. Async paid ~0.1 s × 13 feeds that sync did not, so the comparison measured the handicap. `sync_pipe`/`async_pipe` are now one `Pipeline` run per feed; unlike the old `async_pipe2`, which only constructed a pipe, `async_pipe` really executes the fetch. |
-
-`delay` is now removed, so the fetch group is at least consistent — but it simulates no latency at
-all, and local-file parsing gives async concurrency nothing to win against. Restoring that signal
-belongs in the **harness**, not in a pipe's `conf`: a localhost HTTP server, or a sleeping wrapper
-applied to *both* callables equally. The same fixture would give the workflow benchmarks a latency
-signal to measure.
-
-**Matrix benchmark** (turn `benchmark.py` into this) using `perf_counter_ns`, warmup, sorted
-percentile samples (`min`/`median`/`p95`/`p99`), and the memory high-water mark, varying:
-
-```text
-items:        1, 10, 100, 10_000
-concurrency:  1, 4, 16, 64
-delay/item:   0, 100 µs, 1 ms, 10 ms      # delay=0 exposes framework overhead
-result size:  tiny, medium, large
-consumer:     fast / slow
-ordering:     ordered / arrival-order
-```
-
-Plus realistic-I/O shapes (local FS, localhost HTTP, remote HTTP, CPU-heavy transform, mixed). **Do
-not** use internet requests to compare schedulers — network variance overwhelms the signal.
-
-**Profilers** — Scalene (async profiler attributes suspended `await` wall time to the line and
-reports coroutine concurrency via `sys.monitoring` on 3.12+): `scalene run --cpu-only -m pytest
-tests/benchmarks`; Pyinstrument with `async_mode="enabled"` for a call-tree that follows the async
-context.
+whether swapping a Riko abstraction for an AnyIO primitive actually helps. The harness and its
+audit (the fetch group simulates no latency, so async has nothing to win against until the latency
+fixture lands), the matrix design, and the profiler choices are owned by
+[performance.md](performance.md) §2 and §4; this section keeps only what the helper audit adds.
 
 **Instrument `_pool_stream` instead of only CPU-profiling it** — AnyIO memory streams expose
 `.statistics()`:
@@ -224,7 +199,7 @@ time."
 
 ## 5. Sequenced first changes
 
-1. **Delete `async_partial`.**
+1. ~~**Delete `async_partial`.**~~ Kept 2026-11-02 as `maybe_async`'s deferred-call form (see its table row).
 2. **Delete or rewrite `gather_results`** via AnyIO 4.14 task handles (fixes the `None`-dropping bug regardless).
 3. **Delete `async_json`;** use `response.json()` directly.
 4. **Audit `async_reduce` callers** (`sort`, `regex`); delegate to `anyio.functools.reduce` if the strict async-reducer contract suffices.
@@ -233,8 +208,8 @@ time."
    twin. `as_awaitable` (the value-taking form) keeps its name.
 6. **Mark `async_return`** a next-major deprecation candidate (stable public API).
 7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless profiling shows a real problem.
-8. **Repair the benchmark harness** (§4) — the missing latency fixture — before using it to
-   justify any of the above.
+8. **Repair the benchmark harness** ([performance.md](performance.md) §2 — the missing latency
+   fixture) before using it to justify any of the above.
 
 The first three remove abstractions **without losing Riko-specific functionality**; `async_map*`/
 `_pool_stream` are exactly where Riko *should* own an abstraction over AnyIO.
