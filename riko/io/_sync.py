@@ -21,7 +21,7 @@ import mezmorize
 import requests
 from mezmorize.utils import get_cache_type
 
-from riko._package import __version__
+from riko._package import default_user_agent
 from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
 from riko.base._paths import is_http_url, normalize_url
 from riko.base._sentinels import MISSING, is_missing_type
@@ -85,27 +85,6 @@ def ext_from_content_type(content_type: str | None) -> str | None:
         ext = content_type.split("/")[1].split(";")[0]
 
     return ext
-
-
-def default_user_agent(name: str = "riko") -> str:
-    """
-    Formats the default user agent as ``name/version``.
-
-    Kwargs:
-
-        name: The product name in the ``name/version`` string.
-
-    Returns:
-
-        The ``name/version`` user agent string.
-
-    Examples:
-
-        >>> default_user_agent("app")  # doctest: +ELLIPSIS
-        'app/...'
-
-    """
-    return f"{name}/{__version__}"
 
 
 def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
@@ -539,7 +518,10 @@ def opener(
     r = None
 
     if is_http_url(url):
-        r = requests.get(url, params=params, stream=not memoize, timeout=timeout)
+        headers = {"User-Agent": default_user_agent()}
+        r = requests.get(
+            url, params=params, headers=headers, stream=not memoize, timeout=timeout
+        )
         r.raise_for_status()
         r.raw.decode_content = True
 

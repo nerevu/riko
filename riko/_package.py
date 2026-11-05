@@ -21,3 +21,24 @@ PACKAGE_INFO = {
     "__author__": _meta.get("Author", ""),
     "__email__": _meta.get("Author-email", ""),
 }
+
+
+def default_user_agent(name: str = "riko") -> str:
+    """
+    Formats the default user agent as ``name/version``.
+
+    Kwargs:
+
+        name: The product name in the ``name/version`` string.
+
+    Returns:
+
+        The ``name/version`` user agent string.
+
+    Examples:
+
+        >>> default_user_agent("app")  # doctest: +ELLIPSIS
+        'app/...'
+
+    """
+    return f"{name}/{__version__}"

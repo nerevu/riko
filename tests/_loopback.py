@@ -59,12 +59,13 @@ class _Server(ThreadingHTTPServer):
 
 
 def _make_handler(
-    payload: bytes, content_type: str, status: int
+    body: bytes, content_type: str, status: int, echo: str | None
 ) -> type[BaseHTTPRequestHandler]:
     class _Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def do_GET(self) -> None:
+            payload = body if echo is None else self.headers.get(echo, "").encode()
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
@@ -87,15 +88,19 @@ def loopback_url(
     content_type: str = "text/plain; charset=utf-8",
     status: int = 200,
     path: str = "feed.txt",
+    echo: str | None = None,
 ) -> Generator[str]:
     """
     Serve *body* from an ephemeral loopback server and yield its URL.
 
     The server binds an OS-assigned port on ``127.0.0.1``, runs on a daemon
-    thread, and is shut down on exit. *body* is served for any GET path.
+    thread, and is shut down on exit. *body* is served for any GET path, or,
+    when *echo* names a request header, that header's value is served instead.
     """
     payload = body.encode() if isinstance(body, str) else body
-    server = _Server(("127.0.0.1", 0), _make_handler(payload, content_type, status))
+    server = _Server(
+        ("127.0.0.1", 0), _make_handler(payload, content_type, status, echo)
+    )
     # A short poll interval keeps shutdown from waiting out the 0.5 s default.
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
