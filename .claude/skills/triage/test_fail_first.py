@@ -42,3 +42,34 @@ def test_changed_tests_include_skill_tests(tmp_path, monkeypatch):
     monkeypatch.setattr(fail_first, "ROOT_DIR", tmp_path)
     expected = [*sorted(names[:2]), ".claude/skills/triage/conftest.py"]
     assert fail_first.get_changed_tests("HEAD") == sorted(expected)
+
+
+def test_snapshot_swaps_old_copies_into_the_working_tree(tmp_path, monkeypatch):
+    def git(*args):
+        config = ("-c", "user.name=t", "-c", "user.email=t@t")
+        run = subprocess.run(
+            (fail_first.GIT, *config, *args),
+            cwd=tmp_path,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return run.stdout
+
+    git("init", "-q")
+    (tmp_path / "fix.py").write_text("old\n")
+    (tmp_path / "test_fix.py").write_text("t = 1\n")
+    git("add", ".")
+    git("commit", "-q", "--no-verify", "-m", "base")
+    (tmp_path / "fix.py").write_text("new\n")
+    (tmp_path / "test_fix.py").write_text("t = 2\n")
+    monkeypatch.setattr(fail_first, "ROOT_DIR", tmp_path)
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "t")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@t")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "t")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "t@t")
+    sha = fail_first.build_snapshot("HEAD", ["fix.py=HEAD:fix.py"])
+
+    assert git("show", f"{sha}:fix.py") == "old\n"
+    assert git("show", f"{sha}:test_fix.py") == "t = 2\n"
+    assert git("status", "--short") == " M fix.py\n M test_fix.py\n"
