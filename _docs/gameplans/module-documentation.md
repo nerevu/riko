@@ -478,7 +478,7 @@ appear automatically as runtime-only rows through `list_modules()` unless a real
 Pipes identity exists in the historical manifest.
 
 Protocol, storage, SQL, dbt, orchestration, and optional enrichment modules installed
-from extension packages are documented through:
+from plugins are documented through:
 
 ```text
 riko modules list
@@ -487,6 +487,6 @@ package-owned generated reference pages
 ```
 
 The status generator should support an explicit `builtins_only=True` catalog query so an
-installed connector extra cannot make the checked-in `status.csv` nondeterministic.
+installed plugin cannot make the checked-in `status.csv` nondeterministic.
 Tests must verify that entry-point modules are excluded from this historical report while
 remaining visible in the public module registry.

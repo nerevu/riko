@@ -65,8 +65,8 @@ class ModuleDefinition:
             read), the entry-point key, or an empty string when omitted. Required by
             ``ModuleRegistry.register`` unless ``name`` can derive one.
 
-        sync_pipe: Sync interface callable.
-        async_pipe: Async interface callable.
+        sync_pipe: The module's ``pipe``.
+        async_pipe: The module's ``async_pipe``.
         description: Summary used by module discovery.
 
     Examples:
@@ -182,8 +182,7 @@ class ModuleDefinition:
             >>> definition = ModuleDefinition(sync_pipe=sync_pipe)
             >>> definition.get_pipe() is sync_pipe
             True
-            >>> definition.get_pipe(is_async=True) is None
-            True
+            >>> definition.get_pipe(is_async=True)
 
         """
         return self.async_pipe if is_async else self.sync_pipe
@@ -191,7 +190,7 @@ class ModuleDefinition:
     @property
     def interfaces(self) -> frozenset[Interface]:
         """
-        The sync and async interfaces this definition provides.
+        Which of ``pipe`` and ``async_pipe`` this definition provides.
 
         Returns:
 

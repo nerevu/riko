@@ -41,11 +41,10 @@ from attrs import define
 
 from riko.bado._util import as_awaitable
 from riko.bado.itertools import (
-    alist,
     as_async,
     async_iter,
-    async_map,
     async_map_ordered_stream,
+    materialize,
 )
 from riko.base._guards import (
     is_async_callable,
@@ -194,15 +193,15 @@ class _AsyncWrapperStream[T]:
     """
     Dual-protocol result of an async ``processor``/``splitter`` wrapper.
 
-    Async-iterating or ``anext``-ing it consumes the wrapped parser's stream item
-    by item with no outer await (the default ``async for item in async_pipe(...)``
-    path); awaiting it runs the parser and returns the whole stream (the advanced
-    ``await async_pipe(...)`` path). The parser runs once, on first consumption.
+    Async-iterating or ``anext``-ing it consumes the wrapped parser's stream item by
+    item with no outer await (the default ``async for item in async_pipe(...)`` path).
+    Awaiting it runs the parser and returns the whole stream (the advanced
+    ``await async_pipe(...)`` path). Iteration runs the parser once. Each ``await`` runs
+    it again.
 
     Attributes:
 
-        make: A thunk that invokes the wrapped parser and returns its awaitable
-            stream.
+        make: A thunk that invokes the wrapped parser and returns its awaitable stream.
 
     """
 
@@ -315,7 +314,7 @@ class Module[B: bool]:
 
     @property
     def isasync(self) -> B:
-        """Whether this decorator builds the async interface (``async_pipe``)."""
+        """Whether this decorator builds an ``async_pipe``."""
         return self._isasync
 
     def _resolve_isasync(self, pipe: ModuleParser) -> bool:
@@ -347,8 +346,8 @@ class Module[B: bool]:
             reason = "an async def" if awaitable else "marked isasync=True"
             qualified = f"{pipe.__module__}.{name}"
             raise TypeError(
-                f"{qualified}: 'pipe' is the synchronous interface but is "
-                f"{reason}; name the async interface 'async_pipe' instead."
+                f"{qualified}: 'pipe' must be synchronous but is {reason}; "
+                "name it 'async_pipe' instead."
             )
 
         return isasync
@@ -366,7 +365,7 @@ class Module[B: bool]:
 
             wrapper: The wrapper function to annotate.
             pipe: The undecorated parser it wraps.
-            isasync: Whether the wrapper is the async interface.
+            isasync: Whether the wrapper is an ``async_pipe``.
 
         """
         module_type = self.module_type
@@ -399,7 +398,7 @@ class Module[B: bool]:
 
         Args:
 
-            wrapper: The module wrapper being called.
+            wrapper: The pipe callable being called.
             names: The keyword argument names the call supplied.
 
         Raises:
@@ -508,13 +507,13 @@ class Module[B: bool]:
         """
         Prepares ``wrapper``'s configuration and call options for reuse over many items.
 
-        Every module wrapper exposes this as its ``prepare``. The configuration and call
+        Every pipe callable exposes this as its ``prepare``. The configuration and call
         options are resolved here. Each item call supplies the ``context`` and any
         secondary input streams, resources, or embed.
 
         Args:
 
-            wrapper: The module wrapper this decorator built.
+            wrapper: The pipe callable this decorator built.
 
             extras: The names of the extra inputs delivered with each item: a named
                 input stream under its port name, positional streams as ``others``,
@@ -629,14 +628,14 @@ async def _materialize_terminal[T](value: object) -> object:
         returned unchanged.
 
     """
-    materialized: Iterator[T] | list[T] | T
+    materialized: object
 
     if isinstance(value, AsyncIterable):
-        materialized = iter(await alist(value))
+        materialized = await materialize(value)
     elif is_known_sequence(value):
         materialized = [await _materialize_terminal(item) for item in value]
     else:
-        materialized = cast("T", value)
+        materialized = value
 
     return materialized
 
@@ -734,7 +733,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     Attributes:
 
         module: The decorator that built the wrapper.
-        wrapper: The module wrapper being called.
+        wrapper: The pipe callable being called.
         prepared: The module's prepared call-time state.
         options: The prepared call options.
 
@@ -747,7 +746,7 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
 
     @property
     def parser(self) -> Callable[..., Any]:
-        """The undecorated parser the module wrapper wraps."""
+        """The undecorated parser the pipe callable wraps."""
         return vars(self.wrapper)["__wrapped__"]
 
     @property
@@ -844,12 +843,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         if is_streamlike(item):
             _run = partial(self._arun, context=context, extra=extra)
             run = cast("AsyncItemProcessor", _run)
-
-            if isinstance(item, AsyncIterable):
-                processed = _aprocess_stream(run, item)
-            else:
-                mapped = await async_map(run, item)
-                processed = chain.from_iterable(mapped)
+            processed = _aprocess_stream(run, as_async(item))
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
 
@@ -959,8 +953,7 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
             if async_native:
                 input_ = self.module.anormalize_input(items)
             else:
-                _items = await alist(self.module.anormalize_input(items))
-                input_ = iter(_items)
+                input_ = await materialize(self.module.anormalize_input(items))
         else:
             input_ = self.module.normalize_input(items)
 
@@ -1557,7 +1550,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        for item in items or []:
+        for item in [] if items is None else items:
             yield _wrap_item(item)
 
     async def anormalize_input(self, items: AsyncItemsOrValues) -> AsyncStream:
@@ -1934,7 +1927,7 @@ class splitter[B: bool](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        if items:
+        if items is not None:
             for item in items:
                 data = item if is_mapping(item) else {"content": item}
                 yield DotDict(data)

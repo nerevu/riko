@@ -21,6 +21,7 @@ from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_codegen_note
 from riko.cli import (
     _codegen,
     _docs,
@@ -30,14 +31,21 @@ from riko.cli import (
     _test,
     _upgrade,
 )
-from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
+from riko.cli._docs import (
+    gen_stale_path_citations,
+    gen_stale_source_symbol_citations,
+    gen_stale_test_citations,
+    gen_stale_test_symbol_citations,
+    gen_unruled_terms,
+)
 from riko.cli._docstyle import (
     gen_docstring_issues,
     gen_example_prose,
     summary_leads_with_output,
 )
 from riko.cli._document import read_document, require_workflow
-from riko.cli._gen_tier_index import INDEX_HEADER, generate_tier_index
+from riko.cli._gen_api_surface import generate_api_surface
+from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
@@ -56,12 +64,14 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_terms import BANNED_TERMS, BannedTerm, gen_term_issues
+from riko.cli._lint_terms import BannedTerm, gen_term_issues
 from riko.cli._lint_tests import (
     MERGE_LINES,
     SPLIT_LINES,
     LayoutIssue,
+    gen_global_bound_issues,
     gen_layout_issues,
+    get_backstop,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -388,7 +398,6 @@ class TestLintCommand:
 
 
 PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
-SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
 
 
 def _coverage_report(root: Path, uncovered: int) -> Path:
@@ -562,6 +571,9 @@ class TestCeilingRatchet:
         assert capsys.readouterr().out == f"{report}\n"
 
 
+SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
+
+
 class TestConsoleScripts:
     """Every console script names an importable callable."""
 
@@ -595,6 +607,8 @@ def _doctest(source: str) -> str:
 
 _MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
 _PRIVATE_MODULE = ["private module without a public API carries a module example"]
+_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
 EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
@@ -615,6 +629,12 @@ EXAMPLE_RULES = [
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
+    pytest.param(
+        "_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="no-example"
+    ),
+    pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
+    pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
+    pytest.param("mod.py", "def export(): ...\n", [], id="public-no-example"),
     pytest.param(
         "mod.py",
         'def _build_x():\n    """Resolves x."""\n',
@@ -677,7 +697,19 @@ class TestVerbTables:
     ) -> None:
         generated = generate_verb_tables(text, fmt)
         assert row in generated
+        assert get_codegen_note("--verbs") in generated.splitlines()[0]
         assert generate_verb_tables(generated, fmt) == generated
+
+
+class TestGenerateApiSurface:
+    """The generated name blocks in the API-surface reference."""
+
+    def test_generation_names_its_command_and_is_idempotent(self) -> None:
+        text = "<!-- api-surface:export -->\n\n<!-- /api-surface:export -->"
+        generated = generate_api_surface(text)
+        assert get_codegen_note("--api") in generated.splitlines()[0]
+        assert "'export'" in generated
+        assert generate_api_surface(generated) == generated
 
 
 CITATION_SCANS = [
@@ -688,6 +720,12 @@ CITATION_SCANS = [
         id="tests",
     ),
     pytest.param(gen_stale_path_citations, "riko/{}.py", "riko/kept.py", id="paths"),
+    pytest.param(
+        gen_stale_test_symbol_citations,
+        "TestKept::test_{}",
+        "TestKept::test_kept",
+        id="symbols",
+    ),
 ]
 
 
@@ -715,13 +753,45 @@ class TestCitationLint:
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
         assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
 
+    def test_test_symbols_cover_files_classes_and_tests(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        path = tmp_path / "tests" / "public" / "test_alpha.py"
+        path.parent.mkdir(parents=True)
+        path.write_text("class TestAlpha:\n    def test_one(self): ...\n")
+        rel = "tests/public/test_alpha.py"
+        expected = [rel, f"{rel}::TestAlpha", f"{rel}::TestAlpha::test_one"]
+        assert list(_docs.gen_test_symbols(path)) == [*expected, "TestAlpha::test_one"]
 
-STANDARD = ROOT_DIR / "_docs" / "DOCUMENTATION_STANDARD.md"
+    def test_source_symbol_pairs_check_both_names_with_the_class_prefix(self) -> None:
+        path = "riko/x.py"
+        known = (path, f"{path}::C", f"{path}::C.y")
+        text = f"`C.x()`/`y()` (`{path}`), `C.y`/`z` (`{path}`)"
+        stale = [f"{path}::C.x", f"{path}::C.z"]
+        assert [
+            key for _, key in gen_stale_source_symbol_citations(text, known)
+        ] == stale
 
-
-def _reserved_terms_section() -> str:
-    text = STANDARD.read_text(encoding="utf-8")
-    return text.split("## Reserved terms", 1)[1].split("\n## ", 1)[0].lower()
+    def test_source_symbols_cover_bindings_in_every_scope_shape(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        path = tmp_path / "riko" / "alpha.py"
+        path.parent.mkdir()
+        source = (
+            "import os.path as osp\n"
+            "if TYPE:\n    from x import Y\n"
+            "try:\n    import z\nexcept ImportError:\n    w = None\n"
+            "type Alias = int\nCONST: int = 1\na, b = 1, 2\n"
+            "class C:\n    attr = 1\n    def method(self): ...\n"
+            "def func():\n    local = 1\n"
+        )
+        path.write_text(source)
+        names = ("osp", "Y", "z", "w", "Alias", "CONST", "a", "b", "C", "func")
+        members = ("C.attr", "C.method")
+        expected = {"riko/alpha.py", *(f"riko/alpha.py::{n}" for n in names + members)}
+        assert set(_docs.gen_source_symbols(path)) == expected
 
 
 TERM_PATTERNS = [
@@ -743,17 +813,22 @@ TERM_PATTERNS = [
         [(1, "riko.ext.registry"), (2, "riko.ext.names")],
         id="removed-ext-paths",
     ),
+    pytest.param(
+        "# it pulls its upstream, then its upstream node runs\n"
+        "# a suspended upstream; their upstream reader reads upstream\n",
+        [(1, "its upstream"), (2, "a suspended upstream")],
+        id="upstream-nouns",
+    ),
 ]
 
 
 class TestTermLint:
     """The reserved-terms lint check."""
 
-    @pytest.mark.parametrize("term", BANNED_TERMS, ids=lambda term: term.phrase)
-    def test_every_banned_phrase_has_a_reserved_terms_ruling(
-        self, term: BannedTerm
-    ) -> None:
-        assert term.phrase.lower() in _reserved_terms_section()
+    def test_a_missing_reserved_terms_section_rules_on_nothing(self) -> None:
+        text = "## Voice\n\nSay sync for `Other Mode`.\n"
+        terms = (BannedTerm("other mode", "sync"), BannedTerm("cross-mode", "sync"))
+        assert list(gen_unruled_terms(text, *terms)) == ["other mode", "cross-mode"]
 
     def test_python_strings_and_comments_are_checked_but_code_is_not(
         self, tmp_path: Path
@@ -793,11 +868,16 @@ class TestTermLint:
         found = [(issue.path.name, issue.lineno) for issue in gen_term_issues(tmp_path)]
         assert found == [("GUIDE.md", 3), ("GUIDE.md", 5), ("mod.py", 4)]
 
-    def test_prose_files_are_checked_except_the_changelog(self, tmp_path: Path) -> None:
+    def test_prose_files_are_checked_except_the_migration_guide(
+        self, tmp_path: Path
+    ) -> None:
         (tmp_path / "GUIDE.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
         (tmp_path / "CHANGES.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
+        (tmp_path / "MIGRATION.rst").write_text(
+            "Run a sub-pipeline.\n", encoding="utf-8"
+        )
         found = [issue.path.name for issue in gen_term_issues(tmp_path)]
-        assert found == ["GUIDE.rst"]
+        assert found == ["CHANGES.rst", "GUIDE.rst"]
 
 
 class TestLiteralLint:
@@ -957,41 +1037,11 @@ lint = ["types-requests"]
 """
 
 
-def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
-    package = tmp_path / "pkg"
-    package.mkdir(exist_ok=True)
-    (package / "mod.py").write_text(source, encoding="utf-8")
-    config = tmp_path / "pyproject.toml"
-    config.write_text(PYPROJECT_TOML, encoding="utf-8")
-    issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
-    required = [issue.message for issue in issues if issue.where == str(config)]
-    lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
-    return required, lines
-
-
-_INIT = f'"""\nProvides tests.\n\n{INDEX_HEADER}\n\n"""\n'
-NO_INDEX = f"the docstring has no {INDEX_HEADER!r} block"
-
-_ALPHA = """
-class TestAlpha:
-    def test_one(self): ...
-
-
-class TestAsyncAlpha:
-    def test_one(self): ...
-
-
-class TestBeta:
-    def test_two(self): ...
-"""
-
-
 def _write_suite(root: Path, **files: str) -> Path:
     tests_dir = root / "tests"
     tier = tests_dir / "public"
     tier.mkdir(parents=True)
     init = tier / "__init__.py"
-    init.write_text(_INIT, encoding="utf-8")
     (tier / "test_alpha.py").write_text(_ALPHA + "\n" * MERGE_LINES, encoding="utf-8")
     init.write_text(generate_tier_index(tier), encoding="utf-8")
 
@@ -1001,10 +1051,6 @@ def _write_suite(root: Path, **files: str) -> Path:
         path.write_text(text, encoding="utf-8")
 
     return tests_dir
-
-
-def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
-    return [(issue.message, issue.fatal) for issue in gen_layout_issues(tests_dir)]
 
 
 STALE = "the index is stale; run `manage codegen --tests`"
@@ -1048,20 +1094,148 @@ class TestTierIndexCodegen:
         text = (tier / "__init__.py").read_text(encoding="utf-8")
         assert generate_tier_index(tier) == text
 
-    def test_a_docstring_without_an_index_header_is_refused(
-        self, tmp_path: Path
-    ) -> None:
-        tier = _write_suite(tmp_path) / "public"
-        (tier / "__init__.py").write_text('"""Provides tests."""\n')
+    def test_a_folder_outside_the_tiers_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="'other' is not a test tier"):
+            generate_tier_index(tmp_path / "other")
 
-        with pytest.raises(ValueError, match="has no 'Index"):
-            generate_tier_index(tier)
+    def test_the_file_starts_with_the_generated_header(self, tmp_path: Path) -> None:
+        tier = _write_suite(tmp_path) / "public"
+        assert generate_tier_index(tier).startswith(f'{GENERATED_HEADER}\n\n"""\n')
 
 
 INDEX_FORMS = [
-    pytest.param(None, [NO_INDEX], id="no-index"),
-    pytest.param("    test_alpha.py    Alpha\n", [STALE], id="hand-edited"),
-    pytest.param("    test_alpha.py    Alpha, Beta\n", [], id="current"),
+    pytest.param(f"{GENERATED_HEADER}\n", "", [STALE], id="header-removed"),
+    pytest.param("Alpha, Beta\n", "Alpha\n", [STALE], id="hand-edited"),
+    pytest.param("", "", [], id="current"),
+]
+
+
+_ALPHA = """
+class TestAlpha:
+    def test_one(self): ...
+
+
+class TestAsyncAlpha:
+    def test_one(self): ...
+
+
+class TestBeta:
+    def test_two(self): ...
+"""
+
+
+_BACKSTOP = 30
+_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
+_MARK = "@pytest.mark.timeout(5)"
+_ROW_MARK = (
+    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
+)
+_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
+_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
+_OPTIONS = "[tool.pytest.ini_options]\n"
+
+
+def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
+    issues = gen_layout_issues(tests_dir, _BACKSTOP)
+    return [(issue.message, issue.fatal) for issue in issues]
+
+
+def _case(body: str, marker: str = "", prefix: str = "") -> str:
+    method = f"    {marker}\n    def test_one(self):\n        {body}\n"
+    return f"\n{prefix}\nclass TestGamma:\n{method}"
+
+
+BOUND_CASES = [
+    pytest.param(
+        _case("...", "@pytest.mark.timeout(4)"),
+        f"timeout(4) {_LADDER}",
+        id="off-ladder-marker",
+    ),
+    pytest.param(
+        _case("with fail_after(0.5): ..."),
+        f"fail_after(0.5) {_LADDER}",
+        id="off-ladder-inner",
+    ),
+    pytest.param(
+        _case("with fail_after(5): ...", _MARK),
+        "fail_after(5) must stay below its timeout marker (5 s)",
+        id="inner-at-marker",
+    ),
+    pytest.param(
+        _case("with fail_after(30): ..."),
+        "fail_after(30) must stay below its pyproject timeout (30 s)",
+        id="inner-at-global",
+    ),
+    pytest.param(
+        _case("event.wait(timeout=0.5)"),
+        f"wait(timeout=0.5) {_LADDER}",
+        id="keyword-bound",
+    ),
+    pytest.param(
+        _case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional-bound"
+    ),
+    pytest.param(_case("...", _ROW_MARK), f"timeout(4) {_LADDER}", id="row-marker"),
+    pytest.param(
+        _case("with fail_after(_BOUND): ...", prefix="_BOUND = 4"),
+        f"fail_after(_BOUND) {_LADDER}",
+        id="module-constant",
+    ),
+    pytest.param(
+        _case("sleep(5)", _MARK),
+        "sleep(5) outlasts its timeout marker (5 s); "
+        "the test can end only by its backstop",
+        id="own-path-sleep",
+    ),
+    pytest.param(
+        _case('ROOT_DIR / "_docs" / "X.md"'),
+        _DOC_READ.format("ROOT_DIR / '_docs' / 'X.md'"),
+        id="docs-chain",
+    ),
+    pytest.param(
+        _case('DOCS_DIR / "FAQ.rst"'),
+        _DOC_READ.format("DOCS_DIR / 'FAQ.rst'"),
+        id="docs-dir",
+    ),
+    pytest.param(
+        _case('Path("README.rst")'),
+        _DOC_READ.format("Path('README.rst')"),
+        id="cwd-doc",
+    ),
+]
+CLEAN_BOUND_CASES = [
+    pytest.param(
+        _case("async def block(): await async_sleep(3600)", _MARK), id="nested-sleep"
+    ),
+    pytest.param(_case("AsyncExecution(shutdown_timeout=0.05)"), id="subject-timeout"),
+    pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
+    pytest.param(_case("event.wait()"), id="no-argument"),
+    pytest.param(_case("thread.join(x)"), id="non-literal-positional"),
+    pytest.param(_case("...", "@pytest.mark.timeout(T)"), id="non-literal-marker"),
+    pytest.param(_case("with fail_after(1): ...", _MARK), id="inner-below-marker"),
+    pytest.param(_case('text = "@pytest.mark.timeout(0.5)"'), id="string-marker"),
+    pytest.param(
+        _case("def block(): sleep(_BLOCK)", _MARK, "_BLOCK = 10"),
+        id="nested-constant-sleep",
+    ),
+    pytest.param(_case('tmp_path / "GUIDE.md"'), id="tmp-doc"),
+]
+BACKSTOP_CASES = [
+    pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),
+    pytest.param(f"{_OPTIONS}timeout = 30.0\n", 30.0, id="float"),
+    pytest.param("", None, id="missing"),
+]
+GLOBAL_BOUND_CASES = [
+    pytest.param("timeout = 30\nfaulthandler_timeout = 15\n", [], id="clean"),
+    pytest.param(
+        "timeout = 25\nfaulthandler_timeout = 15\n",
+        [f"timeout = 25 {_LADDER}"],
+        id="off-ladder",
+    ),
+    pytest.param(
+        "timeout = 30\nfaulthandler_timeout = 30\n",
+        ["faulthandler_timeout = 30 must stay below timeout (30 s)"],
+        id="faulthandler-at-timeout",
+    ),
 ]
 
 
@@ -1125,6 +1299,7 @@ class TestLayoutLint:
                 "public tests import supported names: _hidden",
                 id="private-import",
             ),
+            *BOUND_CASES,
         ],
     )
     def test_in_file_departures_fail(
@@ -1135,13 +1310,36 @@ class TestLayoutLint:
         path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
         assert (message, True) in _messages(tests_dir)
 
-    @pytest.mark.parametrize(("rows", "expected"), INDEX_FORMS)
-    def test_the_index_must_match_its_generated_form(
-        self, tmp_path: Path, rows: str | None, expected: list[str]
+    @pytest.mark.parametrize("addition", CLEAN_BOUND_CASES)
+    def test_bounds_and_doc_reads_outside_the_rules_pass(
+        self, tmp_path: Path, addition: str
     ) -> None:
         tests_dir = _write_suite(tmp_path)
-        index = "Provides tests.\n" if rows is None else f"{INDEX_HEADER}\n\n{rows}"
-        (tests_dir / "public" / "__init__.py").write_text(f'"""\n{index}"""\n')
+        path = tests_dir / "public" / "test_alpha.py"
+        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+        messages = [message for message, _ in _messages(tests_dir)]
+        assert not [m for m in messages if any(f in m for f in _BOUND_FRAGMENTS)]
+
+    @pytest.mark.parametrize(("text", "expected"), BACKSTOP_CASES)
+    def test_backstop_comes_from_the_pytest_timeout(
+        self, text: str, expected: int | None
+    ) -> None:
+        assert get_backstop(text) == expected
+
+    @pytest.mark.parametrize(("options", "expected"), GLOBAL_BOUND_CASES)
+    def test_pytest_timeout_globals_sit_on_the_ladder(
+        self, options: str, expected: list[str]
+    ) -> None:
+        issues = gen_global_bound_issues(f"{_OPTIONS}{options}", Path("pyproject.toml"))
+        assert [issue.message for issue in issues] == expected
+
+    @pytest.mark.parametrize(("old", "new", "expected"), INDEX_FORMS)
+    def test_the_index_must_match_its_generated_form(
+        self, tmp_path: Path, old: str, new: str, expected: list[str]
+    ) -> None:
+        tests_dir = _write_suite(tmp_path)
+        init = tests_dir / "public" / "__init__.py"
+        init.write_text(init.read_text(encoding="utf-8").replace(old, new, 1))
         assert [message for message, _ in _messages(tests_dir)] == expected
 
     def test_long_files_get_advice_to_split(self, tmp_path: Path) -> None:
@@ -1167,7 +1365,7 @@ class TestLayoutLint:
         code: int,
     ) -> None:
         issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
-        monkeypatch.setattr(_lint, "gen_layout_issues", lambda _: [issue])
+        monkeypatch.setattr(_lint, "gen_layout_issues", lambda *_: [issue])
 
         assert str(issue) == line
         assert _lint._lint_tests() == code
@@ -1246,47 +1444,16 @@ LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
 ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
 TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
 REQUESTS = "import requests\n"
-RUNTIME_NAME_CASES = [
-    pytest.param(ABSOLUTE, ["a", "c"], id="absolute-only"),
-    pytest.param(_if(TC) + "import b\n", ["b"], id="type-checking-body"),
-    pytest.param(_if("typing.TYPE_CHECKING"), [], id="typing-attribute"),
-    pytest.param(_if(TC, "pass", "import a"), ["a"], id="type-checking-else"),
-    pytest.param(_if(NOT_TC), ["a"], id="not-type-checking-body"),
-    pytest.param(_if(NOT_TC, "pass", "import a"), [], id="not-type-checking-else"),
-    pytest.param(_if(f"{TC} and flag"), ["a"], id="compound-test"),
-    pytest.param(ELIF, ["a"], id="elif-branch"),
-    pytest.param(LOCAL, ["b"], id="function-local"),
-    pytest.param(TRY, ["a"], id="try-block"),
-]
 ONLY = (
     "'python-dateutil' is a [project] dependency that nothing imports at run time; "
     "import it outside TYPE_CHECKING or move it to a dependency group"
 )
-REQUIREMENT_CASES = [
-    pytest.param(f"{REQUESTS}import dateutil\n", [], id="both-used"),
-    pytest.param(REQUESTS + _if(TC, "import dateutil"), [ONLY], id="typing-only"),
-    pytest.param(REQUESTS + _if(NOT_TC, "import dateutil"), [], id="not-type-checking"),
-]
 
 LXML = "import lxml\n"
 
 
 def _try(body: str, caught: str = "ImportError", handler: str = "pass") -> str:
     return f"try:\n    {body}\nexcept {caught}:\n    {handler}\n"
-
-
-OPTIONAL_CASES = [
-    pytest.param(LXML, [1], id="unguarded"),
-    pytest.param(_try("import lxml"), [], id="import-error"),
-    pytest.param(_try("import lxml", "ModuleNotFoundError"), [], id="not-found"),
-    pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
-    pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
-    pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
-    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
-    pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
-    pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
-    pytest.param(REQUESTS, [], id="also-required"),
-]
 
 
 ESCAPE_CASES = [
@@ -1343,6 +1510,51 @@ class TestEscapeLint:
         typing = tomllib.loads(pyproject.read_text())["tool"]["riko"]["typing"]
         recorded = {k: v for k, v in typing.items() if not k.endswith("-lowered")}
         assert recorded == tomllib.loads(ceilings)
+
+
+def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
+    package = tmp_path / "pkg"
+    package.mkdir(exist_ok=True)
+    (package / "mod.py").write_text(source, encoding="utf-8")
+    config = tmp_path / "pyproject.toml"
+    config.write_text(PYPROJECT_TOML, encoding="utf-8")
+    issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
+    required = [issue.message for issue in issues if issue.where == str(config)]
+    lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
+    return required, lines
+
+
+RUNTIME_NAME_CASES = [
+    pytest.param(ABSOLUTE, ["a", "c"], id="absolute-only"),
+    pytest.param(_if(TC) + "import b\n", ["b"], id="type-checking-body"),
+    pytest.param(_if("typing.TYPE_CHECKING"), [], id="typing-attribute"),
+    pytest.param(_if(TC, "pass", "import a"), ["a"], id="type-checking-else"),
+    pytest.param(_if(NOT_TC), ["a"], id="not-type-checking-body"),
+    pytest.param(_if(NOT_TC, "pass", "import a"), [], id="not-type-checking-else"),
+    pytest.param(_if(f"{TC} and flag"), ["a"], id="compound-test"),
+    pytest.param(ELIF, ["a"], id="elif-branch"),
+    pytest.param(LOCAL, ["b"], id="function-local"),
+    pytest.param(TRY, ["a"], id="try-block"),
+]
+
+REQUIREMENT_CASES = [
+    pytest.param(f"{REQUESTS}import dateutil\n", [], id="both-used"),
+    pytest.param(REQUESTS + _if(TC, "import dateutil"), [ONLY], id="typing-only"),
+    pytest.param(REQUESTS + _if(NOT_TC, "import dateutil"), [], id="not-type-checking"),
+]
+
+OPTIONAL_CASES = [
+    pytest.param(LXML, [1], id="unguarded"),
+    pytest.param(_try("import lxml"), [], id="import-error"),
+    pytest.param(_try("import lxml", "ModuleNotFoundError"), [], id="not-found"),
+    pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
+    pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
+    pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
+    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
+    pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
+    pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
+    pytest.param(REQUESTS, [], id="also-required"),
+]
 
 
 class TestDependencyLint:
@@ -1457,52 +1669,33 @@ class TestRelativeImportLint:
         assert issues[0].suggestion == "from .b import thing"
 
 
+_UPWARD = "from riko.runtime.b import thing\n"
+_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+ARCHITECTURE_IMPORTS = [
+    pytest.param(_UPWARD, ["runtime"], id="upward"),
+    pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
+    pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
+]
+
+
 class TestImportArchitectureLint:
     """The import-architecture lint check."""
 
-    def test_architecture(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(("source", "targets"), ARCHITECTURE_IMPORTS)
+    def test_architecture(self, tmp_path: Path, source, targets) -> None:
         root = tmp_path / "riko"
         write(root, "__init__.py", "")
         write(root, "types/__init__.py", "")
-        write(root, "types/a.py", "from riko.runtime.b import thing\n")
+        write(root, "types/a.py", source)
         write(root, "runtime/__init__.py", "")
         write(root, "runtime/b.py", "thing = 1\n")
         report = load_architecture_report(root)
         assert not report.unclassified
-        assert len(report.violations) == 1
-        assert "types > {runtime}" in render_architecture(report)
-
-    def test_type_checking_is_exempt(self, tmp_path: Path) -> None:
-        root = tmp_path / "riko"
-        write(root, "__init__.py", "")
-        write(root, "types/__init__.py", "")
-        write(
-            root,
-            "types/a.py",
-            (
-                "from typing import TYPE_CHECKING\n"
-                "if TYPE_CHECKING:\n"
-                "    from riko.runtime.b import thing\n"
-            ),
+        assert [v.target_label for v in report.violations] == targets
+        assert ("architecture violations:" in render_architecture(report)) == bool(
+            targets
         )
-        write(root, "runtime/__init__.py", "")
-        write(root, "runtime/b.py", "thing = 1\n")
-        assert not load_architecture_report(root).violations
-
-    def test_function_local_upward_import_fails(self, tmp_path: Path) -> None:
-        root = tmp_path / "riko"
-        write(root, "__init__.py", "")
-        write(root, "types/__init__.py", "")
-        write(
-            root,
-            "types/a.py",
-            "def load():\n    from riko.runtime.b import thing\n\n    return thing\n",
-        )
-        write(root, "runtime/__init__.py", "")
-        write(root, "runtime/b.py", "thing = 1\n")
-        report = load_architecture_report(root)
-        assert len(report.violations) == 1
-        assert report.violations[0].target_label == "runtime"
 
     def test_unclassified_fails(self, tmp_path: Path) -> None:
         root = tmp_path / "riko"
@@ -1511,8 +1704,6 @@ class TestImportArchitectureLint:
         report = load_architecture_report(root)
         assert report.unclassified[0].module == "riko.mystery"
 
-
-class TestValidateGraph:
     def test_layer_graph_validation_accepts_a_reduced_dag(self):
         _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
 

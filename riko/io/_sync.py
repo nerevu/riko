@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
+from math import isinf
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.request import Request, urlopen
@@ -29,8 +30,8 @@ import requests
 from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
-from riko.base._config import ENCODING, STREAMING_THRESHOLD
-from riko.base._paths import normalize_url
+from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
+from riko.base._paths import is_http_url, normalize_url
 
 from ._reencode import reencode
 
@@ -67,8 +68,7 @@ def ext_from_content_type(content_type: str | None) -> str | None:
         'json'
         >>> ext_from_content_type("text/html")
         'html'
-        >>> ext_from_content_type(None) is None
-        True
+        >>> ext_from_content_type(None)
 
     """
     if not content_type:
@@ -355,7 +355,7 @@ def opener(
     offline: bool = ...,
     *,
     binary: Literal[True],
-    timeout: float | None = None,
+    timeout: float | None = settings.fetch_timeout,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
 @overload
@@ -367,7 +367,7 @@ def opener(
     offline: bool = ...,
     *,
     binary: Literal[True],
-    timeout: float | None = None,
+    timeout: float | None = settings.fetch_timeout,
     **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
 @overload
@@ -378,7 +378,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    timeout: float | None = None,
+    timeout: float | None = settings.fetch_timeout,
     **_: object,
 ) -> tuple[StringIO, str | None]: ...
 @overload
@@ -389,7 +389,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    timeout: float | None = None,
+    timeout: float | None = settings.fetch_timeout,
     **_: object,
 ) -> tuple[StreamReader, str | None]: ...
 def opener(
@@ -399,7 +399,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = None,
     offline: bool = True,
     binary: bool = False,
-    timeout: float | None = None,
+    timeout: float | None = settings.fetch_timeout,
     **_: object,
 ) -> tuple[FileLike, str | None]:
     """
@@ -418,7 +418,9 @@ def opener(
         params: Query parameters for http requests.
         offline: Whether to treat a schemeless path as a local file (not an http host).
         binary: Whether to return bytes rather than decoded text.
-        timeout: Per-request timeout in seconds.
+
+        timeout: Per-request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``, 30
+            seconds). ``None``, ``0``, or ``inf`` waits forever.
 
     Returns:
 
@@ -435,9 +437,10 @@ def opener(
 
     params = params or {}
     url = normalize_url(url, offline=offline)
+    timeout = None if (not timeout) or isinf(timeout) else timeout
     r = None
 
-    if url.startswith("http"):
+    if is_http_url(url):
         r = requests.get(url, params=params, stream=not memoize, timeout=timeout)
         r.raise_for_status()
         r.raw.decode_content = True
@@ -452,8 +455,7 @@ def opener(
             r.close()
         else:
             encoding = r.encoding or encoding
-            reencoded = reencode(r.raw, encoding, decode=True, owner=r)
-            response = cast("StreamReader", reencoded)
+            response = reencode(r.raw, encoding, decode=True, owner=r)
     else:
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
@@ -470,8 +472,7 @@ def opener(
             elif memoize:
                 response = buffer(r, binary=False)
             elif encoding:
-                reencoded = reencode(r.fp, encoding, decode=True, owner=r)
-                response = cast("StreamReader", reencoded)
+                response = reencode(r.fp, encoding, decode=True, owner=r)
             else:
                 response = r
         else:
@@ -546,7 +547,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         url: str = ...,
         *,
         binary: Literal[True],
-        **kwargs: BasicArg,
+        **kwargs: BasicArg | float,
     ) -> None: ...
     @overload
     def __init__(
@@ -554,15 +555,15 @@ class Fetch[B: (Literal[True], Literal[False])]:
         url: str = ...,
         *,
         binary: Literal[False] = ...,
-        **kwargs: BasicArg,
+        **kwargs: BasicArg | float,
     ) -> None: ...
     def __init__(
         self,
         url: str = "",
         *,
-        memoize: BasicArg = False,
+        memoize: BasicArg | float = False,
         binary: bool = False,
-        **kwargs: BasicArg,
+        **kwargs: BasicArg | float,
     ) -> None:
         # TODO: need to use separate timeouts for memoize and urlopen
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]

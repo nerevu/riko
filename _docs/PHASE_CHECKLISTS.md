@@ -9,7 +9,7 @@ live in their owning gameplans. This file consolidates the former
 
 ## Progress tracker (authoritative)
 
-Suite: **1851 passed / 62 xfailed**. The user commits.
+Suite: **2814 passed / 83 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1 and R3 were
 repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -96,9 +96,9 @@ ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is still owed.
 | **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
 | **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/public/test_write.py`) |
 | **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ⏳ in progress | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` waits on R5A |
-| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail `TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded` (explicit value sources) |
+| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail `TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded` (explicit value sources); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs` (stored-workflow subtype from its roots) |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
-| **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestInvalidCombinations::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
+| **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
 | **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4E → merge → publish; acceptance = every announcement-post sample runs on the released wheel; not the 1.0 gate (implementation-sequence § 4 "M2") |
 | **M3** monthly-invoicing release | 🎯 milestone | M2 → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R5C/R6 (implementation-sequence § 4 "M3") |
 | **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R5B → R5C → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
@@ -213,7 +213,7 @@ classes were deleted at v1-cutover step 4; `AsyncExecution` now owns async itera
   close via `async with`/`aclose`.
 
 **Landed since the original deferral list.**
-- Cancel-scope teardown of streaming pipes (`aclosing` + benign `GeneratorExit`-group unwrap) — a
+- Cancel-scope cleanup of streaming pipes (`aclosing` + benign `GeneratorExit`-group unwrap) — a
   supported early close (`async with`/`aclose`) is clean while as-complete delivery is kept.
 - Child-level `count="first"` early-exit + close via `_take_first` (`riko/modules/_loop.py`) — yields
   the first result per parent then closes the child iterator in a `finally`; shared by sync + async loops.
@@ -399,7 +399,7 @@ step 4, and `Pipeline.with_execution(executor=, concurrency=, ordered=)` is the 
 - **Shared-budget execution wiring** — `AsyncExecution` shares one `Semaphore` budget across every
   node of a run; `Context` stays an immutable environment/resource definition.
 - **Sync bounded window** — the sync pool maps through `Executor.submit` within a bounded look-ahead
-  window and honors `ordered` (`riko/execution/_pools.py`).
+  window and honors `ordered` in `_PoolLifetime.flat_map` (`riko/execution/_pools.py`).
 
 (The earlier "child `count="first"` aclose" and the `async_map_stream` early-close wart both **landed**
 under P7.5 — see P7 above.)
@@ -433,7 +433,7 @@ definitions. Final F5/R7 moves live subscription/channel/task ownership into eac
 changes sync and async together from transformation-shaped `func` to a receive-time `func` whose
 return is discarded and whose received item passes through, removes hidden
 PENDING/DONE/id lifecycle bookkeeping, and makes cleanup independent of draining ignored branch
-output. The current idle-drain teardown bug remains characterized rather than being repaired by
+output. The current idle-drain cleanup bug remains characterized rather than being repaired by
 extending the old DONE/`ids` machinery.
 
 ## Guiding & resolved decisions

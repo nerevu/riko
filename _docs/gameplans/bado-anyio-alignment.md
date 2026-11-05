@@ -80,6 +80,10 @@ Design notes:
 * Separate the cache TTL from the network timeout. `build_opener` forwards the same `**kwargs` to
   the opener and to `mezmorize.memoize(**kwargs)`, so one `timeout` sets both the `urlopen`
   timeout and the cache entry lifetime (`riko/io/_sync.py` `Fetch.__init__` TODO).
+* Bound the opener memo. `build_opener` is `@repr_cache`-memoized, an unbounded store keyed on the
+  forwarded `**kwargs`, and each `memoize=True` entry builds its own mezmorize cache. Every caller
+  passes conf-level kwargs today, so it cannot grow per item (2026-10-29 unboundedness audit, latent,
+  no tripwire); keep it that way, or bound the store, when the cache moves to the fetch boundary.
 
 ### `throttle`
 
@@ -142,8 +146,8 @@ Notes:
   UTF-16 document raises `UnicodeDecodeError` in both modes; reading those formats as bytes
   lets the parser honor the declaration. That needs an explicit `encoding` to be
   distinguishable from the `ENCODING` default first (the `Defaults` merge erases the
-  difference today). Tripwire: `tests/public/test_modules.py::TestLocalDocuments::
-  test_declared_encoding_is_honored`.
+  difference today). Tripwire:
+  `tests/public/test_modules.py::TestFetchdata::test_declared_encoding_is_honored`.
 * Line-ending translation is part of decode parity. `async_url_open` decodes through
   `TextIOWrapper` with universal newlines (`\r` and `\r\n` become `\n`); the sync
   `Reencoder` translates only when the source contains no `\n` at all, so `b"abc\rdef\n"`

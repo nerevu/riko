@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_mapping, require_mapping, require_sequence
-from riko.base._iterutils import partition, unzip
+from riko.base._iterutils import map_keys_and_values, partition, unzip
 from riko.base._logging import get_logger
 from riko.base._require_guards import (
     def_from_require,
@@ -66,13 +66,15 @@ require_base_pipe = require_from_typed_dict(
 require_write_conf = require_from_typed_dict(WriteConf, extra={"keys"})
 
 
+def _lower_key[K](key: K) -> K | str:
+    """Lowercases a key when it is an all-uppercase string."""
+    return key.lower() if isinstance(key, str) and key.isupper() else key
+
+
 def _lower_keys[T](obj: T) -> T:
     """Lowercases every all-uppercase string key, at any depth."""
     if is_mapping(obj):
-        result = {
-            (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
-            for k, v in obj.items()
-        }
+        result = map_keys_and_values(_lower_key, _lower_keys, obj)
     elif isinstance(obj, list):
         result = [_lower_keys(v) for v in obj]
     else:

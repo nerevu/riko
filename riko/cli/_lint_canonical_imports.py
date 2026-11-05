@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._import_graph import (
+    FUNCTION_NODES,
     ModuleInfo,
     _load_modules,
     _resolve_from_module,
@@ -62,7 +63,7 @@ def _runtime_symbol_sources(module: ModuleInfo) -> dict[str, tuple[str, str]]:
             for alias in node.names:
                 bound = alias.asname or alias.name.split(".", 1)[0]
                 sources.pop(bound, None)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        elif isinstance(node, (*FUNCTION_NODES, ast.ClassDef)):
             sources.pop(node.name, None)
         elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]

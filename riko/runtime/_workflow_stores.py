@@ -14,6 +14,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
+from riko.base._iterutils import map_values
 from riko.base._typing import import_or_else
 from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
@@ -40,8 +41,7 @@ class WorkflowStore[T](Protocol):
         ...     def load(self, name):
         ...         return None
         >>>
-        >>> EmptyStore().load("pipe_demo") is None
-        True
+        >>> EmptyStore().load("pipe_demo")
 
     """
 
@@ -88,8 +88,7 @@ class PackageStore:
         >>> store = PackageStore("examples.pyworkflows")
         >>> store.load("pipe_timezone").__name__
         'examples.pyworkflows.pipe_timezone'
-        >>> store.load("pipe_missing") is None
-        True
+        >>> store.load("pipe_missing")
 
     """
 
@@ -143,13 +142,12 @@ class MappingStore:
         >>> store = MappingStore({"pipe_demo": module})
         >>> store.load("pipe_demo") is module
         True
-        >>> store.load("pipe_other") is None
-        True
+        >>> store.load("pipe_other")
 
     """
 
     def __init__(self, modules: Mapping[str, ModuleType]) -> None:
-        self._modules = {k: ResolvedWorkflow(v) for k, v in modules.items()}
+        self._modules = map_values(ResolvedWorkflow, modules)
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """

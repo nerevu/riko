@@ -3,77 +3,92 @@
 
 from __future__ import annotations
 
-from io import BytesIO
+from functools import partial
+from importlib.metadata import EntryPoint
+from io import BytesIO, StringIO
 from os import linesep
-from time import monotonic
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 from urllib.response import addinfourl
 
 import pytest
 from requests import Response
+from requests.exceptions import Timeout
 
-from riko.bado._backend import Semaphore, async_sleep, lowlevel
+from riko.bado import as_async
+from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
 from riko.bado._util import async_return, gather_results
-from riko.bado.itertools import (
-    async_map,
-    async_map_ordered_stream,
-    async_map_stream,
-    async_merge,
-)
-from riko.base._paths import get_path
-from riko.coercion._configs import CsvObjconf
-from riko.io._async import async_url_open
+from riko.bado.itertools import async_map_ordered_stream, async_map_stream, async_merge
+from riko.base._config import settings
+from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
+from riko.definitions._targets import FileTarget, build_write
+from riko.definitions._write import WriteResult
+from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
 from riko.io._sync import Fetch
-from riko.modules import csv
-from riko.modules.timeout import AsyncTimeoutIterator
+from riko.modules.tail import async_pipe as async_tail
+from riko.modules.tail import pipe as tail
+from riko.parsing.documents import IJSON_IS_NATIVE, IS_FASTFEEDPARSER, IS_LXML
+from riko.runtime import _write_session
+from riko.runtime._export import export
+from riko.runtime._target_registry import TargetRegistry
+from riko.runtime._write_session import (
+    _SessionState,
+    _SyncFileWriteSession,
+    async_file_write_session,
+    awrite_through,
+    file_write_session,
+    write_through,
+)
 from riko.types._enums import Formats
-from tests import aresolve, async_test, skipif_issync
-from tests._loopback import loopback_url
+from tests import aresolve, async_test, is_installed, skipif_issync
+from tests._loopback import URL, loopback_url, stalled_url, stub_async_get
+from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Iterator
+
+    from riko.types._io import PathLike
+    from riko.types._streams import Feed, Items
 
 
-async def _double(x: int) -> int:
-    return x * 2
+ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
+_X0, _X1 = [{"x": 0}], [{"x": 1}]
+_CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
+_JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+
+
+def _never() -> bool:
+    """Reports a graceful close rather than a termination."""
+    return False
+
+
+def _always() -> bool:
+    """Reports a termination rather than a graceful close."""
+    return True
+
+
+def _sink(items: Items, dest: PathLike, mode: str = "replace", **kwargs) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    with file_write_session(build_write(dest, mode, **kwargs)) as session:
+        session.write(items)
+        result = session.finalize()
+
+    return result
+
+
+_LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
+
+
+@pytest.fixture(scope="module")
+def served_url():
+    """Serves the loopback body over a real socket for the streamed branches."""
+    with loopback_url(_LOOPBACK_BODY) as served:
+        yield served
 
 
 class TestFetch:
-    def test_csv_headerless_closes_original_source(self, monkeypatch):
-        """
-        Ensure ``auto_close`` closes the original fetch after header buffering.
-
-        With ``has_header=False``, ``seekable`` uses a spooled copy while leaving the
-        original fetch open.
-        """
-        closed: list[bool] = []
-        real_fetch = csv.Fetch
-
-        class _SpyFetch(real_fetch):
-            def close(self) -> None:
-                closed.append(True)
-                super().close()
-
-        monkeypatch.setattr(csv, "Fetch", _SpyFetch)
-        conf = CsvObjconf(
-            {
-                "url": get_path("countries.csv"),
-                "has_header": False,
-                "skip_rows": 0,
-                "col_names": None,
-                "encoding": "utf-8",
-                "sanitize": False,
-                "dedupe": True,
-            }
-        )
-
-        list(csv.parser({}, None, conf))
-        assert closed
-
     def test_unified_http_backend(self):
         """Route parameterless HTTP URLs through the requests backend."""
         response = Mock()
@@ -90,39 +105,37 @@ class TestFetch:
         mock_urlopen.assert_not_called()
         assert mock_requests.call_args.args[0] == target
 
+    def test_default_timeout_comes_from_settings(self):
+        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
+        response = Mock()
+        response.headers = {"Content-Type": "text/plain"}
 
-@pytest.mark.simulated_network
-class TestLoopbackServer:
-    """
-    The streamed/memoized branches exercised against a real loopback server.
+        with patch("riko.io._sync.requests.get", return_value=response) as mock_get:
+            Fetch("http://example.com/feed.txt", binary=True)
 
-    The streamed and memoized branches only diverge once bytes actually cross a
-    socket, so a fixture file cannot exercise them: the streamed text branch reads
-    ``r.raw``, which is empty unless the request was made with ``stream=True``.
-    """
+        assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
 
-    BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
-    PAYLOAD = BODY.encode()
+    @pytest.mark.simulated_network
+    def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(Timeout):
+            Fetch(url, timeout=0.2)
 
-    @pytest.fixture(scope="class")
-    @classmethod
-    def url(cls):
-        with loopback_url(cls.BODY) as served:
-            yield served
+    @pytest.mark.simulated_network
+    def test_streamed_text_read_returns_full_body(self, served_url):
+        with Fetch(served_url) as f:
+            assert f.read() == _LOOPBACK_BODY
 
-    def test_streamed_text_read_returns_full_body(self, url):
-        with Fetch(url) as f:
-            assert f.read() == self.BODY
-
-    def test_streamed_text_iterates_every_line(self, url):
-        with Fetch(url) as f:
+    @pytest.mark.simulated_network
+    def test_streamed_text_iterates_every_line(self, served_url):
+        with Fetch(served_url) as f:
             lines = list(f)
 
         assert len(lines) == 2000
         assert lines[-1] == "line 1999 ünïcode\n"
 
-    def test_streamed_text_closes_its_response(self, url):
-        f = Fetch(url)
+    @pytest.mark.simulated_network
+    def test_streamed_text_closes_its_response(self, served_url):
+        f = Fetch(served_url)
         assert isinstance(f.file, Reencoder)
         response = f.file._f
         assert isinstance(response, Response)
@@ -130,16 +143,148 @@ class TestLoopbackServer:
 
         assert response.raw.closed
 
-    def test_memoized_text_matches_streamed(self, url):
-        with Fetch(url, memoize=True) as f:
-            assert f.read() == self.BODY
+    @pytest.mark.simulated_network
+    def test_memoized_text_matches_streamed(self, served_url):
+        with Fetch(served_url, memoize=True) as f:
+            assert f.read() == _LOOPBACK_BODY
 
-    def test_streamed_binary_read_returns_payload(self, url):
-        with Fetch(url, binary=True) as f:
-            assert f.read() == self.PAYLOAD
+    @pytest.mark.simulated_network
+    def test_streamed_binary_read_returns_payload(self, served_url):
+        with Fetch(served_url, binary=True) as f:
+            assert f.read() == _LOOPBACK_BODY.encode()
+
+    def test_empty_file_fetches_as_empty_text(self, tmp_path):
+        """Fetching an empty text file reads nothing instead of raising."""
+        path = tmp_path / "empty.txt"
+        path.write_bytes(b"")
+
+        with Fetch(path.as_uri()) as f:
+            assert f.read() == ""
+
+    def test_failed_decode_closes_the_fetched_file(self, tmp_path):
+        """A fetched file that fails to decode is closed rather than leaked."""
+        path = tmp_path / "latin1.txt"
+        path.write_bytes("<r>café</r>".encode("latin-1"))
+        fetched = Fetch(path.as_uri())
+        assert isinstance(fetched.file, Reencoder)
+        handle = fetched.file._f
+        assert isinstance(handle, addinfourl)
+
+        with pytest.raises(UnicodeDecodeError), fetched:
+            fetched.read()
+
+        assert handle.closed
 
 
 class TestAsyncUrlOpen:
+    @pytest.mark.parametrize(
+        ("content_type", "expected"),
+        [
+            ("application/json; charset=utf-8", "json"),
+            ("text/xml", "xml"),
+            ("text/html", "html"),
+        ],
+    )
+    @async_test
+    async def test_ext_from_content_type(self, monkeypatch, content_type, expected):
+        monkeypatch.setattr(
+            "riko.io._async.async_get", stub_async_get(b"{}", content_type)
+        )
+        f = await async_url_open(URL)
+        assert f.ext == expected
+        assert f.content_type == content_type
+
+    @async_test
+    async def test_default_timeout_comes_from_settings(self, monkeypatch):
+        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
+        seen: dict[str, object] = {}
+        stub = stub_async_get(b"{}", "application/json")
+
+        async def async_get(url: str, **kwargs: object):
+            seen.update(kwargs)
+            return await stub(url, **kwargs)
+
+        monkeypatch.setattr("riko.io._async.async_get", async_get)
+        await async_url_open(URL)
+        assert seen["timeout"] == settings.fetch_timeout
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_timeout_stops_a_stalled_read(self):
+        with stalled_url() as url, pytest.raises(TimeoutException):
+            await async_url_open(url, timeout=0.2)
+
+    @pytest.mark.simulated_network
+    @pytest.mark.xfail(
+        strict=True,
+        reason="streaming async URL reads are not yet implemented: async_url_open "
+        "buffers the whole body before returning, so a stalled body times out "
+        "before the lines already received can be read",
+    )
+    @async_test
+    async def test_async_url_open_reads_received_lines_before_the_body_ends(self):
+        """The first line of a stalled body is readable, as with sync ``Fetch``."""
+        prefix = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nfirst\n"
+
+        with stalled_url(prefix) as url:
+            async with async_url_open(url, timeout=0.5) as f:
+                assert f.readline() == "first\n"
+
+    @async_test
+    async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
+        path = tmp_path / "data.txt"
+        path.write_text("data")
+        handle = async_url_open(str(path))
+
+        async with handle as first:
+            assert first.read() == "data"
+
+            with pytest.raises(RuntimeError, match="not reentrant"):
+                async with handle:
+                    pass
+
+        assert first.closed
+
+        async with handle as second:
+            assert second.read() == "data"
+
+        assert second.closed
+
+    @async_test
+    async def test_overlapping_entries_open_one_buffer(self):
+        opened: list[BytesIO] = []
+        outcomes: list[str] = []
+
+        async def opener() -> BytesIO:
+            await async_sleep(0.01)
+            opened.append(buffer := BytesIO(b"data"))
+            return buffer
+
+        handle = _AsyncURLStream(opener)
+
+        async def enter() -> None:
+            try:
+                async with handle:
+                    await async_sleep(0.01)
+            except RuntimeError:
+                outcomes.append("refused")
+            else:
+                outcomes.append("entered")
+
+        await gather_results([enter(), enter()])
+        assert sorted(outcomes) == ["entered", "refused"]
+        assert [buffer.closed for buffer in opened] == [True]
+
+    @async_test
+    async def test_relative_path_starting_with_http_is_local(
+        self, tmp_path, monkeypatch
+    ):
+        (tmp_path / "http_fixture.csv").write_text("a,b")
+        monkeypatch.chdir(tmp_path)
+
+        async with async_url_open("http_fixture.csv") as f:
+            assert f.read() == "a,b"
+
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
         strict=True,
@@ -179,34 +324,11 @@ class TestAsyncUrlOpen:
                 assert sync_result == f.read()
 
 
-URL = "https://example.test/data"
-
-
-def _async_get(content, content_type):
-    async def async_get(url, **_):
-        return SimpleNamespace(content=content, headers={"content-type": content_type})
-
-    return async_get
-
-
-@skipif_issync
-class TestExtensionlessAsyncUrlOpen:
-    """``async_url_open`` exposes an ``ext`` derived from the content type."""
-
-    @pytest.mark.parametrize(
-        ("content_type", "expected"),
-        [
-            ("application/json; charset=utf-8", "json"),
-            ("text/xml", "xml"),
-            ("text/html", "html"),
-        ],
-    )
-    @pytest.mark.anyio
-    async def test_ext_from_content_type(self, monkeypatch, content_type, expected):
-        monkeypatch.setattr("riko.io._async.async_get", _async_get(b"{}", content_type))
-        f = await async_url_open(URL)
-        assert f.ext == expected
-        assert f.content_type == content_type
+PARTIAL_READS = [
+    pytest.param(b"abc\nde\n", False, list, [b"c\n", b"de\n"], id="bytes-iter"),
+    pytest.param(b"abc\nde\n", False, bytes, b"c\nde\n", id="bytes-buffer"),
+    pytest.param("abc\nde\n", True, list, ["c\n", "de\n"], id="text-iter"),
+]
 
 
 class TestReencode:
@@ -263,6 +385,14 @@ class TestReencode:
         assert "".join(lines) == full
         assert list(reencode(BytesIO(data), decode=True)) == lines
 
+    @pytest.mark.parametrize(("source", "decode", "consume", "expected"), PARTIAL_READS)
+    def test_partial_read_keeps_the_rest(self, source, decode, consume, expected):
+        """Iterating or buffering after a sized read resumes where the read stopped."""
+        f = BytesIO(source) if isinstance(source, bytes) else StringIO(source)
+        reader = reencode(f, decode=decode)
+        reader.read(2)
+        assert consume(reader) == expected
+
     @pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le"])
     def test_wide_encoding_keeps_every_line(self, encoding):
         """A source whose newline spans several bytes decodes in full, line by line."""
@@ -289,42 +419,6 @@ class TestReencode:
         reader = reencode(BytesIO(data), **kwargs)
         assert reader.read() == expected
         assert reader.readline() == expected
-
-    def test_empty_file_fetches_as_empty_text(self, tmp_path):
-        """Fetching an empty text file reads nothing instead of raising."""
-        path = tmp_path / "empty.txt"
-        path.write_bytes(b"")
-
-        with Fetch(path.as_uri()) as f:
-            assert f.read() == ""
-
-    def test_failed_open_closes_the_source(self):
-        """A source that fails while the reader is being opened is closed."""
-
-        class BrokenSource(BytesIO):
-            def __next__(self):
-                raise OSError("unreadable")
-
-        source = BrokenSource(b"<r/>")
-
-        with pytest.raises(OSError, match="unreadable"):
-            reencode(source, decode=True)
-
-        assert source.closed
-
-    def test_failed_decode_closes_the_fetched_file(self, tmp_path):
-        """A fetched file that fails to decode is closed rather than leaked."""
-        path = tmp_path / "latin1.txt"
-        path.write_bytes("<r>café</r>".encode("latin-1"))
-        fetched = Fetch(path.as_uri())
-        assert isinstance(fetched.file, Reencoder)
-        handle = fetched.file._f
-        assert isinstance(handle, addinfourl)
-
-        with pytest.raises(UnicodeDecodeError), fetched:
-            fetched.read()
-
-        assert handle.closed
 
     @pytest.mark.parametrize(
         ("kwargs", "expected"),
@@ -378,12 +472,60 @@ class TestReencode:
         assert reader.readline() == "ine one\n"
         assert reader.readlines() == ["line two\n", "line three\n"]
 
+    def test_failed_open_closes_the_source(self):
+        """A source that fails while the reader is being opened is closed."""
+
+        class BrokenSource(BytesIO):
+            def __next__(self):
+                raise OSError("unreadable")
+
+        source = BrokenSource(b"<r/>")
+
+        with pytest.raises(OSError, match="unreadable"):
+            reencode(source, decode=True)
+
+        assert source.closed
+
 
 class TestConversionFuncs:
-    """``Formats`` members mirror the ``export`` converters."""
+    """The ``export`` converter registry mirrors ``Formats`` and drives ``export``."""
 
     def test_every_converter_has_a_member(self):
         assert set(CONVERSION_FUNCS) <= set(Formats)
+
+    def test_encoding_reaches_a_converter_that_takes_it(self, monkeypatch, tmp_path):
+        encodings = []
+
+        def records2csv(items: Items, encoding: str = "utf-8") -> StringIO:
+            encodings.append(encoding)
+            return StringIO("x\n")
+
+        monkeypatch.setitem(CONVERSION_FUNCS, Formats.CSV, records2csv)
+        export([{"x": 1}], "csv", str(tmp_path / "out.csv"), encoding="utf-16")
+        assert encodings == ["utf-16"]
+
+    def test_names_the_missing_extra(self, monkeypatch):
+        monkeypatch.delitem(CONVERSION_FUNCS, Formats.OFX, raising=False)
+
+        with pytest.raises(ValueError, match="requires the finance extra"):
+            export([{"x": 1}], "ofx")
+
+
+FILE_CHUNKS = [
+    pytest.param("w+", "abcdef\nxy\n", ["abc", "def", "\nxy", "\n"], id="text"),
+    pytest.param("wb+", b"abcdef", [b"abc", b"def"], id="binary"),
+]
+
+
+class TestChunkContent:
+    """``_chunk_content`` splits a real file by ``chunksize``, like an in-memory one."""
+
+    @pytest.mark.parametrize(("mode", "data", "expected"), FILE_CHUNKS)
+    def test_real_file_honors_chunksize(self, tmp_path, mode, data, expected):
+        with (tmp_path / "in").open(mode) as f:
+            f.write(data)
+            f.seek(0)
+            assert list(_chunk_content(f, 3)) == expected
 
 
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
@@ -408,6 +550,19 @@ async def _forever(closed: list[bool]):
             index += 1
     finally:
         closed.append(True)
+
+
+async def _double(x: int) -> int:
+    return x * 2
+
+
+_MAP = partial(async_map_stream, _double, range(3))
+_ORDERED = partial(async_map_ordered_stream, _double, range(3))
+_MERGE = partial(async_merge, [])
+STREAM_OPTION_REJECTIONS = [
+    pytest.param({"limit": 0}, "limit must be at least 1", id="limit"),
+    pytest.param({"buffer": -1}, "buffer cannot be negative", id="buffer"),
+]
 
 
 class TestAsyncMapStream:
@@ -557,23 +712,13 @@ class TestAsyncMapStream:
         assert closed == [True]
 
     @skipif_issync
-    @pytest.mark.parametrize("stream", [async_map_stream, async_map_ordered_stream])
-    def test_stream_rejects_bad_limit(self, stream):
-        with pytest.raises(ValueError, match="limit must be at least 1"):
-            aresolve(stream(_double, range(3), limit=0))
-
-    @skipif_issync
-    @pytest.mark.parametrize("stream", [async_map_stream, async_map_ordered_stream])
-    def test_stream_rejects_negative_buffer(self, stream):
-        with pytest.raises(ValueError, match="buffer cannot be negative"):
-            aresolve(stream(_double, range(3), buffer=-1))
-
-
-class TestAsyncMap:
-    @async_test
-    async def test_async_map_rejects_negative_limit(self):
-        with pytest.raises(ValueError, match="limit cannot be negative"):
-            await async_map(_double, range(3), -1)
+    @pytest.mark.parametrize(
+        "build", [_MAP, _ORDERED, _MERGE], ids=["map", "ordered", "merge"]
+    )
+    @pytest.mark.parametrize(("kwargs", "match"), STREAM_OPTION_REJECTIONS)
+    def test_rejects_bad_limit_or_buffer(self, build, kwargs, match):
+        with pytest.raises(ValueError, match=match):
+            aresolve(build(**kwargs))
 
 
 async def _gen_items(items, delay=0.0):
@@ -600,16 +745,6 @@ class TestAsyncMerge:
         assert sorted(out) == ["fast1", "fast2", "slow1", "slow2"]
         assert out.index("fast2") < out.index("slow2")
 
-    @skipif_issync
-    def test_async_merge_rejects_bad_limit(self):
-        with pytest.raises(ValueError, match="limit must be at least 1"):
-            aresolve(async_merge([_gen_items([1])], limit=0))
-
-    @skipif_issync
-    def test_async_merge_rejects_negative_buffer(self):
-        with pytest.raises(ValueError, match="buffer cannot be negative"):
-            aresolve(async_merge([_gen_items([1])], buffer=-1))
-
 
 class TestGatherResults:
     @async_test
@@ -620,25 +755,413 @@ class TestGatherResults:
         assert result == [None, 1, None]
 
 
-class TestAsyncTimeoutIterator:
-    @pytest.mark.timeout(5)
+class TestCapabilityFlags:
+    """
+    Pin the parser capability flags with and without each perf lib installed.
+
+    These run unmarked in every environment, so the base environment verifies the
+    degraded behavior rather than skipping the extra-only tests.
+    """
+
+    def test_capability_flags_track_installed_libs(self):
+        """The parser capability flags reflect whether each perf lib is importable."""
+        assert IS_LXML is is_installed("lxml")
+        assert IS_FASTFEEDPARSER is is_installed("fastfeedparser")
+
+        if not is_installed("ijson"):
+            assert IJSON_IS_NATIVE is False
+
+
+class TestRegisterTarget:
+    def test_entry_point_loads_a_target_class(self) -> None:
+        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
+        assert TargetRegistry()._load(ep) is FileTarget
+
+    def test_entry_point_must_load_a_target_class(self) -> None:
+        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
+
+        with pytest.raises(TypeError, match="must load a target class"):
+            TargetRegistry()._load(ep)
+
+    def test_entry_point_key_must_match_the_backend(self, monkeypatch) -> None:
+        ep = EntryPoint("s3", "riko.definitions._targets:FileTarget", "riko.targets")
+        monkeypatch.setattr("riko.runtime._registry.entry_points", lambda group: [ep])
+
+        with pytest.raises(ValueError, match="'s3' declares a target named 'file'"):
+            TargetRegistry()._load_entry_point("s3")
+
+
+class TestConverterPath:
+    """The native whole-stream path and the temporary singleton path."""
+
+    def _spy(self, monkeypatch):
+        calls = []
+        original = _write_session.serialize_items
+
+        def spy(items, fmt, **kwargs):
+            materialized = list(items)
+            calls.append(materialized)
+            return original(materialized, fmt, **kwargs)
+
+        monkeypatch.setattr(_write_session, "serialize_items", spy)
+        return calls
+
+    def test_sink_converts_whole_stream_once(self, monkeypatch, tmp_path):
+        calls = self._spy(monkeypatch)
+        _sink(ITEMS, tmp_path / "out.jsonl")
+
+        assert len(calls) == 1
+        assert calls[0] == ITEMS
+
+    def test_passthrough_converts_per_item(self, monkeypatch, tmp_path):
+        calls = self._spy(monkeypatch)
+        prepared = build_write(tmp_path / "out.jsonl")
+        yielded = list(write_through(ITEMS, prepared, terminating=_never))
+
+        assert yielded == ITEMS
+        assert len(calls) == len(ITEMS)
+
+
+CSV_SINK_CASES = [
+    pytest.param(None, ITEMS, "replace", _CSV012, id="csv-replace-header-once"),
+    pytest.param(None, _X0, "append", _CSV0, id="csv-append-to-empty-emits-header"),
+    pytest.param(b"x\r\n0", _X1, "append", b"x\r\n0\n1\r\n", id="csv-unterminated"),
+    pytest.param(_CSV0, [], "append", _CSV0, id="csv-empty-append-unchanged"),
+]
+
+
+class TestCsv:
+    @pytest.mark.parametrize(("seed", "items", "mode", "expected"), CSV_SINK_CASES)
+    def test_sink_writes_expected_bytes(self, tmp_path, seed, items, mode, expected):
+        path = tmp_path / "out.csv"
+        if seed is not None:
+            path.write_bytes(seed)
+
+        _sink(items, path, mode)
+        assert path.read_bytes() == expected
+
+    def test_append_existing_skips_header(self, tmp_path):
+        path = tmp_path / "out.csv"
+        _sink([{"x": 0}], path)
+        _sink([{"x": 1}], path, "append")
+        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
+
+    def test_passthrough_singleton_preserves_schema(self, tmp_path):
+        path = tmp_path / "out.csv"
+        rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
+        list(write_through(rows, build_write(path), terminating=_never))
+        assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
+
+    def test_passthrough_unexpected_field_raises(self, tmp_path):
+        path = tmp_path / "out.csv"
+        rows = [{"a": 1}, {"a": 2, "b": 3}]
+
+        with pytest.raises(ValueError, match="not in the CSV header"):
+            list(write_through(rows, build_write(path), terminating=_never))
+
+
+JSONL_APPEND_CASES = [
+    pytest.param(_JSON0, _X1, _JSON01, id="jsonl-append-terminated"),
+    pytest.param(b'{"x": 0}', _X1, _JSON01, id="jsonl-append-unterminated"),
+    pytest.param(_JSON0, [], _JSON0, id="jsonl-empty-append-unchanged"),
+]
+
+
+class TestJsonl:
+    def test_singleton_has_no_array(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        list(write_through(ITEMS, build_write(path), terminating=_never))
+        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
+
+    @pytest.mark.parametrize(("seed", "items", "expected"), JSONL_APPEND_CASES)
+    def test_append_writes_expected_bytes(self, tmp_path, seed, items, expected):
+        path = tmp_path / "out.jsonl"
+        path.write_bytes(seed)
+        _sink(items, path, "append")
+        assert path.read_bytes() == expected
+
+
+class TestFramed:
+    def test_passthrough_buffers_until_finalize(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        first = next(stream)
+        assert not path.exists()
+        assert [first, *stream] == ITEMS
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+    def test_sink_writes_one_document(self, tmp_path):
+        path = tmp_path / "out.json"
+        result = _sink(ITEMS, path)
+        assert isinstance(result, WriteResult)
+        assert result.written > 0
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+    def test_abort_discards_staged_document(self, tmp_path):
+        path = tmp_path / "out.json"
+        prepared = build_write(path)
+
+        with file_write_session(prepared) as session:
+            session.write(ITEMS)
+            session.abort()
+
+        assert not path.exists()
+
+    @pytest.mark.xfail(
+        strict=True, reason="atomic framed write publication is not yet implemented"
+    )
+    def test_interrupted_finalize_keeps_original_content(self, tmp_path, monkeypatch):
+        # The commit empties the destination on open, so an interruption before the
+        # document is written loses the old content instead of leaving it in place.
+        path = tmp_path / "out.json"
+        path.write_bytes(b'[{"x": 9}]')
+
+        def interrupt(_content):
+            raise RuntimeError("interrupted")
+
+        monkeypatch.setattr(_write_session, "_cast_bytes", interrupt)
+
+        with file_write_session(build_write(path)) as session:
+            session.write(ITEMS)
+
+            with pytest.raises(RuntimeError, match="interrupted"):
+                session.finalize()
+
+        assert path.read_bytes() == b'[{"x": 9}]'
+
+
+class TestSessionLifecycle:
+    def _session(self, tmp_path, name="out.json"):
+        session = _SyncFileWriteSession(build_write(tmp_path / name))
+        session.acquire()
+        return session
+
+    def test_open_to_finalized(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+        session.finalize()
+        assert session._state is _SessionState.FINALIZED
+        session.close()
+
+    def test_open_to_aborted(self, tmp_path):
+        session = self._session(tmp_path)
+        session.abort()
+        assert session._state is _SessionState.ABORTED
+        session.close()
+
+    def test_write_after_finalize_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+        session.finalize()
+
+        with pytest.raises(
+            PipelineStateError, match="the write session in state 'finalized'"
+        ):
+            session.write(ITEMS)
+
+        session.close()
+
+    def test_write_after_abort_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.abort()
+
+        with pytest.raises(PipelineStateError, match="aborted"):
+            session.write(ITEMS)
+
+        session.close()
+
+    def test_close_twice_is_safe(self, tmp_path):
+        session = self._session(tmp_path)
+        session.close()
+        session.close()
+
+    def test_close_never_commits(self, tmp_path):
+        path = tmp_path / "out.json"
+        session = _SyncFileWriteSession(build_write(path))
+        session.acquire()
+        session.write(ITEMS)
+        session.close()
+        assert not path.exists()
+
+    def test_incremental_abort_keeps_written_bytes(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        session = _SyncFileWriteSession(build_write(path))
+        session.acquire()
+        session.write({"x": 1})
+        session.abort()
+        session.close()
+        assert path.read_bytes() == b'{"x": 1}\n'
+
+    def test_stream_then_item_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+
+        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
+            session.write({"x": 0})
+
+        session.close()
+
+    def test_item_then_stream_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write({"x": 0})
+
+        with pytest.raises(PipelineStateError, match="cannot mix item and stream"):
+            session.write(ITEMS)
+
+        session.close()
+
+    def test_two_whole_streams_rejected(self, tmp_path):
+        session = self._session(tmp_path)
+        session.write(ITEMS)
+
+        with pytest.raises(PipelineStateError, match="cannot attempt multiple stream"):
+            session.write(ITEMS)
+
+        session.close()
+
+
+async def _asink(
+    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
+) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
+        await session.awrite(items)
+        result = await session.afinalize()
+
+    return result
+
+
+class TestWriteExecution:
+    def test_writes_mid_chain(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        assert list(tail(stream, conf={"count": 1})) == [{"x": 2}]
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+    def test_replace_defers_truncation_until_consumed(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        path.write_bytes(b'{"old": 1}\n')
+        prepared = build_write(path, "replace")
+        stream = write_through(ITEMS, prepared, terminating=_never)
+        assert path.read_bytes() == b'{"old": 1}\n'
+        list(stream)
+        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n{"x": 2}\n'
+
+    def test_graceful_close_finalizes_prefix(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        next(stream)
+        stream.close()
+        assert path.read_bytes() == b'[{"x": 0}]'
+
+    def test_terminate_aborts(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_always)
+        next(stream)
+        stream.close()
+        assert not path.exists()
+
+    def test_exception_aborts(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = write_through(ITEMS, build_write(path), terminating=_never)
+        next(stream)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            stream.throw(RuntimeError("boom"))
+
+        assert not path.exists()
+
     @pytest.mark.xfail(
         strict=True,
-        reason="AsyncTimeoutIterator only checks its deadline between anexts. A "
-        "source that stalls past the deadline is awaited to completion rather than "
-        "interrupted.",
+        reason=(
+            "a streaming replace write opens its destination for writing up front, "
+            "so a failed run destroys the old content until writes publish atomically"
+        ),
     )
+    @pytest.mark.parametrize(
+        ("name", "original"), [("out.csv", b"a\n1\n"), ("out.jsonl", b'{"a": 1}\n')]
+    )
+    def test_failed_replace_keeps_original_content(self, tmp_path, name, original):
+        path = tmp_path / name
+        path.write_bytes(original)
+
+        def source() -> Iterator[dict[str, int]]:
+            yield {"a": 2}
+            raise ValueError("boom")
+
+        stream = write_through(source(), build_write(path), terminating=_never)
+
+        with pytest.raises(ValueError, match="boom"):
+            list(stream)
+
+        assert path.read_bytes() == original
+
+
+@skipif_issync
+class TestAsyncWriteExecution:
     @async_test
-    async def test_timeout_interrupts_a_stalled_source(self):
-        """A stalled source is abandoned after timeout, not awaited to completion."""
+    async def test_passthrough_preserves_stream(self, tmp_path):
+        prepared = build_write(tmp_path / "out.json")
+        stream = awrite_through(as_async(ITEMS), prepared, terminating=_never)
+        assert [item async for item in stream] == ITEMS
 
-        async def source():
-            yield {"x": 0}
-            await async_sleep(1.0)
-            yield {"x": 1}
+    @async_test
+    async def test_writes_mid_chain(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
+        tailed = async_tail(stream, conf={"count": 1})
+        assert [item async for item in tailed] == [{"x": 2}]
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
-        it = AsyncTimeoutIterator(source(), timeout_ms=50)
-        start = monotonic()
-        [item async for item in it]
-        run_time = monotonic() - start
-        assert run_time < 0.5
+    @async_test
+    async def test_csv_singleton_preserves_schema(self, tmp_path):
+        path = tmp_path / "out.csv"
+        rows = [{"a": 1, "b": 2}, {"b": 4, "a": 3}]
+        stream = awrite_through(as_async(rows), build_write(path), terminating=_never)
+        _ = [item async for item in stream]
+        assert path.read_bytes() == b"a,b\r\n1,2\r\n3,4\r\n"
+
+    @async_test
+    async def test_graceful_close_finalizes_prefix(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
+        await anext(stream)
+        await stream.aclose()
+        assert path.read_bytes() == b'[{"x": 0}]'
+
+    @async_test
+    async def test_terminate_aborts(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_always)
+        await anext(stream)
+        await stream.aclose()
+        assert not path.exists()
+
+    @async_test
+    async def test_exception_aborts(self, tmp_path):
+        path = tmp_path / "out.json"
+        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
+        await anext(stream)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await stream.athrow(RuntimeError("boom"))
+
+        assert not path.exists()
+
+    @async_test
+    async def test_whole_stream_writes_one_document(self, tmp_path):
+        path = tmp_path / "out.json"
+        result = await _asink(ITEMS, path)
+        assert result.written > 0
+        assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
+
+
+class TestSink:
+    def test_non_file_target_execution_unsupported(self):
+        prepared = build_write(RecordStore(), "replace")
+
+        with (
+            pytest.raises(UnsupportedTargetError, match="RecordStore"),
+            file_write_session(prepared),
+        ):
+            pass  # pragma: no cover

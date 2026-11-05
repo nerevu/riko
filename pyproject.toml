@@ -119,7 +119,6 @@ malware-check = true
 extend-exclude = [
     "**/pycache",
     ".cache",
-    ".claude",
     ".ruff_cache",
     ".tox/*",
     "tmp",
@@ -202,6 +201,10 @@ split-on-trailing-comma = false
     "ERA001",  # Commented-out code (enforced in tests only)
 ]
 
+".claude/**/test_*.py" = [
+    "S101",   # Use of `assert` detected
+]
+
 "tests/pyworkflows/*" = [
     "ERA001",  # Commented-out code (generated fixture data)
     "E501",  # Line too long (generated fixture data)
@@ -256,9 +259,9 @@ exclude = [
 addopts = ["--doctest-modules", "--doctest-glob=*.rst", "--cov=riko", "--tb=short"]
 testpaths = ["tests", "riko", "examples", "README.rst", "docs"]
 doctest_optionflags = ["ELLIPSIS"]
-timeout = 120
+timeout = 30
 timeout_method = "thread"
-faulthandler_timeout = 60
+faulthandler_timeout = 15
 markers = [
     "anyio: requires the async optional dependencies (anyio + httpx)",
     "smoke: fast install-validation subset run against the built wheel/sdist",
@@ -309,16 +312,16 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 405
-uncovered-lowered = 2026-11-04
+uncovered = 395
+uncovered-lowered = 2026-10-29
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
 # `typing.cast` calls. A run fails above either and lowers it on a gain. It records the
 # day as `<key>-lowered`.
-any = 137
+any = 128
 any-lowered = 2026-10-27
-cast = 108
+cast = 91
 cast-lowered = 2026-10-27
 
 [tool.riko.ratchet]

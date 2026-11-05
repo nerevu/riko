@@ -79,7 +79,8 @@ from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Literal, overload
 
-from riko.base._exceptions import UnsupportedWorkflowError
+from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
+from riko.base._graph import get_cycle
 from riko.base._strutils import pythonise
 from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
@@ -90,6 +91,7 @@ from ._workflow_pipes import build_workflow_pipes, workflow
 from ._workflow_stores import DirectoryStore, PackageStore
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
@@ -104,6 +106,12 @@ if TYPE_CHECKING:
 
     from ._resolver import ResolverDispatcher
     from ._workflow_stores import DocumentStore, ModuleStore
+
+
+def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[str]:
+    """Gets the ``pipe_<id>`` names among a stored workflow's ``DEPENDENCIES``."""
+    names: Iterable[str] = getattr(module, "DEPENDENCIES", ())
+    return frozenset(map(pythonise, filter(is_pipe_id, names)))
 
 
 def _build_resolved_workflow(
@@ -137,13 +145,13 @@ def _build_resolved_workflow(
         >>> flow = Workflow.parse('{"nodes": [{"name": "forever"}]}')
         >>> resolved = _build_resolved_workflow("pipe_demo", flow, dispatcher)
         >>> resolved.DEPENDENCIES
-        ['forever']
+        ('forever',)
         >>> next(iter(resolved.pipe()))
         {'forever': True}
 
     """
     inputs: dict[str, object] = dict(flow.inputs)
-    dependencies = sorted({node.name for node in flow.module_nodes.values()})
+    dependencies = flow.dependencies
     subtype: ModuleSubtype = "transformer" if inputs else "source"
     args = (flow, dispatcher)
     pipes = build_workflow_pipes(*args, *dependencies, inputs=inputs, subtype=subtype)
@@ -301,8 +309,7 @@ class WorkflowResolver:
             >>> store = MappingStore({"pipe_demo": ModuleType("pipe_demo")})
             >>> resolver = WorkflowResolver(module_store=store)
             >>> resolver.reset()
-            >>> resolver.load("pipe_demo") is None
-            True
+            >>> resolver.load("pipe_demo")
 
         """
         self._module_store = None
@@ -331,20 +338,54 @@ class WorkflowResolver:
         """
         return is_pipe_id(name)
 
-    def _load_resolved_document(self, name: str) -> ResolvedWorkflow | None:
-        module = self._resolved_documents.get(name)
-        document_store = self._document_store
-        flow = None
-
-        if module is None and document_store is not None:
-            flow = document_store.load(name)
-
-        if flow is not None:
+    def _load_resolved(self, name: str) -> ResolvedWorkflow | None:
+        if (
+            (module := self._resolved_documents.get(name)) is None
+            and (document_store := self._document_store) is not None
+            and (flow := document_store.load(name)) is not None
+        ):
             dispatcher = self._require_dispatcher(name)
             module = _build_resolved_workflow(name, flow, dispatcher)
             self._resolved_documents[name] = module
 
         return module
+
+    def _load_stored(self, pipe_id: str) -> ResolvedWorkflow | None:
+        store = self._module_store
+        module = None if store is None else store.load(pipe_id)
+        return self._load_resolved(pipe_id) if module is None else module
+
+    def _require_acyclic(self, pipe_id: str, *dependencies: str) -> None:
+        """
+        Requires that ``pipe_id``'s stored-workflow dependencies never lead back to it.
+
+        A stored workflow embeds the workflows its nodes name. One that reaches itself
+        through that chain would run forever, so it is rejected before it runs.
+
+        Args:
+
+            pipe_id: The stored workflow being loaded.
+            dependencies: The names its nodes and loop embeds run.
+
+        Raises:
+
+            InvalidPipelineError: If a stored workflow embeds itself. The error names
+                the cycle and points to ``loop`` for repeating its steps.
+
+        """
+        graph = {pipe_id: frozenset(dependencies)}
+        pending = list(dependencies)
+
+        while pending:
+            if (name := pending.pop()) not in graph:
+                graph[name] = _get_dependencies(self._load_stored(name))
+                pending.extend(graph[name])
+
+        if cycle := get_cycle(pipe_id, graph):
+            path = " -> ".join([*cycle, cycle[0]])
+            msg = f"stored workflow {cycle[0]!r} embeds itself ({path}). Move steps to"
+            msg += " a separate stored workflow and run it from a 'loop' node instead"
+            raise InvalidPipelineError(msg)
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """
@@ -365,7 +406,8 @@ class WorkflowResolver:
         Raises:
 
             InvalidPipelineError: If the ``DocumentStore`` holds a malformed
-                ``WorkflowDocument`` named ``name``.
+                ``WorkflowDocument`` named ``name``, or the stored workflow embeds
+                itself through the workflows its nodes name.
 
             UnsupportedWorkflowError: If the ``DocumentStore`` supplies ``name`` but no
                 dispatcher is registered to run it.
@@ -379,14 +421,15 @@ class WorkflowResolver:
             >>> resolver = WorkflowResolver(module_store=store)
             >>> resolver.load("pipe:demo").__name__
             'pipe_demo'
-            >>> resolver.load("pipe_other") is None
-            True
+            >>> resolver.load("pipe_other")
 
         """
         pipe_id = pythonise(name)
-        store = self._module_store
-        module = None if store is None else store.load(pipe_id)
-        return self._load_resolved_document(pipe_id) if module is None else module
+
+        if (module := self._load_stored(pipe_id)) is not None:
+            self._require_acyclic(pipe_id, *_get_dependencies(module))
+
+        return module
 
     @overload
     def require(
@@ -413,7 +456,8 @@ class WorkflowResolver:
         Raises:
 
             InvalidPipelineError: If the ``DocumentStore`` holds a malformed
-                ``WorkflowDocument`` named ``name``.
+                ``WorkflowDocument`` named ``name``, or the stored workflow embeds
+                itself through the workflows its nodes name.
 
             UnsupportedWorkflowError: If no store supplies ``name``, its
                 ``ResolvedWorkflow`` lacks ``pipe`` (or ``async_pipe`` when
@@ -450,7 +494,7 @@ class WorkflowResolver:
 
     def require_interfaces(self, name: str) -> frozenset[Interface]:
         """
-        Finds which of a stored workflow's sync and async interfaces are defined.
+        Finds which of ``pipe`` and ``async_pipe`` a stored workflow defines.
 
         Args:
 
@@ -464,7 +508,8 @@ class WorkflowResolver:
         Raises:
 
             InvalidPipelineError: If the ``DocumentStore`` holds a malformed
-                ``WorkflowDocument`` named ``name``.
+                ``WorkflowDocument`` named ``name``, or the stored workflow embeds
+                itself through the workflows its nodes name.
 
             UnsupportedWorkflowError: If no store supplies ``name``, or the
                 ``DocumentStore`` supplies it but no dispatcher is registered to run it.
@@ -593,8 +638,7 @@ def reset_workflow_resolver() -> None:
         >>> reset_workflow_resolver()
         >>> register_workflow_store(package="riko.modules")
         >>> reset_workflow_resolver()
-        >>> workflow_resolver.load("pipe_demo") is None
-        True
+        >>> workflow_resolver.load("pipe_demo")
 
     """
     workflow_resolver.reset()

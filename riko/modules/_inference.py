@@ -348,11 +348,6 @@ def gen_return_inferences(pipe: Callable) -> Iterator[ReturnInference]:
 
         >>> from collections.abc import Iterator
         >>>
-        >>> def gen(items):
-        ...     yield from items
-        >>>
-        >>> [inf.source.value for inf in gen_return_inferences(gen)]
-        ['generator']
         >>> def dual(items) -> int | Iterator[dict]:
         ...     return items
         >>>

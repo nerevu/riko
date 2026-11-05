@@ -91,7 +91,7 @@ pipeline resolver — the v2 execution's own subpipe path — loads them.
 - Either way, retire the serialized-`PipeDef` half of the pipeline resolver: `DirectoryStore` /
   `load_definition` in `riko/runtime/_pipelines.py` are the only in-tree `parse_pipe_def`
   consumers outside the compiler — delete them or re-point them at v2 `parse_document`.
-- Update conftest store wiring and `PIPELINE_DIRS` (`riko/base/_config.py`).
+- Update conftest store wiring.
 - Guards: `manage codegen --pipes` drift, full test gate.
 - As-built (2026-09-29, `b4850983`): neither (a) nor (b) — a third path chosen at the design
   checkpoint. `tests/pipelines/*.json` and `examples/pipelines/*.json` were rewritten as
@@ -149,7 +149,7 @@ Blocks step 4.
   and a wire's optional third entry names the target port — so fan-in (`["b", "u", "in:1"]`) is now
   expressible and the old "Limitation" section of `docs/DAG_FORMAT.rst` is gone. The R17 tripwire
   `test_convert_dag_empty_modules_raises` is **retired**, replaced by the regular test
-  `tests/public/test_workflow.py::TestPipeDag::test_empty_modules_raise_invalid_pipeline` (empty `modules` →
+  `tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` (empty `modules` →
   `InvalidPipelineError("workflow has no nodes")`). `tests/dags/*.json` stay as `build-workflow`
   fixtures; `tests/internal/test_codegen.py` compiles every committed fixture and proves the generated
   module item-for-item equivalent to running the document (the two split fixtures strict-xfail), and
@@ -265,7 +265,9 @@ commit; since `write` survives until `WriteNode` executes (R5C), `SINK_NAMES`
 The cutover session's only step-6 action is keeping this deferral recorded so the deletion table
 row is not executed early.
 Tripwire: `tests/internal/test_codegen.py::TestModuleCategory::test_no_module_is_a_sink` (strict
-xfail on `list_modules(category="sink") == []`) XPASSes when `write` leaves module space.
+xfail on `list_modules(category="sink") == []`) XPASSes when `write` leaves module space. The
+`list_modules` doctest in `riko/modules/_metadata.py` still shows `category="sink"` returning `['write']`;
+flipping the tripwire changes that doctest in the same step (triage 2026-10-28).
 
 ## Per-step gates
 

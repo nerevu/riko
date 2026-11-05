@@ -8,12 +8,14 @@ from ast import (
     AnnAssign,
     Assign,
     AsyncFunctionDef,
+    Attribute,
     ClassDef,
-    FunctionDef,
     ImportFrom,
     Module,
     Name,
+    Subscript,
     TypeAlias,
+    expr,
     get_docstring,
     parse,
     walk,
@@ -23,6 +25,8 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
 from riko.base._verbs import VERBS
+
+from ._import_graph import FUNCTION_NODES
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -38,8 +42,11 @@ COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
+_NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
+_TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
+_EXCEPTION_SUFFIXES: tuple[str, ...] = ("Error", "Exception", "Warning")
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
 _PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
     ("riko", STABLE),
@@ -140,8 +147,7 @@ def get_summary_verb(summary: str) -> str | None:
 
         >>> get_summary_verb("Resolves a seed to one stream.")
         'resolve'
-        >>> get_summary_verb("Finds the first match.") is None
-        True
+        >>> get_summary_verb("Finds the first match.")
 
     """
     return _LEAD_VERBS.get(summary.strip().split(" ", 1)[0])
@@ -225,6 +231,32 @@ def gen_malformed_raises(doc: str) -> Iterator[str]:
                 yield line
 
 
+def gen_none_checks(doc: str) -> Iterator[str]:
+    """
+    Finds doctest lines that check for ``None`` instead of showing the result.
+
+    A call that returns ``None`` shows no output, so the bare call already
+    demonstrates it.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each ``>>>`` line ending in ``is None``.
+
+    Examples:
+
+        >>> doc = ">>> f(1) is None\\nTrue\\n>>> f(2)\\n"
+        >>> list(gen_none_checks(doc))
+        ['>>> f(1) is None']
+
+    """
+    lines = (line.strip() for line in doc.splitlines())
+    yield from (line for line in lines if _NONE_CHECK.fullmatch(line))
+
+
 def resolve_public_path(name: str) -> str | None:
     """
     Finds the supported import path of a public name.
@@ -244,8 +276,7 @@ def resolve_public_path(name: str) -> str | None:
         'riko'
         >>> resolve_public_path("processor")
         'riko.ext'
-        >>> resolve_public_path("summary_leads_with_output") is None
-        True
+        >>> resolve_public_path("summary_leads_with_output")
 
     """
     return next((path for path, names in _PUBLIC_PATHS if name in names), None)
@@ -301,10 +332,23 @@ def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
                     yield lines[node.lineno - 1].strip(), alias.name, public
 
 
+def _get_base_name(base: expr) -> str:
+    """Gets the bare class name of a base expression such as ``typing.Protocol[T]``."""
+    node = base.value if isinstance(base, Subscript) else base
+    name = ""
+
+    if isinstance(node, Attribute):
+        name = node.attr
+    elif isinstance(node, Name):
+        name = node.id
+
+    return name
+
+
 def _gen_defined_names(tree: Module) -> Iterator[str]:
     """Lists the names a module's top-level statements define."""
     for node in tree.body:
-        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+        if isinstance(node, (*FUNCTION_NODES, ClassDef)):
             yield node.name
         elif isinstance(node, Assign):
             for target in node.targets:
@@ -316,16 +360,49 @@ def _gen_defined_names(tree: Module) -> Iterator[str]:
                 yield target.id
 
 
+def _gen_runtime_names(tree: Module) -> Iterator[str]:
+    """
+    Lists the functions and classes a module defines that do something when used.
+
+    Type-only classes (protocols and typed dicts, directly or through a base defined in
+    the same module) and exceptions do not count.
+
+    """
+    type_only: set[str] = set(_TYPE_ONLY_BASES)
+
+    for node in tree.body:
+        if isinstance(node, FUNCTION_NODES):
+            yield node.name
+        elif isinstance(node, ClassDef):
+            bases = set(map(_get_base_name, node.bases))
+
+            if not type_only.isdisjoint(bases):
+                type_only.add(node.name)
+            elif not node.name.endswith(_EXCEPTION_SUFFIXES):
+                yield node.name
+
+
 def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIssue]:
-    """Flags a module example in a private module that defines no public name."""
+    """
+    Flags a private module whose module example does not match its public API.
+
+    A private module that defines no public name carries no module example, and one
+    whose public names include a runtime function or class must carry one.
+
+    """
     doc = get_docstring(tree) or ""
     private = path.name.startswith("_") and path.name != "__init__.py"
     exported = not _PUBLIC_NAMES.isdisjoint(_gen_defined_names(tree))
+    runtime = sorted(_PUBLIC_NAMES.intersection(_gen_runtime_names(tree)))
+    has_example = bool(DocTestParser().get_examples(doc))
 
-    if private and not exported and DocTestParser().get_examples(doc):
+    if private and not exported and has_example:
         problem = "private module without a public API carries a module example"
         first = next(line.strip() for line in doc.splitlines() if ">>>" in line)
         yield DocstringIssue(path, 1, "<module>", problem, first)
+    elif private and runtime and not has_example:
+        problem = "private module with a public runtime API has no module example"
+        yield DocstringIssue(path, 1, "<module>", problem, ", ".join(runtime))
 
 
 def _iter_python_files(root: Path) -> Iterator[Path]:
@@ -339,9 +416,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     Walks ``roots`` for docstrings that break the summary or example rules.
 
     Function summaries must not lead with the output or with a different general-purpose
-    verb than the function name. No docstring may narrate between its doctest examples
-    or import a public name through a private module. A private module without a public
-    API carries no module example.
+    verb than the function name. No docstring may narrate between its doctest examples,
+    check a result with ``is None``, or import a public name through a private module.
+    A private module without a public API carries no module example, and one with a
+    public runtime API carries one.
 
     Args:
 
@@ -352,7 +430,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
         One :class:`DocstringIssue` per offending line, in path then line order.
 
     """
-    types = (Module, ClassDef, FunctionDef, AsyncFunctionDef)
+    types = (Module, ClassDef, *FUNCTION_NODES)
 
     for root in roots:
         for path in _iter_python_files(root):
@@ -364,7 +442,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                 summary = doc.strip().split("\n", 1)[0].strip()
                 lineno = getattr(node, "lineno", 1)
                 name = getattr(node, "name", "<module>")
-                is_function = isinstance(node, (FunctionDef, AsyncFunctionDef))
+                is_function = isinstance(node, FUNCTION_NODES)
 
                 if is_function and summary and summary_leads_with_output(summary):
                     problem = "summary leads with the output"
@@ -388,6 +466,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     problem = "narrates between examples (use a >>> # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
 
+                for check in gen_none_checks(doc):
+                    problem = "checks for None (show the bare call instead)"
+                    yield DocstringIssue(path, lineno, name, problem, check)
+
                 for line, imported, public in gen_private_imports(doc):
                     problem = (
                         f"imports {imported} privately "
@@ -405,6 +487,7 @@ __all__ = [
     "gen_docstring_issues",
     "gen_example_prose",
     "gen_malformed_raises",
+    "gen_none_checks",
     "gen_private_imports",
     "get_name_verb",
     "get_summary_verb",

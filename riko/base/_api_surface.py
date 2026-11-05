@@ -14,6 +14,7 @@ BADO = frozenset(
         "backend",
         "isasync",
         "issync",
+        "materialize",
         "run",
     }
 )
@@ -167,14 +168,7 @@ EXTENSION = EXT_MODULES | EXT_TARGETS | EXT_WORKFLOWS
 
 TYPES = frozenset(
     {
-        "AsyncLifecyclePlan",
-        "ExternalPlan",
-        "LifecyclePlan",
-        "OwnedPlan",
-        "ResourcePlan",
         "ResourceStrategy",
-        "SyncLifecyclePlan",
-        "ValueFactoryPlan",
         "AsyncStream",
         "AsyncItems",
         "AsyncPipeTuples",

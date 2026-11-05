@@ -206,7 +206,7 @@ class Pipeline(PipelineDefinition[T_co]):
             [{'x': 3}]
             >>> "hash" | pipeline
             Traceback (most recent call last):
-            TypeError: a string before | is ambiguous: ...
+            TypeError: ...ambiguous: ...pipeline('hash')...from_module('hash')...
 
         """
         if isinstance(other, str):
@@ -312,7 +312,7 @@ class Pipeline(PipelineDefinition[T_co]):
             [1, 2]
 
         """
-        flow = self._callable_workflow(
+        flow = self._build_callable_workflow(
             fn, resources=resources, version=version, identity=identity, **kwargs
         )
         return Pipeline[R](flow, context=self.context, settings=self.settings)
@@ -346,7 +346,9 @@ class Pipeline(PipelineDefinition[T_co]):
             [{'count': 2}]
 
         """
-        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = self._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return Pipeline[Item](flow, context=self.context, settings=self.settings)
 
     def __getattr__(self, name: str) -> Callable[..., Pipeline[Item]]:
@@ -355,7 +357,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
     def _compose[R](self, other: PipelineDefinition[R]) -> Pipeline[R]:
         """Chains ``other`` after this pipeline and combines their resources."""
-        flow = self._composed_workflow(other)
+        flow = self._build_composed_workflow(other)
         context = self._combine_context(other.context)
         return Pipeline[R](flow, context=context, settings=self.settings)
 
@@ -367,13 +369,28 @@ class Pipeline(PipelineDefinition[T_co]):
         """
         Chains a module name or another pipeline using ``|``.
 
+        A pipeline on the right may have any number of nodes. Its nodes get fresh ids
+        where needed. ``(a | b) | c`` and ``a | (b | c)`` build the same pipeline. Its
+        resources join this pipeline's context. To chain a function, use ``.map``
+        instead. To configure a module, use attribute chaining or
+        ``.pipe(name, conf=...)``.
+
         Args:
 
-            other: A module name or a pipeline.
+            other: Module name (string or a ``Sources``/``Transforms``/``Sinks`` member)
+                or a pipeline.
 
         Returns:
 
             A new pipeline whose default output is ``other``'s.
+
+        Raises:
+
+            TypeError: If ``other`` is a function.
+
+            InvalidPipelineError: If ``other`` carries execution settings; a context
+                with a mode, inputs, or test flag; duplicates a resource name; or its
+                workflow cannot be appended (see ``Workflow.with_workflow``).
 
         Examples:
 

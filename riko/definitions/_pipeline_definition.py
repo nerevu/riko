@@ -205,7 +205,9 @@ class PipelineDefinition(Generic[T_co]):
             Endpoint(node='sort-1', port='out')
 
         """
-        flow = cls()._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = cls()._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return cls(workflow=flow)
 
     def replace(self, *, workflow: Workflow | None = None) -> Self:
@@ -278,12 +280,14 @@ class PipelineDefinition(Generic[T_co]):
             CallOptions(emit=True)
 
         """
-        flow = self._module_workflow(name, conf=conf, options=options, embed=embed)
+        flow = self._build_module_workflow(
+            name, conf=conf, options=options, embed=embed
+        )
         return PipelineDefinition[Item](
             flow, context=self.context, settings=self.settings
         )
 
-    def _module_workflow(
+    def _build_module_workflow(
         self,
         name: ModuleNameLike,
         *,
@@ -353,7 +357,7 @@ class PipelineDefinition(Generic[T_co]):
 
         """
         if dest is None:
-            flow = self._module_workflow(
+            flow = self._build_module_workflow(
                 "write", conf=conf, options=options, embed=embed
             )
             written = self.replace(workflow=flow)
@@ -391,16 +395,19 @@ class PipelineDefinition(Generic[T_co]):
 
             concurrency: Max number of items that item-wise modules can work on at once
                 across the whole run. ``"auto"`` selects a size based on the machine.
-                (default: None, sequential processing).
+                (default: None, i.e., sequential processing).
 
-            ordered: Whether results keep source order (default: False, completion
+            ordered: Whether results keep source order (default: False, i.e., completion
                 order).
 
-            event_sink: The sink that receives the run's events (default: None, events
-                are discarded).
+            event_sink: The sink that receives the run's events (default: None, i.e.,
+                events are discarded).
 
-            shutdown_timeout: The bound, in seconds, on teardown under asynchronous
-                iteration (default: None, no bound).
+            shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
+                iteration, and on how long stopped worker processes get, together,
+                before any still running are killed. ``math.inf`` means no bound
+                (default: None, i.e., 30 seconds unless ``RIKO_SHUTDOWN_TIMEOUT`` is
+                set).
 
         Returns:
 
@@ -598,38 +605,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Chains ``fn`` as its own node and calls it with each item.
 
-        ``fn`` receives each item as is and its return value becomes the next item. It
-        is called with the item, then the keyword arguments, then each bound resource as
-        a keyword named after its alias. Keyword arguments must be JSON-native, so use
-        ``functools.partial`` to pass a non-JSON-native value.
-
-        Args:
-
-            fn: The callable to apply to each item.
-
-        Kwargs:
-
-            resources: The Context resources ``fn`` receives as keywords.
-            version: The durable identity of ``fn``'s behavior, if declared.
-
-            identity: How each result's identity relates to its input item
-                (``"preserve"``, ``"derive"``, or ``"combine"``), if declared. Not yet
-                implemented.
-
-            kwargs (JSONValue): The JSON-native keywords ``fn`` receives with each item.
-
-        Returns:
-
-            A new pipeline whose default output is the callable node.
-
-        Raises:
-
-            InvalidPipelineError: If a resource alias is not a Python identifier, a
-                keyword argument shares its name with a resource alias, a keyword
-                argument is not JSON-native, or ``identity`` is not an identity mode.
-
-            TypeError: If ``fn`` is not callable, or ``version`` is ``None`` or
-                unhashable.
+        ``Pipeline.map`` documents the call contract and its errors.
 
         Examples:
 
@@ -643,12 +619,12 @@ class PipelineDefinition(Generic[T_co]):
             Endpoint(node='map-1', port='out')
 
         """
-        flow = self._callable_workflow(
+        flow = self._build_callable_workflow(
             fn, resources=resources, version=version, identity=identity, **kwargs
         )
         return PipelineDefinition[R](flow, context=self.context, settings=self.settings)
 
-    def _callable_workflow(
+    def _build_callable_workflow(
         self,
         fn: Callable[..., object],
         *,
@@ -703,7 +679,7 @@ class PipelineDefinition(Generic[T_co]):
 
         return context
 
-    def _composed_workflow(self, other: PipelineDefinition[object]) -> Workflow:
+    def _build_composed_workflow(self, other: PipelineDefinition[object]) -> Workflow:
         """Appends ``other``'s workflow unless it carries execution settings."""
         if other.settings != DEF_EXECUTION_SETTINGS:
             msg = "a pipeline on the right of '|' may not carry execution settings; "
@@ -714,7 +690,7 @@ class PipelineDefinition(Generic[T_co]):
 
     def _compose[R](self, other: PipelineDefinition[R]) -> PipelineDefinition[R]:
         """Chains ``other`` after this pipeline and combines their resources."""
-        flow = self._composed_workflow(other)
+        flow = self._build_composed_workflow(other)
         context = self._combine_context(other.context)
         return PipelineDefinition[R](flow, context=context, settings=self.settings)
 
@@ -741,28 +717,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Chains a module name or another pipeline using ``|``.
 
-        A pipeline on the right may have any number of nodes. Its nodes get fresh ids
-        where needed, so ``(a | b) | c`` and ``a | (b | c)`` build the same pipeline.
-        Its resources join this pipeline's context. To chain a function, use ``.map``
-        instead. To configure a module, use ``.pipe(name, conf=...)`` or attribute
-        chaining.
-
-        Args:
-
-            other: A module name (a plain string or a ``Sources``/``Transforms``/
-                ``Sinks`` member) or a pipeline.
-
-        Returns:
-
-            A new pipeline whose default output is ``other``'s.
-
-        Raises:
-
-            TypeError: If ``other`` is a function.
-
-            InvalidPipelineError: If ``other`` carries execution settings; a context
-                with a mode, inputs, or test flag; duplicates a resource name; or its
-                workflow cannot be appended (see ``Workflow.with_workflow``).
+        ``Pipeline.__or__`` documents the composition contract and its errors.
 
         Examples:
 

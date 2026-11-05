@@ -303,9 +303,9 @@ These rules apply to Python modules across the entire `riko/` package, not only
 `riko/modules/`.
 
 Every module keeps a user-facing description. Every public module, and every
-private module that defines a re-exported public API, also keeps at least one
-basic usage example. Pure private implementation/type modules with no public
-entry point follow the private-module exception below.
+private module whose re-exported public API includes something that runs, also
+keeps at least one basic usage example. Private implementation modules and
+type-only or exception-only modules follow the private-module rule below.
 
 A module example is an **entry point**, not a comprehensive test suite — prefer
 *one* representative public workflow, exercising the module's public surface
@@ -476,7 +476,16 @@ When removing executable examples:
 4. If an example is later restored as an executable doctest, remove any pytest
    test that was added solely to preserve that identical happy path.
 5. Keep edge/error/non-deterministic/integration behavior in pytest even when a
-   related happy path appears in a doctest.
+   related happy path appears in a doctest. When a doctest grows past basic usage,
+   move its extra cases into the subject's pytest table.
+6. An edge or error case shown in both a doctest and pytest leaves the doctest
+   when the doctest already shows several other basic use cases. When it does
+   not, prefer rewriting the doctest to show basic usage and keep the edge case
+   in pytest. Basic usage lives in its most appropriate doctest: when it is shown
+   elsewhere, move it into this doctest only if this is the better home (and let
+   the move trickle down to the doctest it leaves); never duplicate it just to
+   give a doctest something to run. Only when no basic usage belongs in this
+   doctest does it keep the edge case and the pytest copy go.
 
 Removing prose that merely taught an external/library concept does not require a
 replacement test. Removing a concrete user-visible Riko behavior does.
@@ -488,23 +497,32 @@ in the generator. Never patch only the generated file.
 
 An underscore-prefixed module gets a module-level example **only when it has a
 public API** — a name it defines that is re-exported from `riko`, `riko.bado`,
-`riko.ext` (including `riko.ext.codegen`), `riko.modules`, or `riko.types`. When it
-does, the example imports through that public path, never the private one:
+`riko.ext` (including `riko.ext.codegen`), `riko.modules`, or `riko.types`. It
+**must** have one when that public API includes something that runs: a function,
+or any class other than a type-only or exception class (enums and records
+included). A module whose public names are only type aliases, `TypedDict`s,
+`Protocol`s, or exceptions has none, because the best example it could give is an
+annotation that tests nothing (and raising or catching an exception is generic
+Python). The example imports through the public path, never the private one:
 
 | Module | Public surface | Module example |
 |---|---|---|
-| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | yes — `from riko.ext import processor` |
+| `riko/modules/_decorators.py` | `processor`, `operator`, `splitter` | required — `from riko.ext import processor` |
+| `riko/types/_options.py` | `CallOptions` | required — `from riko.types import CallOptions` |
+| `riko/types/_streams.py` | type aliases and `Protocol`s only | no |
+| `riko/base/_exceptions.py` | exceptions only | no |
 | `riko/modules/_inference.py` | none | no |
 | `riko/cli/_coverage.py` | none | no |
 
-Otherwise the module keeps its description (and `Attributes:` for module-level
-constants) and stops there. A module-level example is the reader's entry point
-into a supported surface; a private module with no public surface has no entry
-point to advertise, and demonstrating one would contradict the "public examples
-exercise the public object" rule under Doctest rules. This bounds only the
-*module* docstring — a private function may still carry a local doctest where a
-compact executable example clarifies non-obvious behavior. `manage lint --docstrings`
-enforces both this rule and the public-path rule for example imports.
+A private module without a module example keeps its description (and
+`Attributes:` for module-level constants) and stops there. A module-level example
+is the reader's entry point into a supported surface; a private module with no
+public surface has no entry point to advertise, and demonstrating one would
+contradict the "public examples exercise the public object" rule under Doctest
+rules. This bounds only the *module* docstring — a private function may still
+carry a local doctest where a compact executable example clarifies non-obvious
+behavior. `manage lint --docstrings` enforces both directions of this rule and the
+public-path rule for example imports.
 
 ## General docstring rules
 
@@ -627,6 +645,8 @@ code block without interpreter prompts.
 - Treat doctests as executable user documentation first, tests second.
 - Show actual returned values, not boolean assertions
   (`>>> next(pipe(items))["count"]` → `5`, not `... == {"count": 5} → True`).
+  A `None` result is the bare call with no output, never `... is None` → `True`
+  (`manage lint --docstrings` enforces it).
 - Follow Arrange → Act → Observe; keep each example focused on one behavior.
 - Every code block runs on its own: it imports and defines everything it uses,
   even when an earlier block in the same file or section already did, because
@@ -687,8 +707,18 @@ code block without interpreter prompts.
   example *from* that test and delete the now-redundant test — the doctest is the
   single source. Reserve unit tests for what a doctest should not carry: exception
   and edge paths, unstable-`repr`/non-deterministic cases, and multi-step
-  integration. Before adding a doctest, grep the suite for an equivalent assertion;
-  before deleting a test, confirm the doctest actually runs it (`--doctest-modules`).
+  integration. A doctest shows basic usage; once it grows past that, its extra
+  cases move into pytest. An edge or error case in both places leaves the doctest
+  when the doctest already shows several other basic use cases. When it does not,
+  prefer rewriting the doctest to show basic usage and keeping the edge case in
+  pytest. Basic usage lives in its most appropriate doctest, so it may move into
+  this doctest from elsewhere when this is the better home, with the move
+  trickling down to the doctest it leaves; never duplicate it just to give a
+  doctest something to run. Only when no basic usage belongs in this doctest does
+  it keep the edge case and the pytest copy go. One row of a parametrized table
+  counts as a test here. Before adding a doctest, grep the suite for an
+  equivalent assertion; before deleting a test, confirm the doctest actually runs
+  it (`--doctest-modules`).
 
 ## Python syntax baseline
 
@@ -810,14 +840,15 @@ reader to the wrong place.
 | **item** | one dict-like mapping of field names to values — the unit a stream carries | don't use it for a stream; an item's entries are *item fields*, not "item attributes" (an attribute is a Python attribute) |
 | **record** | a row in an external representation — inside a fetched document (`fetchdata`'s `path`), a keyed write target, a serialized file — or a fixed-field structure (an attrs record, `LogRecord`) | "item" for anything flowing between nodes, including what a write receives or serializes |
 | **feed** | an RSS/Atom feed (`fetch`, `fetchsitefeed`, `feedautodiscovery`); in backticks, ``Feed`` is the `Items \| AsyncItems` type (sync or async items) | "stream" for any other sequence of items; "async iterable" for a generic one |
-| **source** | a module that creates items (the `Sources` enum, the `"source"` category/subtype: `fetch`, `csv`, `itembuilder`); an edge's `source`/`target` endpoint keeps its graph meaning when qualified ("source port") | "input stream"/"input item" for what a module receives; "seed" for the items handed to a `Pipeline` |
+| **source** | a module that creates items (the `Sources` enum, the `"source"` category/subtype: `fetch`, `csv`, `itembuilder`); an edge's `source`/`target` endpoint keeps its graph meaning when qualified ("source port") | "input stream"/"input item" for what a module receives, so never "async source" (say "async input stream", or "async iterable" for a generic one); "seed" for the items handed to a `Pipeline` |
 | **target** | a `Target` endpoint identified by its backend (`FileTarget`, `SupportsRead`/`SupportsWrite`, the target registry); an edge's `target` endpoint keeps its graph meaning when qualified ("target port", "target node") | "format" for a `Formats` value or what `export` serializes to ("export format", never "export target"); "destination" only for where a write lands (`dest`), never "destination type" for a cast type |
-| **provider** | the namespace a module name carries: its first dotted segment (`example.lookup` → `"example"`), or `"riko"` for an unqualified built-in; `ModuleMetadata.provider`, `list_modules(provider=)`, and one generated discovery class per provider | "category" for a module's data-flow role (`"source"`/`"transform"`/`"sink"`); "backend" for a `Target`'s kind (`Backends`), so an action target runs a "backend command", never a "provider command"; "extension package", never "provider package", for the installable distribution that ships a provider's modules |
-| **shutdown timeout** | the `shutdown_timeout` execution setting: how long an execution's teardown may run before it is cut off | never "shutdown budget"; "node-thread budget" names `RIKO_NODE_THREADS` |
+| **provider** | the namespace a module name carries: its first dotted segment (`example.lookup` → `"example"`), or `"riko"` for an unqualified built-in; `ModuleMetadata.provider`, `list_modules(provider=)`, and one generated discovery class per provider | "category" for a module's data-flow role (`"source"`/`"transform"`/`"sink"`); "backend" for a `Target`'s kind (`Backends`), so an action target runs a "backend command", never a "provider command"; "plugin", never "provider package", for the installed distribution that ships a provider's modules; "integration" for the external platform or protocol those modules serve (gameplans also say "provider" for that platform, as in "provider-native"; shipped text says "integration") |
+| **cleanup** | what an execution does to release a resource when it is done with it: closing an owned value, calling a `cleanup=` callback, or exiting a lifecycle; "cleans up", "async cleanup", `requires_async_cleanup`/`has_async_cleanup`; a write session's resource release is its `close()`/`aclose()` | never "teardown", "tear down", "tears down", or "torn down"; "close" for the specific act on an owned value, stream, or write session; pytest's own teardown phase is reworded ("after the test ends") rather than exempted |
+| **shutdown timeout** | the `shutdown_timeout` execution setting: how long an execution's cleanup may run before it is cut off, and how long stopped worker processes get, together, before being killed | never "shutdown budget"; "node-thread budget" names `RIKO_NODE_THREADS` |
 | **seed** | the items handed to a `Pipeline` run (`pipeline(items)`, `items \| pipeline`, `pipeline.open(items)`); "seeds a pipeline" | never for starting a pipeline from a module (`from_module` "starts from" one); "starting value" for a reduce accumulator |
-| **module** | a named, reusable riko unit such as `fetch` or `hash` (`from_module`, `list_modules`, `Modules`); its processor/operator/splitter classification is its *module type* | "Python module" or `types.ModuleType` for an importable Python module — a bare "module" is always a riko module; `ModuleStore` and the `ModuleType` literal are identifier exceptions |
+| **module** | a named, reusable riko unit such as `fetch` or `hash` (`from_module`, `list_modules`, `Modules`); its processor/operator/splitter classification is its *module type*; as a sentence subject it is "the ``sort`` module", while lists, possessives, and a qualifying noun take the bare name ("``fetchdata``, ``fetchpage``, and ``csv``", "``union``'s ``others``", "a ``filter`` rule") | "Python module" or `types.ModuleType` for an importable Python module — a bare "module" is always a riko module; `ModuleStore` and the `ModuleType` literal are identifier exceptions |
 | **node** | a module placed in a workflow with its conf and options (`ModuleNode`, ids like `sort-1`); a `Pipeline` is a chain of nodes | not "pipe", "step", or "configured pipe" |
-| **pipe** | only a verb (`Pipeline.pipe(name)` "pipes the stream into" a module) or a callable's name: a module's `pipe`/`async_pipe` (a "pipe callable") or a resolved workflow's `pipe` | never a noun for a module or a node ("the `fetch` module", not "the fetch pipe"); never for the `parser`; `pipe_<id>`, `PipeDef`, "pipe script", and `run-pipe` keep their names |
+| **pipe** | only a verb (`Pipeline.pipe(name)` "pipes the stream into" a module) or a callable's name: a module's `pipe`/`async_pipe` (a "pipe callable", the one noun for what a decorator returns) or a resolved workflow's `pipe` | never a noun for a module or a node ("the `fetch` module", not "the fetch pipe"); not "module wrapper" or "decorated pipe" for a pipe callable in user prose (`ModuleWrapper` keeps its type name); never for the `parser`; `pipe_<id>`, `PipeDef`, "pipe script", and `run-pipe` keep their names |
 | **pipeline** | the variable bound to a `Pipeline` (`pipeline = Pipeline.from_module(...)`, `stream = iter(pipeline)`) | never `flow = Pipeline(...)` |
 | **flow** | the variable bound to a bare `Workflow` graph: a parameter, local, module-level, or doctest binding (`flow = pipeline.workflow`, `compile_workflow(flow, ...)`, a workflow module's `flow`); instance fields (`pipeline.workflow`, `ExecutionPlan.workflow`), the `from_workflow` name, and the `workflow=` keywords that set those fields (constructors, `evolve`) keep theirs (`manage lint --bindings`); a `RawWorkflow` mapping is `raw` | don't use it for a `Pipeline`; never `workflow = Workflow(...)` (`workflow` is the decorator) |
 | **`Workflow`** | the in-memory graph object (`Workflow.parse`, `migrate_v1_to_v2` return one) | not "canonical workflow", "spec", or "workflow document" |
@@ -830,17 +861,19 @@ reader to the wrong place.
 | **resolved workflow** | `ResolvedWorkflow`: the `types.ModuleType` a stored workflow resolves to, imported as is or built from a `WorkflowDocument` | not `WorkflowModule`, "workflow module", or "imported workflow" |
 | **pipe script** | a hand-written Python file defining `pipe(test=False)` that `run-pipe` executes | not "pipe file" or "pipe module" |
 | **resource binding** | a node's `resources=` mapping of local alias (the slot a module reads) to Context resource name; the verb *bind* means only this ("the Context names a node binds") | never for adding a definition to a `Context`: a Context *provides* a resource (`with_resource`); never for fixing a call's arguments (*prepare*/*apply*) or attaching callables (*attach*); a Python name binding (`flow = ...`, `manage lint --bindings`) keeps its language meaning |
-| **prepare** | fix a module call's configuration and call options once for reuse over many items (a wrapper's `prepare`, the `Preparer`/`PreparedCall` protocols, `prepare_call`, `Module.prepare`); the result is a *prepared* call or pipe | never "bind" (*bind* is reserved for resource binding) or "bound keywords" (say "keyword arguments"); "apply" for keyword arguments fixed on a plain callable |
+| **prepare** | fix a module call's configuration and call options once for reuse over many items (a pipe callable's `prepare`, the `Preparer`/`PreparedCall` protocols, `prepare_call`, `Module.prepare`); the result is a *prepared* call or pipe | never "bind" (*bind* is reserved for resource binding) or "bound keywords" (say "keyword arguments"); "apply" for keyword arguments fixed on a plain callable |
 | **registry** | a `Registry[T]` only: the module registry (`ModuleRegistry`, `module_registry`) or the target registry (`TargetRegistry`); entries resolve runtime → entry point → built-in | not for `WorkflowResolver`, the dispatcher, a workflow store, export formats, or the pub/sub receivers |
 | **register** | add an entry to a registry's runtime tier (`register_module`, `register_target`) or add a workflow store (`register_workflow_store`) | "declare an entry point" for the entry-point tier; "available"/"resolvable" for any module, built-ins included (built-ins are not registered); never "registered workflow" |
 | **resolver** | always qualified: the workflow resolver (`WorkflowResolver`) or the `Resolver` protocol | "dispatcher" for `ResolverDispatcher` |
 | **dispatcher** | `ResolverDispatcher` (`dispatcher`): routes a module name to the module registry and a `pipe_<id>` name to the workflow resolver | not "resolver" or "resolver façade" |
-| **catalog** | the module catalog: what `list_modules()`/`describe_module()` report over built-in, entry-point, and runtime-registered modules (`catalog_names` is a registry's share of it) | "serialization formats"/"export formats" or the `Formats` enum for what `export`/`write` serialize to |
+| **catalog** | the module catalog: what `list_modules()`/`describe_module()` report over built-in, entry-point, and runtime-registered modules (`discovered_names` is a registry's share of it) | "serialization formats"/"export formats" or the `Formats` enum for what `export`/`write` serialize to |
 | **store** | a workflow store (`WorkflowStore`: a module store or a document store) that a `pipe_<id>` name is looked up in | always qualify a later kind ("state store", "checkpoint store"); never for a registry |
-| **extension package** | an installable package that declares riko entry points (`riko-example-ext`) | not "plugin" or "entry-point plugin" |
-| **execution mode** | only the `ExecutionMode` enum (`RUN`/`DESCRIBE_*`, `Context.mode`): whether a workflow runs or only describes itself | "sync or async" for how a pipeline is iterated (`for` vs `async for`, a module's `pipe` vs `async_pipe`): "uses one callable for both sync and async", not "both execution modes", "both sides", "each side", "the chosen side", "the missing side", "the other side", "the other mode", "host-mode", "cross-mode", or "engine" |
+| **plugin** | an installed distribution that declares riko entry points (`riko-example-ext`); it adds named modules or targets to a registry, never hooks that change runtime behavior | not "extension package", "provider package", "integration package", "connector package", "entry-point plugin", "add-on", or "installed distribution"; "extension" stays for the `riko.ext` surface and its authors |
+| **integration** | everything riko knows about one external system, a SaaS platform (Salesforce) or a protocol (SFTP, Kafka): its facts, mechanics, importers/deployers, and connectors; it ships in a plugin and registers its modules under a provider | not "provider package", "integration package", or "connector package"; the plugin is the distribution, the integration is what it is for |
+| **connector** | the part of an integration that reads from or writes to its external system: its sources, `Target`s, and credential/session handling; an integration with no I/O has none | not the whole integration or the plugin that ships it ("connector package") |
+| **execution mode** | only the `ExecutionMode` enum (`RUN`/`DESCRIBE_*`, `Context.mode`): whether a workflow runs or only describes itself | "sync or async" for how a pipeline is iterated (`for` vs `async for`, a module's `pipe` vs `async_pipe`): "uses one callable for both sync and async", not "both execution modes", "both sides", "each side", "the chosen side", "the missing side", "the other side", "the other mode", "host-mode", "cross-mode", or "engine". Split by reader: prose for pipeline users (module behavior, user docs, their changelog bullets) says "a sync run"/"an async run", since they only iterate; prose for extension authors (decorators, `ModuleDefinition`, registry, workflow modules) names `pipe`/`async_pipe`; "interface" appears only as the `Interface`/`interfaces`/`require_interfaces` identifiers, never "sync interface" or "async interface" in prose |
 | **execution** | the private one-shot object that carries out one run (`SyncExecution`/`AsyncExecution`, `subject="execution"`), the execution layer, and its settings (`with_execution`, `ExecutionSettings`, "execution-wide") | not a public object: users hold an iterator, not an execution |
-| **run** | one iteration of a `Pipeline` from start to teardown: it owns that iteration's resources ("the run's resources", "tears the run down", "varies between runs"); `PipelineStream` names the handle `pipeline(items)` returns and `PipelineRun` the context manager `pipeline.open(items)` returns | not "execution" in user-facing prose about the lifetime; never "scoped run" or "scopes a run" for `open()` (say it returns a context manager); `ExecutionMode.RUN` is the run-vs-describe choice, not a lifetime |
+| **run** | one iteration of a `Pipeline` from start to cleanup: it owns that iteration's resources ("the run's resources", "cleans the run up", "varies between runs"); `PipelineStream` names the handle `pipeline(items)` returns and `PipelineRun` the context manager `pipeline.open(items)` returns | not "execution" in user-facing prose about the lifetime; never "scoped run" or "scopes a run" for `open()` (say it returns a context manager); `ExecutionMode.RUN` is the run-vs-describe choice, not a lifetime |
 | **context** | the `Context` a module runs in: the run environment that supplies `mode`, `inputs`, the `test` flag, and the resources it provides (`with_context`, the `context=` parameter); an immutable definition, not part of the execution | not "execution context" or "pipeline context": a `pipe` parameter line reads `context (Context): the run environment`; say "context manager" in full for a `with` target |
 | **input** | qualified in its riko senses (plain "the input" for a function's argument or a CLI file is ordinary English). *Input values* are the answers a run supplies (`Context.inputs`, the `inputs=` keyword argument) that an `input` module reads by its `input_key` instead of prompting; *input declarations* are a workflow's typed inputs (`Workflow.inputs`, full JSON Schemas; describe-inputs mode reports them); an *input port* is where an edge enters a node (`in`, positional `in:N`, named `in:<name>`), and every port delivers an *input stream* (the default one, or a "secondary input stream" through `in:N`/`in:<name>`); the `input` module keeps its name | never bare "inputs" in prose; not "value input" for a named port (it carries a stream); not "source" for a secondary input stream; not "input requirements" for input declarations |
 | **output** | qualified in its riko senses (an output file, printed output, or serialized output is ordinary English). A node's *output stream* is what it yields after `count`/`assign`/`emit` shape its results, and it pairs with the input stream the next node receives (a stream on an edge is the upstream node's output stream until a port takes it, then that port's input stream; never an "upstream stream"); an *output port* is where an edge leaves a node (`out`, positional `out:N`, named `out:<name>`); a *workflow output* is a named endpoint a workflow exposes (`Workflow.outputs`), and the *default output* is the one a `Pipeline` yields; a `PipeDef`'s terminal marker is its ``output`` node | never bare "output(s)" in prose; not "output" for what a parser returns (that is a result); not "output module" (there is no such module) |
@@ -848,19 +881,19 @@ reader to the wrong place.
 | **terminal** | only a conf *terminal reference* (`{"terminal": "<name>", "type": …}`, the `Terminal` conf type): it takes the next item from the secondary input stream wired into `in:<name>`; its `type` is the *terminal type* (a shell terminal stays ordinary English) | "consumes the stream" for a call that ends a pipeline (`export()`), never "terminal call/verb"; "the `PipeDef` `output` node" for the old `_OUTPUT` marker; "secondary input stream" for a stream passed as a keyword argument, never "terminal sub-source" or "terminal input" |
 | **key** | always qualified: a *conf key* ("no ``url`` key"), a *sort key* (`build_sort_key`), the *match keys* a keyed write needs (`write(keys=)`), or a lookup/registry key; the `*_key` conf names (`count_key`, `join_key`, `input_key`) keep their names but each *names a field*; a mapping key in a generic helper is ordinary English | "field" for anything naming item data; "group value" for what a grouping reports per group; "subkey" only for the `{"subkey": …}` reference |
 | **sink** | a receiver of side-channel values: the *event sink* (`EventSink`, `event_sink=`) and, later, the error sink; until the `write` module retires, also the `Sinks` discovery category ("sink module", `category="sink"`) | never a call or verb that ends a pipeline (there is no `sink()`; a call that ends one "consumes the stream"); never "sink pipe"; "write" or "target" for where items end up |
-| **dependencies** | the modules and stored workflows a workflow uses: the generated `DEPENDENCIES` list, `ExecutionMode.DESCRIBE_DEPENDENCIES`, `Context.describe_dependencies`; a package requirement is always qualified ("optional dependency", "dev dependencies") | "upstream"/"downstream" nodes for graph order between nodes (`GraphIndex.upstream`/`.downstream`, "upstream subgraph"), never "dependencies"/"dependents"; what a node receives is its *input stream*, never an "upstream stream" |
+| **dependencies** | the modules and stored workflows a workflow uses: the generated `DEPENDENCIES` list, `ExecutionMode.DESCRIBE_DEPENDENCIES`, `Context.describe_dependencies`; a package requirement is always qualified ("optional dependency", "dev dependencies") | "upstream"/"downstream" nodes for graph order between nodes (`GraphIndex.upstream`/`.downstream`, "upstream subgraph"), never "dependencies"/"dependents"; what a node receives is its *input stream*, never an "upstream stream"; the words are adjectives or adverbs of direction ("reads upstream", "a blocked upstream read", "observable downstream"), never nouns for streams: not "its upstream", "upstreams"/"downstreams" (say *input stream(s)* or *node stream(s)*) |
 | **describe** | report information instead of running: `describe_module` returns a module's metadata; the *describe modes* (`ExecutionMode.DESCRIBE_INPUTS`/`DESCRIBE_DEPENDENCIES`/`DESCRIBE`) make a workflow module's `pipe` return its input declarations or dependencies | always "describe mode" for the mode, never a bare "describe" |
 | **connection** | a live client connection to an external system (a database connection, an HTTP session) — the kind a resource provides | "edge" for a graph edge (`incoming`/`outgoing` hold edges); "concurrency limit" for a cap on in-flight calls (`RIKO_CONCURRENCY_LIMIT`) (`async_map`'s `limit`); "strongly connected component" and Riko Connect are unaffected |
 | **parser** | the function a module author writes and decorates (`def parser(...)` under `@processor`/`@operator`; the parser protocols); what it returns is its *result* | always qualify a document library ("XML parser", "HTML5 parser", "feed parser": lxml, html5lib, feedparser); "document format" for what a file extension selects; "parsing" for the activity |
 | **emit** | in module and user docs, only what the `emit` call option does: yield the result as is instead of assigning it; `EventSink.emit` ("emits an event") keeps the event sense | "yields" for producing items (or a specific summary verb, since summaries never start with "Yields"); not "emits" for a stream a module produces |
 | **wire** | an entry of a `PipeDag` or `PipeDef` `wires` list (a `[source, target(, port)]` entry or a `{src, tgt}` `Wire` mapping); the verb "wire into a port" means connect | "edge" for a `Workflow`'s connections (`StreamEdge`, `edges`), never "wire" |
-| **path** | always one of: a filesystem path (`dest`, `get_path`, "the destination path"); a URL path (`urlbuilder`'s `path`); or a *dotted path*, an `"a.b.c"` address of a nested value, qualified by what it walks ("a dotted path into the item", "into the fetched document") | not "dotted key", "dotted name", or "dot separated path" (Python import names stay "dotted module name"); "the sync/async pipe" or "under sync/async iteration", never "the async path" or "both paths" |
+| **path** | always one of: a filesystem path (`dest`, `get_path`, "the destination path"); a URL path (`urlbuilder`'s `path`); or a *dotted path*, an `"a.b.c"` address of a nested value, qualified by what it walks ("a dotted path into the item", "into the fetched document") | not "dotted key", "dotted name", or "dot separated path" (Python import names stay "dotted module name"); "a sync/async run" or "under sync/async iteration", never "the async path" or "both paths" |
 | **configuration** | a module's `conf`: what that module does, checked against its `<Name>Conf` contract; "module configuration" in a parameter line; `DEFAULTS` is its "default configuration" | not for call options, decoration options, settings, or a `Context` |
 | **call options** | the per-node `options` (`CallOptions`: `field`, `assign`, `emit`, `count`) that shapes any module's input and output; a call option overrides the default a module's decoration options give for the same key | never bare "options", "call-time options", or "module options"; `conf`, `context`, and `embed` are keyword arguments, not call options |
 | **decoration options** | what a module author fixes at decoration time (`OPTS`, `DecorationOptions`: `extract`, `listize`, `ftype`, `ptype`, `objectify`, `parse`, `pollable`, `skip_if`) plus the defaults it gives call options | not "wrapper options" or "decorator options"; not part of a pipeline author's surface |
 | **keyword arguments** | everything a pipe callable accepts (`conf`, the call options, `context`, `embed`, `inputs`); a parser's catch-all parameter is called `**kwargs`, never a "keyword sink" | not "options" or "kwargs" in prose |
 | **settings** | always qualified: "execution settings" (`ExecutionSettings`, `with_execution`) or "process settings" (`Settings`, the `RIKO_*` environment variables) | never for a module's configuration, call options, or a `Context` |
-| **type** | never bare in prose. *Module type* is only processor/operator/splitter (`ModuleType`, `list_modules(type=)`, a wrapper's `.type`); a workflow node's or edge's kind is its *node family*/*edge family* (`family`); the module a node runs is its *module name* (`name`; a `PipeDag` may still spell it `type`, a `PipeDef` always does); a conf value's `type` is its *cast type* or *terminal type*; `export`'s `type_` is the *export type* | not "module ``type``" for a module name, and never `type` for a node family |
+| **type** | never bare in prose. *Module type* is only processor/operator/splitter (`ModuleType`, `list_modules(type=)`, a pipe callable's `.type`); a workflow node's or edge's kind is its *node family*/*edge family* (`family`); the module a node runs is its *module name* (`name`; a `PipeDag` may still spell it `type`, a `PipeDef` always does); a conf value's `type` is its *cast type* or *terminal type*; `export`'s `type_` is the *export type* | not "module ``type``" for a module name, and never `type` for a node family |
 
 The `coroutine` collision is the one that actually bites: `iscoroutinefunction`
 sits right next to the code you are documenting, so "coroutine function" is the

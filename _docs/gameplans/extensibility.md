@@ -43,7 +43,7 @@ rather than inventing parallel models.
    executable code.
 7. **Evidence before optimization.** Optional execution drivers/per-node optimizations require
    measurable benefit without semantic drift.
-8. **Extensions specialize owners.** Operation packs, provider packages, and CLIs register
+8. **Extensions specialize owners.** Operation packs, integrations, and CLIs register
    implementations/references; they do not redefine `OperationSpec`, capability policy, provider
    waiting, or Core execution.
 
@@ -539,7 +539,9 @@ walking the edges itself (folded in 2026-10-05; the earlier separate `cyclic_nod
 The v1 legacy artifacts the index once carried (`_OUTPUT` as a real node, verbatim
 `_INPUT`/`_OTHER`/`_OUTPUT` ports, dropped orphan nodes) left with the v1 builder: the index now
 indexes only canonical `Workflow`s, keeps every declared node, and stores canonical ports, so
-disconnection stays a validation question (E3.9).
+disconnection stays a validation question (E3.9). Validation does not reject a node no output
+needs: a pure off-output branch is skipped, and an off-output write node is owned by R5C
+(implementation-sequence.md § R5C, repo-audit triage 2026-10-29).
 
 R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
 execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
@@ -597,9 +599,9 @@ state semantics. They do not introduce a parallel checkpoint type or change reco
 Backpressure/buffering boundaries and bounded concurrency should be inspectable in execution plans.
 Finite windows may be ordinary operators where useful; distributed stream processing is not implied.
 
-## E5. Adapter and connector packages
+## E5. Integrations and connectors
 
-Connector/package design follows [connectors.md](connectors.md): protocols and dependencies live in
+Integration and connector design follows [connectors.md](connectors.md): protocols and dependencies live in
 optional packages unless they are broadly useful, small, and deterministic enough for core.
 
 Useful adapter categories:
@@ -851,8 +853,8 @@ Requirements:
   discovery/policy;
 - external operation packs require no edit to `nerevu/riko` Core.
 
-Provider importer/deployer implementations register through their provider package's extension
-mechanism; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
+Provider importer/deployer implementations register through the plugin that ships their
+integration; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
 register through `riko.commands`; `cli.md` owns that adapter surface.
 
 Before freezing `riko.operations` as public, prove it with at least one external pack and one

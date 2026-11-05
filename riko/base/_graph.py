@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Hashable, Iterable, Iterator, Mapping
 from graphlib import CycleError, TopologicalSorter
+from itertools import chain
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,10 @@ type SCC[T: Hashable] = list[tuple[T, ...]]
 type FrozenGraph[T: Hashable] = MappingProxyType[T, frozenset[T]]
 type AnyGraph[T] = Graph[T] | FrozenGraph[T]
 type SortKey[T] = Callable[[T], SupportsRichComparison] | None
+
+
+def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph:
+    return nx.DiGraph(map_values(sort_stably, graph))
 
 
 def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[T]:
@@ -71,8 +76,7 @@ def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[
         [(6,), (5,), (0,), (1,), (4,), (2,), (3,)]
 
     """
-    digraph = nx.DiGraph(map_values(sort_stably, graph))
-    components = nx.strongly_connected_components(digraph)
+    components = nx.strongly_connected_components(_build_digraph(graph))
     scc = [tuple(sort_stably(component)) for component in components]
     return scc if reverse else scc[::-1]
 
@@ -232,7 +236,37 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     """
     _groups = topological_sort(graph) if groups is None else groups
     is_cyclic = lambda group: len(group) > 1 or group[0] in graph.get(group[0], ())
-    return [node for group in _groups if is_cyclic(group) for node in group]
+    return list(chain.from_iterable(filter(is_cyclic, _groups)))
+
+
+def get_cycle[T: Hashable](source: T, graph: AnyGraph[T]) -> list[T]:
+    """
+    Gets the first cycle reachable from a node.
+
+    Args:
+
+        source: The node to start from.
+        graph: Each node mapped to the nodes that come after it.
+
+    Returns:
+
+        The cycle's nodes in edge order, starting where the path from ``source`` enters
+        it, or an empty list when no cycle is reachable.
+
+    Examples:
+
+        >>> get_cycle("a", {"a": {"b"}, "b": {"c"}, "c": {"b"}})
+        ['b', 'c']
+        >>> get_cycle("a", {"a": {"b"}})
+        []
+
+    """
+    try:
+        edges = nx.find_cycle(_build_digraph(graph), source)
+    except nx.NetworkXNoCycle:
+        edges = []
+
+    return [node for node, _ in edges]
 
 
 def edges_to_graph[T: Hashable](
@@ -331,7 +365,7 @@ def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]
         ('a', 'c')
 
     """
-    digraph = nx.DiGraph(map_values(sort_stably, graph))
+    digraph = _build_digraph(graph)
     kept = nx.transitive_reduction(digraph).edges
     yield from sort_stably(set(digraph.edges).difference(kept))
 
@@ -339,18 +373,14 @@ def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]
 def freeze_graph[T: Hashable](
     graph: AnyGraph[T], key: SortKey[T] = None
 ) -> FrozenGraph[T]:
-    if key is None:
-        items = graph.items()
-    else:
-        items = [(k, graph[k]) for k in sorted(graph, key=key)]
-
-    return MappingProxyType({k: frozenset(v) for k, v in items})
+    ordered = graph if key is None else {k: graph[k] for k in sorted(graph, key=key)}
+    return MappingProxyType(map_values(frozenset, ordered))
 
 
 def descendants[T: Hashable](
     source: T, graph: AnyGraph[T] = MappingProxyType({})
 ) -> frozenset[T]:
-    digraph = nx.DiGraph(map_values(sort_stably, graph))
+    digraph = _build_digraph(graph)
 
     if source not in digraph:
         raise KeyError(source)

@@ -10,7 +10,6 @@ across the run's loopable nodes.
 from __future__ import annotations
 
 from collections.abc import (
-    AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
     Callable,
@@ -18,7 +17,7 @@ from collections.abc import (
     Iterable,
     Mapping,
 )
-from contextlib import AsyncExitStack, aclosing, nullcontext
+from contextlib import AsyncExitStack, aclosing
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -43,6 +42,7 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
+from riko.types._io import is_async_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -72,7 +72,7 @@ from ._execution import (
     _require_seed,
 )
 from ._resource_acquisition import build_context_manager, call_factory
-from ._resource_teardown import aclose_resource, close_resource
+from ._resource_cleanup import aclose_resource, aclose_with, close_resource
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -234,10 +234,16 @@ def _resolve_thread_budget() -> _ThreadBudget:
 
 
 @define(eq=False)
-class _ReleasingStream[T]:
-    """Wraps an output stream so its node threads return when it ends or closes."""
+class _RunStream[T]:
+    """
+    Wraps a run's output stream so closing it closes every stream the run built.
+
+    The node streams close in reverse build order, output first, and the run's node
+    threads return once they have.
+    """
 
     _stream: AsyncIterator[T]
+    _node_streams: tuple[AsyncIterator[T], ...]
     _reservation: _Reservation
 
     def __aiter__(self) -> Self:
@@ -253,10 +259,12 @@ class _ReleasingStream[T]:
         return item
 
     async def aclose(self) -> None:
-        """Closes the output stream and returns the run's node threads."""
-        with self._reservation:
-            async with maybe_aclosing(self._stream):
-                pass
+        """Closes the output stream and its node streams, and releases the threads."""
+        async with AsyncExitStack() as stack:
+            stack.callback(self._reservation.release)
+
+            for stream in (*self._node_streams, self._stream):
+                await stack.enter_async_context(maybe_aclosing(stream))
 
 
 _timeout = Factory(lambda self: self.settings.shutdown_timeout, takes_self=True)
@@ -272,7 +280,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     under one in-flight ceiling shared by the whole run.
     """
 
-    shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
+    shutdown_timeout: float = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
     _inflight: dict[Resource[object], Event] = field(factory=dict, init=False)
     _reservations: list[_Reservation] = field(factory=list, init=False)
@@ -305,11 +313,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         raised: BaseException | None = None
         suppressed = False
-        missing_timeout = self.shutdown_timeout is None
-        bound = nullcontext() if missing_timeout else fail_after(self.shutdown_timeout)
-
         try:
-            with CancelScope(shield=True), bound:
+            with CancelScope(shield=True), fail_after(self.shutdown_timeout):
                 try:
                     unwound = await self._stack.__aexit__(exc_type, exc, traceback)
                     suppressed = bool(unwound)
@@ -459,14 +464,14 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self._require_open("run work in")
         return await asyncify(func, limiter=limiter)(*args)
 
-    def _register_teardown(
-        self, teardown: Callable, value: object, *, is_async: bool
+    def _register_cleanup(
+        self, cleanup: Callable, value: object, *, is_async: bool
     ) -> None:
-        """Registers ``teardown(value)`` on unwind: on the loop, or a worker if sync."""
+        """Registers ``cleanup(value)`` on unwind: on the loop, or a worker if sync."""
         if is_async:
-            self.push_async_callback(teardown, value)
+            self.push_async_callback(cleanup, value)
         else:
-            self.push_async_callback(_asyncify_call, teardown, value)
+            self.push_async_callback(aclose_with, cleanup, value)
 
     async def _acall_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         if plan.is_async:
@@ -477,7 +482,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         value = await as_awaitable(raw)
 
         if (cleanup := plan.cleanup) is not False:
-            self._register_teardown(cleanup, value, is_async=plan.is_teardown_async)
+            self._register_cleanup(cleanup, value, is_async=plan.requires_async_cleanup)
 
         return value
 
@@ -498,10 +503,10 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 value = plan.value
             case OwnedPlan():
                 value = plan.value
-                is_async = plan.is_teardown_async
+                is_async = plan.has_async_cleanup
                 close = aclose_resource if is_async else close_resource
-                teardown = partial(close, plan.cleanup)
-                self._register_teardown(teardown, value, is_async=is_async)
+                cleanup = partial(close, plan.cleanup)
+                self._register_cleanup(cleanup, value, is_async=is_async)
             case ValueFactoryPlan():
                 value = await self._acall_factory(plan)
             case SyncLifecyclePlan() | AsyncLifecyclePlan():
@@ -513,7 +518,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self, resource: Resource[R]
     ) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = await self._aopen(resource.plan)
+            value = await self._aopen(resource._plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:
@@ -571,8 +576,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             seed: Items for the workflow output's open input: one item, an item stream,
                 an async item stream, or an awaitable resolving to one of those. An
                 awaitable is resolved when the run starts. A seed that is both sync- and
-                async-iterable is read asynchronously. A generator or async generator
-                seed is closed when the execution exits.
+                async-iterable is read asynchronously. A generator seed, or any seed
+                with ``aclose``, is closed when the execution exits.
 
         """
         resolved = await as_awaitable(seed)
@@ -582,7 +587,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         else:
             stream = as_async(normalize_items(resolved))
 
-        if isinstance(resolved, AsyncGenerator):
+        if is_async_closeable(resolved):
             self.push_async_callback(resolved.aclose)
         elif isinstance(resolved, Generator):
             self.callback(resolved.close)
@@ -681,12 +686,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             The async item stream produced by the node.
 
         """
-        upstreams: list[AsyncIterator[T]] = []
+        node_streams: list[AsyncIterator[T]] = []
 
         def drain(stream: AsyncIterable[T]) -> Iterator[T]:
-            upstream = aiter(stream)
-            upstreams.append(upstream)
-            return _worker_drain(upstream)
+            node_stream = aiter(stream)
+            node_streams.append(node_stream)
+            return _worker_drain(node_stream)
 
         bridged = _bridge_inputs(extra, drain)
         worker_source = drain(source)
@@ -698,7 +703,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         run = partial(self._run_node_call, limiter)
         raw, iterator = await run(start)
-        return pull_stream(raw, iterator, *upstreams, pull=run, close=_asyncify_call)
+        return pull_stream(raw, iterator, *node_streams, pull=run, close=_asyncify_call)
 
     async def _abuild_stream(
         self,
@@ -779,8 +784,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             reservation.release()
             raise
 
-        stream = steps[endpoint.node]
-        return stream if demand == 0 else _ReleasingStream(stream, reservation)
+        node_streams = tuple(s for nid, s in steps.items() if nid != endpoint.node)
+        return _RunStream(steps[endpoint.node], node_streams, reservation)
 
     async def arun(
         self,
@@ -793,7 +798,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Builds the async item stream for one of the plan's workflow outputs.
 
         Only the selected workflow output's upstream subgraph runs. The returned stream
-        is lazy. Consume it inside this execution's ``async with`` block so its teardown
+        is lazy. Consume it inside this execution's ``async with`` block so its cleanup
         stays owned.
 
         A module without an async implementation runs on a thread it holds while it

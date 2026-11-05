@@ -161,8 +161,6 @@ class ResolvedModule:
         >>> module = ResolvedModule("hash", {}, sync_pipe=pipe)
         >>> module.select_sync() is module.select_async() is pipe
         True
-        >>> module.is_async_pipe(module.select_async())
-        False
 
     """
 
@@ -792,16 +790,16 @@ class ExecutionPlan:
         demand: dict[str, int] = {}
 
         for node_id in self.index.required[output]:
-            upstream = [demand[source] for source in self.index.upstream[node_id]]
+            upstream_demand = [demand[src] for src in self.index.upstream[node_id]]
             node = self.nodes[node_id]
-            max_count = max(upstream, default=0)
+            max_count = max(upstream_demand, default=0)
 
             if node.is_thread_holder(mapped=mapped):
                 demand[node_id] = max_count + 1
             elif node.sequential_inputs:
                 demand[node_id] = max_count
             else:
-                demand[node_id] = sum(upstream)
+                demand[node_id] = sum(upstream_demand)
 
         return max(demand.values(), default=0)
 

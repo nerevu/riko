@@ -110,7 +110,7 @@ def workflow(
         loopable: The pipe's ``loopable`` discovery flag. ``loop`` embeds a tagged pipe
             either way.
 
-        isasync: Whether the pipe is the async interface. Defaults to ``True`` for an
+        isasync: Whether the pipe is an ``async_pipe``. Defaults to ``True`` for an
             async function or an async generator function.
 
     Returns:

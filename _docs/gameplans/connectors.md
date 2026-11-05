@@ -2,11 +2,11 @@
 
 ## 1. Mission
 
-Create optional connector packages that let Riko read from and write to external systems without
+Create optional integrations whose connectors let Riko read from and write to external systems without
 placing protocol clients, credentials, or provider-specific behavior in Core.
 
 This plan owns concrete connector/Target adapter behavior, credential/session mechanics,
-acknowledgements, and optional protocol packages. It consumes:
+acknowledgements, and optional protocol integrations. It consumes:
 
 - canonical `Target` / `Format` / `ReadNode` / `WriteNode` structure from `extensibility.md`;
 - provider-neutral write/action behavior from `effects.md`;
@@ -14,7 +14,7 @@ acknowledgements, and optional protocol packages. It consumes:
 - state/checkpoint semantics from `execution-semantics.md`;
 - fan-out/pub-sub semantics from `fanout-topology.md`;
 - file/artifact codecs from `artifact-conversion.md`;
-- provider semantics from `provider-integrations.md` where the adapter is a SaaS/provider package.
+- provider semantics from `provider-integrations.md` where the connector belongs to a SaaS integration.
 
 ## 2. Package boundaries
 
@@ -322,7 +322,7 @@ exit-code validation, and secret redaction.
 ## 12. SaaS and REST APIs
 
 Generic public APIs may be represented through OpenAPI/MCP capabilities or HTTP/REST Targets rather
-than one core module per SaaS provider. Provider packages are justified when provider semantics,
+than one core module per SaaS provider. Dedicated integrations are justified when provider semantics,
 long-running operations, batching, identity mapping, webhooks, auth, or administration exceed generic
 transport semantics.
 
@@ -330,7 +330,7 @@ Provider-specific Actions remain actions; do not disguise commands as fake write
 
 ## 13. Capability/module projection
 
-A connector/provider package may expose:
+An integration may expose:
 
 - registered Target adapter(s);
 - named source/operator modules where transformation semantics warrant them;
@@ -363,6 +363,13 @@ These surfaces share service/resource implementations rather than duplicating ex
 - S3/GCS/Azure Blob;
 - FTP/SFTP;
 - directory limits/artifactization.
+
+Note (triage 2026-10-28): the async URL readers (`async_url_open`/`async_url_read`) dispatch only
+`http(s)://` to the network and open every other scheme as a local path, so `ftp://` fails async
+while sync `Fetch` reaches it through `urllib`. No tripwire: FTP/SFTP is expected to arrive as a
+Target adapter that need not route through `async_url_open`. When C2 lands, either route
+non-file schemes in the async readers to the adapter or make them raise a clear unsupported-scheme
+error.
 
 ### C3 — Mail/brokers
 

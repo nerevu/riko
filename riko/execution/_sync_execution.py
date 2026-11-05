@@ -27,7 +27,10 @@ from attrs import define, field
 from riko.bado._backend import start_blocking_portal
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._guards import is_awaitable
+from riko.base._iterutils import map_values
+from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
+from riko.types._io import is_async_closeable
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -55,7 +58,7 @@ from ._execution import (
 )
 from ._pools import _PoolLifetime
 from ._resource_acquisition import build_context_manager, call_factory
-from ._resource_teardown import close_resource
+from ._resource_cleanup import close_resource, close_with
 from ._resource_view import ResourceView
 
 if TYPE_CHECKING:
@@ -122,7 +125,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             ThreadPoolExecutor if executor is Executor.THREAD else ProcessPoolExecutor
         )
         pool = pool_type(workers)
-        return self._pools.enter_context(_PoolLifetime(pool, workers))
+        grace = self.settings.shutdown_timeout
+        return self._pools.enter_context(_PoolLifetime(pool, workers, grace=grace))
 
     def close(
         self,
@@ -205,13 +209,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return result
 
-    def _validate_sync_teardown[R](
+    def _validate_sync_cleanup[R](
         self, plan: OwnedPlan[R] | ValueFactoryPlan[R]
     ) -> None:
-        if plan.is_teardown_async:
+        if plan.requires_async_cleanup:
             match plan:
                 case OwnedPlan(cleanup=None):
-                    msg = "async-native resource teardown requires async execution"
+                    msg = "closing an async-only resource requires async execution"
                 case _:
                     msg = "async resource cleanup requires async execution"
 
@@ -222,7 +226,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         value = self.run_async(raw) if is_awaitable(raw) else raw
 
         if (cleanup := plan.cleanup) is not False:
-            self.callback(cleanup, value)
+            self.callback(close_with, cleanup, value)
 
         return value
 
@@ -234,11 +238,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             case ExternalPlan():
                 value = plan.value
             case OwnedPlan():
-                self._validate_sync_teardown(plan)
+                self._validate_sync_cleanup(plan)
                 value = plan.value
-                self.callback(close_resource, plan.cleanup, value)
+                self.callback(close_with, partial(close_resource, plan.cleanup), value)
             case ValueFactoryPlan():
-                self._validate_sync_teardown(plan)
+                self._validate_sync_cleanup(plan)
                 value = self._call_factory(plan)
             case SyncLifecyclePlan():
                 value = self._enter_lifecycle(plan)
@@ -250,7 +254,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
     def _acquire_entry[R](self, resource: Resource[R]) -> Acquisition[ResolvedValue[R]]:
         try:
-            value = self._open(resource.plan)
+            value = self._open(resource._plan)
         except Exception as error:  # noqa: BLE001
             entry: Acquisition[ResolvedValue[R]] = _FailedAcquisition(error)
         else:
@@ -285,9 +289,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """Pulls an async stream item by item through the execution portal."""
         return async_drain(source, self.run_async)
 
+    def _drain_owned(self, source: AsyncIterable[T]) -> Iterator[T]:
+        """Drains an async stream this execution owns and closes it at exit."""
+        if is_async_closeable(source):
+            self.callback(self.portal.call, source.aclose)
+
+        return self._async_drain(source)
+
     def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
-        pairs = self._require_bindings(binding).items()
-        return ResourceView({slot: self.acquire(resource) for slot, resource in pairs})
+        return ResourceView(map_values(self.acquire, self._require_bindings(binding)))
 
     def _map_stream(
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]
@@ -341,7 +351,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
             item_call = node.sync_interface.item_call
-            _mapped = partial(item_call, context=self.context, **extra)
+            context = None if isinstance(node.node, CallableNode) else self.context
+            _mapped = partial(item_call, context=context, **extra)
             mapped = cast("Callable[[T], Iterable[T]]", _mapped)
             stream = self._map_stream(mapped, source)
         elif sync_native:
@@ -351,7 +362,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         else:
             _stream = call(source, context=self.context, **extra)
             avalue = cast("AsyncModuleWrapperOutput[T]", _stream)
-            stream = self._async_drain(require_async_stream(avalue, pipe))
+            stream = self._drain_owned(require_async_stream(avalue, pipe))
 
         return stream
 
@@ -364,14 +375,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         A seed is one item, an item stream, an async item stream, or an awaitable
         resolving to one of those. An awaitable is awaited when the run starts; the
         stream itself stays lazy. A seed that is both sync- and async-iterable is
-        read synchronously. The execution closes a generator seed when it exits.
+        read synchronously. The execution closes a generator seed, or any async seed
+        with ``aclose``, when it exits.
         """
         resolved = self.run_async(seed) if is_awaitable(seed) else seed
 
         if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
             stream = iter(normalize_items(resolved))
         else:
-            stream = self._async_drain(resolved)
+            stream = self._drain_owned(resolved)
 
         if isinstance(resolved, Generator):
             self.callback(resolved.close)
@@ -409,7 +421,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds the item stream for one of the plan's workflow outputs.
 
         Only the selected workflow output's upstream subgraph runs. The returned stream
-        is lazy. Consume it inside this execution's ``with`` block so its teardown stays
+        is lazy. Consume it inside this execution's ``with`` block so its cleanup stays
         owned.
 
         Args:

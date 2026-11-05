@@ -449,7 +449,7 @@ the type/normalization boundary, not the execution lifecycle:
 R3 classifies and normalizes what can be known from the definition. It must **not** inspect a
 not-yet-created factory result to guess its runtime lifecycle. Context construction also does not open,
 await, enter, close, or serialize execution-created resource values. Runtime factory-result
-validation, single-flight lazy acquisition, sync/async adaptation, rollback, and teardown belong to
+validation, single-flight lazy acquisition, sync/async adaptation, rollback, and cleanup belong to
 R4B.
 
 Caller-owned `Resource.from_external(...)` values are the explicit exception to "no live values in a
@@ -753,7 +753,7 @@ Deliver:
   ordering moved to R11, whose provider sessions are their first consumer; R4B ships `lazy=` as a
   recorded but not yet honored flag);
 - transactional partial-acquisition unwind and comprehensive cleanup-error grouping;
-- bounded cancellation-shielded resource teardown;
+- bounded cancellation-shielded resource cleanup;
 - one R4B resource-model cleanup that normalizes user resource declarations into an executable
   lifecycle plan and stops carrying generator/context-manager/instance distinctions past that
   boundary;
@@ -772,13 +772,13 @@ and other consumers remain ecosystem/observability work.
    `asyncio.create_task()` exists only in explicitly characterized transitional code scheduled for
    removal;
 2. every context-managed component is entered on the execution exit stack, and rollback is that
-   stack unwinding rather than a separate teardown path;
+   stack unwinding rather than a separate cleanup path;
 3. lifecycle composition is not execution-mode adaptation: potentially blocking sync entry/exit is
    adapted to a worker before it reaches an async stack;
 4. cross-mode adaptation happens only at an execution boundary chosen during preparation. Parser,
    module, factory, and extension code never creates event loops, portals, executors, worker
    threads, or task groups;
-5. resource teardown is shielded from ambient cancellation only within the shared execution shutdown
+5. resource cleanup is shielded from ambient cancellation only within the shared execution shutdown
    budget; cancellation remains the primary outcome and no per-resource timeout exists initially;
 6. event delivery is execution-owned and must not create a parallel callback/lifecycle framework.
 
@@ -786,13 +786,13 @@ and other consumers remain ecosystem/observability work.
 
 Do not wait until R12 to discover that the execution lifecycle cannot hold a real client. R4B exit
 tests prove a real sync lifecycle under **both** sync and async execution, a real async lifecycle
-under native async execution, and deterministic rejection of async-native teardown under sync
-execution. The fourth quadrant — async-native teardown on `SyncExecution` — is an explicit
+under native async execution, and deterministic rejection of async-native cleanup under sync
+execution. The fourth quadrant — async-native cleanup on `SyncExecution` — is an explicit
 `InvalidPipelineError` raised before acquisition, not a bridged run, so async resources are never
 smuggled through the sync portal for cleanup.
 
 Covered cases: eager open, mid-execution failure rollback, failure-induced task cancellation,
-ambient-cancellation-safe teardown, exception-aware `__exit__`/`__aexit__` teardown, and
+ambient-cancellation-safe cleanup, exception-aware `__exit__`/`__aexit__` cleanup, and
 lone-versus-grouped cleanup-error reporting. Lazy open and early consumer abandonment are deferred
 past this foundation commit. R12 proves the **external package API**; R4B proves the
 **runtime architecture**.
@@ -804,13 +804,13 @@ rather than twice. R4B collapses the two resource-model concerns into a single c
 carrying them forward as separate hotspots.
 
 Classify and validate each user declaration once, then prepare it into an executable lifecycle plan
-carrying `acquire`, native mode, `enter`, `teardown`, ownership, and cleanup policy. After that
+carrying `acquire`, native mode, `enter`, `close`, ownership, and cleanup policy. After that
 boundary the runtime consumes the plan; it does not re-inspect the original generator-vs-context-
 manager-vs-instance syntax.
 
 As built (user ruling 2026-10-16, reshaped twice on 2026-10-21): the plan is the definition's stored
-data, not a separate prepared object. `Resource` stores `plan`, `credential`, and `lazy`; `plan` is a
-tagged union defined in `riko/types/_resource.py` and exported from `riko.types` — `ExternalPlan` /
+data, not a separate prepared object. `Resource` stores `_plan`, `credential`, and `lazy`; `_plan` is a
+private tagged union defined in `riko/types/_resource.py` (only `ResourceStrategy` is exported, 2026-10-28) — `ExternalPlan` /
 `OwnedPlan` / `ValueFactoryPlan` / `SyncLifecyclePlan` / `AsyncLifecyclePlan`. Each constructor
 classifies its declaration once (`build_factory_plan` / `build_lifecycle_plan`, where the generic
 factory guards narrow), so no field-pair validator or cast exists. Lifecycle records split on
@@ -820,17 +820,17 @@ picklable `enter` (a generator function is wrapped through a module-level partia
 given). `strategy`, `async_native`, `external`, and `value` are derived properties. Both executions
 `match` on the plan; `FactoryKind` no longer exists. The records are passive: calling a value factory
 and building a lifecycle's context manager live in `riko/execution/_resource_acquisition.py` (where
-the `(ctx, resources)` invocation extends them), and owned-value teardown stays in
-`riko/execution/_resource_teardown.py`.
+the `(ctx, resources)` invocation extends them), and owned-value cleanup stays in
+`riko/execution/_resource_cleanup.py`.
 
 1. Classification is input machinery and not the runtime ontology. The normalization boundary
    preserves the distinctions required to acquire and adapt a resource — value factory vs
-   lifecycle, explicit cleanup vs intrinsic teardown, native sync vs async — and drops the ones that
+   lifecycle, an explicit cleanup callable vs intrinsic cleanup, native sync vs async — and drops the ones that
    only described the user's original syntax (generator function vs context-manager factory vs
    instance survives only as the `source` a lifecycle record keeps for identity).
 2. Public/static `OneShotResource` vs `ReusableResource` remain user-facing declaration types (on
    the stable `riko` surface with `Resource`); `Context` admission is their only `isinstance` reader.
-   Reuse, ownership, and no-op-vs-real teardown are carried into execution by the plan variant, not
+   Reuse, ownership, and no-op-vs-real cleanup are carried into execution by the plan variant, not
    by subclass bodies; the private variants (`_OwnedResource`, `_LifecycleResource`,
    `_ExternalResource`, `_FactoryResource`) are absent.
 
@@ -901,7 +901,7 @@ Repaired locally in the same series (not deferred): non-default output ports now
 reachable `StreamEdge.source_port` other than `out`, or a selected output whose port is not `out`,
 raises `InvalidPipelineError` instead of silently aliasing the node's `out` stream; executable
 port-keyed fan-out/split delivery remains R7, which removes the guard. Regressions:
-`test_run_rejects_nondefault_source_output_port` / `test_run_rejects_nondefault_selected_output_port`.
+`tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects` rows `nondefault-source-output-port` / `nondefault-selected-output-port`.
 One more fail-closed guard sits beside it, `Workflow.require_executable()` (called from `ExecutionPlan.validate()`):
 a source port feeding more than one stream edge (the executor keys streams by node, so both consumers
 would share one iterator). R7's port-keyed delivery removes it. Regression:
@@ -926,8 +926,7 @@ is eager), surfaced a bare `TypeError` under async execution, and let a splitter
 were lists through as items. `_adapt.py`'s `require_items`/`arequire_items` are now `require_stream`/
 `require_async_stream(value, pipe)`: the execution-side boundary earns its narrowing from the same
 `is_splitter` `TypeIs` guard (`riko/types/_wrappers.py`) on the pipe's declared type, consuming nothing.
-Regressions: `test_build_plan_rejects_splitter_node_before_any_node_runs`,
-`test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
+Regressions: `test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
 `test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
 `test_iterating_a_split_pipeline_raises_before_running` pair. The async splitter wrapper's inability
 to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_async_input_stream`).
@@ -945,12 +944,12 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
   shutdown (the async task group arrives with R7's spawned tasks).
 - **MIGRATE:** P10 bounded/executor mechanics and R3 resource acquisition run under the common
   execution lifetime; resource declarations normalize once into the executable lifecycle plan
-  (`Resource.plan`). The
+  (`Resource._plan`). The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
   until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/public/test_write.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
-  private resource-variant subclass hierarchy is absent, replaced by the `Resource.plan` tagged union.
+  private resource-variant subclass hierarchy is absent, replaced by the `Resource._plan` tagged union.
 
 ### R4C — Callable nodes (pure one-to-one `map`)
 
@@ -1046,7 +1045,10 @@ Deliver:
   root takes an input stream but declares no inputs counts as a source and starts itself as a node of
   another pipeline, while one that declares inputs over a source root counts as a transformer.
   Routed here from R4C's per-run seed work (2026-10-24) because the fix belongs with the input
-  declarations it reads.
+  declarations it reads. Since R4C's self-starting check, the second case fails outright: run
+  unseeded, it raises "requires a seed" instead of starting its source root (triaged 2026-10-28).
+  Strict xfail
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
 - an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule starts any
   non-output node whose outgoing edges all enter named ports, inferred from graph position alone,
   so an ordinary transform there runs on the internal placeholder seed (`hash` feeding
@@ -1054,7 +1056,7 @@ Deliver:
   String Builder root in `pipe_b962874`) until a node can declare itself a value source; whether
   undeclared feeders then keep starting themselves is this phase's call (if they do, delete the
   tripwire rather than flip it). Strict xfail
-  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1137,7 +1139,7 @@ Deliver:
   of a sync-only `udf` makes `.map` of an async callable raise "neither a sync nor an async
   callable" although `udf` itself never runs. The E1 plain-callable slot decision removes the
   borrowing. Strict xfail
-  `tests/public/test_pipeline.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
+  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
 annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers
@@ -1181,7 +1183,7 @@ accelerated encoder lands, and a conf-identity key goes stale under mutation). `
 supported way to amortize repeated calls meanwhile. No tripwire: only a timing test could probe it.
 
 Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not describe
-their callables. `_build_casters` (`riko/modules/_prepare.py`) hides behind
+their callables. `_build_caster` (`riko/modules/_prepare.py`) hides behind
 `cast("SyncConfCastFunc", ...)` that its `cast_pass` branch returns the conf unchanged rather than a
 `DynamicConf`, and `ArgCaster` (`riko/types/_wrappers.py`) is `Callable[..., T]` although `dispatch`
 calls every caster with exactly one positional argument. Retype them with the typed config object
@@ -1209,7 +1211,7 @@ STABLE signature accepts. Attribute chaining now accepts only built-in module id
 (`BUILTIN_MODULE_IDS` in the generated `riko/types/_module_ids.py`; other names raise
 `AttributeError`, 2026-10-21 triage), so R4E can type it with generated per-module signatures under
 `TYPE_CHECKING` rather than `Pipeline[Any]`. (2) The generated `*RawConf` types are asserted private
-(`tests/public/test_modules.py::test_raw_module_confs_are_private`) while generated workflow modules
+(`tests/internal/test_codegen.py::TestImportSurface::test_raw_module_confs_are_private`) while generated workflow modules
 import them from `riko.types.modules`; the contract decision here must give generated code a supported
 conf type (shared with the R9 note on generated-module imports). (3) There is no public route from a
 module *name* to its conf type: `describe_module` reports no conf, `get_conf_type` takes a parser
@@ -1244,7 +1246,7 @@ these go.
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
   `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read`
   (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes. `@processor async def
-  pipe` wraps as async; `tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises`
+  pipe` wraps as async; `tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises`
   (which pins today's `TypeError`) is replaced by a test that it wraps.
 - **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees,
   including the per-item `TypeError`s for a missing `extract` key (`build_conf` in
@@ -1353,7 +1355,7 @@ Deliver:
 - node semantic fingerprints using R2A encoding and the R2B best-effort/version contract;
 - custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference is ambiguous,
   including which modes a one-to-one `map` accepts (R4C carries all three inert; strict xfail
-  `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`);
+  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`);
 - node `version=` override plumbing;
 - declared resource bindings included in semantic fingerprints by resolved definition, not Context
   lookup name.
@@ -1442,6 +1444,12 @@ Deliver:
   `TypeError` (tripwire `tests/public/test_write.py::TestPipelineWriteDefinition::test_requires_a_destination`;
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
+- a write node that feeds no workflow output still runs: execution today plans only each output's
+  upstream subgraph (`GraphIndex.required`), so an effect branch hanging off the main path would be
+  skipped. Pure off-output branches stay skipped (their values are discarded, per
+  [fanout-topology.md](fanout-topology.md)), so validation does not reject unreachable nodes
+  (repo-audit triage 2026-10-29). Tripwire:
+  `tests/public/test_write.py::TestPipelineWrite::test_a_write_node_off_every_output_path_still_writes`.
 
 `write()` is an effect operation, not a public module and not a terminal by definition. Its graph
 position determines whether the user continues chaining. There is no public `sink()`
@@ -1454,20 +1462,36 @@ reconciliation/mutation. Provider commands that do not naturally mean data write
 Concrete FILE/HTTP/S3/Postgres/Airtable/Intune/etc. adapters remain R11.
 
 Audit note (2026-10-10 structural audit): `riko/runtime/_write_session.py` (sync/async write sessions,
-incremental/framed delivery, finalize/abort/teardown) has no runtime importer; only
-`tests/internal/test_definitions.py` exercises it since the v1 collections write verbs went at
+incremental/framed delivery, finalize/abort/close) has no runtime importer; only
+`tests/internal/test_io.py` exercises it since the v1 collections write verbs went at
 v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/finalize state machine
 (`file_write_session` vs `async_file_write_session` differ only by `await`; the
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
 decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
 with its tests). Likewise `resolve_format` (`riko/definitions/_targets.py`), whose only consumer outside
-`_targets.py` (where `FileTarget.capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
+`_targets.py` (where `FileTarget.get_capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
 audit): reuse it for `WriteNode` format inference from a locator; it stays either way because
 `FileTarget` needs it.
 Coverage triage (2026-10-15): the async twin's incremental stream write, append-mode trailing-newline
 probe (`aends_with_newline`/`ainitial_file_size`/`aneeds_newline`), and unsupported-target guard in
 `async_file_write_session` run in no test; they were left untested rather than mirrored, so whichever
 shape this phase picks must cover them.
+Shape audit (2026-10-29): the same accessors mix shapes — `initial_file_size`/`ainitial_file_size`
+memoize by hand into a `None` field instead of a `cached_property` (the async one is a `property`
+returning a coroutine), `needs_newline`/`skip_header` and their `a*` twins are properties that
+change state when read, `ends_with_newline`/`aends_with_newline` are zero-argument methods beside
+those properties, `_framed_content`/`_aframed_content` build the framed document behind a noun
+name, and the `input_shape` setter performs a one-shot state transition that can raise. Whichever
+shape this phase picks replaces them (explicit state-transition methods, a cached size, a
+`_build_framed_content`), so they were left as they are rather than reshaped ahead of it.
+Atomic publication (shutdown-timeout triage 2026-10-29): a replace write must leave the old content
+in place until it publishes ([effects.md § 12](effects.md#12-fileserialized-writes): "temp artifact
+before atomic publication"). Today the framed commit (`_commit`/`_acommit`) opens the destination
+with `"wb"` and only then writes, so anything that interrupts it in between — including the
+30-second shutdown timeout cutting off an early-close finalize, which this phase makes reachable —
+leaves an empty file. Streaming replace writes open the destination up front, so a failed run
+destroys it too. Tripwires: `tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
+and `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`.
 
 **Exit:**
 
@@ -1735,6 +1759,12 @@ Deliver iterative mode:
 - explicit stable loop `id=` where cross-revision state identity is required;
 - resume counts total iterations across executions;
 - Pipeline DAG remains acyclic; feedback is internal loop execution semantics;
+- self-embedding stays rejected: `WorkflowResolver.load` refuses a stored workflow that names
+  itself, directly or through other stored workflows (user ruling 2026-10-29, unboundedness-audit
+  triage). That includes data-driven recursion that would terminate (a filter emptying the stream
+  before a self-`loop`); such work moves to `until`/`max_iterations`, which carry a hard bound. Do
+  not add a runtime recursion-depth limit in its place. Test:
+  `tests/internal/test_modules.py::TestWorkflowResolver::test_require_rejects_a_stored_workflow_that_embeds_itself`;
 - the canonical Workflow v2 structural fields for `until`/`max_iterations` (R4A did not build them).
 - the structural type of `ModuleNode.embed`, settled together with what an embed may reference
   (registered module, processor, stored workflow, or embedded `Pipeline`): today the field is typed
@@ -1759,7 +1789,7 @@ the tag survives, it, `build_workflow_pipes`, and the `dispatcher` instance need
 planned as `riko.ext.workflows`: hand-written workflow modules import the decorator, and generated ones
 `build_workflow_pipes` and `dispatcher`, from private `riko.runtime._workflow_pipes` and
 `riko.runtime._resolver` today (2026-10-10 terminology audit; tripwire
-`tests/internal/test_codegen.py::TestCompileWorkflow::test_generated_source_imports_no_private_module`).
+`tests/public/test_workflow.py::TestCompileWorkflow::test_generated_source_imports_no_private_module`).
 If the tag survives as its own marker (see the type tag below), name the marker and its guard after
 the decorator, but not a bare `.workflow` attribute: `pipeline.workflow` is a `Workflow`. A tagged pipe's `.name` is still the function's `__name__` (`pipe`/`async_pipe`), not the
 `pipe_<id>` the resolver knows, so the keep/delete decision should also say what `.name` a stored
@@ -1776,7 +1806,7 @@ the tag moves to its own marker read by its own guard, rather than a fourth `.ty
 Audit note (2026-10-10 structural audit): `riko/modules/_loop.py` carries twin sync/async bodies
 (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_parent`, `_run_loop`/`_arun_loop`) and
 one copy has already drifted (`module_name` vs `op_module_name`); `_take_first` re-implements
-`_close_generator` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
+`_maybe_close` from `riko/execution/_adapt.py`. Consolidate the pure logic into one body behind an
 iterator adapter (as the execution split did for `_resolve_inputs`) when this phase settles the embed
 shape, since the names change then anyway.
 
@@ -1812,6 +1842,11 @@ R10 therefore owns:
   aliases (async **operators** already return an `AsyncIterator` directly);
 - proof that genuinely eager operators (`sort`, `reverse`, etc.) are the only intentional
   materialization points.
+- the operator/splitter parser input contract: `setup()` hands a parser two lazy views (`tuples` and
+  the item stream) over one shared iterator, and a parser that reads both interleaves or drops items.
+  Select the one view a parser needs before invoking it and share the view-building between
+  operator and splitter; this changes the `riko.ext` parser protocols, so it needs a compatibility
+  boundary (repo-audit triage 2026-10-29, design note, no tripwire).
 - a sync-only loop embed under an async host honors `count="first"` lazily instead of running the
   child to completion on its worker (strict-xfail tripwire
   `tests/internal/test_execution_plan.py::TestAsyncEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
@@ -1830,6 +1865,12 @@ the Feed-native path. The collapsed table-reader body also owns the one narrowin
 `Item`: the local `typings/meza/` stubs type rows as `dict[str, str | None]` (`read_csv`) or `object`
 (`read`), which the invariant `Item` dict union rejects, so `csv.py` and `fetchtable.py` each carry two
 `cast("Stream", ...)` today (2026-10-27 typed-boundary triage).
+
+Audit note (2026-10-29 repo audit): `_AsyncWrapperStream` (`riko/modules/_decorators.py`) runs the
+parser again when one result is awaited twice or awaited and then iterated, and its `aclose()` cannot
+reach a stream obtained by awaiting. This phase deletes the awaitable processor-wrapper shape rather
+than memoizing it. Tripwire:
+`tests/internal/test_modules.py::TestAsyncProcessor::test_awaiting_the_call_twice_runs_the_parser_once`.
 
 Audit note (2026-10-23 file-split audit): `riko/modules/_decorators.py` (~2050 lines) has three clean
 seams — the `Module` base with its option sets and terminal materialization, the `_Prepared*` call
@@ -1863,8 +1904,8 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
   thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire in
   `tests/internal/test_execution_plan.py`);
 - lazy resources acquire on first use rather than at run start, and declared resource-to-resource
-  dependencies acquire dependency-first and tear down dependent-first (moved from R4B; tripwire
-  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
+  dependencies acquire dependency-first and clean up dependent-first (moved from R4B; tripwire
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);
 - factories declared `(ctx, resources)` receive a `ResourceView` (`execution-semantics.md` §
   Execution-bound resource view). `ResourceView` lives in `riko/execution/_resource_view.py` today;
   factory definitions sit in `definitions`, which cannot import `execution`, so move it to a layer
@@ -1958,7 +1999,7 @@ not block proving ownership boundaries.
 
 ### R12 — external proof and release gate
 
-Prove the architecture with at least one external extension package before freezing 1.0:
+Prove the architecture with at least one external plugin before freezing 1.0:
 
 - entry-point module registration through retained P8 seam;
 - declared Resource dependency;
@@ -1977,7 +2018,7 @@ v1-cutoff gates.
 
 **Exit:**
 
-- **ADD:** an external extension package proves the frozen resource/state/pubsub/target/action seams,
+- **ADD:** an external plugin proves the frozen resource/state/pubsub/target/action seams,
   and the 1.0 release-readiness gates pass.
 - **MIGRATE:** generated discovery, release docs, wheels, and public-surface checks describe only the
   final architecture.
@@ -2060,7 +2101,7 @@ The implementation reconciliation is complete when:
    semantics rest on explicit `version=` rather than on automatic callable introspection being
    complete;
 7. reusable owned resource lifecycle is definition/factory based, and every execution-owned
-   acquisition, context manager, task, rollback, bridge, and teardown is attached to the execution's
+   acquisition, context manager, task, rollback, bridge, and cleanup is attached to the execution's
    lifetime primitives;
 8. cache replay uses the finalized Mezmoize-backed CacheNode contract and never publishes an
    incomplete fill;

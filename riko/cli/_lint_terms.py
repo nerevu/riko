@@ -41,11 +41,13 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("other mode", "sync or async"),
     BannedTerm("both sides", "sync and async"),
     BannedTerm("other side", "the sync or async counterpart"),
-    BannedTerm("chosen side", "the sync or async interface"),
+    BannedTerm("chosen side", "the sync or async run"),
     BannedTerm("each side", "sync and async"),
-    BannedTerm("missing side", "the missing sync or async interface"),
+    BannedTerm("missing side", "the missing `pipe` or `async_pipe`"),
     BannedTerm("terminal sub-source", "secondary input stream"),
     BannedTerm("upstream stream", "input stream"),
+    BannedTerm("upstreams", "input streams or node streams"),
+    BannedTerm("downstreams", "output streams or downstream nodes"),
     BannedTerm("scoped run", "context manager (`pipeline.open(items)` returns one)"),
     BannedTerm("input requirements", "input declarations"),
     BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
@@ -64,19 +66,29 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("pipe file", "pipe script"),
     BannedTerm("wrapper options", "decoration options"),
     BannedTerm("decorator options", "decoration options"),
+    BannedTerm("module wrapper", "pipe callable"),
+    BannedTerm("decorated pipe", "pipe callable"),
+    BannedTerm("sync interface", "a sync run, or `pipe`"),
+    BannedTerm("async interface", "an async run, or `async_pipe`"),
+    BannedTerm("async source", "async input stream or async iterable"),
     BannedTerm("call-time options", "call options or keyword arguments"),
     BannedTerm("export target", "export format"),
     BannedTerm("destination type", "cast type"),
     BannedTerm("item attribute", "item field"),
     BannedTerm("resolver façade", "dispatcher"),
-    BannedTerm("entry-point plugin", "extension package"),
-    BannedTerm("provider package", "extension package"),
+    BannedTerm("entry-point plugin", "plugin"),
+    BannedTerm("extension package", "plugin"),
+    BannedTerm("provider package", "plugin or integration"),
+    BannedTerm("integration package", "plugin or integration"),
+    BannedTerm("connector package", "plugin or integration"),
     BannedTerm("provider command", "backend command"),
+    BannedTerm("teardown", "cleanup"),
+    BannedTerm("tear down", "clean up or close"),
+    BannedTerm("tears down", "cleans up or closes"),
+    BannedTerm("torn down", "cleaned up or closed"),
 )
 
-_EXCLUDED_NAMES = frozenset(
-    {"CHANGES.rst", "MIGRATION.rst", "_lint_terms.py", "test_cli.py"}
-)
+_EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
 
 
 def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
@@ -89,6 +101,7 @@ PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work
 RUN_SCOPING = BannedTerm(
     "scoping a run", "context manager (`pipeline.open(items)` returns one)"
 )
+UPSTREAM_NOUN = BannedTerm("upstream as a noun", "input stream or node stream")
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
@@ -110,6 +123,14 @@ _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     (
         REMOVED_EXT_PATH,
         re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
+    ),
+    (
+        UPSTREAM_NOUN,
+        re.compile(
+            r"\b(?:its|their|the whole|a suspended)\s+(?:up|down)streams?\b"
+            r"(?!\s+(?:nodes?|subgraph|reads?|reader)\b)",
+            re.IGNORECASE,
+        ),
     ),
 )
 
@@ -167,9 +188,9 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
 
     Args:
 
-        roots: Files or directories to scan; the changelog and migration guide
-            are skipped because they quote released wording, and the banned list
-            and its tests because they spell out every phrase.
+        roots: Files or directories to scan. Skips the migration guide because it quotes
+            released wording. Skips the banned list and its tests because they spell out
+            every phrase.
 
     Yields:
 
@@ -203,6 +224,7 @@ __all__ = [
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
     "RUN_SCOPING",
+    "UPSTREAM_NOUN",
     "BannedTerm",
     "TermIssue",
     "gen_phrase_issues",

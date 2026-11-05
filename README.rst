@@ -718,7 +718,7 @@ Project Structure
     │   ├── *.py              (runnable pipe scripts)
     │   ├── workflows/*       (example WorkflowDocuments)
     │   ├── pyworkflows/*     (hand-written Python equivalents)
-    │   └── riko-example-ext/ (example extension package)
+    │   └── riko-example-ext/ (example plugin)
     ├── riko
     │   ├── __init__.py       (stable public API)
     │   ├── base/             (constants, paths, logging, helpers, exceptions)
@@ -729,7 +729,7 @@ Project Structure
     │   ├── io/               (sync/async URL and file I/O, serialization)
     │   ├── parsing/          (config, XML/HTML, and document parsing)
     │   ├── rss/              (feed discovery and parsing)
-    │   ├── execution/        (sync/async executions, resource acquisition and teardown)
+    │   ├── execution/        (sync/async executions, resource acquisition and cleanup)
     │   ├── runtime/          (export, compiler, registries, pipelines, pub/sub)
     │   ├── modules/          (the built-in modules)
     │   ├── ext/              (extension API: decorators, protocols)

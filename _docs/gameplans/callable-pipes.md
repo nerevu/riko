@@ -230,7 +230,7 @@ async def pipe(item, **kwargs): ...
 `@processor async def async_pipe`, but `@processor async def pipe` keeps raising `TypeError`
 until interfaces are classified by `isasync` rather than by attribute name. That change is
 scheduled in R4E ([implementation-sequence.md](implementation-sequence.md), 2026-10-22 triage);
-`tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises` pins the
+`tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises` pins the
 current `TypeError` until then.
 
 A single async implementation need not be renamed `async_pipe`. `isasync=True` remains the
@@ -349,7 +349,7 @@ identity: IdentityMode  # "preserve" | "derive" | "combine"
 The values are an `IdentityMode` `StrEnum` (`PRESERVE`/`DERIVE`/`COMBINE`, bare strings
 accepted), since callers supply them at a Python call site (decided 2026-10-22). R4C's `map`
 accepts and carries all three without semantics; R5A decides which apply to a one-to-one node
-(strict xfail `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`).
+(strict xfail `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
 
 * `preserve`: 1 -> 1 identity/generation preservation;
 * `derive`: deterministic child identity/generation;
@@ -383,6 +383,12 @@ worker pools
 
 Planning fails before workers start when required configuration cannot be safely serialized.
 No process-only public Context type is introduced.
+
+Shipped (R4C, repo-audit triage 2026-10-29): a callable node never reads the run's `Context`, so
+the process executor ships its calls without one, and an
+unpicklable resource it does not declare no longer refuses the run. Module nodes still ship the
+`Context`, because wrappers read its `inputs`/`test`/`mode`. Regression:
+`tests/public/test_pipeline.py::TestExecutionSettings::test_a_process_mapped_callable_ignores_unused_context_resources`.
 
 ### Side effects and idempotency
 

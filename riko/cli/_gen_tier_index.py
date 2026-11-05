@@ -1,35 +1,41 @@
 # vim: sw=4:ts=4:expandtab
 """
-Generates each test tier's index from the subjects its files declare.
+Generates each test tier's ``__init__.py`` from the subjects its files declare.
 
-A tier folder's ``__init__.py`` docstring ends with an index: one row per test file
-naming the subjects it owns, in file order. A subject is a top-level ``Test<Subject>``
-class name without its ``Test`` prefix; an ``Async<Subject>`` twin shares the row entry
-of its ``<Subject>`` or ``Sync<Subject>`` class.
+The whole file is generated: a do-not-edit header, then a docstring holding the
+tier's one-line summary and its index, with one row per test file naming the
+subjects it owns, in file order. A subject is a top-level ``Test<Subject>`` class
+name without its ``Test`` prefix; an ``Async<Subject>`` twin shares the row entry of
+its ``<Subject>`` or ``Sync<Subject>`` class.
 """
 
 from __future__ import annotations
 
 import ast
-import re
 import textwrap
 from typing import TYPE_CHECKING
 
 from riko.base._paths import TESTS_DIR
+from riko.base._strutils import get_codegen_note
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-TIERS = ("public", "internal", "functional")
+TIER_SUMMARIES = {
+    "public": "Provides public API tests: tests that use only supported names.",
+    "internal": "Provides internal tests: mechanics, drift guards, and failure modes.",
+    "functional": (
+        "Provides functional tests: CLI commands, examples, and stored workflows "
+        "end to end."
+    ),
+}
+TIERS = tuple(TIER_SUMMARIES)
+GENERATED_HEADER = f"# {get_codegen_note('--tests')}"
 INDEX_HEADER = "Index (file, then the subjects it owns, in file order):"
 _LINE_LENGTH = 88
 _INDENT = " " * 4
 _GAP = " " * 4
-_INDEX = re.compile(
-    rf"(?P<head>^{re.escape(INDEX_HEADER)}\n\n).*?(?P<tail>^\"\"\"$)",
-    re.MULTILINE | re.DOTALL,
-)
 
 
 def gen_subjects(tree: ast.Module) -> Iterator[tuple[str, ast.ClassDef]]:
@@ -112,7 +118,7 @@ def build_index_rows(tier: Path) -> str:
 
 def generate_tier_index(tier: Path) -> str:
     """
-    Regenerates a tier folder's ``__init__.py`` source with a current index.
+    Generates a tier folder's ``__init__.py`` source with a current index.
 
     Args:
 
@@ -120,22 +126,21 @@ def generate_tier_index(tier: Path) -> str:
 
     Returns:
 
-        The ``__init__.py`` source with every row after the index header replaced.
+        The whole ``__init__.py`` source: the generated-file header, then a
+        docstring with the tier's summary and its index rows.
 
     Raises:
 
-        ValueError: If the docstring does not end with an index header.
+        ValueError: If the folder is not one of the test tiers.
 
     """
-    text = (tier / "__init__.py").read_text(encoding="utf-8")
+    summary = TIER_SUMMARIES.get(tier.name)
+
+    if summary is None:
+        raise ValueError(f"{tier.name!r} is not a test tier: {', '.join(TIERS)}")
+
     rows = build_index_rows(tier)
-    repl = lambda match: f"{match['head']}{rows}{match['tail']}"
-    generated, count = _INDEX.subn(repl, text, count=1)
-
-    if not count:
-        raise ValueError(f"the docstring has no {INDEX_HEADER!r} block")
-
-    return generated
+    return f'{GENERATED_HEADER}\n\n"""\n{summary}\n\n{INDEX_HEADER}\n\n{rows}"""\n'
 
 
 def main() -> int:

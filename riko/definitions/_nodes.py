@@ -11,6 +11,16 @@ Nodes carry declarative intent, never execution state, and no node runs here.
 ``WriteNode`` and ``ActionNode`` carry a ``backend`` and serialization ``fmt`` rather
 than a live resource or write session.
 
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import ModuleNode
+        >>>
+        >>> node = ModuleNode(id="fetch-1", name="fetch", conf={"url": "feed.xml"})
+        >>> node.family, node.name, dict(node.conf)
+        ('module', 'fetch', {'url': 'feed.xml'})
+
 """
 
 from __future__ import annotations
@@ -433,10 +443,10 @@ def get_family_edges(
 type RunnableNode = ModuleNode | CallableNode[object]
 
 
-def require_runnable_node(value: Node, what: str | None = None, **_) -> RunnableNode:
+def require_runnable_node(value: Node) -> RunnableNode:
     if not isinstance(value, (ModuleNode, CallableNode)):
         msg = f"{value.family} node execution is not yet supported"
-        raise InvalidPipelineError(msg if what is None else f"{what}: {msg}")
+        raise InvalidPipelineError(msg)
 
     return value
 

@@ -422,7 +422,7 @@ second retry loop around a Riko operation already governed by `RetryPolicy`.
 
 ## 14. Connector and event integration
 
-Microsoft packages implement the same shared connector boundaries as other providers:
+The Microsoft integrations implement the same shared connector boundaries as other integrations:
 
 ```text
 Graph / ARM

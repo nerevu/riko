@@ -8,6 +8,7 @@ from time import struct_time
 from typing import TYPE_CHECKING, overload
 
 from riko.base._guards import is_mapping
+from riko.base._iterutils import map_keys
 
 if TYPE_CHECKING:
     from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView
@@ -79,7 +80,7 @@ class Objectify[V](_Objectify, Mapping[str, V]):
             'foo'
 
         """
-        _data = {k.lower(): v for k, v in data.items()}
+        _data = map_keys(str.lower, data)
         super().__init__(_data, func, **defaults)
 
     def __len__(self) -> int:

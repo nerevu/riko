@@ -99,7 +99,7 @@ class TargetRegistry(Registry[type[Target]]):
             True
 
         """
-        entry = self._registered(str(backend))
+        entry = self._load_entry(str(backend))
 
         if entry is None:
             entry = self._resolve_builtin(backend)

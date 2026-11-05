@@ -762,13 +762,13 @@ by name (see `Registering a custom module`_ below).
 A ``processor`` can return one value, an ``item``, or an iterator. Use ``field``
 and ``assign`` at the call site to control extraction and assignment.
 
-The async interface accepts a sync *or* async callable, so ``async_pipe`` may be a plain
-``def`` that returns the sync parser (as built-in ``count``/``reverse``/``sort`` do)
-*or* an ``async def`` that awaits real I/O (as ``strreplace``/``timeout`` and
-`register_module.py`_ do). Pass ``isasync=True`` when you wrap a sync function for the
-async interface. At runtime it is only required when the function isn't named
-``async_pipe``, but a type checker needs it whenever you assign the result to a typed
-``async_pipe`` slot (as `register_module.py`_ does).
+The wrapped function can be a plain ``def`` that returns a synchronous result (as built-in
+``count``/``reverse``/``sort`` do) *or* an ``async def`` that awaits real I/O (as
+``strreplace``/``timeout`` and `register_module.py`_ do). Pass ``isasync=True`` to the
+decorator to wrap a sync function that should be used for async runs. At runtime this is
+only required when the function isn't named ``async_pipe``. A type checker needs it
+whenever you assign the result to a typed ``async_pipe`` slot (as `register_module.py`_
+does).
 
 Creating a custom operator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -802,7 +802,7 @@ entry point.
 
 Build a ``ModuleDefinition`` from a module exposing ``pipe``/``async_pipe`` with
 ``ModuleDefinition.from_module``, or pass those callables explicitly. See
-`riko-example-ext`_ (installable extension package), `register_module.py`_ (runtime
+`riko-example-ext`_ (installable plugin), `register_module.py`_ (runtime
 ``register_module`` with explicit callables), and `register_alias.py`_ (runtime
 ``register_module`` aliasing a built-in), plus the `FAQ`_ entry
 `Can I create custom modules`_ for the mechanics.

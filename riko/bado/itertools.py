@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         Awaitable,
         Callable,
         Iterable,
+        Iterator,
     )
 
     from riko.types._streams import AnyIterable
@@ -150,6 +151,32 @@ async def alist[T](source: AnyIterable[T]) -> list[T]:
 
     """
     return [item async for item in as_async(source)]
+
+
+async def materialize[T](source: AnyIterable[T]) -> Iterator[T]:
+    """
+    Collects a sync or async iterable into a sync iterator.
+
+    Args:
+
+        source: A sync or async iterable.
+
+    Returns:
+
+        An iterator over the items of *source* in order.
+
+    Examples:
+
+        >>> from riko import as_async, run
+        >>>
+        >>> async def main():
+        ...     print(next(await materialize(as_async([1, 2]))))
+        >>>
+        >>> run(main)
+        1
+
+    """
+    return iter(await alist(source))
 
 
 async def async_iter[T](
@@ -284,7 +311,7 @@ def async_reduce[T, S](
 async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     content: Iterable[T],
-    limit: int = 0,
+    limit: int = DEF_CONCURRENCY_LIMIT,
     *,
     budget: Semaphore | None = None,
     **kwargs: object,
@@ -298,8 +325,8 @@ async def async_map[T, S](
 
         content: The items to map over.
 
-        limit: Maximum number of concurrent calls. ``0`` (the default) runs them all
-            at once.
+        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``,
+            16). ``0`` runs them all at once.
 
         budget: A semaphore shared across maps that caps how many calls run at
             once in total. A permit is held only while *func* runs (default: None).

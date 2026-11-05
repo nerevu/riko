@@ -22,6 +22,13 @@ Consolidate aggressively, but **not by chasing test count**. One test owner per 
 > cases. **Internal tests** own generator mechanics, drift guards, and failure modes.
 > **Functional tests** own cross-layer fixture and CLI integration.
 
+The boundary with `manage lint` is just as fixed: pytest input is Python, runtime, and API
+behavior plus the generators' and linters' own mechanics over fixture text, while `manage lint`
+owns repository consistency (doc and Markdown freshness, citation checks, import architecture).
+A tracked Markdown or prose file is never pytest input: a check that a doc edit would fail
+belongs in `manage lint --docs`, so the suite cannot go red over documentation. Generated
+Python compared against its generator stays a pytest drift guard.
+
 Because pytest executes doctests in Python modules, `README.rst`, and `docs/*.rst`, the
 README/FAQ already exercise string-based `SyncPipe` construction and `list_modules()` filtering —
 so new tests do not re-prove those string paths. The biggest net improvement is **making each
@@ -84,12 +91,12 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestDates`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestTtToDatedict::test_utime_honors_aware_offset`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
 | ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_values.py::TestParsers`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
 | ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_modules.py::TestPrepare`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
-| ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_io.py::TestFetch::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
+| ~~`has_header=False` closes the original source as well as the spool~~ — **landed** as `tests/internal/test_modules.py::TestCsvParser::test_csv_headerless_closes_original_source` (spies the original's `close`, cross-version); fix predated this via the variadic `auto_close` (correctness-audit R16) | internal | R16 |
 
 Both open-question rows are now resolved. R19 (`filter`'s `greater`/`less` over strings) was
 **decided** in favour of type-aware comparison — numeric when both operands coerce to a number,
@@ -100,7 +107,7 @@ deferred to the Workflow v2 normalization boundary
 ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
 behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): the `PipeDag` reader (now `Workflow.parse`)
 rejects an empty DAG with `InvalidPipelineError`, the tripwire is retired, and
-`tests/public/test_workflow.py::TestPipeDag::test_empty_modules_raise_invalid_pipeline` guards it.
+`tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` guards it.
 
 ## 3. Layout and enforcement
 
@@ -110,9 +117,11 @@ test folders themselves — this gameplan does not restate them:
 - `tests/__init__.py` (docstring) — the two-step placement rule (tier first: functional, then public,
   then internal; then the subject's row), the in-file layout (every test in a `Test<Subject>` class,
   async twin after its sync class, behaviors → rejection tables → strict-xfail tripwires), and the
-  size triggers (split a file past ~2000 lines by moving its largest row out; merge one under ~300).
-- `tests/<tier>/__init__.py` (docstring) — that tier's index: one row per file naming the subjects it
-  owns. Files start coarse (3 public, 8 internal, 2 functional) and split only when unwieldy. Files
+  size triggers (past ~2000 lines, move misplaced tests out and trim overlaps first, then split the
+  largest row into a concept-named file; merge one under ~300;
+  either ends with an overlap/misfit/move check across the files it touched).
+- `tests/<tier>/__init__.py` (generated whole by `manage codegen --tests`; never hand-edited) — that
+  tier's summary and index: one row per file naming the subjects it owns. Files start coarse (3 public, 8 internal, 2 functional) and split only when unwieldy. Files
   are named for stable concepts, never mirrored from `riko/` package paths, so package refactors
   move imports, not tests.
 - Shared helpers live in `tests/_*.py` (`_lifecycle`, `_execution`, `_workflows`, `_loopback`,
@@ -124,11 +133,21 @@ Enforcement:
   index (`manage codegen --tests` regenerates it), a subject owned by two files, a top-level `test_*`
   function, a private name imported in `public/`, a history-named file (`test_regressions`), a helper
   module inside a tier, or a stray folder; it prints size advice without failing.
+  It also fails on a test bound off the ladder in `tests/__init__.py` (a `timeout` marker, a
+  `fail_after`/`move_on_after` bound, a `wait`/`join`/`result` timeout, and the `timeout`/
+  `faulthandler_timeout` globals, `faulthandler_timeout` below `timeout`), an inner bound not below
+  the test's outer one (its smallest `timeout` marker, else the `pyproject.toml` backstop), a `sleep`
+  on the test's own path that lasts as long as that outer bound, and a test that reads a tracked
+  doc (a path built from `ROOT_DIR`/`DOCS_DIR`/`PACKAGE_DIR`/`TESTS_DIR`/`__file__` naming
+  `_docs`, `docs`, or a `.md`/`.rst` file, or a `Path`/`open` of a `.md`/`.rst` name), the §1
+  rule that Markdown is never pytest input.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no
   current file; a line saying the file was deleted, retired, removed, dropped, merged, or
-  superseded records history and is exempt. Repoint a moved test's citations when moving it.
+  superseded records history and is exempt. Its `path::Class[::test]` and `Class::test`
+  citations must also name a current test class or test. `.claude/skills/tidy/move_tests.py`
+  repoints both forms when it moves or renames a test; keep each citation on one line.
 - The same check fails on a backticked `riko/*.py` citation in a tracked `_docs/` root doc,
   `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst` that names no current source file; gameplans,
   `MILESTONES.md`, and `docs/*.rst` keep historical paths and are exempt.
@@ -141,6 +160,10 @@ Enforcement:
   environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`
   tooling is omitted (`[tool.coverage.run] omit`), and the console scripts count through their
   subprocess runs (`patch = ["subprocess"]`); a new `manage` helper module joins the omit list.
+- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call and a `pytest.param`
+  row that share a callee, a distinctive argument, and an expected value (`doctest-args`, which
+  sees short literals such as `"8"`/`"many"` that `overlaps` drops), and a doctest `Traceback`
+  whose exception and message match a `pytest.raises` (`doctest-raises`).
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and whether a
   doctest or existing test already owns the case.
 
@@ -168,20 +191,19 @@ pipe boundary with a deterministic module rather than comparing `.name`; keep th
 
 ## 4. Doctest audit
 
-Different deletion rule from pytest, because doctests are executable documentation:
+Different deletion rule from pytest, because doctests are executable documentation. Which side
+keeps a case shown in both a doctest and pytest is settled once, for public and private symbols
+alike, by [DOCUMENTATION_STANDARD.md](../DOCUMENTATION_STANDARD.md) (removing-examples rule 6 and
+"Doctests and unit tests share coverage"); this section adds only what that rule does not say:
 
-- **Public/built-in doctests stay** when they demonstrate a useful API behavior — overlap between a
-  README journey and a module example is not inherently wasteful. One module-level example is a
-  soft default, not a cap: keep a second example when it demonstrates a distinct first-class mode
-  or completes the module's primary workflow.
+- **Doctests stay** when they demonstrate a useful API behavior — overlap between a README journey
+  and a module example is not inherently wasteful. One module-level example is a soft default, not
+  a cap: keep a second example when it demonstrates a distinct first-class mode or completes the
+  module's primary workflow.
 - **Deleting a module example requires an ownership check.** First look for equivalent function/class
   doctests and pytest coverage. Move genuinely uncovered behavior to the appropriate test before
   deleting the example; do not create a duplicate pytest test when another doctest already owns it.
   If the example is later restored, remove a pytest test that exists only as its duplicate.
-- **Private doctests need stronger justification.** If `_inference`/`_iterutils`/`_objectify` already
-  have focused pytest coverage, move edge cases to pytest and leave at most a tiny descriptive
-  example. `_inference.infer_from_source()` is the clearest candidate — its doctests repeat pytest
-  cases.
 - **The root `riko/__init__.py` doctest should go.** It re-teaches a normal `SyncPipe` workflow the
   README/module docs already own. The package initializer should describe the namespace's purpose,
   audience, stability, and package-wide semantics instead. This exception removes the requirement
@@ -323,12 +345,12 @@ the suite, forcing the marker's removal) the moment its owner lands:
 
 - **R5** — `tests/internal/test_codegen.py::TestPythonise::test_pythonise_yields_valid_identifiers` (module-enums.md;
   re-homed from the deleted `test_compile.py` at v1-cutover step 5, 2026-10-03).
-- **R9** — `tests/functional/test_basics.py::test_fetchtable_reads_sqlite_fixture` — the sqlite half
+- **R9** — `tests/public/test_modules.py::TestFetchtable::test_fetchtable_reads_sqlite_fixture` — the sqlite half
   proves the binary-as-text defect (no xlsx writer in the env; the xlsx and async halves stay owned)
   (connectors.md).
-- **R10** — `tests/public/test_modules.py::TestExtensionlessFetchdata::test_query_string_does_not_defeat_extension`
+- **R10** — `tests/public/test_modules.py::TestFetchdata::test_query_string_does_not_defeat_extension`
   (connectors.md).
-- **R14** — `tests/internal/test_io.py::TestAsyncTimeoutIterator::test_timeout_interrupts_a_stalled_source`, asserting
+- **R14** — `tests/internal/test_modules.py::TestAsyncTimeoutIterator::test_timeout_interrupts_a_stalled_source`, asserting
   elapsed rather than content (content is unchanged across the fix) (execution-semantics.md § 7.2).
 - **R15** — `tests/internal/test_io.py::TestAsyncUrlOpen::test_async_url_open_honors_content_type_charset` — the
   async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
@@ -350,7 +372,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   routes through that canonical `normalize_workflow` → `validate` front door, so an empty DAG raises
   `InvalidPipelineError("workflow has no nodes")` — the same rejection the full-document path gives.
   The tripwire is **retired**; the behavior is guarded by the regular test
-  `tests/public/test_workflow.py::TestPipeDag::test_empty_modules_raise_invalid_pipeline`.
+  `tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules`.
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):
@@ -387,7 +409,7 @@ cancellation, and `ExceptionGroup` grouping of multiple cleanup errors.
 Two internal drift guards accompany it:
 
 - no execution-spawned task escapes the execution's task group (assert no surviving tasks after
-  teardown, including on the cancellation and abandonment paths);
+  cleanup, including on the cancellation and abandonment paths);
 - no module, parser, factory, or extension code constructs an event loop, portal, executor, worker
   thread, or task group. A grep-style guard over `riko/` outside `riko/_execution/` is adequate and
   cheap.
@@ -402,7 +424,7 @@ with its behavior proven in two files, laid out by the same ownership rule as §
 - `tests/internal/test_definitions.py` — the capability model (`appendable` derives from `modes`,
   `serializes` from a resolved `fmt`, `keyed_modes` is the union of both keyed sets, match/idempotent
   sets never overlap and stay subsets of `modes`; `File × {CSV, JSONL, JSON}` rows; the
-  key-validation matrix) and session behavior (one converter call on the whole-stream path,
+  key-validation matrix); `tests/internal/test_io.py` — session behavior (one converter call on the whole-stream path,
   per-item passthrough; CSV header/schema/append boundaries; JSONL one value per line with one final
   terminator; framed JSON/GeoJSON stage-then-publish-once with abort discarding the staged document;
   the `_SessionState` transitions and misuse).
@@ -430,7 +452,7 @@ Tests follow the contract owner rather than being copied into every package that
 | Concern | Test owner |
 |---|---|
 | `OperationSpec`, `OperationPlan`, reproducibility, overlays, import provenance/lossiness, `CompatibilityReport`, deployment drift | `operations-as-code.md` / `riko-ops` |
-| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / provider package |
+| provider-native asset discovery/acquisition/export/deployment/inspection and target compatibility facts | `provider-integrations.md` / the integration |
 | common capability discovery/catalog/policy/approval | `mcp.md` / `riko-mcp` |
 | provider `OperationHandle` waiting | `provider-integrations.md` |
 | Microsoft `ChangePlan`/desired-state/apply/verify | `microsoft-administration.md` / `riko-microsoft` |

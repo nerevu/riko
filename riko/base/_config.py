@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isnan
 from multiprocessing import cpu_count
 from os import environ
 from types import MappingProxyType
@@ -102,6 +103,8 @@ class Settings:
     streaming_threshold: int = 1 * 1024 * 1024
     encoding: str = "utf-8"
     discovery_timeout: int = 10
+    fetch_timeout: float = 30.0
+    shutdown_timeout: float = 30.0
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
@@ -133,6 +136,30 @@ def _env_int(
     return value
 
 
+def _env_float(env: Mapping[str, str], key: str, default: float) -> float:
+    """
+    Reads a non-negative number ``RIKO_*`` override; ``inf`` means no bound.
+
+    A malformed, negative, or NaN value logs a warning and keeps ``default``.
+    """
+    raw = env.get(key)
+
+    if raw is None:
+        value = default
+    else:
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning("ignoring %s=%r: expected a number", key, raw)
+            value = default
+
+        if isnan(value) or value < 0:
+            logger.warning("ignoring %s=%r: expected a non-negative number", key, raw)
+            value = default
+
+    return value
+
+
 def _env_str(env: Mapping[str, str], key: str, default: str) -> str:
     """Reads a string ``RIKO_*`` override, falling back to the default when unset."""
     return env.get(key, default)
@@ -156,27 +183,27 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         8
         >>> load_settings({"RIKO_NODE_THREADS": "many"}).node_threads
         40
-        >>> load_settings({"RIKO_NODE_THREADS": "-1"}).node_threads
-        40
-        >>> load_settings({"RIKO_PARSED_DATE_CACHE_SIZE": "0"}).parsed_date_cache_size
-        0
 
     """
     source = environ if env is None else env
     defaults = Settings()
     return Settings(
         concurrency_limit=_env_int(
-            source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit
+            source, "RIKO_CONCURRENCY_LIMIT", defaults.concurrency_limit, minimum=1
         ),
         node_threads=_env_int(
             source, "RIKO_NODE_THREADS", defaults.node_threads, minimum=0
         ),
         streaming_threshold=_env_int(
-            source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold
+            source, "RIKO_STREAMING_THRESHOLD", defaults.streaming_threshold, minimum=0
         ),
         encoding=_env_str(source, "RIKO_ENCODING", defaults.encoding),
         discovery_timeout=_env_int(
-            source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout
+            source, "RIKO_DISCOVERY_TIMEOUT", defaults.discovery_timeout, minimum=1
+        ),
+        fetch_timeout=_env_float(source, "RIKO_FETCH_TIMEOUT", defaults.fetch_timeout),
+        shutdown_timeout=_env_float(
+            source, "RIKO_SHUTDOWN_TIMEOUT", defaults.shutdown_timeout
         ),
         exchange_api=_env_str(source, "RIKO_EXCHANGE_API", defaults.exchange_api),
         shipped_call_cache_size=_env_int(

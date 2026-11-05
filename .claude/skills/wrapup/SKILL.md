@@ -31,7 +31,20 @@ each phase is one response:
 
 ## 0. Tidy (one subagent)
 
-Launch one fresh `general-purpose` agent with `model: "opus"` (not a fork — it
+Every agent brief ends with the mid-run self-check: past about 10 minutes or
+100k tokens with mechanical, repeated work left, stop at a consistent point, run
+the gates, and report what is done, what is left, and the helper script that
+would speed up the rest (run `date` at the start and between items). About 10
+minutes in, send it a non-stopping status ping; pause one that is grinding,
+build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
+`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
+fold it into an existing one,
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
+
+First run `python .claude/skills/land/gates.py check tidy`. When it exits 0,
+tidy already ran on this exact tree (in this or another session): skip the
+agent and report "tidy current". Otherwise launch one fresh `general-purpose`
+agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow
 `.claude/skills/tidy/SKILL.md` in the repo at the current working directory. You
@@ -53,6 +66,9 @@ single command batch:
   `fixup! <subject>` line names its target by subject. A target may already be
   pushed, so find it in `git log --format='%h %s' HEAD`, not in that range; the
   oldest target is the base for step 5's rebase line.
+- The suite count: `python .claude/skills/land/gates.py summary test` (the
+  last `/land` suite pass, from any session) and `grep -n '^Suite:'
+  _docs/PHASE_CHECKLISTS.md`.
 - For each owner you expect to touch, the relevant section only: `grep -n` for
   the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
   `_docs/PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`
@@ -90,6 +106,9 @@ Owner semantics — each concept has one owner, update it there and nowhere else
   is where "how it works" lives; docstrings state only what the caller gets).
 - **`_docs/PHASE_CHECKLISTS.md`** — authoritative status. Flip checkboxes and
   status lines only; no prose narratives.
+  Its `Suite: **N passed / M xfailed**` line takes the counts from the
+  recorded test summary whenever they differ; when no summary is recorded,
+  leave the line and say so in the report.
 - **The owning gameplan in `_docs/gameplans/`** — update the slice's status
   and any decisions made this session that refine the target. If a decision
   contradicts a gameplan, reconcile explicitly rather than leaving both
@@ -144,9 +163,14 @@ decisions with their why, open items with their owning gameplan. Update
 existing memories rather than duplicating; convert relative dates to absolute;
 don't record what the repo already documents.
 
-Overwrite the rolling handoff memory (`session-handoff.md`, indexed once in
-`MEMORY.md`) in the same response — it describes only the current frontier,
-not history:
+Update the rolling handoff memory (`session-handoff.md`, indexed once in
+`MEMORY.md`). Several sessions may share it, so it holds **one section per
+slice in progress**, each headed `## <slice name>` with its branch, HEAD, and
+date. Rewrite only this session's section (add it when missing); leave other
+sections as they are, except to drop one that the step-1 evidence shows has
+landed with no successor work. A shared preamble above the sections holds only
+what is true of the whole tree (pending autosquash, unpushed commits). Each
+section describes only its current frontier, not history:
 
 - **Where work stopped**: the slice in progress, its owning gameplan/phase,
   and the last completed step.
@@ -160,7 +184,10 @@ not history:
   otherwise rediscover the hard way, including any code change wrapup
   identified but deliberately did not make.
 - Dates absolute, never relative. If everything landed clean with no
-  successor work, say exactly that — an empty frontier is also information.
+  successor work, remove this session's section and say so in the report.
+
+Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
+sections (slice names and dates), not just this session's.
 
 If step 1 found pending `fixup!` commits, issue in the same response one Bash
 call that puts the autosquash line on the clipboard with `pbcopy`:
@@ -181,6 +208,14 @@ session that starts before the user runs it knows to.
 End with a short manifest: tidy's fixes and open findings, each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
-is safe to clear. When fixups are pending, the manifest's last line is the
+is safe to clear, and any **script candidates**: a subagent this session whose
+completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) spent on
+mechanical, repeatable work (slicing or replaying diffs, rebuilding tables, bulk
+renames, rehearsing commits), or that wrote its own helper scripts into the
+scratchpad. Name each one's task, duration, and tool count, and the script it
+suggests (name, inputs, outputs, and home, such as beside the skill that launched
+the agent). Propose them only; build one when the user agrees.
+Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work
+(design, review, triage) is never a candidate. When fixups are pending, the manifest's last line is the
 rebase step: the user runs the clipboard line (shown for reference) only now,
 after wrapup has finished. `/land` deliberately leaves this step to wrapup.

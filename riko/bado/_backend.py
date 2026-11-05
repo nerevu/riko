@@ -49,6 +49,7 @@ except ImportError:
     NamedTemporaryFile: object = None
     Path: object = None
     Semaphore: type | None = None
+    TimeoutException: type[Exception] | None = None
     async_chain: Callable[..., object] = lambda *_, **_kw: None
     async_open: Callable[..., object] = lambda *_, **_kw: None
     async_sleep: Callable[..., object] = lambda *_, **_kw: None
@@ -92,7 +93,7 @@ else:
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from asyncer import asyncify
-    from httpx import USE_CLIENT_DEFAULT, AsyncClient
+    from httpx import USE_CLIENT_DEFAULT, AsyncClient, TimeoutException
 
     backend = "anyio"
     run: Run = anyio.run
@@ -113,6 +114,7 @@ __all__ = [
     "NamedTemporaryFile",
     "Path",
     "Semaphore",
+    "TimeoutException",
     "async_chain",
     "async_open",
     "async_sleep",

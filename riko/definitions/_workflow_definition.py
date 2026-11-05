@@ -359,11 +359,17 @@ class Workflow:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.summary})"
 
-    def family_sources(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+    def get_family_sources(
+        self, family: EdgeFamily = "stream"
+    ) -> Counter[tuple[str, str]]:
+        """Gets how many ``family`` edges each ``(node, port)`` source feeds."""
         edges = get_family_edges(self.edges, family)
         return Counter((edge.source.node, edge.source.port) for edge in edges)
 
-    def family_ports(self, family: EdgeFamily = "stream") -> Counter[tuple[str, str]]:
+    def get_family_ports(
+        self, family: EdgeFamily = "stream"
+    ) -> Counter[tuple[str, str]]:
+        """Gets how many ``family`` edges each ``(node, port)`` target receives."""
         edges = get_family_edges(self.edges, family)
         return Counter((edge.target.node, edge.target.port) for edge in edges)
 
@@ -421,6 +427,13 @@ class Workflow:
         nodes = self.module_nodes.items()
         embeds = {k: n.embed for k, n in nodes if n.embed is not None}
         return FrozenDict.from_frozen(embeds)
+
+    @cached_property
+    def dependencies(self) -> tuple[str, ...]:
+        """The module and stored-workflow names the nodes and their loop embeds run."""
+        names = (node.name for node in self.module_nodes.values())
+        embeds = (embed["name"] for embed in self.embeds.values())
+        return tuple(sorted({*names, *embeds}))
 
     @cached_property
     def index(self) -> GraphIndex:
@@ -631,7 +644,7 @@ class Workflow:
 
         """
         endpoints = {endpoint.node for endpoint in self.endpoints}
-        family_ports = self.family_ports().items()
+        family_ports = self.get_family_ports().items()
 
         if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
@@ -694,7 +707,7 @@ class Workflow:
             InvalidPipelineError: If a source port feeds more than one stream edge.
 
         """
-        family_sources = self.family_sources().items()
+        family_sources = self.get_family_sources().items()
 
         if fan_out := sorted(source for source, count in family_sources if count > 1):
             msg = f"un-supported fan-out from source(s): {fan_out}"
@@ -805,10 +818,10 @@ def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
     """
     Migrates a ``PipeDef`` into a ``Workflow``.
 
-    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy
-    ports, the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
-    translated to their ``Workflow`` equivalents. Orphan and empty-graph rejection is
-    left to validation.
+    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy ports,
+    the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
+    translated to their ``Workflow`` equivalents. Orphan nodes are kept, and run only
+    when a workflow output needs them. Empty-graph rejection is left to validation.
 
     A module's call options become the node's ``options``, a loop's embedded module and
     its configuration become the node's ``embed``, and a ``write`` module's file-open

@@ -14,23 +14,39 @@ needs is the diff and the rule files named below.
 
 ## 1. Resolve the scope
 
-The marker `.claude/tidy-marker` (untracked, survives `/clear`) holds two
-lines from the last tidy: the `HEAD` sha and the working-tree fingerprint
-`(git diff HEAD; git ls-files --others --exclude-standard; git ls-files -z --others --exclude-standard | xargs -0 git hash-object) | git hash-object --stdin`
-(hashes untracked file names and contents, so a new, renamed, or edited scratch doc re-triggers tidy).
-If both still match, report "nothing to tidy" and stop. Otherwise the scope
-is everything changed since that sha:
+Tidy's marker is the `tidy` entry of `.claude/gate-markers.json` (untracked,
+per worktree, survives `/clear`, shared by every session), written by
+`python .claude/skills/land/gates.py`. Run `gates.py check tidy` first: exit 0
+means tidy already ran on this exact content, so report "nothing to tidy" and
+stop. The marker is the working tree's content tree id, so committing, staging,
+an autosquash, or another session's earlier tidy keeps it valid; only a content
+edit invalidates it. Otherwise the scope is what changed since the last pass:
 
-- marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
-  `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
-- marker missing or not an ancestor (after an autosquash rebase): the unpushed
-  commits (`git log HEAD --not --remotes`) diffed from
-  the parent of the oldest one, plus the working tree and untracked files; with
-  no unpushed commits, the working tree alone.
+- `check` printed a `changed since: git diff <tidied tree> <current tree>` line
+  (the tidied tree still exists): that diff plus untracked files. It holds only
+  the content edited since the pass, so work the pass already covered stays out,
+  including commits made after it;
+- otherwise, everything changed since the marker's `head` sha (printed by
+  `check`):
+  - marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
+    `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
+  - marker missing or not an ancestor (after an autosquash rebase): the unpushed
+    commits (`git log HEAD --not --remotes`) diffed from
+    the parent of the oldest one, plus the working tree and untracked files; with
+    no unpushed commits, the working tree alone.
 
-If the scope is empty, write the marker and stop. A
+If the scope is empty, run `gates.py record tidy` and stop. A
 wholesale run ("tidy the repo") takes every tracked file and fans out one
 read-only agent per top-level package, then applies fixes centrally.
+Every agent brief ends with the mid-run self-check: past about 10 minutes or
+100k tokens with mechanical, repeated work left, stop at a consistent point, run
+the gates, and report what is done, what is left, and the helper script that
+would speed up the rest (run `date` at the start and between items). About 10
+minutes in, send it a non-stopping status ping; pause one that is grinding,
+build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
+`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
+fold it into an existing one,
+park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it; report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
 diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
@@ -46,7 +62,7 @@ diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
   the touched area — to tell an owned gap from a defect.
 
 Settled exceptions are **not findings**: identifiers the Reserved terms rows
-say are kept (`catalog_names`, callable-sense "pipe",
+say are kept (callable-sense "pipe",
 the `*_key` conf names, `ModuleStore`), wording a pending phase replaces (the
 `Sinks` category, send/receive "target"), and gameplans keeping older wording
 until touched.
@@ -109,17 +125,46 @@ neighborhood it affects:
    (functional if it runs a CLI command, `examples` pipeline, or stored fixture end
    to end; public if it uses only supported names; else internal) and in the file
    whose index row names its subject? Does a collected doctest or an existing test
-   already assert the same input and outcome? A public symbol's doctest wins over a
-   pytest copy; for a private symbol, trim whichever side the module has more of.
+   already assert the same input and outcome? Doctests show basic usage. An edge or
+   error case in both places leaves the doctest when the doctest already shows
+   several other basic use cases. When it does not, prefer rewriting the doctest to
+   show basic usage and keeping the edge case in pytest. Basic usage lives in its
+   most appropriate doctest: move it into this doctest from elsewhere when this is
+   the better home (and follow the move down to the doctest it leaves), but never
+   duplicate it just to give a doctest something to run. Only when no basic usage
+   belongs in this doctest does the pytest copy go. When you add a doctest, grep
+   the tests for each of its inputs and remove a matching test or table row in the
+   same pass.
    A new test with the same setup and assertion as an existing one (two is
    enough) is a row in that test's table, and a regression test goes in its
    subject's class, never a history-named file. Tables follow the
    `tests/__init__.py` layout: module-level constant, one-line `pytest.param`
    rows with ids (an `ids=[...]` list only when values and ids share one line);
-   a fold that grows the file needs its rows compacted. A doctest grown past one
-   example per idea moves its extra cases into its subject's test table. If
+   a fold that grows the file needs its rows compacted. A doctest grown past basic
+   usage moves its extra cases into its subject's test table. If
    `manage test --ratchet` reports more uncovered lines, find the lines the
    change stopped executing before anything else.
+   When the change splits or merges a test file (a new or deleted
+   `tests/<tier>/test_*.py`, or classes moved between files), run this check over
+   every test in the files it touched, not only the moved ones: overlaps (same
+   input and outcome in either file, another tier, or a doctest), misfits (a class
+   asserting a subject another row owns, or a test in the wrong tier), move
+   candidates left behind in the source file, and helpers whose users changed
+   (now used by one file → beside its class; by several → `tests/_*.py`).
+   Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
+   file>` (static, about 2s). It lists candidates (unused or single-user helpers,
+   copied definitions, same-shape tests, shared literals, doctest calls repeated
+   as `pytest.param` rows, doctest errors repeated as `pytest.raises`, same-named
+   tests, unsupported names in public, functional classes with no end-to-end
+   marker).
+   Read and verify only those, never whole files. Make the moves with
+   `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
+   `--merge` to fold one class into another, `--sort` for in-class order,
+   `--delete`/`--drop-row` for trims, `--place` to put helpers above their user;
+   moves repoint doc citations), and find a test's current home with
+   `overlap_scan.py --where NAME`. After editing either script, run the smoke
+   tests: `uv run --active pytest .claude/skills/tidy/test_move_tests.py
+   .claude/skills/tidy/test_overlap_scan.py`.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.
@@ -160,10 +205,13 @@ it to the next `/land`.
 
 ## 6. Mark and report
 
-After the fixes, write the marker: `HEAD`'s sha and the fingerprint of the
-tree as tidy left it. An untouched tree then skips the next run; any later
-edit re-opens the whole range since that sha.
+After the fixes, run `python .claude/skills/land/gates.py record tidy`. It
+records the tree as tidy left it, so an untouched tree skips the next run from
+any session, and any later edit reopens the range since that `head`.
 
 Report: the scope resolved, each fix applied (file:line, rule), findings sent
-to `/triage`, questions asked and their answers, lint promotions proposed, and
-the verification run. Never commit; the user commits.
+to `/triage`, questions asked and their answers, lint promotions proposed, script
+candidates (a check you repeated by hand, or a helper script you wrote into the
+scratchpad, that a checked-in script could run next time: name, inputs, outputs;
+its draft saved in `.claude/skills/drafts/`),
+and the verification run. Never commit; the user commits.
