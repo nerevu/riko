@@ -53,7 +53,7 @@ walls:
 Euler is planned as three modular layers, so lower-level pieces can be swapped or
 optimized without disrupting the applications built on top:
 
-```
+```text
 library  ->  framework  ->  application
 ```
 
@@ -66,13 +66,18 @@ library  ->  framework  ->  application
 
 The vision draws on several existing open-source libraries by the author, which are
 intended to power Euler's data analysis, portal communication, API generation, and
-asynchronous processing:
+asynchronous processing. Two of these libraries already exist; the rest are planned to
+be extracted into two new libraries, **sifuri** and **bado**:
 
-- [meza](https://github.com/reubano/meza) — pure-Python data processing
-- [ckanutils](https://github.com/reubano/ckanutils) — CKAN interaction
-- [swutils](https://github.com/reubano/swutils)
-- [hdxscraper data collectors](https://github.com/search?q=user%3Areubano+hdxscraper)
-- [pipe2py (twisted)](https://github.com/kazeeki/pipe2py/tree/master/pipe2py/twisted)
+- [meza](https://github.com/reubano/meza) — pure-Python data processing (already
+  written)
+- [ckanutils](https://github.com/reubano/ckanutils) — CKAN interaction (already written)
+- [swutils](https://github.com/reubano/swutils) — much of its code is to be extracted to
+  complete **sifuri** (planned)
+- [hdxscraper data collectors](https://github.com/search?q=user%3Areubano+hdxscraper) —
+  also to be extracted into **sifuri** (planned)
+- [pipe2py (twisted)](https://github.com/kazeeki/pipe2py/tree/master/pipe2py/twisted) —
+  pipe2py's Twisted-based asynchronous module is to form the basis of **bado** (planned)
 
 ## Repository contents
 
@@ -81,6 +86,7 @@ asynchronous processing:
 | `media/shuttle.md` | Full Shuttleworth Foundation Fellowship application (project vision, plan, video script) |
 | `media/` | Presentation decks, screenshots, and imagery |
 | `logo.svg`, `Euler Title.svg`, `logo.icns`, `logo.tiff` | Branding assets |
+| `logo.dbdoc` | Logo drawing document (an Apple XML property list holding the canvas settings and the logo's layers and shapes) |
 | `state_of_internet.xlsx` | Supporting data referenced in the application |
 
 ## License
