@@ -54,6 +54,12 @@ at call sites.
   then a docstring holding the tier's summary (`TIER_SUMMARIES`) and its
   `Index (file, ...)` rows from the tier files' `Test<Subject>` classes. Edit the
   summary in the generator, never in the file.
+- **User agents** — `riko/cli/_gen_user_agents.py` (`manage codegen --user-agents`)
+  writes `riko/base/_user_agents.py`, the `UserAgent` pools: `DESKTOP_USER_AGENTS` and
+  `MOBILE_USER_AGENTS`, each the 20 most common distinct agents of that device type in
+  the installed `fake-useragent`'s bundled `browsers.jsonl` (a lint-group dependency,
+  read without network). `UserAgent.RANDOM` draws from both. The drift guard in
+  `tests/internal/test_codegen.py` skips when `fake-useragent` is not installed.
 
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.

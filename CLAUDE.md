@@ -331,10 +331,12 @@ a `normalize`; substituting a default the caller supplies or chooses
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--api`, `--tests`, `--verbs` are additive; `--all` runs all generators.
+  `--names`, `--api`, `--tests`, `--verbs`, `--user-agents` are additive; `--all`
+  runs all generators.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
-  `riko/modules/_names.py`, `riko/types/_module_ids.py`, the marked name blocks in
-  `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md` and `CONTRIBUTING.rst`, and
+  `riko/modules/_names.py`, `riko/types/_module_ids.py`, `riko/base/_user_agents.py`,
+  the marked name blocks in `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md`
+  and `CONTRIBUTING.rst`, and
   the `tests/<tier>/__init__.py` tier indexes all have canonical sources and drift
   guards. The `workflows`/`pyworkflows` fixture trees are not generated; they are
   `WorkflowDocument`s plus hand-maintained typed probes.

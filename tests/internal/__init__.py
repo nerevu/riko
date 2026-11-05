@@ -15,9 +15,9 @@ Index (file, then the subjects it owns, in file order):
                               ReadDocument, SubprocessImports, LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
                               Pythonise, ModuleCategory, GeneratedNamesDrift,
-                              GenerateModuleIds, ConfigCodegen, WorkflowFixtures,
-                              WorkflowProbes, ImportSurface, VerbTables,
-                              GenerateApiSurface
+                              GenerateModuleIds, ConfigCodegen, UserAgentCodegen,
+                              WorkflowFixtures, WorkflowProbes, ImportSurface,
+                              VerbTables, GenerateApiSurface
     test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
