@@ -80,7 +80,7 @@ def parser(
 
         num: The first operand, already cast to ``Decimal``.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `op` and `other`.
+        objconf: The module configuration: `op` and `other`.
 
     Returns:
 

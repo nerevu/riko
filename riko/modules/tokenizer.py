@@ -62,7 +62,7 @@ def parser(
 
         extraction: The extracted conf value. Unused.
 
-        objconf: The module configuration, containing `delimiter`, `dedupe`, `sort` and
+        objconf: The module configuration: `delimiter`, `dedupe`, `sort` and
             `token_key`.
 
     Returns:

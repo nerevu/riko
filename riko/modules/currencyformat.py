@@ -60,7 +60,7 @@ def parser(
 
         amount: The amount to format.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `currency`.
+        objconf: The module configuration: `currency`.
 
     Returns:
 

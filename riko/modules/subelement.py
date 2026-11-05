@@ -66,7 +66,7 @@ def parser(
 
         item: The entry to process.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `path` and `token_key`.
+        objconf: The module configuration: `path` and `token_key`.
 
     Returns:
 
