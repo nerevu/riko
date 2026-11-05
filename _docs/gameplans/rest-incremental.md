@@ -633,7 +633,11 @@ Required deterministic fixtures:
 18. dependent parent/child endpoint execution;
 19. bounded child-request concurrency;
 20. `Retry-After` / rate-limit behavior;
-21. serialized workflow compiles and preserves REST semantics.
+21. serialized workflow compiles and preserves REST semantics;
+22. an expired or source-invalidated cursor follows the documented reset path and never
+    degrades into a silent full refresh, and an unchanged response (conditional fetch
+    or equal cursor) commits observation metadata without moving a derived cursor,
+    while a source-issued opaque token is still stored as returned.
 
 Frame/batch representation tests live in `tabular-interop.md`.
 

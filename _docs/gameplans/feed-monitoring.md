@@ -47,7 +47,16 @@ Relevant precedents:
 * **HDX age API** — dataset freshness classified from age against an expected update
   frequency (due/overdue/delinquent thresholds per frequency, archived means always
   delinquent, invalid frequency is an error that counts toward a run's error limit),
-  with a `needs_update` flag as the rule output;
+  with a `needs_update` flag as the rule output; `age` is the days between the
+  dataset's `last_updated` (when its data last changed) and the update run (when the
+  source was last observed), so the two timestamps are already separate inputs, and
+  each run upserts its record by dataset id without deleting anything;
+* **Duckstring** — a run that successfully checked a source is recorded separately from
+  a run that produced changed data, so freshness propagates to consumers without
+  rerunning them when all relevant consumer dependencies are unchanged; ETags,
+  modification timestamps, and content fingerprints avoid redundant acquisition, and
+  only a declared complete snapshot may turn absent keys into deletions
+  (`_docs/research/duckstring-evaluation.md`);
 * **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state,
   windows, and explicit incremental cursors;
 * **resumable database/API change feeds** — opaque resume positions, explicit deletion
@@ -241,6 +250,24 @@ A source may use an owner-level `StateKey[T]` (`item_key=None`, `generation=None
 intrinsic source progress. Explicit incremental recovery boundaries use `.checkpoint()`
 and the enclosing stateful owner's identity rules from `execution-semantics.md`.
 
+`observation` separates **when the source was last checked** from **when its contents
+last changed**. A successful observation that finds no content change commits updated
+observation metadata (observed-at, and the source's own last-modified/version where it
+exposes one), records no content change, and yields no change items. A downstream
+consumer may skip recomputation when its source data version is unchanged and no
+other relevant dependency has changed, including evaluation time, configuration, or
+external state; source observation alone does not determine whether downstream work
+is skippable (an HDX-style age classifier reevaluates when elapsed time crosses a
+freshness threshold even though `last_updated` and the content are unchanged, § 2).
+A derived cursor (a
+`max(updated_at)`-style position) stays where it was; a source-issued resume token
+returned with an empty result is still stored as the checkpoint, per the opaque-cursor
+rule below. ETags, `Last-Modified`, and content fingerprints may short-circuit
+acquisition, but they stay transport optimizations recorded as observation metadata:
+they never stand in for the checkpoint and never become correctness state (the HDX age
+API's `last_updated` versus run time, and Duckstring's checked-versus-changed runs,
+§ 2).
+
 An opaque cursor is treated as an uninterpreted source token. When a checkpoint payload
 is opaque, generic monitoring/state code must:
 
@@ -249,10 +276,35 @@ is opaque, generic monitoring/state code must:
 * return it to the same source contract when resuming;
 * never increment it;
 * never numerically or lexicographically compare it;
-* never infer ordering from its textual/JSON representation.
+* never infer ordering from its textual/JSON representation;
+* store a token the source returns even when the observation yields no items, since a
+  new token can accompany an empty result.
 
 A source adapter may understand its own cursor format, but that knowledge does not leak
 into generic state logic.
+
+Zero yielded items does not say which of four outcomes an observation reached. The
+result-level observation metadata (`FeedResult.metadata`, whose carrier R5A supplies)
+records the underlying facts independently rather than as one exclusive state, since
+an unchanged observation can also be a complete-empty snapshot:
+
+* **unchanged** — the source establishes that its content version is unchanged:
+  update the observation history and any source-issued resume token; consumers skip
+  only when their other dependencies are unchanged; never infer deletions from an
+  empty change stream;
+* **complete-empty snapshot** — a successful, exhaustive observation establishes zero
+  members within the declared source selection: absence-derived deletion is permitted
+  within that selection, subject to § 9.3;
+* **incremental-empty** — a successful incremental poll yields no changes: commit
+  observation metadata and any advanced source-issued cursor; existing target records
+  stay, since absence is not deletion;
+* **incomplete** — acquisition failed, was cancelled, or stopped early: commit no
+  candidate source state, derive no deletions, and keep the previous published result.
+
+Completion is established only after successful traversal, never when a lazy
+`FeedResult` is constructed, and a successful traversal is distinct from complete
+snapshot membership: an incremental poll finishes successfully without representing
+the whole selection (gameplan audit triage 2026-11-05).
 
 ## 9. M3a — resumable change-feed contract
 
@@ -396,7 +448,26 @@ The monitoring layer must not silently convert an explicit tombstone into ordina
 absence.
 
 Snapshot sources that cannot emit tombstones may still derive deletions through
-completed snapshot comparison; those feeds declare `deletion="absent"`.
+complete-snapshot comparison; those feeds declare `deletion="absent"`.
+
+An observation is a complete snapshot within its declared source selection only when
+the source contract guarantees complete membership for that selection and the
+observation finished successfully, every required page included. Stable membership
+filters such as a tenant or project selection may define the snapshot boundary (for
+REST sources the carrier is `source_filter`,
+[rest-incremental.md § 12](rest-incremental.md#12-r6a--source-side-filter-pushdown);
+other sources use their own source-selection configuration, with no new generic scope
+field); cursor-based or incremental filters such as `updated_since` establish no
+complete membership and cannot support absence-derived deletions. Entity match keys
+must be unique within the declared selection; a duplicate key fails the comparison
+instead of silently collapsing. Absence-derived deletions are restricted to that same
+selection, so a tenant-scoped snapshot never touches target records outside its
+tenant: the target's reconciliation boundary matches the source selection even where
+match keys are unique only within it. A partial, interrupted, or otherwise incomplete
+observation never produces absence-derived deletions, and a feed that cannot assert
+completeness declares `deletion="unsupported"` rather than inferring it. The
+write-side half of this rule, which destructive modes require of their input, is
+[effects.md § 11](effects.md#11-write-modes-and-reconciliation).
 
 ### 9.4 Replay and idempotency
 
@@ -833,7 +904,21 @@ Required tests include:
 23. deterministic threshold/z-score fixtures;
 24. transition/cooldown firing semantics;
 25. dry-run performs no external mutation;
-26. in-process and orchestrated finite observation produce equivalent logical deltas.
+26. in-process and orchestrated finite observation produce equivalent logical deltas;
+27. an unchanged observation updates observation metadata, preserves the content
+    version, stores any new source-issued resume token, and yields no change items; a
+    consumer with no changed dependencies may skip recomputation, while an HDX-style
+    age classifier reevaluates when elapsed time crosses a freshness threshold even
+    though the dataset's `last_updated` and source content are unchanged (deterministic
+    clock and recorded source fixtures substituted through `Context`/`Resource`);
+28. a complete tenant-scoped snapshot may derive deletions within its selection and
+    leaves out-of-scope target records untouched; an incremental-filtered, partial, or
+    interrupted observation never yields absence-derived deletions; and a duplicate
+    entity key fails the snapshot comparison;
+29. the four observation outcomes of § 8 are told apart by result metadata, not item
+    count: a complete-empty snapshot may delete scoped records while an
+    incremental-empty poll may not, and an incomplete observation, whether it yielded
+    zero or many items, neither advances the checkpoint nor derives deletions.
 
 ## 24. Phases
 

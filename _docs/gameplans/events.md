@@ -128,6 +128,10 @@ checkpoint/state CAS outcome
 retry/disposition
 cancellation/deadline
 artifact publication
+failure attribution (the node whose failure ended the run; the downstream nodes the
+                     graph index shows as potentially affected; and, separately, the
+                     nodes runtime evidence shows were left unfed or cancelled — static
+                     reachability is never reported as an observed downstream failure)
 aggregate counters (per-node input/output counts, active time, upstream/downstream wait time,
                     queue occupancy, active workers)
 ```
@@ -161,7 +165,14 @@ Required contracts:
 7. pub/sub lifecycle emits no user-stream control records;
 8. event sink cleanup/cancellation follows execution lifetime;
 9. sensitive adapter data is redacted before emission;
-10. optional consumers can be added without changing feature/runtime semantics.
+10. optional consumers can be added without changing feature/runtime semantics;
+11. in a branched workflow, a node failure identifies the originating node and the
+    candidate downstream dependents, but reports only runtime-confirmed nodes as left
+    unfed or cancelled: independent branches that completed are not misclassified, an
+    upstream failure is not duplicated as a separate failure per dependent, and a node
+    whose runtime status is unknown stays potentially affected rather than confirmed
+    (the existing EventSink transport needs no new event type; attribution draws on
+    node lifecycle and cancellation evidence as it matures).
 
 ## 10. Definition of done
 
