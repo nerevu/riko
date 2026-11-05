@@ -51,6 +51,7 @@ from riko.types._enums import (
     Formats,
     IdentityMode,
     SortableCastType,
+    UserAgent,
 )
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
@@ -97,6 +98,7 @@ __all__ = [
     "UnsupportedModuleError",
     "UnsupportedTargetError",
     "UnsupportedWorkflowError",
+    "UserAgent",
     "Workflow",
     "WorkflowDocument",
     "WorkflowLike",

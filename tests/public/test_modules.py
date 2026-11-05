@@ -7,6 +7,7 @@ import gc
 import re
 import sqlite3
 from collections.abc import AsyncIterator, Generator, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from inspect import isawaitable
@@ -59,7 +60,15 @@ from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
+    CsvConf,
+    ExchangeRateConf,
+    FeedAutoDiscoveryConf,
+    FetchConf,
+    FetchDataConf,
     FetchPageConf,
+    FetchSiteFeedConf,
+    FetchTableConf,
+    FetchTextConf,
     FilterConf,
     FilterConfRule,
     InputConf,
@@ -78,14 +87,22 @@ from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable
+    from collections.abc import AsyncIterable, Callable
     from pathlib import Path
 
     from riko.types._streams import Item
+    from riko.types.modules import Conf
 
 _OMITTED = object()
 _NUMBERS = ["1", "2", "3"]
 _DATES = ["2019-01-01", "2020-05-01", "2024-11-12"]
+_FEED_URL = "FEED_URL"
+_CSV = "a,b\n1,2\n"
+_HTML = "<html><head><title>T</title></head><body><p>A</p></body></html>"
+_FX = '{"rates": {"USD": 1, "GBP": 0.5}}'
+_RSS = "<rss version='2.0'><channel><item><title>A</title></item></channel></rss>"
+_LINK = f'<link rel="alternate" type="application/rss+xml" href="{_FEED_URL}">'
+_SITE = f"<html><head>{_LINK}</head></html>"
 
 FETCH_MODULES = [
     "fetch",
@@ -99,6 +116,7 @@ FETCH_MODULES = [
 MISSING_URL = "file:///nonexistent.xml"
 JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
 XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
+USER_AGENT = "custom/1.0"
 
 
 def _values(stream: Any, key: str) -> list[Any]:
@@ -139,7 +157,118 @@ class TestInput:
         assert next(input_pipe(conf=conf)) == 0
 
 
+@contextmanager
+def _served_conf(
+    body: str | bytes, path: str, build: Callable[[str], Conf], seen: list[str]
+) -> Generator[Conf]:
+    """Serves ``body`` (and a feed it links to) and yields a module conf for it."""
+    with loopback_url(_RSS, path="linked.xml", seen=seen) as feed_url:
+        page = body.replace(_FEED_URL, feed_url) if isinstance(body, str) else body
+
+        with loopback_url(page, path=path, seen=seen) as url:
+            yield build(url)
+
+
+USER_AGENT_MODULES = [
+    pytest.param(
+        "csv",
+        _CSV,
+        "data.csv",
+        lambda url: CsvConf(url=url, user_agent=USER_AGENT),
+        id="csv",
+    ),
+    pytest.param(
+        "exchangerate",
+        _FX,
+        "fx.json",
+        lambda url: ExchangeRateConf(url=url, memoize=False, user_agent=USER_AGENT),
+        id="exchangerate",
+    ),
+    pytest.param(
+        "feedautodiscovery",
+        _SITE,
+        "site.html",
+        lambda url: FeedAutoDiscoveryConf(url=url, user_agent=USER_AGENT),
+        id="feedautodiscovery",
+    ),
+    pytest.param(
+        "fetch",
+        _RSS,
+        "feed.xml",
+        lambda url: FetchConf(url=url, user_agent=USER_AGENT),
+        id="fetch",
+    ),
+    pytest.param(
+        "fetchdata",
+        JSON,
+        "data.json",
+        lambda url: FetchDataConf(url=url, path="items", user_agent=USER_AGENT),
+        id="fetchdata",
+    ),
+    pytest.param(
+        "fetchpage",
+        _HTML,
+        "page.html",
+        lambda url: FetchPageConf(url=url, user_agent=USER_AGENT),
+        id="fetchpage",
+    ),
+    pytest.param(
+        "fetchsitefeed",
+        _SITE,
+        "site.html",
+        lambda url: FetchSiteFeedConf(url=url, user_agent=USER_AGENT),
+        id="fetchsitefeed",
+    ),
+    pytest.param(
+        "fetchtable",
+        _CSV,
+        "data.csv",
+        lambda url: FetchTableConf(url=url, user_agent=USER_AGENT),
+        id="fetchtable",
+    ),
+    pytest.param(
+        "fetchtext",
+        "line\n",
+        "data.txt",
+        lambda url: FetchTextConf(url=url, user_agent=USER_AGENT),
+        id="fetchtext",
+    ),
+    pytest.param(
+        "xpathfetchpage",
+        _HTML,
+        "p.html",
+        lambda url: XpathFetchPageConf(url=url, xpath="//p", user_agent=USER_AGENT),
+        id="xpathfetchpage",
+    ),
+]
+
+
 class TestFetchModules:
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("name", "body", "path", "build"), USER_AGENT_MODULES)
+    def test_the_configured_user_agent_is_sent(self, name, body, path, build):
+        seen: list[str] = []
+
+        with _served_conf(body, path, build, seen) as served:
+            pipeline = Pipeline.from_module(name, conf=served)
+            assert list(pipeline([{"content": "GBP"}]))
+
+        assert set(seen) == {USER_AGENT}
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("name", "body", "path", "build"), USER_AGENT_MODULES)
+    @async_test
+    async def test_the_configured_user_agent_is_sent_asynchronously(
+        self, name, body, path, build
+    ):
+        seen: list[str] = []
+
+        with _served_conf(body, path, build, seen) as served:
+            pipeline = Pipeline.from_module(name, conf=served)
+            assert await alist(pipeline([{"content": "GBP"}]))
+
+        assert set(seen) == {USER_AGENT}
+
     @async_test
     async def test_async_fetchpage_decodes_with_the_configured_encoding(self, tmp_path):
         """An async read honors ``encoding`` as the sync read does (latin-1 page)."""

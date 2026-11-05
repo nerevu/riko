@@ -76,8 +76,8 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
-            `detag`.
+        objconf: The module configuration: `url`, `start`, `end`, `token`,
+            `detag`, and `user_agent`.
 
     Returns:
 
@@ -106,7 +106,9 @@ async def async_parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchpage")
-    content = await async_url_read(url, encoding=objconf.encoding)
+    content = await async_url_read(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     parsed = get_string(content, objconf.start or "", objconf.end or "")
     detagged = get_text(parsed) if objconf.detag else parsed
     split = detagged.split(objconf.token) if objconf.token else [detagged]
@@ -123,8 +125,8 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `start`, `end`, `token` and
-            `detag`.
+        objconf: The module configuration: `url`, `start`, `end`, `token`,
+            `detag`, and `user_agent`.
 
     Returns:
 
@@ -150,7 +152,7 @@ def parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchpage")
-    with Fetch(url, encoding=objconf.encoding) as f:
+    with Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)
 
@@ -186,6 +188,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -251,6 +257,10 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

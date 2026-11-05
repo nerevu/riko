@@ -65,7 +65,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`.
+        objconf: The module configuration: `url` and `user_agent`.
 
     Returns:
 
@@ -90,7 +90,9 @@ async def async_parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetch")
-    content: str = await async_url_read(url, encoding=objconf.encoding)
+    content: str = await async_url_read(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     return augment_entries(parse_rss(content=content))
 
 
@@ -106,7 +108,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`.
+        objconf: The module configuration: `url` and `user_agent`.
 
     Returns:
 
@@ -128,7 +130,7 @@ def parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetch")
-    entries = parse_rss(url, encoding=objconf.encoding)
+    entries = parse_rss(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     return augment_entries(entries)
 
 
@@ -144,7 +146,12 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
+
             encoding (str): Feed encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -200,9 +207,15 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The module configuration.
 
             url (str): The feed to fetch, local or remote. Required.
+
             encoding (str): Feed encoding (default: "utf-8").
+
             memoize (bool): Accepted but not yet honored: the feed is fetched
                 on every run (default: False).
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

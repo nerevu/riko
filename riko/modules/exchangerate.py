@@ -176,9 +176,11 @@ async def async_parser(
     Args:
 
         base: The currency being exchanged from.
+
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `param`, `currency`
-            and `precision`.
+
+        objconf: The module configuration: `url`, `param`, `currency`, `precision`, and
+            `user_agent`.
 
     Returns:
 
@@ -209,10 +211,14 @@ async def async_parser(
     if same_currency:
         rate = Decimal(1)
     elif is_http_url(objconf.url):
-        r = await async_get(objconf.url, params=objconf.param)
+        r = await async_get(
+            objconf.url, params=objconf.param, user_agent=objconf.user_agent
+        )
         _rates = require_rates(await async_json(r))
     else:
-        content = await async_url_read(objconf.url, encoding=objconf.encoding)
+        content = await async_url_read(
+            objconf.url, encoding=objconf.encoding, user_agent=objconf.user_agent
+        )
         _rates = require_rates(loads(content))
 
     if _rates is not None:
@@ -232,9 +238,11 @@ def parser(
     Args:
 
         base: The currency being exchanged from.
+
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `param`, `currency`
-            and `precision`.
+
+        objconf: The module configuration: `url`, `param`, `currency`, `precision`, and
+            `user_agent`.
 
     Returns:
 
@@ -260,7 +268,12 @@ def parser(
     if base == objconf.currency:
         rate = Decimal(1)
     else:
-        with Fetch(objconf.url, encoding=objconf.encoding, params=objconf.param) as f:
+        with Fetch(
+            objconf.url,
+            encoding=objconf.encoding,
+            params=objconf.param,
+            user_agent=objconf.user_agent,
+        ) as f:
             _rates = require_rates(load(f))
             places = Decimal(10) ** -objconf.precision
             rates = build_rates(**_rates)
@@ -292,6 +305,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -357,6 +374,10 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

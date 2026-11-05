@@ -54,6 +54,7 @@ OTHER = frozenset(
         "Resource",
         "ReusableResource",
         "SortableCastType",
+        "UserAgent",
         "Workflow",
         "WorkflowLike",
         "WorkflowDocument",
@@ -179,6 +180,7 @@ TYPES = frozenset(
         "CallOptions",
         "CallOptionsLike",
         "Conf",
+        "CustomUserAgent",
         "DagModule",
         "Embed",
         "EventSink",
@@ -199,5 +201,6 @@ TYPES = frozenset(
         "RawCallOptions",
         "Stream",
         "SyncPipeTuples",
+        "UserAgentLike",
     }
 )

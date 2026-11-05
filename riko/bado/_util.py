@@ -27,13 +27,17 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import define, field
 
-from riko._package import default_user_agent
 from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable, is_awaitable
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING, MissingType
-from riko.types._io import ASYNC_CLEANUP_MSG, get_sync_closer, resolve_closer
+from riko.types._io import (
+    ASYNC_CLEANUP_MSG,
+    get_sync_closer,
+    resolve_closer,
+    resolve_user_agent,
+)
 
 from ._backend import (
     AsyncClient,
@@ -58,6 +62,7 @@ if TYPE_CHECKING:
     from anyio import CapacityLimiter
     from anyio.abc import TaskGroup
 
+    from riko.types._enums import UserAgentLike
     from riko.types._wrappers import AsyncFunc, Func
 
     from ._backend import HTTPXResponse
@@ -108,6 +113,7 @@ async def async_get(
     *,
     params: Mapping[str, str] | None = None,
     timeout: float | None = settings.fetch_timeout,
+    user_agent: UserAgentLike | None = None,
 ) -> HTTPXResponse:
     """
     Fetches ``url`` via httpx and follows redirects.
@@ -123,14 +129,16 @@ async def async_get(
         timeout: Seconds to wait before giving up (default: ``RIKO_FETCH_TIMEOUT``,
             30 seconds). ``0``, ``inf``, or ``None`` waits forever.
 
+        user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
+            agent of that kind (default: "riko/<version>").
+
     Returns:
 
         The final response after any redirects.
 
     """
     resolved = None if timeout in {0, inf} else timeout
-
-    headers = {"User-Agent": default_user_agent()}
+    headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     async with AsyncClient(follow_redirects=True, headers=headers) as client:
         return await client.get(url, params=params, timeout=resolved)

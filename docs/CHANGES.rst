@@ -62,6 +62,11 @@ New
 
 - Added ``jsonl`` (newline-delimited JSON) to ``riko.Formats``.
 
+- The HTTP-fetching modules (``csv``, ``exchangerate``, ``fetchtable``, ``fetchpage``,
+  ``feedautodiscovery``, ``fetchsitefeed``, ``fetchdata``, ``fetch``, ``fetchtext``, and
+  ``xpathfetchpage``) accept a ``user_agent`` conf. Pass a ``riko.UserAgent`` member or
+  a custom agent string. Leave unset for ``riko/<version>`` as before.
+
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_SHIPPED_CALL_CACHE_SIZE``, ``RIKO_DISCOVERY_TIMEOUT``, ``RIKO_FETCH_TIMEOUT``,
   ``RIKO_PARSED_DATE_CACHE_SIZE``, ``RIKO_SHUTDOWN_TIMEOUT``, ``RIKO_BENCHMARK_DELAY``,
