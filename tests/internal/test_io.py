@@ -19,9 +19,10 @@ import pytest
 from requests import Response
 from requests.exceptions import Timeout
 
-from riko.bado import as_async
+from riko._package import __version__
+from riko.bado import as_async, run
 from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
-from riko.bado._util import async_return, gather_results
+from riko.bado._util import async_get, async_return, gather_results
 from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
@@ -234,6 +235,21 @@ class TestParseRss:
         assert [source.closed for source in sources] == [True]
 
 
+def _read_sync(url: str) -> str:
+    with Fetch(url) as f:
+        return f.read()
+
+
+def _read_async(url: str) -> str:
+    return run(partial(async_get, url)).text
+
+
+HTTP_READERS = [
+    pytest.param(_read_sync, id="sync"),
+    pytest.param(_read_async, id="async", marks=skipif_issync),
+]
+
+
 class TestFetch:
     def test_unified_http_backend(self):
         """Route parameterless HTTP URLs through the requests backend."""
@@ -260,6 +276,12 @@ class TestFetch:
             Fetch("http://example.com/feed.txt", binary=True)
 
         assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize("read", HTTP_READERS)
+    def test_http_requests_send_the_default_user_agent(self, read):
+        with loopback_url(echo="User-Agent") as url:
+            assert read(url) == f"riko/{__version__}"
 
     @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):

@@ -256,6 +256,9 @@ Fixes
 
 - ``fetchpage`` returns ``""`` without ``start`` or when ``end`` immediately follows it.
 
+- Sync and async HTTP fetching now sends ``riko/<version>`` instead of the default
+  client ``User-Agent``.
+
 - ``riko.async_url_open`` and the ``exchangerate`` module's ``url`` treat names like
   ``http_data.csv`` as files.
 

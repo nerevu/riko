@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import define, field
 
+from riko._package import default_user_agent
 from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable, is_awaitable
@@ -129,7 +130,9 @@ async def async_get(
     """
     resolved = None if timeout in {0, inf} else timeout
 
-    async with AsyncClient(follow_redirects=True) as client:
+    headers = {"User-Agent": default_user_agent()}
+
+    async with AsyncClient(follow_redirects=True, headers=headers) as client:
         return await client.get(url, params=params, timeout=resolved)
 
 
