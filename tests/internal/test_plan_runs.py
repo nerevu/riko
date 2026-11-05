@@ -29,14 +29,17 @@ from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
 from tests._execution import (
     ClosingAsyncIterator,
+    ClosingIterator,
     agen_source,
     arun_plan,
     awaitable_source,
     build_chain,
     build_dispatcher,
     build_workflow,
+    gen_closing_seed,
     module_workflow,
     passthrough_pipe,
+    relay_pipe,
     run_plan,
     tag_source,
     tagged_source,
@@ -50,6 +53,23 @@ if TYPE_CHECKING:
     from riko.types.modules import Conf
 
 
+_SRC = ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
+_ECHO = cast("SyncModuleWrapper", lambda items, **_: iter(list(items)))
+_SINK = ModuleDefinition(name="sink", sync_pipe=_ECHO)
+_PROBE = ModuleDefinition(name="probe", sync_pipe=passthrough_pipe)
+_DOUBLED = [{"x": 2}, {"x": 4}]
+_SRC_SINK = [ModuleNode(id="a", name="src"), ModuleNode(id="b", name="sink")]
+_PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
+_SRC_NODE = [ModuleNode(id="n", name="src")]
+_PORT_1_OUTPUT = {"default": Endpoint("n", "out:1")}
+_NEEDS_SEED = r"'b'.*requires a seed"
+_NON_DEFAULT = "non-default output port"
+_SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
+_EMPTY = Workflow(nodes=[], outputs={})
+_NOPE = "no workflow output 'nope'"
+_RESERVED = "use a reserved name"
+
+
 @tag_source
 def _plain_reader(stream, **kwargs):
     yield {"got": kwargs["resources"]["slot"]}
@@ -61,10 +81,18 @@ def _decorated_reader(stream, objconf, tuples, **kwargs):
     yield {"got": kwargs["resources"]["slot"]}
 
 
-def _named_port_workflow() -> Workflow:
+def _named_port_workflow(name: str = "count") -> Workflow:
     a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="probe")
-    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:count"))
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", f"in:{name}"))
     return build_workflow([a, b], edges=(edge,))
+
+
+def _unbound_relay_workflow() -> Workflow:
+    """Chains a source into a relay that binds a resource no context provides."""
+    a = ModuleNode(id="a", name="src")
+    b = ModuleNode(id="b", name="relay", resources={"slot": "primary"})
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
+    return build_workflow([a, b], edges=(edge,), resources=("primary",))
 
 
 READERS = [
@@ -73,39 +101,11 @@ READERS = [
 ]
 
 
-_SRC = ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
-
-
-_ECHO = cast("SyncModuleWrapper", lambda items, **_: iter(list(items)))
-
-
-_SINK = ModuleDefinition(name="sink", sync_pipe=_ECHO)
-
-
-_PROBE = ModuleDefinition(name="probe", sync_pipe=passthrough_pipe)
-
-
-_SRC_SINK = [ModuleNode(id="a", name="src"), ModuleNode(id="b", name="sink")]
-
-
-_PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
-
-
-_SRC_NODE = [ModuleNode(id="n", name="src")]
-
-
-_PORT_1_OUTPUT = {"default": Endpoint("n", "out:1")}
-
-
-_NEEDS_SEED = r"'b'.*requires a seed"
-
-
-_NON_DEFAULT = "non-default output port"
-
-
 # Execution fails closed on non-default output ports: only the bare 'out' port is
 # executable, so a distinct 'out:1' source port or selected output is rejected
-# rather than silently aliased to the node's 'out' stream.
+# rather than silently aliased to the node's 'out' stream. A named input port that
+# shares a name with an argument every module call takes is rejected rather than
+# overwriting that argument or being overwritten by it.
 RUN_REJECTIONS = [
     pytest.param(
         build_workflow(_SRC_SINK, edges=(_PORT_1_EDGE,)),
@@ -125,16 +125,20 @@ RUN_REJECTIONS = [
         _NEEDS_SEED,
         id="transformer-fed-only-through-a-named-port",
     ),
+    pytest.param(_named_port_workflow("conf"), (_SRC, _PROBE), _RESERVED, id="in:conf"),
+    pytest.param(
+        _named_port_workflow("context"), (_SRC, _PROBE), _RESERVED, id="in:context"
+    ),
+    pytest.param(
+        _named_port_workflow("embed"), (_SRC, _PROBE), _RESERVED, id="in:embed"
+    ),
+    pytest.param(
+        _named_port_workflow("others"), (_SRC, _PROBE), _RESERVED, id="in:others"
+    ),
+    pytest.param(
+        _named_port_workflow("resources"), (_SRC, _PROBE), _RESERVED, id="in:resources"
+    ),
 ]
-
-
-_SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
-
-
-_EMPTY = Workflow(nodes=[], outputs={})
-
-
-_NOPE = "no workflow output 'nope'"
 
 
 UNKNOWN_OUTPUTS = [
@@ -158,23 +162,10 @@ class _DualSeed:
 # An async stream seed is the stream itself, never one item holding the stream
 # object, and an awaitable seed is awaited once for its items.
 SEEDS = [
-    pytest.param(lambda: [{"x": 1}, {"x": 2}], [{"x": 2}, {"x": 4}], id="list"),
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
-    pytest.param(
-        agen_source, [{"x": 2}, {"x": 4}], id="async-stream", marks=skipif_issync
-    ),
-    pytest.param(
-        awaitable_source, [{"x": 2}, {"x": 4}], id="awaitable", marks=skipif_issync
-    ),
+    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
+    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
 ]
-
-
-def _gen_closing_seed(closed: list[str]) -> Iterator[Item]:
-    try:
-        yield {"x": 1}
-        yield {"x": 2}
-    finally:
-        closed.append("closed")
 
 
 async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
@@ -186,17 +177,48 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 
 
 CLOSING_SEEDS = [
-    pytest.param(_gen_closing_seed, id="generator"),
+    pytest.param(gen_closing_seed, id="generator"),
     pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
-    pytest.param(
-        ClosingAsyncIterator, id="closeable-async-iterator", marks=skipif_issync
-    ),
+    pytest.param(ClosingAsyncIterator, id="async-iterator", marks=skipif_issync),
 ]
 
 
-async def _acollect(stream, seen):
-    async for item in stream:
-        seen.append(item)
+def _resource_reader_plan(reader=_decorated_reader):
+    sync_pipe = cast("SyncModuleWrapper", reader)
+    dispatcher = build_dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
+    nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
+    flow = build_workflow(
+        nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
+    )
+    return ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+
+
+def _lifecycle(events: list[str]):
+    def db():
+        events.append("open")
+
+        try:
+            yield "conn"
+        finally:
+            events.append("close")
+
+    return db
+
+
+def _doubler_plan(name: str) -> ExecutionPlan:
+    def double(source, **_):
+        return ({"x": row["x"] * 2} for row in source)
+
+    async def adouble(source, **_):
+        async for row in source:
+            yield {"x": row["x"] * 2}
+
+    sync_pipe = cast("SyncModuleWrapper", double)
+    async_pipe = cast("AsyncModuleWrapper", adouble)
+    definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
+    adefinition = ModuleDefinition(name="adouble", async_pipe=async_pipe)
+    dispatcher = build_dispatcher(definition, adefinition)
+    return ExecutionPlan.from_workflow(module_workflow(name), dispatcher)
 
 
 class TestPlanRun:
@@ -232,7 +254,7 @@ class TestPlanRun:
             ModuleNode(id="a", name="src"), ModuleNode(id="b", name="double")
         )
 
-        assert run_plan(flow, dispatcher=dispatcher) == [{"x": 2}, {"x": 4}]
+        assert run_plan(flow, dispatcher=dispatcher) == _DOUBLED
 
     def test_run_forwards_node_options_as_call_kwargs(self) -> None:
         seen: dict[str, object] = {}
@@ -253,36 +275,6 @@ class TestPlanRun:
         assert run_plan(flow, dispatcher=dispatcher) == []
         assert seen["emit"] is True
         assert seen["conf"] == {}
-
-    def test_run_wires_others_ordered_by_port_index(self) -> None:
-        def merge(items, others=None, **_):
-            yield from items
-
-            for other in others or ():
-                yield from other
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="a", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="b", sync_pipe=tagged_source("b")),
-            ModuleDefinition(name="c", sync_pipe=tagged_source("c")),
-            ModuleDefinition(name="merge", sync_pipe=cast("SyncModuleWrapper", merge)),
-        )
-        a = ModuleNode(id="a", name="a")
-        b = ModuleNode(id="b", name="b")
-        c = ModuleNode(id="c", name="c")
-        m = ModuleNode(id="m", name="merge")
-        edges = (
-            StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
-            StreamEdge(Endpoint("c", "out"), Endpoint("m", "in:2")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
-        )
-        flow = build_workflow([a, b, c, m], edges=edges)
-
-        assert run_plan(flow, dispatcher=dispatcher) == [
-            {"t": "a"},
-            {"t": "b"},
-            {"t": "c"},
-        ]
 
     def test_run_wires_named_input_port_as_kwarg(self) -> None:
         def joiner(items, side=None, **_):
@@ -425,14 +417,6 @@ class TestPlanRun:
         ):
             execution.run(plan)
 
-    def test_run_seeds_a_lone_source_root(self) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
-        )
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
-
-        assert plan.require_seed_target("default") == "n"
-
     def test_run_accepts_sparse_positional_inputs(self) -> None:
         # A variadic fan-in reads its positional inputs as one ordered list, so a gap
         # in the numbering (a legacy _OTHER3 with no _OTHER2) executes, and the port
@@ -478,46 +462,6 @@ class TestPlanRun:
             assert events == ["open"]
 
         assert events == ["open", "close"]
-
-    @pytest.mark.parametrize(("flow", "definitions", "match"), RUN_REJECTIONS)
-    def test_run_rejects(self, flow, definitions, match) -> None:
-        with pytest.raises(InvalidPipelineError, match=match):
-            run_plan(flow, dispatcher=build_dispatcher(*definitions))
-
-    @pytest.mark.parametrize(
-        ("flow", "definitions", "output", "seed", "match"), UNKNOWN_OUTPUTS
-    )
-    def test_run_refuses_an_unknown_output_name(
-        self, flow, definitions, output, seed, match
-    ) -> None:
-        plan = ExecutionPlan.from_workflow(flow, build_dispatcher(*definitions))
-
-        with (
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match=match),
-        ):
-            execution.run(plan, output, seed=seed)
-
-    def test_run_rejects_unprovided_resource(self) -> None:
-        @tag_source
-        def reader(items, **_):
-            yield {}
-
-        sync_pipe = cast("SyncModuleWrapper", reader)
-        definition = ModuleDefinition(name="reader", sync_pipe=sync_pipe)
-        dispatcher = build_dispatcher(definition)
-        nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
-        endpoint = Endpoint("n", "out")
-        flow = build_workflow(
-            nodes, resources=("primary",), outputs={"default": endpoint}
-        )
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-
-        with (
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="not provided"),
-        ):
-            list(execution.run(plan))
 
     def test_run_executes_only_selected_output_subgraph(self) -> None:
         ran: list[str] = []
@@ -583,17 +527,13 @@ class TestPlanRun:
 
     @pytest.mark.parametrize(("make_seed", "expected"), SEEDS)
     def test_run_seeds_the_root_from_each_seed_shape(self, make_seed, expected) -> None:
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("double"), _doubler_dispatcher()
-        )
+        plan = _doubler_plan("double")
 
         with SyncExecution() as execution:
             assert list(execution.run(plan, seed=make_seed())) == expected
 
     def test_run_reads_a_dual_iterable_seed_synchronously(self) -> None:
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("double"), _doubler_dispatcher()
-        )
+        plan = _doubler_plan("double")
 
         with SyncExecution() as execution:
             assert list(execution.run(plan, seed=_DualSeed())) == [{"x": 2}]
@@ -601,9 +541,7 @@ class TestPlanRun:
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     def test_run_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
         closed: list[str] = []
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("double"), _doubler_dispatcher()
-        )
+        plan = _doubler_plan("double")
 
         with SyncExecution() as execution:
             stream = execution.run(plan, seed=make_seed(closed))
@@ -654,6 +592,83 @@ class TestPlanRun:
 
         assert seen == [{"forever": True}]
 
+    def test_run_seeds_a_positional_fan_in_rather_than_its_sources(self) -> None:
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="a_src", sync_pipe=tagged_source("a")),
+            ModuleDefinition(name="b_src", sync_pipe=tagged_source("b")),
+            ModuleDefinition(name="union", sync_pipe=union_pipe),
+        )
+        a = ModuleNode(id="a", name="a_src")
+        b = ModuleNode(id="b", name="b_src")
+        u = ModuleNode(id="u", name="union")
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("u", "in:1")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("u", "in:2")),
+        )
+        flow = build_workflow([a, b, u], edges=edges)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        expected = [{"x": 1}, {"t": "a"}, {"t": "b"}]
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan, seed=[{"x": 1}])) == expected
+
+    @pytest.mark.parametrize(("flow", "definitions", "match"), RUN_REJECTIONS)
+    def test_run_rejects(self, flow, definitions, match) -> None:
+        with pytest.raises(InvalidPipelineError, match=match):
+            run_plan(flow, dispatcher=build_dispatcher(*definitions))
+
+    @pytest.mark.parametrize(
+        ("flow", "definitions", "output", "seed", "match"), UNKNOWN_OUTPUTS
+    )
+    def test_run_refuses_an_unknown_output_name(
+        self, flow, definitions, output, seed, match
+    ) -> None:
+        plan = ExecutionPlan.from_workflow(flow, build_dispatcher(*definitions))
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match=match),
+        ):
+            execution.run(plan, output, seed=seed)
+
+    def test_run_rejects_unprovided_resource(self) -> None:
+        @tag_source
+        def reader(items, **_):
+            yield {}
+
+        sync_pipe = cast("SyncModuleWrapper", reader)
+        definition = ModuleDefinition(name="reader", sync_pipe=sync_pipe)
+        dispatcher = build_dispatcher(definition)
+        nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
+        endpoint = Endpoint("n", "out")
+        flow = build_workflow(
+            nodes, resources=("primary",), outputs={"default": endpoint}
+        )
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match="not provided"),
+        ):
+            list(execution.run(plan))
+
+    def test_run_closes_built_streams_when_a_later_node_fails(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with (
+            pytest.raises(InvalidPipelineError, match="not provided"),
+            SyncExecution() as execution,
+        ):
+            execution.run(plan)
+
+        assert closed == ["closed"]
+
     def test_run_rejects_seed_with_multiple_open_inputs(self) -> None:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
@@ -674,26 +689,6 @@ class TestPlanRun:
             pytest.raises(InvalidPipelineError, match="exactly one open input"),
         ):
             execution.run(plan, seed=[{"x": 1}])
-
-    def test_run_seeds_a_positional_fan_in_rather_than_its_sources(self) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="a_src", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="b_src", sync_pipe=tagged_source("b")),
-            ModuleDefinition(name="union", sync_pipe=union_pipe),
-        )
-        a = ModuleNode(id="a", name="a_src")
-        b = ModuleNode(id="b", name="b_src")
-        u = ModuleNode(id="u", name="union")
-        edges = (
-            StreamEdge(Endpoint("a", "out"), Endpoint("u", "in:1")),
-            StreamEdge(Endpoint("b", "out"), Endpoint("u", "in:2")),
-        )
-        flow = build_workflow([a, b, u], edges=edges)
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-        expected = [{"x": 1}, {"t": "a"}, {"t": "b"}]
-
-        with SyncExecution() as execution:
-            assert list(execution.run(plan, seed=[{"x": 1}])) == expected
 
     @pytest.mark.xfail(
         strict=True, reason="declaring a node as a value source is not yet implemented"
@@ -762,43 +757,6 @@ class TestPlanRun:
         assert events == []
 
 
-def _resource_reader_plan(reader=_decorated_reader):
-    sync_pipe = cast("SyncModuleWrapper", reader)
-    dispatcher = build_dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
-    nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
-    flow = build_workflow(
-        nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
-    )
-    return ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-
-
-def _lifecycle(events: list[str]):
-    def db():
-        events.append("open")
-
-        try:
-            yield "conn"
-        finally:
-            events.append("close")
-
-    return db
-
-
-def _doubler_dispatcher():
-    def double(source, **_):
-        return ({"x": row["x"] * 2} for row in source)
-
-    async def adouble(source, **_):
-        async for row in source:
-            yield {"x": row["x"] * 2}
-
-    sync_pipe = cast("SyncModuleWrapper", double)
-    async_pipe = cast("AsyncModuleWrapper", adouble)
-    definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
-    adefinition = ModuleDefinition(name="adouble", async_pipe=async_pipe)
-    return build_dispatcher(definition, adefinition)
-
-
 def _gen_counting(closed: list[bool]) -> Iterator[Item]:
     index = 0
 
@@ -831,6 +789,11 @@ COUNTING_SOURCES = [
     pytest.param(_gen_counting, id="generator"),
     pytest.param(_CountingIterator, id="closeable-iterator"),
 ]
+
+
+async def _acollect(stream, seen):
+    async for item in stream:
+        seen.append(item)
 
 
 class TestAsyncPlanRun:
@@ -988,21 +951,25 @@ class TestAsyncPlanRun:
 
     @async_test
     async def test_arun_seeds_the_root_from_one_item(self) -> None:
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("adouble"), _doubler_dispatcher()
-        )
+        plan = _doubler_plan("adouble")
 
         async with AsyncExecution() as execution:
             stream = await execution.arun(plan, seed={"x": 5})
             assert [item async for item in stream] == [{"x": 10}]
 
+    @async_test
+    async def test_arun_reads_a_dual_iterable_seed_asynchronously(self) -> None:
+        plan = _doubler_plan("adouble")
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan, seed=_DualSeed())
+            assert [item async for item in stream] == [{"x": 200}]
+
     @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
     @async_test
     async def test_arun_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
         closed: list[str] = []
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("adouble"), _doubler_dispatcher()
-        )
+        plan = _doubler_plan("adouble")
 
         async with AsyncExecution() as execution:
             stream = aiter(await execution.arun(plan, seed=make_seed(closed)))
@@ -1087,6 +1054,83 @@ class TestAsyncPlanRun:
 
         assert seen == [{"x": 0}, {"x": 1}, {"x": 2}]
         assert closed == [True]
+
+    @async_test
+    async def test_arun_closes_built_streams_when_a_later_node_fails(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with pytest.raises(InvalidPipelineError, match="not provided"):
+            async with AsyncExecution() as execution:
+                await execution.arun(plan)
+
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_closes_a_sync_worker_nodes_async_input_once(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="relay"))
+        plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                assert await anext(stream) == {"x": 1}
+                await stream.aclose()
+
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_sync_worker_node_closes_its_input_once_it_finishes(
+        self,
+    ) -> None:
+        # The source stays referenced and never ends, so only the node finishing can
+        # close it before the run itself is closed.
+        closed, sources = [], []
+
+        async def gen():
+            try:
+                while True:
+                    yield {"x": 1}
+            finally:
+                closed.append("closed")
+
+        @tag_source
+        def src(_items=None, **_):
+            sources.append(gen())
+            return sources[-1]
+
+        def take_two(items, **_):
+            for index, item in enumerate(items):
+                if index == 2:
+                    break
+
+                yield item
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(
+                name="take", sync_pipe=cast("SyncModuleWrapper", take_two)
+            ),
+        )
+        nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="take"))
+        plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(plan)
+                assert [item async for item in stream] == [{"x": 1}, {"x": 1}]
+                assert closed == ["closed"]
 
     @async_test
     async def test_arun_sync_worker_node_closes_its_async_inputs_on_early_exit(

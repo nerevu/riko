@@ -53,6 +53,32 @@ def test_tree_id_ignores_staging_and_commits_but_not_edits(repo, tmp_path):
     assert untracked == staged == committed == gates.get_tree_id()
 
 
+def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):
+    skill = tmp_path / ".claude" / "skills" / "SKILL.md"
+    script = skill.with_name("helper.py")
+    skill.parent.mkdir(parents=True)
+    skill.write_text("one\n")
+    script.write_text("x = 1\n")
+    repo("add", "-f", ".claude")
+    repo("commit", "-qm", "skill")
+    ids = {gate: gates.get_tree_id(gate) for gate in ("tidy", "lint", "test")}
+    skill.write_text("two\n")
+    (tmp_path / ".claude" / "scratch.md").write_text("x\n")
+
+    assert gates.get_tree_id("tidy") != ids["tidy"]
+    assert gates.get_tree_id("lint") == ids["lint"]
+    assert gates.get_tree_id("test") == ids["test"]
+
+    script.write_text("x = 2\n")
+
+    assert gates.get_tree_id("lint") != ids["lint"]
+    assert gates.get_tree_id("test") == ids["test"]
+
+    (tmp_path / "a.py").write_text("a = 2\n")
+
+    assert gates.get_tree_id("test") != ids["test"]
+
+
 @pytest.mark.usefixtures("repo")
 def test_run_records_then_skips_until_the_tree_changes(tmp_path, capsys):
     path = gates.get_state_dir() / "gate-markers.json"
@@ -82,6 +108,40 @@ def test_check_prints_the_diff_since_the_last_pass(tmp_path, capsys):
     assert gates.check(path, "tidy") == 1
     expected = f"changed since: git diff {passed} {gates.get_tree_id()}"
     assert expected in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("repo")
+def test_scope_prints_edits_and_untracked_files_since_the_pass(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    gates.run(path, "tidy", ["true"], mutates=False, lock=False)
+    (tmp_path / "a.py").write_text("a = 2\n")
+    (tmp_path / "c.py").write_text("c = 3\n")
+    (tmp_path / "uv.lock").write_text("lock\n")
+    capsys.readouterr()
+
+    assert gates.scope(path, "tidy") == 1
+    out = capsys.readouterr().out
+    assert out.startswith("scope tidy: edits since the pass at ")
+    assert "+a = 2" in out
+    assert "+c = 3" in out
+    assert "c.py" in out.split("--- untracked")[1]
+    assert "uv.lock" not in out.split("--- diff")[1]
+    assert gates.main(["record", "tidy"]) == 0
+    assert gates.scope(path, "tidy") == 0
+
+
+@pytest.mark.usefixtures("repo")
+def test_scope_falls_back_to_the_head_and_reports_an_empty_scope(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+
+    assert gates.scope(path, "tidy") == gates.EMPTY
+    assert "scope tidy: the working tree\nbase: HEAD\n" in capsys.readouterr().out
+    (tmp_path / "a.py").write_text("a = 2\n")
+    assert gates.scope(path, "tidy", max_inline=3) == 1
+    out = capsys.readouterr().out
+    target = path.with_name("tidy-scope.diff")
+    assert f"written to {target}" in out
+    assert "+a = 2" in target.read_text()
 
 
 @pytest.mark.usefixtures("repo")

@@ -16,12 +16,12 @@ from typing import TYPE_CHECKING, Protocol
 
 import click
 
-from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
+from riko.base._paths import PACKAGE_DIR, PYPROJECT, ROOT_DIR, TESTS_DIR
 
 from ._build import twine_check
 from ._docs import AS_BUILT_DOCS, lint_docs
 from ._docstyle import gen_docstring_issues
-from ._import_commands import _IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
+from ._import_commands import IMPORT_CHECKS, IMPORTS_COMMAND, run_import_checks
 from ._lint_basenames import gen_basename_issues
 from ._lint_bindings import gen_binding_issues
 from ._lint_deps import gen_hook_pin_issues, gen_import_issues
@@ -29,13 +29,21 @@ from ._lint_escapes import ESCAPES, gen_escape_counts
 from ._lint_literals import gen_literal_issues
 from ._lint_rst import lint_rst
 from ._lint_terms import gen_phrase_issues, gen_term_issues
-from ._lint_tests import gen_global_bound_issues, gen_layout_issues, get_backstop
+from ._lint_tests import (
+    LayoutIssue,
+    gen_global_bound_issues,
+    gen_inline_tables,
+    gen_layout_issues,
+    gen_rows_without_id,
+    get_backstop,
+)
 from ._ratchet import ratchet_ceiling
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _WORKFLOW_DIR = ROOT_DIR / ".github" / "workflows"
+
 _TEXT_ROOTS: tuple[str, ...] = (
     "riko",
     "tests",
@@ -149,23 +157,39 @@ _lint_literals = partial(_run_text_lint, gen_literal_issues)
 _lint_bindings = partial(_run_text_lint, gen_binding_issues)
 
 
+def _ratchet_sites(key: str, noun: str, *sites: LayoutIssue) -> int:
+    """Checks a count of test sites against its ceiling and prints them when over it."""
+    if code := ratchet_ceiling(PYPROJECT, "tests", key, len(sites), noun):
+        for site in sites:
+            print(site)
+
+    return code
+
+
 def _lint_tests() -> int:
     """Checks the test suite against its tier layout, generated indexes, and bounds."""
-    pyproject = ROOT_DIR / "pyproject.toml"
-    text = pyproject.read_text(encoding="utf-8")
+    text = PYPROJECT.read_text(encoding="utf-8")
 
     if (backstop := get_backstop(text)) is None:
         raise RuntimeError("pyproject.toml sets no [tool.pytest.ini_options] timeout")
 
     issues = [
-        *gen_global_bound_issues(text, pyproject),
+        *gen_global_bound_issues(text, PYPROJECT),
         *gen_layout_issues(TESTS_DIR, backstop),
     ]
 
     for issue in issues:
         print(issue)
 
-    return 1 if any(issue.fatal for issue in issues) else 0
+    tables = gen_inline_tables(TESTS_DIR)
+    rows = gen_rows_without_id(TESTS_DIR)
+    noun = "inline multi-line parametrize tables"
+    codes = [
+        1 if any(issue.fatal for issue in issues) else 0,
+        _ratchet_sites("inline-tables", noun, *tables),
+        _ratchet_sites("rows-without-id", "`pytest.param` rows without `id=`", *rows),
+    ]
+    return max(codes)
 
 
 def _lint_basenames() -> int:
@@ -175,9 +199,8 @@ def _lint_basenames() -> int:
 
 def _lint_escapes() -> int:
     """Checks the package's ``Any`` and ``cast`` uses against their ceilings."""
-    pyproject = ROOT_DIR / "pyproject.toml"
     totals = sum((counts for _, counts in gen_escape_counts(PACKAGE_DIR)), Counter())
-    ratchet = partial(ratchet_ceiling, pyproject, "typing")
+    ratchet = partial(ratchet_ceiling, PYPROJECT, "typing")
     codes = [
         ratchet(escape.lower(), totals[escape], f"`{escape}` uses")
         for escape in ESCAPES
@@ -190,11 +213,10 @@ def _lint_deps() -> int:
     if not _deptry:
         raise RuntimeError("deptry not found")
 
-    pyproject = ROOT_DIR / "pyproject.toml"
     hooks = ROOT_DIR / ".pre-commit-config.yaml"
     deptry_code = call([_deptry, "."], cwd=ROOT_DIR)
     issues = [
-        *gen_import_issues(PACKAGE_DIR, pyproject),
+        *gen_import_issues(PACKAGE_DIR, PYPROJECT),
         *gen_hook_pin_issues(hooks, ROOT_DIR / "uv.lock"),
     ]
 
@@ -418,7 +440,7 @@ def _lint_command(
             return_codes.append(_lint_yaml(*where))
 
         if all_:
-            return_codes.append(run_import_checks(PACKAGE_DIR, *_IMPORT_CHECKS))
+            return_codes.append(run_import_checks(PACKAGE_DIR, *IMPORT_CHECKS))
 
         if dist:
             return_codes.append(twine_check())

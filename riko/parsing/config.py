@@ -3,7 +3,7 @@ Configuration parsing and per-item resolution helpers.
 
 Examples:
 
-    >>> from riko.parsing import resolve_conf
+    >>> from riko.parsing.config import resolve_conf
     >>>
     >>> resolve_conf(conf={"type": "text", "value": "hello"})
     'hello'

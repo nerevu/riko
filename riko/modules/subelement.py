@@ -50,9 +50,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, Stream
     from riko.types._values import RikoValue
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"emit": True}
 DEFAULTS: Defaults = {"token_key": "content"}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

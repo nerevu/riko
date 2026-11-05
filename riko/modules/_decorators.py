@@ -163,17 +163,21 @@ _SPLITTER_OPTS: frozenset[str] = frozenset(
     SharedDecorationOptions.__required_keys__
     | SharedDecorationOptions.__optional_keys__
 )
+
 _OPERATOR_OPTS: frozenset[str] = frozenset(
     OperatorDecorationOptions.__required_keys__
     | OperatorDecorationOptions.__optional_keys__
 )
+
 _PROCESSOR_OPTS: frozenset[str] = frozenset(
     ProcessorDecorationOptions.__required_keys__
     | ProcessorDecorationOptions.__optional_keys__
 )
+
 _CALL_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(RawCallOptions))
 _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverrides))
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
+
 _require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
 _require_decoration_options = require_from_typed_dict(
@@ -641,7 +645,7 @@ async def _materialize_terminal[T](value: object) -> object:
 
 
 async def _aprocess_stream[T](
-    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], stream: AsyncIterable[T]
+    wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], items: AsyncIterable[T]
 ) -> AsyncIterator[ItemOrValue]:
     """
     Maps a processor over an async stream lazily, in order, flattening its results.
@@ -649,14 +653,14 @@ async def _aprocess_stream[T](
     Args:
 
         wrapper: The per-item processor call, returning that item's results.
-        stream: The async stream of items to process.
+        items: The async stream of items to process.
 
     Yields:
 
         Each result of every item, in stream order.
 
     """
-    async with aclosing(async_map_ordered_stream(wrapper, stream)) as mapped:
+    async with aclosing(async_map_ordered_stream(wrapper, items)) as mapped:
         async for processed in mapped:
             for value in processed:
                 yield value

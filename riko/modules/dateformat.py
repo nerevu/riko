@@ -35,9 +35,10 @@ if TYPE_CHECKING:
     from riko.coercion._configs import DateFormatObjconf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"field": "date", "ftype": BasicCastType.DATETIME}
 DEFAULTS: Defaults = {"format": "%m/%d/%Y %H:%M:%S"}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

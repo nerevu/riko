@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import ast
 
-from riko.base._paths import PACKAGE_DIR
+from riko.base._paths import CONFIG_PATH, PACKAGE_DIR
 from riko.base._strutils import get_codegen_note, ruff_format
 
 _TYPES_DIR = PACKAGE_DIR / "types"
 _MODULES = _TYPES_DIR / "modules.py"
-_CONFIGS = PACKAGE_DIR / "coercion" / "_configs.py"
 _IOS = {"PathLike"}
 _NAMES = {"CastType", "FmtLike", "LocationType"}
 _TYPING_TYPES = {"Any", "Literal"}
@@ -163,7 +162,7 @@ def render() -> str:
 
 
 def main() -> int:
-    return 0 if _CONFIGS.write_text(render()) else 1
+    return 0 if CONFIG_PATH.write_text(render()) else 1
 
 
 if __name__ == "__main__":

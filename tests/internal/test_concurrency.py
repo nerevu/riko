@@ -63,27 +63,17 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
+_INLINE = {"executor": "inline"}
+_PROCESS = {"executor": "process"}
+_THREAD = {"executor": "thread"}
 ITEMS = [{"x": x} for x in range(20)]
+LIMIT = config.concurrency_limit
+INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
+THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
 
 
 def _key(item):
     return tuple(sorted(item.items()))
-
-
-INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
-
-
-THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
-
-
-LIMIT = config.concurrency_limit
-
-
-def _mark_and_block(directory: str) -> None:
-    staged = Path(directory, f"{getpid()}.tmp")
-    staged.write_text("")
-    staged.replace(staged.with_suffix(".pid"))
-    sleep(60)
 
 
 def _pair(item: str) -> list[str]:
@@ -211,37 +201,29 @@ class TestRequireProcessSafe:
 
 SYNC_POLICIES = [
     pytest.param({"concurrency": 1}, SyncPolicy(INLINE, None), id="one"),
-    pytest.param({"executor": "inline"}, SyncPolicy(INLINE, None), id="inline"),
-    pytest.param({"executor": "thread"}, SyncPolicy(THREAD, 1), id="thread"),
-    pytest.param({"executor": "process"}, SyncPolicy(PROCESS, 1), id="process"),
+    pytest.param(_INLINE, SyncPolicy(INLINE, None), id="inline"),
+    pytest.param(_THREAD, SyncPolicy(THREAD, 1), id="thread"),
+    pytest.param(_PROCESS, SyncPolicy(PROCESS, 1), id="process"),
     pytest.param({"concurrency": "auto"}, SyncPolicy(THREAD, THREADS), id="auto"),
     pytest.param(
-        {"executor": "inline", "concurrency": 4},
-        SyncPolicy(INLINE, None),
-        id="inline-4",
+        {**_INLINE, "concurrency": 4}, SyncPolicy(INLINE, None), id="inline-4"
+    ),
+    pytest.param({**_THREAD, "concurrency": 3}, SyncPolicy(THREAD, 3), id="thread-3"),
+    pytest.param(
+        {**_PROCESS, "concurrency": 2}, SyncPolicy(PROCESS, 2), id="process-2"
     ),
     pytest.param(
-        {"executor": "thread", "concurrency": 3}, SyncPolicy(THREAD, 3), id="thread-3"
-    ),
-    pytest.param(
-        {"executor": "process", "concurrency": 2},
-        SyncPolicy(PROCESS, 2),
-        id="process-2",
-    ),
-    pytest.param(
-        {"executor": "thread", "concurrency": "auto"},
+        {**_THREAD, "concurrency": "auto"},
         SyncPolicy(THREAD, THREADS),
         id="thread-auto",
     ),
     pytest.param(
-        {"executor": "process", "concurrency": "auto"},
+        {**_PROCESS, "concurrency": "auto"},
         SyncPolicy(PROCESS, PROCS),
         id="process-auto",
     ),
     pytest.param(
-        {"executor": "inline", "concurrency": "auto"},
-        SyncPolicy(INLINE, None),
-        id="inline-auto",
+        {**_INLINE, "concurrency": "auto"}, SyncPolicy(INLINE, None), id="inline-auto"
     ),
 ]
 
@@ -458,20 +440,34 @@ class TestSyncPolicy:
 
         assert released == ["terminate"]
 
+
+def _mark_and_block(directory: str) -> None:
+    staged = Path(directory, f"{getpid()}.tmp")
+    staged.write_text("")
+    staged.replace(staged.with_suffix(".pid"))
+    sleep(5)
+
+
+class TestPoolLifetime:
+    """``_PoolLifetime`` stops its worker processes within its grace period."""
+
     @pytest.mark.slow
-    @pytest.mark.timeout(3)
+    @pytest.mark.timeout(2)
     def test_terminate_with_infinite_grace_waits_for_the_worker_to_exit(self) -> None:
         pool = ProcessPoolExecutor(1)
         lifetime = _PoolLifetime(pool, 1, grace=inf)
-        pool.submit(int).result(timeout=2)
+        pool.submit(int).result(timeout=1)
         (worker,) = pool._processes.values()
-        pool.submit(sleep, 60)
+        pool.submit(sleep, 5)
         sleep(0.2)
-        lifetime.terminate()
+        terminating = Thread(target=lifetime.terminate, daemon=True)
+        terminating.start()
+        terminating.join(timeout=1)
+        assert not terminating.is_alive()
         assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(15)
+    @pytest.mark.timeout(8)
     def test_terminate_kills_every_stuck_worker_within_one_grace(
         self, tmp_path: Path
     ) -> None:
@@ -484,7 +480,10 @@ class TestSyncPolicy:
         for _ in range(workers):
             pool.submit(_mark_and_block, str(tmp_path))
 
+        deadline = perf_counter() + 2
+
         while len(list(tmp_path.glob("*.pid"))) < workers:
+            assert perf_counter() < deadline
             sleep(0.01)
 
         start = perf_counter()
@@ -498,19 +497,13 @@ class TestSyncPolicy:
 
 ASYNC_POLICIES = [
     pytest.param({}, AsyncPolicy(None, False), id="default"),
-    pytest.param({"executor": "inline"}, AsyncPolicy(1, True), id="inline"),
-    pytest.param({"executor": "thread"}, AsyncPolicy(1, False), id="thread"),
+    pytest.param(_INLINE, AsyncPolicy(1, True), id="inline"),
+    pytest.param(_THREAD, AsyncPolicy(1, False), id="thread"),
     pytest.param({"concurrency": "auto"}, AsyncPolicy(LIMIT, False), id="auto"),
+    pytest.param({**_INLINE, "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"),
+    pytest.param({**_THREAD, "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"),
     pytest.param(
-        {"executor": "inline", "concurrency": 3}, AsyncPolicy(3, True), id="inline-3"
-    ),
-    pytest.param(
-        {"executor": "thread", "concurrency": 3}, AsyncPolicy(3, False), id="thread-3"
-    ),
-    pytest.param(
-        {"executor": "inline", "concurrency": "auto"},
-        AsyncPolicy(LIMIT, True),
-        id="inline-auto",
+        {**_INLINE, "concurrency": "auto"}, AsyncPolicy(LIMIT, True), id="inline-auto"
     ),
 ]
 

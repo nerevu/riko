@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
+
 OUTPUT_A = {"default": Endpoint("a", "out")}
 
 
@@ -197,6 +198,44 @@ async def arun_plan(
 
 
 passthrough_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
+
+
+def gen_closing_seed(closed: list[str]) -> Generator[Item]:
+    """Yields more items than any read-ahead and records ``"closed"`` on close."""
+    try:
+        for index in range(1, 51):
+            yield {"x": index}
+    finally:
+        closed.append("closed")
+
+
+class ClosingIterator:
+    """A two-item iterator with ``close`` that is not a generator."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.index = closed, 0
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Item:
+        if self.index == 2:
+            raise StopIteration
+
+        self.index += 1
+        return {"x": self.index}
+
+    def close(self) -> None:
+        self.closed.append("closed")
+
+
+def _relay(items, **_):
+    """Re-yields each item with a ``for`` loop, which never closes ``items``."""
+    for item in items:  # noqa: UP028
+        yield item
+
+
+relay_pipe = cast("SyncModuleWrapper", _relay)
 
 
 class ClosingAsyncIterator:

@@ -18,14 +18,19 @@ sessions on the same tree. Gate passes are recorded per tree, not per session,
 by `.claude/skills/land/gates.py` (`G` below):
 
 - **Markers.** A pass is stored in `.claude/gate-markers.json` against the
-  working tree's content tree id. Staging, committing, an autosquash, `/clear`,
-  or another session leaves it valid; any content edit invalidates it. Run each
-  gate through `python $G run <gate> [--mutates] [--lock] -- <command>`: it
+  working tree's content tree id, minus what the gate never reads under
+  `.claude/`: nothing for tidy, the markdown for lint and prettify (Ruff), the
+  whole folder for the other gates. Staging, committing, an autosquash, `/clear`, or
+  another session leaves it valid; any content edit invalidates it, except
+  that a skill-prose edit reruns only tidy and a skill-script edit reruns
+  tidy, lint, and prettify. Run each gate through
+  `python $G run <gate> [--mutates] [--lock] -- <command>`: it
   prints `skip <gate>` and exits 0 when the gate already passed on this tree
   (from any session), otherwise runs the command and records a pass only when
   it succeeds and the tree did not change during the run. Mutating gates
-  (prettify, codegen) pass `--mutates`, which records the tree they left. Every
-  fix changes the tree id, so the gates after it rerun on their own.
+  (prettify, codegen) pass `--mutates`, which records the tree they left. A fix
+  changes the tree id of every gate that reads the fixed file, so those gates
+  rerun on their own.
 - **No waiting, no deadlocks.** Only the full suite and `diff_uncovered.py` take
   `--lock`, a non-blocking OS lock on `riko-gate.lock` in the git common
   directory (shared by every worktree), which the OS drops when the process exits. When
@@ -57,17 +62,23 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    judgment call for the user. `--daily` makes it a no-op when a full upgrade
    already succeeded today, so always run it; never skip it by recollection.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh
-   subagent (`model: "opus"`, so it never inherits a Fable session's model)
-   given the skill text plus the mid-run self-check (past about 10 minutes or
+   subagent (`model: "opus"`, so it never inherits a Fable session's model),
+   never as an in-loop grep pass. Run `python $G check tidy` first and skip
+   the agent when it exits 0 (tidy already ran on this tree, in any session).
+   The brief opens "Follow `.claude/skills/tidy/SKILL.md`, reproduced below;
+   `/land` is the caller, so skip its verify step" and then **pastes the whole
+   file** (`cat .claude/skills/tidy/SKILL.md`) — the agent must never spend a
+   turn reading it — plus the mid-run self-check (past about 10 minutes or
    100k tokens with mechanical work left: pause, report, and name the helper
-   script; afterwards inspect any scripts it wrote for itself and promote, fold,
-   or drop each), never as an in-loop grep pass. Run `python $G check tidy` first and skip
-   the agent when it exits 0 (tidy already ran on this tree, in any session). Its mechanical fixes
+   script; afterwards inspect any scripts it wrote for itself and promote, fold, park in
+   `.claude/skills/drafts/`, or drop each). Its mechanical fixes
    join the change before the gates run; its judgment questions go to the user
    now, and phase-owned findings go through `/triage`.
-2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify`. Never hand-fix
+2. **Prettify first, always**: `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`. Never hand-fix
    formatting-class lint errors — formatting is prettify's job, before any
-   linter runs.
+   linter runs. The `record tidy` re-marks the prettified tree: tidy skips its
+   own prettify under `/land`, so without it a format-only change would reopen
+   tidy's scope for the next session.
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), run
    `python $G run codegen --mutates -- <manage> codegen --all` and check `git diff`
@@ -215,9 +226,6 @@ End with:
   autosquash results, which chain is on the clipboard, any hunk dropped from a
   fixup and why, and that the autosquash waits for `/wrapup`. These are
   commands for the user to run, never executed on their branch.
-- **Script candidates**: a subagent whose completion notice shows a long run (roughly 10+ minutes or 50+
-  tool calls) on mechanical, repeatable work, or that wrote its own helper scripts
-  into the scratchpad (the tidy
-  agent included). Name the task, its duration and tool count, and the script it
+- **Script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (the tidy agent included). Name the task, its duration and tool count, and the script it
   suggests (name, inputs, outputs, home); propose it, never build it unasked.
   Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided.

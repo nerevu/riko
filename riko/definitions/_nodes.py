@@ -72,15 +72,16 @@ if TYPE_CHECKING:
 
     from ._write import PreparedWrite
 
+type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
+type CallableVersion = NonNullHashable | MissingType
+type FrozenKwargs = FrozenDict[str, FrozenJSON]
+type RunnableNode = ModuleNode | CallableNode[object]
+
 _FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
 NO_OPTIONS = CallOptions()
 EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
-
-type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
-type CallableVersion = NonNullHashable | MissingType
-type FrozenKwargs = FrozenDict[str, FrozenJSON]
 
 _normalize_backend = partial(resolve_enum, Backends)
 _normalize_format = partial(resolve_enum, Formats, strict=False)
@@ -438,9 +439,6 @@ def get_family_edges(
 
     """
     return [edge for edge in edges if edge.family == family]
-
-
-type RunnableNode = ModuleNode | CallableNode[object]
 
 
 def require_runnable_node(value: Node) -> RunnableNode:

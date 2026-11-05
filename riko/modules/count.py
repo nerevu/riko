@@ -36,9 +36,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"extract": "count_key"}
 DEFAULTS: Defaults = {"count_key": None}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

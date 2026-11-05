@@ -44,14 +44,16 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types.modules import StrReplaceConfRule
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "ftype": BasicCastType.TEXT,
     "listize": True,
     "field": "content",
     "extract": "rule",
 }
+
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 OPS: dict[str, Callable[[str, StrReplaceConfRule], str]] = {
     "first": lambda word, rule: word.replace(rule.find, rule.replace, 1),

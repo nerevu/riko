@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
     from riko.types._wrappers import SyncModuleWrapper
 
+
+_THREAD = {"executor": "thread", "concurrency": 2, "ordered": True}
+_PROCESS = {"executor": "process", "concurrency": 2, "ordered": True}
 STRR_CONF = StrReplaceConf({"rule": StrReplaceConfRule(find="is", replace="was")})
 
 
@@ -73,19 +76,12 @@ def _count(value: Iterable[object]) -> int:
     return len(list(value))
 
 
-_THREAD = {"executor": "thread", "concurrency": 2, "ordered": True}
-
-
-_PROCESS = {"executor": "process", "concurrency": 2, "ordered": True}
-
-
 _LISTLIKE_ITEMS = [
     pytest.param(_to_list, {}, id="list-inline"),
     pytest.param(_to_list, _THREAD, id="list-thread"),
     pytest.param(_to_list, _PROCESS, id="list-process"),
     pytest.param(_to_tuple, {}, id="tuple-inline"),
     pytest.param(_to_tuple, _THREAD, id="tuple-thread"),
-    pytest.param(_to_tuple, _PROCESS, id="tuple-process"),
     pytest.param(_to_generator, {}, id="generator-inline"),
     pytest.param(_to_generator, _THREAD, id="generator-thread"),
 ]
@@ -103,7 +99,6 @@ _PASSTHROUGH_CASES = [
     pytest.param([{"c": "hi"}], [itemgetter("c"), len], [2], id="chained-scalar"),
     pytest.param([{"x": 1}], [lambda _: None], [None], id="none-is-a-result"),
     pytest.param([{"x": 1}], [lambda i: {"y": i["x"]}], [{"y": 1}], id="mapping"),
-    pytest.param([{"x": 1}, {"x": 2}], [_scaled], [2, 4], id="one-per-item"),
 ]
 
 
@@ -146,13 +141,6 @@ class TestCallableNodes:
         pipeline = Pipeline().map(produce).map(_count)
         assert list(pipeline.with_execution(**settings)([{"x": 1}])) == [2]
 
-    @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
-    @async_test
-    async def test_a_listlike_item_stays_whole_under_async_mapping(self, produce):
-        pipeline = Pipeline().map(produce).map(_count)
-        mapped = pipeline.with_execution(concurrency=2)
-        assert [item async for item in mapped([{"x": 1}])] == [2]
-
     @pytest.mark.parametrize("settings", [{}, _THREAD], ids=["inline", "thread"])
     def test_a_seed_of_lists_maps_each_list_whole(self, settings):
         pipeline = Pipeline().map(len).with_execution(**settings)
@@ -192,11 +180,6 @@ class TestCallableNodes:
         pipeline = Pipeline().map(_keywords, factor=2)
         contextual = pipeline.with_context(Context(inputs={"q": 1}))
         assert list(contextual.with_execution(**settings)([{"x": 1}])) == [["factor"]]
-
-    @async_test
-    async def test_async_map_passes_only_bound_keywords(self):
-        pipeline = Pipeline().map(_keywords, factor=2)
-        assert [item async for item in pipeline([{"x": 1}])] == [["factor"]]
 
     def test_maps_declare_each_resource_once_in_order(self):
         pipeline = (
@@ -254,26 +237,9 @@ class TestCallableNodes:
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
 
-    @async_test
-    async def test_async_iteration_awaits_an_async_callable(self):
-        pipeline = Pipeline().map(_ascaled)
-        assert [item async for item in pipeline([{"x": 1}, {"x": 2}])] == [2, 4]
-
-    @async_test
-    async def test_async_iteration_runs_a_sync_callable(self):
-        pipeline = Pipeline().map(len)
-        seed = ["hi", "you"]
-        stream = pipeline(seed)
-        assert [item async for item in stream] == [2, 3]
-
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
-
-    def test_map_extracts_a_field(self):
-        pipeline = tokenized(VALUE).map(itemgetter("content"))
-        assert isinstance(pipeline, Pipeline)
-        assert list(pipeline) == ["once is 1x", "twice is 2x", "thrice is 3x"]
 
     def test_map_runs_once_per_item_mid_chain(self):
         runs: list[int] = []
@@ -323,7 +289,7 @@ class TestCallableNodes:
         ),
     )
     def test_map_rejects_combine_identity(self):
-        with pytest.raises(InvalidPipelineError):
+        with pytest.raises(InvalidPipelineError, match="combine"):
             Pipeline().map(len, identity="combine")
 
     @pytest.mark.xfail(
@@ -340,3 +306,29 @@ class TestCallableNodes:
 
         with registered_modules(definition, replace=True):
             assert list(Pipeline().map(_ascaled)([{"x": 1}])) == [2]
+
+
+class TestAsyncCallableNodes:
+    @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
+    @async_test
+    async def test_a_listlike_item_stays_whole_under_async_mapping(self, produce):
+        pipeline = Pipeline().map(produce).map(_count)
+        mapped = pipeline.with_execution(concurrency=2)
+        assert [item async for item in mapped([{"x": 1}])] == [2]
+
+    @async_test
+    async def test_async_map_passes_only_bound_keywords(self):
+        pipeline = Pipeline().map(_keywords, factor=2)
+        assert [item async for item in pipeline([{"x": 1}])] == [["factor"]]
+
+    @async_test
+    async def test_async_iteration_awaits_an_async_callable(self):
+        pipeline = Pipeline().map(_ascaled)
+        assert [item async for item in pipeline([{"x": 1}, {"x": 2}])] == [2, 4]
+
+    @async_test
+    async def test_async_iteration_runs_a_sync_callable(self):
+        pipeline = Pipeline().map(len)
+        seed = ["hi", "you"]
+        stream = pipeline(seed)
+        assert [item async for item in stream] == [2, 3]

@@ -39,13 +39,15 @@ if TYPE_CHECKING:
     from riko.types._streams import Cascade, Stream
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "extract": "splits",
     "ptype": BasicCastType.INT,
     "objectify": False,
 }
+
 DEFAULTS: Defaults = {"splits": 2}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

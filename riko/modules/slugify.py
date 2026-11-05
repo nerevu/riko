@@ -39,6 +39,8 @@ if TYPE_CHECKING:
     from riko.coercion._configs import SlugifyObjconf
     from riko.types._options import DecorationOptions, Defaults
 
+logger: Logger = get_logger(__name__)
+
 SEPARATOR = "-"
 
 OPTS: DecorationOptions = {
@@ -47,8 +49,8 @@ OPTS: DecorationOptions = {
     "field": "content",
     "objectify": False,
 }
+
 DEFAULTS: Defaults = {"separator": SEPARATOR}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

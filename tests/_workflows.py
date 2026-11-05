@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
+from riko.definitions._nodes import ModuleNode, PublishEdge, StreamEdge, SubscribeNode
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
@@ -23,12 +25,14 @@ if TYPE_CHECKING:
 
     from riko.types._streams import Item
 
-EXAMPLES_DIR = TESTS_DIR.parent / "examples"
+
+EXAMPLES_DIR = ROOT_DIR / "examples"
 
 SPLIT_PENDING = pytest.mark.xfail(
     strict=True,
     reason="the execution refuses split nodes until streaming fan-out lands",
 )
+
 SPLIT_METHOD_PENDING = pytest.mark.xfail(
     strict=True, reason="Pipeline.split() is not available yet"
 )
@@ -36,6 +40,7 @@ SPLIT_METHOD_PENDING = pytest.mark.xfail(
 DAG_DIR = TESTS_DIR / "dags"
 DAG_PATH = DAG_DIR / "pipe_forever.json"
 DAG = json.loads(DAG_PATH.read_text(encoding="utf-8"))
+
 PIPE_DEF = {
     "modules": [
         {"id": "sw-1", "type": "forever", "conf": {}},
@@ -49,6 +54,10 @@ PIPE_DEF = {
         }
     ],
 }
+
+RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}
+PARENT = [{"title": "hi"}]
+EXCLAIMED = [{"title": "hi", "strconcat": "hi!"}]
 
 
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:
@@ -67,8 +76,12 @@ def run_document(path: Path) -> list[Item]:
     return run_workflow(Workflow.parse(path.read_text()))
 
 
-PARENT = [{"title": "hi"}]
-EXCLAIMED = [{"title": "hi", "strconcat": "hi!"}]
+EDGE_FAMILY_MISMATCHES = [
+    pytest.param(PublishEdge, ModuleNode(id="b", name="sort"), id="publish-to-module"),
+    pytest.param(
+        StreamEdge, SubscribeNode(id="b", name="sub"), id="stream-to-subscribe"
+    ),
+]
 
 
 def _write_document(directory: Path, name: str, suffix: str) -> None:

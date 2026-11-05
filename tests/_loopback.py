@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
     from riko.types._scalars import AnyStr
 
+
 CHUNK = 8192
 URL = "https://example.test/data"
 
@@ -91,7 +92,8 @@ def loopback_url(
     """
     payload = body.encode() if isinstance(body, str) else body
     server = _Server(("127.0.0.1", 0), _make_handler(payload, content_type, status))
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # A short poll interval keeps shutdown from waiting out the 0.5 s default.
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
 
     try:

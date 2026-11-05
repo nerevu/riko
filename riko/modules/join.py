@@ -50,9 +50,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Item, Items, Stream
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"join_key": None, "lower": False}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

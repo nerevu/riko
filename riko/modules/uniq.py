@@ -40,9 +40,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Stream
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"uniq_key": "content", "limit": 1024}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

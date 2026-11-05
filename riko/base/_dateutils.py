@@ -28,17 +28,6 @@ from attrs import frozen
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-
-TIMEOUT = 60 * 60 * 1
-HALF_DAY = 60 * 60 * 12
-NOW = dt.now(UTC)
-TODAY = NOW.date()
-
-AwareDT = Annotated[dt, "timezone-aware"]
-NaiveDT = Annotated[dt, "timezone-naive"]
-AwareST = Annotated[struct_time, "timezone-aware"]
-NaiveST = Annotated[struct_time, "timezone-naive"]
-
 # Sample a winter and a summer instant so both the standard and the daylight
 # abbreviation of every zone are captured, independent of when the module is
 # imported (a bare ``dt.now()`` only sees whichever is in effect today, so an
@@ -57,6 +46,10 @@ _PREFERRED_ZONES = frozenset(
     }
 )
 
+TIMEOUT = 60 * 60 * 1
+HALF_DAY = 60 * 60 * 12
+NOW = dt.now(UTC)
+TODAY = NOW.date()
 
 TT_KEYS = (
     "year",
@@ -69,33 +62,6 @@ TT_KEYS = (
     "day_of_year",
     "daylight_savings",
 )
-
-
-def load_local_tz(
-    try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
-) -> tzinfo:
-    """
-    Loads the host's local timezone, or a fallback timezone.
-
-    Args:
-
-        try_local_tz: Whether to inspect the host's local timezone.
-        fallback_tzinfo: Timezone returned when local lookup is disabled or fails.
-
-    Returns:
-
-        The resolved local timezone, or ``fallback_tzinfo``.
-
-    Examples:
-
-        >>> from datetime import UTC
-        >>>
-        >>> load_local_tz(False) is UTC
-        True
-
-    """
-    _tzinfo = dt.now(UTC).astimezone().tzinfo if try_local_tz else None
-    return _tzinfo or fallback_tzinfo
 
 
 def _add_zones(*zones: str) -> Iterator[tuple[str, tzinfo]]:
@@ -130,6 +96,38 @@ def gen_tzinfos() -> Iterator[tuple[str, tzinfo]]:
 
 
 TZINFOS = dict(gen_tzinfos())
+
+AwareDT = Annotated[dt, "timezone-aware"]
+NaiveDT = Annotated[dt, "timezone-naive"]
+AwareST = Annotated[struct_time, "timezone-aware"]
+NaiveST = Annotated[struct_time, "timezone-naive"]
+
+
+def load_local_tz(
+    try_local_tz: bool | None = True, fallback_tzinfo: tzinfo = UTC
+) -> tzinfo:
+    """
+    Loads the host's local timezone, or a fallback timezone.
+
+    Args:
+
+        try_local_tz: Whether to inspect the host's local timezone.
+        fallback_tzinfo: Timezone returned when local lookup is disabled or fails.
+
+    Returns:
+
+        The resolved local timezone, or ``fallback_tzinfo``.
+
+    Examples:
+
+        >>> from datetime import UTC
+        >>>
+        >>> load_local_tz(False) is UTC
+        True
+
+    """
+    _tzinfo = dt.now(UTC).astimezone().tzinfo if try_local_tz else None
+    return _tzinfo or fallback_tzinfo
 
 
 def get_tzname(

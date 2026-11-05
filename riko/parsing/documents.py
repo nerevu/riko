@@ -61,6 +61,14 @@ try:
 except ImportError:
     fastfeedparser = None
 
+logger: Logger = get_logger(__name__)
+
+type AnyElementTree = (
+    nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
+)
+
+type AnyElement = nativeElement | lxmlElement
+
 IS_FASTFEEDPARSER: bool = fastfeedparser is not None
 
 
@@ -110,12 +118,7 @@ if TYPE_CHECKING:
     from lxml.etree import _Element as lxmlElement
     from lxml.etree import _ElementTree as lxmlElementTree
 
-type AnyElementTree = (
-    nativeElementTree | lxmlElementTree | nativeElementTree[nativeElement[str]]
-)
-type AnyElement = nativeElement | lxmlElement
 
-logger: Logger = get_logger(__name__)
 logger.debug(f"{IS_LXML=}")
 logger.debug(f"{IS_FASTFEEDPARSER=}")
 

@@ -47,9 +47,12 @@ agent and report "tidy current". Otherwise launch one fresh `general-purpose`
 agent with `model: "opus"` (not a fork — it
 needs only the diff, not this session's context; pin the model so it never
 inherits a Fable session's) with: "Follow
-`.claude/skills/tidy/SKILL.md` in the repo at the current working directory. You
-cannot ask the user: apply mechanical fixes, and return phase-owned findings
-and framed judgment questions instead of deciding them." Wait for its report
+`.claude/skills/tidy/SKILL.md`, reproduced below, in the repo at the current
+working directory; `/wrapup` is the caller. You cannot ask the user: apply
+mechanical fixes, and return phase-owned findings and framed judgment questions
+instead of deciding them." and then the whole file pasted in
+(`cat .claude/skills/tidy/SKILL.md`), so the agent never spends a turn reading
+it. Wait for its report
 before step 1, so the evidence batch sees the tidied tree. Its judgment
 questions join step 2's single AskUserQuestion call; its phase-owned findings
 and "tidy edits not yet through the full suite" (when it edited anything) go
@@ -189,6 +192,20 @@ section describes only its current frontier, not history:
 Keep the handoff's `MEMORY.md` line and `description` a one-line summary of all
 sections (slice names and dates), not just this session's.
 
+In the same response, run `python .claude/skills/wrapup/memory_audit.py` and fix
+any dangling link, unindexed file, or broken frontmatter it reports. Claude
+Code loads only the index's first 200 lines or 25KB, and warns from about 140
+lines; the audit's ranking shows which files hold the most history. If
+the index reaches 140 lines or 18KB, merge related topic files before ending,
+down to about 120 lines so the next few sessions have room: same-phase
+memories into one file per phase, same-date triage memories into one file per
+date. A merged file holds rulings, rejected alternatives, and traps only, each
+under a `## <old slug>` heading; mechanism the repo documents stays out. Give
+it a `description` that covers every absorbed fact and rewrite `[[old-slug]]`
+links to the merged slug. Never delete the old files; `mv` them into the
+`memory-archive/` folder beside the memory directory (outside it, so recall
+never reads them) and list them in the report.
+
 If step 1 found pending `fixup!` commits, issue in the same response one Bash
 call that puts the autosquash line on the clipboard with `pbcopy`:
 
@@ -208,11 +225,8 @@ session that starts before the user runs it knows to.
 End with a short manifest: tidy's fixes and open findings, each file updated
 and the one-line reason, anything deliberately not updated (and why), the
 number of turns used against the seven-turn budget, and confirmation the session
-is safe to clear, and any **script candidates**: a subagent this session whose
-completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) spent on
-mechanical, repeatable work (slicing or replaying diffs, rebuilding tables, bulk
-renames, rehearsing commits), or that wrote its own helper scripts into the
-scratchpad. Name each one's task, duration, and tool count, and the script it
+is safe to clear, and any **script candidates**: candidates come from the main loop as much as from subagents: any helper script written this session into the scratchpad or `/tmp` (inline heredoc scripts included), any scan, count, or cross-check run by hand three or more times, and any subagent whose completion notice shows a long run (roughly 10+ minutes or 50+ tool calls) on mechanical, repeatable work or that wrote its own helper scripts (slicing or replaying diffs, rebuilding tables, bulk
+renames, rehearsing commits, auditing memory). Name each one's task, duration, and tool count, and the script it
 suggests (name, inputs, outputs, and home, such as beside the skill that launched
 the agent). Propose them only; build one when the user agrees.
 Save each candidate's draft (or the agent's own script) in `.claude/skills/drafts/` with a header docstring (purpose, inputs, outputs, origin date), and cite that path in the report and handoff. Then put every draft saved this session to the user with AskUserQuestion — promote (as a skill helper, a pyright/lint gate, or a new lint module), defer with a trigger, or drop — with measured numbers from running it, and record the ruling in the handoff; a saved draft is never left undecided. Judgment work

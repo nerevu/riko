@@ -1,5 +1,10 @@
 # vim: sw=4:ts=4:expandtab
-"""Provides shared resource values, factories, and checks for resource tests."""
+"""
+Provides shared resource values, factories, fixtures, and checks for resource tests.
+
+The root ``conftest.py`` loads this module as a plugin, so its fixtures are
+available to every test without an import.
+"""
 
 from __future__ import annotations
 
@@ -9,13 +14,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from riko.definitions._resource_definition import Resource
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
 CREDENTIAL = "microsoft/cif"
-
-
 SCALAR = 42
 
 
@@ -127,3 +132,18 @@ VALUE_FACTORIES = [
     pytest.param(sync_callable_factory, close_connection, id="sync"),
     pytest.param(async_callable_factory, close_async_connection, id="async"),
 ]
+
+
+connection = pytest.fixture(sync_callable_factory)
+sync_contextmanager = pytest.fixture(sync_cm_factory)
+scalar = pytest.fixture(lambda: SCALAR)
+
+
+@pytest.fixture
+def one_shot_resource(connection: Connection) -> Resource[Connection]:
+    return Resource(connection)
+
+
+@pytest.fixture
+def external_resource(connection: Connection) -> Resource[Connection]:
+    return Resource.from_external(connection)

@@ -119,20 +119,14 @@ CONVERSION_FUNCS: dict[Formats, ConversionFunc] = {
     Formats.JSON: records2json,
     Formats.JSONL: partial(records2json, newline=True),
     # 'kml': cv.records2kml,
+    **({Formats.OFX: records2ofx, Formats.QIF: records2qif} if OFX is not None else {}),
 }
-
-
-if OFX is not None:
-    CONVERSION_FUNCS[Formats.OFX] = records2ofx
-    CONVERSION_FUNCS[Formats.QIF] = records2qif
-
 
 ENCODING_FORMATS: Final[frozenset[Formats]] = frozenset(
     fmt
     for fmt, convert in CONVERSION_FUNCS.items()
     if "encoding" in signature(convert).parameters
 )
-
 
 GEOJSON_CRS = "urn:ogc:def:crs:OGC:1.3:CRS84"
 

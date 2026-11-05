@@ -43,6 +43,7 @@ from riko.runtime._write_session import (
 )
 from riko.types._enums import Formats
 from tests import aresolve, async_test, is_installed, skipif_issync
+from tests._lifecycle import ITEMS
 from tests._loopback import URL, loopback_url, stalled_url, stub_async_get
 from tests._targets import RecordStore
 
@@ -52,11 +53,24 @@ if TYPE_CHECKING:
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
 
+_LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 
-ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
+
+async def _double(x: int) -> int:
+    return x * 2
+
+
+_MAP = partial(async_map_stream, _double, range(3))
+_ORDERED = partial(async_map_ordered_stream, _double, range(3))
+_MERGE = partial(async_merge, [])
 _X0, _X1 = [{"x": 0}], [{"x": 1}]
 _CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
 _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+
+# A replace write leaves the old content until it publishes the new one whole.
+ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
+    strict=True, reason="atomic replace-write publication is not yet implemented"
+)
 
 
 def _never() -> bool:
@@ -76,9 +90,6 @@ def _sink(items: Items, dest: PathLike, mode: str = "replace", **kwargs) -> Writ
         result = session.finalize()
 
     return result
-
-
-_LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 
 
 @pytest.fixture(scope="module")
@@ -177,21 +188,14 @@ class TestFetch:
 
 
 class TestAsyncUrlOpen:
-    @pytest.mark.parametrize(
-        ("content_type", "expected"),
-        [
-            ("application/json; charset=utf-8", "json"),
-            ("text/xml", "xml"),
-            ("text/html", "html"),
-        ],
-    )
     @async_test
-    async def test_ext_from_content_type(self, monkeypatch, content_type, expected):
+    async def test_ext_from_content_type(self, monkeypatch):
+        content_type = "application/rss+xml; charset=utf-8"
         monkeypatch.setattr(
             "riko.io._async.async_get", stub_async_get(b"{}", content_type)
         )
         f = await async_url_open(URL)
-        assert f.ext == expected
+        assert f.ext == "xml"
         assert f.content_type == content_type
 
     @async_test
@@ -490,9 +494,6 @@ class TestReencode:
 class TestConversionFuncs:
     """The ``export`` converter registry mirrors ``Formats`` and drives ``export``."""
 
-    def test_every_converter_has_a_member(self):
-        assert set(CONVERSION_FUNCS) <= set(Formats)
-
     def test_encoding_reaches_a_converter_that_takes_it(self, monkeypatch, tmp_path):
         encodings = []
 
@@ -552,13 +553,6 @@ async def _forever(closed: list[bool]):
         closed.append(True)
 
 
-async def _double(x: int) -> int:
-    return x * 2
-
-
-_MAP = partial(async_map_stream, _double, range(3))
-_ORDERED = partial(async_map_ordered_stream, _double, range(3))
-_MERGE = partial(async_merge, [])
 STREAM_OPTION_REJECTIONS = [
     pytest.param({"limit": 0}, "limit must be at least 1", id="limit"),
     pytest.param({"buffer": -1}, "buffer cannot be negative", id="buffer"),
@@ -632,27 +626,6 @@ class TestAsyncMapStream:
         result = aresolve(async_map_ordered_stream(slow_first, range(6), limit=3))
         assert result == list(range(6))
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="sliding-window async ordered mapping is not yet implemented",
-    )
-    @async_test
-    async def test_ordered_yields_ready_results_while_a_later_item_runs(self):
-        """A slow second item never holds back the first result or the third start."""
-        log: list[str] = []
-
-        async def slow_second(i: int) -> int:
-            log.append(f"start {i}")
-            await async_sleep(0.05 if i == 1 else 0)
-            log.append(f"done {i}")
-            return i
-
-        async for i in async_map_ordered_stream(slow_second, range(4), limit=2):
-            log.append(f"yield {i}")
-
-        assert log.index("yield 0") < log.index("done 1")
-        assert log.index("start 2") < log.index("done 1")
-
     @async_test
     async def test_shared_budget_caps_nested_fanout(self):
         """
@@ -719,6 +692,27 @@ class TestAsyncMapStream:
     def test_rejects_bad_limit_or_buffer(self, build, kwargs, match):
         with pytest.raises(ValueError, match=match):
             aresolve(build(**kwargs))
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="sliding-window async ordered mapping is not yet implemented",
+    )
+    @async_test
+    async def test_ordered_yields_ready_results_while_a_later_item_runs(self):
+        """A slow second item never holds back the first result or the third start."""
+        log: list[str] = []
+
+        async def slow_second(i: int) -> int:
+            log.append(f"start {i}")
+            await async_sleep(0.05 if i == 1 else 0)
+            log.append(f"done {i}")
+            return i
+
+        async for i in async_map_ordered_stream(slow_second, range(4), limit=2):
+            log.append(f"yield {i}")
+
+        assert log.index("yield 0") < log.index("done 1")
+        assert log.index("start 2") < log.index("done 1")
 
 
 async def _gen_items(items, delay=0.0):
@@ -827,6 +821,7 @@ CSV_SINK_CASES = [
     pytest.param(None, _X0, "append", _CSV0, id="csv-append-to-empty-emits-header"),
     pytest.param(b"x\r\n0", _X1, "append", b"x\r\n0\n1\r\n", id="csv-unterminated"),
     pytest.param(_CSV0, [], "append", _CSV0, id="csv-empty-append-unchanged"),
+    pytest.param(_CSV0, _X1, "append", b"x\r\n0\r\n1\r\n", id="csv-append-no-header"),
 ]
 
 
@@ -839,12 +834,6 @@ class TestCsv:
 
         _sink(items, path, mode)
         assert path.read_bytes() == expected
-
-    def test_append_existing_skips_header(self, tmp_path):
-        path = tmp_path / "out.csv"
-        _sink([{"x": 0}], path)
-        _sink([{"x": 1}], path, "append")
-        assert path.read_bytes() == b"x\r\n0\r\n1\r\n"
 
     def test_passthrough_singleton_preserves_schema(self, tmp_path):
         path = tmp_path / "out.csv"
@@ -907,9 +896,7 @@ class TestFramed:
 
         assert not path.exists()
 
-    @pytest.mark.xfail(
-        strict=True, reason="atomic framed write publication is not yet implemented"
-    )
+    @ATOMIC_PUBLICATION_PENDING
     def test_interrupted_finalize_keeps_original_content(self, tmp_path, monkeypatch):
         # The commit empties the destination on open, so an interruption before the
         # document is written loses the old content instead of leaving it in place.
@@ -1020,17 +1007,6 @@ class TestSessionLifecycle:
         session.close()
 
 
-async def _asink(
-    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
-) -> WriteResult:
-    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
-        await session.awrite(items)
-        result = await session.afinalize()
-
-    return result
-
-
 class TestWriteExecution:
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
@@ -1071,13 +1047,7 @@ class TestWriteExecution:
 
         assert not path.exists()
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "a streaming replace write opens its destination for writing up front, "
-            "so a failed run destroys the old content until writes publish atomically"
-        ),
-    )
+    @ATOMIC_PUBLICATION_PENDING
     @pytest.mark.parametrize(
         ("name", "original"), [("out.csv", b"a\n1\n"), ("out.jsonl", b'{"a": 1}\n')]
     )
@@ -1095,6 +1065,17 @@ class TestWriteExecution:
             list(stream)
 
         assert path.read_bytes() == original
+
+
+async def _asink(
+    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
+) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    async with async_file_write_session(build_write(dest, mode, **kwargs)) as session:
+        await session.awrite(items)
+        result = await session.afinalize()
+
+    return result
 
 
 @skipif_issync

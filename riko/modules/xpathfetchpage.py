@@ -46,9 +46,10 @@ if TYPE_CHECKING:
     from riko.coercion._configs import XpathFetchPageObjconf
     from riko.types._streams import Item, Stream
 
+logger: Logger = get_logger(__name__)
+
 OPTS = SourceOpts
 DEFAULTS = Defaults({"encoding": ENCODING, "html5": False})
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

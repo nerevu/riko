@@ -45,9 +45,10 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import NumLike
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"ftype": BasicCastType.DECIMAL, "field": "content"}
 DEFAULTS: Defaults = {}
-logger: Logger = get_logger(__name__)
 
 
 def mean(*nums: NumLike) -> float:

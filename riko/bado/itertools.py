@@ -571,7 +571,7 @@ async def async_map_ordered_stream[T, S](
 
 
 async def async_merge[S](
-    iterables: AnyIterable[AsyncIterable[S]],
+    source: AnyIterable[AsyncIterable[S]],
     *,
     limit: int = DEF_CONCURRENCY_LIMIT,
     buffer: int = 0,
@@ -579,22 +579,22 @@ async def async_merge[S](
     """
     Merges many async iterables of items into one interleaved stream.
 
-    Like :func:`async_map_stream`, but each input item is itself an async
-    iterable. Items interleave across iterables as they are produced, rather than
-    one iterable at a time. *limit* and *buffer* bound in-flight memory.
+    Like :func:`async_map_stream`, but each input item is itself an async iterable.
+    Items interleave across iterables as they are produced, rather than one iterable at
+    a time. *limit* and *buffer* bound in-flight memory.
 
     Args:
 
-        iterables: The async iterables to merge.
+        source: The async iterables to merge.
 
-        limit: Maximum number of iterables drained concurrently (default:
+        limit: Maximum number of source items drained concurrently (default:
             ``DEF_CONCURRENCY_LIMIT``).
 
         buffer: Size of the merged-items queue (default: 0).
 
     Yields:
 
-        Each item from every iterable, in arrival order.
+        Each source item, in arrival order.
 
     Examples:
 
@@ -614,11 +614,11 @@ async def async_merge[S](
     """
 
     async def drain(
-        iterable: AsyncIterable[S], results: MemoryObjectSendStream[S]
+        items: AsyncIterable[S], results: MemoryObjectSendStream[S]
     ) -> None:
-        async with maybe_aclosing(aiter(iterable)) as items:
-            async for item in items:
+        async with maybe_aclosing(aiter(items)) as _items:
+            async for item in _items:
                 await results.send(item)
 
-    async for item in _pool_stream(iterables, drain, limit=limit, buffer=buffer):
+    async for item in _pool_stream(source, drain, limit=limit, buffer=buffer):
         yield item

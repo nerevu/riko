@@ -847,7 +847,7 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    async source nor its own output. `AsyncExecution._run_sync_node` (`riko/execution/_async_execution.py`)
    starts the sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`) and
    pulls its output one item per `__anext__` as the consumer demands it, while the pipe reads its async
-   primary source and every async secondary input (`others`, named ports — `_bridge_inputs`) lazily from
+   primary source and every async secondary input (named ports through `map_values`, `others` through `ExecutionExtras.map_others`) lazily from
    the worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
    `run_from_thread`). `_adapt.py` owns the pieces: `require_stream`/`require_async_stream` (the
    node-output boundary, moved out of `_execution.py`), `async_drain(source, call)` — one
@@ -869,7 +869,6 @@ helpers live in `riko/execution/_adapt.py` (regressions in `tests/internal/test_
    positional-input seed rule and `migrate_v1_to_v2` were corrected so the fixtures convert
    faithfully (details in [v1-cutover.md](v1-cutover.md) step 2).
    Regressions:
-   `test_arun_sync_only_source_streams_lazily` (xfail removed),
    `test_arun_sync_only_source_raises_after_yielding_earlier_items`,
    `test_arun_sync_only_source_closes_on_early_exit`,
    `test_arun_unconsumed_sync_only_source_does_not_block_exit`,
@@ -909,7 +908,11 @@ would share one iterator). R7's port-keyed delivery removes it. Regression:
 executable, not guarded: `union` reads `others` as an ordered list and legacy `_OTHER2` normalizes to
 `in:2` (`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
 `parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
-tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
+tripwire `test_build_plan_rejects_undeclared_positional_input`; when it flips, three live tests that wire
+`in:1` into `passthrough_pipe` need a host with declared positional ports:
+`TestPreparedCall::test_the_plan_names_each_nodes_extras` and
+`TestPreparedNode::test_secondary_input_stream_makes_a_node_unmappable` in `test_execution_plan.py`, and
+`TestPlanRun::test_run_rejects_seed_with_multiple_open_inputs` in `test_plan_runs.py`). The R4B "source normalization at one boundary"
 item is also done: `InputLike` (`Item | ValueFeed | Awaitable[Item | ValueFeed]`) is resolved once in
 `SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing
 `normalize_items` in `_adapt.py`); `Pipeline.__call__`, `__ror__`, and the generated module template
@@ -993,7 +996,7 @@ open node that does not start itself, or, when every open node starts itself, th
 placeholder-fed node raises `InvalidPipelineError` ("requires a seed") in
 `ExecutionPlan.gen_build_order`, so the internal placeholder never reaches output. The old
 `test_run_still_seeds_a_node_wired_only_through_a_named_value_port` became the named-port seed-target
-tests in `tests/internal/test_execution_plan.py`.
+tests in `tests/internal/test_plan_runs.py`.
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope), side effects and
 idempotency (R6), state/checkpoints (R6), and per-item gating (`skip_if`, callable-pipes § Per-item
@@ -1057,6 +1060,9 @@ Deliver:
   undeclared feeders then keep starting themselves is this phase's call (if they do, delete the
   tripwire rather than flip it). Strict xfail
   `tests/internal/test_plan_runs.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
+  Today's rule is asserted by `TestPlanRun::test_run_starts_a_transformer_that_only_feeds_named_ports`
+  and the `is_self_starting` doctest in `riko/execution/_prepared.py`; flipping the tripwire changes
+  both.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1084,7 +1090,7 @@ Deliver:
   pipe returns the declared `Workflow.inputs` mapping (strict xfail
   `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`),
   and `migrate_v1_to_v2` declares nothing from a `PipeDef`'s `input` modules (strict xfail
-  `tests/public/test_workflow.py::TestMigrate::test_input_module_becomes_a_declared_input`).
+  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_declared_input`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists beside the IR.
 
 ### M1 — v1-parity merge (`next` → `features`)
@@ -1099,7 +1105,9 @@ close R4B  →  R4C  →  R4D  →  R5A  →  R7  →  merge next → features
 
 R5B, R5C, R6, and everything after follow the merge. Parity means every strict-xfail tripwire written
 for a retired v1 behavior — execution settings (`tests/public/test_pipeline.py`, `TestExecutionSettings`), local
-pub/sub and split (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_script.py`), and
+pub/sub and split (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_script.py`; confirm
+`TestSplit::test_upstream_node_runs_once_for_every_branch`'s count of 3 against the split semantics,
+since it seeds each branch separately), and
 callable nodes (`TestCallableNodes`) — has flipped, with the sole documented exception of per-item
 gating (`skip_if`), whose successor is still undecided. Write execution (`TestPipelineWrite`) is R5C
 and is **not** a parity item. [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main)
@@ -1491,7 +1499,8 @@ with `"wb"` and only then writes, so anything that interrupts it in between — 
 30-second shutdown timeout cutting off an early-close finalize, which this phase makes reachable —
 leaves an empty file. Streaming replace writes open the destination up front, so a failed run
 destroys it too. Tripwires: `tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
-and `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`.
+and `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`,
+which share the `ATOMIC_PUBLICATION_PENDING` mark.
 
 **Exit:**
 
@@ -1585,7 +1594,9 @@ Deliver:
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
   structurally from incoming `PublishEdge`s and owned sender endpoints;
-- no PENDING/DONE/sender-id markers in the data stream;
+- no PENDING/DONE/sender-id markers in the data stream (until then the `StatefulItem`/`StreamState`
+  marker types the built-in `receive` yields stay off the supported type surface; 2026-10-30
+  surface triage);
 - per-subscription order guarantees;
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
 - receive-time `func=` semantics in sync and async together: run at subscription
@@ -1764,7 +1775,7 @@ Deliver iterative mode:
   triage). That includes data-driven recursion that would terminate (a filter emptying the stream
   before a self-`loop`); such work moves to `until`/`max_iterations`, which carry a hard bound. Do
   not add a runtime recursion-depth limit in its place. Test:
-  `tests/internal/test_modules.py::TestWorkflowResolver::test_require_rejects_a_stored_workflow_that_embeds_itself`;
+  `tests/internal/test_resolution.py::TestWorkflowResolver::test_require_rejects_a_stored_workflow_that_embeds_itself`;
 - the canonical Workflow v2 structural fields for `until`/`max_iterations` (R4A did not build them).
 - the structural type of `ModuleNode.embed`, settled together with what an embed may reference
   (registered module, processor, stored workflow, or embedded `Pipeline`): today the field is typed
@@ -1901,8 +1912,8 @@ AZ0/AZ2/AZ3), which depend only on R3 resources and may land right after M2:
 - REST/monitoring persist source state through R6 rather than SourceCheckpoint/CheckpointStore;
 - provider/MCP sessions are declared `Resource`s resolved once per execution;
 - a sync lifecycle resource under async execution is entered and exited on the same thread, so
-  thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire in
-  `tests/internal/test_execution_plan.py`);
+  thread-affine clients (e.g. `sqlite3` connections) work (strict-xfail tripwire
+  `tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`);
 - lazy resources acquire on first use rather than at run start, and declared resource-to-resource
   dependencies acquire dependency-first and clean up dependent-first (moved from R4B; tripwire
   `tests/internal/test_plan_runs.py::TestPlanRun::test_run_defers_an_unused_lazy_resource`);

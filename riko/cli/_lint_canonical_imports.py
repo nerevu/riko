@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING
 from ._import_graph import (
     FUNCTION_NODES,
     ModuleInfo,
-    _load_modules,
-    _resolve_from_module,
     collect_imports,
+    load_modules,
+    resolve_from_module,
 )
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ def _runtime_symbol_sources(module: ModuleInfo) -> dict[str, tuple[str, str]]:
             imported = node.module or ""
 
             if node.level:
-                imported = _resolve_from_module(module, node.module, node.level)
+                imported = resolve_from_module(module, node.module, node.level)
 
             for alias in node.names:
                 if alias.name != "*":
@@ -94,7 +94,7 @@ def _canonical_source(
 
 
 def _iter_issues(root: Path) -> tuple[_CanonicalIssue, ...]:
-    modules = _load_modules(root)
+    modules = load_modules(root)
     source_map = {module.name: _runtime_symbol_sources(module) for module in modules}
     issues: list[_CanonicalIssue] = []
 

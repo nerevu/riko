@@ -49,9 +49,10 @@ if TYPE_CHECKING:
     from riko.types._streams import Feed, Stream
     from riko.types._wrappers import PipeTuples
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {"pollable": True, "emit": True}
 DEFAULTS: Defaults = {"max_wait": 5}
-logger: Logger = get_logger(__name__)
 
 
 async def async_parser(

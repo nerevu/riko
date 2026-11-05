@@ -46,14 +46,14 @@ if TYPE_CHECKING:
 
     from riko.types._pipedef import PipeDag, PipeDefLike
 
+logger: Logger = get_logger(__name__)
+
 _OPTIONS = frozenset(chain.from_iterable(typed_dict_keys(RawCallOptions)))
 _WRITE = "write"
 _LOOP = "loop"
 _MODULE_FAMILY = "module"
 _WARNING = "migrating a pipe definition to a workflow"
 _WRITE_MODES = {"w": WriteMode.REPLACE, "a": WriteMode.APPEND}
-
-logger: Logger = get_logger(__name__)
 
 _optional_mapping = def_from_require(require_mapping)
 _require_embed_ref = require_from_typed_dict(EmbedRef)

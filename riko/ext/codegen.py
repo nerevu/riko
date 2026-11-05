@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from riko.types.modules import ModuleCategory, ModuleClass
 
 _HEADER = f"# {get_codegen_note('--names')}"
+
 _NAMES_DOC = '''"""
 Typed discovery enums for built-in modules.
 
@@ -47,16 +48,19 @@ Examples:
         'fetch'
 
 """'''
+
 _IDS_DOC = '''"""Generated built-in module-id typing aliases and name set."""'''
-_IMPORT = "from riko.types._enums import ModuleName"
-_IMPORT += '\n\n__all__ = ["Modules", "Sinks", "Sources", "Transforms"]'
+_IMPORT = (
+    "from riko.types._enums import ModuleName\n\n"
+    '__all__ = ["Modules", "Sinks", "Sources", "Transforms"]'
+)
+_MEMBER_SPLIT = re.compile(r"[^0-9A-Za-z]+")
 
 _CANONICAL: dict[ModuleCategory, ModuleClass] = {
     "source": "Sources",
     "transform": "Transforms",
     "sink": "Sinks",
 }
-_MEMBER_SPLIT = re.compile(r"[^0-9A-Za-z]+")
 
 
 # TODO: compare to pythonise

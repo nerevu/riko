@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import io
 import json
-import subprocess
-import sys
 import tomllib
 from datetime import date, timedelta
 from importlib import import_module
@@ -19,8 +17,8 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
-from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
-from riko.base._paths import ROOT_DIR
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._paths import PYPROJECT, ROOT_DIR
 from riko.base._strutils import get_codegen_note
 from riko.cli import (
     _codegen,
@@ -38,15 +36,12 @@ from riko.cli._docs import (
     gen_stale_test_symbol_citations,
     gen_unruled_terms,
 )
-from riko.cli._docstyle import (
-    gen_docstring_issues,
-    gen_example_prose,
-    summary_leads_with_output,
-)
+from riko.cli._docstyle import gen_docstring_issues, gen_example_prose
 from riko.cli._document import read_document, require_workflow
 from riko.cli._gen_api_surface import generate_api_surface
 from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
+from riko.cli._import_graph import InvalidArchitectureError
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
@@ -59,18 +54,21 @@ from riko.cli._lint_deps import (
 from riko.cli._lint_escapes import get_escape_counts
 from riko.cli._lint_import_architecture import (
     _validate_graph,
+    lint_architecture,
     load_architecture_report,
     render_architecture,
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_terms import BannedTerm, gen_term_issues
+from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._lint_tests import (
     MERGE_LINES,
     SPLIT_LINES,
     LayoutIssue,
     gen_global_bound_issues,
+    gen_inline_tables,
     gen_layout_issues,
+    gen_rows_without_id,
     get_backstop,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
@@ -80,10 +78,161 @@ from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
 from riko.runtime._compile import compile_workflow
+from tests import run_python
 from tests._workflows import DAG, DAG_PATH, PIPE_DEF
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
+
+_TYPING = "[tool.riko.typing]\n"
+_TODAY = date(2026, 10, 27)
+_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
+_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
+_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_DATED = "any = 8\nany-lowered = 2026-10-27\n"
+_LOWERED = f"{_DATED}{_WINDOW}"
+_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
+_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
+_HOLDS = "9 uses hold the ceiling of 9."
+_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
+_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
+
+_DISCARDED = (
+    " CI discards this change; run the ratchet locally and commit pyproject.toml."
+)
+
+_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
+_MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
+_PRIVATE_MODULE = ["private module without a public API carries a module example"]
+_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
+
+_ALPHA = """
+class TestAlpha:
+    def test_one(self): ...
+
+
+class TestAsyncAlpha:
+    def test_one(self): ...
+
+
+class TestBeta:
+    def test_two(self): ...
+"""
+
+_BACKSTOP = 30
+_BARE_PARAM = "from pytest import param\nV = [param(1)]"
+_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
+_MARK = "@pytest.mark.timeout(5)"
+
+_ROW_MARK = (
+    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
+)
+
+_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
+_PARAMETRIZE = '@pytest.mark.parametrize("v", {})'
+_BOUND_FRAGMENTS = (
+    "bound ladder",
+    "must stay below",
+    "outlasts",
+    "tracked docs",
+    "sets no timeout",
+    "equals the pyproject",
+    "awaits nothing",
+)
+_OPTIONS = "[tool.pytest.ini_options]\n"
+_SHARED = "basename is shared; rename one or allowlist the pair"
+_STALE_BASENAME = "allowlisted basename is no longer duplicated; remove it"
+_ANY = "from typing import Any\n"
+_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
+_UPWARD = "from riko.runtime.b import thing\n"
+_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+
+_TIMEOUT_SUITE = """
+import time
+
+import pytest
+
+
+@pytest.mark.timeout(0.5, method="signal")
+@pytest.mark.xfail(strict=True, reason="never ends")
+def test_hangs():
+    time.sleep(5)
+
+
+@pytest.mark.xfail(strict=True, reason="known defect")
+def test_fails():
+    assert False
+"""
+
+SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
+SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
+
+DISTRIBUTIONS = {
+    "dateutil": ["python-dateutil"],
+    "requests": ["requests"],
+    "lxml": ["lxml"],
+}
+
+PYPROJECT_TOML = """
+[project]
+dependencies = ["python-dateutil>=2", "requests"]
+
+[project.optional-dependencies]
+xml = ["lxml>=5", "requests"]
+
+[dependency-groups]
+lint = ["types-requests"]
+"""
+
+STALE = "the index is stale; run `manage codegen --tests`"
+ALPHA_ROW = "    test_alpha.py    Alpha, Beta\n"
+LONG = "".join(f"class TestSubject{n:02}: ...\n" for n in range(12))
+
+SUBJECTS = [
+    ", ".join(f"Subject{n:02}" for n in range(start, start + 6)) for start in (0, 6)
+]
+
+LONG_ROWS = f"{ALPHA_ROW}    test_long.py     {SUBJECTS[0]},\n{' ' * 21}{SUBJECTS[1]}\n"
+ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
+TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
+REQUESTS = "import requests\n"
+
+ONLY = (
+    "'python-dateutil' is a [project] dependency that nothing imports at run time; "
+    "import it outside TYPE_CHECKING or move it to a dependency group"
+)
+
+LXML = "import lxml\n"
+
+LOCK = """
+[[package]]
+name = "ruff"
+version = "0.16.10"
+"""
+
+HOOKS = """
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        additional_dependencies: [ruff==0.16.10]
+      - id: ruff-format
+        additional_dependencies: [ruff==0.16.9]
+"""
+
+WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
+TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
+
+
+def _if(test: str, body: str = "import a", orelse: str = "") -> str:
+    tail = f"else:\n    {orelse}\n" if orelse else ""
+    return f"if {test}:\n    {body}\n{tail}"
+
+
+LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
+ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
 
 
 def write(root: Path, path: str, text: str) -> None:
@@ -120,7 +269,7 @@ class TestCodegenCommand:
             _codegen,
             "_CODEGEN",
             {
-                name: (_record(calls, name), lambda name=name: name, f"{name} failed")
+                name: (_record(calls, name), name, f"{name} failed")
                 for name in _codegen._CODEGEN
             },
         )
@@ -147,9 +296,6 @@ def _record_upgrade(
     monkeypatch.setattr(_upgrade, "_uv", "uv")
     monkeypatch.setattr(_upgrade, "call", call)
     return calls
-
-
-SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 
 
 class TestUpgradeCommand:
@@ -266,7 +412,7 @@ class TestImportsCommand:
         checks = {
             name: _record_path(calls, name, int(name in failing)) for name in names
         }
-        monkeypatch.setattr(_import_commands, "_IMPORT_CHECKS", checks)
+        monkeypatch.setattr(_import_commands, "IMPORT_CHECKS", checks)
 
         result = CliRunner().invoke(_import_commands.IMPORTS_COMMAND, args)
         assert result.exit_code == exit_code
@@ -322,9 +468,7 @@ class TestLintCommand:
         ("check", "text"),
         [
             pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
-            pytest.param(
-                _lint._lint_literals, "Pass ``'list'`` here.\n", id="literals"
-            ),
+            pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
         ],
     )
     def test_text_checks_exit_by_whether_issues_were_found(
@@ -397,9 +541,6 @@ class TestLintCommand:
         assert calls == expected
 
 
-PYPROJECT = Path(__file__).parents[2] / "pyproject.toml"
-
-
 def _coverage_report(root: Path, uncovered: int) -> Path:
     report = root / "coverage.json"
     report.write_text(json.dumps({"totals": {"missing_lines": uncovered}}))
@@ -441,7 +582,7 @@ class TestCoverageRatchet:
             else f"[tool.riko.coverage]\nuncovered = {recorded}\n"
         )
         pyproject.write_text(f"[project]\nname = 'x'\n{table}")
-        monkeypatch.setattr(_test, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_test, "PYPROJECT", pyproject)
 
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
@@ -492,7 +633,6 @@ class TestCoverageRatchet:
         assert folders == []
 
 
-_TYPING = "[tool.riko.typing]\n"
 CEILING_TEXT_CASES = [
     pytest.param("x = 1\n", "x = 1\n\n[tool.riko.typing]\nany = 4\n", id="no-table"),
     pytest.param(f"{_TYPING}cast = 1\n", f"{_TYPING}any = 4\ncast = 1\n", id="no-key"),
@@ -510,21 +650,6 @@ CEILING_TEXT_CASES = [
 ]
 
 
-_TODAY = date(2026, 10, 27)
-_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
-_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
-_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
-_DATED = "any = 8\nany-lowered = 2026-10-27\n"
-_LOWERED = f"{_DATED}{_WINDOW}"
-_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
-_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
-_HOLDS = "9 uses hold the ceiling of 9."
-_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
-_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
-_DISCARDED = (
-    " CI discards this change; run the ratchet locally and commit pyproject.toml."
-)
-_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
 STALE_CASES = [
     pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
     pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
@@ -571,9 +696,6 @@ class TestCeilingRatchet:
         assert capsys.readouterr().out == f"{report}\n"
 
 
-SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
-
-
 class TestConsoleScripts:
     """Every console script names an importable callable."""
 
@@ -601,14 +723,15 @@ EXAMPLE_PROSE = [
 ]
 
 
+def _function(doc: str) -> str:
+    body = indent(f"Runs.\n\n{doc}", "    ")
+    return f'def f():\n    """\n{body}\n    """\n'
+
+
 def _doctest(source: str) -> str:
-    return f'def f():\n    """\n    Runs.\n\n    >>> {source}\n    """\n'
+    return _function(f">>> {source}")
 
 
-_MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
-_PRIVATE_MODULE = ["private module without a public API carries a module example"]
-_NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
-_TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
 EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
@@ -622,19 +745,15 @@ EXAMPLE_RULES = [
         ['imports processor privately (use "from riko.ext import processor")'],
         id="extension-name",
     ),
-    pytest.param(
-        "mod.py", _doctest("from riko.cli._docstyle import f"), [], id="nopub"
-    ),
+    pytest.param("mod.py", _doctest("from riko.cli._docs import f"), [], id="nopub"),
     pytest.param("mod.py", _doctest("from riko import Pipeline"), [], id="public"),
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
-    pytest.param(
-        "_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="no-example"
-    ),
+    pytest.param("_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="missing"),
     pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
     pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
-    pytest.param("mod.py", "def export(): ...\n", [], id="public-no-example"),
+    pytest.param("mod.py", "def export(): ...\n", [], id="public-missing"),
     pytest.param(
         "mod.py",
         'def _build_x():\n    """Resolves x."""\n',
@@ -647,17 +766,37 @@ EXAMPLE_RULES = [
         ["summary verb does not match the name verb build"],
         id="verb-mismatch-twin",
     ),
-    pytest.param(
-        "mod.py", 'async def abuild_x():\n    """Builds x."""\n', [], id="verb-twin"
-    ),
-    pytest.param(
-        "mod.py", 'def build_x():\n    """Finds x."""\n', [], id="verb-off-table"
-    ),
+    pytest.param("mod.py", 'async def abuild():\n    """Builds x."""\n', [], id="twin"),
+    pytest.param("mod.py", 'def build_x():\n    """Finds x."""\n', [], id="off-table"),
     pytest.param(
         "_require_guards.py",
         'def require_from_keys():\n    """Builds x."""\n',
         [],
         id="compound",
+    ),
+    pytest.param(
+        "mod.py",
+        'def f():\n    """Returns x."""\n',
+        ["summary leads with the output"],
+        id="output-lead",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("Raises:\n\n    KeyError if missing."),
+        ["Raises: entry does not start with 'SomeError:'"],
+        id="malformed-raises",
+    ),
+    pytest.param(
+        "mod.py",
+        _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
+        ["narrates between examples (use a >>> # comment)"],
+        id="narration",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("f() is None"),
+        ["checks for None (show the bare call instead)"],
+        id="none-check",
     ),
 ]
 
@@ -676,10 +815,6 @@ class TestDocstyle:
         path = tmp_path / name
         path.write_text(source, encoding="utf-8")
         assert [issue.problem for issue in gen_docstring_issues(path)] == expected
-
-    def test_docstring_summary_output_lead_detection(self) -> None:
-        assert summary_leads_with_output("Returns the parsed response body.")
-        assert not summary_leads_with_output("Parses the response body.")
 
 
 VERB_TABLE_MARKERS = [
@@ -794,6 +929,23 @@ class TestCitationLint:
         assert set(_docs.gen_source_symbols(path)) == expected
 
 
+class TestUserDocsLint:
+    """The internal-docs lint checks over the shipped user docs."""
+
+    def test_todo_lines_are_named_by_path_and_line(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_docs, "DOCS_DIR", tmp_path / "docs")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
+        (tmp_path / "docs" / "FAQ.rst").write_text(
+            "Intro.\n\nTODO: add seeding\n", encoding="utf-8"
+        )
+        offenders = list(_docs._gen_todo_offenders())
+        assert offenders == ["README.rst:1", "docs/FAQ.rst:3"]
+
+
 TERM_PATTERNS = [
     pytest.param(
         'REASON = "owned by R5C: write is still a sink module"\n'
@@ -879,6 +1031,14 @@ class TestTermLint:
         found = [issue.path.name for issue in gen_term_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
 
+    def test_internal_docs_are_held_to_phrases_but_not_phase_codes(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "IMPLEMENTED.md"
+        source.write_text("Landed in R4C.\n\nRun a sub-pipeline.\n", encoding="utf-8")
+        found = [(issue.lineno, issue.found) for issue in gen_phrase_issues(source)]
+        assert found == [(3, "sub-pipeline")]
+
 
 class TestLiteralLint:
     """The inline-literal quoting lint check."""
@@ -949,9 +1109,7 @@ BINDING_CASES = [
     pytest.param("workflow = Workflow.parse(dag)\n", [1], id="parsed-local"),
     pytest.param("workflow = pipeline.workflow\n", [1], id="attribute-local"),
     pytest.param("workflow = load(dag)\n", [], id="unknown-call"),
-    pytest.param(
-        "def build() -> Workflow: ...\nworkflow = build()\n", [2], id="helper-local"
-    ),
+    pytest.param("def f() -> Workflow: ...\nworkflow = f()\n", [2], id="helper-local"),
     pytest.param("class P:\n    workflow: Workflow = field()\n", [], id="field"),
     pytest.param("evolve(self, workflow=flow)\n", [], id="keyword"),
     pytest.param(
@@ -1018,25 +1176,6 @@ class TestBindingLint:
         ]
 
 
-DISTRIBUTIONS = {
-    "dateutil": ["python-dateutil"],
-    "requests": ["requests"],
-    "lxml": ["lxml"],
-}
-
-
-PYPROJECT_TOML = """
-[project]
-dependencies = ["python-dateutil>=2", "requests"]
-
-[project.optional-dependencies]
-xml = ["lxml>=5", "requests"]
-
-[dependency-groups]
-lint = ["types-requests"]
-"""
-
-
 def _write_suite(root: Path, **files: str) -> Path:
     tests_dir = root / "tests"
     tier = tests_dir / "public"
@@ -1053,13 +1192,6 @@ def _write_suite(root: Path, **files: str) -> Path:
     return tests_dir
 
 
-STALE = "the index is stale; run `manage codegen --tests`"
-ALPHA_ROW = "    test_alpha.py    Alpha, Beta\n"
-LONG = "".join(f"class TestSubject{n:02}: ...\n" for n in range(12))
-SUBJECTS = [
-    ", ".join(f"Subject{n:02}" for n in range(start, start + 6)) for start in (0, 6)
-]
-LONG_ROWS = f"{ALPHA_ROW}    test_long.py     {SUBJECTS[0]},\n{' ' * 21}{SUBJECTS[1]}\n"
 TIER_INDEX_CASES = [
     pytest.param(None, ALPHA_ROW, id="twin-collapses"),
     pytest.param(LONG, LONG_ROWS, id="wraps-under-column"),
@@ -1068,9 +1200,7 @@ TIER_INDEX_CASES = [
         f"{ALPHA_ROW}    test_long.py     AsyncGamma\n",
         id="lone-async-kept",
     ),
-    pytest.param(
-        "def helper(): ...\n", f"{ALPHA_ROW}    test_long.py\n", id="no-subjects"
-    ),
+    pytest.param("def f(): ...\n", f"{ALPHA_ROW}    test_long.py\n", id="no-subjects"),
 ]
 
 
@@ -1110,39 +1240,21 @@ INDEX_FORMS = [
 ]
 
 
-_ALPHA = """
-class TestAlpha:
-    def test_one(self): ...
-
-
-class TestAsyncAlpha:
-    def test_one(self): ...
-
-
-class TestBeta:
-    def test_two(self): ...
-"""
-
-
-_BACKSTOP = 30
-_LADDER = "is not on the bound ladder: 1, 2, 3, 5, 8, 10, 15, 20, 30 s"
-_MARK = "@pytest.mark.timeout(5)"
-_ROW_MARK = (
-    '@pytest.mark.parametrize("v", [pytest.param("x", marks=[pytest.mark.timeout(4)])])'
-)
-_DOC_READ = "tests never read tracked docs: {}; check it in manage lint --docs"
-_BOUND_FRAGMENTS = ("bound ladder", "must stay below", "outlasts", "tracked docs")
-_OPTIONS = "[tool.pytest.ini_options]\n"
-
-
 def _messages(tests_dir: Path) -> list[tuple[str, bool]]:
     issues = gen_layout_issues(tests_dir, _BACKSTOP)
     return [(issue.message, issue.fatal) for issue in issues]
 
 
-def _case(body: str, marker: str = "", prefix: str = "") -> str:
-    method = f"    {marker}\n    def test_one(self):\n        {body}\n"
+def _case(body: str, marker: str = "", prefix: str = "", kind: str = "def") -> str:
+    method = f"    {marker}\n    {kind} test_one(self):\n        {body}\n"
     return f"\n{prefix}\nclass TestGamma:\n{method}"
+
+
+def _write_alpha(root: Path, addition: str) -> Path:
+    tests_dir = _write_suite(root)
+    path = tests_dir / "public" / "test_alpha.py"
+    path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
+    return tests_dir
 
 
 BOUND_CASES = [
@@ -1167,13 +1279,9 @@ BOUND_CASES = [
         id="inner-at-global",
     ),
     pytest.param(
-        _case("event.wait(timeout=0.5)"),
-        f"wait(timeout=0.5) {_LADDER}",
-        id="keyword-bound",
+        _case("event.wait(timeout=0.5)"), f"wait(timeout=0.5) {_LADDER}", id="keyword"
     ),
-    pytest.param(
-        _case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional-bound"
-    ),
+    pytest.param(_case("thread.join(0.5)"), f"join(0.5) {_LADDER}", id="positional"),
     pytest.param(_case("...", _ROW_MARK), f"timeout(4) {_LADDER}", id="row-marker"),
     pytest.param(
         _case("with fail_after(_BOUND): ...", prefix="_BOUND = 4"),
@@ -1201,11 +1309,34 @@ BOUND_CASES = [
         _DOC_READ.format("Path('README.rst')"),
         id="cwd-doc",
     ),
+    pytest.param(
+        "\nclass TestGamma:\n    def setup(self):\n        thread.join(0.5)\n",
+        f"join(0.5) {_LADDER}",
+        id="helper-method",
+    ),
+    pytest.param(
+        "\ndef wait():\n    thread.join(30)\n",
+        "join(30) must stay below its pyproject timeout (30 s)",
+        id="top-level-helper",
+    ),
+    pytest.param(
+        _case('subprocess.run(["x"])'),
+        "subprocess.run() sets no timeout=",
+        id="subprocess-without-timeout",
+    ),
+    pytest.param(
+        _case("...", "@pytest.mark.timeout(30)"),
+        "timeout(30) equals the pyproject timeout; drop the marker",
+        id="marker-at-backstop",
+    ),
+    pytest.param(
+        _case("assert 1", kind="async def"),
+        "test_one awaits nothing; make it a plain def",
+        id="idle-async",
+    ),
 ]
 CLEAN_BOUND_CASES = [
-    pytest.param(
-        _case("async def block(): await async_sleep(3600)", _MARK), id="nested-sleep"
-    ),
+    pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
     pytest.param(_case("AsyncExecution(shutdown_timeout=0.05)"), id="subject-timeout"),
     pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
     pytest.param(_case("event.wait()"), id="no-argument"),
@@ -1218,6 +1349,39 @@ CLEAN_BOUND_CASES = [
         id="nested-constant-sleep",
     ),
     pytest.param(_case('tmp_path / "GUIDE.md"'), id="tmp-doc"),
+    pytest.param(_case('subprocess.run(["x"], timeout=5)'), id="subprocess-timeout"),
+    pytest.param(_case('subprocess.run(["x"], **options)'), id="subprocess-splat"),
+    pytest.param(_case("...", "@pytest.mark.timeout(20)"), id="marker-below-backstop"),
+    pytest.param(_case("[x async for x in agen()]", kind="async def"), id="async-for"),
+    pytest.param(_case("async with lock: ...", kind="async def"), id="async-with"),
+]
+HELPER_BOUND_CASES = [
+    pytest.param(
+        "def wait():\n    t.join(timeout=0.5)\n",
+        [f"join(timeout=0.5) {_LADDER}"],
+        id="off-ladder",
+    ),
+    pytest.param("def wait():\n    t.join(timeout=1)\n", [], id="on-ladder"),
+    pytest.param(
+        'subprocess.run(["x"])\n',
+        ["subprocess.run() sets no timeout="],
+        id="subprocess",
+    ),
+]
+SITE_CASES = [
+    pytest.param(_case("...", _PARAMETRIZE.format("[\n1,\n]")), 1, 0, id="multi-line"),
+    pytest.param(
+        _case("...", _PARAMETRIZE.format('[1], ids=["a"]')), 0, 0, id="one-line-inline"
+    ),
+    pytest.param(
+        _case("...", _PARAMETRIZE.format("V"), "V = [\n    1,\n]"),
+        0,
+        0,
+        id="module-table",
+    ),
+    pytest.param(_case("...", prefix="V = [pytest.param(1)]"), 0, 1, id="without-id"),
+    pytest.param(_case("...", "", 'V = [pytest.param(1, id="a")]'), 0, 0, id="with-id"),
+    pytest.param(_case("...", prefix=_BARE_PARAM), 0, 1, id="bare-param-without-id"),
 ]
 BACKSTOP_CASES = [
     pytest.param(f"{_OPTIONS}timeout = 30\n", 30, id="recorded"),
@@ -1305,20 +1469,31 @@ class TestLayoutLint:
     def test_in_file_departures_fail(
         self, tmp_path: Path, addition: str, message: str
     ) -> None:
-        tests_dir = _write_suite(tmp_path)
-        path = tests_dir / "public" / "test_alpha.py"
-        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
-        assert (message, True) in _messages(tests_dir)
+        assert (message, True) in _messages(_write_alpha(tmp_path, addition))
 
     @pytest.mark.parametrize("addition", CLEAN_BOUND_CASES)
     def test_bounds_and_doc_reads_outside_the_rules_pass(
         self, tmp_path: Path, addition: str
     ) -> None:
-        tests_dir = _write_suite(tmp_path)
-        path = tests_dir / "public" / "test_alpha.py"
-        path.write_text(path.read_text(encoding="utf-8") + addition, encoding="utf-8")
-        messages = [message for message, _ in _messages(tests_dir)]
+        messages = [
+            message for message, _ in _messages(_write_alpha(tmp_path, addition))
+        ]
         assert not [m for m in messages if any(f in m for f in _BOUND_FRAGMENTS)]
+
+    @pytest.mark.parametrize(("source", "expected"), HELPER_BOUND_CASES)
+    def test_shared_helper_modules_keep_the_bound_rules(
+        self, tmp_path: Path, source: str, expected: list[str]
+    ) -> None:
+        tests_dir = _write_suite(tmp_path, **{"_helper.py": source})
+        assert [message for message, _ in _messages(tests_dir)] == expected
+
+    @pytest.mark.parametrize(("addition", "tables", "rows"), SITE_CASES)
+    def test_inline_tables_and_rows_without_ids_are_counted(
+        self, tmp_path: Path, addition: str, tables: int, rows: int
+    ) -> None:
+        tests_dir = _write_alpha(tmp_path, addition)
+        found = (gen_inline_tables(tests_dir), gen_rows_without_id(tests_dir))
+        assert tuple(len(list(sites)) for sites in found) == (tables, rows)
 
     @pytest.mark.parametrize(("text", "expected"), BACKSTOP_CASES)
     def test_backstop_comes_from_the_pytest_timeout(
@@ -1366,6 +1541,9 @@ class TestLayoutLint:
     ) -> None:
         issue = LayoutIssue(Path("a.py"), 3, "bad", fatal=fatal)
         monkeypatch.setattr(_lint, "gen_layout_issues", lambda *_: [issue])
+        monkeypatch.setattr(_lint, "gen_inline_tables", lambda _: iter(()))
+        monkeypatch.setattr(_lint, "gen_rows_without_id", lambda _: iter(()))
+        monkeypatch.setattr(_lint, "ratchet_ceiling", lambda *_: 0)
 
         assert str(issue) == line
         assert _lint._lint_tests() == code
@@ -1379,8 +1557,6 @@ class TestLayoutLint:
         assert "consider merging" in messages[0][0]
 
 
-_SHARED = "basename is shared; rename one or allowlist the pair"
-_STALE = "allowlisted basename is no longer duplicated; remove it"
 BASENAME_CASES = [
     pytest.param(("a/x.py", "b/y.py"), frozenset(), [], id="clean"),
     pytest.param(
@@ -1393,7 +1569,7 @@ BASENAME_CASES = [
     pytest.param(
         ("a/x.py",),
         frozenset({"x.py"}),
-        [("x.py", ("pkg/a/x.py",), _STALE)],
+        [("x.py", ("pkg/a/x.py",), _STALE_BASENAME)],
         id="stale",
     ),
     pytest.param(("a/__init__.py", "b/__init__.py"), frozenset(), [], id="init"),
@@ -1433,25 +1609,6 @@ class TestBasenameLint:
         assert line in capsys.readouterr().out
 
 
-def _if(test: str, body: str = "import a", orelse: str = "") -> str:
-    tail = f"else:\n    {orelse}\n" if orelse else ""
-    return f"if {test}:\n    {body}\n{tail}"
-
-
-TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
-ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
-LOCAL = "def f():\n" + indent(_if(TC) + "import b\n", "    ")
-ELIF = _if(TC, "pass") + "elif flag:\n    import a\n"
-TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
-REQUESTS = "import requests\n"
-ONLY = (
-    "'python-dateutil' is a [project] dependency that nothing imports at run time; "
-    "import it outside TYPE_CHECKING or move it to a dependency group"
-)
-
-LXML = "import lxml\n"
-
-
 def _try(body: str, caught: str = "ImportError", handler: str = "pass") -> str:
     return f"try:\n    {body}\nexcept {caught}:\n    {handler}\n"
 
@@ -1465,14 +1622,10 @@ ESCAPE_CASES = [
     pytest.param("from typing import Any\ndef f() -> Any: ...\n", 1, 0, id="return"),
     pytest.param("from typing import cast\ncast('int', x)\n", 0, 1, id="cast"),
     pytest.param("import typing\ntyping.cast(int, x)\n", 0, 1, id="typing-cast"),
-    pytest.param(
-        "from typing import cast\ncast('dict[str, Any]', x)\n", 0, 1, id="unbound"
-    ),
+    pytest.param("from typing import cast\ncast('list[Any]', x)\n", 0, 1, id="unbound"),
     pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
 ]
 
-_ANY = "from typing import Any\n"
-_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
 ESCAPE_RATCHET_CASES = [
     pytest.param(_ANY, 0, "any = 0\ncast = 0", id="gain-lowers"),
     pytest.param(_ANY_CAST, 0, "any = 2\ncast = 1", id="equal-holds"),
@@ -1503,7 +1656,7 @@ class TestEscapeLint:
         (package / "mod.py").write_text(source, encoding="utf-8")
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text("[tool.riko.typing]\nany = 2\ncast = 1\n")
-        monkeypatch.setattr(_lint, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_lint, "PYPROJECT", pyproject)
         monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
 
         assert _lint._lint_escapes() == code
@@ -1579,24 +1732,6 @@ class TestDependencyLint:
         assert _issues(tmp_path, source)[1] == expected
 
 
-LOCK = """
-[[package]]
-name = "ruff"
-version = "0.16.10"
-"""
-
-
-HOOKS = """
-repos:
-  - repo: local
-    hooks:
-      - id: ruff-check
-        additional_dependencies: [ruff==0.16.10]
-      - id: ruff-format
-        additional_dependencies: [ruff==0.16.9]
-"""
-
-
 def _pin_issues(tmp_path: Path, hooks: str) -> list[tuple[str, str]]:
     config = tmp_path / ".pre-commit-config.yaml"
     config.write_text(hooks, encoding="utf-8")
@@ -1669,9 +1804,6 @@ class TestRelativeImportLint:
         assert issues[0].suggestion == "from .b import thing"
 
 
-_UPWARD = "from riko.runtime.b import thing\n"
-_GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
-_LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
 ARCHITECTURE_IMPORTS = [
     pytest.param(_UPWARD, ["runtime"], id="upward"),
     pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
@@ -1696,6 +1828,7 @@ class TestImportArchitectureLint:
         assert ("architecture violations:" in render_architecture(report)) == bool(
             targets
         )
+        assert lint_architecture(report) == (1 if targets else 0)
 
     def test_unclassified_fails(self, tmp_path: Path) -> None:
         root = tmp_path / "riko"
@@ -1703,6 +1836,7 @@ class TestImportArchitectureLint:
         write(root, "mystery/__init__.py", "")
         report = load_architecture_report(root)
         assert report.unclassified[0].module == "riko.mystery"
+        assert lint_architecture(report) == 1
 
     def test_layer_graph_validation_accepts_a_reduced_dag(self):
         _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
@@ -1724,7 +1858,6 @@ class TestImportArchitectureLint:
             _validate_graph("test", graph)
 
 
-WORKFLOW = json.loads(Workflow.parse(DAG).serialize())
 LEGACY = [pytest.param(DAG, id="dag"), pytest.param(PIPE_DEF, id="v1")]
 
 
@@ -1793,24 +1926,6 @@ class TestReadDocument:
         assert (document, name) == (DAG, "pipe_forever")
 
 
-_TIMEOUT_SUITE = """
-import time
-
-import pytest
-
-
-@pytest.mark.timeout(0.5, method="signal")
-@pytest.mark.xfail(strict=True, reason="never ends")
-def test_hangs():
-    time.sleep(5)
-
-
-@pytest.mark.xfail(strict=True, reason="known defect")
-def test_fails():
-    assert False
-"""
-
-
 class TestTimeouts:
     def test_a_timeout_fails_an_xfail_test(self, pytester: pytest.Pytester) -> None:
         """
@@ -1821,7 +1936,13 @@ class TestTimeouts:
         """
         pytester.makepyfile(_TIMEOUT_SUITE)
         result = pytester.runpytest_subprocess(
-            "-p", "tests._timeouts", "-p", "no:cacheprovider", "-o", "addopts="
+            "-p",
+            "tests._timeouts",
+            "-p",
+            "no:cacheprovider",
+            "-o",
+            "addopts=",
+            timeout=8,
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
@@ -1832,8 +1953,7 @@ class TestSubprocessImports:
         # A script outside the checkout resolves riko the way a console script does.
         probe = tmp_path / "probe.py"
         probe.write_text("import riko\nprint(riko.__file__)\n")
-        args = [sys.executable, str(probe)]
-        done = subprocess.run(args, capture_output=True, check=True, text=True)
+        done = run_python(str(probe), cwd=tmp_path)
         assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 

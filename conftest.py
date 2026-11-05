@@ -18,7 +18,7 @@ from riko.runtime._workflow_resolver import (
     reset_workflow_resolver,
 )
 
-pytest_plugins = ["pytester", "tests._timeouts"]
+pytest_plugins = ["pytester", "tests._resources", "tests._timeouts"]
 
 WORKFLOW_DIR = TESTS_DIR / "workflows"
 RUN_CALL = re.compile(r"^\s*run\(", re.MULTILINE)
@@ -29,6 +29,8 @@ def pytest_configure(config):
     # venv's editable install, which points at whichever checkout installed it.
     paths = [str(ROOT_DIR), os.environ.get("PYTHONPATH")]
     os.environ["PYTHONPATH"] = os.pathsep.join(path for path in paths if path)
+    # Test bounds are measured without asyncio debug mode, which slows every task.
+    os.environ.pop("PYTHONASYNCIODEBUG", None)
 
 
 @pytest.fixture(autouse=True)

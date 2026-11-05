@@ -48,13 +48,15 @@ if TYPE_CHECKING:
     from riko.types._streams import Item
     from riko.types.modules import ObjconfParam
 
+logger: Logger = get_logger(__name__)
+
 OPTS: DecorationOptions = {
     "ftype": BasicCastType.NONE,
     "extract": "param",
     "listize": True,
 }
+
 DEFAULTS: Defaults = {"param": {}}
-logger: Logger = get_logger(__name__)
 
 
 def parser(

@@ -67,9 +67,9 @@ the `C6` "weaker duplicate" shape).
   caller, `pythonise` the identifier caller.
 - `compile_workflow` (`riko/runtime/_compile.py`) emits the sanitized id as the variable while the
   workflow document (`WorkflowDocument`) keeps the original string — ids stay canonical (§ Scope), exactly as enum `.value` does.
-- Round-trip test over the pathological ids above, plus the existing
-  `test_codegen_matches_expected_file` byte guard to prove no `tests/pyworkflows/*.py`
-  output changes.
+- Round-trip test over the pathological ids above, plus the
+  `tests/internal/test_codegen.py::TestWorkflowModule` parity tests to prove the generated
+  modules still match their workflow documents.
 
 This is additive and gates nothing; sequence it with whichever of the two generators is next
 touched.

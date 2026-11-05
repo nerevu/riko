@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+_EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
+
 
 class BannedTerm(NamedTuple):
     """
@@ -88,8 +90,6 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("torn down", "cleaned up or closed"),
 )
 
-_EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
-
 
 def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
     """Compiles a phrase into a whole-word, case-insensitive pattern."""
@@ -97,18 +97,22 @@ def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
     return re.compile(rf"\b{words}s?\b", re.IGNORECASE)
 
 
+_PHRASE_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
+    (term, _build_pattern(term)) for term in BANNED_TERMS
+)
+
 PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work")
+
 RUN_SCOPING = BannedTerm(
     "scoping a run", "context manager (`pipeline.open(items)` returns one)"
 )
+
 UPSTREAM_NOUN = BannedTerm("upstream as a noun", "input stream or node stream")
+
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
 
-_PHRASE_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
-    (term, _build_pattern(term)) for term in BANNED_TERMS
-)
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),

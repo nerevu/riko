@@ -92,7 +92,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
 | ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestTtToDatedict::test_utime_honors_aware_offset`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
-| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_values.py::TestParsers`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
+| ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_values.py::TestGetSkip`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
 | ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_modules.py::TestPrepare`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
 | the same bytes decode identically across sync HTTP, async HTTP and async local file | functional | R15 |
@@ -107,7 +107,7 @@ deferred to the Workflow v2 normalization boundary
 ([extensibility § E3](extensibility.md#e3-canonical-workflow-v2-specification)), not accepted
 behaviour to pin. That boundary landed at cutover step 3 (2026-09-29): the `PipeDag` reader (now `Workflow.parse`)
 rejects an empty DAG with `InvalidPipelineError`, the tripwire is retired, and
-`tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` guards it.
+`tests/public/test_workflow_documents.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules` guards it.
 
 ## 3. Layout and enforcement
 
@@ -125,7 +125,8 @@ test folders themselves — this gameplan does not restate them:
   are named for stable concepts, never mirrored from `riko/` package paths, so package refactors
   move imports, not tests.
 - Shared helpers live in `tests/_*.py` (`_lifecycle`, `_execution`, `_workflows`, `_loopback`,
-  `_timeouts`); no helper is defined in two test files.
+  `_resources`, `_timeouts`; the last two load as pytest plugins from the root `conftest.py`); no
+  helper is defined in two test files.
 
 Enforcement:
 
@@ -140,7 +141,15 @@ Enforcement:
   on the test's own path that lasts as long as that outer bound, and a test that reads a tracked
   doc (a path built from `ROOT_DIR`/`DOCS_DIR`/`PACKAGE_DIR`/`TESTS_DIR`/`__file__` naming
   `_docs`, `docs`, or a `.md`/`.rst` file, or a `Path`/`open` of a `.md`/`.rst` name), the §1
-  rule that Markdown is never pytest input.
+  rule that Markdown is never pytest input. The bound checks also cover `tests/_*.py` helpers and
+  every non-test function and method, a `communicate` timeout counts as a bound, a `timeout`
+  marker may not equal the backstop, every `subprocess.run`/`check_output`/`check_call`/`call`
+  sets `timeout=` (or splats options that may carry it), and an `async def` test must await
+  something. It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
+  multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without `id=`
+  (`rows-without-id`), printing the sites only when a count rises. Its `Bound`/`gen_bounds`
+  also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels
+  each bound LOOSE, TIGHT, or ok against the ladder.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows` excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a tracked
   `_docs/` root doc, a gameplan, `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst` that names no
@@ -160,17 +169,32 @@ Enforcement:
   environment (Python 3.12, all extras); `/land` and that CI leg run it. Dev-only `manage`
   tooling is omitted (`[tool.coverage.run] omit`), and the console scripts count through their
   subprocess runs (`patch = ["subprocess"]`); a new `manage` helper module joins the omit list.
-- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call and a `pytest.param`
-  row that share a callee, a distinctive argument, and an expected value (`doctest-args`, which
-  sees short literals such as `"8"`/`"many"` that `overlaps` drops), and a doctest `Traceback`
-  whose exception and message match a `pytest.raises` (`doctest-raises`).
+- `.claude/skills/tidy/overlap_scan.py` lists (without failing) a doctest call whose every
+  argument and an expected value appear in one `pytest.param` row of a test naming the callee
+  (`doctest-args`, which sees short literals such as `"8"`/`"many"` that `overlaps` drops), a
+  doctest `Traceback` whose exception and message match a `pytest.raises` (`doctest-raises`), and a
+  docstring with six or more examples whose callees a test table already covers
+  (`doctest-balance`). Its module docstring lists the other sections and their known false
+  positives. `.claude/skills/tidy/covdiff.py` reads one `--cov-context=test` coverage file and
+  lists the lines the tests to be cut execute that their covering tests never do.
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and whether a
   doctest or existing test already owns the case.
 
 Pending: `manage lint --tests` bans only `_private` names in `public/`. The fuller placement rule
 — a public test uses only supported names — would check `public/` imports against
 `riko/base/_api_surface.py`; the `public/` files' imports of non-surface modules need moving or an
-allowlist first.
+allowlist first. As of the 2026-10-30 surface triage the remaining non-surface names in `public/`
+are the `SyncModuleWrapper`/`AsyncModuleWrapper` cast targets (waiting on the slot-type decision in
+[extensibility.md](extensibility.md)), the `riko.bado._backend` test primitives (`checkpoint`,
+`fail_after`, `async_sleep`), `DEF_CONCURRENCY_LIMIT`, and `maybe_aclosing`.
+
+No static check fits rows shadowed by an earlier branch in the code under test (needs a
+mutation-style check), xfail comparisons that are false on their face, xfail worst times that
+measure the defect rather than the test, a `sleep` that outlasts its bound inside a nested
+function or a shielded cleanup, same-subject tests whose bodies differ in more than literals, or
+test names that keep a retired verb (every flagged name still named a live function); the audit
+agents look for those by hand. A sync-only run needs no local plugin: the CI `optional=false`
+legs install no extras, and `manage test --tox -e py312` reproduces that locally.
 
 ### Import-linter coverage gap
 
@@ -260,7 +284,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
   live assertions exposed were corrected to the deterministic fixture truth (`feeddiscovery`
   25→15, `simplemath_1` 4→6).
 - Resolver precedence tests use distinguishable callables: `test_runtime_registration_shadows_entry_point`
-  now proves the runtime marker (not the entry-point one) wins, and `test_composite_store_first_hit_wins`
+  now proves the runtime marker (not the entry-point one) wins, and `test_first_hit_wins`
   puts a different object in the first two stores so it proves precedence, not fallback.
 - `test_loop_level_field_selects_child_input` now isolates `field` (a parent carrying both
   `title` and `alt`, tokenizing on `alt`), so it is no longer a duplicate of
@@ -293,7 +317,7 @@ to shrink the suite — they cover contracts hard to catch elsewhere.
 - `public/test_collections.py` (since removed) deduped: the sync/async copies of
   `test_pipes_use_loopability_for_mapping` folded into one `_ENGINES`-parametrized parity test,
   and the redundant `test_enum_and_string_resolve_identically` dropped (equivalence is already
-  proven by `test_resolve_module_name` + `test_constructor_stores_plain_string`).
+  proven by `test_normalize_module_name_unwraps_an_enum` + `test_seed_stores_plain_string`).
 - `internal/test_modules.py`: dropped the facade-level `test_register_requires_name` (the
   registry-level `test_runtime_register_requires_name` already owns the `"needs a name"`
   validation; the facade just forwards, and its delegation is covered by
@@ -356,7 +380,7 @@ the suite, forcing the marker's removal) the moment its owner lands:
   async-HTTP charset half (the `async_url_read`/`fetchpage` halves stay owned) (bado-anyio § 2c).
   `tests/internal/test_io.py::TestAsyncUrlOpen::test_sync_and_async_decode_line_endings_alike` is the line-ending
   half: sync and async must decode `b"abc\rdef\n"` alike (bado-anyio § 2c).
-- **R18** — `tests/internal/test_modules.py::TestResolverDispatcher::test_runtime_registered_pipe_prefixed_module_resolves`
+- **R18** — `tests/internal/test_resolution.py::TestResolverDispatcher::test_runtime_registered_pipe_prefixed_module_resolves`
   (extensibility § 24).
 - **R17** — `tests/internal/test_compile.py::test_convert_dag_empty_modules_raises` (since retired) asserts that
   `parse_dag({"modules": []})` raises is **retired**. It does *not* today — the terminal `output` node is appended
@@ -372,12 +396,12 @@ the suite, forcing the marker's removal) the moment its owner lands:
   routes through that canonical `normalize_workflow` → `validate` front door, so an empty DAG raises
   `InvalidPipelineError("workflow has no nodes")` — the same rejection the full-document path gives.
   The tripwire is **retired**; the behavior is guarded by the regular test
-  `tests/public/test_workflow.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules`.
+  `tests/public/test_workflow_documents.py::TestPipeDag::test_parse_rejects_invalid_pipe_dags` row `empty-modules`.
 
 **Shipped (§ 2b open-question rows).** R19's characterization test was **updated, not deleted**, into
 a regression once the contract was decided (type-aware comparison):
 
-- **R19** — `tests/public/test_modules.py::TestFilter::test_filter_greater_less_compare_numeric_strings_numerically`
+- **R19** — `tests/public/test_modules.py::TestFilter::test_filter_ordered_compare`
   asserts that `filter`'s `greater`/`less` compare numeric strings numerically (`"10" > "9"`) and fall
   back to lexicographic comparison for non-numeric strings (correctness-audit R19, now fixed).
 
@@ -388,6 +412,22 @@ by strict-xfail tripwires).
 2 functional) with `Test<Subject>` classes and shared `tests/_*.py` helpers; duplicate cases and
 copy-paste families are gone (each deletion names its covering owner); the § 3 enforcement is in
 place, with the uncovered-line ceiling recorded at 584.
+
+**Shipped (whole-suite audit, 2026-10-30).** A read-only `/audit-tests` pass, triaged the same day,
+landed in three slices. The bounds slice fixed tests that could not fail and tests that ended only
+by a timeout, gave every subprocess a `run_python` timeout, and clears asyncio debug mode for test
+runs. The layout slice fixed class order (behavior, rejection, tripwire), misfiled classes, async
+twins and helper placement. It moved supported-name tests to the public tier and split
+`test_resolution.py` out of internal `test_modules.py` and `test_workflow_documents.py` out of
+public `test_workflow.py`. It also put module constants at the top of every test file
+(`.claude/skills/tidy/lift_constants.py`). The dedup slice cut duplicate tests and rows after a
+per-test coverage diff, trimmed doctests to basic usage, and folded same-shape tests into
+module-level tables. The speed slice runs the CLI commands in-process (`run_command` in
+`tests/functional/test_script.py`); subprocesses remain only for one entry-point row per console
+script, one outside-checkout row, two `python -m` rows that run each command's `__main__` block,
+and the example scripts that register modules. It also cut the
+`test_demo` matrix to a four-row diagonal, set the benchmark's simulated I/O wait from
+`RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durations.
 
 ## 5b. Execution lifetime proofs (R4)
 
@@ -441,6 +481,9 @@ re-proving it.
 - **P13 exit tests** (see [MILESTONES.md](../MILESTONES.md)) — `public/test_modules.py` (extended
   public/EXT `__all__`; no accidental internal exports) + `tests/typing/`. This gameplan supplies the
   *layering* half of P13; the `tests/typing/{valid,invalid}/` type-check split is MILESTONES' half.
+  Two pytest tests already assert only what pyright checks and move there with it:
+  `tests/internal/test_modules.py::TestParserSignature::test_fixed_arity_parser_is_a_type_error` and
+  `TestBareDecorator::test_bare_and_called_forms_type_check`.
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
 

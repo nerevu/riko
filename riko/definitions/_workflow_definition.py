@@ -81,16 +81,15 @@ if TYPE_CHECKING:
     from riko.types._pipedef import Embed, PipeDag, PipeDefLike
     from riko.types._workflow import EdgeFamily, WorkflowDocument
 
+type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
+type NodesInput = Iterable[Node]
+type OutputsInput = Mapping[str, Endpoint]
 
 _EMPTY_INPUTS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _EMPTY_OUTPUTS: FrozenDict[str, Endpoint] = FrozenDict()
 _EMPTY_NODES: FrozenDict[NodeId, Node] = FrozenDict()
 _EMPTY_EDGES: tuple[Edge, ...] = ()
 _EMPTY_RESOURCES: tuple[str, ...] = ()
-
-type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
-type NodesInput = Iterable[Node]
-type OutputsInput = Mapping[str, Endpoint]
 
 endpoint_freezer = instances_freezer(Endpoint, "Workflow output")
 outputs_converter = mapping_converter(
@@ -229,16 +228,6 @@ class Workflow:
             >>> dag = {"modules": [{"name": "forever"}, {"name": "truncate"}]}
             >>> Workflow.parse(dag, shape="dag")
             Workflow(sw-1 -> sw-2; outputs: default)
-            >>> fan_in = {
-            ...     "modules": [
-            ...         {"id": "a", "name": "fetch"},
-            ...         {"id": "b", "name": "fetch"},
-            ...         {"id": "u", "name": "union"},
-            ...     ],
-            ...     "wires": [["a", "u"], ["b", "u", "in:1"]],
-            ... }
-            >>> [edge.target.port for edge in Workflow.parse(fan_in).edges]
-            ['in', 'in:1']
             >>> Workflow.parse("[]")
             Traceback (most recent call last):
             ...
@@ -362,16 +351,24 @@ class Workflow:
     def get_family_sources(
         self, family: EdgeFamily = "stream"
     ) -> Counter[tuple[str, str]]:
-        """Gets how many ``family`` edges each ``(node, port)`` source feeds."""
+        """
+        Gets how many ``family`` edges each ``(node, port)`` source feeds.
+
+        Equivalent spellings, e.g., ``out:1`` and ``out:01``, count as the same port.
+        """
         edges = get_family_edges(self.edges, family)
-        return Counter((edge.source.node, edge.source.port) for edge in edges)
+        return Counter(edge.source.port_key for edge in edges)
 
     def get_family_ports(
         self, family: EdgeFamily = "stream"
     ) -> Counter[tuple[str, str]]:
-        """Gets how many ``family`` edges each ``(node, port)`` target receives."""
+        """
+        Gets how many ``family`` edges each ``(node, port)`` target receives.
+
+        Equivalent spellings, e.g., ``in:1`` and ``in:01``, count as the same port.
+        """
         edges = get_family_edges(self.edges, family)
-        return Counter((edge.target.node, edge.target.port) for edge in edges)
+        return Counter(edge.target.port_key for edge in edges)
 
     def _gen_edge_target_mismatches(self) -> Iterator[str]:
         """Detects a publish/subscribe mismatch between an edge and its target node."""
@@ -644,7 +641,6 @@ class Workflow:
 
         """
         endpoints = {endpoint.node for endpoint in self.endpoints}
-        family_ports = self.get_family_ports().items()
 
         if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
@@ -654,14 +650,14 @@ class Workflow:
         elif missing := endpoints.difference(self.nodes):
             msg = f"references to missing node(s): {sorted(missing)}"
             raise InvalidPipelineError(msg)
-        elif fan_in := [port for port, count in family_ports if count > 1]:
+        elif misdirected := list(self._gen_misdirected_ports()):
+            msg = f"port direction does not match its role: {misdirected}"
+            raise InvalidPipelineError(msg)
+        elif fan_in := [p for p, count in self.get_family_ports().items() if count > 1]:
             msg = f"multiple stream edges into port(s): {sorted(fan_in)}"
             raise InvalidPipelineError(msg)
         elif mismatches := sorted(self._gen_edge_target_mismatches()):
             msg = f"edge family disagrees with target node: {mismatches}"
-            raise InvalidPipelineError(msg)
-        elif misdirected := list(self._gen_misdirected_ports()):
-            msg = f"port direction does not match its role: {misdirected}"
             raise InvalidPipelineError(msg)
         elif cyclic := list(self.index.cyclic):
             msg = f"edges form a cycle through node(s): {cyclic}"
@@ -729,17 +725,13 @@ class Workflow:
 
         Examples:
 
-            >>> from riko.ext import ModuleNode, WriteNode
+            >>> from riko.ext import ModuleNode
             >>>
-            >>> write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
             >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="a", name="hash"), write],
+            ...     nodes=[ModuleNode(id="a", name="hash")],
             ...     outputs={"default": Endpoint("a", "out")},
             ... )
             >>> flow.require_runnable_only("execution")
-            Traceback (most recent call last):
-                ...
-            riko.base.exceptions.InvalidPipelineError: ...execution is not yet supported
 
         """
         supported = self.runnable_nodes

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from riko.types._streams import Feed, Item, Items
 
 type ExportType = FmtLike | Literal["list", "tuple"]
+type Destination = PathLike | SupportsWrite
 
 _keys_converter = partial(
     normalize_strs,
@@ -146,9 +147,6 @@ class WriteOperation:
         converter=partial(resolve_enum, WriteMode, error=ValueError)
     )
     keys: tuple[str, ...] = field(factory=tuple, converter=_keys_converter)
-
-
-type Destination = PathLike | SupportsWrite
 
 
 @dataclass(frozen=True, slots=True)

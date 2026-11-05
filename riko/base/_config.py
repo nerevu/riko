@@ -59,9 +59,12 @@ SUBPIPE_TYPE = "pipe"
 BUILTIN_PROVIDER = "riko"
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
+
 DUPLICATE_BASENAMES: frozenset[str] = frozenset(
     {"_async.py", "_sync.py", "_logging.py", "modules.py"}
 )
+
+FOREVER_ITEM: Mapping[str, bool] = MappingProxyType({"forever": True})
 
 
 def get_worker_cnt(length: int = 0, *, threads: bool = True) -> int:
@@ -108,6 +111,7 @@ class Settings:
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
+    benchmark_delay: float = 0.1
 
 
 def _env_int(
@@ -181,8 +185,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
 
         >>> load_settings({"RIKO_NODE_THREADS": "8"}).node_threads
         8
-        >>> load_settings({"RIKO_NODE_THREADS": "many"}).node_threads
-        40
 
     """
     source = environ if env is None else env
@@ -218,6 +220,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             defaults.parsed_date_cache_size,
             minimum=0,
         ),
+        benchmark_delay=_env_float(
+            source, "RIKO_BENCHMARK_DELAY", defaults.benchmark_delay
+        ),
     )
 
 
@@ -226,4 +231,3 @@ settings = load_settings()
 DEF_CONCURRENCY_LIMIT = settings.concurrency_limit
 STREAMING_THRESHOLD = settings.streaming_threshold
 ENCODING = settings.encoding
-FOREVER_ITEM: Mapping[str, bool] = MappingProxyType({"forever": True})

@@ -66,6 +66,18 @@ from ._nodes import (
 if TYPE_CHECKING:
     from ._workflow_definition import Workflow
 
+_ALIASES: Mapping[str, Mapping[str, str]] = {"node": {"format": "fmt"}, "edge": {}}
+_REJECTED_EDGE_KEYS = frozenset({"src", "tgt", "from", "to"})
+
+_NODE_BUILDERS: Mapping[str, type[Node]] = {
+    "module": ModuleNode,
+    "read": ReadNode,
+    "write": WriteNode,
+    "action": ActionNode,
+    "cache": CacheNode,
+    "subscribe": SubscribeNode,
+}
+
 
 class WorkflowFields(TypedDict):
     """The normalized field values a ``Workflow`` is built from."""
@@ -77,9 +89,6 @@ class WorkflowFields(TypedDict):
     resources: tuple[str, ...]
     version: str
 
-
-_ALIASES: Mapping[str, Mapping[str, str]] = {"node": {"format": "fmt"}, "edge": {}}
-_REJECTED_EDGE_KEYS = frozenset({"src", "tgt", "from", "to"})
 
 require_endpoint = require_from_attrs(Endpoint, not_required={"port"})
 require_edge = require_from_attrs(Edge)
@@ -125,16 +134,6 @@ def _validate_port(port: str) -> None:
         parse_port(port)
     except ValueError as e:
         raise InvalidPipelineError(f"invalid port: {port!r}") from e
-
-
-_NODE_BUILDERS: Mapping[str, type[Node]] = {
-    "module": ModuleNode,
-    "read": ReadNode,
-    "write": WriteNode,
-    "action": ActionNode,
-    "cache": CacheNode,
-    "subscribe": SubscribeNode,
-}
 
 
 def _resolve_aliases[T](raw: Mapping[str, T], kind: str) -> dict[str, T]:
