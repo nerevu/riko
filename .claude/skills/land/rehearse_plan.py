@@ -33,7 +33,10 @@ index and committed with ``git commit-tree`` (no hooks; the gates already ran). 
    resolved to the copy rather than the venv's editable install (bisect-safe
    commits). ``--tests`` then runs ``manage test --ratchet`` on each step, one at a
    time, since the suite must run alone. A step that touches ``.claude/skills/``
-   also runs the skill scripts' smoke tests (``pytest .claude/skills``).
+   also runs the skill scripts' smoke tests (``pytest .claude/skills``). A failing
+   check writes its whole output to ``NN.<label>.log`` in ``--out``, and the summary
+   quotes its first error-looking lines (a lint's last lines are often a success
+   line from another check).
 3. **Autosquash**: when there are fixups, a throwaway worktree replays
    ``rebase -i --autosquash`` from the oldest target, counting the targets of the
    branch's pending ``fixup!`` commits too (an older one left unmoved would collide
@@ -50,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -78,6 +82,14 @@ MANAGE = ("-m", "riko.cli.manage")
 SKILLS = ".claude/skills/"
 TAR = shutil.which("tar") or "tar"
 PBCOPY = shutil.which("pbcopy")
+FAILURE = re.compile(
+    r"error|fail|violation|no longer exist|would be reformatted|exceeds|"
+    r"\[MD\d+\]|IAR\d+",
+    re.IGNORECASE,
+)
+PASSING = re.compile(
+    r"\b0 errors\b|no issues|success|passed|hold the ceiling", re.IGNORECASE
+)
 
 
 @dataclass
@@ -200,7 +212,19 @@ def extract(step: Step) -> Path:
     return root
 
 
-def run_checks(root: Path, commands: list[tuple[str, tuple[str, ...]]]) -> str:
+def get_failure_lines(output: str) -> list[str]:
+    """Gets a failed check's first three error-looking lines, else its last three."""
+    lines = [line.strip() for line in output.strip().splitlines() if line.strip()]
+    errors = [
+        line for line in lines if FAILURE.search(line) and not PASSING.search(line)
+    ]
+    return errors[:3] or lines[-3:]
+
+
+def run_checks(
+    root: Path, commands: list[tuple[str, tuple[str, ...]]], log: Path | None = None
+) -> str:
+    """Runs each check on ``root``, logging a failure to ``<log>.<label>.log``."""
     env = {**os.environ, "PYTHONPATH": str(root)}
     failures = []
 
@@ -210,13 +234,22 @@ def run_checks(root: Path, commands: list[tuple[str, tuple[str, ...]]]) -> str:
         )
 
         if run.returncode:
-            tail = (run.stdout + run.stderr).strip().splitlines()[-3:]
-            failures.append(f"{label}: {' | '.join(tail)}")
+            output = run.stdout + run.stderr
+            summary = " | ".join(get_failure_lines(output))
+
+            if log is not None:
+                path = log.with_name(f"{log.name}.{label}.log")
+                path.write_text(output)
+                summary = f"{summary} (log: {path.name})"
+
+            failures.append(f"{label}: {summary}")
 
     return "; ".join(failures) or "ok"
 
 
-def check(root: Path, *, full: bool, skills: bool = False) -> str:
+def check(
+    root: Path, *, full: bool, skills: bool = False, log: Path | None = None
+) -> str:
     """Runs the build checks on an extracted copy of the step's tree."""
     py = sys.executable
     ruff = (py, "-m", "ruff", "check", "--no-cache", "-q", "--select", RUFF_RULES)
@@ -225,26 +258,26 @@ def check(root: Path, *, full: bool, skills: bool = False) -> str:
     if skills:
         pytest = (py, "-m", "pytest", "-q", "--no-cov", "-p", "no:cacheprovider")
         build.append(("skill-tests", (*pytest, "-o", "addopts=", SKILLS)))
-    results = [run_checks(root, build)]
+    results = [run_checks(root, build, log)]
 
     if full:
         lints = [
             ("lint", (py, *MANAGE, "lint", "--all")),
             ("verify-types", (py, *MANAGE, "lint", "--verify-types")),
         ]
-        results.append(run_checks(root, lints))
+        results.append(run_checks(root, lints, log))
         pyright = str(Path(py).parent / "pyright")
         results.append(
-            run_checks(root, [("pyright", (pyright, "-p", "pyproject.toml"))])
+            run_checks(root, [("pyright", (pyright, "-p", "pyproject.toml"))], log)
         )
 
     return "; ".join(r for r in results if r != "ok") or "ok"
 
 
-def run_suite(root: Path) -> str:
+def run_suite(root: Path, log: Path | None = None) -> str:
     """Runs the full suite with the coverage ratchet on one extracted tree."""
     suite = (sys.executable, *MANAGE, "test", "--ratchet", "--quiet")
-    return run_checks(root, [("tests", suite)])
+    return run_checks(root, [("tests", suite)], log)
 
 
 def oldest(shas: list[str]) -> str:
@@ -382,16 +415,22 @@ def main() -> None:
     if stray != left_out and not stray < left_out:
         sys.exit(f"final tree differs from the working tree outside skip: {stray}")
 
+    out.mkdir(parents=True, exist_ok=True)
     roots = [extract(step) for step in steps]
     skills = [any(i.startswith(SKILLS) for i in step.ids) for step in steps]
+    logs = [out / f"{n:02}" for n in range(1, len(steps) + 1)]
 
-    def _check(root: Path, touches: bool) -> str:
-        return check(root, full=args.full_checks, skills=touches)
+    def _check(root: Path, touches: bool, log: Path) -> str:
+        return check(root, full=args.full_checks, skills=touches, log=log)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        checks = list(pool.map(_check, roots, skills))
+        checks = list(pool.map(_check, roots, skills, logs))
 
-    suites = [run_suite(root) for root in roots] if args.tests else []
+    suites = (
+        [run_suite(root, log) for root, log in zip(roots, logs, strict=True)]
+        if args.tests
+        else []
+    )
     squash = rehearse_autosquash(steps)
     rows = write_outputs(steps, out, files)
 
@@ -403,7 +442,7 @@ def main() -> None:
     kept = f"; left uncommitted: {', '.join(sorted(left_out))}" if left_out else ""
     print(f"\ncoverage: every id in exactly one step{kept}")
     print(f"autosquash: {squash}")
-    print(f"outputs: {out}/ (NN.patch, NN.msg, commands.txt, chain.txt)")
+    print(f"outputs: {out}/ (NN.patch, NN.msg, NN.*.log, commands.txt, chain.txt)")
 
     if args.copy and PBCOPY:
         subprocess.run((PBCOPY,), input=(out / "chain.txt").read_bytes(), check=True)
