@@ -28,25 +28,35 @@ _HEADER = re.compile(
 )
 
 
-def _split(path: Path) -> tuple[Path | None, bytes]:
-    data = path.read_bytes()
+def _split_bytes(data: bytes) -> tuple[bytes | None, bytes]:
     match = _HEADER.match(data)
+    end = 0 if match is None else match.end()
+    return (None if match is None else data[:end]), data[end:]
+
+
+def _split_source(path: Path, data: bytes) -> tuple[Path | None, bytes]:
+    header, body = _split_bytes(data)
+    match = None if header is None else _HEADER.match(header)
     source = None
 
-    if match:
+    if match is not None:
         source = path.parent / (match["md"] or match["rst"]).decode()
 
-    return source, data[match.end() :] if match else data
+    return source, body
+
+
+def _split(path: Path) -> tuple[Path | None, bytes]:
+    return _split_source(path, path.read_bytes())
 
 
 def _lines(data: bytes) -> list[str]:
     return data.decode("utf-8", "replace").splitlines(keepends=True)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report inspiration snapshot drift.")
     parser.add_argument("--diff", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     failures = 0
 
     for snapshot in sorted(_INSPIRATION.iterdir()):

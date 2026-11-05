@@ -170,6 +170,8 @@ neighborhood it affects:
    touches `_docs/research/inspiration/`, run
    `python .claude/skills/tidy/inspiration_drift.py`: a snapshot whose body differs
    from its `source:` readme is a finding, and snapshot bodies are never edited.
+   `sync_snapshot.py` installs candidates and copies staged snapshots back;
+   `removed_content.py` lists dropped-content leads after a readme rewrite.
 9. **Test ownership** — for each new or moved test (`manage lint --tests` already
    holds the file to its index row and class layout): is it in the right tier
    (functional if it runs a CLI command, `examples` pipeline, or stored fixture end
