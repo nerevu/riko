@@ -12,17 +12,16 @@ its ``<Subject>`` or ``Sync<Subject>`` class.
 from __future__ import annotations
 
 import ast
-import textwrap
 from typing import TYPE_CHECKING
 
+from riko.base._config import LINE_LENGTH
 from riko.base._paths import TESTS_DIR
-from riko.base._strutils import get_codegen_note
+from riko.base._strutils import get_codegen_note, wrap_words
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-_LINE_LENGTH = 88
 _INDENT = " " * 4
 _GAP = " " * 4
 
@@ -80,15 +79,10 @@ def _build_row(name: str, *subjects: str, width: int) -> str:
     """Renders one file's row, wrapping its subjects under the subject column."""
     lead = f"{_INDENT}{name.ljust(width)}{_GAP}"
     text = ", ".join(subjects)
-    wrapped = textwrap.fill(
-        text,
-        width=_LINE_LENGTH,
-        initial_indent=lead,
-        subsequent_indent=" " * len(lead),
-        break_long_words=False,
-        break_on_hyphens=False,
+    lines = wrap_words(
+        text, LINE_LENGTH, initial_indent=lead, subsequent_indent=" " * len(lead)
     )
-    return wrapped if text else lead.rstrip()
+    return "\n".join(lines) if text else lead.rstrip()
 
 
 def _gen_rows(tier: Path) -> Iterator[str]:
