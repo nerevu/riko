@@ -55,7 +55,7 @@ def parser(
 
         url: The link to parse.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `normalize_key`.
+        objconf: The module configuration: `normalize_key`.
 
     Returns:
 

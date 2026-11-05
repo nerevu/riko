@@ -57,7 +57,7 @@ def parser(
         stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The module configuration, containing `start` and `count`.
+        objconf: The module configuration: `start` and `count`.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares

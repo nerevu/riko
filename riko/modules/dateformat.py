@@ -54,7 +54,7 @@ def parser(
 
         date: The date to format, or None when there is none.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `format`.
+        objconf: The module configuration: `format`.
 
     Returns:
 

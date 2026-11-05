@@ -74,7 +74,7 @@ def parser(
         stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The module configuration, containing `join_key`, `other_join_key`
+        objconf: The module configuration: `join_key`, `other_join_key`
             and `lower`.
 
         tuples: Iterable of (item, objconf). `item` is an element in the input stream.

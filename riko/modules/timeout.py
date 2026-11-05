@@ -124,7 +124,7 @@ async def async_parser(
         stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The module configuration, containing any ``timedelta`` unit.
+        objconf: The module configuration: any ``timedelta`` unit.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
@@ -176,7 +176,7 @@ def parser(
         stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The module configuration, containing any ``timedelta`` unit.
+        objconf: The module configuration: any ``timedelta`` unit.
 
         tuples: Iterable of tuples of (item, objconf) `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares

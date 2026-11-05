@@ -143,7 +143,7 @@ async def async_parser(
     Args:
 
         _: The input stream. Unused; items arrive from the sender.
-        objconf: The module configuration, containing `name`.
+        objconf: The module configuration: `name`.
         tuples: Iterable of (item, objconf). Unused.
 
     Kwargs:
@@ -183,7 +183,7 @@ def parser(
 
         _: The input stream. Unused; items arrive from the sender.
 
-        objconf: The module configuration, containing `name`, `wait`, `max_wait`
+        objconf: The module configuration: `name`, `wait`, `max_wait`
             and `max_len`.
 
         tuples: Iterable of (item, objconf). Unused.

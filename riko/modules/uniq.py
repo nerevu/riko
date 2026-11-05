@@ -57,7 +57,7 @@ def parser(
         stream: The input stream. Note: this shares the `tuples` iterator, so consuming
             it will consume `tuples` as well.
 
-        objconf: The module configuration, containing `uniq_key` and `limit`.
+        objconf: The module configuration: `uniq_key` and `limit`.
 
         tuples: Iterable of (item, objconf). `item` is an element in the input stream.
             Note: this shares the `stream` iterator, so consuming it will consume
