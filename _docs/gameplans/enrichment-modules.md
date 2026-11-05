@@ -107,8 +107,19 @@ Unowned feature backlog on existing modules (no phase yet):
   `contains`/`doesnotcontain` are case-insensitive substring tests only.
 * `fetchpage`/`xpathfetchpage`: convert relative links to absolute, drop the closing tag
   when the start token is a stripped HTML tag, and optionally clean HTML with Tidy.
-- `currency` option: decided to stay `str` — it arrives as serialized configuration (so a
-  `Literal` would be the shape), but enumerating ISO 4217 codes is not worth the upkeep.
+* `xpathfetchpage`: a `detag` option matching `fetchpage`'s (GitHub issue #22).
+* `regex`: bound match time so a pathological pattern cannot stall a run (GitHub issue
+  #5). Stdlib `re` has no timeout; the options are the third-party `regex` engine's
+  `timeout=` or a per-node deadline from the common timeout policy.
+* HTTP user agent (GitHub issue #12): a `user_agent` conf on the URL-fetching sources
+  and `exchangerate`. Unset sends `riko/<version>`, a string sends that agent, and
+  `"random"` draws per run from a checked-in list of browser agents. A dev option
+  regenerates that list from the `fake-useragent` package, a dev dependency only, so the
+  drift guards cover it. PR #86 is the reference implementation, to be rebased onto the
+  current tree with `"random"` added (it supersedes PR #47's hard-coded 2020 list).
+* `currency` option: decided to stay `str` — it arrives as serialized configuration (so
+  a `Literal` would be the shape), but enumerating ISO 4217 codes is not worth the
+  upkeep.
 
 ## 6b. `geolocate` — retire the stub lookups
 
