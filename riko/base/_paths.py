@@ -28,6 +28,7 @@ ARCHIVE_DIR = ROOT_DIR / "_docs" / "archive"
 CONFIG_PATH = PACKAGE_DIR / "coercion" / "_configs.py"
 MODULE_IDS_PATH = PACKAGE_DIR / "types" / "_module_ids.py"
 MODULE_NAMES_PATH = PACKAGE_DIR / "modules" / "_names.py"
+USER_AGENTS_PATH = PACKAGE_DIR / "base" / "_user_agents.py"
 
 
 def is_http_url(url: str) -> bool:

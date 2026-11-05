@@ -192,7 +192,8 @@ class TestCodegenCommand:
             ([], ["config"]),
             (["--names", "--api"], ["names", "api"]),
             (["--tests", "--verbs"], ["tests", "verbs"]),
-            (["--all"], ["config", "names", "api", "tests", "verbs"]),
+            (["--user-agents"], ["user-agents"]),
+            (["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"]),
         ],
     )
     def test_codegen_selectors(

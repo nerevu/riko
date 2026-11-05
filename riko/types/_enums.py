@@ -12,7 +12,9 @@ Examples:
 
 from collections.abc import Iterable
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, NewType
+
+from typing_extensions import TypeIs
 
 type ModuleNameLike = str | ModuleName
 type StrLike = str | Iterable[str]
@@ -22,6 +24,9 @@ type ExecutorLike = Executor | str
 type IdentityModeLike = IdentityMode | str
 type DocumentShapeLike = DocumentShape | str
 type ConcurrencyLike = int | Literal["auto"]
+type UserAgentLike = UserAgent | CustomUserAgent | str
+
+CustomUserAgent = NewType("CustomUserAgent", str)
 
 
 class ModuleName(StrEnum):
@@ -247,3 +252,91 @@ class DocumentShape(StrEnum):
     DAG = "dag"
     V1 = "v1"
     V2 = "v2"
+
+
+class UserAgent(StrEnum):
+    """
+    A built-in choice of the HTTP ``User-Agent`` a fetch sends.
+
+    ``DEFAULT`` sends riko's own ``riko/<version>`` agent, the same as leaving the
+    choice unset. The others select a fresh agent for every request: ``DESKTOP`` from
+    desktop browsers, ``MOBILE`` from phone browsers, and ``RANDOM`` from either. Any
+    other non-empty string of printable ASCII (a ``CustomUserAgent``) is sent as is.
+
+    Examples:
+
+        >>> from riko import UserAgent
+        >>>
+        >>> UserAgent("random") is UserAgent.RANDOM
+        True
+        >>> UserAgent.MOBILE.value
+        'mobile'
+
+    """
+
+    DEFAULT = "default"
+    RANDOM = "random"
+    DESKTOP = "desktop"
+    MOBILE = "mobile"
+
+
+def is_custom_user_agent(value: object) -> TypeIs[CustomUserAgent]:
+    """
+    Reports whether ``value`` is an agent sent as is rather than a UserAgent member.
+
+    A custom agent is a non-empty string of printable ASCII, spaces included, that
+    is not a ``UserAgent`` value.
+
+    Examples:
+
+        >>> is_custom_user_agent("riko/1.0")
+        True
+        >>> is_custom_user_agent("curl")
+        True
+        >>> is_custom_user_agent("bot\\r\\nX: 1")
+        False
+        >>> is_custom_user_agent("random")
+        False
+
+    """
+    return (
+        isinstance(value, str)
+        and value.isascii()
+        and value.isprintable()
+        and bool(value)
+        and value not in UserAgent
+    )
+
+
+def require_custom_user_agent(value: object) -> CustomUserAgent:
+    """
+    Requires ``value`` to be an agent string a request can send as is.
+
+    Args:
+
+        value: The agent to check.
+
+    Returns:
+
+        ``value`` narrowed to a ``CustomUserAgent``.
+
+    Raises:
+
+        ValueError: If ``value`` is empty, holds a control or non-ASCII character, or
+            is a ``UserAgent`` value.
+
+    Examples:
+
+        >>> require_custom_user_agent("riko/1.0")
+        'riko/1.0'
+        >>> require_custom_user_agent("")
+        Traceback (most recent call last):
+            ...
+        ValueError: Invalid user agent ''. Use a UserAgent value...
+
+    """
+    if not is_custom_user_agent(value):
+        msg = f"Invalid user agent {value!r}. Use a UserAgent value or a non-empty "
+        raise ValueError(msg + "string of printable ASCII.")
+
+    return value

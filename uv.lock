@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-10-29T16:10:04.277944Z"
+exclude-newer = "2026-10-29T20:18:54.231695Z"
 exclude-newer-span = "P1W"
 
 [options.exclude-newer-package]
@@ -569,6 +569,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/52/92/8a611141e42930c0f194f7504063ab87dfe970cf1a5af28e7703df448734/executing-2.3.0.tar.gz", hash = "sha256:15919cb5d667e5cb4e099511971d00d659573fff2dd5c4e6cd8b71636c7858d2", size = 1338003, upload-time = "2026-10-10T14:06:04.64Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/dd/8bc67e7d5ffc1d88aa5af511189dfb76dc4e1e5b808fab186146ef2663e5/executing-2.3.0-py3-none-any.whl", hash = "sha256:736e859c9f8701f11fcf516856f26f562e04776387824b43a35a1dfe21c84122", size = 29393, upload-time = "2026-10-10T14:06:02.777Z" },
+]
+
+[[package]]
+name = "fake-useragent"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/43/948d10bf42735709edb5ae51e23297d034086f17fc7279fef385a7acb473/fake_useragent-2.2.0.tar.gz", hash = "sha256:4e6ab6571e40cc086d788523cf9e018f618d07f9050f822ff409a4dfe17c16b2", size = 158898, upload-time = "2025-04-14T15:32:19.238Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/37/b3ea9cd5558ff4cb51957caca2193981c6b0ff30bd0d2630ac62505d99d0/fake_useragent-2.2.0-py3-none-any.whl", hash = "sha256:67f35ca4d847b0d298187443aaf020413746e56acd985a611908c73dba2daa24", size = 161695, upload-time = "2025-04-14T15:32:17.732Z" },
 ]
 
 [[package]]
@@ -1766,6 +1775,7 @@ dev = [
     { name = "coverage" },
     { name = "deptry" },
     { name = "docutils" },
+    { name = "fake-useragent" },
     { name = "ipython" },
     { name = "pre-commit" },
     { name = "pygments" },
@@ -1784,6 +1794,7 @@ dev = [
 lint = [
     { name = "deptry" },
     { name = "docutils" },
+    { name = "fake-useragent" },
     { name = "pygments" },
     { name = "pylint" },
     { name = "pyright" },
@@ -1832,6 +1843,7 @@ dev = [
     { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
     { name = "deptry", specifier = ">=0.25.1" },
     { name = "docutils", specifier = ">=0.21" },
+    { name = "fake-useragent", specifier = ">=2.2.0" },
     { name = "ipython", specifier = ">=8.39.0" },
     { name = "pre-commit", specifier = ">=4.6.1" },
     { name = "pygments", specifier = ">=2.20.0" },
@@ -1850,6 +1862,7 @@ dev = [
 lint = [
     { name = "deptry", specifier = ">=0.25.1" },
     { name = "docutils", specifier = ">=0.21" },
+    { name = "fake-useragent", specifier = ">=2.2.0" },
     { name = "pygments", specifier = ">=2.20.0" },
     { name = "pylint", specifier = ">=4.0.5,<5.0.0" },
     { name = "pyright", specifier = ">=1.1.414" },

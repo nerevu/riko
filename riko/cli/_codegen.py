@@ -13,6 +13,7 @@ from riko.base._paths import (
     CONFIG_PATH,
     MODULE_IDS_PATH,
     MODULE_NAMES_PATH,
+    USER_AGENTS_PATH,
 )
 
 from ._gen_api_surface import main as gen_api_surface_main
@@ -20,6 +21,7 @@ from ._gen_config import main as gen_config_main
 from ._gen_names import main as gen_names_main
 from ._gen_tier_index import TIERS
 from ._gen_tier_index import main as gen_tier_index_main
+from ._gen_user_agents import main as gen_user_agents_main
 from ._gen_verbs import VERB_DOCS
 from ._gen_verbs import main as gen_verbs_main
 
@@ -52,6 +54,11 @@ _CODEGEN: dict[str, tuple[Callable[[], int], str, str]] = {
         f"regenerated the verb tables in {', '.join(map(str, VERB_DOCS))}",
         "Error regenerating the verb tables!",
     ),
+    "user-agents": (
+        gen_user_agents_main,
+        f"regenerated the random user-agent pools at {USER_AGENTS_PATH}",
+        "Error regenerating the random user-agent pools!",
+    ),
 }
 
 
@@ -61,6 +68,9 @@ _CODEGEN: dict[str, tuple[Callable[[], int], str, str]] = {
 @click.option("--api", help="Regenerate the API-surface document", is_flag=True)
 @click.option("--tests", help="Regenerate the test tier indexes", is_flag=True)
 @click.option("--verbs", help="Regenerate the function-name verb tables", is_flag=True)
+@click.option(
+    "--user-agents", help="Regenerate the random user-agent pools", is_flag=True
+)
 @click.option("--all", "all_", help="Run every generator", is_flag=True)
 def _codegen_command(
     config: bool = False,
@@ -68,6 +78,7 @@ def _codegen_command(
     api: bool = False,
     tests: bool = False,
     verbs: bool = False,
+    user_agents: bool = False,
     all_: bool = False,
 ) -> None:
     """Regenerate generated project artifacts."""
@@ -77,6 +88,7 @@ def _codegen_command(
         ("api", api),
         ("tests", tests),
         ("verbs", verbs),
+        ("user-agents", user_agents),
     )
     selected = (
         tuple(_CODEGEN) if all_ else tuple(name for name, enabled in pairs if enabled)
