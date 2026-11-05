@@ -165,16 +165,17 @@ sync when source is moved between package groups.
   `python -m riko.cli.manage`. Tox uses the module form to avoid that ambiguity.
 - **`uv`.** Use `uv run --active ...` when the current shell environment should win
   over the default `.venv`.
-- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked`
-  and runs ruff through `uv run --no-sync`; tox uses the lock runner. The pre-commit
-  ruff hooks are `language: python` local hooks pinning `ruff==<locked>` in pre-commit's
-  own environment, so they need neither `uv` on the Git client's `PATH` nor an active
-  venv (`uv run --active` without `VIRTUAL_ENV` silently falls back to a stale
-  `.venv`). That pin is the one copy of a locked version outside `uv.lock`:
-  `manage upgrade` rewrites it and `manage lint --deps` fails when it drifts. Upgrades
-  happen locally: `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package`
-  per `--package`) and syncs the active environment with every group and extra. Both hold
-  to `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
+- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked` and
+  runs ruff and rumdl through `uv run --no-sync`; tox uses the lock runner. The
+  pre-commit ruff and rumdl hooks are `language: python` local hooks pinning
+  `ruff==<locked>` and `rumdl==<locked>` in pre-commit's own environment, so they need
+  neither `uv` on the Git client's `PATH` nor an active venv (`uv run --active` without
+  `VIRTUAL_ENV` silently falls back to a stale `.venv`). Those pins are the only copies
+  of locked versions outside `uv.lock`: `manage upgrade` rewrites them and
+  `manage lint --deps` fails when one drifts. Upgrades happen locally:
+  `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package` per `--package`) and
+  syncs the active environment with every group and extra. Both hold to
+  `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
   security fix included, so an urgent one needs uv's `exclude-newer-package` override
   for that package. `--daily` skips when `.cache/last-upgrade` holds today's date, which
   only a successful full upgrade and sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never

@@ -303,7 +303,9 @@ Dev
   replaced by additive selectors (``--config``, ``--names``, ``--api``, ``--tests``,
   ``--all``) and the ``pipes`` generator and ``gen-pipelines`` are gone;
   ``release-notes`` takes an optional version; ``publish``/``release --dry-run`` run a
-  real ``uv publish --dry-run``; and the ``benchmark`` script now times ``Pipeline``.
+  real ``uv publish --dry-run``; ``lint``, ``check``, and ``prettify`` also lint and
+  format Markdown with ``rumdl``; ``lint --rst`` checks every tracked RST file; and the
+  ``benchmark`` script now times ``Pipeline``.
 
 v0.77.3 (2026-08-31)
 --------------------

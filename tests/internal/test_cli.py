@@ -139,6 +139,10 @@ LOCK = """
 [[package]]
 name = "ruff"
 version = "0.16.10"
+
+[[package]]
+name = "rumdl"
+version = "0.3.2"
 """
 
 HOOKS = """
@@ -149,6 +153,8 @@ repos:
         additional_dependencies: [ruff==0.16.10]
       - id: ruff-format
         additional_dependencies: [ruff==0.16.9]
+      - id: rumdl-check
+        additional_dependencies: [rumdl==0.3.2]
 """
 
 TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
@@ -360,6 +366,7 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
     )
+    monkeypatch.setattr(_lint, "_lint_markdown", lambda *_: calls.append("rumdl") or 0)
     monkeypatch.setattr(_lint, "lint_rst", lambda *_: calls.append("rst") or 0)
     monkeypatch.setattr(_lint, "lint_docs", lambda: calls.append("docs") or 0)
     monkeypatch.setattr(
@@ -432,15 +439,33 @@ class TestLintCommand:
         assert _lint._lint_deps() == 1
         assert "stale pin" in capsys.readouterr().out
 
+    def test_staged_check_lints_python_with_ruff_and_markdown_with_rumdl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[list[str]] = []
+        staged = "a.py\nREADME.md\nsetup.cfg\n"
+        monkeypatch.setattr(_lint, "_ruff", "ruff")
+        monkeypatch.setattr(_lint, "_rumdl", "rumdl")
+        monkeypatch.setattr(_lint, "check_output", lambda *_, **_kw: staged)
+        monkeypatch.setattr(_lint, "call", lambda args: calls.append(args) or 0)
+
+        assert _lint._lint_staged() == 0
+        assert calls == [
+            ["ruff", "check", "a.py"],
+            ["ruff", "format", "--check", "a.py"],
+            ["rumdl", "check", "README.md"],
+        ]
+
     @pytest.mark.parametrize(
         ("args", "expected"),
         [
-            ([], ["ruff"]),
+            ([], ["ruff", "rumdl"]),
             (["--rst", "--yaml"], ["rst", "yaml"]),
             (
                 ["--all"],
                 [
                     "ruff",
+                    "rumdl",
                     "rst",
                     "docs",
                     "docstrings",
@@ -1321,10 +1346,13 @@ class TestHookPinLint:
         assert _pin_issues(tmp_path, HOOKS) == expected
 
     def test_hooks_must_pin_each_locked_tool(self, tmp_path: Path) -> None:
-        """A configuration that never pins ruff is reported."""
+        """A configuration that never pins a pinned tool is reported."""
         hooks = "repos: []\n"
         found = [message for _, message in _pin_issues(tmp_path, hooks)]
-        assert found == ["no hook pins 'ruff'; pin it as ruff==0.16.10"]
+        assert found == [
+            "no hook pins 'ruff'; pin it as ruff==0.16.10",
+            "no hook pins 'rumdl'; pin it as rumdl==0.3.2",
+        ]
 
     def test_upgrade_rewrites_hook_pins_to_the_lock(self, tmp_path: Path) -> None:
         """After an upgrade, every hook pin names the locked version."""

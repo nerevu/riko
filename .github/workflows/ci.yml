@@ -19,8 +19,8 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
-      - name: Install ruff
-        # The locked ruff, so CI never formats with a newer release than local.
+      - name: Install formatters
+        # The locked ruff and rumdl, so CI never formats with a newer release than local.
         run: uv sync --locked --only-group lint
       - name: Sort imports
         run: uv run --no-sync ruff check --select I --fix
@@ -28,6 +28,8 @@ jobs:
         run: uv run --no-sync ruff check --fix
       - name: Format
         run: uv run --no-sync ruff format
+      - name: Format Markdown
+        run: uv run --no-sync rumdl fmt
   lint:
     name: lint (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -73,6 +75,7 @@ jobs:
       - name: Show tool versions
         run: |
           uv run --no-sync ruff --version
+          uv run --no-sync rumdl --version
           uv run --no-sync pyright --version
       - name: Check types
         run: uv run --no-sync manage lint --check-types

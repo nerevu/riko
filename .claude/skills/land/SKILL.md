@@ -19,8 +19,8 @@ by `.claude/skills/land/gates.py` (`G` below):
 
 - **Markers.** A pass is stored in `.claude/gate-markers.json` against the
   working tree's content tree id, minus what the gate never reads under
-  `.claude/`: nothing for tidy, the markdown for lint and prettify (Ruff), the
-  whole folder for the other gates. Staging, committing, an autosquash, `/clear`, or
+  `.claude/`: nothing for tidy, lint, and prettify (Ruff and rumdl), the whole
+  folder for the other gates. Staging, committing, an autosquash, `/clear`, or
   another session leaves it valid; any content edit invalidates it, except
   that a skill edit reruns only tidy, lint, and prettify. Run each gate through
   `python $G run <gate> [--mutates] [--lock] -- <command>`: it
@@ -100,27 +100,31 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
-4. **Lint**: `python $G run lint -- <manage> lint --all`. It already runs Ruff, the RST/docs/docstring/
-   terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and every import contract, so do not rerun
-   `--docs`, `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes` separately. It does **not** run the type gate.
-5. **Tests**: targeted tests for the touched area first while iterating, then
-   the full suite `python $G run test --lock -- <manage> test --ratchet --quiet`
-   before declaring ready —
-   in the foreground and alone: no other pytest or `manage` gate may run
-   beside it: its thread/pool timing tests and the ~70s run degrade under CPU
-   contention, and its own data folder isolates only the coverage file.
-   Doctests are tests here — doc examples run under pytest. `--ratchet` fails
-   when the run leaves more statements uncovered than the ceiling in
-   `pyproject.toml` (`[tool.riko.coverage] uncovered`): cover the new or
-   newly-unexecuted lines rather than raising the ceiling (raising it is a
-   judgment call for the user). To find them, run
-   `python $G run uncovered --lock -- python .claude/skills/land/diff_uncovered.py
-   --baseline-ref HEAD` (alone, like the suite): it lists the change's uncovered lines and each file whose missing
-   count moved, which catches a line outside the diff that lost coverage. It exits
-   non-zero when any changed line is uncovered. Never read
-   the repo-root `.coverage`; it can be stale. When it lowers the ceiling, that `pyproject.toml`
-   diff is part of the change — keep it. The ceiling is measured in the full dev
-   environment (`--group dev --all-extras`, Python 3.12).
+4. **Lint**: `python $G run lint -- <manage> lint --all`. It already runs Ruff, rumdl,
+   the RST/docs/docstring/ terms/literals/deps/bindings/tests/basenames/escapes checks,
+   actionlint, YAML, and every import contract, so do not rerun `--docs`,
+   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
+   `--basenames`, or `--escapes` separately. It does **not** run the type gate.
+5. **Tests**: targeted tests for the touched area first while iterating, then the full
+   suite `python $G run test --lock -- <manage> test --ratchet --quiet` before declaring
+   ready — in the foreground and alone: no other pytest or `manage` gate may run beside
+   it: its thread/pool timing tests and the ~70s run degrade under CPU contention, and
+   its own data folder isolates only the coverage file. Doctests are tests here — doc
+   examples run under pytest. `--ratchet` fails when the run leaves more statements
+   uncovered than the ceiling in `pyproject.toml` (`[tool.riko.coverage] uncovered`):
+   cover the new or newly-unexecuted lines rather than raising the ceiling (raising it
+   is a judgment call for the user). To find them, run this alone, like the suite:
+
+   ```bash
+   python $G run uncovered --lock -- python .claude/skills/land/diff_uncovered.py --baseline-ref HEAD
+   ```
+
+   It lists the change's uncovered lines and each file whose missing count moved, which
+   catches a line outside the diff that lost coverage. It exits non-zero when any
+   changed line is uncovered. Never read the repo-root `.coverage`; it can be stale.
+   When it lowers the ceiling, that `pyproject.toml` diff is part of the change — keep
+   it. The ceiling is measured in the full dev environment (`--group dev --all-extras`,
+   Python 3.12).
 6. **Types**: `python $G run check-types -- <manage> lint --check-types` and
    `python $G run verify-types -- <manage> lint --verify-types`
    (neither is part of `--all`). Always run both: an internal change (for

@@ -38,7 +38,9 @@ run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
 by hand. When the diff is mostly moved code (test reorganizations, file splits),
 `gates.py scope tidy --edits-only` lists just the added lines that no removed
 line carries, `path:line: text`; read those first and the moved spans only
-where an edit sits inside them.
+where an edit sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt`
+pass), `python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's
+wording changes, ignoring line breaks and markup; review those instead of the reflow.
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one read-only
 agent per top-level package, then applies fixes centrally. Every agent brief ends with
