@@ -35,6 +35,7 @@ from riko.modules._decorators import operator, processor, splitter
 from riko.modules._metadata import get_module_metadata, list_modules
 from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
+from riko.modules.count import pipe as count_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
@@ -722,6 +723,19 @@ class TestSort:
         assert _values(sort_pipe(items, conf=conf), "d") == expected
 
 
+class TestCount:
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal keys built from field values are not yet implemented: a "
+        "value containing a dot is read as a nested path",
+    )
+    def test_count_key_values_containing_dots_stay_literal(self):
+        items = [{"title": "riko pt. 1"}, {"title": "riko pt. 2"}]
+        counts = count_pipe(items, conf={"count_key": "title"})
+        assert list(counts) == [{"riko pt. 1": 1}, {"riko pt. 2": 1}]
+
+
 class _FalsyFunc:
     """A receive ``func`` whose truth value is False."""
 
@@ -774,6 +788,18 @@ class TestReceive:
         list(send_pipe([{"x": 0}], others=["closed-early"]))
         received = next((item for item in second if "state" not in item), None)
         assert received == {"x": 0, "seen": True}
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=TimeoutError,
+        reason="a bounded async receive wait is not yet implemented",
+    )
+    @async_test
+    async def test_async_receive_without_a_publisher_stops_after_max_wait(self):
+        conf = ReceiveConf(name="never-published", max_wait=0.05)
+
+        with fail_after(1):
+            assert await alist(async_receive_pipe(conf=conf)) == []
 
 
 class TestSend:

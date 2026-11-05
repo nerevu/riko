@@ -55,6 +55,14 @@ _MERGE = {
     "edges": [StreamEdge(_A_OUT, _C_IN), StreamEdge(_B_OUT, _C_IN)],
     "outputs": {"default": Endpoint("c", "out")},
 }
+_SPLIT_PAST_COUNT = {
+    "nodes": [_A, ModuleNode(id="s", name="split", conf={"splits": 2}), _B],
+    "edges": [
+        StreamEdge(_A_OUT, Endpoint("s", "in")),
+        StreamEdge(Endpoint("s", "out:2"), _B_IN),
+    ],
+    "outputs": {"default": _B_OUT},
+}
 
 _CONF_PENDING = "module configuration is not validated against its contract yet"
 
@@ -486,6 +494,17 @@ INVALID_WORKFLOWS = [
         id="unresolved-resource",
     ),
     pytest.param({"nodes": [_A]}, "exposes no workflow output", id="no-output"),
+    pytest.param(
+        _SPLIT_PAST_COUNT,
+        "out:2",
+        id="split-port-past-its-count",
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=pytest.fail.Exception,
+            reason="rejecting a split output port beyond the configured split count "
+            "is not yet implemented",
+        ),
+    ),
 ]
 INVALID_EDGES = [
     pytest.param(

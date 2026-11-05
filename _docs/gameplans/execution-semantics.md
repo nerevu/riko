@@ -1554,7 +1554,18 @@ error policy.
 
 ### 7.1 Async receive timeout
 
-The current sync and async legacy `receive` implementations do not have equivalent timeout behavior: sync polling honors `max_wait`, while the async path can block indefinitely. Feed-native async receive must bound the wait itself and map expiry to the common timeout policy rather than inventing separate receive-only semantics. R7 removes the legacy module after the object-first subscription runtime lands.
+The current sync and async legacy `receive` implementations do not have equivalent
+timeout behavior: sync polling honors `max_wait`, while the async path can block
+indefinitely. Feed-native async receive must bound the wait itself and map expiry to the
+common timeout policy rather than inventing separate receive-only semantics. R7 removes
+the legacy module after the object-first subscription runtime lands.
+
+Triaged 2026-11-05 (GitHub issue #82). The strict-xfail tripwire
+`tests/public/test_modules.py::TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait`
+pins the hang: an async receive with no publisher should stop after `max_wait` as the
+sync one does. PR #85's local fix was declined: it raised a new public
+`ReceiveTimeoutError` where sync stops quietly, a receive-only semantics this phase
+deletes along with the module.
 
 ### 7.2 A blocked `anext()` must not outlive the deadline
 

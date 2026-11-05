@@ -8,7 +8,7 @@ Index (file, then the subjects it owns, in file order):
     test_callable_nodes.py        CallableNodes
     test_modules.py               Input, FetchModules, Fetchdata, Fetchtext, Fetchtable,
                                   Xpathfetchpage, Filter, Rename, Regex, Hash, Slugify,
-                                  Join, Sort, Receive, Send, AsyncAggregate, Udf,
+                                  Join, Sort, Count, Receive, Send, AsyncAggregate, Udf,
                                   RequiredOperands, ListModules, ModuleMetadata,
                                   Processor, AsyncOperator, EnumMemberName,
                                   GenerateModuleNames

@@ -300,11 +300,24 @@ see a later duplicate without buffering the object).
 
 ### Known instance: a numeric-string key reads as a sequence index
 
-Triaged 2026-11-03 (repo audit). `DotDict.get` runs `int(k)` on every path segment, so a key such as
-`"2020"` is taken as a sequence index: `DotDict({"2020": "x"}).get("2020")` returns `None` while
-`["2020"]` returns `"x"`. Every module that reads a field through `get` then sees the field as
-missing: `rename` deletes it and never re-adds it, `uniq` keeps only the first item, `filter` and
-`subelement` yield nothing, `sort` is a no-op. The literal-access boundary above owns the key
-grammar; until it lands, the strict-xfail tripwire
-`TestDotDict::test_numeric_string_key_reads_literally` in `tests/internal/test_values.py` pins the
-miss.
+Triaged 2026-11-03 (repo audit). `DotDict.get` runs `int(k)` on every path segment, so a
+key such as `"2020"` is taken as a sequence index: `DotDict({"2020": "x"}).get("2020")`
+returns `None` while `["2020"]` returns `"x"`. Every module that reads a field through
+`get` then sees the field as missing: `rename` deletes it and never re-adds it, `uniq`
+keeps only the first item, `filter` and `subelement` yield nothing, `sort` is a no-op.
+The literal-access boundary above owns the key grammar; until it lands, the strict-xfail
+tripwire `TestDotDict::test_numeric_string_key_reads_literally` in
+`tests/internal/test_values.py` pins the miss.
+
+### Known instance: data-derived keys containing dots nest on module output
+
+Triaged 2026-11-05 (GitHub issue #60). Module output is stored through `DotDict`, which
+parses `.` in a key as a path, so a key built from a field *value* nests wherever the
+value holds a dot: `count` with `count_key: "title"` over `"riko pt. 1"` yields
+`{"riko pt": {" 1": 1}}`. Static, author-written keys are unaffected. The literal-access
+boundary above owns the key grammar, including how a module writes a literal key; until
+it lands, the strict-xfail tripwire
+`tests/public/test_modules.py::TestCount::test_count_key_values_containing_dots_stay_literal`
+pins the nesting. PR #63's local repair (a `set_literal` write plus a literal-first
+`__getitem__`) was declined because it changes every `DotDict` read ahead of this
+boundary.
