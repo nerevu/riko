@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from time import struct_time
-from typing import TYPE_CHECKING, Required, TypedDict
-
-if TYPE_CHECKING:
-    from fastfeedparser import FastFeedParserDict
-    from feedparser import FeedParserDict
+from typing import Literal, Protocol, Required, TypedDict, overload
 
 
 class EntryContent(TypedDict, total=False):
@@ -56,7 +52,9 @@ class FasterFeedParserRSSEntry(CommonRSSEntry, total=False):
     media_content: list[EntryContent]
 
 
-type ParserRSSEntry = FeedParserRSSEntry | FasterFeedParserRSSEntry
+class ParserRSSEntry(FeedParserRSSEntry, FasterFeedParserRSSEntry, total=False):
+    """A feed entry as either supported feed parser returns it."""
+
 
 YahooRSSEntry = TypedDict(
     "YahooRSSEntry",
@@ -70,5 +68,19 @@ YahooRSSEntry = TypedDict(
     },
 )
 
-type RSSEntry = ExpandedRSSEntry | YahooRSSEntry
-type RSSParseResult = FeedParserDict | FastFeedParserDict
+
+class AugmentedRSSEntry(ParserRSSEntry, ExpandedRSSEntry, YahooRSSEntry):
+    """A parsed feed entry with the Yahoo! Pipes fields and date aliases filled in."""
+
+
+type RSSEntry = ExpandedRSSEntry | YahooRSSEntry | AugmentedRSSEntry
+
+
+class ParsedFeed(Protocol):
+    """A parsed feed: its entries plus feed-level keys such as ``bozo``."""
+
+    @overload
+    def __getitem__(self, key: Literal["entries"], /) -> list[ParserRSSEntry]: ...
+    @overload
+    def __getitem__(self, key: str, /) -> object: ...
+    def get(self, key: str, /) -> object: ...

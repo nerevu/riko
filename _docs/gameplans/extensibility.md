@@ -73,6 +73,12 @@ short description/examples/docs/distribution metadata
 Do not add a second traits/runtime framework when existing decorator/module metadata can express the
 same information.
 
+Placement (2026-10-23 file-split audit): `ModuleMetadata`, `ReturnInference`, and
+`get_module_provider` sit at the head of `riko/types/modules.py`, whose body is the per-module
+`RawConf`/`Conf` TypedDicts that `manage codegen --config` reads. When this contract grows, give it its
+own `riko/types/` file (re-exported from `riko.types.modules` and `riko.ext`, where `ModuleMetadata` is
+EXTENSION-tier) rather than growing it inside the conf catalog.
+
 State/checkpoint declarations are references to the common core model, not a module-specific store:
 
 ```text
@@ -115,7 +121,10 @@ boundary (stamping declared metadata), reject them, or type the slots honestly. 
 metadata or widen the slot types ahead of that decision. Since 2026-10-21
 `ModuleDefinition.from_module(module, *, name, description)` (which replaced the `module=` kwarg) reads
 a module's callables, name, and docstring summary once into a plain keyword-only record; it is the
-definition-boundary normalization point this decision would extend.
+definition-boundary normalization point this decision would extend. Since 2026-10-22 a `Pipeline.map`
+callable node borrows the built-in `udf` wrapper for this metadata (`_resolve_callable` in
+`riko/execution/_prepared.py`; `udf`'s parser never runs), so the ruling covers callable nodes too:
+stamping or honest slot types would let a callable node resolve without a donor module.
 
 ## E2. Plugin ecosystem v1
 
@@ -465,6 +474,7 @@ unknown node/edge family
 unknown structural field
 unknown/undeclared port
 duplicate node id
+empty or blank node id or module name
 missing referenced node
 more than one StreamEdge into one target stream port
 invalid/missing required fan-in positions

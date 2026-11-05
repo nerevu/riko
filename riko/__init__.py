@@ -9,8 +9,7 @@ Application code imports from this namespace; extension authors use ``riko.ext``
 from riko.bado._backend import async_chain, async_sleep, backend, isasync, issync, run
 from riko.bado._util import async_read, async_return
 from riko.bado.itertools import alist, as_async, async_map, async_map_stream
-from riko.base._paths import get_path, get_temp_file
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     EmptyPipelineError,
     InvalidPipelineError,
     PipelineError,
@@ -19,6 +18,7 @@ from riko.base.exceptions import (
     UnsupportedModuleError,
     UnsupportedWorkflowError,
 )
+from riko.base._paths import get_path, get_temp_file
 from riko.definitions._context import Context
 from riko.definitions._nodes import Node
 from riko.definitions._resource_definition import (
@@ -40,6 +40,7 @@ from riko.types._enums import (
     ExecutionMode,
     Executor,
     Formats,
+    IdentityMode,
 )
 from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
 
@@ -67,6 +68,7 @@ __all__ = [
     "ExecutionMode",
     "Executor",
     "Formats",
+    "IdentityMode",
     "InvalidPipelineError",
     "Modules",
     "Node",

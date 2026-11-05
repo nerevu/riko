@@ -11,7 +11,6 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from functools import partial
 from io import StringIO
 from typing import (
     TYPE_CHECKING,
@@ -20,7 +19,6 @@ from typing import (
     NamedTuple,
     Protocol,
     TypedDict,
-    TypeGuard,
     Unpack,
     overload,
 )
@@ -28,7 +26,7 @@ from typing import (
 from typing_extensions import TypeIs
 
 from riko.base._config import SUBPIPE_TYPE
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 
 from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
@@ -44,6 +42,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.definitions._context import Context
 
+    from ._options import RawCallOptions
     from ._scalars import NumLike, PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items
     from .modules import (
@@ -53,7 +52,6 @@ if TYPE_CHECKING:
         ModuleSubtype,
         ModuleSubtypes,
         ModuleType,
-        RawCallOptions,
     )
 
 # per-item pipe values
@@ -115,7 +113,7 @@ class SyncProcessorParser[I, E, O: ItemOrValue](Protocol):
     ``test``).
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
     ) -> ProcessorParserOutput[O]: ...
 
@@ -127,8 +125,8 @@ class SyncOperatorParser[T: ItemOrValue, E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
     """
 
-    def __call__(  # noqa: E704
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    def __call__(
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> OperatorParserOutput[T]: ...
 
 
@@ -139,8 +137,8 @@ class SyncSplitterParser[E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments.
     """
 
-    def __call__(  # noqa: E704
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    def __call__(
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> SplitterParserOutput: ...
 
 
@@ -152,14 +150,14 @@ type SyncWrapperInput = (
 class SyncFieldParseFunc(Protocol):
     """Reads a module's configured field from one item."""
 
-    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> ItemValue: ...  # noqa: E704
+    def __call__(self, item: ItemOrValue, /, **kwargs: Any) -> ItemValue: ...
 
 
 class SyncConfParseFunc(Protocol):
-    """Resolves a module's bound configuration against one item."""
+    """Resolves a module's prepared configuration against one item."""
 
-    def __call__(  # noqa: E704
-        self, item: ItemOrValue, /, **kwargs: Any
+    def __call__(
+        self, item: ItemOrValue, /, **kwargs: object
     ) -> AnyModuleConf | None: ...
 
 
@@ -183,28 +181,28 @@ type PrepareConf = MaybeFrozenConf | DynamicConf
 
 class PreparedCall(Protocol):
     """
-    A module call with its configuration and call options bound.
+    A module call with its configuration and call options already applied.
 
     It is called once per item, or once per stream for a module that takes a
     whole stream. Each call supplies the ``context`` and any secondary input
     streams, resources, or embed.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self, item: Any = None, *, context: Context | None = None, **extra: object
     ) -> WrapperOutput | SplitterWrapperOutput: ...
 
 
 class Preparer(Protocol):
     """
-    Binds a call's configuration and call options once for reuse over many items.
+    Prepares a call's configuration and call options once for reuse over many items.
 
     Every module wrapper carries one as its ``prepare``. The ``context`` and any
     secondary input streams, resources, or embed are supplied with each item call
-    rather than bound here.
+    rather than fixed here.
     """
 
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         *extras: ExtraName,
         conf: PrepareConf | None = None,
@@ -218,7 +216,7 @@ class WrapperMeta(Protocol):
     __name__: str
     __qualname__: str
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> WrapperOutput | SplitterWrapperOutput: ...
 
@@ -233,121 +231,9 @@ class WrapperMeta(Protocol):
 
 
 class ModuleWrapper(WrapperMeta, Protocol):
-    """A module wrapper: the discovery metadata plus a ``prepare`` binding its calls."""
+    """A module wrapper: the discovery metadata plus a ``prepare`` for its calls."""
 
     prepare: Preparer
-
-
-def bind_call(
-    wrapper: Func[WrapperOutput | SplitterWrapperOutput],
-    *_: ExtraName,
-    conf: PrepareConf | None = None,
-    **options: Unpack[RawCallOptions],
-) -> PreparedCall:
-    """
-    Binds a pipe's configuration and call options for reuse over many items.
-
-    Calling the return value calls ``wrapper`` with its configuration, call options,
-    ``context``, and keyword arguments bound. Can be pickled whenever ``wrapper`` can.
-
-    Args:
-
-        wrapper: The pipe to call.
-
-        _: The names of the extra inputs delivered with each item. Unused, since
-            ``wrapper`` sees each call's keyword arguments itself.
-
-    Kwargs:
-
-        conf: The module configuration.
-
-        assign (str): The field results are assigned to. Defaults to the module
-            name (or ``"content"`` for a source). Ignored when ``emit`` is true.
-
-        emit (bool): Whether to emit results rather than assign them. Defaults to
-            the parser's contract.
-
-        field (str): The field whose value is passed to the pipe in place of the
-            item.
-
-        count (str): ``"first"`` stops after the first result. ``"all"`` keeps
-            every result.
-
-    Returns:
-
-        A call that takes one item at a time.
-
-    Examples:
-
-        >>> def pipe(item=None, conf=None, context=None, **kwargs):
-        ...     return iter([{**item, **conf, **kwargs}])
-        >>>
-        >>> call = bind_call(pipe, conf={"x": 1}, emit=True)
-        >>> list(call({"y": 2}, other="z"))
-        [{'y': 2, 'x': 1, 'emit': True, 'other': 'z'}]
-
-    """
-    return partial(wrapper, conf=conf, **options)
-
-
-def build_call(
-    pipe: ModuleWrapper,
-    *extras: ExtraName,
-    conf: PrepareConf | None = None,
-    **options: Unpack[RawCallOptions],
-) -> PreparedCall:
-    """
-    Binds ``pipe``'s configuration and call options once for reuse over many items.
-
-    A module wrapper prepares its own call. A plain callable registered as a module
-    carries no ``prepare``, so its configuration and call options are bound with
-    ``bind_call``.
-
-    Args:
-
-        pipe: The pipe to call.
-
-        extras: The names of the extra inputs delivered with each item: a named
-            input stream under its port name, positional streams as ``others``, bound
-            resources as ``resources``, and a loop's embed as ``embed``.
-
-    Kwargs:
-
-        conf: The module configuration.
-
-        assign (str): The field results are assigned to. Defaults to the module
-            name (or ``"content"`` for a source). Ignored when ``emit`` is true.
-
-        emit (bool): Whether to emit results rather than assign them. Defaults to
-            the parser's contract.
-
-        field (str): The field whose value is passed to the pipe in place of the
-            item.
-
-        count (str): ``"first"`` stops after the first result. ``"all"`` keeps
-            every result.
-
-    Returns:
-
-        A call that takes one item at a time.
-
-    Examples:
-
-        >>> def pipe(item=None, conf=None, context=None, **kwargs):
-        ...     return iter([{**item, **conf}])
-        >>>
-        >>> list(build_call(pipe, conf={"x": 1})({"y": 2}))
-        [{'y': 2, 'x': 1}]
-
-    """
-    prepare: Preparer | None = getattr(pipe, "prepare", None)
-
-    if prepare is None:
-        call = bind_call(pipe, *extras, conf=conf, **options)
-    else:
-        call = prepare(*extras, conf=conf, **options)
-
-    return call
 
 
 WRAPPER_META: tuple[str, ...] = (
@@ -395,7 +281,7 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
 
     Returns:
 
-        ``value``, narrowed to the wrapper metadata it carries.
+        ``value`` narrowed to the wrapper metadata it carries.
 
     Raises:
 
@@ -420,96 +306,21 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
     return value
 
 
-def stamp_wrapper_meta(
-    target: Callable[..., object],
-    *,
-    name: str,
-    module_type: ModuleType | str,
-    subtype: ModuleSubtype,
-    subtypes: Iterable[ModuleSubtype],
-    pollable: bool,
-    loopable: bool,
-    isasync: bool,
-    sequential_inputs: bool = False,
-    prepare: Preparer | None = None,
-) -> None:
-    """
-    Stamps the discovery metadata every module wrapper carries onto ``target``.
-
-    Afterwards ``target`` carries every attribute named in ``WRAPPER_META``, and a
-    ``prepare`` that binds configuration and call options for reuse.
-
-    Args:
-
-        target: The callable to annotate in place.
-        name: The module name.
-        module_type: The module kind, e.g., "processor" (stored as ``type``).
-        subtype: The primary module subtype.
-        subtypes: Every subtype the module supports.
-        pollable: Whether the module can be polled.
-        loopable: Whether ``loop`` can embed the module.
-        isasync: Whether ``target`` is the async interface.
-
-        sequential_inputs: Whether the module reads its input streams one at a time
-            (default: False).
-
-        prepare: Binds a call for reuse over many items. Defaults to binding ``target``
-            with its configuration and call options (default: None).
-
-    Examples:
-
-        >>> def pipe(item=None, **kwargs):
-        ...     return iter([])
-        >>>
-        >>> stamp_wrapper_meta(
-        ...     pipe,
-        ...     name="mine",
-        ...     module_type="processor",
-        ...     subtype="transformer",
-        ...     subtypes=("transformer",),
-        ...     pollable=False,
-        ...     loopable=True,
-        ...     isasync=False,
-        ... )
-        >>> pipe.type, pipe.isasync
-        ('processor', False)
-        >>> list(pipe.prepare(conf={"x": 1})({"y": 2}))
-        []
-
-    """
-    setattr(target, "name", name)  # noqa: B010
-    setattr(target, "type", module_type)  # noqa: B010
-    setattr(target, "subtype", subtype)  # noqa: B010
-    setattr(target, "subtypes", frozenset(subtypes))  # noqa: B010
-    setattr(target, "pollable", pollable)  # noqa: B010
-    setattr(target, "loopable", loopable)  # noqa: B010
-    setattr(target, "isasync", isasync)  # noqa: B010
-    setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
-    bound = prepare
-
-    if bound is None and is_wrapper_meta(target):
-        bound = partial(bind_call, target)
-
-    setattr(target, "prepare", bound)  # noqa: B010
-
-
 class SyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = False
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> SyncWrapperOutput | SyncSplitterWrapperOutput: ...
 
 
 class SyncSubPipe(SyncModuleWrapper):
-    def __call__(  # noqa: E704
-        self, *_: object, **__: object
-    ) -> SyncProcessorWrapperOutput:
+    def __call__(self, *_: object, **__: object) -> SyncProcessorWrapperOutput:
         return iter(())
 
 
 class SyncProcessorWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         item: SyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
@@ -523,7 +334,7 @@ class SyncProcessorWrapper(SyncModuleWrapper):
 
 
 class SyncOperatorWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         items: SyncOperatorWrapperInput | None = None,
         conf: Conf | None = None,
@@ -538,7 +349,7 @@ class SyncOperatorWrapper(SyncModuleWrapper):
 
 
 class SyncSplitterWrapper(SyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         items: SyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
@@ -562,9 +373,9 @@ class AsyncWrapperStream[Y, A](Protocol):
     ``await async_pipe(...)`` path).
     """
 
-    def __await__(self) -> Generator[object, None, A]: ...  # noqa: E704
-    def __aiter__(self) -> AsyncIterator[Y]: ...  # noqa: E301, E704
-    def __anext__(self) -> Awaitable[Y]: ...  # noqa: E301, E704
+    def __await__(self) -> Generator[object, None, A]: ...
+    def __aiter__(self) -> AsyncIterator[Y]: ...
+    def __anext__(self) -> Awaitable[Y]: ...
 
 
 type AsyncOperatorWrapperOutput = AsyncStream
@@ -595,8 +406,8 @@ class AwaitableProcessorParser[I, E, O: ItemOrValue](Protocol):
     ``test``).
     """
 
-    def __call__(  # noqa: E704
-        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: Any
+    def __call__(
+        self, item: I, extraction: E, objconf: DynamicConf, /, **kwargs: object
     ) -> Awaitable[ProcessorParserOutput[O]]: ...
 
 
@@ -607,8 +418,8 @@ class AwaitableOperatorParser[T: ItemOrValue, E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments (``inputs``, ``count``).
     """
 
-    def __call__(  # noqa: E704
-        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: Any
+    def __call__(
+        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: object
     ) -> Awaitable[OperatorParserOutput[T]]: ...
 
 
@@ -619,8 +430,8 @@ class AwaitableSplitterParser[E](Protocol):
     Its ``**kwargs`` receives the remaining keyword arguments.
     """
 
-    def __call__(  # noqa: E704
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: Any
+    def __call__(
+        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
     ) -> Awaitable[SplitterParserOutput]: ...
 
 
@@ -636,13 +447,13 @@ type AsyncSplitterParser[E] = SyncSplitterParser[E] | AwaitableSplitterParser[E]
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
     isasync = True
 
-    def __call__(  # noqa: E301, E704
+    def __call__(
         self, *args: Any, **kwargs: Any
     ) -> AsyncWrapperOutput | AsyncSplitterWrapperOutput: ...
 
 
 class AsyncProcessorWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         item: AsyncProcessorWrapperInput | None = None,
         conf: Conf | DynamicConf | None = None,
@@ -656,14 +467,12 @@ class AsyncProcessorWrapper(AsyncModuleWrapper):
 
 
 class AsyncSubPipe(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
-        self, *_: object, **__: object
-    ) -> AsyncProcessorWrapperOutput:
+    def __call__(self, *_: object, **__: object) -> AsyncProcessorWrapperOutput:
         raise NotImplementedError
 
 
 class AsyncOperatorWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E301
+    def __call__(
         self,
         items: AsyncOperatorWrapperInput | None = None,
         conf: Conf | None = None,
@@ -678,7 +487,7 @@ class AsyncOperatorWrapper(AsyncModuleWrapper):
 
 
 class AsyncSplitterWrapper(AsyncModuleWrapper):
-    def __call__(  # noqa: E704
+    def __call__(
         self,
         items: AsyncSplitterWrapperInput | None = None,
         conf: Conf | None = None,
@@ -712,8 +521,175 @@ type AnyModuleWrapper = SyncModuleWrapper | AsyncModuleWrapper
 type ModuleParser = ProcessorParser | OperatorParser | SplitterParser
 
 
-def is_subpipe[T: SubPipe](val: T | ModuleWrapper) -> TypeGuard[T]:
-    return callable(val) and getattr(val, "type", None) == SUBPIPE_TYPE
+def is_subpipe[T: SubPipe](value: T | ModuleWrapper | object) -> TypeIs[T]:
+    """
+    Reports whether ``value`` is a callable the ``workflow`` decorator tagged.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is tagged as a stored workflow's pipe.
+
+    Examples:
+
+        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._workflow_pipes import workflow
+        >>>
+        >>> def flow_pipe(item=None, **kwargs):
+        ...     return iter(())
+        >>>
+        >>> is_subpipe(workflow(subtype="source")(flow_pipe)), is_subpipe(pipe)
+        (True, False)
+
+    """
+    return callable(value) and getattr(value, "type", None) == SUBPIPE_TYPE
+
+
+def require_subpipe(value: object) -> SubPipe:
+    """
+    Requires ``value`` to be a callable the ``workflow`` decorator tagged.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to a stored workflow's pipe.
+
+    Raises:
+
+        TypeError: If ``value`` is not tagged as a stored workflow's pipe.
+
+    Examples:
+
+        >>> require_subpipe(len)
+        Traceback (most recent call last):
+            ...
+        TypeError: <built-in function len> is not tagged as a stored workflow's pipe
+
+    """
+    if not is_subpipe(value):
+        raise TypeError(f"{value!r} is not tagged as a stored workflow's pipe")
+
+    return value
+
+
+def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
+    """
+    Reports whether ``value`` is a synchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is a module's sync interface (its ``pipe``).
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> is_sync_wrapper(pipe), is_sync_wrapper(async_pipe), is_sync_wrapper(len)
+        (True, False, False)
+
+    """
+    return is_wrapper_meta(value) and not value.isasync and hasattr(value, "prepare")
+
+
+def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
+    """
+    Reports whether ``value`` is an asynchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        Whether ``value`` is a module's async interface (its ``async_pipe``).
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> is_async_wrapper(async_pipe), is_async_wrapper(pipe), is_async_wrapper(len)
+        (True, False, False)
+
+    """
+    return is_wrapper_meta(value) and value.isasync and hasattr(value, "prepare")
+
+
+def require_sync_wrapper(value: object) -> SyncModuleWrapper:
+    """
+    Requires ``value`` to be a synchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to a sync module wrapper.
+
+    Raises:
+
+        TypeError: If ``value`` is not a synchronous module wrapper.
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> require_sync_wrapper(pipe) is pipe
+        True
+        >>> require_sync_wrapper(async_pipe)
+        Traceback (most recent call last):
+            ...
+        TypeError: <function async_pipe at 0x...> is not a synchronous module wrapper
+
+    """
+    if not is_sync_wrapper(value):
+        raise TypeError(f"{value!r} is not a synchronous module wrapper")
+
+    return value
+
+
+def require_async_wrapper(value: object) -> AsyncModuleWrapper:
+    """
+    Requires ``value`` to be an asynchronous module wrapper.
+
+    Args:
+
+        value: The object to check.
+
+    Returns:
+
+        ``value`` narrowed to an async module wrapper.
+
+    Raises:
+
+        TypeError: If ``value`` is not an asynchronous module wrapper.
+
+    Examples:
+
+        >>> from riko.modules.hash import async_pipe, pipe
+        >>>
+        >>> require_async_wrapper(async_pipe) is async_pipe
+        True
+        >>> require_async_wrapper(pipe)
+        Traceback (most recent call last):
+            ...
+        TypeError: <function pipe at 0x...> is not an asynchronous module wrapper
+
+    """
+    if not is_async_wrapper(value):
+        raise TypeError(f"{value!r} is not an asynchronous module wrapper")
+
+    return value
 
 
 def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
@@ -779,19 +755,15 @@ class Resolver(Protocol):
     """
 
     @overload
-    def require(  # noqa: E704
+    def require(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
-    @overload  # noqa: E301
-    def require(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncModuleWrapper: ...
-    def require(  # noqa: E301, E704
-        self, name: str, is_async: bool = False
-    ) -> ModuleWrapper: ...
+    @overload
+    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper: ...
 
-    def is_compatible(self, name: str) -> bool: ...  # noqa: E704
-    def require_interfaces(self, name: str) -> frozenset[Interface]: ...  # noqa: E704
+    def is_compatible(self, name: str) -> bool: ...
+    def require_interfaces(self, name: str) -> frozenset[Interface]: ...
 
 
 class Dispatcher(Protocol):
@@ -802,16 +774,14 @@ class Dispatcher(Protocol):
     names.
     """
 
-    def validate(self, name: str) -> None: ...  # noqa: E704
+    def validate(self, name: str) -> None: ...
 
     @overload
-    def resolve(  # noqa: E704
+    def resolve(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
-    @overload  # noqa: E301
-    def resolve(  # noqa: E704
+    @overload
+    def resolve(
         self, name: str, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve(  # noqa: E301, E704
-        self, name: str, is_async: bool = False
-    ) -> ModuleWrapper | None: ...
+    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper | None: ...

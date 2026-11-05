@@ -40,7 +40,7 @@ number of times each word appears.
 
 .. code-block:: python
 
-    >>> from riko import get_path, Pipeline, Sources
+    >>> from riko import get_path, Pipeline
     >>>
     >>> ### Set the module configurations ###
     >>> #
@@ -51,23 +51,30 @@ number of times each word appears.
     >>> #   4. split text in words using whitespace as the delimiter
     >>> #   5. count the number of times each word appears
     >>>
-    >>> url = get_path('users.jyu.fi.html')                   # 1
-    >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
-    >>> replace_conf = {
-    ...     'rule': [{'find': '\r\n', 'replace': ' '}, {'find': '\n', 'replace': ' '}]
+    >>> url = get_path('users.jyu.fi.html')                                # 1
+    >>> fetch_conf = {
+    ...     'url': url,
+    ...     'start': '<body>',
+    ...     'end': '</body>',
+    ...     'detag': True,
     ... }
+    >>> replace_rule = [
+    ...     {'find': '\r\n', 'replace': ' '},
+    ...     {'find': '\n', 'replace': ' '},
+    ... ]
+    >>> replace_conf = {'rule': replace_rule}
     >>>
     >>> pipeline = (
-    ...     Pipeline.from_module(Sources.FETCHPAGE, conf=fetch_conf)          # 2
-    ...     .strreplace(conf=replace_conf, options={'assign': 'content'})     # 3
-    ...     .tokenizer(conf={'delimiter': ' '}, options={'emit': True})       # 4
-    ...     .count(conf={'count_key': 'content'})                             # 5
+    ...     Pipeline.from_module('fetchpage', conf=fetch_conf)             # 2
+    ...     .strreplace(conf=replace_conf, options={'assign': 'content'})  # 3
+    ...     .tokenizer(conf={'delimiter': ' '}, options={'emit': True})    # 4
+    ...     .count(conf={'count_key': 'content'})                          # 5
     ... )
     >>>
-    >>> stream = iter(pipeline)
-    >>> next(stream)
+    >>> with pipeline.open() as stream:
+    ...     next(stream)
+    ...     next(stream)
     {'Tidy': 1}
-    >>> next(stream)
     {'your': 1}
 
 Motivation
@@ -189,6 +196,8 @@ Here's the ``riko`` vocabulary at a glance:
 +---------------------+---------------------------------------+----------------------------------------------------+
 | ``stream``          | an iterator of ``item``               | ``iter([{'title': 'Example'}])``                   |
 +---------------------+---------------------------------------+----------------------------------------------------+
+| ``items``           | an iterable of ``item``               | ``[{'title': 'Example'}]``                         |
++---------------------+---------------------------------------+----------------------------------------------------+
 | ``module``          | a named, reusable stream operation    | ``join``, ``slugify``, ``uniq``                    |
 +---------------------+---------------------------------------+----------------------------------------------------+
 | ``operator``        | a module that consumes a ``stream``   | ``count``, ``filter``, ``reverse``                 |
@@ -201,6 +210,10 @@ Here's the ``riko`` vocabulary at a glance:
 +---------------------+---------------------------------------+----------------------------------------------------+
 | ``pipeline``        | a chain of ``nodes``                  | ``Pipeline.from_module(...).count()``              |
 +---------------------+---------------------------------------+----------------------------------------------------+
+| ``seed``            | the data a ``pipeline`` starts from;  | ``pipeline(items)``, ``items | pipeline``          |
+|                     | can be an ``item``, ``stream``, or    | ``pipeline.open(items)``                           |
+|                     | ``items``                             |                                                    |
++---------------------+---------------------------------------+----------------------------------------------------+
 | ``Context``         | input values + ``ExecutionMode``      | ``Context(inputs=...)``                            |
 +---------------------+---------------------------------------+----------------------------------------------------+
 
@@ -212,72 +225,67 @@ is just a Python dictionary, and a ``stream`` is an iterator of ``item``. You ca
 create a ``stream`` manually with something as simple as
 ``iter([{'content': 'hello world'}])``. You manipulate ``streams`` in
 ``riko`` via ``modules``. A ``module`` is a named, reusable operation that accepts
-either a ``stream`` or ``item``, and returns a ``stream``.
+a ``seed`` (e.g., ``{'content': 'hello world'}``), and returns a ``stream``.
 
+``riko`` ``modules`` come in three types: ``processor``, ``operator``, and ``splitter``.
+An ``operator`` operates on a ``stream``, not on individual items. E.g., ``count``,
+``filter``, and ``reverse``. Use ``Pipeline.from_module`` to create a ``pipeline`` from
+any ``module``. Configure a module via ``conf``, e.g., ``from_module(name, conf=...)``.
 
-Through the ``Pipeline`` class, ``modules`` are composable: each ``module`` you add
-becomes a ``node``, and the output stream of each ``node`` is the input stream of
-the next. ``Pipeline(source=items)`` seeds a ``pipeline`` with an existing ``stream``,
-and iterating the ``pipeline`` runs it.
-
-Every ``module`` is also a ``Pipeline`` method: ``.reverse()`` appends a ``reverse``
-``node``, takes its configuration as ``conf=...``, and takes its call options as
-``options=...``. ``.pipe(name, conf=..., options=...)`` is the general form for a
-``module`` name held in a variable, a discovery enum such as ``Transforms.REVERSE``, or
-a dotted extension name such as ``example.shout``.
-
-``riko`` ``modules`` come in three module types: ``processor``, ``operator``, and
-``splitter``. An ``operator`` operates on a ``stream`` and is unable to handle
-individual items. E.g., ``count``, ``filter``, and ``reverse``.
+``riko`` has a typed discovery tree (``Sources``/``Transforms``/``Sinks``) that holds the
+names of all built-in modules. These enums let your editor autocomplete module names and
+catch typos, so you don't need to memorize each module's name. Call the resulting
+``pipeline`` with a ``seed`` to get a single-use ``stream`` you can iterate, or collect
+with ``list()``. To read just one ``item``, use ``pipeline.first(seed)``, which also
+closes the run.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> pipeline = Pipeline(source=items).reverse()
-    >>> pipeline.first()
-    {'title': 'riko pt. 2'}
+    >>> pipeline = Pipeline.from_module(Transforms.REVERSE)
+    >>> list(pipeline(items))
+    [{'title': 'riko pt. 2'}, {'title': 'riko pt. 1'}]
 
 A ``processor`` processes an individual ``item``. E.g., ``fetchsitefeed``, ``hash``,
 ``itembuilder``, and ``regex``. Call options such as ``field``, ``assign``, and ``emit``
-are passed as the ``options`` mapping.
+are passed as the ``options`` mapping. This example also showcases the ``.first()``
+convenience method.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline(source=items).hash(options={'field': 'title'})
-    >>> pipeline.first()['hash']
+    >>> item = {'title': 'riko pt. 1'}
+    >>> pipeline = Pipeline.from_module(Transforms.HASH, options={'field': 'title'})
+    >>> pipeline.first(item)['hash']
     1104819838
 
 Some ``processors``, e.g., ``tokenizer``, return multiple results.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline
+    >>> from riko import Pipeline, Transforms
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline(source=items).tokenizer(
-    ...     conf={'delimiter': ' '}, options={'field': 'title'}
+    >>> pipeline = Pipeline.from_module(
+    ...     Transforms.TOKENIZER, conf={'delimiter': ' '}, options={'field': 'title'}
     ... )
-    >>> list(pipeline)
+    >>> list(pipeline(items))
     [{'content': 'riko'}, {'content': 'pt.'}, {'content': '1'}]
 
-``operators`` are split into sub-types: ``aggregator``
-and ``composer``. ``aggregators``, e.g., ``count``, combine
-all ``items`` of an input ``stream`` into a new ``stream`` with a single ``item``;
-while ``composers``, e.g., ``filter``, create a new ``stream`` containing
-some or all ``items`` of an input ``stream``.
+``operators`` are split into sub-types: ``aggregator`` and ``composer``.
+``aggregators``, e.g., ``sum`` and ``count``, combine all ``items`` of an input
+``stream`` into an output ``stream`` containing a single ``item``.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
-    >>> list(Pipeline(source=items).count())
-    [{'count': 2}]
+    >>> items = [{'title': 'riko pt 1', 'pages': 3}, {'title': 'riko pt 2', 'pages': 5}]
+    >>> list(Pipeline.from_module(Transforms.SUM, conf={'sum_key': 'pages'})(items))
+    [{'sum': Decimal('8')}]
 
 Astute observers may have noticed from the "Word Count" example up top, that ``count``
 can return multiple items if you pass in the ``count_key`` config option.
@@ -286,14 +294,26 @@ can return multiple items if you pass in the ``count_key`` config option.
 
     >>> from riko import Pipeline, Transforms
     >>>
-    >>> pipeline = Pipeline(source=items).pipe(Transforms.COUNT, conf={'count_key': 'title'})
-    >>> list(pipeline)
+    >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
+    >>> pipeline = Pipeline.from_module(Transforms.COUNT, conf={'count_key': 'title'})
+    >>> list(pipeline(items))
     [{'riko pt 1': 1}, {'riko pt 2': 1}]
 
-``processors`` are split into sub-types of ``source`` and ``transformer``. A
-``source``, e.g., ``itembuilder``, can create a ``stream``, while a ``transformer``,
-e.g. ``hash`` can only transform an input ``item``. ``Pipeline.from_module`` starts a
-``pipeline`` from a ``source`` ``module`` instead of seeding it with an existing ``stream``.
+``composers``, e.g., ``filter`` and ``sort``, select or reorder the ``items`` of an
+input ``stream`` without changing them.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Transforms
+    >>>
+    >>> items = [{'title': 'riko pt 1'}, {'title': 'riko pt 2'}]
+    >>> rule = {'field': 'title', 'op': 'contains', 'value': '2'}
+    >>> list(Pipeline.from_module(Transforms.FILTER, conf={'rule': rule})(items))
+    [{'title': 'riko pt 2'}]
+
+``processors`` are split into sub-types of ``source`` and ``transformer``. A ``source``,
+e.g., ``itembuilder``, can create a ``stream`` without a ``seed``, while a
+``transformer``, e.g. ``hash`` can only transform its input.
 
 .. code-block:: python
 
@@ -328,56 +348,74 @@ If you are unsure of a ``module``'s module type, check its metadata.
 
     >>> from riko import get_module_metadata, Sources, Transforms
     >>>
-    >>> metadata = get_module_metadata(Sources.FETCHPAGE)
-    >>> metadata.name, metadata.type, metadata.subtype
+    >>> fetchpage = get_module_metadata(Sources.FETCHPAGE)
+    >>> fetchpage.name, fetchpage.type, fetchpage.subtype
     ('fetchpage', 'processor', 'source')
-    >>> metadata = get_module_metadata(Transforms.COUNT)
-    >>> metadata.name, metadata.type, metadata.subtype
+    >>> count = get_module_metadata(Transforms.COUNT)
+    >>> count.name, count.type, count.subtype
     ('count', 'operator', 'aggregator')
 
 Note: ``type`` and ``subtype`` are mutually exclusive: a subtype implies its type.
 
 ``Pipeline`` performs this check for you to allow for convenient method chaining: any
-module name is available as a method that appends a ``node`` for that ``module``.
+module name is available as a method that appends a ``node`` for that ``module``. E.g.,
+``.reverse()`` appends a ``reverse`` ``node``, takes its configuration as ``conf=...``,
+and takes its call options as ``options=...``.
+
+The chained ``pipeline`` is composable: the output stream of each ``node`` becomes the
+input stream of the next.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Sources
     >>>
-    >>> attrs = [
-    ...     {'key': 'title', 'value': 'riko pt. 1'},
-    ...     {'key': 'content', 'value': "Let's talk about riko!"}
-    ... ]
-    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs}).hash()
-    >>> item = pipeline.first()
-    >>> item['title'], item['content'], item['hash']
-    ('riko pt. 1', "Let's talk about riko!", 197222720)
+    >>> attrs = {'key': 'content', 'value': "Let's talk about riko!"}
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
+    >>> item = pipeline.hash().first()
+    >>> item['content'], item['hash']
+    ("Let's talk about riko!", 197222720)
 
-The ``|`` operator chains the same way. It takes a module name, a ``(name, conf)``
-tuple, or a single-module ``Pipeline`` used as a reusable template. The tuple is handy
-when the next ``module``'s name is computed. A name may be a plain string or a member of
-the typed discovery tree (``Sources``/``Transforms``/``Sinks``). An existing ``stream``
-on the left of ``|`` seeds the ``pipeline``.
+To chain a ``module`` name held in a variable, a discovery enum such as
+``Transforms.REVERSE``, or a dotted extension name such as ``example.shout``, use the
+``.pipe(name)`` general form.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Sources
+    >>>
+    >>> attrs = {'key': 'content', 'value': "Let's talk about riko!"}
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
+    >>> module_name = 'hash'
+    >>> item = pipeline.pipe(module_name).first()
+    >>> item['content'], item['hash']
+    ("Let's talk about riko!", 197222720)
+
+The ``|`` operator chains the same way. A ``Pipeline`` on the left side feeds ``items``
+to a module name or another ``Pipeline`` on the right side. A module name may be a plain
+string or a discovery enum (e.g., ``Transforms``).
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Sources, Transforms
     >>>
-    >>> attrs = [
-    ...     {'key': 'title', 'value': 'riko pt. 1'},
-    ...     {'key': 'content', 'value': "Let's talk about riko!"}
-    ... ]
-    >>> conf = {'attrs': attrs}
-    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf=conf) | Transforms.HASH
-    >>> item = pipeline.first()
-    >>> item['title'], item['hash']
-    ('riko pt. 1', 197222720)
-    >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> (items | Pipeline.from_module(Transforms.REVERSE)).first()
-    {'title': 'riko pt. 2'}
+    >>> attrs = {'key': 'content', 'value': "Let's talk about riko!"}
+    >>> pipeline = Pipeline.from_module(Sources.ITEMBUILDER, conf={'attrs': attrs})
+    >>> item = (pipeline | Transforms.HASH).first()
+    >>> item['content'], item['hash']
+    ("Let's talk about riko!", 197222720)
 
-View the `Cookbook`_ for advanced examples including how to wire in
-values from other modules or accept user input.
+``items`` on the left of ``|`` seed a ``pipeline``.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Transforms
+    >>>
+    >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> list(items | Pipeline.from_module(Transforms.REVERSE))
+    [{'title': 'riko pt. 2'}, {'title': 'riko pt. 1'}]
+
+View the `Cookbook`_ for advanced examples including how to wire in values from other
+modules or accept user input.
 
 Usage
 -----
@@ -490,13 +528,13 @@ To enable asynchronous processing, you must install the ``async`` extra.
 
     python -m pip install "riko[async]"
 
-The same ``pipeline`` then runs asynchronously under ``async for``. When you
-stop early, close the async iterator (``contextlib.aclosing`` does so for you): a bare
-``break`` releases the run only once the iterator is garbage collected.
+The same ``pipeline`` then runs asynchronously under ``async for``. If you want to exit
+early, use ``pipeline.open()`` to create a context manager (iterate it via
+``async with``). Leaving the ``with`` block closes the run, but a bare ``break`` out of
+``async for`` releases the run only once the iterator is garbage collected.
 
 .. code-block:: python
 
-    >>> from contextlib import aclosing
     >>> from riko import get_path, Pipeline, run, Sources
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
@@ -512,7 +550,7 @@ stop early, close the async iterator (``contextlib.aclosing`` does so for you): 
     ...         .filter(conf={'rule': filter_rule})                    # 2
     ...     )
     ...
-    ...     async with aclosing(aiter(pipeline)) as stream:
+    ...     async with pipeline.open() as stream:
     ...         first = await anext(stream)
     ...         print(first['title'])
     >>>
@@ -547,25 +585,25 @@ Built-in modules
 Pipeline lifecycle
 ^^^^^^^^^^^^^^^^^^
 
-A ``Pipeline`` is an immutable *definition*, not a running ``stream``. Every
-iteration starts a fresh one-shot execution, so iterating a ``pipeline`` twice runs
-it twice. The iterator owns that run's resources: exhausting it or closing it early
-tears the run down.
+A ``Pipeline`` is an immutable *definition*, not a ``stream``. Every call starts a fresh
+one-shot run. Running a ``pipeline`` twice iterates the seed twice. The run owns its
+resources. Exhausting it or leaving its ``with pipeline.open(...)`` block early tears
+the run down.
 
 .. code-block:: python
 
     >>> from riko import export, Pipeline
     >>>
-    >>> pipeline = Pipeline(source=[{'content': 'a'}, {'content': 'b'}]).hash()
-    >>> len(list(pipeline))
+    >>> items = [{'content': 'a'}, {'content': 'b'}]
+    >>> pipeline = Pipeline.from_module('hash')
+    >>> len(list(pipeline(items)))
     2
-    >>> len(list(pipeline))
+    >>> len(list(pipeline(items)))
     2
-    >>> stream = iter(pipeline)
-    >>> next(stream)
+    >>> with pipeline.open(items) as stream:
+    ...     next(stream)
     {'content': 'a', 'hash': 1267964084}
-    >>> stream.close()
-    >>> export(pipeline, 'csv').getvalue()
+    >>> export(pipeline(items), 'csv').getvalue()
     'content,hash\r\na,1267964084\r\nb,2297772648\r\n'
 
 ``export`` serializes a ``pipeline`` (or any ``stream``) to one of the ``Formats``;

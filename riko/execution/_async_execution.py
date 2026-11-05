@@ -9,7 +9,15 @@ across the run's loopable nodes.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterable, Mapping
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
+    Callable,
+    Generator,
+    Iterable,
+    Mapping,
+)
 from contextlib import AsyncExitStack, aclosing, nullcontext
 from functools import cached_property, partial
 from typing import TYPE_CHECKING, Any, Self, cast
@@ -34,7 +42,7 @@ from riko.bado.itertools import (
     async_map_stream,
 )
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
@@ -61,7 +69,7 @@ from ._execution import (
     _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _require_source,
+    _require_seed,
 )
 from ._resource_acquisition import build_context_manager, call_factory
 from ._resource_teardown import aclose_resource, close_resource
@@ -83,7 +91,16 @@ if TYPE_CHECKING:
     from ._prepared import ExecutionPlan, PreparedInterface
 
 
-_worker_drain = partial(async_drain, call=run_from_thread)
+def _await_from_thread[R](func: Callable[[], Awaitable[R]]) -> R:
+    """Runs ``func`` to completion on the event loop from a worker thread."""
+
+    async def await_func() -> R:
+        return await func()
+
+    return run_from_thread(await_func)
+
+
+_worker_drain = partial(async_drain, call=_await_from_thread)
 
 
 def _bridge_inputs[T](
@@ -257,7 +274,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
     shutdown_timeout: float | None = field(default=_timeout, kw_only=True)
     _stack: AsyncExitStack = field(factory=AsyncExitStack, init=False)
-    _inflight: dict[Resource[Any], Event] = field(factory=dict, init=False)
+    _inflight: dict[Resource[object], Event] = field(factory=dict, init=False)
     _reservations: list[_Reservation] = field(factory=list, init=False)
 
     @cached_property
@@ -398,8 +415,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         Raises:
 
             InvalidPipelineError: If ``demand`` exceeds the event loop's node-thread
-                budget, or what this execution's open output streams leave of it, so
-                the run could never get all its threads.
+                budget, or what this execution's open output streams leave free.
 
         """
         budget = _resolve_thread_budget()
@@ -544,16 +560,32 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         entry = await self._acquire_entry_once(resource)
         return entry.unwrap()
 
-    async def _abuild_source_stream(
-        self, value: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
+    async def _aopen_seed(
+        self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
     ) -> AsyncIterable[T]:
-        """Resolves a seed of any accepted shape to one lazy async item stream."""
-        resolved = await as_awaitable(value)
+        """
+        Opens a seed as the async stream this execution reads.
+
+        Args:
+
+            seed: Items for the workflow output's open input: one item, an item stream,
+                an async item stream, or an awaitable resolving to one of those. An
+                awaitable is resolved when the run starts. A seed that is both sync- and
+                async-iterable is read asynchronously. A generator or async generator
+                seed is closed when the execution exits.
+
+        """
+        resolved = await as_awaitable(seed)
 
         if isinstance(resolved, AsyncIterable):
             stream: AsyncIterable[T] = resolved
         else:
             stream = as_async(normalize_items(resolved))
+
+        if isinstance(resolved, AsyncGenerator):
+            self.push_async_callback(resolved.aclose)
+        elif isinstance(resolved, Generator):
+            self.callback(resolved.close)
 
         return stream
 
@@ -566,12 +598,12 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self, interface: PreparedInterface, extra: ExtraInput
     ) -> Callable[[T], Awaitable[Iterable[T]]]:
         """
-        Binds a mapped node's pipe into a call that collects one item's results.
+        Builds a call from a mapped node's pipe that collects one item's results.
 
         A synchronous pipe runs on a worker thread, or on the event-loop thread
         when the settings choose the inline executor.
         """
-        prepared = interface.call
+        prepared = interface.item_call
 
         if interface.native:
 
@@ -589,8 +621,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             call = call_native
         else:
-            bound = partial(prepared, context=self.context, **extra)
-            sync_call = cast("Callable[[T], Iterable[T]]", bound)
+            mapped = partial(prepared, context=self.context, **extra)
+            sync_call = cast("Callable[[T], Iterable[T]]", mapped)
 
             if self.settings.async_policy.inline:
 
@@ -610,7 +642,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         limit: int,
     ) -> AsyncIterator[T]:
         """
-        Maps a bound call over a node's items under the run's shared ceiling.
+        Maps a prepared call over a node's items under the run's shared ceiling.
 
         Closing the stream early stops its in-flight calls in the consuming task.
         """
@@ -727,7 +759,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         self,
         plan: ExecutionPlan,
         output: str,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> AsyncIterator[T]:
         """Builds the async item stream for one of the plan's workflow outputs."""
         policy = self.settings.async_policy
@@ -738,9 +770,9 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         reservation = await self._reserve_threads(demand, output)
 
         try:
-            seed = None if source is None else await self._abuild_source_stream(source)
+            stream = None if seed is None else await self._aopen_seed(seed)
 
-            for node_id, node_seed in plan.gen_build_order(output, seed=seed):
+            for node_id, node_seed in plan.gen_build_order(output, seed=stream):
                 args = (plan, node_id, steps, node_seed, reservation.limiter)
                 steps[node_id] = await self._abuild_stream(*args)
         except BaseException:
@@ -755,7 +787,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         plan: ExecutionPlan,
         output: str = "default",
         *,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> AsyncIterator[T]:
         """
         Builds the async item stream for one of the plan's workflow outputs.
@@ -765,7 +797,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         stays owned.
 
         A module without an async implementation runs on a thread it holds while it
-        reads its upstream stream. Every run on one event loop draws those threads from
+        reads its input stream. Every run on one event loop draws those threads from
         one shared budget (``RIKO_NODE_THREADS``), and a run takes all the threads it
         may need before reading anything. It waits while other executions hold them,
         and raises when this execution's own open output streams leave too few.
@@ -776,11 +808,16 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
             output: The name of the workflow output to produce.
 
-            source: A seed for the workflow output's open input in place of the
-                default empty seed. It can be one item, an item stream, an async item
-                stream, or an awaitable resolving to one of those. When omitted, only a
-                node with no default or positional input port receives that default. A
-                plan with no nodes streams it unchanged as its default output.
+            seed: Items for the workflow output's open input: one item, an item stream,
+                an async item stream, or an awaitable resolving to one of those. An
+                awaitable is resolved when the run starts. A seed that is both sync- and
+                async-iterable is read asynchronously. A generator or async generator
+                seed is closed when the execution exits. A plan with no nodes streams
+                the seed unchanged as its default output.
+
+                When omitted, every node whose default input port gets no input stream
+                must be self-starting (a source module, or a node that only feeds named
+                input ports).
 
         Returns:
 
@@ -788,21 +825,21 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such workflow output, if it
-                has no nodes and no ``source`` is given, if ``source`` is supplied but
-                the workflow output has no single open input, if the settings name
-                the process executor, or if the workflow output may hold more node
-                threads at once than the node-thread budget or what this execution's
-                open output streams leave free.
+            InvalidPipelineError: If ``output`` is not exposed by ``plan``; if ``seed``
+                isn't given and a node requires one, or the plan has no nodes; if
+                ``seed`` is given but the ``plan``'s ``output`` doesn't have exactly one
+                node for it to feed; if the process executor is chosen; or if the
+                workflow output thread's demand exceeds the event loop's node-thread
+                budget, or what this execution's open output streams leave free.
 
         """
         self._require_open("run")
 
         if plan.workflow.is_empty:
-            _source = _require_source(source, output)
-            stream = aiter(await self._abuild_source_stream(_source))
+            _seed = _require_seed(seed, output)
+            stream = aiter(await self._aopen_seed(_seed))
         else:
-            stream = await self._arun_plan(plan, output, source)
+            stream = await self._arun_plan(plan, output, seed)
 
         return stream
 

@@ -35,13 +35,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.process import merge
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
-from riko.types._guards import is_mapping
+from riko.base._require_guards import require_arg
+from riko.base._sentinels import MISSING
 from riko.types._options import DecorationOptions, Defaults
-from riko.types._sentinels import MISSING
 
 from ._decorators import operator
-from ._require import require_arg
 
 if TYPE_CHECKING:
     from logging import Logger

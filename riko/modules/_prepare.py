@@ -9,15 +9,15 @@ from typing import TYPE_CHECKING, cast, overload
 
 from attrs import Factory, define, field
 
+from riko.base._guards import is_mapping
 from riko.base._iterutils import broadcast, dispatch
+from riko.base._require_guards import narrow_from_require, require_from_form
 from riko.coercion._objectify import objectify
 from riko.coercion._sequences import listize
 from riko.coercion.cast import cast_none, cast_pass, cast_value, resolve_cast_type
 from riko.parsing._dotdict import match_key
 from riko.parsing.config import conf_is_dynamic, get_field, resolve_conf
-from riko.types._collections import narrow_from_require, require_from_form
 from riko.types._enums import BasicCastType, CastType
-from riko.types._guards import is_mapping
 from riko.types._options import (
     Casted,
     DecorationOptions,
@@ -99,12 +99,12 @@ def build_conf(
 
 
 @overload
-def _build_caster[T](type_: None) -> ArgCaster[T]: ...  # noqa: E704
+def _build_caster[T](type_: None) -> ArgCaster[T]: ...
 @overload
-def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-@overload  # noqa: E302
-def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...  # noqa: E704
-def _build_caster[T](  # noqa: E302
+def _build_caster(type_: BasicCastType) -> ArgCaster[ItemOrValue]: ...
+@overload
+def _build_caster(type_: CastType) -> ArgCaster[ItemOrValue]: ...
+def _build_caster[T](
     type_: BasicCastType | CastType | None,
 ) -> ArgCaster[T | PrimitiveValue | ItemOrValue]:
     """
@@ -329,7 +329,7 @@ class PreparedModule[T, E]:
 
         Examples:
 
-            >>> from riko.types._guards import is_mapping
+            >>> from riko.base._guards import is_mapping
             >>>
             >>> opts = {"assign": "content", "emit": is_mapping}
             >>> prepared = PreparedModule(name="pipe", opts=opts)
@@ -350,7 +350,7 @@ class PreparedModule[T, E]:
 
 
 @overload
-def resolve_and_cast[T, E](  # noqa: E704
+def resolve_and_cast[T, E](
     item: Item | RikoDict | DotDict[RikoValue],
     opts: DecorationOptions,
     *,
@@ -361,8 +361,8 @@ def resolve_and_cast[T, E](  # noqa: E704
     module: str = ...,
     **kwargs: object,
 ) -> ItemDispatch[T, E]: ...
-@overload  # noqa: E302
-def resolve_and_cast[T, E](  # noqa: E704
+@overload
+def resolve_and_cast[T, E](
     item: PrimitiveValue | RikoList,
     opts: DecorationOptions,
     *,
@@ -373,7 +373,7 @@ def resolve_and_cast[T, E](  # noqa: E704
     module: str = ...,
     **kwargs: object,
 ) -> ValueDispatch[T, E]: ...
-def resolve_and_cast[T, E](  # noqa: E302
+def resolve_and_cast[T, E](
     item: ItemOrValue,
     opts: DecorationOptions,
     *,
@@ -385,7 +385,7 @@ def resolve_and_cast[T, E](  # noqa: E302
     **kwargs: object,
 ) -> ItemOrValueDispatch[T, E]:
     """
-    Parses and casts one item's field and conf into a dispatch record.
+    Resolves one item's field and conf and casts them into a dispatch record.
 
     Runs the field/conf parsers over the item, resolves the extract-or-conf via
     ``build_conf``, applies the casters, and wraps the result as an item

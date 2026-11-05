@@ -2,8 +2,8 @@
 """
 Registers a built-in module under a second name with ``ModuleDefinition.from_module``.
 
-Point ``from_module`` at any object exposing ``pipe``/``async_pipe`` and it binds both
-interfaces. Here we give the built-in ``count`` a second, namespaced name without
+Point ``from_module`` at any object exposing ``pipe``/``async_pipe`` and it registers
+both interfaces. Here we give the built-in ``count`` a second, namespaced name without
 touching riko core.
 
 For explicit interface callables, see ``register_module.py``. For the installable
@@ -23,5 +23,5 @@ from riko.modules import count
 
 if __name__ == "__main__":
     register_module(ModuleDefinition.from_module(count, name="stats.count"))
-    source = [{"n": 1}, {"n": 2}, {"n": 3}]
-    print(list(Pipeline(source=source).pipe("stats.count")))
+    items = [{"n": 1}, {"n": 2}, {"n": 3}]
+    print(list(Pipeline.from_module("stats.count")(items)))

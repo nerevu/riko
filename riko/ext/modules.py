@@ -53,7 +53,7 @@ from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 def get_conf_type(parser: object) -> type[DynamicConf]:
     """
-    Resolves the configuration type a parser declares for its ``objconf``.
+    Gets the configuration type a parser declares for its ``objconf``.
 
     Annotations written as strings, including names imported only for type
     checking, resolve against the generated module configuration types.

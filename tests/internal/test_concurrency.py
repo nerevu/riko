@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import pickle  # noqa: S403
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import partial
 from itertools import chain, pairwise
-from multiprocessing.pool import ThreadPool
-from threading import Lock, Thread, get_ident
+from threading import Event, Lock, Thread, Timer, get_ident
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 
@@ -19,7 +19,7 @@ import pytest
 from riko.bado._backend import async_sleep, create_task_group, fail_after, lowlevel
 from riko.base._config import get_worker_cnt
 from riko.base._config import settings as config
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
@@ -41,7 +41,7 @@ from riko.runtime._resolver import dispatcher
 from riko.types._enums import Executor
 from riko.types._workflow import Endpoint
 from tests import async_test
-from tests._execution import build_chain, build_dispatcher, build_workflow
+from tests._execution import build_chain, build_dispatcher, build_workflow, tag_source
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -214,13 +214,13 @@ class TestMappingPolicy:
         assert plan.nodes["c"].is_mappable is False
 
 
-def _run_sync(plan, settings=None, source=ITEMS):
+def _run_sync(plan, settings=None, seed=ITEMS):
     kwargs = {} if settings is None else {"settings": settings}
     execution = SyncExecution(**kwargs)
     result: list = []
 
     with execution:
-        result = list(execution.run(plan, source=source))
+        result = list(execution.run(plan, seed=seed))
 
     return result
 
@@ -230,8 +230,12 @@ def opened(monkeypatch):
     calls: list[tuple[Executor, int]] = []
 
     def record(pool, window):
-        executor = Executor.THREAD if isinstance(pool, ThreadPool) else Executor.PROCESS
-        calls.append((executor, getattr(pool, "_processes")))  # noqa: B009
+        executor = (
+            Executor.THREAD
+            if isinstance(pool, ThreadPoolExecutor)
+            else Executor.PROCESS
+        )
+        calls.append((executor, window))
         return _PoolLifetime(pool, window)
 
     monkeypatch.setattr(_sync_execution, "_PoolLifetime", record)
@@ -319,6 +323,7 @@ class TestSyncConcurrency:
             if side is not None:
                 yield from side
 
+        @tag_source
         def source(_items=None, **_):
             yield {"t": "side"}
 
@@ -336,9 +341,9 @@ class TestSyncConcurrency:
         result: list = []
 
         with SyncExecution(context, settings=settings) as execution:
-            result = list(execution.run(plan))
+            result = list(execution.run(plan, seed=[{"t": "main"}]))
 
-        assert result == [{"forever": True}, {"t": "side"}]
+        assert result == [{"t": "main"}, {"t": "side"}]
         assert opened == []
 
     @pytest.mark.slow
@@ -370,11 +375,44 @@ class TestSyncConcurrency:
         plan = _hash_plan("hash")
 
         with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
-            stream = cast("Generator", execution.run(plan, source=ITEMS))
+            stream = cast("Generator", execution.run(plan, seed=ITEMS))
             next(stream)
             stream.close()
 
         assert released == ["terminate"]
+
+    @pytest.mark.slow
+    def test_sync_closed_early_releases_resources_after_busy_threads(self) -> None:
+        events: list[str] = []
+        started, gate = Event(), Event()
+
+        def slow(item, resources=None, **_):
+            if item["x"] == 1:
+                started.set()
+                gate.wait(timeout=5)
+                events.append("worker done")
+
+            return iter([item])
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="slow", sync_pipe=_loopable(slow))
+        )
+        node = ModuleNode(id="s", name="slow", resources={"slot": "primary"})
+        flow = build_workflow([node], resources=("primary",))
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        cleanup = lambda _: events.append("cleanup")
+        resource = Resource.from_factory(object, cleanup=cleanup)
+        context = Context().with_resource("primary", resource)
+        settings = ExecutionSettings(concurrency=2)
+
+        with SyncExecution(context, settings=settings) as execution:
+            stream = cast("Generator", execution.run(plan, seed=ITEMS))
+            next(stream)
+            assert started.wait(timeout=5)
+            Timer(0.2, gate.set).start()
+            stream.close()
+
+        assert events == ["worker done", "cleanup"]
 
     @pytest.mark.slow
     @pytest.mark.parametrize("ordered", [False, True])
@@ -392,7 +430,7 @@ class TestSyncConcurrency:
 
         def consume() -> None:
             with SyncExecution(settings=settings) as execution:
-                stream = cast("Generator", execution.run(plan, source=tracked()))
+                stream = cast("Generator", execution.run(plan, seed=tracked()))
                 next(stream)
                 stream.close()
 
@@ -409,7 +447,7 @@ class TestSyncConcurrency:
         plan = _hash_plan("hash")
 
         with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
-            execution.run(plan, source=ITEMS)
+            execution.run(plan, seed=ITEMS)
 
         assert opened == []
 
@@ -428,7 +466,7 @@ class TestSyncConcurrency:
             execution,
             pytest.raises(InvalidPipelineError, match="node 'z' cannot run"),
         ):
-            execution.run(plan, source=ITEMS)
+            execution.run(plan, seed=ITEMS)
 
         assert opened == []
 
@@ -444,7 +482,7 @@ class TestSyncConcurrency:
             execution,
             pytest.raises(InvalidPipelineError, match="node 'loop' cannot run"),
         ):
-            execution.run(plan, source=ITEMS)
+            execution.run(plan, seed=ITEMS)
 
         assert opened == []
 
@@ -464,7 +502,7 @@ class TestSyncConcurrency:
             execution,
             pytest.raises(InvalidPipelineError, match="node 'n' cannot run") as info,
         ):
-            execution.run(plan, source=ITEMS)
+            execution.run(plan, seed=ITEMS)
 
         assert info.value.__cause__ is not None
         assert opened == []
@@ -482,7 +520,7 @@ class TestSyncConcurrency:
             execution,
             pytest.raises(InvalidPipelineError, match="node 'n' cannot run") as info,
         ):
-            execution.run(plan, source=ITEMS)
+            execution.run(plan, seed=ITEMS)
 
         assert isinstance(info.value.__cause__, RuntimeError)
         assert opened == []
@@ -495,12 +533,12 @@ def _passthru(stream, **_):
 _passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
 
 
-async def _arun(plan, settings, source=ITEMS):
+async def _arun(plan, settings, seed=ITEMS):
     execution = AsyncExecution(settings=settings)
     result: list = []
 
     async with execution:
-        stream = await execution.arun(plan, source=source)
+        stream = await execution.arun(plan, seed=seed)
         result = [item async for item in stream]
 
     return result
@@ -611,7 +649,7 @@ class TestAsyncConcurrency:
 
         with fail_after(20):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, source=ITEMS[:2])
+                stream = await execution.arun(plan, seed=ITEMS[:2])
                 result = [item async for item in stream]
 
         assert result == ITEMS[:2]
@@ -631,7 +669,7 @@ class TestAsyncConcurrency:
         with fail_after(20):
             async with AsyncExecution() as execution:
                 with pytest.raises(InvalidPipelineError, match="RIKO_NODE_THREADS"):
-                    await execution.arun(_passthru_plan(depth), source=source())
+                    await execution.arun(_passthru_plan(depth), seed=source())
 
         assert read == []
 
@@ -684,13 +722,13 @@ class TestAsyncConcurrency:
 
         with fail_after(20):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, source=ITEMS[:2])
+                stream = await execution.arun(plan, seed=ITEMS[:2])
 
                 for _ in range(reads):
                     await anext(stream)
 
                 await stream.aclose()  # pyright: ignore[reportAttributeAccessIssue]
-                rerun = await execution.arun(plan, source=ITEMS[:2])
+                rerun = await execution.arun(plan, seed=ITEMS[:2])
                 result = [item async for item in rerun]
 
         assert result == ITEMS[:2]
@@ -706,13 +744,13 @@ class TestAsyncConcurrency:
 
         async def wait_for_threads() -> None:
             try:
-                await waiter.arun(plan, source=ITEMS[:2])
+                await waiter.arun(plan, seed=ITEMS[:2])
             except PipelineStateError as error:
                 errors.append(type(error))
 
         with fail_after(20):
             async with AsyncExecution() as holder, create_task_group() as tg:
-                held = await holder.arun(plan, source=ITEMS[:2])
+                held = await holder.arun(plan, seed=ITEMS[:2])
                 await anext(held)
                 tg.start_soon(wait_for_threads)
                 await async_sleep(0.05)
@@ -732,11 +770,11 @@ class TestAsyncConcurrency:
 
         with fail_after(20):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, source=ITEMS[:2])
+                stream = await execution.arun(plan, seed=ITEMS[:2])
                 await anext(stream)
 
                 with pytest.raises(InvalidPipelineError, match="open output streams"):
-                    await execution.arun(plan, source=ITEMS[:2])
+                    await execution.arun(plan, seed=ITEMS[:2])
 
                 rest = [item async for item in stream]
 
@@ -751,6 +789,7 @@ class TestAsyncConcurrency:
         # sum.
         node_threads(3)
 
+        @tag_source
         def src(_items=None, **_):
             yield from ITEMS[:3]
 
@@ -791,6 +830,7 @@ class TestAsyncConcurrency:
         # module finishes one input before it starts the other, so 25 fit in 40.
         node_threads(40)
 
+        @tag_source
         def src(_items=None, **_):
             yield from ITEMS[:3]
 
@@ -893,7 +933,7 @@ class TestAsyncConcurrency:
 
         async with AsyncExecution(settings=settings) as execution:
             with pytest.raises(InvalidPipelineError, match="synchronous execution"):
-                await execution.arun(plan, source=ITEMS)
+                await execution.arun(plan, seed=ITEMS)
 
         assert threads == []
 
@@ -912,9 +952,7 @@ class TestAsyncConcurrency:
         first: dict = {}
 
         async with AsyncExecution(settings=settings) as execution:
-            stream = cast(
-                "AsyncGenerator", await execution.arun(plan, source=tracked())
-            )
+            stream = cast("AsyncGenerator", await execution.arun(plan, seed=tracked()))
             first = await anext(stream)
             await stream.aclose()
 

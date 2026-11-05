@@ -4,29 +4,34 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import itertools
 import pickle  # noqa: S403
-from collections.abc import AsyncIterator, Awaitable, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
 from functools import wraps
 from inspect import isawaitable, iscoroutinefunction
 from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 
 import attrs
 import pytest
 
 from riko.bado.itertools import as_async
-from riko.base._paths import TESTS_DIR
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     InvalidPipelineError,
     UnsupportedModuleError,
     UnsupportedWorkflowError,
 )
+from riko.base._guards import is_mapping
+from riko.base._paths import TESTS_DIR
+from riko.base._sentinels import MISSING
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._workflow_definition import Workflow
+from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.modules import _metadata
 from riko.modules import count as count_module
+from riko.modules import exchangerate as exchangerate_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
 from riko.modules._decorators import operator, processor, splitter
@@ -54,7 +59,7 @@ from riko.runtime._module_registry import (
 )
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
-from riko.runtime._workflow_pipes import workflow
+from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
 from riko.runtime._workflow_resolver import WorkflowResolver
 from riko.runtime._workflow_stores import (
     CompositeStore,
@@ -62,16 +67,16 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
-from riko.types._guards import is_mapping
 from riko.types._options import ItemDispatch, ValueDispatch
-from riko.types._sentinels import MISSING
 from riko.types._wrappers import (
     WRAPPER_META,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
     AsyncSubPipe,
     ProcessorWrapper,
-    stamp_wrapper_meta,
+    SyncProcessorWrapper,
+    require_async_wrapper,
+    require_sync_wrapper,
 )
 from riko.types.modules import (
     Conf,
@@ -87,6 +92,7 @@ from riko.types.modules import (
     TokenizerRawConf,
 )
 from tests import async_test, pyworkflows, skipif_issync
+from tests._execution import module_workflow
 
 if TYPE_CHECKING:
     from riko.types._streams import Cascade, Item, Stream
@@ -383,30 +389,91 @@ class TestProcessorSkipIf:
         assert result == [{"x": 1}, {"y": "processed"}]
 
 
+async def _async_shout(item: Item, *args, **kwargs) -> str:
+    return shout(item)
+
+
+def _count(stream: Stream, *args, **kwargs) -> int:
+    return sum(1 for _ in stream)
+
+
+async def _async_count(stream: Stream, *args, **kwargs) -> int:
+    return _count(stream)
+
+
+def _twice(stream: Stream, *args, **kwargs) -> Cascade:
+    items = list(stream)
+    return iter([iter(items), iter(items)])
+
+
+async def _async_twice(stream: Stream, *args, **kwargs) -> Cascade:
+    return _twice(stream)
+
+
+async def _drain(value: object) -> object:
+    resolved = await value if isawaitable(value) else value
+
+    if isinstance(resolved, AsyncIterable):
+        result = [await _drain(part) async for part in resolved]
+    elif isinstance(resolved, Iterator):
+        result = [await _drain(part) for part in resolved]
+    else:
+        result = resolved
+
+    return result
+
+
+BARE_ROWS = [{"content": "hi"}]
+BARE_FORMS = [
+    pytest.param(processor, shout, {"assign": "content"}, id="processor-sync"),
+    pytest.param(processor, _async_shout, {"assign": "content"}, id="processor-async"),
+    pytest.param(operator, _count, {}, id="operator-sync"),
+    pytest.param(operator, _async_count, {}, id="operator-async"),
+    pytest.param(splitter, _twice, {}, id="splitter-sync"),
+    pytest.param(splitter, _async_twice, {}, id="splitter-async"),
+]
+BARE_AND_OPTIONS = [
+    pytest.param(processor, (), {"isasync": True}, id="processor+isasync"),
+    pytest.param(operator, ({},), {}, id="operator+defaults"),
+    pytest.param(splitter, (), {"objectify": False}, id="splitter+objectify"),
+]
+DECORATORS = [processor, operator, splitter]
+
+
 class TestBareDecorator:
-    """A decorator used without being called first."""
+    """A decorator applied without being called first."""
 
-    @pytest.mark.parametrize("decorator", [processor, operator, splitter])
-    def test_bare_decorator_raises_at_decoration(self, decorator) -> None:
-        """
-        Decorating without calling the decorator first is an author error.
+    @pytest.mark.parametrize(("decorator", "parser", "kwargs"), BARE_FORMS)
+    def test_bare_stamps_called_metadata(self, decorator, parser, kwargs) -> None:
+        bare, called = decorator(parser), decorator()(parser)
+        assert [getattr(bare, attr) for attr in WRAPPER_META] == [
+            getattr(called, attr) for attr in WRAPPER_META
+        ]
 
-        The decorated function would otherwise be swallowed as the positional
-        ``defaults`` and the mistake would surface only on the first call.
-        """
-        with pytest.raises(TypeError, match=rf"@{decorator.__name__}\(\)"):
-            decorator(shout)
+    @async_test
+    @pytest.mark.parametrize(("decorator", "parser", "kwargs"), BARE_FORMS)
+    async def test_bare_output_matches_called(self, decorator, parser, kwargs) -> None:
+        bare = await _drain(decorator(parser)(BARE_ROWS, **kwargs))
+        assert bare == await _drain(decorator()(parser)(BARE_ROWS, **kwargs))
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="owned by the pending callable-pipes decorator work: a bare @processor "
-        "(no parentheses) is rejected at decoration instead of wrapping the function "
-        "as an unconfigured pipe",
-    )
     def test_bare_processor_wraps_an_unconfigured_pipe(self) -> None:
-        pipe = processor(shout)  # pyright: ignore[reportArgumentType]
-        stream = pipe({"content": "hi"}, assign="content")  # pyright: ignore[reportCallIssue]
+        pipe = processor(shout)
+        stream = pipe({"content": "hi"}, assign="content")
         assert next(stream) == {"content": "HI"}
+
+    def test_bare_and_called_forms_type_check(self) -> None:
+        assert_type(processor(shout), SyncProcessorWrapper)
+        assert_type(processor(), processor[Literal[False]])
+
+    @pytest.mark.parametrize(("decorator", "args", "kwargs"), BARE_AND_OPTIONS)
+    def test_function_with_options_raises(self, decorator, args, kwargs) -> None:
+        with pytest.raises(TypeError, match="either the function to wrap or"):
+            decorator(shout, *args, **kwargs)
+
+    @pytest.mark.parametrize("decorator", DECORATORS)
+    def test_default_instance_round_trips(self, decorator) -> None:
+        copies = [pickle.loads(pickle.dumps(decorator())), copy.copy(decorator())]  # noqa: S301
+        assert [type(each) for each in copies] == [decorator, decorator]
 
 
 def _fixed_processor(item: Item, extraction: object, objconf: object) -> str:
@@ -813,6 +880,12 @@ def _carries_wrapper_meta(func: object) -> bool:
     return all(hasattr(func, attr) for attr in WRAPPER_META)
 
 
+WRAPPER_REQUIRES = [
+    pytest.param(require_sync_wrapper, "synchronous", id="sync"),
+    pytest.param(require_async_wrapper, "asynchronous", id="async"),
+]
+
+
 class TestWrapperMeta:
     """Every way of building a pipe stamps the wrapper metadata."""
 
@@ -863,6 +936,11 @@ class TestWrapperMeta:
         assert _carries_wrapper_meta(processor(isasync=True)(shout))
         assert _carries_wrapper_meta(operator()(total))
 
+    @pytest.mark.parametrize(("require", "match"), WRAPPER_REQUIRES)
+    def test_require_rejects_a_plain_function(self, require, match):
+        with pytest.raises(TypeError, match=match):
+            require(len)
+
 
 class TestWorkflowDecorator:
     def test_returns_a_tagged_copy(self):
@@ -877,6 +955,13 @@ class TestWorkflowDecorator:
     def test_rejects_positional_arguments(self):
         with pytest.raises(TypeError, match="Pipeline"):
             workflow(object())  # pyright: ignore[reportCallIssue]
+
+    def test_an_unseeded_stored_workflow_pipe_requires_a_seed(self):
+        flow = module_workflow("reverse")
+        pipes = build_workflow_pipes(flow, dispatcher, subtype="transformer")
+
+        with pytest.raises(InvalidPipelineError, match="requires a seed"):
+            list(pipes.sync_pipe())
 
 
 LOOP_FOLD_CASES = [
@@ -1015,7 +1100,7 @@ class TestLoopCharacterization:
     def test_loop_prepares_embed_once_per_stream(self, monkeypatch):
         prepares: list[object] = []
         prepare = tokenizer.prepare
-        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)
         monkeypatch.setattr(tokenizer, "prepare", spy)
         result = _tokenizer_loop(iter(PARENTS), emit=True)
         assert list(result) == [
@@ -1136,7 +1221,7 @@ class TestAsyncLoop:
     async def test_prepares_embed_once_per_stream(self, monkeypatch):
         prepares: list[object] = []
         prepare = async_tok.prepare
-        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)  # noqa: E731
+        spy = lambda *a, **k: prepares.append(k) or prepare(*a, **k)
         monkeypatch.setattr(async_tok, "prepare", spy)
         stream = async_loop(
             iter(PARENTS),
@@ -1284,7 +1369,7 @@ class TestModuleRegistry:
 
             return __import__(name, *args, **kwargs)
 
-        monkeypatch.setattr("riko.base._imports.import_module", fake_import)
+        monkeypatch.setattr("riko.base._typing.import_module", fake_import)
 
         with pytest.raises(ModuleNotFoundError) as e:
             fixed_registry.require("tokenizer")
@@ -1375,12 +1460,10 @@ class TestPublicRegister:
     def test_register_runs_end_to_end(self, fixed_registry):
         """A registered alias of a built-in resolves and runs through a pipeline."""
         register_module(ModuleDefinition.from_module(tokenizer_module, name=_NAME))
-        source = Pipeline(source=[{"content": "a b c"}])
-        pipeline = source.pipe(_NAME, conf={"delimiter": " "})
+        pipeline = Pipeline.from_module(_NAME, conf={"delimiter": " "})
+        stream = pipeline([{"content": "a b c"}])
         expected = ["a", "b", "c"]
-        assert [
-            item.get("content") for item in pipeline if is_mapping(item)
-        ] == expected
+        assert [item.get("content") for item in stream if is_mapping(item)] == expected
 
     def test_reset_registry_clears_registration(self, fixed_registry):
         register_module(MOD_DEFN)
@@ -1919,3 +2002,9 @@ class TestPrepare:
     def test_operator_wraps_a_none_item_as_content(self):
         items = cast("Any", [None])
         assert next(operator().normalize_input(items)) == {"content": None}
+
+
+class TestExchangeRate:
+    def test_a_non_numeric_rate_raises(self):
+        with pytest.raises(TypeError, match="invalid rate"):
+            exchangerate_module.build_rates({"USD": [1]})

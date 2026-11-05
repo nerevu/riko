@@ -9,30 +9,28 @@ from inspect import (
     Parameter,
     Signature,
     getmembers_static,
+    isawaitable,
     iscoroutinefunction,
     isfunction,
     signature,
 )
-from typing import TYPE_CHECKING, Any, TypeGuard, overload
+from typing import TYPE_CHECKING, TypeGuard, overload
 
 import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs
 
-from riko.base._strutils import replacer
-from riko.base.exceptions import InvalidPipelineError
-
-from ._scalars import BasicValueType, PrimitiveValueType
-from ._sentinels import MISSING, SentinelValue, StreamState
+from ._exceptions import InvalidPipelineError
+from ._sentinels import MISSING
+from ._typing import BasicValueType, PrimitiveValueType
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
 
-    from ._scalars import BasicValue
-    from ._sentinels import MissingType, Sentinel
-    from ._streams import AnyIterable, Item, StatefulItem
-    from ._values import BasicList
-    from .modules import AnyConfRule, Conf, ConfArg
+    from riko.types._scalars import BasicValue
+    from riko.types._streams import AnyIterable
+    from riko.types._values import BasicList
+    from riko.types.modules import Conf
 
 
 def _protocol_signature(method: Callable) -> Signature:
@@ -137,27 +135,23 @@ def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
     return attrs.has(type(value)) and not is_mapping(value)
 
 
-def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
-    return is_dataclass_inst(value) and type(value).__name__.endswith("ConfRule")
-
-
 @overload
-def require_mapping(  # noqa: E704
+def require_mapping(
     value: Conf | None,
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> Conf: ...
-@overload  # noqa: E302
-def require_mapping[K, V](  # noqa: E704
+@overload
+def require_mapping[K, V](
     value: Mapping[K, V] | object,
     what: str | None = "value",
     *,
     error: type[Exception] = InvalidPipelineError,
     **_,
 ) -> Mapping[K, V]: ...
-def require_mapping[K, V](  # noqa: E302
+def require_mapping[K, V](
     value: Mapping[K, V] | object,
     what: str | None = "value",
     *,
@@ -171,26 +165,18 @@ def require_mapping[K, V](  # noqa: E302
     return value
 
 
-def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
-    return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
-
-
-def is_missing_type(val: Item | MissingType | None) -> TypeIs[MissingType]:
-    return val is MISSING
-
-
 def is_known_sequence[VT](val: object) -> TypeIs[list[VT] | tuple[VT, ...]]:
     return isinstance(val, (list, tuple))
 
 
 def is_mapping_seq(
-    val: list[Any] | tuple[Any, ...],
-) -> TypeGuard[list[Mapping[Any, object]] | tuple[Mapping[Any, object], ...]]:
+    val: list[object] | tuple[object, ...],
+) -> TypeGuard[list[Mapping[object, object]] | tuple[Mapping[object, object], ...]]:
     return bool(val and is_mapping(val[0]))
 
 
 def is_value_seq(
-    val: list[Any] | tuple[Any, ...],
+    val: list[object] | tuple[object, ...],
 ) -> TypeGuard[BasicList | tuple[BasicValue, BasicValue]]:
     return bool(val and isinstance(val[0], BasicValueType))
 
@@ -282,35 +268,45 @@ def is_streamlike[T](value: AnyIterable[T] | object) -> TypeGuard[AnyIterable[T]
     return is_listlike(value) or isinstance(value, AsyncIterable)
 
 
-def is_sentinel[VT](val: Mapping[str, VT], **kwargs: object) -> TypeGuard[Sentinel]:
-    if SentinelValue in val:
-        sentinel = str(val[SentinelValue])
-        key = replacer(sentinel, "")
-    else:
-        key = None
-
-    return all([key, (len(val) in {2, 3}), key in kwargs])
-
-
-def is_type_value(val: Mapping[Any, Any]) -> TypeGuard[ConfArg]:
-    return len(val) == 2 and "type" in val and "value" in val
-
-
 @overload
-def is_async_callable[T](  # noqa: E704
+def is_async_callable[T](
     val: Callable[..., T | Awaitable[T]],
 ) -> TypeGuard[Callable[..., Awaitable[T]]]: ...
-@overload  # noqa: E302
-def is_async_callable(  # noqa: E704
-    val: object,
-) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
-def is_async_callable(val: object) -> bool:  # noqa: E302
+@overload
+def is_async_callable(val: object) -> TypeGuard[Callable[..., Awaitable[object]]]: ...
+def is_async_callable(val: object) -> bool:
     if callable(val):
         result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
     else:
         result = False
 
     return result
+
+
+def is_awaitable[T](value: T | Awaitable[T]) -> TypeIs[Awaitable[T]]:
+    """
+    Reports whether ``value`` is awaitable.
+
+    Args:
+
+        value: A value or an awaitable that resolves to one.
+
+    Returns:
+
+        Whether ``value`` must be awaited to get its result.
+
+    Examples:
+
+        >>> async def answer():
+        ...     return 42
+        >>>
+        >>> coro = answer()
+        >>> is_awaitable(coro), is_awaitable(42)
+        (True, False)
+        >>> coro.close()
+
+    """
+    return isawaitable(value)
 
 
 def is_sync_callable[T](val: Callable[..., T] | object) -> TypeGuard[Callable[..., T]]:

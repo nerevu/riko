@@ -180,10 +180,10 @@ bounded-retention, ownership, and close semantics before it could ship.
 
 ### 4.2 External subscriptions and publishers
 
-An external `Subscription[T]` is an ordinary source:
+An external `Subscription[T]` is an ordinary seed:
 
 ```python
-pipeline = Pipeline(source=subscription)
+stream = pipeline(subscription)
 ```
 
 `publish()` accepts either a local subscription Pipeline or an external `Publisher[T]`.
@@ -449,6 +449,11 @@ ordered list, so `in` + `in:2` (legacy `_OTHER2`) executes
 `parse_port`; per-module fan-in arity belongs to the module port contracts, not this
 phase (tripwire `test_build_plan_rejects_undeclared_positional_input`).
 
+**Node vs node-id naming (triage 2026-10-25).** `GraphEdge.source`/`target` and the executor's
+`steps` table hold node ids under node-sense names. Rename them (`source_id`/`target_id`, a
+`(node_id, port)`-keyed table) as part of this phase's value-addressing rewrite rather than ahead of
+it. `Endpoint.node` keeps its name: it mirrors the serialized endpoint's `"node"` key.
+
 ## 11. Branch-to-fan-in composition
 
 Do not add a redundant generic `rejoin()` primitive. Branch outputs are ordinary Pipeline
@@ -470,7 +475,9 @@ left_transform.out   -> union.in
 right_transform.out  -> union.in:1
 ```
 
-Concurrent async fan-in uses `merge`; sequential concatenation remains `union`.
+Concurrent async fan-in uses `merge`; sequential concatenation remains `union`. The fluent
+`Pipeline.union(...)` constructor above is an R7 deliverable (implementation-sequence R7), as the
+one-call replacement for the removed `SyncCollection`.
 
 ## 12. Ordering contract
 

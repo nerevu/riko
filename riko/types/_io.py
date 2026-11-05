@@ -7,19 +7,19 @@ from typing import Protocol, runtime_checkable
 
 from typing_extensions import TypeIs
 
-from ._guards import isinstance_strict
+from riko.base._guards import isinstance_strict
 
 type PathLike = str | Path
 
 
 @runtime_checkable
 class SyncCloseable(Protocol):
-    def close(self) -> object | None: ...  # noqa: E704
+    def close(self) -> object | None: ...
 
 
 @runtime_checkable
 class AsyncCloseable(Protocol):
-    async def aclose(self) -> object | None: ...  # noqa: E704
+    async def aclose(self) -> object | None: ...
 
 
 type Closeable = SyncCloseable | AsyncCloseable

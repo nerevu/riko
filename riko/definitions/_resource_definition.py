@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from inspect import isasyncgen, isgenerator
-from typing import TYPE_CHECKING, Any, Literal, Never, Self, cast, overload
+from typing import TYPE_CHECKING, Literal, Never, Self, overload
 from warnings import warn
 
 from attrs import define, field
 
-from riko.base.exceptions import ResourceInterpretationWarning
-from riko.types._collections import FrozenDict
+from riko.base._exceptions import ResourceInterpretationWarning
+from riko.types._frozendict import FrozenDict
 from riko.types._io import is_closeable
 from riko.types._resource import (
     AnyContextManager,
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
-type Values = Mapping[str, Any | Closeable]
+type Values = Mapping[str, object]
 
 
 @define(frozen=True, slots=True, eq=False, repr=False, init=False)
@@ -96,7 +96,7 @@ class Resource[T]:
             raise TypeError(msg)
 
     @overload
-    def __new__(  # noqa: E704
+    def __new__(
         cls,
         value: Closeable,
         *,
@@ -104,8 +104,8 @@ class Resource[T]:
         credential: str | None = ...,
         lazy: bool = ...,
     ) -> OneShotResource[T]: ...
-    @overload  # noqa: E301
-    def __new__(  # noqa: E704
+    @overload
+    def __new__(
         cls,
         value: ResolvedValue[T],
         *,
@@ -113,23 +113,21 @@ class Resource[T]:
         credential: str | None = ...,
         lazy: bool = ...,
     ) -> OneShotResource[T]: ...
-    @overload  # noqa: E301
-    def __new__(cls, value: Self) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __new__(cls, value: LifecycleFactory[T]) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __new__(cls, value: AnyContextManager[T]) -> Never: ...  # noqa: E704
-    @overload  # noqa: E301
-    def __new__(cls, value: T) -> Never: ...  # noqa: E704
-    def __new__(  # noqa: E301
-        cls, *args: object, **kwargs: object
-    ) -> OneShotResource[T] | ReusableResource[T]:
+    @overload
+    def __new__(cls, value: Self) -> Never: ...
+    @overload
+    def __new__(cls, value: LifecycleFactory[T]) -> Never: ...
+    @overload
+    def __new__(cls, value: AnyContextManager[T]) -> Never: ...
+    @overload
+    def __new__(cls, value: T) -> Never: ...
+    def __new__(cls, *args: object, **kwargs: object) -> Resource[T]:
         # pickle and copy rebuild an instance by calling __new__ with no arguments
         if args or kwargs:
             cls._validate_constructor()
 
         target = OneShotResource if cls is Resource else cls
-        return cast("OneShotResource[T] | ReusableResource[T]", object.__new__(target))
+        return object.__new__(target)
 
     @staticmethod
     def _validate_value(value: object) -> None:
@@ -171,14 +169,29 @@ class Resource[T]:
 
         self._set_fields(OwnedPlan(value, cleanup), credential, lazy)
 
-    @classmethod
-    def _from_plan[R: Resource[Any]](
-        cls,
-        target: type[R],
-        plan: ResourcePlan[Any],
+    @overload
+    @staticmethod
+    def _from_plan[V](
+        target: type[ReusableResource[V]],
+        plan: ResourcePlan[V],
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> ReusableResource[V]: ...
+    @overload
+    @staticmethod
+    def _from_plan[V](
+        target: type[OneShotResource[V]],
+        plan: ResourcePlan[V],
+        credential: str | None = ...,
+        lazy: bool = ...,
+    ) -> OneShotResource[V]: ...
+    @staticmethod
+    def _from_plan[V](
+        target: type[Resource[V]],
+        plan: ResourcePlan[V],
         credential: str | None = None,
         lazy: bool = False,
-    ) -> R:
+    ) -> Resource[V]:
         resource = object.__new__(target)
         resource._set_fields(plan, credential, lazy)
         return resource
@@ -243,7 +256,7 @@ class Resource[T]:
 
     @overload
     @classmethod
-    def from_factory[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_factory[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: ValueFactory[T],
         *args: object,
@@ -252,9 +265,9 @@ class Resource[T]:
         lazy: bool = ...,
         **kwargs: object,
     ) -> ReusableResource[T]: ...
-    @overload  # noqa: E301
+    @overload
     @classmethod
-    def from_factory[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_factory[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: LifecycleFactory[T],
         *args: object,
@@ -263,7 +276,7 @@ class Resource[T]:
         lazy: bool = ...,
         **kwargs: object,
     ) -> ReusableResource[T]: ...
-    @classmethod  # noqa: E301
+    @classmethod
     def from_factory[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls,
         factory: ResourceFactory[T],
@@ -291,26 +304,26 @@ class Resource[T]:
 
     @overload
     @classmethod
-    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: Resource[T]
     ) -> Never: ...
-    @overload  # noqa: E301
+    @overload
     @classmethod
-    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: LifecycleFactory[T]
     ) -> Never: ...
-    @overload  # noqa: E301
+    @overload
     @classmethod
-    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: AnyContextManager[T]
     ) -> Never: ...
-    @overload  # noqa: E301
+    @overload
     @classmethod
-    def from_external[T](  # noqa: E704  # pyright: ignore[reportGeneralTypeIssues]
+    def from_external[T](  # pyright: ignore[reportGeneralTypeIssues]
         cls, value: ResolvedValue[T]
     ) -> ReusableResource[T]: ...
-    @classmethod  # noqa: E301
-    def from_external[T](  # pyright: ignore[reportInconsistentOverload,reportGeneralTypeIssues]  # noqa: E501
+    @classmethod
+    def from_external[T](  # pyright: ignore[reportInconsistentOverload,reportGeneralTypeIssues]
         cls, value: ResolvedValue[T]
     ) -> ReusableResource[T]:
         """
@@ -409,7 +422,7 @@ class OneShotResource[T](Resource[T]):
 
     if TYPE_CHECKING:
 
-        def __new__(cls, *args: object, **kwargs: object) -> Never: ...  # noqa: E704
+        def __new__(cls, *args: object, **kwargs: object) -> Never: ...
 
 
 class ReusableResource[T](Resource[T]):
@@ -424,10 +437,10 @@ class ReusableResource[T](Resource[T]):
 
     if TYPE_CHECKING:
 
-        def __new__(cls, *args: object, **kwargs: object) -> Never: ...  # noqa: E704
+        def __new__(cls, *args: object, **kwargs: object) -> Never: ...
 
 
-type ReusableResources = FrozenDict[str, ReusableResource[Any]]
+type ReusableResources = FrozenDict[str, ReusableResource[object]]
 type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 __all__ = ["OneShotResource", "Resource", "ReusableResource"]

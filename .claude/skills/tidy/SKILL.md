@@ -24,7 +24,7 @@ is everything changed since that sha:
 - marker present and an ancestor of `HEAD` (`git merge-base --is-ancestor`):
   `git diff <sha>` plus untracked files (`git ls-files --others --exclude-standard`);
 - marker missing or not an ancestor (after an autosquash rebase): the unpushed
-  commits (`git log HEAD --not --remotes`, the range `/land` uses) diffed from
+  commits (`git log HEAD --not --remotes`) diffed from
   the parent of the oldest one, plus the working tree and untracked files; with
   no unpushed commits, the working tree alone.
 
@@ -46,7 +46,7 @@ diff renamed, removed, or changed in meaning (`grep -rn` across `riko/`,
   the touched area — to tell an owned gap from a defect.
 
 Settled exceptions are **not findings**: identifiers the Reserved terms rows
-say are kept (`catalog_names`, `source=`/`SourceLike`, callable-sense "pipe",
+say are kept (`catalog_names`, callable-sense "pipe",
 the `*_key` conf names, `ModuleStore`), wording a pending phase replaces (the
 `Sinks` category, send/receive "target"), and gameplans keeping older wording
 until touched.
@@ -98,8 +98,10 @@ neighborhood it affects:
    `docs/MIGRATION.rst`, untracked scratch docs cited from stable docs.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
-   the change altered; doctests that rebind a name or reuse another section's
-   state; docstrings that explain mechanism instead of what the caller gets.
+   the change altered; code blocks that use a name they don't define
+   themselves or rebind a name within the block (setup repeated across blocks
+   is correct, never dedupe it); docstrings that explain mechanism instead of
+   what the caller gets.
 8. **Doc hygiene** — duplicated table rows or sections, broken cross-references
    the docs lint does not cover, `_docs/` paths in shipped text.
 9. **Test ownership** — for each new or moved test (`manage lint --tests` already

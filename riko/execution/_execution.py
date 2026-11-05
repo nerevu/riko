@@ -4,7 +4,7 @@ Shared state and plan checks for the private sync/async executions.
 
 A prepared workflow (an execution plan) is a reusable structural snapshot; running
 it creates a one-shot sync or async execution. Each owns the exit stack and sync/async
-bridge that bound a run's acquired resources and adapted work. These
+bridge that scope a run's acquired resources and adapted work. These
 types are private to the runtime and belong to no supported surface.
 """
 
@@ -17,17 +17,18 @@ from collections.abc import (
     Iterable,
     Iterator,
     Mapping,
+    Sequence,
 )
 from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any, Never, cast, overload
+from typing import TYPE_CHECKING, Any, Never, overload
 
 from attrs import Factory, define, field
 
 from riko.bado._backend import asyncify
-from riko.base._constants import FOREVER_ITEM
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._config import FOREVER_ITEM
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from riko.types._collections import FrozenDict
+from riko.types._frozendict import FrozenDict
 from riko.types._workflow import parse_port
 from riko.types._wrappers import ModuleWrapper
 
@@ -49,7 +50,7 @@ type SyncExecSteps[T] = dict[str, Iterator[T]]
 type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
 type ExtraObjects[T] = ResourceView | ModuleWrapper
 type ExtraStreams[T] = (
-    AsyncIterable[T] | list[AsyncIterable[T]] | Iterator[T] | Iterable[Iterator[T]]
+    AsyncIterable[T] | Iterator[T] | Sequence[Iterator[T] | AsyncIterable[T]]
 )
 type ExtraValues[T] = ExtraObjects[T] | ExtraStreams[T]
 type ExtraInput[T] = Mapping[str, ExtraValues[T]]
@@ -80,15 +81,15 @@ async def _asyncify_call[T](func: Callable[..., T], *args: object) -> T:
     return await asyncify(func)(*args)
 
 
-def _require_source[S](source: S | None, output: str) -> S:
+def _require_seed[S](seed: S | None, output: str) -> S:
     """Requires the seed an identity plan streams as its default output."""
     if output != "default":
         raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
-    elif source is None:
+    elif seed is None:
         msg = "workflow has no nodes; an empty workflow requires a seed"
         raise InvalidPipelineError(msg)
 
-    return source
+    return seed
 
 
 @define(frozen=True, slots=True)
@@ -194,12 +195,12 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._stack.callback(self._record_cleanup_error, func, *args)
 
     @overload
-    def enter_context(  # noqa: E704
+    def enter_context(
         self, cm: AbstractContextManager[BlockingPortal]
     ) -> BlockingPortal: ...
     @overload
-    def enter_context[V](self, cm: AbstractContextManager[V]) -> V: ...  # noqa: E704
-    def enter_context[V](  # noqa: E301
+    def enter_context[V](self, cm: AbstractContextManager[V]) -> V: ...
+    def enter_context[V](
         self, cm: AbstractContextManager[BlockingPortal | V]
     ) -> BlockingPortal | V:
         """
@@ -217,7 +218,9 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._require_open("add a resource to")
         return self._stack.enter_context(cm)
 
-    def _require_bindings(self, binding: Mapping[str, str]) -> dict[str, Resource[Any]]:
+    def _require_bindings(
+        self, binding: Mapping[str, str]
+    ) -> dict[str, Resource[object]]:
         """Requires the context to provide every resource a node binds, by slot."""
         context = self.context
         available = {} if context is None else context.resources
@@ -236,20 +239,25 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         seed: I | None,
         *,
         as_stream: Callable[[I | Iterable[Any]], V],
-    ) -> tuple[V, ExtraOutput]:
+    ) -> tuple[V, ExtraOutput[object]]:
         """
-        Wires a node's upstream streams onto its input ports.
+        Wires the output streams of a node's upstream nodes onto its input ports.
 
-        The default input port takes its upstream stream, or else the seed. Positional
-        ``in:<n>`` ports arrive in order as ``others`` and named ``in:<name>`` ports
-        under their own name. When the default input port gets neither, the primary
-        input stream is empty if positional ports are wired and holds the default seed
-        items otherwise.
+        Each incoming edge carries its upstream node's output stream to one of this
+        node's input ports. The edge into the default input port supplies the primary
+        input stream. ``seed`` supplies it only when no edge targets that port. Edges
+        into positional ``in:<n>`` ports become ``others``, ordered by ``n``. Edges into
+        named ``in:<name>`` ports are passed under their own name.
+
+        When no edge targets the default input port and no seed is given, the primary
+        input stream is empty if any positional ports are wired. This is because the
+        node then reads only ``others``. Otherwise, the primary input stream holds the
+        default seed: one item that lets a self-starting node run once.
 
         Args:
 
             incoming: The stream edges that target the node.
-            steps: The streams already built for upstream nodes.
+            steps: The output stream of each upstream node, keyed by node id.
             seed: The items fed to the node's open input, if any.
             as_stream: Turns the seed into the execution's stream kind.
 
@@ -258,31 +266,30 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             The node's primary input stream and its secondary input streams.
 
         """
-        source: V | None = None if seed is None else as_stream(seed)
+        primary: V | None = None if seed is None else as_stream(seed)
         indexed: list[tuple[int, V]] = []
-        extra: ExtraOutput = {}
+        extra: ExtraOutput[object] = {}
 
         for edge in incoming:
             require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
-            port = parse_port(edge.target_port)
-            upstream = steps[edge.source]
+            input_port = parse_port(edge.target_port)
+            output_stream = steps[edge.source]
 
-            if port.is_default:
-                source = upstream
-            elif port.index is not None:
-                indexed.append((port.index, upstream))
-            elif port.name is not None:
-                extra[port.name] = upstream
+            if input_port.is_default:
+                primary = output_stream
+            elif input_port.index is not None:
+                indexed.append((input_port.index, output_stream))
+            elif input_port.name is not None:
+                extra[input_port.name] = output_stream
 
         if indexed:
             ordered = sorted(indexed, key=lambda item: item[0])
-            extra["others"] = cast("ExtraStreams", [stream for _, stream in ordered])
+            extra["others"] = [stream for _, stream in ordered]
 
-        if source is None:
-            seed_items: Iterable[Any] = () if indexed else DEFAULT_SEED
-            source = as_stream(seed_items)
+        if primary is None:
+            primary = as_stream(() if indexed else DEFAULT_SEED)
 
-        return source, extra
+        return primary, extra
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool

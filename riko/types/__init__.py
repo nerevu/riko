@@ -7,6 +7,7 @@ not part of the SemVer-guaranteed API.
 """
 
 from ._events import EventSink
+from ._options import CallOptions, CallOptionsLike, RawCallOptions
 from ._pipedef import PipeDag, PipeDef, PipeDefLike
 from ._resource import (
     AsyncLifecyclePlan,
@@ -18,7 +19,17 @@ from ._resource import (
     SyncLifecyclePlan,
     ValueFactoryPlan,
 )
-from ._streams import AsyncItems, AsyncStream, Feed, Item, Items, Stream
+from ._streams import (
+    AsyncItems,
+    AsyncStream,
+    Feed,
+    InputLike,
+    Item,
+    Items,
+    PipelineRun,
+    PipelineStream,
+    Stream,
+)
 from ._workflow import RawEdge, RawEndpoint, RawNode, RawWorkflow
 from ._wrappers import AsyncPipeTuples, PipeTuples, SyncPipeTuples
 from .modules import Conf
@@ -28,10 +39,13 @@ __all__ = [
     "AsyncLifecyclePlan",
     "AsyncPipeTuples",
     "AsyncStream",
+    "CallOptions",
+    "CallOptionsLike",
     "Conf",
     "EventSink",
     "ExternalPlan",
     "Feed",
+    "InputLike",
     "Item",
     "Items",
     "LifecyclePlan",
@@ -40,6 +54,9 @@ __all__ = [
     "PipeDef",
     "PipeDefLike",
     "PipeTuples",
+    "PipelineRun",
+    "PipelineStream",
+    "RawCallOptions",
     "RawEdge",
     "RawEndpoint",
     "RawNode",

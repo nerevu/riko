@@ -149,6 +149,21 @@ sessions were deleted at the v1 cutover, so `WriteNode` is their next caller. Te
 at a graph leaf) versus passthrough (more nodes follow) is a consumption difference, not a distinct
 node family — R5C adds the canonical caller, not a second implementation.
 
+**Targets without a path (open, R5C).** `WriteNode.from_prepared` records a target's `backend`
+and its `dest` when it has one; a native target object without `dest` (for example a keyed
+`AIRTABLE` record store) is not recorded, so the node alone cannot reach it. R5C decides how a
+`WriteNode` carries such a live target, presumably as a Context resource binding (extensibility
+E3.7: "Resource bindings to live clients are separate"). Tripwire:
+`tests/public/test_write.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
+(under the class-level write-node xfail).
+
+**Composed and wrapped writes (R5C).** `a | Pipeline().write(dest)` already composes (`|` appends
+any workflow); running it waits on `WriteNode` execution, pinned by
+`tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`. The private
+`write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their input stream `source`
+(the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
+caller rather than ahead of it (triage 2026-10-25).
+
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
 session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
 into the write effect and maintains lineage externally, rather than teaching the session about pipeline

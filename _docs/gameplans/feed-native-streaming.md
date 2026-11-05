@@ -151,7 +151,7 @@ The earlier separate `BatchPolicy(max_records/max_bytes/max_delay)` target is su
 There is one public batch model:
 
 ```python
-Pipeline(source=source, batch=True, batch_size=1000)
+Pipeline(batch=True, batch_size=1000)(items)
 ```
 
 `batch_size` is invalid without `batch=True`.

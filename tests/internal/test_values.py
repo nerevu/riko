@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import copy
 import os
+import pickle  # noqa: S403
 import subprocess
 import sys
 import time
@@ -27,17 +29,17 @@ from attrs import define
 from dateutil.relativedelta import relativedelta
 from feedparser import FeedParserDict
 
+from riko.base import _exceptions as errors
 from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
+from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import ROOT_DIR, get_path
-from riko.base.exceptions import CyclicIdentityError, IdentityEncodingError
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
     IdentityDomain,
-    ReprCacheWrapper,
     canonical_bytes,
     canonicalize,
     digest,
@@ -63,12 +65,12 @@ from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
 from riko.types._enums import CastType
-from riko.types._rss import FeedParserRSSEntry
+from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
 from riko.types.modules import XpathFetchPageConf
 
 if TYPE_CHECKING:
-    from riko.types._collections import FrozenSetMapping
+    from riko.types._frozendict import FrozenSetMapping
 
 NOON_UTC = datetime(2020, 6, 15, 12, tzinfo=UTC)
 NOON_TT = time.struct_time((2020, 6, 15, 12, 0, 0, 0, 0, -1))
@@ -264,7 +266,7 @@ class _Opaque:
     pass
 
 
-def _counting_cache() -> tuple[list[object], ReprCacheWrapper[int]]:
+def _counting_cache() -> tuple[list[object], repr_cache[int]]:
     calls: list[object] = []
 
     @repr_cache
@@ -292,7 +294,7 @@ class TestReprCache:
 
     def test_scalar_arguments_skip_canonical_encoding(self, monkeypatch):
         encoded: list[object] = []
-        spy = lambda value: encoded.append(value) or canonical_bytes(value)  # noqa: E731
+        spy = lambda value: encoded.append(value) or canonical_bytes(value)
         monkeypatch.setattr(_canonical, "canonical_bytes", spy)
         calls, tally = _counting_cache()
         assert (tally(42), tally(42), tally("42")) == (1, 1, 2)
@@ -357,7 +359,7 @@ class TestCastDatetime:
     def test_plain_date_string_never_consults_the_clock(self, monkeypatch):
         zones: list[bool] = []
         load_local_tz = cast_module.load_local_tz
-        spy = lambda **kwargs: zones.append(True) or load_local_tz(**kwargs)  # noqa: E731
+        spy = lambda **kwargs: zones.append(True) or load_local_tz(**kwargs)
         monkeypatch.setattr(cast_module, "load_local_tz", spy)
         assert cast_datetime("Jan. 12, 2001") is not None
         assert zones == []
@@ -390,6 +392,12 @@ SORT_KEY_WARNINGS = [
     pytest.param("pass", 0, id="pass"),
     pytest.param("", 0, id="empty"),
     pytest.param("bogus", 1, id="unknown"),
+]
+
+ANY2DICT_LISTS = [
+    pytest.param([{"a": 1}, None, {"b": 0}], None, None, id="list-skips-null"),
+    pytest.param('[{"a": 1}, null, {"b": 0}]', "json", None, id="json-array"),
+    pytest.param('{"x": [{"a": 1}, {"b": 0}]}', "json", "x", id="json-path"),
 ]
 
 INVALID_CAST_KEYS = [
@@ -717,6 +725,11 @@ class TestParsers:
                 "urgency",
             ]
 
+    @pytest.mark.parametrize(("content", "ext", "path"), ANY2DICT_LISTS)
+    def test_any2dict_yields_list_entries(self, content, ext, path):
+        result = list(any2dict(content, ext=ext, path=path))
+        assert result == [{"a": 1}, {"b": 0}]
+
     def test_xpathfetchpage_strips_xhtml_namespace_from_nested_keys(self):
         conf = XpathFetchPageConf(
             {"url": get_path("users.jyu.fi.html"), "xpath": "/html/body/p/a"}
@@ -763,14 +776,14 @@ class TestRSSUtils:
     @pytest.mark.parametrize(("entry", "expected"), AUGMENT_FALLBACKS)
     def test_augment_entries_fallbacks(self, entry, expected):
         """Feed-entry augmentation fallbacks from ``riko.rss.feeds``."""
-        item = next(augment_entries([FeedParserRSSEntry(entry)]))
+        item = next(augment_entries([ParserRSSEntry(entry)]))
         assert item.get("summary") == expected
         assert item.get("description") == expected
 
     def test_augment_entries_parses_date_the_parser_could_not(self):
         """A present-but-``None`` parsed date falls back to the raw date string."""
         raw = cast(
-            "FeedParserRSSEntry",
+            "ParserRSSEntry",
             {
                 "link": "https://example.com/feed-item",
                 "published": "May 11, 2012 10:01:00 EST",
@@ -793,7 +806,7 @@ class TestRSSUtils:
     def test_resolve_date_skips_blank_and_unparseable_values(self):
         """A blank or unparseable candidate never raises; the next key is tried."""
         raw = cast(
-            "FeedParserRSSEntry",
+            "ParserRSSEntry",
             {
                 "published_parsed": None,
                 "published": "not a date",
@@ -812,7 +825,7 @@ class TestRSSUtils:
     def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
         """Asking a feedparser entry for a missing ``updated`` key stays silent."""
         raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
-        entry = cast("FeedParserRSSEntry", raw)
+        entry = cast("ParserRSSEntry", raw)
         keys = ("updated_parsed", "updated", "published_parsed", "published")
         resolved = resolve_date(entry, *keys)
         assert isinstance(resolved, struct_time)
@@ -977,3 +990,39 @@ class TestLogging:
         after = get_logger("riko.tests.after")
         assert before.getEffectiveLevel() == ERROR
         assert after.getEffectiveLevel() == ERROR
+
+
+ERRORS = [
+    pytest.param(errors.RikoError(), id="riko"),
+    pytest.param(errors.PipelineError("plain"), id="pipeline"),
+    pytest.param(errors.InvalidPipelineError("bad"), id="invalid"),
+    pytest.param(errors.EmptyPipelineError(), id="empty"),
+    pytest.param(
+        errors.PipelineStateError("closed", "read", subject="run"), id="state"
+    ),
+    pytest.param(
+        errors.UnsupportedModuleError("trunkate", "why", candidates=iter(["truncate"])),
+        id="module",
+    ),
+    pytest.param(errors.UnsupportedWorkflowError("pipe_x", "gone"), id="workflow"),
+    pytest.param(errors.UnsupportedTargetError("ftp"), id="target"),
+    pytest.param(errors.ReceiverUnavailableError("alerts"), id="receiver"),
+    pytest.param(errors.DuplicateReceiverError("alerts"), id="duplicate"),
+    pytest.param(errors.IdentityEncodingError(set), id="encoding"),
+    pytest.param(errors.CyclicIdentityError(), id="cyclic"),
+]
+ROUND_TRIPS = [
+    pytest.param(lambda error: pickle.loads(pickle.dumps(error)), id="pickle"),  # noqa: S301
+    pytest.param(copy.copy, id="copy"),
+    pytest.param(copy.deepcopy, id="deepcopy"),
+]
+
+
+class TestRikoError:
+    @pytest.mark.parametrize("error", ERRORS)
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_round_trip_keeps_message_and_attributes(self, error, round_trip):
+        copied = round_trip(error)
+        assert type(copied) is type(error)
+        assert str(copied) == str(error)
+        assert vars(copied) == vars(error)

@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from attrs import define, field
 
-from riko.types._collections import normalize_strs
-from riko.types._enums import FmtLike, Formats, resolve_enum
+from riko.base._require_guards import normalize_strs
+from riko.base._typing import resolve_enum
+from riko.types._enums import FmtLike, Formats
 from riko.types._io import PathLike
 from riko.types._target_protocols import SupportsWrite
 
@@ -117,7 +118,8 @@ class WriteOperation:
 
     A ``WriteOperation`` is not a fully validated write specification: whether its
     ``mode``/``keys`` are legal depends on a target's :class:`WriteCapabilities`.
-    :class:`PreparedWrite` is the target-bound, validated object.
+    :class:`PreparedWrite` is the validated write that has been checked against its
+    target's capabilities.
 
     Attributes:
 
@@ -139,7 +141,7 @@ type Destination = PathLike | SupportsWrite
 @dataclass(frozen=True, slots=True)
 class PreparedWrite:
     """
-    A target-bound, validated write ready for execution.
+    A validated, target-capability-checked, ready-to-execute write.
 
     Attributes:
 
@@ -175,7 +177,7 @@ class SyncWriteSession(Protocol):
     One session type serves every write, whatever consumes the pipeline.
     """
 
-    def write(self, value: Item | Items) -> None:  # noqa: E301
+    def write(self, value: Item | Items) -> None:
         """Delivers an item or the whole stream through this session."""
         ...
 
@@ -199,8 +201,8 @@ class SyncWriteSession(Protocol):
 class AsyncWriteSession(Protocol):
     """A live, execution-owned asynchronous write session."""
 
-    async def awrite(self, value: Item | Feed) -> None: ...  # noqa: E704
-    async def aacquire(self) -> None: ...  # noqa: E704
-    async def afinalize(self) -> WriteResult: ...  # noqa: E704
-    def abort(self) -> None: ...  # noqa: E704
-    async def ateardown(self) -> None: ...  # noqa: E704
+    async def awrite(self, value: Item | Feed) -> None: ...
+    async def aacquire(self) -> None: ...
+    async def afinalize(self) -> WriteResult: ...
+    def abort(self) -> None: ...
+    async def ateardown(self) -> None: ...

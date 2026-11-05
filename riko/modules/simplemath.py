@@ -30,11 +30,11 @@ import operator
 from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import cast_value
 from riko.types._enums import BasicCastType, CastType
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -57,7 +57,7 @@ def mean(*nums: NumLike) -> float:
         return float("inf")
 
 
-OPS: dict[str, Callable[[Any, Any], NumLike]] = {
+OPS: dict[str, Callable[[Decimal, Decimal], NumLike]] = {
     "add": operator.add,
     "subtract": operator.sub,
     "multiply": operator.mul,

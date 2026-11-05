@@ -178,7 +178,7 @@ info" table; this section keeps only the release-gate file map and exit tests, w
 ### Target file map
 
 > **Superseded.** This pre-landing sketch names files that never existed after landing (the execution
-> package is `riko/execution/`, the `Pipeline` lives in `riko/definitions/_composition.py` +
+> package is `riko/execution/`, the `Pipeline` lives in `riko/definitions/_pipeline_definition.py` +
 > `riko/runtime/_pipeline.py`, and `Context`/`Resource` in `riko/definitions/`). The current source map
 > is [KEY_PATHS.md](KEY_PATHS.md); the table is kept as history only.
 

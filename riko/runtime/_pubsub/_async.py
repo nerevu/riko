@@ -15,7 +15,7 @@ from riko.bado._backend import (
     create_memory_object_stream,
     fail_after,
 )
-from riko.base.exceptions import DuplicateReceiverError, ReceiverUnavailableError
+from riko.base._exceptions import DuplicateReceiverError, ReceiverUnavailableError
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable

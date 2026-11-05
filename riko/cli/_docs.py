@@ -1,39 +1,26 @@
 # vim: sw=4:ts=4:expandtab
 
-"""Documentation lint helpers for the manage CLI."""
+"""Internal-documentation lint helpers for the manage CLI."""
 
 from __future__ import annotations
 
 import re
 import tomllib
 from collections import Counter
-from glob import glob
-from io import StringIO
 from itertools import chain
-from os.path import basename, dirname, exists, isdir, join
-from pathlib import Path
 from shutil import which
 from subprocess import run
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
+from riko.base._paths import DOCS_DIR, PACKAGE_DIR, ROOT_DIR, TESTS_DIR
 
 from ._gen_api_surface import _BLOCK, _DOC, generate_api_surface
-
-try:
-    from docutils import nodes
-    from docutils.core import publish_doctree
-except ImportError:
-    publish_doctree = None
-    nodes = None
-
+from ._gen_verbs import VERB_BLOCKS, VERB_DOCS, VERB_PATTERNS, generate_verb_tables
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
+    from pathlib import Path
 
-_TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
-_LINE_ANCHOR_RE = re.compile(r"^L\d")
-_DOCS_DIR = ROOT_DIR / "docs"
 _INTERNAL_DOCS = ROOT_DIR / "_docs"
 _ROADMAP = _INTERNAL_DOCS / "ROADMAP.md"
 _TRACKER = _INTERNAL_DOCS / "PHASE_CHECKLISTS.md"
@@ -100,137 +87,19 @@ _HISTORY_WORDS = re.compile(
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
 _CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
+_TODO = re.compile(r"^\s*TODO\b")
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
 )
 
 
-def get_anchor(text: str) -> str:
-    """Computes the GitHub anchor for a heading."""
-    lowered = text.strip().lower()
-    kept = "".join(c for c in lowered if c.isalnum() or c in {" ", "-", "_"})
-    return kept.replace(" ", "-")
-
-
-def _gen_doc_files(where: str | None) -> Iterator[str]:
-    """Resolve the RST files to check."""
-    for location in where.split(" ") if where else [ROOT_DIR, _DOCS_DIR]:
-        if isdir(location):
-            yield from glob(str(Path(location) / "*.rst"))
-        elif Path(location).suffix == ".rst":
-            yield str(location)
-
-
-def _render_rst(path: str) -> tuple[str, Any]:
-    """Read and parse an RST file into source text and doctree."""
-    if not publish_doctree:
-        raise RuntimeError("docutils not found")
-
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
-
-    overrides = {
-        "report_level": 2,
-        "halt_level": 5,
-        "warning_stream": StringIO(),
-        "input_encoding": "utf-8",
-    }
-    return text, publish_doctree(text, source_path=path, settings_overrides=overrides)
-
-
-def _get_doc_anchors(doctree: Any) -> set[str]:
-    """Compute the GitHub heading anchors a rendered document exposes."""
-    seen: dict[str, int] = {}
-    anchors: set[str] = set()
-
-    if nodes is None:
-        raise RuntimeError("docutils not found")
-    else:
-        for node in doctree.findall(nodes.title):
-            if isinstance(node.parent, (nodes.section, nodes.document)):
-                base = get_anchor(node.astext())
-                count = seen.get(base, 0)
-                anchors.add(base if count == 0 else f"{base}-{count}")
-                seen[base] = count + 1
-
-    return anchors
-
-
-def _render_errors(path: str, doctree: Any) -> list[str]:
-    """Collect docutils warning, error, and severe messages."""
-    if nodes is None:
-        raise RuntimeError("docutils not found")
-    else:
-        return [
-            f"{path}:{node.get('line', '?')}: [{node['type']}] "
-            f"{node.children[0].astext()}"
-            for node in doctree.findall(nodes.system_message)
-            if node["level"] >= 2
-        ]
-
-
-def _load_path_anchors(path: str, cache: dict[str, set[str]]) -> set[str]:
-    """Loads a document's anchors, rendering and caching it on first use."""
-    if path not in cache:
-        try:
-            cache[path] = _get_doc_anchors(_render_rst(path)[1])
-        except OSError:
-            cache[path] = set()
-
-    return cache[path]
-
-
-def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[str]:
-    """Collects internal RST hyperlinks whose target file or anchor is missing."""
-    base_dir = dirname(path)
-    errors: list[str] = []
-
-    for match in _TARGET_RE.finditer(text):
-        uri = match["uri"].strip()
-        ref_path, _, anchor = uri.partition("#")
-        target = join(base_dir, ref_path) if ref_path else path
-        external = uri.startswith(("http://", "https://", "mailto:", "//"))
-
-        if external:
-            continue
-        elif ref_path and not exists(target):
-            errors.append(f"{path}: broken target '{uri}' (missing file)")
-        elif anchor and not _LINE_ANCHOR_RE.match(anchor) and target.endswith(".rst"):
-            where = ref_path or basename(path)
-
-            if anchor not in _load_path_anchors(target, cache):
-                errors.append(f"{path}: unknown anchor '#{anchor}' in {where}")
-
-    return errors
-
-
-def lint_rst(where: str | None = None) -> int:
-    """Validates RST rendering and internal links."""
-    if publish_doctree is None:
-        raise RuntimeError("docutils not found")
-
-    cache: dict[str, set[str]] = {}
-    problems: list[str] = []
-
-    for path in _gen_doc_files(where):
-        text, doctree = _render_rst(path)
-        cache[path] = _get_doc_anchors(doctree)
-        problems.extend(_render_errors(path, doctree))
-        problems.extend(_get_link_errors(path, text, cache))
-
-    for problem in problems:
-        print(problem)
-
-    return 1 if problems else 0
-
-
 def _read(path: Path) -> str:
-    """Read a UTF-8 document, returning empty text when it is absent."""
+    """Reads a UTF-8 document, or empty text when it is absent."""
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
 def _tracked_docs() -> set[Path]:
-    """List internal Markdown documents tracked by git."""
+    """Lists internal Markdown documents tracked by git."""
     if not _GIT:
         raise RuntimeError("git not found")
 
@@ -245,26 +114,26 @@ def _tracked_docs() -> set[Path]:
 
 
 def _gameplan_paths() -> list[Path]:
-    """List authoritative Markdown gameplans tracked by git in stable order."""
+    """Lists authoritative Markdown gameplans tracked by git in stable order."""
     tracked = _tracked_docs()
     globbed = _GAMEPLANS.glob("*.md") if _GAMEPLANS.exists() else []
     return sorted(path for path in globbed if path in tracked)
 
 
 def _root_doc_paths() -> list[Path]:
-    """List root internal Markdown documents tracked by git in stable order."""
+    """Lists root internal Markdown documents tracked by git in stable order."""
     tracked = _tracked_docs()
     return sorted(path for path in _INTERNAL_DOCS.glob("*.md") if path in tracked)
 
 
 def _root_markdown_offenders() -> list[str]:
-    """Find tracked root Markdown documents outside the authority allowlist."""
+    """Finds tracked root Markdown documents outside the authority allowlist."""
     paths = _root_doc_paths()
     return [path.name for path in paths if path.name not in _ROOT_MARKDOWN]
 
 
 def _version_tuple(text: str) -> tuple[int, int, int]:
-    """Parse the first semantic version in text."""
+    """Parses the first semantic version in text."""
     if match := _VERSION.search(text):
         major, minor, patch = match.groups()
         parsed = (int(major), int(minor), int(patch))
@@ -275,20 +144,20 @@ def _version_tuple(text: str) -> tuple[int, int, int]:
 
 
 def _packaged_version() -> tuple[int, int, int]:
-    """Read the packaged project version from pyproject.toml."""
+    """Reads the packaged project version from pyproject.toml."""
     data = tomllib.loads(_read(_PYPROJECT)) if _PYPROJECT.exists() else {}
     raw = data.get("project", {}).get("version", "0.0.0")
     return _version_tuple(raw)
 
 
 def _status_banner_offenders() -> list[str]:
-    """Find gameplans that claim phase status locally."""
+    """Finds gameplans that claim phase status locally."""
     paths = _gameplan_paths()
     return [path.name for path in paths if _STATUS_BANNER.search(_read(path))]
 
 
 def _authority_namespace_offenders() -> list[str]:
-    """Find non-authoritative documents left in the active gameplan namespace."""
+    """Finds non-authoritative documents left in the active gameplan namespace."""
     offenders: list[str] = []
 
     for path in _gameplan_paths():
@@ -301,7 +170,7 @@ def _authority_namespace_offenders() -> list[str]:
 
 
 def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
-    """Find archive or research links listed in ROADMAP tables."""
+    """Finds archive or research links listed in ROADMAP tables."""
     return [
         line.strip()
         for line in roadmap.splitlines()
@@ -310,7 +179,7 @@ def _non_authoritative_listing_offenders(roadmap: str) -> list[str]:
 
 
 def _phase_closure_offenders() -> list[str]:
-    """Find R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
+    """Finds R-phases whose exit omits ordered ADD/MIGRATE/DELETE closure."""
     markers = ("- **ADD:**", "- **MIGRATE:**", "- **DELETE:**")
     offenders: list[str] = []
 
@@ -412,12 +281,47 @@ def gen_stale_path_citations(
                     yield (lineno, cited)
 
 
+def gen_todo_lines(text: str) -> Iterator[int]:
+    """
+    Finds lines that start with a ``TODO`` marker.
+
+    Args:
+
+        text: The document text.
+
+    Yields:
+
+        Each marker's line number.
+
+    Examples:
+
+        >>> from riko.cli._docs import gen_todo_lines
+        >>>
+        >>> text = "Intro.\\n\\nTODO: add seeding\\nA mid-line TODO is fine"
+        >>> list(gen_todo_lines(text))
+        [3]
+
+    """
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if _TODO.match(line):
+            yield lineno
+
+
+def _gen_todo_offenders() -> Iterator[str]:
+    """Names each ``TODO`` line left in the shipped user docs."""
+    docs = (ROOT_DIR / "README.rst", ROOT_DIR / "CONTRIBUTING.rst")
+
+    for path in (*docs, *sorted(DOCS_DIR.glob("*.rst"))):
+        for lineno in gen_todo_lines(_read(path)):
+            yield f"{path.relative_to(ROOT_DIR)}:{lineno}"
+
+
 def _gen_citation_offenders(
     scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
     known: Iterable[str],
     *paths: Path,
 ) -> Iterator[str]:
-    """Format each document's stale citations as ``path:line: cited`` offenders."""
+    """Formats each document's stale citations as ``path:line: cited`` offenders."""
     _known = frozenset(known)
 
     for path in paths:
@@ -426,7 +330,7 @@ def _gen_citation_offenders(
 
 
 def _gen_stale_test_citation_offenders() -> Iterator[str]:
-    """Find tracked docs citing test files that no longer exist."""
+    """Finds tracked docs citing test files that no longer exist."""
     known = (
         path.relative_to(ROOT_DIR).as_posix() for path in TESTS_DIR.glob("*/test_*.py")
     )
@@ -434,14 +338,14 @@ def _gen_stale_test_citation_offenders() -> Iterator[str]:
         _root_doc_paths(),
         _gameplan_paths(),
         _CITING_DOCS,
-        sorted(_DOCS_DIR.glob("*.rst")),
+        sorted(DOCS_DIR.glob("*.rst")),
     )
     yield from _gen_citation_offenders(gen_stale_test_citations, known, *docs)
 
 
 def _gen_stale_path_citation_offenders() -> Iterator[str]:
     """
-    Find current-state docs citing source files that no longer exist.
+    Finds current-state docs citing source files that no longer exist.
 
     ``MILESTONES.md`` records history, so it is not scanned.
     """
@@ -453,7 +357,7 @@ def _gen_stale_path_citation_offenders() -> Iterator[str]:
 
 
 def _api_surface_offenders() -> list[str]:
-    """Find API-surface blocks that drift from the contract declaration."""
+    """Finds API-surface blocks that drift from the contract declaration."""
     offenders: list[str] = []
 
     if text := _read(_DOC):
@@ -470,8 +374,20 @@ def _api_surface_offenders() -> list[str]:
     return offenders
 
 
+def _gen_verb_table_offenders() -> Iterator[str]:
+    """Finds verb tables that drift from the verb declaration."""
+    for path, fmt in VERB_DOCS.items():
+        text = _read(path)
+        present = {match["key"] for match in VERB_PATTERNS[fmt].finditer(text)}
+
+        if missing := sorted(VERB_BLOCKS - present):
+            yield f"{path.name}: missing verb tables {missing}"
+        elif generate_verb_tables(text, fmt) != text:
+            yield f"{path.name}: verb tables are stale; run `manage codegen --verbs`"
+
+
 def _version_claim_offenders(current: tuple[int, int, int]) -> list[str]:
-    """Find completion claims for versions newer than the packaged version."""
+    """Finds completion claims for versions newer than the packaged version."""
     return [
         line.strip()
         for path in (_TRACKER, _ROADMAP)
@@ -548,11 +464,17 @@ def lint_docs() -> int:
     if offenders := _api_surface_offenders():
         problems.append(f"{_DOC}: {'; '.join(offenders)}")
 
+    if offenders := list(_gen_verb_table_offenders()):
+        problems.append(f"verb tables drift: {'; '.join(offenders)}")
+
     if offenders := list(_gen_stale_test_citation_offenders()):
         problems.append(f"cited test files no longer exist: {'; '.join(offenders)}")
 
     if offenders := list(_gen_stale_path_citation_offenders()):
         problems.append(f"cited source files no longer exist: {'; '.join(offenders)}")
+
+    if offenders := list(_gen_todo_offenders()):
+        problems.append(f"user docs carry TODO lines: {'; '.join(offenders)}")
 
     for problem in problems:
         print(problem)

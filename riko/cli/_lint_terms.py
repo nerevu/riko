@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, NamedTuple
 
-from ._shipped_text import gen_files, gen_text
+from ._shipped_text import gen_blocks, gen_files
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,7 +19,9 @@ class BannedTerm(NamedTuple):
 
     Attributes:
 
-        phrase: The banned phrase (case-insensitive, whole words, optional plural).
+        phrase: The banned phrase (case-insensitive, whole words, optional plural, and
+            matched across line breaks).
+
         instead: The replacement wording the reserved-terms rules give.
 
     """
@@ -43,8 +45,11 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("each side", "sync and async"),
     BannedTerm("missing side", "the missing sync or async interface"),
     BannedTerm("terminal sub-source", "secondary input stream"),
+    BannedTerm("upstream stream", "input stream"),
+    BannedTerm("scoped run", "context manager (`pipeline.open(items)` returns one)"),
     BannedTerm("input requirements", "input declarations"),
     BannedTerm("keyword sink", "`**kwargs` or keyword arguments"),
+    BannedTerm("bound keyword", "keyword argument"),
     BannedTerm("named workflow", "stored workflow"),
     BannedTerm("registered workflow", "stored workflow"),
     BannedTerm("imported workflow", "resolved workflow"),
@@ -76,10 +81,14 @@ _EXCLUDED_NAMES = frozenset(
 
 def _build_pattern(term: BannedTerm) -> re.Pattern[str]:
     """Compiles a phrase into a whole-word, case-insensitive pattern."""
-    return re.compile(rf"\b{re.escape(term.phrase)}s?\b", re.IGNORECASE)
+    words = r"\s+".join(re.escape(word) for word in term.phrase.split())
+    return re.compile(rf"\b{words}s?\b", re.IGNORECASE)
 
 
 PHASE_CODE = BannedTerm("phase code", "a plain-English name for the pending work")
+RUN_SCOPING = BannedTerm(
+    "scoping a run", "context manager (`pipeline.open(items)` returns one)"
+)
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
@@ -90,6 +99,14 @@ _PHRASE_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = tuple(
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
+    (
+        RUN_SCOPING,
+        re.compile(
+            r"\bscope[sd]?\s+(?:a|one|the|each)\s+run\b(?!')"
+            r"|\bopen\b[^.]{0,40}?\bto\s+scope\b",
+            re.IGNORECASE,
+        ),
+    ),
     (
         REMOVED_EXT_PATH,
         re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
@@ -121,16 +138,27 @@ class TermIssue(NamedTuple):
         return f"{self.path}:{self.lineno} {found!r} -> say {instead!r}"
 
 
+def _gen_pairs(
+    block: str, *patterns: tuple[BannedTerm, re.Pattern[str]]
+) -> Iterator[tuple[re.Match[str], BannedTerm]]:
+    """Finds every ``patterns`` match in ``block`` with the term it matched."""
+    for term, pattern in patterns:
+        for match in pattern.finditer(block):
+            yield match, term
+
+
 def _gen_issues(
     patterns: tuple[tuple[BannedTerm, re.Pattern[str]], ...], *roots: Path
 ) -> Iterator[TermIssue]:
     """Walks ``roots`` for every ``patterns`` match in their scannable files."""
     for root in roots:
         for path in gen_files(root, _EXCLUDED_NAMES):
-            for lineno, line in gen_text(path):
-                for term, pattern in patterns:
-                    for match in pattern.finditer(line):
-                        yield TermIssue(path, lineno, match.group(0), term)
+            for start, block in gen_blocks(path):
+                pairs = _gen_pairs(block, *patterns)
+
+                for match, term in sorted(pairs, key=lambda pair: pair[0].start()):
+                    lineno = start + block.count("\n", 0, match.start())
+                    yield TermIssue(path, lineno, match.group(0), term)
 
 
 def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
@@ -174,6 +202,7 @@ __all__ = [
     "BANNED_TERMS",
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
+    "RUN_SCOPING",
     "BannedTerm",
     "TermIssue",
     "gen_phrase_issues",

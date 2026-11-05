@@ -28,7 +28,7 @@ manage codegen --all
 The private command implementation is `riko/cli/_codegen.py`; individual generators
 live beside it as `_gen_*.py`. Standalone `gen-*` console scripts remain available.
 All Python-source generators format through the shared
-`riko.base._source_format.ruff_format(str) -> str` helper rather than shelling out
+`riko.base._strutils.ruff_format(str) -> str` helper rather than shelling out
 at call sites.
 
 - **Config** — `riko/cli/_gen_config.py` derives `<Name>Objconf` classes from the
@@ -44,6 +44,11 @@ at call sites.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
+- **Verb tables** — `riko/cli/_gen_verbs.py` (`manage codegen --verbs`) rewrites the
+  marked `verbs`/`verb-pairs` blocks in `CLAUDE.md` (Markdown) and `CONTRIBUTING.rst`
+  (grid tables) from `riko/base/_verbs.py`, which `manage lint --docstrings` also
+  reads to match each summary's verb to its function name; `manage lint --docs`
+  flags stale blocks. Surrounding prose stays hand-maintained.
 - **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) rewrites the
   `Index (file, ...)` block ending each `tests/<tier>/__init__.py` docstring from the
   tier files' `Test<Subject>` classes.
@@ -181,6 +186,18 @@ sync when source is moved between package groups.
   (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
   `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer
   shared also fails, so the allowlist is pruned when a pair is renamed away.
+- **Escape ratchet.** `manage lint --escapes` counts `typing.Any` references and
+  `typing.cast` calls under `riko/` by import binding (an unrelated `cast`, such as a
+  coercion function, is not counted), including quoted annotations, quoted `cast` targets,
+  and quoted subscripts. The counts ratchet against `[tool.riko.typing]` `any`/`cast` in
+  `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as the coverage
+  ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml` diff).
+- **Ratchet staleness.** Recording or lowering a ceiling also records the day as
+  `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
+  holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that key
+  there is no check. Exit codes never change. Under GitHub Actions the warning, and any
+  `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
+  annotations.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest that
   imports a public name through a private `riko` module path, and a module example in an
   underscore-prefixed module that defines no public name. Both read the public names
@@ -198,7 +215,10 @@ sync when source is moved between package groups.
   (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.
   Coverage runs on the `sysmon` core (Python 3.12 `sys.monitoring`; about the cost of a
   no-coverage run) and measures the console scripts
-  through `patch = ["subprocess"]`. Dev-only `manage` modules are listed in
+  through `patch = ["subprocess"]`. The root `conftest.py` puts the checkout first on
+  `PYTHONPATH`, so those subprocesses run the checkout under test (a git worktree included)
+  rather than whatever checkout the venv's editable install points at
+  (`TestSubprocessImports` in `tests/internal/test_cli.py`). Dev-only `manage` modules are listed in
   `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
   ceiling is specific to the full dev environment on Python 3.12; other environments run
   `--no-cov`.
@@ -218,6 +238,13 @@ sync when source is moved between package groups.
   `raw_set` doubles their cost.
 - **`meza` is pinned to the project source declared in `pyproject.toml`.** Meza owns
   the lower-level conversion semantics referenced by the runtime contract.
+- **Local type stubs.** meza ships no type information, so `typings/meza/` holds
+  hand-written `.pyi` stubs that pyright reads from its default `stubPath`. They cover
+  only the meza names riko imports, so a new meza import needs its stub here first.
+  `pyright --verifytypes` does not read `stubPath`, so a meza base class of a riko
+  class that reaches the verified surface is declared instead as a `TYPE_CHECKING`
+  facade in the subclass's module, with the meza import in the `else:` branch
+  (`_Objectify` in `riko/coercion/_objectify.py`).
 - **Changelog style.** `docs/CHANGES.rst` records user-observable behavior in the
   shortest useful form; implementation moves and private helper names do not belong
   there unless they change a supported import or command surface.

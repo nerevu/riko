@@ -15,17 +15,18 @@ from itertools import chain, pairwise
 from typing import TYPE_CHECKING, cast
 
 from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_mapping, require_mapping, require_sequence
 from riko.base._iterutils import partition, unzip
 from riko.base._logging import get_logger
-from riko.base._strutils import pythonise
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import (
+from riko.base._require_guards import (
     def_from_require,
     require_from_typed_dict,
     require_str,
     typed_dict_keys,
 )
-from riko.types._guards import is_mapping, require_mapping, require_sequence
+from riko.base._strutils import pythonise
+from riko.types._options import RawCallOptions
 from riko.types._pipedef import DagModule, Embed, EmbedRef, PipeModule
 from riko.types._workflow import (
     WORKFLOW_VERSION,
@@ -34,7 +35,7 @@ from riko.types._workflow import (
     RawNode,
     RawWorkflow,
 )
-from riko.types.modules import Conf, RawCallOptions, WriteConf, require_module_conf
+from riko.types.modules import Conf, WriteConf, require_module_conf
 
 from ._nodes import optional_str
 from ._normalize import resolve_port
@@ -92,7 +93,7 @@ def _parse_write_mode(mode: str) -> WriteMode:
 
 
 def _require_embed_ref_fields(value: EmbedRef, what: str = "embed") -> EmbedRef:
-    """Validates an EmbedRef's keys."""
+    """Requires an EmbedRef's keys to be well-formed."""
     require_str(value["type"], f"{what} 'type'")
     require_str(value["id"], f"{what} 'id'")
     return value
@@ -119,7 +120,7 @@ def _require_dag_name(value: DagModule, what: str = "dag module") -> str:
 
 
 def _require_dag_fields(value: DagModule, what: str = "dag module") -> DagModule:
-    """Validates a ``DagModule``'s keys."""
+    """Requires a ``DagModule``'s keys to be well-formed."""
     optional_str(value.get("id"))
     _require_dag_name(value, what)
     _optional_mapping(value.get("conf"))
@@ -133,18 +134,17 @@ def _get_write_mode(value: WriteConf) -> WriteMode | None:
 
 
 def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModule:
-    """Validates a ``PipeModule``'s keys."""
+    """Requires a ``PipeModule``'s keys to be well-formed."""
     require_str(value["id"], f"{what} 'id'")
     require_str(value["type"], f"{what} 'type'")
     require_mapping(value["conf"], f"{what} 'conf'")
     return value
 
 
-def _require_v1_loop_fields(value: PipeModule, what: str = "loop module") -> PipeModule:
-    """Validates a ``loop`` ``PipeModule``'s embed."""
+def _require_v1_loop_embed(value: PipeModule, what: str = "loop module") -> EmbedRef:
+    """Requires a ``loop`` ``PipeModule``'s embed to be well-formed."""
     embed = require_mapping(value.get("embed"), f"{what} 'embed'")
-    _require_embed_ref_fields(_require_embed_ref(embed))
-    return value
+    return _require_embed_ref_fields(_require_embed_ref(embed))
 
 
 def _build_embed(embed: EmbedRef, conf: Conf | None = None) -> Embed:
@@ -174,10 +174,8 @@ def _migrate_pipe_module(module: PipeModule) -> RawNode:
             node["mode"] = mode
 
     elif name == _LOOP:
-        loop = _require_v1_loop_fields(module, "module")
-        _embed = cast("EmbedRef", loop.get("embed", {}))
-        embed = _build_embed(_embed, conf)
-        node = RawNode({"id": loop["id"], "name": name, "embed": embed})
+        embed = _build_embed(_require_v1_loop_embed(module, "module"), conf)
+        node = RawNode({"id": module_id, "name": name, "embed": embed})
     else:
         node = RawNode({"id": module_id, "name": name, "conf": conf})
 

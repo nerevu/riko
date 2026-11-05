@@ -623,7 +623,7 @@ R4A.5  deterministic serialization + acceptance
 - **R4A.1 — canonical v2 model.** The closed discriminated node union and edge families (E3.3/E3.4),
   full `{node, port}` endpoints and port grammar, the `nodes`/`edges`/`outputs`/`inputs` envelope
   (E3.2/E3.6), inputs-as-JSON-Schema, and the public immutable `Pipeline[T]`. Structural only, no
-  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/{_nodes,_workflow,_composition}.py` (placement supersedes
+  runtime. Files: `riko/types/_workflow.py`, `riko/definitions/{_nodes,_workflow,_pipeline_definition}.py` (placement supersedes
   the original `riko/workflow/` package note — see the clean-break policy below).
 - **R4A.2 — `normalize_workflow()`. Landed** (see `IMPLEMENTED.md`). Authoring sugar → strict
   canonical (E3.1): omitted outputs→`outputs.default` (lone leaf only; ambiguity deferred to
@@ -711,7 +711,7 @@ top-level package/layer; it lives in the existing declarative-contract layer. Pu
 with `Workflow.parse`/`load`/`serialize`, in `riko/definitions/_workflow_definition.py`, over the data-returning
 `_normalize.py`/`_migrate.py`/`_serialize.py` beside it (amended 2026-10-12, superseding the
 2026-10-05 amendment that put `normalize`/`migrate` in `riko/runtime/`); `PipelineDefinition` in
-`riko/definitions/_composition.py`; and the runnable `Pipeline` subclass that adds iteration in
+`riko/definitions/_pipeline_definition.py`; and the runnable `Pipeline` subclass that adds iteration in
 `riko/runtime/_pipeline.py`, so no definition imports upward. No `riko/workflow/` package is added.
 
 **R4A.1 landed** (see `IMPLEMENTED.md`): the closed node/edge union, port grammar, `Workflow`
@@ -910,9 +910,9 @@ executable, not guarded: `union` reads `others` as an ordered list and legacy `_
 `in:2` (`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
 `parse_port`; per-module arity stays with the module port contracts (R4A.3's deferred fan-in arity;
 tripwire `test_build_plan_rejects_undeclared_positional_input`). The R4B "source normalization at one boundary"
-item is also done: `SourceLike` (`Item | Feed | Awaitable[Item | Feed]`) is resolved once in
-`SyncExecution.run`/`AsyncExecution.arun` (`_build_source_stream`/`_abuild_source_stream`, sharing
-`normalize_items` in `_adapt.py`); `Pipeline.source`, `__ror__`, and the generated module template
+item is also done: `InputLike` (`Item | ValueFeed | Awaitable[Item | ValueFeed]`) is resolved once in
+`SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing
+`normalize_items` in `_adapt.py`); `Pipeline.__call__`, `__ror__`, and the generated module template
 hand the raw seed through, and the async `processor` wrapper maps an `AsyncIterable` input lazily
 (`_aprocess_stream`) instead of treating it as one item. Shutdown reporting now meets the
 cleanup-error contract: plain callbacks and task/budget failures are recorded and grouped
@@ -934,7 +934,7 @@ to read an async input stream is R7's (tripwire `test_async_splitter_accepts_an_
 
 As-built close (2026-10-03): `Pipeline.with_execution(executor=, concurrency=, ordered=, event_sink=,
 shutdown_timeout=)` stores a frozen `ExecutionSettings` (`riko/definitions/_settings.py`; omitted
-arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` bind the
+arguments are `MISSING`, explicit `None` restores the default), `with_context`/`with_resource` set the
 run's `Context`, and `ExecutionSettings.sync_policy`/`async_policy` derive the per-run mapping policy
 both executions honor (details in [IMPLEMENTED § Private execution runtime](../IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)).
 Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
@@ -947,7 +947,7 @@ Concurrent pulling of fan-in branches is R7's (its deliverable list names it).
   execution lifetime; resource declarations normalize once into the executable lifecycle plan
   (`Resource.plan`). The
   write-session lifecycle part of this bullet is **carried to R5C**: no node drives a write session
-  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/internal/test_definitions.py`).
+  until `WriteNode` executes (tripwire `TestPipelineWrite` in `tests/public/test_write.py`).
 - **DELETE:** `SyncPipe`/`AsyncPipe`/Collection runtime classes and superseded one-shot pipe lifecycle
   hosts are absent rather than wrapped; no parallel task-group/exit-stack/portal runtime remains; the
   private resource-variant subclass hierarchy is absent, replaced by the `Resource.plan` tagged union.
@@ -972,9 +972,10 @@ Deliver:
 - the bare decorator form: `@processor` / `@operator` / `@splitter` wrap a function exactly as
   `@processor()` does, for sync and `async def` implementations alike
   ([callable-pipes.md](callable-pipes.md) § Existing decorator model), so a module author never
-  needs empty parentheses;
-- `Pipeline.open()`: a fresh single-use run handle per call that is a sync and async context manager
-  (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
+  needs empty parentheses. The async case is `@processor async def async_pipe`; a single async
+  implementation named `pipe` keeps raising until R4E classifies interfaces by `isasync`;
+- **shipped 2026-10-24:** `Pipeline.open()`: a fresh single-use run handle per call that is a
+  sync and async context manager (`closing(iter(pipeline))` / `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration
   whose semantics [execution-semantics.md](execution-semantics.md) owns; it rides this slot as the
   next Pipeline-surface PR, not as callable-node work. It carries the adopted seed direction in
   [execution-semantics.md](execution-semantics.md) § Canonical definition and execution model: an
@@ -983,13 +984,17 @@ Deliver:
   open pipeline raises; `pipeline(items)` returns a plain stream and `open(items)` the only
   `PipelineRun` context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
 
-Open decision (triaged 2026-10-16): which node a seed targets. `GraphIndex.is_open` treats a node
-wired only through a named `in:<name>` port as not open (it tests `edge.is_positional`), yet
-`_resolve_node_inputs` still feeds that node's default input the default seed (pinned by
-`test_run_still_seeds_a_node_wired_only_through_a_named_value_port`). Making `is_open` test the
-bare default port instead would give that test's workflow two open inputs, so a seed would raise.
-The per-run seed work decides which definition is right; no tripwire until it does, since the target
-behavior is not yet chosen.
+Resolved (triaged 2026-10-16, decided 2026-10-23): which node a seed targets. The default port alone
+decides openness: `GraphIndex.is_open` is true when no edge enters the node's bare default `in` port,
+so a node wired only through named `in:<name>` or positional `in:<n>` ports is open (`GraphEdge.is_positional`
+is renamed `is_default` and the edge-level `is_positional` no longer exists). A seed feeds the single
+open node that does not start itself, or, when every open node starts itself, the single open node
+(`ExecutionPlan.require_seed_target`). Source modules (declared `subtype == "source"`) and value feeders
+(not an output's node; every outgoing edge enters a named port) start themselves; unseeded, any other
+placeholder-fed node raises `InvalidPipelineError` ("requires a seed") in
+`ExecutionPlan.gen_build_order`, so the internal placeholder never reaches output. The old
+`test_run_still_seeds_a_node_wired_only_through_a_named_value_port` became the named-port seed-target
+tests in `tests/internal/test_execution_plan.py`.
 
 Out of scope here: `flat_map`/strict flat-map (needs R5A's derive/combine envelope), side effects and
 idempotency (R6), state/checkpoints (R6), and per-item gating (`skip_if`, callable-pipes § Per-item
@@ -998,18 +1003,24 @@ gating, pending a decision).
 **Exit:**
 
 - **ADD:** `Pipeline.map` exists as a mode-neutral callable node; the callable-node tripwires in
-  `tests/public/test_pipeline.py` flip to passes. The bare decorator form wraps, and
-  `tests/internal/test_modules.py::TestBareDecorator::test_bare_decorator_raises_at_decoration` (which pins today's
-  decoration-time `TypeError`) is replaced by a test that the bare and called forms wrap identically.
+  `tests/public/test_pipeline.py` flip to passes. The bare decorator form wraps (shipped 2026-10-22:
+  `tests/internal/test_modules.py::TestBareDecorator` checks the bare and called forms wrap identically).
   `Pipeline.open()` exists, with sync and async tests that a `break` inside the block closes the run
   in the opening task and that concurrent `open()` calls on one pipeline run independently; README,
-  FAQ, and the abandoned-async-iteration note recommend it over `aclosing(aiter(...))`.
+  FAQ, and the abandoned-async-iteration note recommend it over `aclosing(aiter(...))` (shipped
+  2026-10-24).
 - **MIGRATE:** the retired `udf(func=…)`-through-a-pipeline usages and the kazeeki/example callables
   move onto `.map`; module preparation remains the single definition mechanism.
 - **DELETE:** none at the public surface; no parallel callable-wrapping path exists beside the
   decorator/preparation model.
   `PipelineDefinition.source` is deleted: no stored seed coexists with per-run seeds
-  (`pipeline(items)`/`open(items)`), and a generator-seeded pipeline re-runs when handed a fresh seed.
+  (`pipeline(items)`/`open(items)`), and a generator-seeded pipeline re-runs when handed a fresh seed
+  (shipped 2026-10-24, with `SourceLike` renamed `InputLike`).
+
+**Not built in R4C (re-homed 2026-11-03).** Decorated functions on the right of `|` (a node holding
+an unregistered decorated module) → unscheduled; it needs R2B's `version=` for durable identity, and
+[callable-pipes.md](callable-pipes.md) § Existing decorator model keeps the target. Strict xfail
+`tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`.
 
 ### R4D — Workflow input declarations
 
@@ -1021,9 +1032,29 @@ Deliver:
 - `Workflow` input declarations (canonical full JSON Schema; authoring shorthands normalize to it;
   requiredness inferred from an absent default; `default: null` implies nullable);
 - the `{"input": name}` structural reference grammar in node configuration;
+- a decision on callable nodes (R4C `map`): whether `{"input": name}` references also apply to a
+  `CallableNode`'s keyword arguments, so `pipeline.map(fn, q={"input": "q"})` calls `fn(item, q=<value>)`,
+  and whether a callable ever receives `context=` (R4C passes none;
+  [callable-pipes.md](callable-pipes.md) § Callable Context). References covering the real uses
+  closes `context=` as "not passed"; adopting it needs a concrete need references cannot express;
 - validation of `Context.inputs` against the declarations at plan/preparation time, before resources
   open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
+- a stored workflow's module subtype derived from what its roots need: today a workflow store tags
+  the pipe `"transformer" if flow.inputs else "source"` (`riko/runtime/_workflow_resolver.py`, and
+  the generated module's `workflow(subtype=…)` in `riko/runtime/_compile.py`), so a workflow whose
+  root takes an input stream but declares no inputs counts as a source and starts itself as a node of
+  another pipeline, while one that declares inputs over a source root counts as a transformer.
+  Routed here from R4C's per-run seed work (2026-10-24) because the fix belongs with the input
+  declarations it reads.
+- an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule starts any
+  non-output node whose outgoing edges all enter named ports, inferred from graph position alone,
+  so an ordinary transform there runs on the internal placeholder seed (`hash` feeding
+  `itembuilder`'s `in:v` yields `{"k": 0}` unseeded). The rule stays for v1 parity (the Yahoo Pipes
+  String Builder root in `pipe_b962874`) until a node can declare itself a value source; whether
+  undeclared feeders then keep starting themselves is this phase's call (if they do, delete the
+  tripwire rather than flip it). Strict xfail
+  `tests/internal/test_execution_plan.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field is
   `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string or a
   non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails in
@@ -1072,7 +1103,7 @@ gating (`skip_if`), whose successor is still undecided. Write execution (`TestPi
 and is **not** a parity item. [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main)
 points here for merge sequencing; its correctness-audit rows remain the gate's defect half.
 
-### R4E — Module configuration contracts and strict conf validation
+### R4E — Module configuration contracts, strict conf validation, and `isasync` interface classification
 
 Scheduled 2026-10-04 **after M1 and before M2**. [extensibility.md](extensibility.md) E1 owns the
 module contract ("generate configuration JSON Schema from typed configs"; invalid config fails before
@@ -1092,7 +1123,21 @@ Deliver:
   naming the node and key, before resources open or the source is read; a node whose module declares
   no contract is not rejected. The check lands inside `ModuleWrapper.prepare`, which the plan already
   calls once per node (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is needed;
-- the same check for built-in and entry-point modules.
+- the same check for built-in and entry-point modules;
+- interface classification by `isasync` rather than by attribute name, so a single async
+  implementation named `pipe` (`@processor async def pipe`) wraps as the async interface instead of
+  raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
+  [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns the semantics,
+  [release-readiness.md § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)
+  makes it a 1.0 requirement). It touches the decorator wrapper builder, `ModuleDefinition`'s
+  interface slots, and codegen, beside the plain-callable slot decision in
+  [extensibility.md](extensibility.md) E1.
+- callable nodes that resolve without a donor module (triaged 2026-10-27): `Pipeline.map` borrows the
+  registered `udf` module's metadata (`_resolve_callable`), so `register_module(..., replace=True)`
+  of a sync-only `udf` makes `.map` of an async callable raise "neither a sync nor an async
+  callable" although `udf` itself never runs. The E1 plain-callable slot decision removes the
+  borrowing. Strict xfail
+  `tests/public/test_pipeline.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a parser's `objconf`
 annotation and returns the generated `<Name>Objconf`, but no runtime path consumes it, and parsers
@@ -1116,7 +1161,7 @@ and `ModuleNode.conf` upstream is already frozen JSON, so this is a latent hazar
 - **Interim, sized 2026-10-13:** mark every key of the conf `TypedDict`s `ReadOnly[...]` (PEP 705; no
   class-wide flag exists). A scripted rewrite of `riko/types/modules.py` wraps 247 keys across 89
   classes and adds no pyright errors (no code writes into a conf `TypedDict`). It needs two helpers to
-  look through `ReadOnly[...]`: `_get_key_qualifier` (`riko/types/_collections.py`), without which
+  look through `ReadOnly[...]`: `_get_key_qualifier` (`riko/base/_require_guards.py`), without which
   `typed_dict_keys` misreads `Required`/`NotRequired` in 27 conf types; and `_strip_required`
   (`riko/cli/_gen_config.py`), without which regenerating `_configs.py` changes 127 lines and the
   codegen drift test fails. Enforcement is static only.
@@ -1172,11 +1217,35 @@ callable and answers `DynamicConf` for any other object (a name included) withou
 only name-to-conf map is the private `RAW_CONFS` in `riko/runtime/_compile.py`. The per-module
 configuration schema that `describe_module()` consumes (above) is that route.
 
+Typing note (2026-10-27 `Any`/`cast` audit, re-measured in the follow-up triage): every module's
+`pipe`/`async_pipe` takes `*args: Any` (106 of the package's `Any` uses, two per module). The
+decorators run the stub itself per item (`_PreparedCall.parser` is the stub's `__wrapped__`), and its
+overloads check it against the processor/operator parser protocols in `riko/types/_wrappers.py`, which
+type `objconf` as `DynamicConf` while each parser annotates its generated `<Name>Objconf`. `*args:
+object` alone gives 4 errors per module, all in the stub's forwarding body. Measured removal chain
+(103 of the 106; pyright clean and the full suite passing on a scratch copy): (1) make the
+processor/operator parser protocols and the `processor` `__new__`/`__call__` overloads generic over
+`C: DynamicConf` with `objconf: C`; (2) drop `**kwargs` from the six parser protocols, or keep
+`**kwargs: object` and narrow in the eight stubs whose parsers take typed keywords; (3) give each stub
+its parser's exact signature and forward explicitly; (4) make `_inference.gen_return_inferences`
+resolve only the return hint, because explicit stub parameters name `TYPE_CHECKING`-only imports and
+`resolve_type_hints(pipe)` then raises `NameError` at import. The generic `C` does not depend on the
+`get_conf_type` decision (it has no runtime callers; runtime `objconf` is always a plain
+`DynamicConf`), but the user kept it here (2026-10-27 triage) so the stubs are rewritten once, with
+the conf contract. The last three (`aggregate`/`receive`/`write` `async_pipe`) also need their async
+parsers annotated `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
+sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2 `embed` casts on
+the same split, and the untyped `_PreparedCall.parser` behind 3 more); `isasync` interface
+classification here should type that split instead. `manage lint --escapes` lowers its ceilings as
+these go.
+
 **Exit:**
 
 - **ADD:** registered module conf is validated at plan build; the strict-xfail tripwire table
   `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read`
-  (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes.
+  (rows `unknown-key`, `wrong-type`, `bad-op`, `missing-key`) flips to passes. `@processor async def
+  pipe` wraps as async; `tests/internal/test_modules.py::TestInvalidCombinations::test_async_named_pipe_raises`
+  (which pins today's `TypeError`) is replaced by a test that it wraps.
 - **MIGRATE:** module parsers stop defensively re-checking conf shapes the contract now guarantees,
   including the per-item `TypeError`s for a missing `extract` key (`build_conf` in
   `riko/modules/_prepare.py`) and an unsupported `simplemath` op, which only the `bad-op` and
@@ -1282,7 +1351,9 @@ Deliver:
 - explicit derive/combine handling for 1→N/N→1/N→N;
 - source-node namespace in root identity;
 - node semantic fingerprints using R2A encoding and the R2B best-effort/version contract;
-- custom-node `identity="preserve"|"derive"|"combine"` only where inference is ambiguous;
+- custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference is ambiguous,
+  including which modes a one-to-one `map` accepts (R4C carries all three inert; strict xfail
+  `tests/public/test_pipeline.py::TestCallableNodes::test_map_rejects_combine_identity`);
 - node `version=` override plumbing;
 - declared resource bindings included in semantic fingerprints by resolved definition, not Context
   lookup name.
@@ -1292,6 +1363,13 @@ Normal parser APIs still receive values and their prepared arguments, not `_Feed
 Once R5A lands, ordinary Feed-native transforms whose semantics depend only on the final execution
 envelope may migrate immediately rather than waiting for R10.
 
+Open typing question (2026-10-27 `Any`/`cast` triage, no owner yet): `Item` is a union that includes
+TypedDicts (`RSSEntry`, `StatefulItem`, `AnyLocation`, `StringyDict`), so `{**item, key: value}` and
+`DotDict(item)` infer `object` values and need a `cast("Item", ...)` (`riko/modules/_loop.py`, `join`,
+`rename`, `regex`, `subelement`, `riko/coercion/cast.py` location merge). Annotating the spread as
+`dict[str, ItemValue]` still fails. Decide the `Item` shape when this phase retypes values for the
+`_FeedItem` envelope; until then the casts stay.
+
 **Exit:**
 
 - **ADD:** `FeedResult`, `Metadata`, and the private `_FeedItem` provenance/identity envelope exist.
@@ -1299,6 +1377,8 @@ envelope may migrate immediately rather than waiting for R10.
   envelope and resolved resource definitions participate in semantic fingerprints.
 - **DELETE:** none at the public surface; migrated modules retain no second per-item
   provenance/identity carrier beside `_FeedItem`.
+- **CHANGES:** `riko.IdentityMode` is exported but inert until this phase; its `docs/CHANGES.rst`
+  entry lands with the phase that makes `identity=` take effect (triage 2026-10-27).
 
 ### R5B — CacheNode runtime / Mezmoize replay
 
@@ -1359,7 +1439,7 @@ Deliver:
 - `PipelineDefinition.write()` gives up its second meaning in the same commit: today a call without a
   destination chains the shipped `write` module (so attribute chaining keeps reaching it) while a call
   with one appends a `WriteNode`. Once the module is gone, `dest` is required and a bare `write()` is a
-  `TypeError` (tripwire `tests/public/test_pipeline.py::TestPipelineWriteDefinition::test_requires_a_destination`;
+  `TypeError` (tripwire `tests/public/test_write.py::TestPipelineWriteDefinition::test_requires_a_destination`;
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 
@@ -1380,7 +1460,10 @@ v1-cutover step 4. Its sync/async session pairs duplicate the newline/header/fin
 (`file_write_session` vs `async_file_write_session` differ only by `await`; the
 `isinstance(target, FileTarget)` guard appears three times with two exception types). This phase
 decides whether the `WriteNode` path reuses it (then dedupe the twins) or replaces it (then delete it
-with its tests).
+with its tests). Likewise `resolve_format` (`riko/definitions/_targets.py`), whose only consumer outside
+`_targets.py` (where `FileTarget.capabilities` uses it) is `riko/modules/write.py` (2026-10-23 move
+audit): reuse it for `WriteNode` format inference from a locator; it stays either way because
+`FileTarget` needs it.
 Coverage triage (2026-10-15): the async twin's incremental stream write, append-mode trailing-newline
 probe (`aends_with_newline`/`ainitial_file_size`/`aneeds_newline`), and unsupported-target guard in
 `async_file_write_session` run in no test; they were left untested rather than mirrored, so whichever
@@ -1449,7 +1532,7 @@ Deliver:
 - `Publisher[T]`, `Subscription[T]`, `Channel[T]` runtime protocols;
 - `Pipeline.subscribe(name, ..., func=...)` local declaration;
 - `pipeline.publish(subscription_or_publisher, isolate=True)`;
-- external `Subscription` accepted as `Pipeline(source=...)`;
+- external `Subscription` accepted as a seed (`pipeline(subscription)`, `subscription | pipeline`);
 - execution-owned local branches and cleanup, with every subscriber/branch/merge task created under
   one execution-owned task group, which R7 introduces (R4B removed its unused eager group because
   entering it in the consumer's task made a bare `async for … break` cancel the consumer). The group
@@ -1468,6 +1551,13 @@ Deliver:
   makes that a **sum**, and that test changes with it; `union`/`join` (`sequential_inputs`) likewise
   score the max of their inputs (pinned by `test_async_sequential_fan_in_needs_only_its_deepest_input`),
   which holds only while they keep reading their inputs in turn;
+- a one-call fluent fan-in, `Pipeline.union(*pipelines)` (fanout-topology § 11), wiring each operand's
+  default output into one `union` node's `in`, `in:1`, … — the native replacement for
+  `SyncCollection(mod, srcs)`, which today needs a hand-wired `union` `Workflow` (assigned by triage
+  2026-10-26; tripwire `TestFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`).
+  Open shape question: a `Pipeline.union` classmethod shadows the module-name chaining
+  `pipeline.union(...)` that `__getattr__` provides today, so R7 decides between a classmethod that
+  also accepts the chained form or a distinct name;
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish, derived
   structurally from incoming `PublishEdge`s and owned sender endpoints;
@@ -1530,11 +1620,36 @@ Naming (2026-10-10 naming triage): the async hub's `publish`/`complete`/`_get_or
 (`riko/runtime/_pubsub/_async.py`) are deleted with the hub lifecycle, so they were not renamed. The
 R7 protocols should use one vocabulary for both colors (today the sync hub says `send`/`notify_complete`
 where the async hub says `publish`/`complete`), give a coroutine an `a` prefix only when it has a sync
-twin, and avoid `get_` on a method that creates channel state.
+twin, avoid `get_` on a method that creates channel state, and say *subscribe*/*attach*, never
+*bind*, for a sender's receiver association (the sync hub's docstrings say "bound to" today).
 
 Audit note (2026-10-10 structural audit): `riko/runtime/_pubsub/_types.py` holds two aliases whose
 three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge it into
 `riko/types/_streams.py` when this phase reshapes the hub types rather than moving it twice.
+The sync hub's `coroutine` receiver decorator (`riko/runtime/_pubsub/__init__.py`) has one consumer,
+`riko/modules/receive.py` (2026-10-23 move audit); delete it with that module unless the new
+subscribe API reuses it.
+
+Typing note (2026-10-27 `Any`/`cast` audit): the input router's `V: (Iterator[Any], AsyncIterator[Any])`
+constraint (`_BaseExecution._resolve_node_inputs`) and the pipe-output casts in `_sync_execution.py`
+and `_async_execution.py` go when port-keyed dispatch retypes the router on port streams (the
+splitter-union exit below). The `Acquisitions` map (`dict[Resource[Any], Acquisition[Any]]`) stays
+existential: `Resource` is invariant, so `Resource[object]` rejects the typed call sites until
+`_aacquire_entry` returns a type a generic `_acquire_entry_once[R]` can carry. Two typing
+unsoundnesses ride on this (2026-10-27 triage, typing only, so no runtime tripwire): the router hands
+`DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded `T`, and the
+acquisition entries hold `Acquisition[ResolvedValue[R]]` (`R | Closeable`) while `acquire`/`aacquire`
+return `R`; retyping the router on `Stream`/`AsyncStream` port streams and dropping `| Closeable` from
+`ResolvedValue` (the `Resource(value: Closeable)` overload must bind `T`) remove both.
+
+Typing note (2026-10-30): the splitter exit retypes call outputs by module type, not by color.
+`PreparedInterface` (`riko/execution/_prepared.py`) is one record for both colors: its `pipe` is
+`AnyModuleWrapper`, its `native` flag is relative to the running execution, and `NodeCall.__call__`
+returns the sync/async output union. So a single-output call site still needs a color narrowing
+after this phase. Split the interface into sync and async variants (a tagged union that
+`isinstance` narrows, each with a color-typed call protocol) in the same rewrite of node dispatch.
+`_run_sync_node` (`riko/execution/_async_execution.py`) then takes the sync variant by type rather
+than by docstring.
 
 **Exit:**
 
@@ -1554,8 +1669,8 @@ three importers are all `TYPE_CHECKING`-only and consumed from `modules`; merge 
 Deliver:
 
 ```python
-Pipeline(source=source, batch=False)
-Pipeline(source=source, batch=True, batch_size=...)
+Pipeline(batch=False)(items)
+Pipeline(batch=True, batch_size=...)(items)
 ```
 
 with capability/conversion-cost backend negotiation rather than a global library ranking:
@@ -1711,7 +1826,17 @@ phase deletes: the `regex.py` sync/async parsers (the sync one alone wraps `str(
 drift), the six-line table-reader block repeated across `csv.py`/`fetchtable.py`, the sync/async pairs
 in `fetchtext`, `feedautodiscovery`, `write`, `timeout`, `aggregate`, `udf`, and `fetchsitefeed`, and
 `rss/discovery.py`'s `load_rss_links`/`aload_rss_links`. Collapse each pair to one body as it moves to
-the Feed-native path.
+the Feed-native path. The collapsed table-reader body also owns the one narrowing from a meza row to
+`Item`: the local `typings/meza/` stubs type rows as `dict[str, str | None]` (`read_csv`) or `object`
+(`read`), which the invariant `Item` dict union rejects, so `csv.py` and `fetchtable.py` each carry two
+`cast("Stream", ...)` today (2026-10-27 typed-boundary triage).
+
+Audit note (2026-10-23 file-split audit): `riko/modules/_decorators.py` (~2050 lines) has three clean
+seams — the `Module` base with its option sets and terminal materialization, the `_Prepared*` call
+records, and the `processor`/`operator`/`splitter` classes, which never reference each other. Split it
+along those seams once this phase's shim deletions shrink the base, not before: extracting the base
+now would move the `_materialize_terminal*` shims this phase deletes. Repoint every internal importer
+of `processor`/`operator`/`splitter` in the same change; `riko.ext` stays the facade authors import.
 
 **Exit:**
 
@@ -1905,14 +2030,15 @@ or executor outside the execution; R7 adds the execution's async task group, not
 
 ## 6. Next implementation slice
 
-R0–R4B have landed (status: the R-track table in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4B
-closed 2026-10-03 with `with_execution`/`with_context`/`with_resource`). The branch is working toward
-the **M1 v1-parity merge** (§ 4): R4C → R4D → R5A → R7 → merge. The next coding PR is therefore
-**R4C — callable nodes**: `Pipeline.map(fn, ...)` for pure one-to-one callables as a mode-neutral
-graph node, per that section and [callable-pipes.md](callable-pipes.md); not an Operations as Code,
-state-store, cache, or pub/sub PR.
+R0–R4C have landed (status: the R-track table in [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4C
+closed 2026-11-03 with `Pipeline.map`, the bare decorator form, and `Pipeline.open()`). The branch is
+working toward the **M1 v1-parity merge** (§ 4): R4D → R5A → R7 → merge. The next coding PR is
+therefore **R4D — workflow input declarations**: top-level typed `Workflow` inputs with execution
+values arriving through `Context.inputs`, per that section and
+[extensibility.md § E3.6](extensibility.md#e36-inputs); not an Operations as Code, state-store, cache,
+or pub/sub PR.
 
-After R4C, R4D follows, then R5A and R7 (which may overlap per § 5), then the merge. R2B (`version=` plumbing) remains open beside them. R11A is **not** permission to jump
+After R4D, R5A and R7 follow (they may overlap per § 5), then the merge. R2B (`version=` plumbing) remains open beside them. R11A is **not** permission to jump
 around those prerequisites; it is the first Operations as Code slice once the owning lower-level seams
 exist.
 

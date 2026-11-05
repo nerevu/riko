@@ -14,7 +14,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
-from riko.base._imports import import_or_else
+from riko.base._typing import import_or_else
 from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
 from riko.types._workflow import ResolvedWorkflow

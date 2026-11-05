@@ -8,18 +8,25 @@ portal for async-only components, and the run's one worker pool.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Callable, Iterable, Iterator, Mapping
+from collections.abc import (
+    AsyncIterable,
+    Callable,
+    Generator,
+    Iterable,
+    Iterator,
+    Mapping,
+)
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import ExitStack
 from functools import cached_property, partial
 from inspect import isawaitable
-from multiprocessing import Pool as CPUPool
-from multiprocessing.dummy import Pool as ThreadPool
 from typing import TYPE_CHECKING, Self, cast, overload
 
 from attrs import define, field
 
 from riko.bado._backend import start_blocking_portal
-from riko.base.exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._guards import is_awaitable
 from riko.types._enums import Executor
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -44,7 +51,7 @@ from ._execution import (
     _asyncify_call,
     _BaseExecution,
     _FailedAcquisition,
-    _require_source,
+    _require_seed,
 )
 from ._pools import _PoolLifetime
 from ._resource_acquisition import build_context_manager, call_factory
@@ -97,6 +104,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     """
 
     _stack: ExitStack = field(factory=ExitStack, init=False)
+    _pools: ExitStack = field(factory=ExitStack, init=False)
 
     def __enter__(self) -> Self:
         return self
@@ -110,8 +118,11 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             action = "open a worker pool in"
             raise PipelineStateError("sequential", action, subject="execution")
 
-        pool = ThreadPool(workers) if executor is Executor.THREAD else CPUPool(workers)
-        return self._stack.enter_context(_PoolLifetime(pool, workers))
+        pool_type = (
+            ThreadPoolExecutor if executor is Executor.THREAD else ProcessPoolExecutor
+        )
+        pool = pool_type(workers)
+        return self._pools.enter_context(_PoolLifetime(pool, workers))
 
     def close(
         self,
@@ -122,6 +133,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """
         Unwinds the exit stack and stops the portal under the primary error.
 
+        The worker pool is released first, so no worker still runs when resources close.
         Only the first call shuts the execution down. A repeated call does nothing.
         """
         suppressed = False
@@ -129,6 +141,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         if not self._closing:
             self._closing = True
             raised: BaseException | None = None
+            self._stack.push(self._pools)
 
             try:
                 suppressed = bool(self._stack.__exit__(exc_type, exc, traceback))
@@ -156,12 +169,12 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         return self.enter_context(portal_cm)
 
     @overload
-    def run_async[R](self, func: Awaitable[R], /) -> R: ...  # noqa: E704
-    @overload  # noqa: E301
-    def run_async[R](  # noqa: E704
+    def run_async[R](self, func: Awaitable[R], /) -> R: ...
+    @overload
+    def run_async[R](
         self, func: Callable[..., Awaitable[R]], /, *args: object
     ) -> R: ...
-    def run_async[R](  # noqa: E301
+    def run_async[R](
         self, func: Awaitable[R] | Callable[..., Awaitable[R]], *args: object
     ) -> R:
         """
@@ -173,8 +186,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         Args:
 
-            func: An async callable to invoke on the portal loop, or an awaitable
-                to await directly.
+            func: An async callable to invoke on the portal loop, or an awaitable to
+                await directly.
+
             args: Positional arguments forwarded to a callable ``func``.
 
         Returns:
@@ -205,7 +219,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
     def _call_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
         raw = call_factory(plan)
-        value = self.run_async(raw) if isawaitable(raw) else cast("R", raw)
+        value = self.run_async(raw) if is_awaitable(raw) else raw
 
         if (cleanup := plan.cleanup) is not False:
             self.callback(cleanup, value)
@@ -278,7 +292,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     def _map_stream(
         self, call: Callable[[T], Iterable[T]], source: Iterator[T]
     ) -> Iterator[T]:
-        """Maps a bound pipe over its items once the consumer first pulls."""
+        """Maps a prepared pipe over its items once the consumer first pulls."""
         self._require_open("map items in")
         func = build_item_call(call, self.settings.sync_policy.executor)
         yield from self._pool.flat_map(func, source, ordered=self.settings.ordered)
@@ -326,8 +340,10 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             )
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
-            bound = partial(call, context=self.context, **extra)
-            stream = self._map_stream(cast("Callable[[T], Iterable[T]]", bound), source)
+            item_call = node.sync_interface.item_call
+            _mapped = partial(item_call, context=self.context, **extra)
+            mapped = cast("Callable[[T], Iterable[T]]", _mapped)
+            stream = self._map_stream(mapped, source)
         elif sync_native:
             _stream = call(source, context=self.context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)
@@ -339,16 +355,26 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return stream
 
-    def _build_source_stream(
-        self, value: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
+    def _open_seed(
+        self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
     ) -> Iterator[T]:
-        """Resolves a seed of any accepted shape to one lazy item stream."""
-        resolved = self.run_async(value) if isawaitable(value) else value
+        """
+        Opens a seed as the item stream this execution reads.
 
-        if isinstance(resolved, AsyncIterable):
-            stream = self._async_drain(resolved)
-        else:
+        A seed is one item, an item stream, an async item stream, or an awaitable
+        resolving to one of those. An awaitable is awaited when the run starts; the
+        stream itself stays lazy. A seed that is both sync- and async-iterable is
+        read synchronously. The execution closes a generator seed when it exits.
+        """
+        resolved = self.run_async(seed) if is_awaitable(seed) else seed
+
+        if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
             stream = iter(normalize_items(resolved))
+        else:
+            stream = self._async_drain(resolved)
+
+        if isinstance(resolved, Generator):
+            self.callback(resolved.close)
 
         return stream
 
@@ -356,7 +382,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         self,
         plan: ExecutionPlan,
         output: str,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
     ) -> Iterator[T]:
         """Builds the item stream for one of the plan's workflow outputs."""
         endpoint = plan.require_output(output)
@@ -365,9 +391,9 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         if self.settings.sync_policy.executor is Executor.PROCESS:
             require_process_safe(plan, output, self.context)
 
-        seed = None if source is None else self._build_source_stream(source)
+        stream = None if seed is None else self._open_seed(seed)
 
-        for node_id, node_seed in plan.gen_build_order(output, seed=seed):
+        for node_id, node_seed in plan.gen_build_order(output, seed=stream):
             steps[node_id] = self._build_stream(plan, node_id, steps, node_seed)
 
         return steps[endpoint.node]
@@ -377,7 +403,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         plan: ExecutionPlan,
         output: str = "default",
         *,
-        source: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
+        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> Iterator[T]:
         """
         Builds the item stream for one of the plan's workflow outputs.
@@ -392,11 +418,12 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
             output: The name of the workflow output to produce.
 
-            source: A seed for the workflow output's open input in place of the
-                default empty seed. It can be one item, an item stream, an async item
-                stream, or an awaitable resolving to one of those. When omitted, only a
-                node with no default or positional input port receives that default. A
-                plan with no nodes streams it unchanged as its default output.
+            seed: Items for the workflow output's open input. It can be one item, an
+                item stream, an async item stream, or an awaitable resolving to one of
+                those. When omitted, every node whose default input port gets no input
+                stream must be self-starting (a source module, or a node that only feeds
+                named input ports). A plan with no nodes streams the seed unchanged as
+                its default output.
 
         Returns:
 
@@ -404,18 +431,19 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such workflow output, if it
-                has no nodes and no ``source`` is given, if ``source`` is supplied but
-                the workflow output has no single open input, or if the process executor
-                is chosen and a node cannot be sent to a worker process.
+            InvalidPipelineError: If ``output`` is not exposed by ``plan``; if ``seed``
+                isn't given and a node requires one, or the plan has no nodes; if
+                ``seed`` is given but the ``plan``'s ``output`` doesn't have exactly one
+                node for it to feed; or if the process executor is chosen and a node
+                cannot be sent to a worker process.
 
         """
         self._require_open("run")
 
         if plan.workflow.is_empty:
-            stream = self._build_source_stream(_require_source(source, output))
+            stream = self._open_seed(_require_seed(seed, output))
         else:
-            stream = self._run_plan(plan, output, source)
+            stream = self._run_plan(plan, output, seed)
 
         return stream
 

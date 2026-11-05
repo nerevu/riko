@@ -15,7 +15,6 @@ from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO, TextIOBase
 from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Literal, cast, overload
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from riko.coercion._canonical import repr_cache
@@ -30,10 +29,8 @@ import requests
 from mezmorize.utils import get_cache_type
 
 from riko._package import __version__
-from riko.base._constants import ENCODING, STREAMING_THRESHOLD
-from riko.base._logging import get_logger
+from riko.base._config import ENCODING, STREAMING_THRESHOLD
 from riko.base._paths import normalize_url
-from riko.coercion._sequences import truncate_content
 
 from ._reencode import reencode
 
@@ -41,7 +38,6 @@ if TYPE_CHECKING:
     from codecs import StreamReader
     from collections.abc import Iterable, Iterator, Mapping
     from http.client import HTTPResponse
-    from logging import Logger
     from urllib.response import addinfourl
 
     from riko.types._scalars import AnyStr
@@ -50,8 +46,6 @@ if TYPE_CHECKING:
     from ._filelike import BinaryFileLike, FileLike, Opener, StringFileLike
 
 O_NONBLOCK: int = getattr(os, "O_NONBLOCK", 0)
-
-logger: Logger = get_logger(__name__)
 
 
 def ext_from_content_type(content_type: str | None) -> str | None:
@@ -164,7 +158,7 @@ def get_response_encoding(
     r: HTTPResponse | addinfourl, def_encoding: str = ENCODING
 ) -> str:
     """
-    Resolves the response's charset.
+    Gets the response's declared charset, or ``def_encoding`` when it declares none.
 
     Args:
 
@@ -240,22 +234,22 @@ def auto_close[T](stream: Iterable[T], *files: FileLike) -> Iterator[T]:
 
 
 @overload
-def buffer(  # noqa: E704
+def buffer(
     f: StringFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[str]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: BinaryFileLike, binary: bool = ..., encoding: str = ...
 ) -> SpooledTemporaryFile[bytes]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: BinaryFileLike, binary: bool = ..., *, encoding: str
 ) -> SpooledTemporaryFile[str]: ...
-@overload  # noqa: E302
-def buffer(  # noqa: E704
+@overload
+def buffer(
     f: FileLike, binary: bool | None = ..., encoding: str | None = ...
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]: ...
-def buffer(  # noqa: E302
+def buffer(
     f: FileLike, binary: bool | None = None, encoding: str | None = None
 ) -> SpooledTemporaryFile[bytes] | SpooledTemporaryFile[str]:
     """
@@ -353,7 +347,7 @@ def seekable(
 
 
 @overload
-def opener(  # noqa: E704
+def opener(
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
@@ -364,8 +358,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
@@ -376,8 +370,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[RawIOBase, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[True],
     encoding: str = ...,
@@ -387,8 +381,8 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[StringIO, str | None]: ...
-@overload  # noqa: E302
-def opener(  # noqa: E704
+@overload
+def opener(
     url: str,
     memoize: Literal[False] = ...,
     encoding: str = ...,
@@ -398,7 +392,7 @@ def opener(  # noqa: E704
     timeout: float | None = None,
     **_: object,
 ) -> tuple[StreamReader, str | None]: ...
-def opener(  # noqa: E302
+def opener(
     url: str,
     memoize: bool = False,
     encoding: str = ENCODING,
@@ -464,7 +458,7 @@ def opener(  # noqa: E302
         req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = buffer(r, binary=True) if memoize else cast("RawIOBase", r)
+            response = buffer(r, binary=True) if memoize else r
         elif r:
             encoding = get_response_encoding(r, encoding)
 
@@ -479,7 +473,7 @@ def opener(  # noqa: E302
                 reencoded = reencode(r.fp, encoding, decode=True, owner=r)
                 response = cast("StreamReader", reencoded)
             else:
-                response = cast("TextIOBase", r)
+                response = r
         else:
             response = BytesIO() if binary else StringIO()
 
@@ -531,9 +525,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
     """
     Opens a url or file as an iterable byte or text stream.
 
-    Degrades on a failed fetch: a ``URLError``/``RequestException`` is logged and
-    the instance yields a single empty chunk instead of raising. A broken source drops
-    out of a pipeline rather than aborting it.
+    A source that cannot be opened raises its error (e.g., a ``URLError`` wrapping a
+    missing file, or a ``requests`` error), as the asynchronous opener does.
 
     Args:
 
@@ -548,22 +541,22 @@ class Fetch[B: (Literal[True], Literal[False])]:
     content_type: str | None
 
     @overload
-    def __init__(  # noqa: E704
+    def __init__(
         self: Fetch[Literal[True]],
         url: str = ...,
         *,
         binary: Literal[True],
         **kwargs: BasicArg,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: Fetch[Literal[False]],
         url: str = ...,
         *,
         binary: Literal[False] = ...,
         **kwargs: BasicArg,
     ) -> None: ...
-    def __init__(  # noqa: E301
+    def __init__(
         self,
         url: str = "",
         *,
@@ -576,16 +569,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         self.content_type = None
         self.file = None
         opener = build_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
-
-        try:
-            self.file, self.content_type = opener(url)
-        except URLError as e:
-            if "File name too long" in str(e.reason):
-                raise
-
-            logger.error(f"Error opening {truncate_content(url)}: {e.reason}")
-        except requests.RequestException as e:
-            logger.error(f"Error opening {truncate_content(url)}: {e}")
+        self.file, self.content_type = opener(url)
 
     def __getattr__(self, name: str) -> object:
         if self.file is not None:
@@ -605,10 +589,10 @@ class Fetch[B: (Literal[True], Literal[False])]:
         self.close()
 
     @overload
-    def __iter__(self: Fetch[Literal[True]]) -> Iterator[bytes]: ...  # noqa: E704
+    def __iter__(self: Fetch[Literal[True]]) -> Iterator[bytes]: ...
     @overload
-    def __iter__(self: Fetch[Literal[False]]) -> Iterator[str]: ...  # noqa: E704
-    def __iter__(self) -> Iterator[bytes | str]:  # noqa: E301
+    def __iter__(self: Fetch[Literal[False]]) -> Iterator[str]: ...
+    def __iter__(self) -> Iterator[bytes | str]:
         if self.file:
             result = iter(self.file)
         elif self.binary:
@@ -619,20 +603,20 @@ class Fetch[B: (Literal[True], Literal[False])]:
         return result
 
     @overload
-    def __next__(self: Fetch[Literal[True]]) -> bytes: ...  # noqa: E704
+    def __next__(self: Fetch[Literal[True]]) -> bytes: ...
     @overload
-    def __next__(self: Fetch[Literal[False]]) -> str: ...  # noqa: E704
-    def __next__(self) -> bytes | str:  # noqa: E301
+    def __next__(self: Fetch[Literal[False]]) -> str: ...
+    def __next__(self) -> bytes | str:
         if self.file:
             return next(self.file)
 
         raise StopIteration
 
     @overload
-    def read(self: Fetch[Literal[True]], size: int = ...) -> bytes: ...  # noqa: E704
+    def read(self: Fetch[Literal[True]], size: int = ...) -> bytes: ...
     @overload
-    def read(self: Fetch[Literal[False]], size: int = ...) -> str: ...  # noqa: E704
-    def read(self, size: int = -1) -> bytes | str:  # noqa: E301
+    def read(self: Fetch[Literal[False]], size: int = ...) -> str: ...
+    def read(self, size: int = -1) -> bytes | str:
         if self.file:
             result = self.file.read(size)
         else:

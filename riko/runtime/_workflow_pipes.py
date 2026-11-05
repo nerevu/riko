@@ -11,14 +11,16 @@ from __future__ import annotations
 
 from functools import partial, update_wrapper
 from inspect import isasyncgenfunction
-from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, overload
 
 from riko.bado.itertools import as_async
 from riko.base._config import SUBPIPE_TYPE
-from riko.definitions._composition import PipelineDefinition
+from riko.base._guards import is_async_callable
+from riko.definitions._pipeline_definition import PipelineDefinition
+from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._enums import ExecutionMode
-from riko.types._guards import is_async_callable
-from riko.types._wrappers import stamp_wrapper_meta
+from riko.types._frozendict import normalize_mapping
+from riko.types._wrappers import require_subpipe
 
 from ._run import arun_pipeline, run_pipeline
 
@@ -27,7 +29,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.definitions._workflow_definition import Workflow
-    from riko.types._streams import SourceLike
+    from riko.types._streams import InputLike
     from riko.types._wrappers import (
         AsyncFunc,
         AsyncSubPipe,
@@ -65,22 +67,22 @@ class SubPipes(NamedTuple):
 
 class _WorkflowTagger(Protocol):
     @overload
-    def __call__(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+    def __call__(  # pyright: ignore[reportOverlappingOverload]
         self, pipe: AsyncFunc
     ) -> AsyncSubPipe: ...
-    @overload  # noqa: E301
-    def __call__(self, pipe: Func) -> SyncSubPipe: ...  # noqa: E704
+    @overload
+    def __call__(self, pipe: Func) -> SyncSubPipe: ...
 
 
 @overload
-def workflow(  # noqa: E704  # pyright: ignore[reportOverlappingOverload]
+def workflow(  # pyright: ignore[reportOverlappingOverload]
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: Literal[True]
 ) -> Callable[[Func], AsyncSubPipe]: ...
-@overload  # noqa: E302
-def workflow(  # noqa: E704
+@overload
+def workflow(
     *, subtype: ModuleSubtype = ..., loopable: bool = ..., isasync: bool | None = ...
 ) -> _WorkflowTagger: ...
-def workflow(  # noqa: E302
+def workflow(
     *args: object,
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,
@@ -154,7 +156,7 @@ def workflow(  # noqa: E302
             isasync=resolved,
         )
 
-        return cast("SubPipe", tagged)
+        return require_subpipe(tagged)
 
     return tag
 
@@ -214,16 +216,16 @@ def build_workflow_pipes(
         [{'x': 1}]
 
     """
-    inputs = {} if inputs is None else dict(inputs)
+    inputs = normalize_mapping(inputs)
     description = {"inputs": inputs, "dependencies": list(dependencies)}
 
     def pipe(
-        item: SourceLike | None = None, context: Context | None = None, **_: object
+        item: InputLike | None = None, context: Context | None = None, **_: object
     ) -> Iterator[object] | dict[str, object] | list[str]:
         if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, source=item, context=context)
+            definition = PipelineDefinition(flow, context=context)
             result: Iterator[object] | dict[str, object] | list[str]
-            result = run_pipeline(definition, dispatcher)
+            result = run_pipeline(definition, dispatcher, seed=item)
         elif context.mode is ExecutionMode.DESCRIBE:
             result = description
         elif context.describe_input:
@@ -234,11 +236,12 @@ def build_workflow_pipes(
         return result
 
     def async_pipe(
-        item: SourceLike | None = None, context: Context | None = None, **_: object
+        item: InputLike | None = None, context: Context | None = None, **_: object
     ) -> AsyncIterator[object]:
         if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, source=item, context=context)
-            result: AsyncIterator[object] = arun_pipeline(definition, dispatcher)
+            definition = PipelineDefinition(flow, context=context)
+            result: AsyncIterator[object]
+            result = arun_pipeline(definition, dispatcher, seed=item)
         elif context.mode is ExecutionMode.DESCRIBE:
             result = as_async([description])
         elif context.describe_input:

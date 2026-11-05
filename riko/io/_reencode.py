@@ -7,18 +7,18 @@ import re
 from codecs import iterdecode, iterencode
 from itertools import chain
 from os import linesep
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 from meza import BOM
 from meza.io import IterStringIO as _IterStringIO
 from meza.io import Reencoder as _Reencoder
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.types._scalars import AnyStr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
-    from typing import Literal, overload
+    from typing import Literal
 
     from riko.types._io import SyncCloseable
 
@@ -73,7 +73,7 @@ class PatchedReencoder[T: AnyStr](_Reencoder):
         if first_line is None:
             _stream: Iterator[str] | Iterator[bytes] = iter(())
         else:
-            chained = cast("Iterator[L]", chain([first_line], f))
+            chained = chain([first_line], f)
 
             if isinstance(first_line, bytes):
                 decoded = iterdecode(cast("Iterator[bytes]", chained), fromenc)
@@ -93,24 +93,33 @@ class PatchedReencoder[T: AnyStr](_Reencoder):
                 _stream = _gen_lines(decoded, linesep)
 
         self.join_char = cast("T", b"" if self.binary else "")
-        self.stream = _stream  # pyright: ignore [reportAttributeAccessIssue]
+        self.stream = _stream
 
 
-class IterStringIO(_IterStringIO):  # pyright: ignore[reportRedeclaration])
+class IterStringIO(_IterStringIO):
     def __buffer__(self, flags: int) -> memoryview:
         """Exposes the internal memory buffer directly for passing into bytes()."""
-        joined = b"".join(cast("Iterator[bytes]", self.iter))
+        joined = b"".join(self.iter)
         return memoryview(joined)
 
 
-class Reencoder[T: AnyStr](PatchedReencoder[T]):  # pyright: ignore[reportRedeclaration])
+class Reencoder[T: AnyStr](PatchedReencoder[T]):
     """Reencoder whose ``read`` honors ``n`` and closes its source/owner."""
 
-    def __init__(self, f, *args, owner=None, **kwargs):
+    def __init__(
+        self,
+        f: FileLike,
+        fromenc: str = ENCODING,
+        toenc: str = ENCODING,
+        *,
+        owner: SyncCloseable | None = None,
+        decode: bool = False,
+        remove_BOM: bool = False,  # noqa: N803
+    ) -> None:
         self._f = f if owner is None else owner
 
         try:
-            super().__init__(f, *args, **kwargs)
+            super().__init__(f, fromenc, toenc, decode=decode, remove_BOM=remove_BOM)
         except BaseException:
             self._f.close()
             raise
@@ -171,7 +180,7 @@ class Reencoder[T: AnyStr](PatchedReencoder[T]):  # pyright: ignore[reportRedecl
 
         return result
 
-    def readline(self, n=None, keepends=True) -> T:
+    def readline(self, n: int | None = None, keepends: bool = True) -> T:
         if not (self._buf or self._fill()):
             line = self.join_char
         else:
@@ -181,85 +190,48 @@ class Reencoder[T: AnyStr](PatchedReencoder[T]):  # pyright: ignore[reportRedecl
             line if keepends else cast("Callable[[T], T]", line.rstrip)(self.lineseps)
         )
 
-    def _readlines(self, keepends=True) -> Iterator[T]:
+    def _readlines(self, keepends: bool = True) -> Iterator[T]:
         while self._buf or self._fill():
             yield self.readline(keepends=keepends)
 
-    def readlines(  # pyright: ignore[reportIncompatibleMethodOverride])
-        self, keepends=True
+    def readlines(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, keepends: bool = True
     ) -> list[T]:
         return list(self._readlines(keepends=keepends))
 
-    def close(self):
+    def close(self) -> None:
         self._f.close()
 
 
-def reencode(  # pyright: ignore[reportRedeclaration])
-    f, fromenc=ENCODING, toenc=ENCODING, *, owner=None, **kwargs
-):
-    return Reencoder(f, fromenc, toenc, owner=owner, **kwargs)
-
-
-if TYPE_CHECKING:
-
-    class IterStringIO[T: AnyStr]:  # noqa: F811
-        def __init__(
-            self,
-            iterable: Iterable[str] | None = None,
-            bufsize: int = 4096,
-            decode: bool = False,
-            **kwargs,
-        ) -> None: ...
-        def __buffer__(self, flags: int) -> memoryview: ...  # noqa: E704
-        def read(self, n: int | None = None) -> T: ...  # noqa: E704
-        def readline(  # noqa: E301, E704
-            self, n: int | None = None, keepends=True
-        ) -> T: ...
-        def readlines(self, keepends=True) -> list[T]: ...  # noqa: E704
-
-    class Reencoder[T: AnyStr]:  # noqa: F811
-        _f: SyncCloseable
-        binary: bool
-        join_char: T
-        stream: Iterator[T]
-
-        def __init__(  # noqa: E704
-            self,
-            f: FileLike,
-            fromenc: str = ...,
-            toenc: str = ...,
-            *,
-            owner: SyncCloseable | None = ...,
-            decode: bool = ...,
-            remove_BOM: bool = ...,  # noqa: N803
-        ) -> None: ...
-        def __buffer__(self, flags: int) -> memoryview: ...  # noqa: E704
-        def __iter__(self) -> Iterator[T]: ...  # noqa: E704
-        def __next__(self) -> T: ...  # noqa: E704
-        def read(self, n: int | None = None) -> T: ...  # noqa: E704
-        def readline(  # noqa: E301, E704
-            self, n: int | None = None, keepends=True
-        ) -> T: ...
-        def readlines(self, keepends=True) -> list[T]: ...  # noqa: E704
-        def close(self) -> None: ...  # noqa: E704
-
-    @overload
-    def reencode(  # noqa: E704, F811
-        f: FileLike,
-        fromenc: str = ...,
-        toenc: str = ...,
-        *,
-        owner: SyncCloseable | None = ...,
-        decode: Literal[True],
-        remove_BOM: bool = ...,  # noqa: N803
-    ) -> Reencoder[str]: ...
-    @overload  # noqa: E301
-    def reencode(  # noqa: E704
-        f: FileLike,
-        fromenc: str = ...,
-        toenc: str = ...,
-        *,
-        owner: SyncCloseable | None = ...,
-        decode: Literal[False] = ...,
-        remove_BOM: bool = ...,  # noqa: N803
-    ) -> Reencoder[bytes]: ...
+@overload
+def reencode(
+    f: FileLike,
+    fromenc: str = ...,
+    toenc: str = ...,
+    *,
+    owner: SyncCloseable | None = ...,
+    decode: Literal[True],
+    remove_BOM: bool = ...,  # noqa: N803
+) -> Reencoder[str]: ...
+@overload
+def reencode(
+    f: FileLike,
+    fromenc: str = ...,
+    toenc: str = ...,
+    *,
+    owner: SyncCloseable | None = ...,
+    decode: Literal[False] = ...,
+    remove_BOM: bool = ...,  # noqa: N803
+) -> Reencoder[bytes]: ...
+def reencode(
+    f: FileLike,
+    fromenc: str = ENCODING,
+    toenc: str = ENCODING,
+    *,
+    owner: SyncCloseable | None = None,
+    decode: bool = False,
+    remove_BOM: bool = False,  # noqa: N803
+) -> Reencoder[str] | Reencoder[bytes]:
+    return Reencoder(
+        f, fromenc, toenc, owner=owner, decode=decode, remove_BOM=remove_BOM
+    )

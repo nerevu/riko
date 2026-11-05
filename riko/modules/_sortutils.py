@@ -20,13 +20,13 @@ from datetime import datetime as dt
 from decimal import Decimal
 from math import isnan
 from time import struct_time
-from typing import TYPE_CHECKING, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, TypeVar
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
 from riko.coercion.cast import CAST_SWITCH, cast_value, resolve_cast_type
 from riko.types._enums import CastType
-from riko.types._guards import is_mapping
 from riko.types._scalars import PrimitiveValue, SortableValue
 
 if TYPE_CHECKING:
@@ -115,9 +115,9 @@ def _resolve_default(
 
             if unorderable or cast_type in DATELIKE_TYPES:
                 resolved = SORT_FILLER
-            elif _default is not None:
-                resolved = cast("SortableValue", _default)
-    elif isinstance(default, Mapping):
+            elif _default is not None and not is_mapping(_default):
+                resolved = _default
+    elif is_mapping(default):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     else:
         resolved = default
@@ -175,8 +175,7 @@ def def_itemgetter(
         if invalid_type:
             casted = _resolve_uncastable(value, msg, sort_default)
         elif cast_type is not None:
-            _casted = cast_value(value, cast_type)
-            casted = cast("PrimitiveValue", _casted)
+            casted = cast_value(value, cast_type)
         elif isinstance(value, (str, int, struct_time)):
             casted = value
         elif isinstance(value, NON_SORTABLE):
@@ -243,7 +242,7 @@ def build_sort_key(
     keyfunc = def_itemgetter(attr, type_=type_, fallback_tzinfo=fallback_tzinfo)
 
     def key(item: Mapping | PrimitiveValue) -> tuple[bool, SortableValue]:
-        value = item.get(attr) if isinstance(item, Mapping) else item
+        value = item.get(attr) if is_mapping(item) else item
 
         if value is None and default is not None:
             keyed = (True, keyfunc(default))

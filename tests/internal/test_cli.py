@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
+import sys
 import tomllib
 from datetime import date, timedelta
 from importlib import import_module
@@ -17,8 +19,8 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
+from riko.base._exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.base._paths import ROOT_DIR
-from riko.base.exceptions import InvalidArchitectureError, InvalidPipelineError
 from riko.cli import (
     _codegen,
     _docs,
@@ -28,7 +30,6 @@ from riko.cli import (
     _test,
     _upgrade,
 )
-from riko.cli._coverage import build_ceiling_text
 from riko.cli._docs import gen_stale_path_citations, gen_stale_test_citations
 from riko.cli._docstyle import (
     gen_docstring_issues,
@@ -37,6 +38,7 @@ from riko.cli._docstyle import (
 )
 from riko.cli._document import read_document, require_workflow
 from riko.cli._gen_tier_index import INDEX_HEADER, generate_tier_index
+from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.cli._lint_basenames import BasenameIssue, gen_basename_issues
 from riko.cli._lint_bindings import gen_binding_issues, gen_binding_lines
 from riko.cli._lint_canonical_imports import _iter_issues as canonical_issues
@@ -46,6 +48,7 @@ from riko.cli._lint_deps import (
     gen_runtime_imports,
     get_locked_version,
 )
+from riko.cli._lint_escapes import get_escape_counts
 from riko.cli._lint_import_architecture import (
     _validate_graph,
     load_architecture_report,
@@ -61,6 +64,7 @@ from riko.cli._lint_tests import (
     gen_layout_issues,
 )
 from riko.cli._logging import exception_hook, resolve_log_level
+from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
 from riko.cli._upgrade import _pin_hooks
 from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
@@ -94,8 +98,8 @@ class TestCodegenCommand:
         [
             ([], ["config"]),
             (["--names", "--api"], ["names", "api"]),
-            (["--tests"], ["tests"]),
-            (["--all"], ["config", "names", "api", "tests"]),
+            (["--tests", "--verbs"], ["tests", "verbs"]),
+            (["--all"], ["config", "names", "api", "tests", "verbs"]),
         ],
     )
     def test_codegen_selectors(
@@ -393,6 +397,13 @@ def _coverage_report(root: Path, uncovered: int) -> Path:
     return report
 
 
+PARTIAL_RATCHET_CASES = [
+    pytest.param(["tests/public"], id="paths"),
+    pytest.param(["--tox"], id="tox"),
+    pytest.param(["--failed"], id="failed"),
+]
+
+
 class TestCoverageRatchet:
     """The ``manage test --ratchet`` uncovered-line ceiling."""
 
@@ -425,10 +436,6 @@ class TestCoverageRatchet:
 
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
-
-    def test_a_table_without_a_ceiling_line_is_rejected(self) -> None:
-        with pytest.raises(ValueError, match="has no uncovered line"):
-            build_ceiling_text("[tool.riko.coverage]\nother = 1\n", 5)
 
     @pytest.mark.parametrize(
         ("args", "present", "absent"),
@@ -463,16 +470,96 @@ class TestCoverageRatchet:
         assert not absent or absent not in command
         assert data_file == expected
 
+    @pytest.mark.parametrize("args", PARTIAL_RATCHET_CASES)
     def test_ratchet_refuses_a_partial_run(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, args: list[str]
     ) -> None:
         folders: list[str] = []
         monkeypatch.setattr(_test, "mkdtemp", lambda: folders.append("made") or "")
 
-        result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", "tests/public"])
+        result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", *args])
         assert result.exit_code == 2
         assert "measures the whole suite" in result.output
         assert folders == []
+
+
+_TYPING = "[tool.riko.typing]\n"
+CEILING_TEXT_CASES = [
+    pytest.param("x = 1\n", "x = 1\n\n[tool.riko.typing]\nany = 4\n", id="no-table"),
+    pytest.param(f"{_TYPING}cast = 1\n", f"{_TYPING}any = 4\ncast = 1\n", id="no-key"),
+    pytest.param(f"{_TYPING}any = 9\n", f"{_TYPING}any = 4\n", id="rewrite"),
+    pytest.param(
+        f"{_TYPING}any = 9  # note\n",
+        f"{_TYPING}any = 4  # note\n",
+        id="inline-comment",
+    ),
+    pytest.param(
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 9\n",
+        f"[tool.riko.coverage]\nany = 1\n\n{_TYPING}any = 4\n",
+        id="other-table-kept",
+    ),
+]
+
+
+_TODAY = date(2026, 10, 27)
+_WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
+_FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
+_STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_DATED = "any = 8\nany-lowered = 2026-10-27\n"
+_LOWERED = f"{_DATED}{_WINDOW}"
+_DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
+_UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
+_HOLDS = "9 uses hold the ceiling of 9."
+_HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
+_RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
+_DISCARDED = (
+    " CI discards this change; run the ratchet locally and commit pyproject.toml."
+)
+_CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
+STALE_CASES = [
+    pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
+    pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
+    pytest.param(_STALE, 9, True, _STALE, f"::warning::{_HELD}", id="stale-ci"),
+    pytest.param(_STALE, 8, False, _LOWERED, _RECORDED, id="lowering-resets"),
+    pytest.param(_STALE, 8, True, _LOWERED, _CI_DISCARDS, id="ci-discards"),
+    pytest.param("any = 8\n", 8, False, _DATED, _RECORDED, id="undated-starts-clock"),
+    pytest.param(_DATETIME, 8, False, _DATED, _RECORDED, id="datetime-restarts-clock"),
+    pytest.param(_UNWINDOWED, 9, False, _UNWINDOWED, _HOLDS, id="no-window"),
+]
+
+
+class TestCeilingRatchet:
+    """The shared ``pyproject.toml`` ceiling a ratchet records."""
+
+    @pytest.mark.parametrize(("text", "expected"), CEILING_TEXT_CASES)
+    def test_ceiling_text_sets_only_the_named_key(
+        self, text: str, expected: str
+    ) -> None:
+        assert build_ceiling_text(text, "typing", "any", 4) == expected
+
+    @pytest.mark.parametrize(("text", "count", "ci", "expected", "report"), STALE_CASES)
+    def test_ratchet_reports_ceiling_age(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        text: str,
+        count: int,
+        ci: bool,
+        expected: str,
+        report: str,
+    ) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(f"{_TYPING}{text}")
+        monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+        if ci:
+            monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+        code = ratchet_ceiling(pyproject, "typing", "any", count, "uses", today=_TODAY)
+        assert code == 0
+        assert pyproject.read_text() == f"{_TYPING}{expected}"
+        assert capsys.readouterr().out == f"{report}\n"
 
 
 class TestConsoleScripts:
@@ -528,6 +615,30 @@ EXAMPLE_RULES = [
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
+    pytest.param(
+        "mod.py",
+        'def _build_x():\n    """Resolves x."""\n',
+        ["summary verb does not match the name verb build"],
+        id="verb-mismatch",
+    ),
+    pytest.param(
+        "mod.py",
+        'async def _abuild_x():\n    """Resolves x."""\n',
+        ["summary verb does not match the name verb build"],
+        id="verb-mismatch-twin",
+    ),
+    pytest.param(
+        "mod.py", 'async def abuild_x():\n    """Builds x."""\n', [], id="verb-twin"
+    ),
+    pytest.param(
+        "mod.py", 'def build_x():\n    """Finds x."""\n', [], id="verb-off-table"
+    ),
+    pytest.param(
+        "_require_guards.py",
+        'def require_from_keys():\n    """Builds x."""\n',
+        [],
+        id="compound",
+    ),
 ]
 
 
@@ -549,6 +660,24 @@ class TestDocstyle:
     def test_docstring_summary_output_lead_detection(self) -> None:
         assert summary_leads_with_output("Returns the parsed response body.")
         assert not summary_leads_with_output("Parses the response body.")
+
+
+VERB_TABLE_MARKERS = [
+    pytest.param("md", "<!-- verbs -->\n<!-- /verbs -->", "| `load` |", id="md"),
+    pytest.param("rst", ".. begin verbs\n.. end verbs", "| ``load`` ", id="rst"),
+]
+
+
+class TestVerbTables:
+    """Generated function-name verb tables."""
+
+    @pytest.mark.parametrize(("fmt", "text", "row"), VERB_TABLE_MARKERS)
+    def test_generation_is_idempotent(
+        self, fmt: TableFormat, text: str, row: str
+    ) -> None:
+        generated = generate_verb_tables(text, fmt)
+        assert row in generated
+        assert generate_verb_tables(generated, fmt) == generated
 
 
 CITATION_SCANS = [
@@ -595,6 +724,28 @@ def _reserved_terms_section() -> str:
     return text.split("## Reserved terms", 1)[1].split("\n## ", 1)[0].lower()
 
 
+TERM_PATTERNS = [
+    pytest.param(
+        'REASON = "owned by R5C: write is still a sink module"\n'
+        "# see R4B.2 and P10, not R2D2 or PR9\n",
+        [(1, "R5C"), (2, "R4B.2"), (2, "P10")],
+        id="phase-codes",
+    ),
+    pytest.param(
+        "# scope the run with open(), or Scopes a run\n"
+        "# open it to scope one; scope a run's resources is fine\n",
+        [(1, "scope the run"), (1, "Scopes a run"), (2, "open it to scope")],
+        id="run-scoping",
+    ),
+    pytest.param(
+        "# import from riko.ext.registry, not riko.ext.modules\n"
+        "# riko.ext.names is gone too\n",
+        [(1, "riko.ext.registry"), (2, "riko.ext.names")],
+        id="removed-ext-paths",
+    ),
+]
+
+
 class TestTermLint:
     """The reserved-terms lint check."""
 
@@ -622,25 +773,25 @@ class TestTermLint:
             (4, "other mode"),
         ]
 
-    def test_phase_codes_are_checked(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(("text", "expected"), TERM_PATTERNS)
+    def test_patterns_are_checked(
+        self, tmp_path: Path, text: str, expected: list[tuple[int, str]]
+    ) -> None:
         source = tmp_path / "mod.py"
-        source.write_text(
-            'REASON = "owned by R5C: write is still a sink module"\n'
-            "# see R4B.2 and P10, not R2D2 or PR9\n",
-            encoding="utf-8",
-        )
+        source.write_text(text, encoding="utf-8")
         found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
-        assert found == [(1, "R5C"), (2, "R4B.2"), (2, "P10")]
+        assert found == expected
 
-    def test_removed_ext_paths_are_checked(self, tmp_path: Path) -> None:
-        source = tmp_path / "mod.py"
-        source.write_text(
-            "# import from riko.ext.registry, not riko.ext.modules\n"
-            "# riko.ext.names is gone too\n",
+    def test_phrases_split_across_lines_are_checked(self, tmp_path: Path) -> None:
+        (tmp_path / "GUIDE.md").write_text(
+            "Intro.\n\nA node with bound\nkeywords and a\nsub-pipeline.\n",
             encoding="utf-8",
         )
-        found = [(issue.lineno, issue.found) for issue in gen_term_issues(source)]
-        assert found == [(1, "riko.ext.registry"), (2, "riko.ext.names")]
+        (tmp_path / "mod.py").write_text(
+            '"""\nSummary.\n\nRuns in the other\n    mode.\n"""\n', encoding="utf-8"
+        )
+        found = [(issue.path.name, issue.lineno) for issue in gen_term_issues(tmp_path)]
+        assert found == [("GUIDE.md", 3), ("GUIDE.md", 5), ("mod.py", 4)]
 
     def test_prose_files_are_checked_except_the_changelog(self, tmp_path: Path) -> None:
         (tmp_path / "GUIDE.rst").write_text("Run a sub-pipeline.\n", encoding="utf-8")
@@ -723,6 +874,24 @@ BINDING_CASES = [
     ),
     pytest.param("class P:\n    workflow: Workflow = field()\n", [], id="field"),
     pytest.param("evolve(self, workflow=flow)\n", [], id="keyword"),
+    pytest.param(
+        "class P:\n    workflow: Workflow\n"
+        "    def replace(self, *, workflow: Workflow | None = None): ...\n",
+        [],
+        id="field-keyword",
+    ),
+    pytest.param(
+        "class P:\n    flow: Workflow\n"
+        "    def replace(self, *, workflow: Workflow | None = None): ...\n",
+        [3],
+        id="non-field-keyword",
+    ),
+    pytest.param(
+        "class P:\n    workflow: Workflow\n"
+        "    def replace(self, workflow: Workflow): ...\n",
+        [3],
+        id="positional-field-name",
+    ),
     pytest.param("def from_workflow(cls, flow: Workflow): ...\n", [], id="method"),
     pytest.param(
         'def f():\n    """\n    >>> workflow = Workflow(nodes=[])\n    """\n',
@@ -1120,6 +1289,62 @@ OPTIONAL_CASES = [
 ]
 
 
+ESCAPE_CASES = [
+    pytest.param("from typing import Any\nx: Any\n", 1, 0, id="bare-any"),
+    pytest.param("import typing as t\nx: t.Any\n", 1, 0, id="qualified-any"),
+    pytest.param("from typing import Any as A\nx: A\n", 1, 0, id="aliased-any"),
+    pytest.param("from typing import Any\nx: 'list[Any]'\n", 1, 0, id="quoted-any"),
+    pytest.param("from typing import Any\nX = A[B['Any']]\n", 1, 0, id="subscript"),
+    pytest.param("from typing import Any\ndef f() -> Any: ...\n", 1, 0, id="return"),
+    pytest.param("from typing import cast\ncast('int', x)\n", 0, 1, id="cast"),
+    pytest.param("import typing\ntyping.cast(int, x)\n", 0, 1, id="typing-cast"),
+    pytest.param(
+        "from typing import cast\ncast('dict[str, Any]', x)\n", 0, 1, id="unbound"
+    ),
+    pytest.param("from riko import cast\ncast(x)\nAny = 1\n", 0, 0, id="foreign"),
+]
+
+_ANY = "from typing import Any\n"
+_ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
+ESCAPE_RATCHET_CASES = [
+    pytest.param(_ANY, 0, "any = 0\ncast = 0", id="gain-lowers"),
+    pytest.param(_ANY_CAST, 0, "any = 2\ncast = 1", id="equal-holds"),
+    pytest.param(_ANY + "x: Any\n" * 3, 1, "any = 2\ncast = 0", id="loss-fails"),
+]
+
+
+class TestEscapeLint:
+    """The ``Any`` and ``cast`` ceiling lint check."""
+
+    @pytest.mark.parametrize(("source", "any_", "cast"), ESCAPE_CASES)
+    def test_escapes_are_counted_once_by_binding(
+        self, source: str, any_: int, cast: int
+    ) -> None:
+        assert get_escape_counts(source) == {"Any": any_, "cast": cast}
+
+    @pytest.mark.parametrize(("source", "code", "ceilings"), ESCAPE_RATCHET_CASES)
+    def test_check_ratchets_each_ceiling(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        source: str,
+        code: int,
+        ceilings: str,
+    ) -> None:
+        package = tmp_path / "pkg"
+        package.mkdir()
+        (package / "mod.py").write_text(source, encoding="utf-8")
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text("[tool.riko.typing]\nany = 2\ncast = 1\n")
+        monkeypatch.setattr(_lint, "ROOT_DIR", tmp_path)
+        monkeypatch.setattr(_lint, "PACKAGE_DIR", package)
+
+        assert _lint._lint_escapes() == code
+        typing = tomllib.loads(pyproject.read_text())["tool"]["riko"]["typing"]
+        recorded = {k: v for k, v in typing.items() if not k.endswith("-lowered")}
+        assert recorded == tomllib.loads(ceilings)
+
+
 class TestDependencyLint:
     """The run-time requirement lint check."""
 
@@ -1396,22 +1621,29 @@ def test_fails():
 
 
 class TestTimeouts:
-    def test_a_timeout_fails_an_xfail_test(
-        self, pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_timeout_fails_an_xfail_test(self, pytester: pytest.Pytester) -> None:
         """
         An xfail test that ends by its timeout is reported as failed.
 
         Runs in a subprocess so the signal never fires under this process's
         coverage tracer.
         """
-        monkeypatch.setenv("PYTHONPATH", str(ROOT_DIR))
         pytester.makepyfile(_TIMEOUT_SUITE)
         result = pytester.runpytest_subprocess(
             "-p", "tests._timeouts", "-p", "no:cacheprovider", "-o", "addopts="
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
+
+
+class TestSubprocessImports:
+    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
+        # A script outside the checkout resolves riko the way a console script does.
+        probe = tmp_path / "probe.py"
+        probe.write_text("import riko\nprint(riko.__file__)\n")
+        args = [sys.executable, str(probe)]
+        done = subprocess.run(args, capture_output=True, check=True, text=True)
+        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
 LOG_LEVELS = [

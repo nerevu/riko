@@ -9,10 +9,10 @@ from functools import partial
 from inspect import signature
 from itertools import repeat
 from time import struct_time
-from typing import TYPE_CHECKING, Any, Self, cast, overload
+from typing import TYPE_CHECKING, Self, overload
 
+from riko.base._guards import is_known_sequence, is_listlike, is_mapping
 from riko.base._iterutils import map_values, multi_try
-from riko.types._guards import is_known_sequence, is_listlike, is_mapping
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -24,30 +24,24 @@ if TYPE_CHECKING:
 
 
 @overload
-def listize(  # noqa: E704 # pyright: ignore[reportOverlappingOverload]
+def listize(  # pyright: ignore[reportOverlappingOverload]
     value: Item | Iterable[Item],
 ) -> Iterable[Item]: ...
 @overload
-def listize[T](value: list[T]) -> list[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: dict[str, T],
-) -> list[dict[str, T]]: ...
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: CaseInsensitiveDict[T],
-) -> list[CaseInsensitiveDict[T]]: ...
+def listize[T](value: list[T]) -> list[T]: ...
 @overload
-def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...  # noqa: E704
-@overload  # noqa: E302
-def listize[T](  # noqa: E704
-    value: Sequence[T],
-) -> Sequence[T]: ...
+def listize[T](value: dict[str, T]) -> list[dict[str, T]]: ...
 @overload
-def listize[T](value: Iterable[T]) -> Iterable[T]: ...  # noqa: E704
+def listize[T](value: CaseInsensitiveDict[T]) -> list[CaseInsensitiveDict[T]]: ...
 @overload
-def listize[T](value: T) -> list[T]: ...  # noqa: E704
-def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
+def listize[T](value: Mapping[str, T]) -> list[Mapping[str, T]]: ...
+@overload
+def listize[T](value: Sequence[T]) -> Sequence[T]: ...
+@overload
+def listize[T](value: Iterable[T]) -> Iterable[T]: ...
+@overload
+def listize[T](value: T) -> list[T]: ...
+def listize[T](value: T) -> T | Iterable[T]:
     """
     Creates a listlike object from any value.
 
@@ -90,20 +84,16 @@ def listize[T](value: T) -> T | Iterable[T]:  # noqa: E302
 
 
 @overload
-def gen_items(  # noqa: E704
-    content: BasicDict | StringyDict, key: str | None = ...
-) -> Stream: ...
+def gen_items(content: BasicDict | StringyDict, key: str | None = ...) -> Stream: ...
 @overload
-def gen_items(content: RikoValue) -> ValueStream: ...  # noqa: E704
-@overload  # noqa: E302
-def gen_items(  # noqa: E704
-    content: RikoValue, key: str, yield_if_none: bool = ...
-) -> Stream: ...  # noqa: E704
-@overload  # noqa: E302
-def gen_items(  # noqa: E704
+def gen_items(content: RikoValue) -> ValueStream: ...
+@overload
+def gen_items(content: RikoValue, key: str, yield_if_none: bool = ...) -> Stream: ...
+@overload
+def gen_items(
     content: RikoValue, key: None = ..., yield_if_none: bool = ...
 ) -> ValueStream: ...
-def gen_items(  # noqa: E302
+def gen_items(
     content: RikoValue | BasicDict | StringyDict,
     key: str | None = None,
     yield_if_none=False,
@@ -140,7 +130,7 @@ def gen_items(  # noqa: E302
         yield {key: content} if key else content
 
 
-def truncate_content[T](content: T | object, length: int = 20) -> T:
+def truncate_content(content: object, length: int = 20) -> object:
     """
     Shortens every string or bytes value for a log message, recursing into containers.
 
@@ -175,7 +165,7 @@ def truncate_content[T](content: T | object, length: int = 20) -> T:
     else:
         truncated = content
 
-    return cast("T", truncated)
+    return truncated
 
 
 class Chainable:
@@ -207,14 +197,13 @@ class Chainable:
         funcs = (partial(getattr, x) for x in [self.data, builtins, itertools])
         zipped = zip(funcs, repeat(AttributeError), strict=False)
         method = multi_try(name, zipped, default=None)
-        result = Chainable(self.data, method)
-        return cast("Self", result)
+        return type(self)(self.data, method)
 
-    def __call__(self, *args: Any, **kwargs: object) -> Self:
+    def __call__(self, *args: object, **kwargs: object) -> Self:
         method = self.method
 
         if method is None:
-            result = Chainable(self.data)
+            result = type(self)(self.data)
         else:
             try:
                 signature(method).bind(self.data, *args, **kwargs)
@@ -225,8 +214,8 @@ class Chainable:
                 data_first = True
 
             if data_first or not args:
-                result = Chainable(method(self.data, *args, **kwargs))
+                result = type(self)(method(self.data, *args, **kwargs))
             else:
-                result = Chainable(method(args[0], self.data, **kwargs))
+                result = type(self)(method(args[0], self.data, **kwargs))
 
-        return cast("Self", result)
+        return result

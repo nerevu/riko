@@ -13,15 +13,15 @@ from.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, TypeGuard
 
 import attrs
 
 from riko.base._config import OUTPUT_MODULE
-from riko.base.exceptions import InvalidPipelineError
-from riko.types._collections import serialize_attrs
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import is_listlike, is_mapping, require_mapping
+from riko.base._recordutils import serialize_attrs
 from riko.types._enums import DocumentShape
-from riko.types._guards import is_listlike, is_mapping, require_mapping
 from riko.types._workflow import Edge, RawWorkflow, WorkflowDocument
 
 from ._migrate import migrate_pipe_def, parse_dag_graph
@@ -42,7 +42,7 @@ _WIRE_KEYS = frozenset({"src", "tgt"})
 class WorkflowEncoder(json.JSONEncoder):
     """Renders the structural and JSON-native value types a workflow carries."""
 
-    def default(self, o: object) -> Any:
+    def default(self, o: object) -> object:
         if isinstance(o, (Node, Edge)):
             result = {"family": o.family, **serialize_attrs(o)}
         elif is_mapping(o):
@@ -73,7 +73,13 @@ def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocume
 
         The ``WorkflowDocument`` as UTF-8 JSON bytes.
 
+    Raises:
+
+        InvalidPipelineError: If the workflow has a callable node.
+
     """
+    flow.validate_document_nodes()
+
     if indent is None:
         separators = (",", ":")
         suffix = ""

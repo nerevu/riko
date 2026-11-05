@@ -4,12 +4,13 @@ Provides internal tests: mechanics, drift guards, and failure modes.
 Index (file, then the subjects it owns, in file order):
 
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
-                              LintCommand, CoverageRatchet, ConsoleScripts, Docstyle,
-                              CitationLint, TermLint, LiteralLint, BindingLint,
-                              TierIndexCodegen, LayoutLint, BasenameLint,
-                              DependencyLint, HookPinLint, CanonicalImportLint,
-                              RelativeImportLint, ImportArchitectureLint, ValidateGraph,
-                              RequireWorkflow, RunTarget, ReadDocument, Timeouts,
+                              LintCommand, CoverageRatchet, CeilingRatchet,
+                              ConsoleScripts, Docstyle, VerbTables, CitationLint,
+                              TermLint, LiteralLint, BindingLint, TierIndexCodegen,
+                              LayoutLint, BasenameLint, EscapeLint, DependencyLint,
+                              HookPinLint, CanonicalImportLint, RelativeImportLint,
+                              ImportArchitectureLint, ValidateGraph, RequireWorkflow,
+                              RunTarget, ReadDocument, Timeouts, SubprocessImports,
                               LogLevel
     test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
                               Pythonise, ModuleCategory, EnumMemberName,
@@ -17,8 +18,8 @@ Index (file, then the subjects it owns, in file order):
                               WorkflowFixtures, WorkflowProbes
     test_concurrency.py       ExecutionSettings, MappingPolicy, SyncConcurrency
     test_definitions.py       FrozenDict, Context, Resource, ResourceFreezing,
-                              ResourceView, ResourceBinding, Nodes, WorkflowFields,
-                              NormalizeInternals, RawWorkflowFields,
+                              ResourceView, ResourceBinding, Nodes, CallableNode,
+                              WorkflowFields, NormalizeInternals, RawWorkflowFields,
                               ExecutionPlanFields, PipelineDefinitionFields,
                               RequireHelpers, RequireFromForm, ResolveEnum,
                               NormalizeStrs, FieldNames, TypedDictKeys, WriteMode,
@@ -46,9 +47,9 @@ Index (file, then the subjects it owns, in file order):
                               AsyncLoop, CustomEmbed, ModuleRegistry, PublicRegister,
                               ResolverDispatcher, RequireInterface, EntryPointModules,
                               WorkflowResolver, Catalog, ResolvedDocuments, Modules,
-                              Prepare
+                              Prepare, ExchangeRate
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, ResolveCastType, DefItemgetter, Fromdict,
                               TryLocalTz, Dates, DotDict, Parsers, RSSUtils, Graph,
-                              GraphIndex, Logging
+                              GraphIndex, Logging, RikoError
 """

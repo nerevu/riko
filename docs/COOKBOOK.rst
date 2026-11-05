@@ -34,10 +34,11 @@ count them.
 
 ``Pipeline`` resolves each chained attribute as a built-in ``module``. A module name
 can be either a string or (as shown above) a member of the typed discovery tree
-(``Sources``/``Transforms``/``Sinks``). The ``pipeline`` is an immutable definition, so
-it does no work until it is iterated (e.g., by ``list()``, a ``for`` loop,
-``.first()``, or an export). See `discovering modules`_ in the FAQ for
-``list_modules`` and ``describe_module``.
+(``Sources``/``Transforms``/``Sinks``). The ``pipeline`` is an immutable definition. It
+does no work until it is iterated (e.g., by ``list()`` or a ``for`` loop). A
+``pipeline`` that starts from a ``source`` ``module`` runs on its own. Any other
+``pipeline`` runs on the items you call it with (``pipeline(items)``).
+See `discovering modules`_ in the FAQ for ``list_modules`` and ``describe_module``.
 
 Transform, filter, and order items
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -57,12 +58,12 @@ and orders the items by score.
     >>> rule = {'field': 'score', 'op': 'greater', 'value': 10}
     >>> replace = {'rule': {'find': ' ', 'replace': '-'}}
     >>> pipeline = (
-    ...     Pipeline(source=items)
+    ...     Pipeline()
     ...         .filter(conf={'rule': rule})
     ...         .strreplace(conf=replace, options={'field': 'title', 'assign': 'slug'})
     ...         .sort(conf={'rule': {'field': 'score'}})
     ... )
-    >>> [(item['slug'], item['score']) for item in pipeline]
+    >>> [(item['slug'], item['score']) for item in pipeline(items)]
     [('Release-notes', 13), ('Final-report', 21)]
 
 Call options travel in ``options``. ``field`` selects the input field passed to a
@@ -89,8 +90,8 @@ default and can be set to ``or``.
     ...     {'field': 'score', 'op': 'atleast', 'value': 10},
     ...     {'field': 'published', 'op': 'truthy'},
     ... ]
-    >>> pipeline = Pipeline(source=items).filter(conf={'rule': rules})
-    >>> [item['title'] for item in pipeline]
+    >>> pipeline = Pipeline.from_module("filter", conf={'rule': rules})
+    >>> [item['title'] for item in pipeline(items)]
     ['Gamma']
 
 Set ``permit=False`` to exclude matches instead of keeping them.
@@ -196,28 +197,27 @@ dictionaries, aka ``items``.
     >>> # directory, so these examples run offline
     >>>
     >>> ### Fetch a web page ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
+    >>> page = Pipeline.from_module(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
     >>>
     >>> ### Fetch a data file ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
+    >>> data = Pipeline.from_module(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
     >>>
     >>> ### View the fetched data ###
-    >>> stream = iter(pipeline)
-    >>> item = next(stream)
+    >>> item = data.first()
     >>> item['base']
     'USD'
     >>> ### Fetch an RSS feed ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
+    >>> feed = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
     >>>
     >>> ### Fetch the first RSS feed found on a page ###
-    >>> pipeline = Pipeline.from_module(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
+    >>> site_feed = Pipeline.from_module(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
     >>>
     >>> ### Find all RSS links on a page and fetch the feeds ###
-    >>> pipeline = Pipeline.from_module(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
-    >>> urls = [entry['link'] for entry in pipeline]
+    >>> discovery = Pipeline.from_module(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
+    >>> urls = [entry['link'] for entry in discovery]
     >>> urls
     ['file://riko/data/bbci.co.uk.xml']
-    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': urls[0]})
+    >>> discovered = Pipeline.from_module(Sources.FETCH, conf={'url': urls[0]})
     >>>
     >>> ### Alternatively, fetch every discovered feed in one workflow ###
     >>> #
@@ -233,13 +233,13 @@ dictionaries, aka ``items``.
     ...     for n in range(len(urls))
     ... ]
     >>> modules.append({'id': 'merged', 'name': 'union', 'conf': {}})
-    >>> pipeline = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
+    >>> merged = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
     >>>
     >>> ### View the fetched RSS feed(s) ###
     >>> #
     >>> # Note: regardless of how you fetch an RSS feed, it will have the same
     >>> # structure
-    >>> pipeline.first()['title']
+    >>> merged.first()['title']
     "EU sets out 'phased' Brexit strategy"
 
 Alternate ``conf`` value entry
@@ -255,8 +255,8 @@ node's stream.
     >>>
     >>> conf = {'url': {'subkey': 'url'}}
     >>> items = [{'url': get_path('feed.xml')}]
-    >>> pipeline = items | Pipeline.from_module(Sources.FETCH, conf=conf)
-    >>> item = pipeline.first()
+    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf=conf)
+    >>> item = pipeline.first(items)
     >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
     True
 
@@ -340,48 +340,70 @@ Notes
 Chaining with the ``|`` operator or ``pipe`` method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Alongside attribute chaining (``pipeline.tokenizer(...)``), a ``node`` can be added to the
-``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the module name
-as either a string or a typed ``Sources``/``Transforms``/``Sinks`` member. They also
-accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"``, and a
-single-module ``Pipeline`` used as a reusable template.
+Alongside attribute chaining (``pipeline.tokenizer(...)``), you can add a ``node`` to
+a ``pipeline`` with the ``|`` operator or the ``pipe`` method. These take the module
+name as either a string or a typed ``Sources``/``Transforms``/``Sinks`` member. They
+also accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"``.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Transforms
     >>>
-    >>> src = [{"content": "a,b,c,a"}]
-    >>>
-    >>> # seed a pipeline with ``items | pipeline``
-    >>> pipeline = src | Pipeline.from_module(Transforms.TOKENIZER)
-    >>> pipeline.first()
-    {'content': 'a'}
+    >>> items = [{"content": "a,b,c,a"}]
+    >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
     >>>
     >>> # chain a module by name
-    >>> (pipeline | Transforms.HASH).first()
+    >>> (pipeline | Transforms.HASH).first(items)
     {'content': 'a', 'hash': 1267964084}
+
+A ``pipeline`` holds no ``items`` of its own. Every run takes a ``seed`` as its first
+argument, whether you call it (``pipeline(items)``), pipe it (``items | pipeline``),
+open it (``pipeline.open(items)``), or read one ``item`` (``pipeline.first(items)``). A
+chained ``pipeline`` is no different, so compose first and seed last.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> # chain a module by ``(name, conf)`` pair
-    >>> list(pipeline | (Transforms.TRUNCATE, {"count": 2}))
+    >>> items = [{"content": "a,b,c,a"}]
+    >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
+    >>>
+    >>> # seed a pipeline with items
+    >>> list(items | pipeline)
+    [{'content': 'a'}, {'content': 'b'}, {'content': 'c'}, {'content': 'a'}]
+    >>>
+    >>> # seed a chained pipeline with items
+    >>> list(items | pipeline.pipe(Transforms.TRUNCATE, conf={"count": 2}))
     [{'content': 'a'}, {'content': 'b'}]
+
+``|`` also takes another ``Pipeline``, and reusable steps compose: ``(a | b) | c`` and
+``a | (b | c)`` build the same ``pipeline``.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, Transforms
     >>>
-    >>> # chain with a dynamic module name
-    >>> module = "count"
-    >>> pipeline.pipe(module).first()
-    {'count': 4}
+    >>> items = [{"content": "a,b,c,a"}]
+    >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
     >>>
-    >>> # chain a single-module template
-    >>> counter = Pipeline.from_module(Transforms.COUNT)
-    >>> (pipeline | counter).first()
-    {'count': 4}
+    >>> # compose reusable steps
+    >>> chained = Pipeline.from_module(Transforms.UNIQ) | Transforms.COUNT
+    >>> (pipeline | chained).first(items)
+    {'count': 3}
+    >>> (pipeline | Transforms.UNIQ | Transforms.COUNT).first(items)
+    {'count': 3}
 
 Fetch several sources
 ^^^^^^^^^^^^^^^^^^^^^
 
-A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-in
-with ``Workflow.parse``: each wire names the ``union`` port it enters, so the first
-source goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the
-`DAG format doc`_).
+A ``union`` node merges ``items`` from multiple ``source`` nodes. Build the fan-in with
+``Workflow.parse``. Each wire names the ``union`` port it enters, so the first source
+goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the `DAG format
+doc`_).
+
+Concurrency is an execution-wide setting rather than a property of a node. It is
+declared on the ``Pipeline`` with ``with_execution``. It applies to the item-wise
+``processor`` steps, such as ``fetch``.
 
 .. code-block:: python
 
@@ -398,13 +420,6 @@ source goes to ``in`` and the rest to ``in:1``, ``in:2``, and so on (see the
     >>> feeds = Pipeline(Workflow.parse(dag))
     >>> len(list(feeds))
     32
-
-Concurrency is an execution-wide setting rather than a property of a node. It is
-declared on the ``Pipeline`` with ``with_execution``. It applies to the item-wise
-``processor`` steps, such as ``fetch``.
-
-.. code-block:: python
-
     >>> concurrent = feeds.with_execution(executor="thread", concurrency=4)
     >>> len(list(concurrent))
     32
@@ -417,42 +432,51 @@ declared on the ``Pipeline`` with ``with_execution``. It applies to the item-wis
 Managing pipeline lifecycle
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A ``Pipeline`` is an immutable *definition*, not a running stream. Each iteration starts
-a fresh one-shot run, so iterating twice runs the ``pipeline`` twice. There is no run
-state to inspect or reset.
+A ``Pipeline`` is an immutable *definition*, not a stream. Each call starts a fresh one-
+shot run. Calling it twice runs the ``pipeline`` twice.
 
 .. code-block:: python
 
     >>> from riko import Pipeline
     >>>
-    >>> pipeline = Pipeline(source=[{'content': 'a'}, {'content': 'b'}]).hash()
-    >>> len(list(pipeline))                    # one execution
+    >>> items = [{'content': 'a'}, {'content': 'b'}]
+    >>> pipeline = Pipeline.from_module("hash")
+    >>> len(list(pipeline(items)))             # one run
     2
-    >>> len(list(pipeline))                    # a fresh execution, same result
+    >>> len(list(pipeline(items)))             # a fresh run, same result
     2
 
-Closing an iterator early tears that execution down and releases whatever it
-acquired; the definition is unaffected.
+``pipeline.open(items)`` returns a context manager instead. Leaving its ``with`` block
+tears that run down and releases any acquired resources.
 
 .. code-block:: python
 
-    >>> stream = iter(pipeline)
-    >>> next(stream)['content']
+    >>> from riko import Pipeline
+    >>>
+    >>> items = [{'content': 'a'}, {'content': 'b'}]
+    >>> pipeline = Pipeline.from_module("hash")
+    >>>
+    >>> with pipeline.open(items) as stream:
+    ...     next(stream)['content']
     'a'
-    >>> stream.close()
-    >>> len(list(pipeline))
-    2
 
-Chaining derives a *new* definition and leaves the original untouched. A
-``pipeline`` can serve as the prefix of several ``pipelines``.
+Chaining derives a *new* definition and leaves the original untouched. A ``pipeline``
+can serve as the prefix of several ``pipelines``.
 
 .. code-block:: python
 
-    >>> counted = pipeline.count()
-    >>> sorted(pipeline.workflow.nodes), sorted(counted.workflow.nodes)
-    (['hash-1'], ['count-1', 'hash-1'])
-    >>> list(counted)
-    [{'count': 2}]
+    >>> from riko import Pipeline
+    >>>
+    >>> attrs = {'key': 'content', 'value': "Let's talk about riko!"}
+    >>> pipeline = Pipeline.from_module('itembuilder', conf={'attrs': attrs})
+    >>> sorted(pipeline.workflow.nodes)
+    ['itembuilder-1']
+    >>> list(pipeline.count())
+    [{'count': 1}]
+    >>> list(pipeline.hash())
+    [{'content': "Let's talk about riko!", 'hash': 197222720}]
+    >>> sorted(pipeline.workflow.nodes)
+    ['itembuilder-1']
 
 Exporting a stream
 ^^^^^^^^^^^^^^^^^^
@@ -464,10 +488,10 @@ them into a concrete list you can index, measure, and reuse.
 
     >>> from riko import Pipeline, export
     >>>
-    >>> pipeline = Pipeline(source=[{'title': 'a'}, {'title': 'b'}]).hash()
-    >>> items = export(pipeline)
-    >>> len(items), items[0]['title']      # unlike the pipeline, indexable & measurable
-    (2, 'a')
+    >>> pipeline = Pipeline.from_module("hash")
+    >>> items = export(pipeline([{'content': 'a'}, {'content': 'b'}]))
+    >>> len(items), items[0]['hash']      # unlike the pipeline, indexable & measurable
+    (2, 1267964084)
 
 You can pass an export type as the second argument ``list`` (the default) and ``tuple``
 return the items, and a format serializes them. A format may be a plain string or a
@@ -477,15 +501,15 @@ optional ``csv2ofx`` dependency). A format returns a ``StringIO`` buffer.
 
 .. code-block:: python
 
-    >>> from riko import Formats, list_formats
+    >>> from riko import Formats, Pipeline, export, list_formats
     >>>
-    >>> source = [{"title": "a"}, {"title": "b"}]
-    >>> pipeline = Pipeline(source=source).hash(options={"field": "title"})
+    >>> items = [{"title": "a"}, {"title": "b"}]
+    >>> pipeline = Pipeline.from_module("hash", options={"field": "title"})
     >>> {"csv", "geojson", "json", "jsonl"}.issubset(list_formats())
     True
-    >>> export(pipeline, "tuple")
+    >>> export(pipeline(items), "tuple")
     ({'title': 'a', 'hash': 1267964084}, {'title': 'b', 'hash': 2297772648})
-    >>> export(pipeline, Formats.JSON).getvalue()
+    >>> export(pipeline(items), Formats.JSON).getvalue()
     '[{"hash": 1267964084, "title": "a"}, {"hash": 2297772648, "title": "b"}]'
 
 
@@ -520,6 +544,9 @@ already there.
 
 .. code-block:: python
 
+    from riko import Pipeline, Sources
+
+    conf = {"attrs": {"key": "content", "value": "a,bb,ccc"}}
     pipeline = (
         Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
         .tokenizer()
@@ -541,10 +568,9 @@ eager: it serializes the whole ``stream`` before writing it.
 Asynchronous pipelines
 ----------------------
 
-The ``async`` extra (``python -m pip install "riko[async]"``) lets the same
-``Pipeline`` run asynchronously. Build a ``pipeline`` the same way, then consume it
-with ``async for`` (or ``anext`` on ``aiter(pipeline)``). ``riko.run(main)`` runs an
-async function on the installed backend.
+The ``async`` extra (``python -m pip install "riko[async]"``) lets the same ``Pipeline``
+run asynchronously. Build a ``pipeline`` as normal, then consume it with ``async for``,
+or run it as a context manager with ``async with pipeline.open()``.
 
 Each async ``source`` fetch reads its body fully into memory before parsing (a
 single ``await``). So ``stream`` here means ``Iterator[item]``, not an incremental
@@ -572,15 +598,19 @@ Lazy async iteration
     >>> run(main)
     Donations / 5
 
-To take just the first ``item``, close the async iterator afterwards so the
-execution it started is torn down.
+To stop early, use the context manager ``async with pipeline.open() as stream:``.
+Leaving the block closes the run.
 
 .. code-block:: python
 
+    >>> from riko import Pipeline, get_path, run
+    >>>
+    >>> conf = {'url': get_path('feed.xml')}
+    >>>
     >>> async def first():
-    ...     stream = aiter(Pipeline.from_module(Sources.FETCH, conf=fetch_conf))
-    ...     item = await anext(stream)
-    ...     await stream.aclose()
+    ...     async with Pipeline.from_module('fetch', conf=conf).open() as stream:
+    ...         item = await anext(stream)
+    ...
     ...     print(item['title'])
     >>>
     >>> run(first)
@@ -662,9 +692,9 @@ there is no failed state left behind: the error belongs to that one execution.
     ...     yield {'content': 'first'}
     ...     raise RuntimeError('broken input')
     >>>
-    >>> pipeline = Pipeline(source=broken_source()).hash()
+    >>> pipeline = Pipeline.from_module("hash")
     >>> try:
-    ...     list(pipeline)
+    ...     list(pipeline(broken_source()))
     ... except RuntimeError as exc:
     ...     print(exc)
     broken input
@@ -679,31 +709,34 @@ Using a one-off function
 
 The built-in ``udf`` ``processor`` applies a Python callable to each ``item``.
 It is the simplest option when a transformation is local to one application.
-A ``Pipeline`` holds only JSON-native values, so a callable cannot
-travel through ``options``; call the ``pipe`` functionally instead.
+Call its ``pipe`` functionally:
 
 .. code-block:: python
 
     >>> from riko.modules.udf import pipe as udf
     >>>
-    >>> def add_length(item):
-    ...     return {**item, 'length': len(item['content'])}
+    >>> def set_length(item):
+    ...     return {**item, "length": len(item["content"])}
     >>>
-    >>> items = [{'content': 'a'}, {'content': 'abcd'}]
-    >>> [item['length'] for item in udf(items, func=add_length, emit=True)]
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
+    >>> [item["length"] for item in udf(items, func=set_length, emit=True)]
     [1, 4]
 
-Inside a ``Pipeline`` chain, ``map`` will append the callable as its own node.
+Inside a ``Pipeline`` chain, ``map`` appends the callable as its own node. It passes
+keyword arguments to the callable, and ``resources=`` passes resources the ``Context``
+provides to it.
 
 .. code-block:: python
 
-    pipeline = Pipeline(source=items).map(add_length)
-    [item['length'] for item in pipeline]
-
-.. note::
-
-   Pending. ``map`` exists on ``Pipeline`` but raises ``NotImplementedError``
-   until callable nodes land.
+    >>> from riko import Pipeline
+    >>>
+    >>> def set_offset_length(item, *, offset):
+    ...     return {**item, "length": len(item["content"]) + offset}
+    >>>
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
+    >>> pipeline = Pipeline().map(set_offset_length, offset=10)
+    >>> [item["length"] for item in pipeline(items)]
+    [11, 14]
 
 Use the extension decorators when the transformation should have normal ``riko``
 configuration, assignment, metadata, and sync/async wrappers.
@@ -719,7 +752,7 @@ by name (see `Registering a custom module`_ below).
 
     >>> from riko.ext import processor
     >>>
-    >>> @processor()
+    >>> @processor
     ... def uppercase(item, extraction, objconf, **kwargs) -> str:
     ...     return str(item['content']).upper()
     >>>
@@ -832,10 +865,10 @@ subscription's ``func`` will see each ``item`` as it is published.
     items = [{'title': 'Gravity paper'}, {'title': 'Breaking: riko 4.0'}]
     received = []
     subscriber = Pipeline.subscribe('subscriber', func=received.append)
-    publisher = Pipeline(source=items).publish(subscriber)
+    publisher = Pipeline().publish(subscriber)
 
     ### Consuming the publisher drives the push ###
-    _ = list(publisher)
+    _ = list(publisher(items))
 
     ### The subscriber saw every item as it was published ###
     [item['title'] for item in received]
@@ -868,7 +901,7 @@ keep a subscriber's failures out of the main ``pipeline``:
 
     ### Send ALL items to 'everything', filter, then send matches to 'breaking' ###
     pipeline = (
-        Pipeline(source=items)
+        Pipeline()
             .publish(everything)
             .filter(conf={'rule': [{'field': 'score', 'value': 500, 'op': 'greater'}]})
             .publish(breaking, isolate=True)
@@ -876,7 +909,7 @@ keep a subscriber's failures out of the main ``pipeline``:
     )
 
     ### Consume the main pipeline (this also drives the pushes) ###
-    [item['title'] for item in pipeline]  # sorted high score items
+    [item['title'] for item in pipeline(items)]  # sorted high score items
 
 .. note::
 
@@ -896,10 +929,10 @@ draining the subscription later.
 
 .. code-block:: python
 
-    from riko import Pipeline
+    from riko import get_path, Pipeline, Sources
 
-    items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    left, right = Pipeline(source=items).split(2)
+    pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
+    left, right = pipeline.split(2)
     left.first(), right.first()
 
 .. note::
@@ -971,14 +1004,23 @@ becomes a ``SortRawConf``, so a type checker catches a bad option.
 
 The module also exposes a single ``pipe`` (or, with ``is_async=True``, an
 ``async_pipe``) callable that runs the workflow through riko's execution with the
-``Context`` you hand it. It is ordinary importable Python that you can edit it or save
-as ``pipe_<id>.py`` in a package. Register the pacakage with
+``Context`` you hand it. It is ordinary importable Python that you can edit or save
+as ``pipe_<id>.py`` in a package. Register the package with
 ``riko.ext.register_workflow_store`` so a ``loop`` can embed it by the saved name.
 
 .. code-block:: python
 
-    >>> from riko import compile_workflow
+    >>> from riko import Workflow, compile_workflow
     >>>
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
+    >>> dag = {
+    ...     'modules': [
+    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'name': 'rename', 'conf': rename_conf},
+    ...     ]
+    ... }
+    >>> flow = Workflow.parse(dag)
     >>> source = compile_workflow(flow, 'pipe_demo')
     >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
     DEPENDENCIES: list[str] = ["itembuilder", "rename"]
@@ -1081,8 +1123,17 @@ declarations or list of module and stored-workflow names instead of running.
 
 .. code-block:: python
 
-    >>> from riko import Context, ExecutionMode, compile_workflow
+    >>> from riko import Context, ExecutionMode, Workflow, compile_workflow
     >>>
+    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
+    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
+    >>> dag = {
+    ...     'modules': [
+    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
+    ...         {'name': 'rename', 'conf': rename_conf},
+    ...     ]
+    ... }
+    >>> flow = Workflow.parse(dag)
     >>> namespace = {}
     >>> exec(compile_workflow(flow, 'pipe_demo'), namespace)
     >>> pipe = namespace['pipe']
@@ -1096,7 +1147,7 @@ Performance and memory
 
 Keep the following execution behaviors in mind:
 
-- A ``Pipeline`` is a definition. Every iteration is a fresh execution, so iterating
+- A ``Pipeline`` is a definition. Every call starts a fresh run, so running it
   twice does the work twice. Materialize with ``export`` or ``list`` when you need to
   reuse a result.
 - Most modules are lazy, but ``write``, ``sort``, ``reverse``, ``count``, and ``sum``

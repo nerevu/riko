@@ -20,15 +20,14 @@ Examples:
 from __future__ import annotations
 
 from io import BytesIO, StringIO, TextIOWrapper
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast, overload
 
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
 
-from riko.bado import _backend
-from riko.bado._backend import async_open
+from riko.bado._backend import NamedTemporaryFile, async_open
 from riko.bado._util import async_get, async_read
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._paths import normalize_url
 
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
-    from riko.bado._backend import NamedTemporaryFile
     from riko.types._io import PathLike
     from riko.types._scalars import AnyStr
 
@@ -69,22 +67,22 @@ def _is_open_mode(mode: str) -> TypeIs[OpenBinaryMode | OpenTextMode]:
 
 
 @overload
-def chunk(  # noqa: E704
+def chunk(
     content: str, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[list[str]]: ...
-@overload  # noqa: E302
-def chunk(  # noqa: E704
+@overload
+def chunk(
     content: StringIO, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[str]: ...
-@overload  # noqa: E302
-def chunk(  # noqa: E704
+@overload
+def chunk(
     content: bytes, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[list[int]]: ...
-@overload  # noqa: E302
-def chunk(  # noqa: E704
+@overload
+def chunk(
     content: BytesIO, chunksize: int | None = None, *args: int, **kwargs: int
 ) -> Iterator[bytes]: ...
-def chunk(  # noqa: E302
+def chunk(
     content: AnyStr | IOFileLike,
     chunksize: int | None = None,
     *args: int,
@@ -122,14 +120,14 @@ def chunk(  # noqa: E302
 
 
 @overload
-def _chunk_content(  # noqa: E704
+def _chunk_content(
     content: str | StringIO, chunksize: int | None = None
 ) -> Iterator[str]: ...
-@overload  # noqa: E302
-def _chunk_content(  # noqa: E704
+@overload
+def _chunk_content(
     content: bytes | BytesIO, chunksize: int | None = None
 ) -> Iterator[bytes]: ...
-def _chunk_content(  # noqa: E302
+def _chunk_content(
     content: AnyStr | IOFileLike, chunksize: int | None = None
 ) -> Iterator[AnyStr]:
     """
@@ -231,7 +229,7 @@ async def _read_bytes(url: str, timeout: float) -> tuple[bytes, str, str | None]
     return result
 
 
-class _AsyncURLStream[T]:
+class _AsyncURLStream[T: BytesIO | NamedTextIOWrapper]:
     """
     An awaitable, async-context-manager handle over a lazily opened buffer.
 
@@ -244,12 +242,12 @@ class _AsyncURLStream[T]:
         self._open = opener
         self._stream: BytesIO | NamedTextIOWrapper | None = None
 
-    def __await__(self) -> Generator[Any, None, T]:
+    def __await__(self) -> Generator[object, None, T]:
         return self._open().__await__()
 
     async def __aenter__(self) -> T:
         opened = await self._open()
-        self._stream = cast("BytesIO | NamedTextIOWrapper", opened)
+        self._stream = opened
         return opened
 
     async def __aexit__(self, *_: object) -> bool:
@@ -260,7 +258,7 @@ class _AsyncURLStream[T]:
 
 
 @overload
-def async_url_open(  # noqa: E704
+def async_url_open(
     url: str,
     timeout: float = ...,
     encoding: str = ...,
@@ -268,15 +266,15 @@ def async_url_open(  # noqa: E704
     binary: Literal[True],
     **_: object,
 ) -> _AsyncURLStream[BytesIO]: ...
-@overload  # noqa: E302
-def async_url_open(  # noqa: E704
+@overload
+def async_url_open(
     url: str,
     timeout: float = ...,
     encoding: str = ...,
     binary: Literal[False] = ...,
     **_: object,
 ) -> _AsyncURLStream[NamedTextIOWrapper]: ...
-def async_url_open(  # noqa: E302
+def async_url_open(
     url: str,
     timeout: float = 0,
     encoding: str = ENCODING,
@@ -463,4 +461,4 @@ def async_get_temp_file() -> NamedTemporaryFile[bytes]:
         True
 
     """
-    return _backend.NamedTemporaryFile(delete=True, delete_on_close=False)
+    return NamedTemporaryFile(delete=True, delete_on_close=False)

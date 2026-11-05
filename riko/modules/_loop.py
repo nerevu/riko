@@ -72,7 +72,7 @@ def _take[T: Feed](results: T, count: CountValues | None = "all") -> T:
     return result
 
 
-def _fold_parent(  # noqa: E302
+def _fold_parent(
     parent: Item, results: Stream, assign: str, emit: bool = False
 ) -> Stream:
     """
@@ -97,7 +97,7 @@ def _fold_parent(  # noqa: E302
         yield parent
 
 
-async def _afold_parent(  # noqa: E302
+async def _afold_parent(
     parent: Item, results: Stream | AsyncStream, assign: str, emit: bool = False
 ) -> AsyncStream:
     yielded = False

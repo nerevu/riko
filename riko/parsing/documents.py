@@ -11,49 +11,44 @@ Attributes:
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as native_etree  # noqa: N813, S405
 from html.parser import HTMLParser
 from io import BytesIO, RawIOBase, StringIO
 from itertools import chain
 from json import JSONDecodeError, load, loads
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
+from xml.etree.ElementTree import Element, ElementTree  # noqa: S405
 
 import feedparser
+import html5lib
 
-from riko.base._constants import STREAMING_THRESHOLD
+from riko.base._config import STREAMING_THRESHOLD
+from riko.base._guards import is_mapping
+from riko.base._iterutils import gen_non_none
 from riko.base._logging import get_logger
 from riko.coercion._sequences import listize
-from riko.types._guards import is_mapping
 
 from ._dotdict import DotDict
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
     from logging import Logger
-    from types import ModuleType
 
     from riko.io._filelike import FileLike
+    from riko.types._rss import ParsedFeed
     from riko.types._streams import Item, Stream
     from riko.types._values import RikoDict, Stringy, StringyDict
 
 try:
     from lxml import etree, html
-except ImportError:
-    html5parser: ModuleType | None = None
-
-    import xml.etree.ElementTree as etree  # noqa: N813, S405
-    from xml.etree.ElementTree import ElementTree  # noqa: S405
-
-    import html5lib as html
-
-    IS_LXML: bool = False
-    XML_PARSER: Any = None
-else:
-    from xml.etree.ElementTree import ElementTree  # noqa: S405
-
     from lxml.html import html5parser
-
+except ImportError:
+    etree = html = html5parser = None
+    IS_LXML: bool = False
+    XML_PARSER = None
+else:
     IS_LXML: bool = True
-    XML_PARSER = etree.XMLParser(  # noqa: S314
+    XML_PARSER = etree.XMLParser(
         resolve_entities=False,
         no_network=True,
         load_dtd=False,
@@ -64,11 +59,41 @@ else:
 try:
     import fastfeedparser
 except ImportError:
-    rss_parser: ModuleType = feedparser
-    IS_FASTFEEDPARSER = False
-else:
-    rss_parser: ModuleType = fastfeedparser
-    IS_FASTFEEDPARSER = True
+    fastfeedparser = None
+
+IS_FASTFEEDPARSER: bool = fastfeedparser is not None
+
+
+def parse_feed(source: str | bytes | FileLike) -> ParsedFeed:
+    """
+    Parses an RSS or Atom feed with whichever feed parser is installed.
+
+    Args:
+
+        source: The feed document, or an open file to read it from.
+
+    Returns:
+
+        The parsed feed: its ``entries`` plus feed-level keys such as ``bozo``.
+
+    Examples:
+
+        >>> content = (
+        ...     b"<rss version='2.0'><channel><title>Example</title>"
+        ...     b"<item><title>First</title></item></channel></rss>"
+        ... )
+        >>> parse_feed(content)["entries"][0]["title"]
+        'First'
+
+    """
+    if fastfeedparser is None:
+        parsed = feedparser.parse(source)
+    else:
+        data = source if isinstance(source, str | bytes) else source.read()
+        parsed = fastfeedparser.parse(data)
+
+    return parsed
+
 
 try:
     import ijson
@@ -82,7 +107,6 @@ if TYPE_CHECKING:
     from xml.etree.ElementTree import Element as nativeElement
     from xml.etree.ElementTree import ElementTree as nativeElementTree
 
-    from lxml import html as lxmlhtml
     from lxml.etree import _Element as lxmlElement
     from lxml.etree import _ElementTree as lxmlElementTree
 
@@ -105,7 +129,7 @@ class LinkParser(HTMLParser):
 
     def __init__(
         self,
-        *args: Any,
+        *args: object,
         external_only: bool = True,
         strict: bool = True,
         rss_only: bool = False,
@@ -336,18 +360,19 @@ def xpath(
     namespaces = {ns_prefix: namespace}
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
-    if hasattr(tree, "xpath"):
-        _xpath = cast("lxmlElementTree | lxmlElement", tree).xpath
-        elements = _xpath(ns_path, namespaces=namespaces) if namespace else _xpath(path)
-    elif namespace:
+    if isinstance(tree, ElementTree | Element) and namespace:
         elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
-    else:
+    elif isinstance(tree, ElementTree | Element):
         elements = tree.findall(".//" + "/".join(tags[pos:]))
+    elif namespace:
+        elements = tree.xpath(ns_path, namespaces=namespaces)
+    else:
+        elements = tree.xpath(path)
 
     yield from elements
 
 
-def xml2etree(  # noqa: E302
+def xml2etree(
     f: str | FileLike, xml: bool = True, html5: bool = False
 ) -> AnyElementTree:
     """
@@ -372,18 +397,19 @@ def xml2etree(  # noqa: E302
         True
 
     """
-    if xml:
-        element_tree = etree.parse(f, XML_PARSER)  # noqa: S314
-    elif html5 and html5parser:
-        element_tree = cast("lxmlElementTree", html5parser.parse(f))
-    elif IS_LXML:
-        element_tree = cast("lxmlhtml", html).parse(f)
+    if xml and etree is not None:
+        element_tree = etree.parse(f, XML_PARSER)
+    elif xml:
+        element_tree = native_etree.parse(f)  # noqa: S314
+    elif html5 and html5parser is not None:
+        element_tree = html5parser.parse(f)
+    elif html is not None:
+        element_tree = html.parse(f)
     else:
-        if html5 and not html5parser:
+        if html5:
             logger.warning("lxml parser not found. Using html5lib instead.")
 
-        element = cast("nativeElement", html.parse(f))
-        element_tree = ElementTree(element)
+        element_tree = ElementTree(html5lib.parse(f))
 
     return element_tree
 
@@ -438,7 +464,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
 
 def any2dict(
-    content: FileLike | RikoDict | list[RikoDict],
+    content: FileLike | RikoDict | list[RikoDict | None] | str,
     ext: str | None = "xml",
     html5: bool = False,
     path: str | None = None,
@@ -456,9 +482,7 @@ def any2dict(
     elif is_mapping(content):
         yield content
     elif isinstance(content, list):
-        for item in content:
-            if item is not None:
-                yield item
+        yield from gen_non_none(content)
     elif ext and ext in {"xml", "html"}:
         if ext == "xml":
             root = xml2etree(content, xml=True, html5=html5).getroot()
@@ -497,8 +521,8 @@ def any2dict(
             except JSONDecodeError as e:
                 logger.error(e)
             else:
-                value = DotDict(json).get(path, "")
-                yield from any2dict(cast("list[RikoDict]", value), ext=None)
+                value = DotDict(json).get(path, "") if path else json
+                yield from any2dict(cast("list[RikoDict | None]", value), ext=None)
         else:
             try:
                 json_obj = load(content)

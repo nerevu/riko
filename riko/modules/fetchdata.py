@@ -26,10 +26,11 @@ Attributes:
 from __future__ import annotations
 
 from os.path import splitext
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from riko.base._constants import ENCODING
+from riko.base._config import ENCODING
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.coercion._sequences import listize
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
@@ -38,13 +39,11 @@ from riko.parsing.documents import any2dict
 from riko.types._options import DecorationOptions, Defaults
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import FetchDataObjconf
-    from riko.io._filelike import FileLike
     from riko.types._streams import Item, Stream
 
 OPTS: DecorationOptions = SourceOpts
@@ -92,7 +91,7 @@ async def async_parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
-    path = objconf.path if isinstance(objconf.path, str) else ".".join(objconf.path)
+    path = ".".join(listize(objconf.path))
     binary = ext == "json"
     f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
     ext = ext or getattr(f, "ext", None) or ""
@@ -137,13 +136,11 @@ def parser(
     """
     url: str = require_conf_key(objconf, "url", "fetchdata")
     ext = splitext(url)[1].lstrip(".")
-    paths = cast("list[str]", listize(objconf.path))
-    path = ".".join(paths)
+    path = ".".join(listize(objconf.path))
 
     with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
         ext = ext or f.ext
-        content = cast("FileLike", f)
-        yield from any2dict(content, ext, objconf.html5, path=path)
+        yield from any2dict(f, ext, objconf.html5, path=path)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

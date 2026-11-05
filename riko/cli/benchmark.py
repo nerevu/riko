@@ -150,7 +150,7 @@ def sync_module_per_item() -> Items:
 
 
 def sync_prepared_per_item() -> Items:
-    """Prepares the same module once, then calls the bound result once per item."""
+    """Prepares the same module once, then calls the prepared result once per item."""
     call = regex.prepare(conf=REGEX_CONF)
     outputs = (cast("SyncProcessorWrapperOutput", call([item])) for item in items)
     return list(chain.from_iterable(outputs))

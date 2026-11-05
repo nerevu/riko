@@ -21,8 +21,8 @@ Examples:
         python << 'EOF'
         from riko import Pipeline
 
-        source = [{'content': 'hi'}]
-        print(Pipeline(source=source).pipe('example.shout').first())
+        items = [{'content': 'hi'}]
+        print(Pipeline.from_module('example.shout').first(items))
         EOF
 
 """
@@ -48,12 +48,12 @@ def parser(
     return map(_shout, stream)
 
 
-@operator()
+@operator
 def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     """
     Uppercases each item's ``content`` field.
 
-    ``isasync=True`` is not needed here: the ``@operator()`` decorator infers the async
+    ``isasync=True`` is not needed here: the ``@operator`` decorator infers the async
     interface from the ``async_pipe`` name. See ``register_module.py`` for the explicit
     ``isasync=True`` form.
 
@@ -82,7 +82,7 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     return parser(*args, **kwargs)
 
 
-@operator()
+@operator
 def pipe(*args: Any, **kwargs: Any) -> Stream:
     """
     Uppercases each item's ``content`` field.

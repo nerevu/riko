@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from riko.base._config import BUILTIN_PROVIDER
-from riko.base._source_format import ruff_format
+from riko.base._strutils import ruff_format
 from riko.modules._metadata import gen_module_catalog, get_module_category
 from riko.types.modules import get_module_provider
 

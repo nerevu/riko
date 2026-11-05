@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from riko.types._collections import normalize_strs
-from riko.types._enums import Backends, FmtLike, Formats, StrLike, resolve_enum
+from riko.base._require_guards import normalize_strs
+from riko.base._typing import resolve_enum
+from riko.types._enums import Backends, FmtLike, Formats, StrLike
 from riko.types._io import PathLike, PathLikeType
 from riko.types._target_protocols import SupportsWrite
 
@@ -234,11 +235,11 @@ def build_write(
     keys: StrLike | None = None,
 ) -> PreparedWrite:
     """
-    Resolves, validates, and binds a write into a ``PreparedWrite``.
+    Resolves, validates, and prepares a write as a ``PreparedWrite``.
 
-    The target reports its ``(target × fmt)`` capabilities; the keys are
-    normalized; the ``(target, mode, keys)`` triple is validated; and the result is a
-    fully validated, execution-ready specification.
+    The target reports its ``(target × fmt)`` capabilities; the keys are normalized;
+    the ``(target, mode, keys)`` triple is validated; and the result is a fully
+    validated, execution-ready specification.
 
     Args:
 
@@ -249,7 +250,8 @@ def build_write(
 
     Returns:
 
-        The target-bound, validated write specification.
+        A validated write specification that has been checked against its target's
+            capabilities.
 
     Raises:
 

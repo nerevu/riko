@@ -36,10 +36,10 @@ import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
 
-from riko.base.exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError
+from riko.base._guards import require_mapping
 from riko.definitions._workflow_definition import Workflow
 from riko.types._enums import DocumentShape
-from riko.types._guards import require_mapping
 
 from ._document import read_document
 

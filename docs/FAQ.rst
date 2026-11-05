@@ -20,13 +20,13 @@ Index
 - `How do synchronous and asynchronous pipelines differ`_
 - `What does parallel=True do`_
 - `Is riko distributed`_
-- `Why does a pipeline return no items the second time`_
+- `Why does a pipeline see no items the second time`_
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
 - `Can I store a workflow as JSON`_
 - `What execution modes are available`_
 - `Can I create custom modules`_
-- `How should errors and resource cleanup be handled`_
+- `How should I handle errors and resource cleanup`_
 - `Where should I report problems or contribute`_
 
 What is riko's data model?
@@ -42,12 +42,12 @@ configuration, and a ``pipeline`` is a chain of ``nodes``.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'alpha'}, {'title': 'beta'}]
-    >>> pipeline = Pipeline(source=items).hash(
-    ...     options={'field': 'title', 'assign': 'title_hash'}
+    >>> pipeline = Pipeline.from_module(
+    ...     'hash', options={'field': 'title', 'assign': 'title_hash'}
     ... )
-    >>> pipeline.first()
+    >>> pipeline.first(items)
     {'title': 'alpha', 'title_hash': 863334096}
-    >>> len(list(pipeline))
+    >>> len(list(pipeline(items)))
     2
 
 ``riko`` is designed around ordinary Python iteration. It is not a dataframe
@@ -249,8 +249,8 @@ Args
 
     >>> from riko import Pipeline
     >>>
-    >>> stream = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> Pipeline(source=stream).reverse().first()
+    >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
+    >>> Pipeline.from_module('reverse').first(items)
     {'title': 'riko pt. 2'}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
@@ -262,8 +262,8 @@ as the ``options`` mapping.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline(source=items).hash(options={'field': 'title'})
-    >>> result = pipeline.first()
+    >>> pipeline = Pipeline.from_module('hash', options={'field': 'title'})
+    >>> result = pipeline.first(items)
     >>> sorted(result)
     ['hash', 'title']
     >>> result['hash']
@@ -450,14 +450,14 @@ is a single ``item``. So the following all behave predictably:
     >>> from riko.modules.udf import pipe
     >>>
     >>> func = lambda item: {"y": item["x"] + 3}
-    >>> source = [{"x": 0}, {"x": 1}]
-    >>> next(pipe(source[0], func=func))
+    >>> items = [{"x": 0}, {"x": 1}]
+    >>> next(pipe(items[0], func=func))
     {'y': 3}
-    >>> next(pipe(iter(source), func=func))
+    >>> next(pipe(iter(items), func=func))
     {'y': 3}
-    >>> next(pipe(source, func=func))
+    >>> next(pipe(items, func=func))
     {'y': 3}
-    >>> next(pipe(tuple(source), func=func))
+    >>> next(pipe(tuple(items), func=func))
     {'y': 3}
 
 Only the outermost argument is interpreted as one-or-many, so a list-valued
@@ -465,41 +465,40 @@ Only the outermost argument is interpreted as one-or-many, so a list-valued
 
 .. code-block:: python
 
+    >>> from riko.modules.udf import pipe
+    >>>
     >>> item = {"x": 0, "tags": ["a", "b"]}
     >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
     {'tags': ['a', 'b']}
 
-A ``Pipeline`` source behaves identically: one ``item``, a list, or an iterator all
+A ``Pipeline`` seed behaves identically: one ``item``, a list, or an iterator all
 seed the same ``stream``.
 
 .. code-block:: python
 
     >>> from riko import Pipeline
     >>>
-    >>> source = [{"x": 0}, {"x": 1}]
+    >>> items = [{"x": 0}, {"x": 1}]
     >>> options = {"field": "x"}
-    >>> Pipeline(source=iter(source)).hash(options=options).first()
+    >>> pipeline = Pipeline.from_module('hash', options=options)
+    >>> pipeline.first(iter(items))
     {'x': 0, 'hash': 2328942002}
-    >>> Pipeline(source=source).hash(options=options).first()
+    >>> pipeline.first(items)
     {'x': 0, 'hash': 2328942002}
-    >>> Pipeline(source=source[0]).hash(options=options).first()
+    >>> pipeline.first(items[0])
     {'x': 0, 'hash': 2328942002}
 
-``udf`` itself is not reachable this way, because a ``Pipeline``'s ``options`` must be
-JSON-native and a callable is not. Chaining a callable as its own node is what ``map``
-will be for.
-
-.. note::
-
-    Pending. The ``map`` call exists but raises ``NotImplementedError`` until
-    callable nodes land. Call ``riko.modules.udf.pipe`` directly, as above, in the
-    meantime.
+``udf`` is not reachable this way, because a ``Pipeline``'s ``options`` must be
+JSON-native and a callable is not. ``map`` chains a callable as its own node instead.
+The callable receives each ``item`` as is, and sets its output as the next ``item``.
 
 .. code-block:: python
 
-    from riko import Pipeline
-
-    pipeline = Pipeline(source=source).map(func)
+    >>> from riko import Pipeline
+    >>>
+    >>> items = [{"x": 0}, {"x": 1}]
+    >>> list(Pipeline().map(lambda item: {"y": item["x"] + 3})(items))
+    [{'y': 3}, {'y': 4}]
 
 What file types are supported?
 ------------------------------
@@ -594,20 +593,23 @@ workflow as JSON`_ for the wire grammar.
 
 The ways to consume one ``Pipeline``:
 
-+-------------------------------------+----------------------------------------+------------------------------------------------+
-| API                                 | How it runs                            | Important behavior                             |
-+=====================================+========================================+================================================+
-| ``for item in pipeline``            | inline iterator pipeline               | fresh run per ``iter()``; lazy except the      |
-|                                     |                                        | operations that retain input (see `Which       |
-|                                     |                                        | operations materialize or retain input`_)      |
-+-------------------------------------+----------------------------------------+------------------------------------------------+
-| ``async for item in pipeline``      | async iteration                        | fresh run per ``aiter()``; close early with    |
-|                                     |                                        | ``aclosing``                                   |
-+-------------------------------------+----------------------------------------+------------------------------------------------+
-| ``pipeline.with_execution(...)``    | thread/process executor                | ``concurrency`` ceiling; optionally ordered    |
-+-------------------------------------+----------------------------------------+------------------------------------------------+
-| ``pipeline.split(n)`` / ``publish`` | streaming fan-out (pending)            | branches and local subscriptions               |
-+-------------------------------------+----------------------------------------+------------------------------------------------+
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| API                                   | How it runs                            | Important behavior                             |
++=======================================+========================================+================================================+
+| ``for item in pipeline(items)``       | inline iterator pipeline               | fresh run per call; lazy except the            |
+|                                       |                                        | operations that retain input (see `Which       |
+|                                       |                                        | operations materialize or retain input`_)      |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``async for item in pipeline(items)`` | async iteration                        | fresh run per call                             |
+|                                       |                                        |                                                |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``with pipeline.open(items)``         | context manager; ``async with`` for    | closes the run when the block exits,           |
+|                                       | async                                  | including on ``break``                         |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.with_execution(...)``      | thread/process executor                | ``concurrency`` ceiling; optionally ordered    |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.split(n)`` / ``publish``   | streaming fan-out (pending)            | branches and local subscriptions               |
++---------------------------------------+----------------------------------------+------------------------------------------------+
 
 .. note::
 
@@ -641,8 +643,9 @@ keeps the default concurrency limit in flight. The process executor raises there
 
 .. code-block:: python
 
-    from riko import Pipeline, Sources
+    from riko import Pipeline, Sources, get_path
 
+    url = get_path('feed.xml')
     pipeline = (
         Pipeline.from_module(Sources.FETCH, conf={'url': url})
         .with_execution(executor='thread', concurrency=4, ordered=False)
@@ -662,33 +665,48 @@ checkpoints, durable retries, event-time windows, a scheduler, or a workflow UI.
 Use an orchestrator around ``riko`` when you need durable task execution, and
 use a distributed data engine when one machine is insufficient.
 
-Why does a pipeline return no items the second time?
-----------------------------------------------------
+Why does a pipeline see no items the second time?
+-------------------------------------------------
 
-It doesn't. A ``Pipeline`` is an immutable definition, and each call to ``iter()``
-(or ``aiter()``) starts a fresh one-shot execution, so iterating twice runs the
-``pipeline`` twice and yields the same ``items`` again. It is the *iterator* that
-represents one execution: it owns the run's resources, and exhausting it or closing
-it early tears the run down.
+Because its seed was already consumed. A ``Pipeline`` stores no ``items``. Each call
+(``pipeline(items)`` or ``items | pipeline``) starts a fresh run. A run reads its seed
+to the end. An iterator or generator seed is empty when handed to the next run, so
+that run sees no items. Pass it a fresh seed (or a ``list``, which can be iterated
+multiple times).
 
 .. code-block:: python
 
     >>> from riko import Pipeline
     >>>
-    >>> pipeline = Pipeline(source=[{'content': 'a'}]).hash()
-    >>> len(list(pipeline))
-    1
-    >>> len(list(pipeline))
-    1
-    >>> stream = iter(pipeline)
-    >>> next(stream)
-    {'content': 'a', 'hash': 1267964084}
-    >>> stream.close()
+    >>> pipeline = Pipeline.from_module('count')
+    >>> stream = iter([{'content': 'a'}])
+    >>> list(pipeline(stream))
+    [{'count': 1}]
+    >>> list(pipeline(stream))
+    [{'count': 0}]
+    >>> items = [{'content': 'a'}]
+    >>> list(pipeline(items))
+    [{'count': 1}]
+    >>> list(pipeline(items))
+    [{'count': 1}]
 
-If a ``pipeline`` seeded from an in-memory iterator (``Pipeline(source=iter(...))``)
-returns no ``items`` the second time, it is because the *seed iterator* was
-exhausted by the first run; seed from a list, or start from a ``source`` ``module``
-such as ``fetch`` or ``itembuilder``, to make the ``pipeline`` re-runnable.
+A ``pipeline`` that starts from a ``source`` ``module`` such as ``fetch`` or
+``itembuilder`` needs no seed, and each run recreates the source. The stream a run
+returns is single-use. Like any Python iterator, once it is consumed, iterating it
+again yields nothing. Exhausting a run, or leaving its ``with pipeline.open(...)``
+block, closes it.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline
+    >>>
+    >>> pipeline = Pipeline.from_module('count')
+    >>> items = [{'content': 'a'}]
+    >>> stream = pipeline(items)
+    >>> list(stream)
+    [{'count': 1}]
+    >>> list(stream)
+    []
 
 Which operations materialize or retain input?
 ---------------------------------------------
@@ -746,16 +764,18 @@ locally declared subscription while the main ``stream`` continues.
 
 .. code-block:: python
 
-    from riko import Pipeline
+    from riko import get_path, Pipeline, Sources
 
+    url = get_path("feed.xml")
     items = [{"title": "quiet"}, {"title": "loud"}]
 
     # streaming fan-out into two branches
-    left, right = Pipeline(source=items).split(2)
+    left, right = Pipeline.from_module(Sources.FETCH, conf={"url": url}).split(2)
 
     # local subscription: the main stream continues while a copy flows to it
     alerts = Pipeline.subscribe("alerts")
-    pipeline = Pipeline(source=items).publish(alerts, isolate=True).filter(conf=...)
+    pipeline = Pipeline().publish(alerts, isolate=True).filter(conf=...)
+    stream = pipeline(items)
 
 This is an in-process coordination mechanism, not an external message broker.
 
@@ -885,30 +905,31 @@ For runtime registration, call ``register_module`` instead:
 .. code-block:: python
 
     from riko.ext import ModuleDefinition, register_module
+    from your_ext import shout
 
     register_module(ModuleDefinition.from_module(shout, name="example.shout"))
 
-``from_module`` takes an object exposing ``pipe``/``async_pipe`` and binds what it finds
-there. You can alternatively pass ``sync_pipe``/``async_pipe`` to ``ModuleDefinition``
+``from_module`` takes an object exposing ``pipe``/``async_pipe`` and registers what it
+finds there. You can alternatively pass ``sync_pipe``/``async_pipe`` to ``ModuleDefinition``
 directly for bare callables. Registered and entry-point names surface in
 ``list_modules()`` alongside the packaged built-ins. See ``examples/riko-example-ext``
 for a complete example, the `Cookbook`_ for custom ``processor`` and ``operator``
 examples, and the `contributing guide`_ for the additional work required for a built-in
 module.
 
-How should errors and resource cleanup be handled?
---------------------------------------------------
+How should I handle errors and resource cleanup?
+------------------------------------------------
 
-Normal module exceptions propagate out of the iteration that triggered them, and an
-unknown module name raises ``UnsupportedModuleError`` before anything runs. A
-``Pipeline`` carries no state of its own, so there is nothing to inspect or reset
-afterwards: iterate it again to rerun it.
+Normal module exceptions propagate out of the iteration that triggered them. An unknown
+module name raises ``UnsupportedModuleError`` before anything runs. A ``Pipeline``
+carries no state of its own, so there is nothing to inspect or reset afterwards. Run it
+again, with a fresh seed if it takes one.
 
-Each iterator owns its run's resources and releases them when it is exhausted or
-closed, or else when it is garbage collected. When you stop early and want the release
-to happen deterministically, call ``close()`` on a sync iterator, or wrap an async one in
-``contextlib.aclosing`` (or ``await`` its ``aclose()``). External I/O can still raise the
-normal network, parsing, and filesystem exceptions for the underlying operation.
+Each run owns its resources and releases them when it is exhausted or closed. Otherwise
+it issues a ``ResourceWarning`` if a resource was left open for garbage collection. If
+you intend to stop early, use the context manager
+``with pipeline.open(items) as stream:`` (``async with`` for async iteration). Leaving
+the block closes the run.
 
 Where should I report problems or contribute?
 ---------------------------------------------
@@ -930,13 +951,13 @@ documentation workflow.
 .. _How do synchronous and asynchronous pipelines differ: #how-do-synchronous-and-asynchronous-pipelines-differ
 .. _What does parallel=True do: #what-does-paralleltrue-do
 .. _Is riko distributed: #is-riko-distributed
-.. _Why does a pipeline return no items the second time: #why-does-a-pipeline-return-no-items-the-second-time
+.. _Why does a pipeline see no items the second time: #why-does-a-pipeline-see-no-items-the-second-time
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
 .. _How do I send one stream to multiple consumers: #how-do-i-send-one-stream-to-multiple-consumers
 .. _Can I store a workflow as JSON: #can-i-store-a-workflow-as-json
 .. _What execution modes are available: #what-execution-modes-are-available
 .. _Can I create custom modules: #can-i-create-custom-modules
-.. _How should errors and resource cleanup be handled: #how-should-errors-and-resource-cleanup-be-handled
+.. _How should I handle errors and resource cleanup: #how-should-i-handle-errors-and-resource-cleanup
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
 .. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
 

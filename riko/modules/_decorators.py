@@ -8,7 +8,7 @@ Examples:
 
         >>> from riko.ext import DynamicConf, processor
         >>>
-        >>> @processor()
+        >>> @processor
         ... def pipe(item, extraction, objconf, **kwargs) -> int:
         ...     return item * objconf.times
         >>>
@@ -28,8 +28,10 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Generic,
     Literal,
     NamedTuple,
+    TypeVar,
     Unpack,
     cast,
     overload,
@@ -45,27 +47,31 @@ from riko.bado.itertools import (
     async_map,
     async_map_ordered_stream,
 )
-from riko.base._logging import get_logger
-from riko.definitions._context import Context
-from riko.parsing._dotdict import DotDict
-from riko.parsing.config import get_field, get_skip
-from riko.types._collections import require_from_typed_dict, typed_dict_keys
-from riko.types._enums import BasicCastType
-from riko.types._guards import (
+from riko.base._guards import (
     is_async_callable,
     is_known_sequence,
     is_listlike,
     is_mapping,
     is_streamlike,
 )
+from riko.base._logging import get_logger
+from riko.base._require_guards import require_from_typed_dict, typed_dict_keys
+from riko.definitions._context import Context
+from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.parsing._dotdict import DotDict
+from riko.parsing.config import get_field, get_skip
+from riko.types._enums import BasicCastType
 from riko.types._io import is_async_closeable
 from riko.types._options import (
     Casted,
+    ContextOverrides,
     DecorationOptions,
     Defaults,
     OperatorDecorationOptions,
     ProcessorDecorationOptions,
+    RawCallOptions,
     SharedDecorationOptions,
+    build_require_raw_call_options,
 )
 from riko.types._pipedef import CountValues, EmbedKwargs
 from riko.types._streams import (
@@ -77,14 +83,8 @@ from riko.types._streams import (
     Stream,
     StreamOrValueStream,
 )
-from riko.types._wrappers import PreparedCall, stamp_wrapper_meta
-from riko.types.modules import (
-    Conf,
-    ContextOverrides,
-    RawCallOptions,
-    build_require_raw_call_options,
-    require_conf,
-)
+from riko.types._wrappers import PreparedCall
+from riko.types.modules import Conf, require_conf
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, has_sequential_inputs, is_loopable
@@ -177,6 +177,9 @@ _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverri
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
 _require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
+_require_decoration_options = require_from_typed_dict(
+    DecorationOptions, error=TypeError
+)
 
 
 def _resolve_context(
@@ -209,7 +212,7 @@ class _AsyncWrapperStream[T]:
         self._make = make
         self._agen: AsyncIterator[T] | None = None
 
-    def __await__(self) -> Generator[Any, None, AnyIterable[T]]:
+    def __await__(self) -> Generator[object, None, AnyIterable[T]]:
         return self._make().__await__()
 
     def __aiter__(self) -> AsyncIterator[T]:
@@ -227,7 +230,7 @@ class _AsyncWrapperStream[T]:
             await self._agen.aclose()
 
 
-class Module[B: (Literal[True], Literal[False])]:
+class Module[B: bool]:
     """
     Base for the ``processor``/``operator``/``splitter`` pipe decorators.
 
@@ -238,15 +241,41 @@ class Module[B: (Literal[True], Literal[False])]:
     per-call state those steps share.
     """
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType]
     decoration_options: ClassVar[frozenset[str]]
     call_options: ClassVar[frozenset[str]] = _CALL_OPTS
     context_options: ClassVar[frozenset[str]] = _CONTEXT_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]]
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]]
+
+    def __new__(cls, *args: object, **kwargs: object) -> object:
+        """
+        Creates the decorator, or wraps a function when applied bare.
+
+        Applied without parentheses, the decorator wraps the function exactly as
+        its called, option-free form does.
+
+        Raises:
+
+            TypeError: When the function to wrap is passed along with decoration
+                options.
+
+        """
+        pipe = args[0] if args else None
+
+        if callable(pipe) and (len(args) > 1 or kwargs):
+            msg = f"@{cls.__name__} takes either the function to wrap or decoration "
+            raise TypeError(msg + "options, not both")
+        elif callable(pipe):
+            wrap = cast("Callable[[Callable[..., object]], ModuleWrapper]", cls())
+            result = wrap(pipe)
+        else:
+            result = super().__new__(cls)
+
+        return result
 
     @overload
-    def __init__(  # noqa: E704
+    def __init__(
         self: Module[Literal[True]],
         defaults: Defaults | None = ...,
         *,
@@ -256,8 +285,8 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = ...,
         **opts: object,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: Module[Literal[False]],
         defaults: Defaults | None = ...,
         *,
@@ -267,7 +296,7 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = ...,
         **opts: object,
     ) -> None: ...
-    def __init__(  # noqa: E301
+    def __init__(
         self,
         defaults: Defaults | None = None,
         *,
@@ -277,20 +306,17 @@ class Module[B: (Literal[True], Literal[False])]:
         ptype: BasicCastType = BasicCastType.PASS,
         **opts: object,
     ):
-        if callable(defaults):
-            name = type(self).__name__
-            raise TypeError(
-                f"@{name} must be called before decorating (use @{name}()); the "
-                f"bare form is not supported yet and would have taken "
-                f"{defaults!r} as the pipe defaults"
-            )
-
         # Only called once on pipe import
         self.defaults: Defaults = defaults or Defaults()
         self._opts: DecorationOptions = DecorationOptions(ftype=ftype, ptype=ptype)
-        self._opts.update(cast("DecorationOptions", opts))
-        self.isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
+        self._opts.update(_require_decoration_options(opts))
+        self._isasync = isasync  # pyright: ignore[reportAttributeAccessIssue]
         self.pollable: bool = pollable
+
+    @property
+    def isasync(self) -> B:
+        """Whether this decorator builds the async interface (``async_pipe``)."""
+        return self._isasync
 
     def _resolve_isasync(self, pipe: ModuleParser) -> bool:
         """
@@ -334,7 +360,7 @@ class Module[B: (Literal[True], Literal[False])]:
         Stamps discovery metadata onto a finished wrapper.
 
         Derives and sets the module's name, subtype(s), and loopability from the parser
-        and decoration options, and the ``prepare`` that binds a call for reuse.
+        and decoration options, and the ``prepare`` that prepares a call for reuse.
 
         Args:
 
@@ -480,7 +506,7 @@ class Module[B: (Literal[True], Literal[False])]:
         **options: Unpack[RawCallOptions],
     ) -> PreparedCall:
         """
-        Binds ``wrapper``'s configuration and call options for reuse over many items.
+        Prepares ``wrapper``'s configuration and call options for reuse over many items.
 
         Every module wrapper exposes this as its ``prepare``. The configuration and call
         options are resolved here. Each item call supplies the ``context`` and any
@@ -579,16 +605,12 @@ class Module[B: (Literal[True], Literal[False])]:
 
 
 @overload
-async def _materialize_terminal[T](  # noqa: E704
-    value: AsyncIterable[T],
-) -> Iterator[T]: ...
-@overload  # noqa: E302
-async def _materialize_terminal[T](  # noqa: E704
-    value: list[T] | tuple[T, ...],
-) -> list[T]: ...
+async def _materialize_terminal[T](value: AsyncIterable[T]) -> Iterator[T]: ...
 @overload
-async def _materialize_terminal[T](value: T) -> T: ...  # noqa: E704
-async def _materialize_terminal[T](value: object) -> object:  # noqa: E302
+async def _materialize_terminal[T](value: list[T] | tuple[T, ...]) -> list[T]: ...
+@overload
+async def _materialize_terminal[T](value: T) -> T: ...
+async def _materialize_terminal[T](value: object) -> object:
     """
     Drains an async secondary input stream into a concrete sync iterator.
 
@@ -699,8 +721,13 @@ class _ProcessorCall(NamedTuple):
     stream_count: CountValues | None
 
 
+# Declared covariant: inferred variance turns invariant on Python 3.13+, where the
+# frozen record gains a ``__replace__`` that takes ``module``.
+M_co = TypeVar("M_co", bound=Module[bool], covariant=True)
+
+
 @define(frozen=True, slots=True)
-class _PreparedCall[M: Module[Any]](PreparedCall):
+class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     """
     A module call prepared once, holding what every prepared call kind shares.
 
@@ -709,11 +736,11 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
         module: The decorator that built the wrapper.
         wrapper: The module wrapper being called.
         prepared: The module's prepared call-time state.
-        options: The bound call options.
+        options: The prepared call options.
 
     """
 
-    module: M
+    module: M_co
     wrapper: ModuleWrapper
     prepared: PreparedModule[ItemOrValue, object]
     options: RawCallOptions
@@ -735,7 +762,7 @@ class _PreparedCall[M: Module[Any]](PreparedCall):
 
 
 @define(frozen=True, slots=True)
-class _PreparedProcessor(_PreparedCall["processor[Any]"]):
+class _PreparedProcessor(_PreparedCall["processor[bool]"]):
     """A processor call prepared once and run once per item."""
 
     def __call__(
@@ -839,7 +866,7 @@ class _PreparedProcessor(_PreparedCall["processor[Any]"]):
 
 
 @define(frozen=True, slots=True)
-class _PreparedOperator(_PreparedCall["operator[Any]"]):
+class _PreparedOperator(_PreparedCall["operator[bool]"]):
     """An operator call prepared once and run once per stream."""
 
     def __call__(
@@ -978,7 +1005,7 @@ class _PreparedOperator(_PreparedCall["operator[Any]"]):
 
 
 @define(frozen=True, slots=True)
-class _PreparedSplitter(_PreparedCall["splitter[Any]"]):
+class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
     """A splitter call prepared once and run once per stream."""
 
     def __call__(
@@ -1030,31 +1057,58 @@ def _wrap_item(item: ItemOrValue) -> DotDict[RikoValue]:
     return DotDict(_item)
 
 
-class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class processor[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that processes individual items."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "processor"
     decoration_options: ClassVar[frozenset[str]] = _PROCESSOR_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedProcessor
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedProcessor
 
     @overload
-    def __init__(  # noqa: E704
+    def __new__[I, E, O: ItemOrValue](
+        cls, pipe: AwaitableProcessorParser[I, E, O], /
+    ) -> AsyncProcessorWrapper: ...
+    @overload
+    def __new__[I, E, O: ItemOrValue](
+        cls, pipe: SyncProcessorParser[I, E, O], /
+    ) -> SyncProcessorWrapper: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> processor[Literal[True]]: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> processor[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> object:
+        return super().__new__(cls, *args, **kwargs)
+
+    @overload
+    def __init__(
         self: processor[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
         **kwargs: object,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: processor[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> None: ...
-    def __init__(self, *args: object, **kwargs: object):  # noqa: E301
+    def __init__(self, *args: object, **kwargs: object):
         """
         Configures a sync/async pipe that processes individual items.
 
@@ -1062,8 +1116,8 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         ``subtype: transformer`` or ``subtype: source`` (a source sets ``ftype`` to
         ``"none"``).
 
-        Keyword arguments such as ``conf`` and ``count`` go to the wrapped pipe,
-        not the decorator.
+        Keyword arguments such as ``conf`` and ``count`` go to the wrapped pipe, not the
+        decorator.
 
         Args:
 
@@ -1072,55 +1126,52 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         Kwargs:
 
             isasync (bool): Wraps an async pipe (default: False).
+
             pollable (bool): Marks the pipe as pollable for discovery (default: False).
 
-            extract (str): Key whose ``conf`` value is passed to the pipe in
-                place of ``conf`` (default: None).
+            extract (str): Key whose ``conf`` value is passed to the pipe in place of
+                ``conf`` (default: None).
 
-            listize (bool): Ensure an ``extract`` value is list-like (default:
-                False).
+            listize (bool): Ensure an ``extract`` value is list-like (default: False).
 
-            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
-                instance (default: True unless ``ptype`` is ``"none"``).
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify`` instance
+                (default: True unless ``ptype`` is ``"none"``).
 
-            ptype (str): Converts ``conf`` items to a type after objectifying.
-                One of ``"pass"``, ``"none"``, ``"text"``, ``"int"``,
-                ``"float"``, or ``"decimal"``; ``"none"`` disables ``objectify``
-                (default: "pass").
+            ptype (str): Converts ``conf`` items to a type after objectifying. One of
+                ``"pass"``, ``"none"``, ``"text"``, ``"int"``, ``"float"``, or
+                ``"decimal"``; ``"none"`` disables ``objectify`` (default: "pass").
 
-            field (str): Field whose value is passed to the pipe in place of
-                ``item`` (default: None).
+            field (str): Field whose value is passed to the pipe in place of ``item``
+                (default: None).
 
-            ftype (str): Converts the input ``item`` to a type after reading
-                ``field``. Same choices as ``ptype``; ``"none"`` enables
-                ``emit`` and marks the module a source (default: "pass").
+            ftype (str): Converts the input ``item`` to a type after reading ``field``.
+                Same choices as ``ptype``; ``"none"`` enables ``emit`` and marks the
+                module a source (default: "pass").
 
-            assign (str): Field the stream is assigned to (default: "content"
-                for a source, module name otherwise). Ignored when ``emit`` is
-                true.
+            assign (str): Field the stream is assigned to (default: "content" for a
+                source, module name otherwise). Ignored when ``emit`` is true.
 
-            emit (bool): Return the stream as is instead of assigning it.
-                Overrides ``assign`` (default: derived from ``ftype``).
+            emit (bool): Return the stream as is instead of assigning it. Overrides
+                ``assign`` (default: derived from ``ftype``).
 
-            skip_if (callable): Callable taking the ``item`` that returns True to
-                skip processing, leaving the original item unchanged (default:
-                None).
+            skip_if (callable): Callable taking the ``item`` that returns True to skip
+                processing, leaving the original item unchanged (default: None).
 
         Raises:
 
-            TypeError: When an option the processor does not read is passed, such
-                as the operator-only ``embed`` or the ``count`` keyword argument.
+            TypeError: When an option the processor does not read is passed, such as
+                the operator-only ``embed`` or the ``count`` keyword argument.
 
         Examples:
 
             >>> from riko import async_return, issync, run
             >>>
-            >>> @processor()
+            >>> @processor
             ... def pipe(item, extraction, objconf, **kwargs):
             ...     content = item["content"]
             ...     return f'say "{content}" {objconf.times} times!'
             >>>
-            >>> @processor()
+            >>> @processor
             ... async def async_pipe(item, extraction, objconf, **kwargs):
             ...     content = await async_return(item["content"])
             ...     return f'say "{content}" {objconf.times} times!'
@@ -1252,18 +1303,18 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return result
 
     @overload
-    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+    def __call__[I, E, O: ItemOrValue](
         self: processor[Literal[True]], pipe: AsyncProcessorParser[I, E, O]
     ) -> AsyncProcessorWrapper: ...
-    @overload  # noqa: E301
-    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+    @overload
+    def __call__[I, E, O: ItemOrValue](
         self: processor[Literal[False]], pipe: AwaitableProcessorParser[I, E, O]
     ) -> AsyncProcessorWrapper: ...
-    @overload  # noqa: E301
-    def __call__[I, E, O: ItemOrValue](  # noqa: E704, E741
+    @overload
+    def __call__[I, E, O: ItemOrValue](
         self: processor[Literal[False]], pipe: SyncProcessorParser[I, E, O]
     ) -> SyncProcessorWrapper: ...
-    def __call__[I, E, O: ItemOrValue](  # noqa: E301, E741
+    def __call__[I, E, O: ItemOrValue](
         self, pipe: ProcessorParser[I, E, O]
     ) -> ProcessorWrapper:
         """
@@ -1341,36 +1392,63 @@ class processor[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return wrapper
 
 
-class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class operator[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that processes an entire stream."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "operator"
     decoration_options: ClassVar[frozenset[str]] = _OPERATOR_OPTS
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedOperator
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedOperator
 
     @overload
-    def __init__(  # noqa: E704
+    def __new__[T: ItemOrValue, E](
+        cls, pipe: AwaitableOperatorParser[T, E], /
+    ) -> AsyncOperatorWrapper: ...
+    @overload
+    def __new__[T: ItemOrValue, E](
+        cls, pipe: SyncOperatorParser[T, E], /
+    ) -> SyncOperatorWrapper: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> operator[Literal[True]]: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> operator[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> object:
+        return super().__new__(cls, *args, **kwargs)
+
+    @overload
+    def __init__(
         self: operator[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
         **kwargs: object,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: operator[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> None: ...
-    def __init__(self, *args: object, **kwargs: object):  # noqa: E301
+    def __init__(self, *args: object, **kwargs: object):
         """
         Configures a sync/async pipe that processes an entire stream.
 
-        Keyword arguments such as ``conf``, ``count``, and ``embed`` go to the
-        wrapped pipe, not the decorator.
+        Keyword arguments such as ``conf``, ``count``, and ``embed`` go to the wrapped
+        pipe, not the decorator.
 
         Args:
 
@@ -1382,36 +1460,34 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             pollable (bool): Marks the pipe as pollable for discovery (default: False).
 
-            extract (str): Key whose ``conf`` values are passed to the pipe in
-                place of ``conf`` (default: None).
+            extract (str): Key whose ``conf`` values are passed to the pipe in place of
+                ``conf`` (default: None).
 
-            listize (bool): Ensure an ``extract`` value is list-like (default:
-                False).
+            listize (bool): Ensure an ``extract`` value is list-like (default: False).
 
-            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
-                instance (default: True unless ``ptype`` is ``"none"``).
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify`` instance
+                (default: True unless ``ptype`` is ``"none"``).
 
-            ptype (str): Converts ``conf`` items to a type after objectifying.
-                One of ``"pass"``, ``"none"``, ``"text"``, ``"int"``,
-                ``"float"``, or ``"decimal"``; ``"none"`` disables ``objectify``
-                (default: "pass").
+            ptype (str): Converts ``conf`` items to a type after objectifying. One of
+                ``"pass"``, ``"none"``, ``"text"``, ``"int"``, ``"float"``, or
+                ``"decimal"``; ``"none"`` disables ``objectify`` (default: "pass").
 
-            field (str): Field whose values are passed to the pipe in place of
-                ``items`` (default: None).
+            field (str): Field whose values are passed to the pipe in place of ``items``
+                (default: None).
 
-            ftype (str): Converts the input ``items`` to a type after reading
-                ``field``. Same choices as ``ptype`` (default: "pass").
+            ftype (str): Converts the input ``items`` to a type after reading ``field``.
+                Same choices as ``ptype`` (default: "pass").
 
-            assign (str): Field the stream is assigned to (default: the module
-                name). Ignored when ``emit`` is true.
+            assign (str): Field the stream is assigned to (default: the module name).
+                Ignored when ``emit`` is true.
 
-            emit (bool): Return the stream as is instead of assigning it.
-                Overrides ``assign`` (default: derived from ``ftype``).
+            emit (bool): Return the stream as is instead of assigning it. Overrides
+                ``assign`` (default: derived from ``ftype``).
 
         Raises:
 
-            TypeError: When an option the operator does not read is passed, such
-                as the processor-only ``skip_if`` or the ``embed`` keyword argument.
+            TypeError: When an option the operator does not read is passed, such as the
+                processor-only ``skip_if`` or the ``embed`` keyword argument.
 
         Examples:
 
@@ -1504,30 +1580,30 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
             yield _wrap_item(item)
 
     @overload
-    def setup[T, E](  # noqa: E704
+    def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
         input_: Stream,
         field: str | None = ...,
         **kwargs: object,
     ) -> tuple[SyncPipeTuples, Stream, Casted[Item, E] | Casted[T, E]]: ...
-    @overload  # noqa: E301
-    def setup[T, E](  # noqa: E704
+    @overload
+    def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
         input_: AsyncStream,
         field: str | None = ...,
         **kwargs: object,
     ) -> tuple[AsyncPipeTuples, AsyncStream, Casted[Item, E] | Casted[T, E]]: ...
-    @overload  # noqa: E301
-    def setup[T, E](  # noqa: E704
+    @overload
+    def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
         input_: Stream | AsyncStream,
         field: str | None = ...,
         **kwargs: object,
     ) -> tuple[PipeTuples, Stream | AsyncStream, Casted[Item, E] | Casted[T, E]]: ...
-    def setup[T, E](  # noqa: E301
+    def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
         input_: Stream | AsyncStream,
@@ -1627,18 +1703,18 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return result
 
     @overload
-    def __call__[T: ItemOrValue, E](  # noqa: E704
+    def __call__[T: ItemOrValue, E](
         self: operator[Literal[True]], pipe: AsyncOperatorParser[T, E]
     ) -> AsyncOperatorWrapper: ...
-    @overload  # noqa: E301
-    def __call__[T: ItemOrValue, E](  # noqa: E704
+    @overload
+    def __call__[T: ItemOrValue, E](
         self: operator[Literal[False]], pipe: AwaitableOperatorParser[T, E]
     ) -> AsyncOperatorWrapper: ...
-    @overload  # noqa: E301
-    def __call__[T: ItemOrValue, E](  # noqa: E704
+    @overload
+    def __call__[T: ItemOrValue, E](
         self: operator[Literal[False]], pipe: SyncOperatorParser[T, E]
     ) -> SyncOperatorWrapper: ...
-    def __call__[T: ItemOrValue, E](  # noqa: E301
+    def __call__[T: ItemOrValue, E](
         self, pipe: OperatorParser[T, E]
     ) -> OperatorWrapper:
         """
@@ -1737,38 +1813,62 @@ class operator[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return wrapper
 
 
-class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
+class splitter[B: bool](Module[B]):  # noqa: N801
     """Creates a pipe callable that splits a stream into multiple streams."""
 
-    isasync: B
+    _isasync: B
     module_type: ClassVar[ModuleType] = "splitter"
     decoration_options: ClassVar[frozenset[str]] = _SPLITTER_OPTS
     call_options: ClassVar[frozenset[str]] = _SPLITTER_CALL_OPTS
     context_options: ClassVar[frozenset[str]] = frozenset()
-    call_record: ClassVar[type[_PreparedCall[Any]]] = _PreparedSplitter
+    call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedSplitter
 
     @overload
-    def __init__(  # noqa: E704
+    def __new__[E](
+        cls, pipe: AwaitableSplitterParser[E], /
+    ) -> AsyncSplitterWrapper: ...
+    @overload
+    def __new__[E](cls, pipe: SyncSplitterParser[E], /) -> SyncSplitterWrapper: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[True],
+        **kwargs: object,
+    ) -> splitter[Literal[True]]: ...
+    @overload
+    def __new__(
+        cls,
+        defaults: Defaults | None = ...,
+        *,
+        isasync: Literal[False] = ...,
+        **kwargs: object,
+    ) -> splitter[Literal[False]]: ...
+    def __new__(cls, *args: object, **kwargs: object) -> object:
+        return super().__new__(cls, *args, **kwargs)
+
+    @overload
+    def __init__(
         self: splitter[Literal[True]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[True],
         **kwargs: object,
     ) -> None: ...
-    @overload  # noqa: E301
-    def __init__(  # noqa: E704
+    @overload
+    def __init__(
         self: splitter[Literal[False]],
         defaults: Defaults | None = ...,
         *,
         isasync: Literal[False] = ...,
         **kwargs: object,
     ) -> None: ...
-    def __init__(self, *args: object, **kwargs: object):  # noqa: E301
+    def __init__(self, *args: object, **kwargs: object):
         """
         Configures a sync/async pipe that splits a stream into copies.
 
-        Keyword arguments such as ``conf`` go to the wrapped pipe, not the
-        decorator.
+        Keyword arguments such as ``conf`` go to the wrapped pipe, not the decorator.
 
         Args:
 
@@ -1778,32 +1878,30 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
 
             isasync (bool): Wraps an async pipe (default: False).
 
-            extract (str): Key whose ``conf`` value is passed to the pipe in
-                place of ``conf`` (default: None).
+            extract (str): Key whose ``conf`` value is passed to the pipe in place of
+                ``conf`` (default: None).
 
-            listize (bool): Ensure an ``extract`` value is list-like (default:
-                False).
+            listize (bool): Ensure an ``extract`` value is list-like (default: False).
 
-            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify``
-                instance (default: True unless ``ptype`` is ``"none"``).
+            objectify (bool): Convert ``conf`` to a ``meza.fntools.Objectify`` instance
+                (default: True unless ``ptype`` is ``"none"``).
 
-            ptype (str): Converts ``conf`` items to a type after objectifying
+            ptype (str): Converts ``conf`` items to a type after objectifying (default:
+                "pass").
+
+            field (str): Field whose value is passed to the pipe in place of ``items``
+                (default: None).
+
+            ftype (str): Converts the input ``items`` to a type after reading ``field``
                 (default: "pass").
 
-            field (str): Field whose value is passed to the pipe in place of
-                ``items`` (default: None).
-
-            ftype (str): Converts the input ``items`` to a type after reading
-                ``field`` (default: "pass").
-
-            assign (str): Field the streams are assigned to (default: the module
-                name).
+            assign (str): Field the streams are assigned to (default: the module name).
 
         Raises:
 
-            TypeError: When an option the splitter does not read is passed, such
-                as the processor/operator-only ``pollable``, ``emit``, or
-                ``skip_if``, or the ``count`` or ``embed`` keyword argument.
+            TypeError: When an option the splitter does not read is passed, such as the
+                processor/operator-only ``pollable``, ``emit``, or ``skip_if``, or the
+                ``count`` or ``embed`` keyword argument.
 
         Examples:
 
@@ -1884,18 +1982,18 @@ class splitter[B: (Literal[True], Literal[False])](Module[B]):  # noqa: N801
         return (tuples, orig_stream, casted)
 
     @overload
-    def __call__[E](  # noqa: E704
+    def __call__[E](
         self: splitter[Literal[True]], pipe: AsyncSplitterParser[E]
     ) -> AsyncSplitterWrapper: ...
-    @overload  # noqa: E301
-    def __call__[E](  # noqa: E704
+    @overload
+    def __call__[E](
         self: splitter[Literal[False]], pipe: AwaitableSplitterParser[E]
     ) -> AsyncSplitterWrapper: ...
-    @overload  # noqa: E301
-    def __call__[E](  # noqa: E704
+    @overload
+    def __call__[E](
         self: splitter[Literal[False]], pipe: SyncSplitterParser[E]
     ) -> SyncSplitterWrapper: ...
-    def __call__[E](self, pipe: SplitterParser[E]) -> SplitterWrapper:  # noqa: E301
+    def __call__[E](self, pipe: SplitterParser[E]) -> SplitterWrapper:
         """
         Creates a sync or async pipe that splits a stream into copies.
 

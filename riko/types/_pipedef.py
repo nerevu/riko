@@ -16,7 +16,8 @@ from riko.base._config import PIPE_ID_PREFIXES
 
 if TYPE_CHECKING:
     from ._module_ids import ModuleId
-    from .modules import AnyModuleRawConf, Conf, RawCallOptions
+    from ._options import RawCallOptions
+    from .modules import AnyModuleRawConf, Conf
 
 
 PipeId = NewType("PipeId", str)

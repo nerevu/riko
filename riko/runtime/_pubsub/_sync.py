@@ -8,7 +8,7 @@ from itertools import count
 from typing import TYPE_CHECKING
 
 from riko.base._logging import get_logger
-from riko.types._sentinels import MissingType, StreamState
+from riko.base._sentinels import MissingType, StreamState
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

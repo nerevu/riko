@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist
+from riko.base._exceptions import RikoError
 from riko.base._paths import ROOT_DIR
-from riko.base.exceptions import RikoError
 from riko.definitions._context import Context
 from riko.runtime._pipeline import Pipeline
 from riko.types._wrappers import is_subpipe

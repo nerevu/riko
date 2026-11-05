@@ -11,6 +11,7 @@ from collections import ChainMap
 from copy import deepcopy
 from dataclasses import dataclass, make_dataclass
 from dataclasses import field as dataclass_field
+from importlib.metadata import EntryPoint
 from pickle import dumps, loads  # noqa: S403
 from typing import (
     TYPE_CHECKING,
@@ -28,24 +29,38 @@ import pytest
 from attrs import fields_dict
 
 from riko.bado import as_async
-from riko.base.exceptions import (
+from riko.base._exceptions import (
     InvalidPipelineError,
     PipelineStateError,
     UnsupportedTargetError,
 )
-from riko.definitions._composition import PipelineDefinition
+from riko.base._guards import require_mapping, require_sequence
+from riko.base._recordutils import field_names
+from riko.base._require_guards import (
+    normalize_strs,
+    require_finite,
+    require_from_form,
+    require_from_typed_dict,
+    require_str,
+    require_strlike,
+    typed_dict_keys,
+)
+from riko.base._typing import resolve_enum
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
+    CallableNode,
     ModuleNode,
     ReadNode,
     StreamEdge,
     SubscribeNode,
     WriteNode,
-    require_module_node,
+    require_binding,
+    require_runnable_node,
 )
-from riko.definitions._normalize import _NODE_BUILDERS, _normalize_port
+from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
+from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
@@ -73,7 +88,11 @@ from riko.modules.hash import pipe as hash_pipe
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.runtime import _write_session
-from riko.runtime._target_registry import register_target, reset_target_registry
+from riko.runtime._target_registry import (
+    TargetRegistry,
+    register_target,
+    reset_target_registry,
+)
 from riko.runtime._write_session import (
     _SessionState,
     _SyncFileWriteSession,
@@ -82,25 +101,19 @@ from riko.runtime._write_session import (
     file_write_session,
     write_through,
 )
-from riko.types._collections import (
-    FrozenDict,
-    field_names,
-    normalize_strs,
-    require_binding,
-    require_finite,
-    require_from_form,
-    require_from_typed_dict,
-    require_str,
-    require_strlike,
-    typed_dict_keys,
-)
-from riko.types._enums import Backends, Executor, Formats, resolve_enum
-from riko.types._guards import require_mapping, require_sequence
+from riko.types._enums import Backends, Executor, Formats, IdentityMode
+from riko.types._frozendict import FrozenDict
+from riko.types._options import CallOptions, RawCallOptions
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._resource import SyncLifecyclePlan
+from riko.types._workflow import (
+    DocumentNodeFamily,
+    Endpoint,
+    RawEdge,
+    RawEndpoint,
+    RawNode,
+)
 from riko.types._workflow import Edge as EdgeBase
-from riko.types._workflow import Endpoint, NodeFamily, RawEdge, RawEndpoint, RawNode
-from riko.types.modules import CallOptions, RawCallOptions
 from tests import async_test, skipif_issync
 
 if TYPE_CHECKING:
@@ -206,6 +219,28 @@ class TestFrozenDict:
     )
     def test_values_are_frozen_from_any_source(self, source: Any):
         assert FrozenDict(source)["ids"] == (1,)
+
+    def test_equal_frozen_dicts_hash_alike(self):
+        assert hash(FrozenDict({"a": [1]})) == hash(FrozenDict({"a": (1,)}))
+
+    def test_an_unhashable_value_makes_it_unhashable(self):
+        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
+            hash(FrozenDict({"a": bytearray()}))
+
+    @pytest.mark.parametrize(
+        ("merged", "expected"),
+        [
+            pytest.param(
+                FrozenDict({"a": 1}) | {"a": 2, "b": [3]}, {"a": 2, "b": (3,)}, id="or"
+            ),
+            pytest.param(
+                {"a": 2, "b": 3} | FrozenDict({"a": 1}), {"a": 1, "b": 3}, id="ror"
+            ),
+        ],
+    )
+    def test_merging_returns_a_frozen_dict(self, merged: Any, expected: dict):
+        assert isinstance(merged, FrozenDict)
+        assert merged == expected
 
 
 class TestContext:
@@ -413,6 +448,21 @@ class _Rule:
     field: str
 
 
+_BLANK_IDENTIFIERS = [
+    pytest.param(lambda: ModuleNode(id="", name="hash"), "ModuleNode 'id'", id="id"),
+    pytest.param(
+        lambda: ModuleNode(id=" ", name="hash"), "ModuleNode 'id'", id="blank"
+    ),
+    pytest.param(lambda: ModuleNode(id="a", name=""), "ModuleNode 'name'", id="name"),
+    pytest.param(lambda: Endpoint("", "out"), "Endpoint 'node'", id="endpoint"),
+    pytest.param(
+        lambda: Workflow.parse({"nodes": [{"name": " "}], "outputs": {}}),
+        "ModuleNode 'name'",
+        id="document-name",
+    ),
+]
+
+
 class TestNodes:
     def test_module_conf_accepts_floats_and_none(self):
         node = ModuleNode(id="a", name="sleep", conf={"wait": 1.5, "join_key": None})
@@ -428,6 +478,11 @@ class TestNodes:
         with pytest.raises(InvalidPipelineError, match="ModuleNode 'id'"):
             ModuleNode(id=1, name="hash")  # pyright: ignore[reportArgumentType]
 
+    @pytest.mark.parametrize(("build", "match"), _BLANK_IDENTIFIERS)
+    def test_blank_identifiers_are_rejected(self, build, match):
+        with pytest.raises(InvalidPipelineError, match=f"{match} must not be blank"):
+            build()
+
     @pytest.mark.parametrize(
         ("node", "kwargs", "match"),
         [
@@ -441,7 +496,90 @@ class TestNodes:
             node(id="a", name="n", **kwargs)
 
 
+_CALLABLE_NODE_ERRORS = [
+    pytest.param({"resources": {"a-b": "db"}}, InvalidPipelineError, "identifiers"),
+    pytest.param({"resources": "def"}, InvalidPipelineError, "identifiers"),
+    pytest.param(
+        {"resources": "db", "kwargs": {"db": 1}}, InvalidPipelineError, "share names"
+    ),
+    pytest.param({"version": None}, TypeError, "must not be None"),
+    pytest.param({"version": ["v1"]}, TypeError, "must be a hashable scalar"),
+    pytest.param({"identity": "bogus"}, InvalidPipelineError, "'identity'"),
+    pytest.param({"fn": "len"}, TypeError, "callable"),
+]
+
+
+class TestCallableNode:
+    @pytest.mark.parametrize(("kwargs", "error", "match"), _CALLABLE_NODE_ERRORS)
+    def test_construction_is_validated(self, kwargs: Any, error: Any, match: str):
+        with pytest.raises(error, match=match):
+            CallableNode(**{"id": "a", "name": "len", "fn": len, **kwargs})
+
+    def test_identity_accepts_a_bare_string(self):
+        node = CallableNode(id="a", name="len", fn=len, identity="preserve")
+        assert node.identity is IdentityMode.PRESERVE
+
+    def test_fn_is_compared_by_identity(self):
+        node = CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
+        assert node == CallableNode(id="a", name="len", fn=len, kwargs={"n": [1]})
+        assert node != CallableNode(id="a", name="len", fn=lambda value: value)
+
+
+_SORT_NODE = ModuleNode(id="b", name="sort")
+_TWO_HASHES = [ModuleNode(id="b", name="hash"), ModuleNode(id="c", name="hash")]
+_B_OUT = Endpoint("b", "out")
+APPEND_REJECTIONS = [
+    pytest.param(
+        Workflow(nodes=[_SORT_NODE]), "appended workflow has nodes", id="no-default"
+    ),
+    pytest.param(
+        Workflow(nodes=_TWO_HASHES, outputs={"default": _B_OUT}),
+        "exactly one node",
+        id="two-open-inputs",
+    ),
+    pytest.param(
+        Workflow(nodes=[_SORT_NODE], outputs={"default": _B_OUT, "side": _B_OUT}),
+        "workflow output",
+        id="named-output-clash",
+    ),
+    pytest.param(
+        Workflow(inputs={"limit": {"type": "string"}}),
+        "declare input",
+        id="input-clash",
+    ),
+]
+APPENDS = [
+    pytest.param(lambda flow: flow.with_node(_SORT_NODE), id="node"),
+    pytest.param(
+        lambda flow: flow.with_workflow(Workflow().with_node(_SORT_NODE)), id="workflow"
+    ),
+]
+
+
 class TestWorkflowFields:
+    def test_appending_a_node_declares_its_resources(self):
+        flow = Workflow(resources=("cache",))
+        node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
+        assert flow.with_node(node).resources == ("cache", "db")
+
+    @pytest.mark.parametrize(("other", "match"), APPEND_REJECTIONS)
+    def test_appending_a_workflow_rejects(self, other, match):
+        flow = Workflow(
+            nodes=[ModuleNode(id="a", name="fetch")],
+            outputs={"default": Endpoint("a", "out"), "side": Endpoint("a", "out")},
+            inputs={"limit": {"type": "integer"}},
+        )
+        with pytest.raises(InvalidPipelineError, match=match):
+            flow.with_workflow(other)
+
+    @pytest.mark.parametrize("append", APPENDS)
+    def test_appending_needs_a_default_output_to_follow(self, append):
+        flow = Workflow(nodes=[ModuleNode(id="a", name="fetch")])
+        with pytest.raises(
+            InvalidPipelineError, match="this workflow has nodes but no default output"
+        ):
+            append(flow)
+
     def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
         with pytest.raises(TypeError, match="not JSON serializable"):
             json.dumps(object(), cls=WorkflowEncoder)
@@ -561,7 +699,22 @@ class TestWorkflowFields:
             Workflow(nodes=[], outputs={}, inputs={"q": declaration})
 
 
+_EXISTING_IDS = [
+    pytest.param((), "fetch-1", id="empty"),
+    pytest.param(("fetch-1",), "fetch-2", id="next"),
+    pytest.param(("fetch-a",), "fetch-1", id="custom-id"),
+    pytest.param(("fetch-2",), "fetch-1", id="gap"),
+]
+
+
 class TestNormalizeInternals:
+    @pytest.mark.parametrize(("ids", "expected"), _EXISTING_IDS)
+    def test_get_node_id_matches_a_normalized_id(self, ids, expected):
+        existing = [{"id": node_id, "name": "fetch"} for node_id in ids]
+        normalized = list(_build_nodes([*existing, {"name": "fetch"}]))[-1]
+        flow = Workflow(nodes=[ModuleNode(**node) for node in existing])
+        assert flow.get_node_id("fetch") == normalized == expected
+
     @pytest.mark.parametrize(
         ("legacy", "direction", "canonical"),
         [
@@ -584,8 +737,8 @@ class TestNormalizeInternals:
     ):
         assert _normalize_port(legacy, direction) == canonical
 
-    def test_every_node_family_has_a_builder(self):
-        families = set(get_args(NodeFamily.__value__))
+    def test_every_document_node_family_has_a_builder(self):
+        families = set(get_args(DocumentNodeFamily.__value__))
         assert set(_NODE_BUILDERS) == families
         assert {builder.family for builder in _NODE_BUILDERS.values()} == families
 
@@ -712,7 +865,12 @@ class TestExecutionPlanFields:
         match = ": PreparedNode 'node': write node execution"
 
         with pytest.raises(InvalidPipelineError, match=match):
-            require_module_node(node, "PreparedNode 'node'")
+            require_runnable_node(node, "PreparedNode 'node'")
+
+    def test_a_callable_node_prepares_with_no_call_options(self):
+        node = CallableNode(id="a", name="len", fn=len, resources="db")
+        prepared = PreparedNode(node, _HASH)
+        assert (prepared.options, prepared.extras) == (CallOptions(), ("resources",))
 
 
 class TestPipelineDefinitionFields:
@@ -730,6 +888,12 @@ class TestPipelineDefinitionFields:
     def test_a_context_is_accepted(self):
         context = Context()
         assert PipelineDefinition(context=context).context is context
+
+    def test_chained_maps_declare_resources_once_in_order(self):
+        first = PipelineDefinition().map(len, resources={"a": "db"})
+        second = first.map(str, resources=("cache", "db"))
+        assert second.workflow.resources == ("db", "cache")
+        assert second.workflow.isvalid
 
 
 _INVALID: list[tuple[Callable[..., object], object]] = [
@@ -988,6 +1152,16 @@ class TestRegisterTarget:
             assert register_target(_RecordStore) is _RecordStore
         finally:
             reset_target_registry()
+
+    def test_entry_point_loads_a_target_class(self) -> None:
+        ep = EntryPoint("file", "riko.definitions._targets:FileTarget", "riko.targets")
+        assert TargetRegistry()._load(ep) is FileTarget
+
+    def test_entry_point_must_load_a_target_class(self) -> None:
+        ep = EntryPoint("bogus", "builtins:len", "riko.targets")
+
+        with pytest.raises(TypeError, match="must load a target class"):
+            TargetRegistry()._load(ep)
 
 
 class TestResolveFormat:

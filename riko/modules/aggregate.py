@@ -31,12 +31,12 @@ from typing import TYPE_CHECKING, Any
 
 from riko.bado._util import maybe_async
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_arg
 from riko.coercion._sequences import listize
 from riko.types._options import Defaults
 from riko.types._streams import Item, Items, Stream
 
 from ._decorators import operator
-from ._require import require_arg
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

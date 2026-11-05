@@ -1,17 +1,21 @@
 """
-Maps a working-tree change onto fixup targets among the unpushed commits.
+Maps a working-tree change onto fixup targets among the branch's own commits.
 
-Usage: python .claude/skills/land/fixup_map.py [--cached] [--patches DIR]
+Usage: python .claude/skills/land/fixup_map.py [--cached] [--patches DIR] [--base REF]
+
+The branch's own commits are those past its merge point: ``REF..HEAD`` where REF
+defaults to the nearest merge-base with ``next`` or ``main`` (local, else ``origin/``).
+Pushed or not, any of them can be a fixup target.
 
 Each hunk of ``git diff -U3 HEAD`` (``--cached``: the staged diff only) is blamed
-against HEAD. A hunk whose blamed lines all come from one unpushed commit (after
+against HEAD. A hunk whose blamed lines all come from one branch commit (after
 following ``fixup!`` chains) is a single-target hunk. It is a fixup *candidate*
 when every identifier its added lines use already exists in that target commit's
 tree; otherwise it depends on the change and stays in the new commit. New and
 deleted files also stay in the new commit.
 
-A hunk with mixed or pushed blame falls back to its file's *latest touch*: the newest
-unpushed commit (after following ``fixup!`` chains) that edits the file. Squashed
+A hunk with mixed or pre-branch blame falls back to its file's *latest touch*: the
+newest branch commit (after following ``fixup!`` chains) that edits the file. Squashed
 there, the hunk sees the file exactly as HEAD has it. Blame cannot vouch that the
 hunk belongs to that commit, so these print marked ``*`` and the caller judges
 each by subject.
@@ -95,7 +99,7 @@ class FileDiff:
 
 def git(*args: str) -> str:
     cmd = ("git", *args)
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
     if result.returncode not in (0, 1):
         sys.exit(f"git {' '.join(args)} failed: {result.stderr.strip()}")
@@ -135,8 +139,23 @@ def parse_diff(text: str) -> list[FileDiff]:
     return files
 
 
-def unpushed_commits() -> dict[str, str]:
-    log = git("log", "--format=%H%x00%s", "HEAD", "--not", "--remotes")
+BASE_BRANCHES = ("next", "main", "origin/next", "origin/main")
+
+
+def merge_point() -> str:
+    """Finds the nearest merge-base of HEAD with a base branch that resolves."""
+    refs = [b for b in BASE_BRANCHES if git("rev-parse", "--verify", "--quiet", b)]
+    bases = {git("merge-base", "HEAD", ref).strip() for ref in refs}
+    found = [b for b in bases if b]
+
+    if not found:
+        sys.exit(f"no merge point with {', '.join(BASE_BRANCHES)}; pass --base REF")
+
+    return min(found, key=lambda b: int(git("rev-list", "--count", f"{b}..HEAD")))
+
+
+def branch_commits(base: str) -> dict[str, str]:
+    log = git("log", "--format=%H%x00%s", f"{base}..HEAD")
     return dict(line.split("\0", 1) for line in log.splitlines() if line)
 
 
@@ -164,8 +183,8 @@ def squashed_ref(target: str, commits: dict[str, str]) -> str:
 
 
 def latest_touch(path: str, commits: dict[str, str]) -> str | None:
-    """Finds the newest unpushed target that edits ``path``, once fixups squash."""
-    log = git("log", "--format=%H", "HEAD", "--not", "--remotes", "--", path)
+    """Finds the newest branch target that edits ``path``, once fixups squash."""
+    log = git("log", "--format=%H", "HEAD", "--", path)
     targets = {resolve_target(sha, commits) for sha in log.split() if sha in commits}
     return next((sha for sha in commits if sha in targets), None)
 
@@ -264,7 +283,7 @@ def classify(
         shas = blame_shas(hunk)
         targets = {resolve_target(s, commits) if s in commits else None for s in shas}
 
-        reason = "pushed blame" if None in targets else "mixed blame"
+        reason = "pre-branch blame" if None in targets else "mixed blame"
 
         if None in targets or len(targets) > 1:
             target = latest_touch(hunk.path, commits)
@@ -315,9 +334,13 @@ def main() -> None:
     parser.add_argument(
         "--patches", type=Path, help="write <sha>.patch per candidate target"
     )
+    parser.add_argument(
+        "--base", help="merge point (default: nearest merge-base with next or main)"
+    )
     args = parser.parse_args()
 
-    commits = unpushed_commits()
+    base = args.base or merge_point()
+    commits = branch_commits(base)
     # a rename would pair a new path with an old one blame cannot find in HEAD
     diff_args = ("diff", "--no-renames", "-U3", "--cached" if args.cached else "HEAD")
     files = parse_diff(git(*diff_args))
@@ -362,7 +385,7 @@ def main() -> None:
 
     candidates = {k: v for k, v in candidates.items() if v}
     dependent = {k: v for k, v in dependent.items() if v}
-    print(f"{len(commits)} unpushed commits, {total} hunks")
+    print(f"{len(commits)} commits past {base[:10]}, {total} hunks")
     print("\nFIXUP CANDIDATES (read each hunk before offering it)")
     print("  * = latest touch, not blame: offer only if the subject fits the hunk")
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, overload
 
 from riko.base._iterutils import map_values
-from riko.types._collections import thaw
+from riko.types._frozendict import thaw
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -48,14 +48,14 @@ def call_factory[T](plan: ValueFactoryPlan[T]) -> T | Awaitable[T]:
 
 
 @overload
-def build_context_manager[T](  # noqa: E704
+def build_context_manager[T](
     plan: SyncLifecyclePlan[T],
 ) -> AbstractContextManager[T]: ...
-@overload  # noqa: E302
-def build_context_manager[T](  # noqa: E704
+@overload
+def build_context_manager[T](
     plan: AsyncLifecyclePlan[T],
 ) -> AbstractAsyncContextManager[T]: ...
-def build_context_manager[T](  # noqa: E302
+def build_context_manager[T](
     plan: SyncLifecyclePlan[T] | AsyncLifecyclePlan[T],
 ) -> AbstractContextManager[T] | AbstractAsyncContextManager[T]:
     """

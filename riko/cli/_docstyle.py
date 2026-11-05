@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from ast import (
     AnnAssign,
     Assign,
@@ -21,12 +22,24 @@ from doctest import DocTestParser
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
+from riko.base._verbs import VERBS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
 BANNED_LEADS: tuple[str, ...] = ("Return", "Yield")
+COMPOUND_FUNCTIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("_require_guards.py", "require_from_attrs"),
+        ("_require_guards.py", "require_from_form"),
+        ("_require_guards.py", "require_from_keys"),
+        ("_require_guards.py", "require_from_typed_dict"),
+    }
+)
+_RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
+_LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
+_NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
 _PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
     ("riko", STABLE),
@@ -78,6 +91,62 @@ def summary_leads_with_output(summary: str) -> bool:
     return any(first.startswith(lead) for lead in BANNED_LEADS)
 
 
+def get_name_verb(name: str, *, is_async: bool = False) -> str | None:
+    """
+    Gets the general-purpose verb a function name starts with.
+
+    Skips leading underscores, ``async_`` prefix, and the ``a`` prefix of a coroutine
+    named for its synchronous twin.
+
+    Args:
+
+        name: The function name.
+        is_async: Whether the function is an async function.
+
+    Returns:
+
+        The verb, or ``None`` when the name starts with none of them.
+
+    Examples:
+
+        >>> get_name_verb("_build_item_call")
+        'build'
+        >>> get_name_verb("_aload_settings", is_async=True)
+        'load'
+        >>> get_name_verb("async_get_temp_file")
+        'get'
+        >>> get_name_verb("gen_items")
+
+    """
+    first = name.lstrip("_").removeprefix("async_").split("_", 1)[0]
+    twin = first.removeprefix("a") if is_async else first
+    verb = twin if twin in _NAME_VERBS else first
+    return verb if verb in _NAME_VERBS else None
+
+
+def get_summary_verb(summary: str) -> str | None:
+    """
+    Gets the general-purpose verb a docstring summary starts with.
+
+    Args:
+
+        summary: The first line of a docstring.
+
+    Returns:
+
+        The verb, or ``None`` when the summary starts with none of them.
+
+    Examples:
+
+        >>> get_summary_verb("Resolves a seed to one stream.")
+        'resolve'
+        >>> get_summary_verb("Finds the first match.") is None
+        True
+
+    """
+    return _LEAD_VERBS.get(summary.strip().split(" ", 1)[0])
+
+
 def gen_example_prose(doc: str) -> Iterator[str]:
     """
     Finds prose paragraphs that narrate between doctest examples.
@@ -115,6 +184,44 @@ def gen_example_prose(doc: str) -> Iterator[str]:
             following = next((rest for rest in lines[end:] if rest), "")
 
             if following.startswith(">>>") and not lines[end - 1].endswith("::"):
+                yield line
+
+
+def gen_malformed_raises(doc: str) -> Iterator[str]:
+    """
+    Finds ``Raises:`` entries that do not start with an exception name and a colon.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each entry line that does not read ``SomeError: description``.
+
+    Examples:
+
+        >>> doc = "Raises:\\n\\n    ValueError: If bad.\\n    KeyError if missing.\\n"
+        >>> list(gen_malformed_raises(doc))
+        ['KeyError if missing.']
+
+    """
+    section: int | None = None
+    entry: int | None = None
+
+    for raw in doc.splitlines():
+        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+
+        if line == "Raises:":
+            section, entry = indent, None
+        elif section is None or not line:
+            continue
+        elif indent <= section:
+            section = None
+        elif entry is None or indent <= entry:
+            entry = indent
+
+            if not _RAISES_ENTRY.match(line):
                 yield line
 
 
@@ -231,9 +338,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     """
     Walks ``roots`` for docstrings that break the summary or example rules.
 
-    Function summaries must not lead with the output; no docstring may narrate
-    between its doctest examples or import a public name through a private module;
-    and a private module without a public API carries no module example.
+    Function summaries must not lead with the output or with a different general-purpose
+    verb than the function name. No docstring may narrate between its doctest examples
+    or import a public name through a private module. A private module without a public
+    API carries no module example.
 
     Args:
 
@@ -244,14 +352,12 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
         One :class:`DocstringIssue` per offending line, in path then line order.
 
     """
+    types = (Module, ClassDef, FunctionDef, AsyncFunctionDef)
+
     for root in roots:
         for path in _iter_python_files(root):
             tree = parse(path.read_text(encoding="utf-8"))
-            nodes = (
-                node
-                for node in walk(tree)
-                if isinstance(node, (Module, ClassDef, FunctionDef, AsyncFunctionDef))
-            )
+            nodes = (node for node in walk(tree) if isinstance(node, types))
 
             for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
                 doc = get_docstring(node) or ""
@@ -263,6 +369,20 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                 if is_function and summary and summary_leads_with_output(summary):
                     problem = "summary leads with the output"
                     yield DocstringIssue(path, lineno, name, problem, summary)
+
+                if is_function and (path.name, name) not in COMPOUND_FUNCTIONS:
+                    is_async = isinstance(node, AsyncFunctionDef)
+                    name_verb = get_name_verb(name, is_async=is_async)
+                    summary_verb = get_summary_verb(summary)
+
+                    if name_verb is not None and summary_verb not in {None, name_verb}:
+                        problem = "summary verb does not match the name verb "
+                        problem += name_verb
+                        yield DocstringIssue(path, lineno, name, problem, summary)
+
+                for entry in gen_malformed_raises(doc):
+                    problem = "Raises: entry does not start with 'SomeError:'"
+                    yield DocstringIssue(path, lineno, name, problem, entry)
 
                 for prose in gen_example_prose(doc):
                     problem = "narrates between examples (use a >>> # comment)"
@@ -280,10 +400,14 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
 
 __all__ = [
     "BANNED_LEADS",
+    "COMPOUND_FUNCTIONS",
     "DocstringIssue",
     "gen_docstring_issues",
     "gen_example_prose",
+    "gen_malformed_raises",
     "gen_private_imports",
+    "get_name_verb",
+    "get_summary_verb",
     "resolve_public_path",
     "summary_leads_with_output",
 ]

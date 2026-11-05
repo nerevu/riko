@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING, Any, cast
 from meza import io
 
 from riko.base._logging import get_logger
+from riko.base._typing import AnyStrType
 from riko.definitions._targets import resolve_format
 from riko.io._async import async_write
 from riko.io._filelike import IOFileLike, IOFileLikeType
 from riko.io._serialization import serialize_items
 from riko.types._options import DecorationOptions, Defaults
-from riko.types._scalars import AnyStr, AnyStrType
 
 from ._decorators import operator
 
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._configs import WriteObjconf
+    from riko.types._scalars import AnyStr
     from riko.types._streams import Items, Stream
     from riko.types._wrappers import PipeTuples
 
@@ -106,9 +107,9 @@ async def async_parser(
         ...     async with async_get_temp_file() as fp:
         ...         conf = {"dest": fp.name, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
-        ...         stream = [{"x": 0}, {"x": 1}]
-        ...         tuples = zip(stream, repeat(objconf))
-        ...         result = await async_parser(stream, objconf, tuples)
+        ...         items = [{"x": 0}, {"x": 1}]
+        ...         tuples = zip(items, repeat(objconf))
+        ...         result = await async_parser(items, objconf, tuples)
         ...         print(next(result))
         ...         print(await fp.read())
         >>>
@@ -154,9 +155,9 @@ def parser(
         >>>
         >>> with get_temp_file() as fp:
         ...     objconf = Objectify({"dest": fp.name, "fmt": "json", "mode": "wb+"})
-        ...     stream = [{"x": 0}, {"x": 1}]
-        ...     tuples = zip(stream, repeat(objconf))
-        ...     next(parser(stream, objconf, tuples))
+        ...     items = [{"x": 0}, {"x": 1}]
+        ...     tuples = zip(items, repeat(objconf))
+        ...     next(parser(items, objconf, tuples))
         ...     fp.read()
         {'x': 0}
         b'[{"x": 0}, {"x": 1}]'

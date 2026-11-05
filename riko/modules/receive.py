@@ -39,11 +39,10 @@ from typing import TYPE_CHECKING, Any, cast
 from meza.fntools import dfilter
 
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING, StreamState, is_missing_type
 from riko.runtime._pubsub import async_hub, coroutine, sync_hub
 from riko.types._enums import BasicCastType
-from riko.types._guards import is_missing_type, is_stateful_item
-from riko.types._sentinels import MISSING, StreamState
-from riko.types._streams import Item, StatefulItem, Stream
+from riko.types._streams import Item, StatefulItem, Stream, is_stateful_item
 
 from ._decorators import operator
 from ._textops import gen_name

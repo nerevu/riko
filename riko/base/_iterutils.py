@@ -77,12 +77,12 @@ def multi_try[T, S](
 
 
 @overload
-def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...  # noqa: E704
-@overload  # noqa: E302
-def unique_everseen[T](  # noqa: E704
+def unique_everseen[T](content: Iterable[T]) -> Iterator[T]: ...
+@overload
+def unique_everseen[T](
     content: Iterable[T], keyfunc: Callable[[T], object]
 ) -> Iterator[T]: ...
-def unique_everseen[T](  # noqa: E302
+def unique_everseen[T](
     content: Iterable[T], keyfunc: Callable[[T], object] | None = None
 ) -> Iterator[T]:
     """
@@ -116,6 +116,40 @@ def unique_everseen[T](  # noqa: E302
         if key not in seen:
             seen.add(key)
             yield element
+
+
+@overload
+def gen_non_none[T](value: Iterable[T | None]) -> Iterator[T]: ...
+@overload
+def gen_non_none[T, R](
+    value: Iterable[T | None], func: Callable[[T], R]
+) -> Iterator[R]: ...
+def gen_non_none[T, R](
+    value: Iterable[T | None], func: Callable[[T], R] | None = None
+) -> Iterator[T | R]:
+    """
+    Applies a function to each non-None value in an iterable.
+
+    Args:
+
+        value: The source iterable.
+        func: Optional function applied to each non-None element.
+
+    Yields:
+
+        Each non-None element, or ``func``'s result for it.
+
+    Examples:
+
+        >>> list(gen_non_none([1, None, 0, 2]))
+        [1, 0, 2]
+        >>> "".join(gen_non_none(["a", None, 1], str))
+        'a1'
+
+    """
+    for item in value:
+        if item is not None:
+            yield item if func is None else func(item)
 
 
 def betwix[T](
@@ -302,25 +336,25 @@ def map_values[K, V, R](func: Callable[[V], R], items: Mapping[K, V]) -> dict[K,
 
 
 @overload
-def dispatch[T, U, X, Y](  # noqa: E704
+def dispatch[T, U, X, Y](
     split: tuple[T, U],
     f1: Callable[[T], X],
     f2: Callable[[U], Y],
     /,  # stops ruff from collapsing this line
 ) -> tuple[X, Y]: ...
-@overload  # noqa: E302
-def dispatch[T, U, V, X, Y, Z](  # noqa: E704
+@overload
+def dispatch[T, U, V, X, Y, Z](
     split: tuple[T, U, V],
     f1: Callable[[T], X],
     f2: Callable[[U], Y],
     f3: Callable[[V], Z],
     /,
 ) -> tuple[X, Y, Z]: ...
-@overload  # noqa: E302
-def dispatch[T](  # noqa: E704
+@overload
+def dispatch[T](
     split: Sequence[T], *funcs: Callable[[T], object]
 ) -> tuple[object, ...]: ...
-def dispatch(  # noqa: E302
+def dispatch(
     split: Sequence[object], *funcs: Callable[..., object]
 ) -> tuple[object, ...]:
     r"""
@@ -355,19 +389,19 @@ def dispatch(  # noqa: E302
 
 
 @overload
-def broadcast[W, X](  # noqa: E704
+def broadcast[W, X](
     item: object, f1: Callable[..., W], f2: Callable[..., X], **kwargs: object
 ) -> tuple[W, X]: ...
-@overload  # noqa: E302
-def broadcast[W, X, Y](  # noqa: E704
+@overload
+def broadcast[W, X, Y](
     item: object,
     f1: Callable[..., W],
     f2: Callable[..., X],
     f3: Callable[..., Y],
     **kwargs: object,
 ) -> tuple[W, X, Y]: ...
-@overload  # noqa: E302
-def broadcast[W, X, Y, Z](  # noqa: E704
+@overload
+def broadcast[W, X, Y, Z](
     item: object,
     f1: Callable[..., W],
     f2: Callable[..., X],
@@ -375,7 +409,7 @@ def broadcast[W, X, Y, Z](  # noqa: E704
     f4: Callable[..., Z],
     **kwargs: object,
 ) -> tuple[W, X, Y, Z]: ...
-def broadcast(  # noqa: E302
+def broadcast(
     item: object, *funcs: Callable[..., object], **kwargs: object
 ) -> tuple[object, ...]:
     r"""
@@ -438,3 +472,24 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
         except StopIteration:
             active -= 1
             nexts = cycle(islice(nexts, active))
+
+
+def invert_dict[K, V](d: dict[K, V]) -> dict[V, K]:
+    """
+    Swaps a dict's keys and values.
+
+    Args:
+
+        d: The dict to invert; its values must be hashable and unique.
+
+    Returns:
+
+        A new dict mapping each value back to its key.
+
+    Examples:
+
+        >>> invert_dict({"a": 1, "b": 2})
+        {1: 'a', 2: 'b'}
+
+    """
+    return {v: k for k, v in d.items()}

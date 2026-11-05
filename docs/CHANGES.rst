@@ -8,14 +8,17 @@ New
 ~~~
 
 - Added ``riko.Pipeline``, an immutable, runnable workflow. Start one with
-  ``Pipeline.from_module`` or ``Pipeline``, or seed one with ``items | pipeline``. Run
-  it with ``list(pipeline)``, ``async for``, or ``.first()``/``.afirst()``. Chain it by
-  attribute (``.sort()``) or with ``.pipe(name)``. Chained modules take ``options=``.
-  ``.with_context`` sets the ``Context``, and ``.with_resource`` provides a resource.
-  ``.with_execution`` runs items in parallel when ``concurrency`` is ``"auto"`` or > 1.
-  Its ``executor`` (a ``riko.Executor``: ``"auto"``, ``"inline"``, ``"thread"``, or
-  ``"process"``) picks where that work runs, and its ``event_sink`` takes a
-  ``riko.types.EventSink``.
+  ``Pipeline.from_module`` or ``Pipeline``. Run it with ``pipeline(items)``.
+  ``.first(items)``/``.afirst(items)`` read one item. Iterate a run with ``for`` or
+  ``async for``. A pipeline starting from a source module runs with no items
+  (``list(pipeline)``). ``pipeline.open(items)`` returns a context manager you can
+  iterate via (``with``/``async with``). Leaving the ``with`` block closes the run.
+
+  Chain a workflow by attribute (``.sort``), or by name via ``.pipe(name)`` or
+  ``pipeline | name``. ``.map(fn)`` appends a ``riko.ext.CallableNode`` that applies a
+  callable to each item. ``.with_context`` sets the ``Context``, ``.with_resource``
+  provides a resource, and ``.replace(…)`` swaps the workflow. ``.with_execution`` runs
+  items in parallel when ``concurrency`` is ``"auto"`` or > 1.
 
 - Added ``riko.Resource`` for use with ``.with_resource``. ``Resource(…)`` owns an
   existing value and closes it with ``cleanup`` or the value's own ``close``.
@@ -27,17 +30,19 @@ New
   ``Context`` rejects. ``resource.plan`` describes how riko acquires a resource.
 
 - Added the ``Workflow`` graph (``Node``, ``Edge``, ``Endpoint``) that a ``Pipeline``
-  runs. ``Workflow.parse`` reads a workflow document (``riko.WorkflowDocument``, its
-  ``bytes`` JSON form), a bare-bones DAG (``riko.types.PipeDag``), or a pipe definition
-  (``riko.types.PipeDef``), and ``riko.DocumentShape`` pins a specific shape.
-  ``Workflow.load`` reads any of those shapes from a file, and ``flow.serialize()``
-  writes a ``WorkflowDocument``.
+  runs. ``Workflow.parse`` reads a workflow document (``riko.WorkflowDocument``: its
+  JSON form), a bare-bones DAG (``riko.types.PipeDag``), or a pipe definition
+  (``riko.types.PipeDef``). ``Workflow.load`` reads any ``riko.DocumentShape`` from a
+  file, and ``flow.serialize`` writes a ``WorkflowDocument``. ``flow.with_node(node)``
+  appends a node, and ``flow.with_workflow(other)`` appends a workflow.
 
-- Added ``riko.WorkflowLike`` to annotate anything accepted where a ``Workflow`` is
-  expected, and ``riko.WorkflowModule`` to annotate the Python module source ``str``
-  that ``riko.compile_workflow`` returns. In ``riko.types``, ``RawWorkflow``,
-  ``RawNode``, ``RawEdge``, and ``RawEndpoint`` annotate a workflow written as a
-  mapping, and ``PipeDefLike`` a ``PipeDef`` or any mapping taken as one.
+- Added ``riko.WorkflowLike`` to annotate what ``riko.compile_workflow`` accepts, and
+  ``riko.WorkflowModule`` to annotate the Python module source ``str`` it returns. Added
+  to ``riko.types``: ``RawWorkflow``/``RawEndpoint``/``RawNode``/``RawEdge`` to annotate
+  workflows; ``PipeDefLike`` for a ``PipeDef`` or similar mapping; ``InputLike`` for
+  what a pipeline runs on; ``PipelineStream``/``PipelineRun`` for what
+  ``pipeline(items)``/``pipeline.open(items)`` returns; and ``RawCallOptions``/
+  ``CallOptions``/``CallOptionsLike`` for a module's call options (``options=``).
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` (``run-pipe -p flow.json``, or an
   example id) or a ``WorkflowModule`` file directly, alongside the pipe scripts (Python
@@ -69,7 +74,7 @@ New
   registrations. ``riko.ext.Dispatcher`` is the protocol that finds a module's or
   stored workflow's pipe by name.
 
-- Module wrappers gained ``prepare``, which binds a call's configuration and call
+- Module wrappers gained ``prepare``, which applies a call's configuration and call
   options once for reuse over many items. ``riko.ext.PreparedCall`` annotates what
   ``prepare`` returns.
 
@@ -94,7 +99,13 @@ Changes
 ~~~~~~~
 
 - ``Context`` is now a fully immutable snapshot, including nested ``inputs`` values.
-  Derive a changed context with ``replace`` instead of direct assignment.
+  Derive a changed context with ``replace`` instead of direct assignment. A frozen
+  mapping, such as ``Context(inputs=…).inputs``, is hashable when its values are, and
+  merges with ``|`` into a new frozen mapping.
+
+- The fetch modules (``fetch``/``fetchdata``/``fetchpage``/``fetchtable``/``fetchtext``/
+  ``fetchsitefeed``) now raise when a URL can't be opened, e.g., a ``URLError`` for a
+  missing file, instead of logging an error and yielding empty content.
 
 - ``Context().inputs`` is now ``None`` when no input values are given, rather than an
   empty mapping. An ``input`` module still prompts when no input values are given, but
@@ -131,6 +142,10 @@ Changes
 - ``run-pipe`` reports any riko error, such as an unknown module, as a one-line message
   and exits with status 1 instead of printing a traceback.
 
+- Calling a compiled workflow module's ``pipe()`` without items, when it requires a seed
+  (input stream), now raises ``riko.InvalidPipelineError`` instead of feeding that module
+  ``None`` and yielding nothing. Pass the items instead, e.g., ``pipe(items)``.
+
 - ``ModuleDefinition`` is no longer a dataclass. Change one with ``attrs.evolve``
   instead of ``dataclasses.replace``. Its constructor is now keyword-only. ``name``
   returns the module's effective name: the ``name`` passed, or else the pipe callable's
@@ -162,10 +177,12 @@ Changes
   ``frozenset``. Mutating a metadata record's subtypes used to change the module's
   discovery metadata.
 
-- ``@processor``, ``@operator``, and ``@splitter`` raise ``TypeError`` at decoration
-  time for an invalid option (e.g., a typo or a call option like ``count``) and when
-  applied without being called. Previously a bare decorator silently took the decorated
-  function as the pipe defaults and surfaced only as an opaque error on the first call.
+- ``|`` no longer takes a ``(name, conf)`` tuple: ``pipeline | ("sort", conf)`` raises
+  ``TypeError``. To chain a configured module, use ``pipeline.sort(conf=conf)``.
+
+- ``@processor``, ``@operator``, and ``@splitter`` now work without parentheses. They
+  also raise ``TypeError`` at decoration time for an invalid option (e.g., a typo or a
+  call option like ``count``) or for a function passed together with options.
 
 - The decorators' ``parse`` method (and ``@operator``'s ``aparse``) is now
   ``normalize_input`` (and ``anormalize_input``).
@@ -174,8 +191,8 @@ Changes
   with ``async for``/``anext`` without awaiting the call first. Async processors and
   splitters are unchanged.
 
-- A module's ``pipe()`` now parses ``conf`` on every call. To parse ``conf`` just once,
-  bind the configuration with ``pipe.prepare(conf=...)`` and call that result per item.
+- A module's ``pipe`` now parses ``conf`` on every call. To parse ``conf`` just once,
+  prepare the configuration with ``pipe.prepare(conf=...)`` and call that result per item.
 
 - Renamed ``derive_category`` to ``get_module_category``, which no longer takes
   ``provider`` or ``override``, and ``riko.ext.register`` to
@@ -217,9 +234,10 @@ Removed
 
 - Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``, and
   ``PipeState``. ``Pipeline`` replaces them: ``list(pipeline)`` replaces ``.list``,
-  ``export(pipeline, …)`` replaces ``.export()``, and multi-source fetching is a
-  ``union`` fan-in in a ``Workflow``. ``subscribe``/``publish``, ``split``, and
-  ``udf(func=…)`` through a pipeline have no replacement.
+  ``export(pipeline, …)`` replaces ``.export``, and multi-source fetching is now a
+  ``union`` fan-in in a ``Workflow``. ``pipeline.map(func)`` replaces
+  ``SyncPipe(Transforms.UDF, func=…)``. ``subscribe``/``publish`` and ``split`` have no
+  replacement.
 
 - Removed call-time decoration options. Passing ``skip_if``, ``ftype``, ``ptype``,
   ``extract``, ``listize``, ``objectify``, ``parse``, or ``pollable`` to a module call
@@ -257,6 +275,15 @@ Removed
 Fixes
 ~~~~~
 
+- riko's errors now survive pickling and copying, so one raised in a worker process
+  reaches the caller intact. Errors also no longer repeat their message.
+
+- The ``fetchdata`` module's ``async_pipe`` no longer raises ``TypeError`` when
+  ``path`` isn't set. It yields the whole document, like ``pipe``.
+
+- An async run or ``riko.async_map`` call whose single task fails now raises that error
+  instead of wrapping it in an ``ExceptionGroup``.
+
 - A workflow's modules now run in the same order on every run.
 
 - Assignment to a dotted field (e.g., ``assign="author.uri"``) no longer changes nested
@@ -280,7 +307,7 @@ Fixes
 - A conf ``type`` or decorator ``ftype``/``ptype`` that is not a ``CastType`` now logs
   one warning and passes the value through unchanged, wherever it appears.
 
-- ``aclose()``ing an ``async_map_stream`` after a partial read now stops its workers and
+- ``aclose``ing an ``async_map_stream`` after a partial read now stops its workers and
   closes its source instead of raising a cancel-scope error or leaving the source open.
 
 - A module's ``async_pipe`` now drains an async secondary input stream (e.g., one of
@@ -342,8 +369,8 @@ Fixes
 - Time-zone lookup now captures both the standard and daylight names regardless of the
   current date and resolves ambiguous abbreviations (e.g., ``CST``) toward US zones.
 
-- Parsing a stream of date strings now caches at most the 1024 most recent strings
-  (``RIKO_PARSED_DATE_CACHE_SIZE``) instead of every distinct one.
+- Parsing a stream of date strings now caches at most ``RIKO_PARSED_DATE_CACHE_SIZE``
+  most recent strings instead of every distinct one.
 
 - ``compile-workflow --help`` and its usage errors now show the command's installed name
   instead of ``compile``.
@@ -352,13 +379,14 @@ Dev
 ~~~
 
 - Added ``--docstrings``, ``--docs``, ``--terms``, ``--deps``, ``--literals``,
-  ``--bindings``, ``--tests``, ``--basenames``, and ``--all`` to ``manage lint``, and
-  ``manage lint imports`` to check the internal import contracts. ``manage lint`` no
-  longer takes paths to check.
+  ``--bindings``, ``--tests``, ``--basenames``, ``--escapes``, and ``--all`` to
+  ``manage lint``; and ``manage lint imports`` to check the internal import contracts.
+  ``manage lint`` no longer takes paths to check.
 
 - Added ``manage test --ratchet``, which fails a full-suite run that leaves more
   statements uncovered than the ceiling recorded in ``pyproject.toml`` and lowers the
-  ceiling when it leaves fewer.
+  ceiling when it leaves fewer. It and ``manage lint --escapes`` warn, without failing,
+  when a ceiling has held longer than ``[tool.riko.ratchet] stale-days``.
 
 - ``manage -v``/``-vv``/``-q`` now set the log level (they previously had no effect).
 
@@ -1042,8 +1070,7 @@ Changes
   stream rather than re-running it. Chaining is allowed while ``NEW`` / ``RUNNING`` /
   ``EXHAUSTED`` but raises ``PipelineStateError`` on ``CLOSED`` / ``FAILED``. Added the
   ``PipeState`` enum, read-only ``state`` / ``closed`` / ``exhausted`` / ``failed``
-  state, sync ``close()`` / ``terminate()``, async ``aclose()``, and context-manager
-  cleanup.
+  state, sync ``close`` / ``terminate``, async ``aclose``, and context-manager cleanup.
 
 - **Converted the ``Context`` describe booleans to an ``ExecutionMode`` enum**
   (``RUN`` / ``DESCRIBE_INPUTS`` / ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE``);

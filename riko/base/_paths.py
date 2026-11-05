@@ -21,6 +21,7 @@ from typing import IO, Literal, overload
 PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
 TESTS_DIR = ROOT_DIR / "tests"
+DOCS_DIR = ROOT_DIR / "docs"
 
 
 def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str:
@@ -41,7 +42,7 @@ def normalize_url(url: str, absolute: bool = True, offline: bool = False) -> str
 
 def get_path(name: str) -> str:
     """
-    Builds the ``file://`` URL for a bundled data file name.
+    Gets the ``file://`` URL for a bundled data file name.
 
     A name that is already an ``http`` or ``file:`` URL passes through unchanged.
 
@@ -58,10 +59,10 @@ def get_path(name: str) -> str:
 
 
 @overload
-def get_temp_file(as_path: Literal[True]) -> str: ...  # noqa: E704
+def get_temp_file(as_path: Literal[True]) -> str: ...
 @overload
-def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...  # noqa: E704
-def get_temp_file(as_path: bool = False) -> str | IO[bytes]:  # noqa: E302
+def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...
+def get_temp_file(as_path: bool = False) -> str | IO[bytes]:
     if as_path:
         with NamedTemporaryFile(delete=False) as fp:
             return fp.name

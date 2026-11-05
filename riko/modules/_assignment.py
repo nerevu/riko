@@ -9,13 +9,14 @@ from itertools import chain, islice
 from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._logging import get_logger
+from riko.definitions._wrapping import build_call
 from riko.parsing._dotdict import DotDict
-from riko.types._wrappers import build_call
 
 if TYPE_CHECKING:
     from logging import Logger
 
     from riko.definitions._context import Context
+    from riko.types._options import RawCallOptions
     from riko.types._pipedef import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
         SyncProcessorWrapperOutput,
         SyncSubPipe,
     )
-    from riko.types.modules import RawCallOptions
 
 logger: Logger = get_logger(__name__)
 
@@ -48,20 +48,20 @@ type Embedder = Callable[
 
 
 @overload
-def bind_subpipe(  # noqa: E704
+def bind_subpipe(
     embed: SyncProcessorWrapper | SyncSubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[SyncProcessorWrapperOutput]: ...
-@overload  # noqa: E302
-def bind_subpipe(  # noqa: E704
+@overload
+def bind_subpipe(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
 ) -> partial[Awaitable[SyncProcessorWrapperOutput]]: ...
-def bind_subpipe(  # noqa: E302
+def bind_subpipe(
     embed: ProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = None,
@@ -97,20 +97,20 @@ def bind_subpipe(  # noqa: E302
 
 
 @overload
-def build_assignment(  # noqa: E704
+def build_assignment(
     items: Stream | Item, skip: bool = ..., count: CountValues | None = ...
 ) -> tuple[bool, Stream]: ...
-@overload  # noqa: E302
-def build_assignment(  # noqa: E704
+@overload
+def build_assignment(
     items: PrimitiveValue, skip: bool = ..., count: CountValues | None = ...
 ) -> tuple[bool, ValueStream]: ...
-@overload  # noqa: E302
-def build_assignment(  # noqa: E704
+@overload
+def build_assignment(
     items: OperatorParserOutput[ItemOrValue],
     skip: bool = ...,
     count: CountValues | None = ...,
 ) -> tuple[bool, StreamOrValueStream]: ...
-def build_assignment(  # noqa: E302
+def build_assignment(
     items: OperatorParserOutput[ItemOrValue],
     skip=False,
     count: CountValues | None = None,
@@ -143,27 +143,27 @@ def build_assignment(  # noqa: E302
 
 
 @overload
-def gen_assignments(  # noqa: E704
+def gen_assignments(
     item: DotDict[RikoValue],
     assignment: Stream,
     assign: str | None = ...,
     one: bool = ...,
 ) -> Stream: ...
-@overload  # noqa: E302
-def gen_assignments(  # noqa: E704
+@overload
+def gen_assignments(
     item: DotDict[RikoValue],
     assignment: ValueStream,
     assign: None = ...,
     one: bool = ...,
 ) -> ValueStream: ...
-@overload  # noqa: E302
-def gen_assignments(  # noqa: E704
+@overload
+def gen_assignments(
     item: DotDict[RikoValue],
     assignment: StreamOrValueStream,
     assign: str | None = ...,
     one: bool = ...,
 ) -> StreamOrValueStream: ...
-def gen_assignments(  # noqa: E302
+def gen_assignments(
     item: DotDict[RikoValue],
     assignment: StreamOrValueStream,
     assign: str | None = None,

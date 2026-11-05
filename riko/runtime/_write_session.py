@@ -8,11 +8,12 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
-from riko.bado import _backend
+from riko.bado._backend import Path as AsyncPath
 from riko.bado._backend import async_open, asyncify
 from riko.bado.itertools import as_async
-from riko.base._constants import ENCODING
-from riko.base.exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._config import ENCODING
+from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._guards import is_mapping
 from riko.definitions._resource_definition import OneShotResource, Resource
 from riko.definitions._targets import FileTarget, build_write
 from riko.definitions._write import (
@@ -26,7 +27,6 @@ from riko.definitions._write import (
 from riko.io._reencode import IterStringIO, Reencoder, reencode
 from riko.io._serialization import serialize_items
 from riko.types._enums import FmtLike, Formats, StrLike
-from riko.types._guards import is_mapping
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
@@ -443,7 +443,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
     async def ainitial_file_size(self) -> int:
         """Whether ``path`` exists and is non-empty."""
         if self._initial_file_size is None:
-            path = _backend.Path(self.path)
+            path = AsyncPath(self.path)
 
             try:
                 file_stat = await path.stat()
@@ -632,13 +632,14 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
     """
     A resource lifecycle that acquires a file write session and tears it down.
 
-    The lifecycle only acquires and releases the session; committing (finalize) or
-    abandoning (abort) is the execution host's decision, made before the ``with``
+    The lifecycle only acquires and releases the session. Committing (finalize) or
+    abandoning (abort) is the execution host's decision and made before the ``with``
     block exits.
 
     Args:
 
-        prepared: The target-bound, validated write.
+        prepared: A validated write that has been checked against its target's
+            capabilities.
 
     Yields:
 
@@ -744,8 +745,13 @@ def write_through(
 
     Args:
 
-        source: The upstream stream to write and pass through.
-        prepared: The target-bound, validated write.
+        source: The input stream to write and pass through.
+
+        prepared: A validated write that has been checked against its target's
+            capabilities.
+
+    Kwargs:
+
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 
     Yields:
@@ -783,8 +789,13 @@ async def awrite_through(
 
     Args:
 
-        source: The upstream stream to write and pass through.
-        prepared: The target-bound, validated write.
+        source: The input stream to write and pass through.
+
+        prepared: A validated write that has been checked against its target's
+            capabilities.
+
+    Kwargs:
+
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 
     Yields:

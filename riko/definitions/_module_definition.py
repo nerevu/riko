@@ -24,6 +24,8 @@ from riko.base._strutils import get_doc_summary
 from riko.types._enums import ModuleName, ModuleNameLike
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -32,6 +34,19 @@ if TYPE_CHECKING:
     )
 
 _UNNAMEABLE_PIPES = frozenset({"<lambda>", "pipe", "async_pipe"})
+
+
+def get_callable_name(fn: Callable[..., object] | None, default: str = "") -> str:
+    """Names a callable after its ``__name__``, or ``default`` for an unnamed one."""
+    candidate: object = getattr(fn, "__name__", None)
+    is_valid = candidate not in _UNNAMEABLE_PIPES
+
+    if isinstance(candidate, str) and candidate.isidentifier() and is_valid:
+        name = candidate
+    else:
+        name = default
+
+    return name
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -89,7 +104,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The definition with the module's interface callables bound.
+            The definition with the module's interface callables attached.
 
         Examples:
 
@@ -125,9 +140,9 @@ class ModuleDefinition:
     @property
     def name(self) -> str:
         """
-        The registry key, from the declared name or else a bound callable.
+        The registry key, from the declared name or else an interface callable.
 
-        A declared name wins. Otherwise the bound pipe callable's ``__name__`` is
+        A declared name wins. Otherwise the pipe callable's ``__name__`` is
         used. Generic ``<lambda>``/``pipe``/``async_pipe`` names are considered
         un-nameable, so those require an explicit ``name``.
 
@@ -146,16 +161,7 @@ class ModuleDefinition:
 
         """
         pipe = self.sync_pipe if self.sync_pipe is not None else self.async_pipe
-        candidate = getattr(pipe, "__name__", "")
-
-        if self.declared_name:
-            name = self.declared_name
-        elif candidate not in _UNNAMEABLE_PIPES:
-            name = candidate
-        else:
-            name = ""
-
-        return name
+        return self.declared_name or get_callable_name(pipe)
 
     def get_pipe(self, is_async: bool = False) -> AnyModuleWrapper | None:
         """
@@ -167,7 +173,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The bound callable, or ``None`` when that interface is undefined.
+            The interface callable, or ``None`` when that interface is undefined.
 
         Examples:
 
@@ -189,7 +195,7 @@ class ModuleDefinition:
 
         Returns:
 
-            The subset of ``pipe``/``async_pipe`` with a bound callable.
+            The subset of ``pipe``/``async_pipe`` with a callable.
 
         Examples:
 

@@ -29,7 +29,7 @@ from functools import cached_property, partial
 from itertools import chain
 from operator import attrgetter
 from types import ModuleType
-from typing import TYPE_CHECKING, ClassVar, Literal, NewType, Required, TypedDict, cast
+from typing import TYPE_CHECKING, ClassVar, Final, Literal, NewType, Required, TypedDict
 
 from attrs import define, field
 
@@ -42,33 +42,39 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._iterutils import map_values
-
-from ._collections import (
-    FrozenDict,
-    freeze,
+from riko.base._require_guards import (
     require_instance,
+    require_nonblank_str,
     require_str,
     validator_from_require,
 )
 
+from ._frozendict import FrozenDict, freeze
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from ._collections import FrozenSetMapping, FrozenTupleMapping
     from ._enums import BackendLike, FmtLike, StrLike
+    from ._frozendict import FrozenSetMapping, FrozenTupleMapping
     from ._io import PathLike
+    from ._options import RawCallOptions
     from ._pipedef import Embed
-    from .modules import Conf, RawCallOptions
+    from .modules import Conf
 
 type NodeId = str
 type Port = str
 type ResourceName = str
 type WorkflowDocument = bytes
-type NodeFamily = Literal["module", "read", "write", "cache", "action", "subscribe"]
+type DocumentNodeFamily = Literal[
+    "module", "read", "write", "cache", "action", "subscribe"
+]
+type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]
 
+PORT_DIRECTIONS: Final[frozenset[PortDirection]] = frozenset({"in", "out"})
 WORKFLOW_VERSION = "2"
+
 WorkflowModule = NewType("WorkflowModule", str)
 ResolvedWorkflow = NewType("ResolvedWorkflow", ModuleType)
 
@@ -99,7 +105,7 @@ class RawNode(TypedDict, total=False):
 
     id: str
     name: Required[str]
-    family: NodeFamily
+    family: DocumentNodeFamily
     label: str
     conf: Conf | Mapping[str, object]
     options: RawCallOptions | Mapping[str, object]
@@ -128,9 +134,17 @@ class RawWorkflow(TypedDict, total=False):
 
 @define(frozen=True, slots=True)
 class Endpoint:
-    """A reference to one port on one node that edges and outputs point through."""
+    """
+    A reference to one port on one node that edges and outputs point through.
 
-    node: NodeId = field(validator=validator_from_require(require_str))
+    Attributes:
+
+        node: The id of the node, named like the serialized endpoint's ``node`` key.
+        port: The port on that node (e.g. ``out``/``in``/``in:1``).
+
+    """
+
+    node: NodeId = field(validator=validator_from_require(require_nonblank_str))
     port: Port = field(validator=validator_from_require(require_str))
 
     def __str__(self) -> str:
@@ -142,7 +156,7 @@ _is_endpoint = validator_from_require(require_instance, Endpoint)
 
 @define(frozen=True, slots=True)
 class Edge:
-    """A stream edge delivering items from a source port to a target port."""
+    """A directed edge from a source port to a target port; its family says how."""
 
     family: ClassVar[EdgeFamily]
     source: Endpoint = field(validator=_is_endpoint)
@@ -150,10 +164,6 @@ class Edge:
 
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.source}, {self.target})"
-
-    @property
-    def port(self) -> tuple[str, str]:
-        return self.target.node, self.target.port
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,7 +211,7 @@ def parse_port(port: Port) -> ParsedPort:
     """
     direction, sep, rest = port.partition(":")
 
-    if direction not in {"in", "out"}:
+    if direction not in PORT_DIRECTIONS:
         raise ValueError(f"invalid port direction: {port!r}")
 
     if not sep:
@@ -213,18 +223,18 @@ def parse_port(port: Port) -> ParsedPort:
     else:
         raise ValueError(f"invalid port: {port!r}")
 
-    return ParsedPort(cast("PortDirection", direction), index, name)
+    return ParsedPort(direction, index, name)
 
 
 @dataclass(frozen=True, slots=True)
 class GraphEdge:
     """
-    One directed stream edge between two workflow node ports.
+    One directed edge between two workflow node ports.
 
     Ports keep their workflow spelling: ``out`` on the source, and on the target either
     the default ``in``, a positional ``in:1``/``in:2`` input port, or a named input port
-    such as ``in:count``. Every input port delivers a stream; ``is_positional`` reports
-    whether the target port is a positional one.
+    such as ``in:count``. Every input port delivers a stream. ``is_default`` reports
+    whether the target port is the default one.
 
     Attributes:
 
@@ -241,8 +251,8 @@ class GraphEdge:
     target_port: str
 
     @property
-    def is_positional(self) -> bool:
-        return parse_port(self.target_port).is_positional
+    def is_default(self) -> bool:
+        return parse_port(self.target_port).is_default
 
 
 @define(frozen=True, slots=True)
@@ -261,7 +271,7 @@ class GraphIndex:
 
     Attributes:
 
-        nodes: Every node id, in declaration order.
+        node_ids: Every node id, in declaration order.
         edges: Every edge, in listing order.
         outputs: The workflow outputs, keyed by name.
         incoming: Edges entering each node, keyed by target id.
@@ -286,7 +296,7 @@ class GraphIndex:
 
     """
 
-    nodes: tuple[str, ...] = field(converter=tuple)
+    node_ids: tuple[NodeId, ...] = field(converter=tuple)
     edges: tuple[GraphEdge, ...] = field(converter=tuple)
     outputs: FrozenDict[str, Endpoint] = field(converter=FrozenDict)
 
@@ -309,7 +319,7 @@ class GraphIndex:
     @cached_property
     def downstream(self) -> FrozenSetMapping:
         pairs = ((edge.source, edge.target) for edge in self.edges)
-        return freeze(edges_to_graph(pairs, *self.nodes))
+        return freeze(edges_to_graph(pairs, *self.node_ids))
 
     @cached_property
     def upstream(self) -> FrozenSetMapping:
@@ -329,7 +339,7 @@ class GraphIndex:
 
     @cached_property
     def roots(self) -> tuple[str, ...]:
-        return tuple(node for node in self.order if not self.upstream[node])
+        return tuple(node_id for node_id in self.order if not self.upstream[node_id])
 
     @cached_property
     def leaves(self) -> tuple[str, ...]:
@@ -340,19 +350,40 @@ class GraphIndex:
         reach = partial(descendants, graph=self.upstream)
         items = self.outputs.items()
         members = {name: reach(ref.node) | {ref.node} for name, ref in items}
-        ordered = {
-            name: tuple(node for node in self.order if node in subgraph)
-            for name, subgraph in members.items()
-        }
+        get_ids = lambda value: tuple(_id for _id in self.order if _id in value)
+        ordered = map_values(get_ids, members)
         return FrozenDict(ordered)
 
-    def is_open(self, node: str) -> bool:
-        """Reports whether ``node``'s default input port is free for a seed to feed."""
-        return all(edge.is_positional for edge in self.incoming.get(node, ()))
+    def is_open(self, node_id: str) -> bool:
+        """
+        Reports whether node's default input port can accept a seed.
+
+        Only an edge into the bare default ``in`` port closes it. Positional ``in:<n>``
+        and named ``in:<name>`` edges leave it open.
+
+        Args:
+
+            node_id: The id of the node to check.
+
+        Returns:
+
+            ``True`` when no edge targets the node's default input port.
+
+        Examples:
+
+            >>> named = GraphEdge("a", "c", "out", "in:count")
+            >>> default = GraphEdge("b", "d", "out", "in")
+            >>> index = GraphIndex(["a", "b", "c", "d"], [named, default], {})
+            >>> index.is_open("c"), index.is_open("d")
+            (True, False)
+
+        """
+        return not any(map(attrgetter("is_default"), self.incoming.get(node_id, ())))
 
 
 __all__ = [
     "WORKFLOW_VERSION",
+    "DocumentNodeFamily",
     "EdgeFamily",
     "Endpoint",
     "GraphEdge",

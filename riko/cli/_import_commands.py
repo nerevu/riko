@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import click
 
+from riko.base._exceptions import ImportLintError
 from riko.base._paths import PACKAGE_DIR
-from riko.base.exceptions import ImportLintError
 
 from ._lint_canonical_imports import lint_canonical_imports
 from ._lint_import_architecture import (

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
 from riko.base._config import LAYER_DEPENDENCIES as _RAW_LAYER_DEPENDENCIES
 from riko.base._config import PREFIX_LAYERS as _PREFIX_LAYERS
+from riko.base._exceptions import InvalidArchitectureError
 from riko.base._graph import (
     AnyGraph,
     FrozenGraph,
@@ -20,7 +21,7 @@ from riko.base._graph import (
     freeze_graph,
     gen_redundant_edges,
 )
-from riko.base.exceptions import InvalidArchitectureError
+from riko.base._iterutils import gen_non_none
 
 from ._import_graph import (
     ModuleInfo,
@@ -168,7 +169,7 @@ def _render_from(
         current = frozenset(layers[frozenset(current)])
         parts.append(_format_group(current))
 
-    return filter(None, parts)
+    return gen_non_none(parts)
 
 
 def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
@@ -207,7 +208,7 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose=True) -> Iterator[str]:
             yield " < ".join(parts)
     else:
         parts = map(_format_group, layers.values())
-        yield " < ".join(filter(None, parts))
+        yield " < ".join(gen_non_none(parts))
 
 
 def load_architecture_report(

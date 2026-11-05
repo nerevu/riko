@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import evolve
 
-from riko.base.exceptions import UnsupportedModuleError
+from riko.base._exceptions import UnsupportedModuleError
 from riko.definitions._module_definition import ModuleDefinition
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._pipedef import is_pipe_id
@@ -174,14 +174,12 @@ class ModuleRegistry(Registry[ModuleDefinition]):
         return not is_pipe_id(name)
 
     @overload
-    def require(  # noqa: E704
+    def require(
         self, name: str, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
-    @overload  # noqa: E301
-    def require(  # noqa: E704
-        self, name: str, is_async: Literal[True]
-    ) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:  # noqa: E301
+    @overload
+    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
+    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
         """
         Finds a module's sync or async callable by tier precedence, or raises.
 
@@ -255,7 +253,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     def load_definition(self, name: str) -> ModuleDefinition | None:
         """
-        Resolves a runtime or entry-point definition by name.
+        Loads a runtime or entry-point definition by name.
 
         Args:
 

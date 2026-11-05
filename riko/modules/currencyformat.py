@@ -23,16 +23,16 @@ Attributes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from babel.numbers import format_currency
 
 from riko.base._logging import get_logger
+from riko.base._require_guards import require_conf_key
 from riko.base.currencies import CURRENCY_CODES
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
-from ._require import require_conf_key
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -79,8 +79,8 @@ def parser(
         parsed = ""
     else:
         currency: str = require_conf_key(objconf, "currency", "currencyformat")
-        currency_code = CURRENCY_CODES.get(currency, cast("dict[str, str]", {}))
-        locale = objconf.locale or currency_code.get("locale", "")
+        code = CURRENCY_CODES.get(currency)
+        locale = objconf.locale or ("" if code is None else code.get("locale", ""))
 
         try:
             parsed = format_currency(amount, objconf.currency, locale=locale)

@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 from meza import convert as cv
 from meza import fntools as ft
 
+from riko.base._guards import require_mapping
 from riko.base._iterutils import sort_stably
-from riko.types._collections import thaw
 from riko.types._enums import Formats
-from riko.types._guards import require_mapping
+from riko.types._frozendict import thaw
 
 try:
     from csv2ofx.ofx import OFX

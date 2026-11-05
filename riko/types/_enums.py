@@ -12,9 +12,7 @@ Examples:
 
 from collections.abc import Iterable
 from enum import StrEnum
-from typing import Literal, overload
-
-from riko.base.exceptions import InvalidPipelineError
+from typing import Literal
 
 
 class ModuleName(StrEnum):
@@ -197,6 +195,29 @@ class Executor(StrEnum):
     PROCESS = "process"
 
 
+class IdentityMode(StrEnum):
+    """
+    How a callable node's results relate to the identity of the items it receives.
+
+    ``PRESERVE`` keeps each input item's identity on its one result. ``DERIVE`` gives
+    each result a child identity derived from its input item. ``COMBINE`` builds a
+    result's identity from every item that contributed to it. A node carries the mode
+    it declares, but no run acts on it yet.
+
+    Examples:
+
+        >>> from riko import IdentityMode
+        >>>
+        >>> IdentityMode("derive") is IdentityMode.DERIVE, IdentityMode.COMBINE.value
+        (True, 'combine')
+
+    """
+
+    PRESERVE = "preserve"
+    DERIVE = "derive"
+    COMBINE = "combine"
+
+
 class DocumentShape(StrEnum):
     """
     The three JSON shapes a workflow input may take.
@@ -219,103 +240,11 @@ class DocumentShape(StrEnum):
     V2 = "v2"
 
 
-@overload
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[True] = ...,
-    error: type[Exception] = ...,
-) -> E: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[False],
-    error: type[Exception] = ...,
-) -> E | None: ...
-@overload  # noqa: E302
-def resolve_enum[E: StrEnum](  # noqa: E704
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: bool,
-    error: type[Exception] = ...,
-) -> E | None: ...
-def resolve_enum[E: StrEnum](  # noqa: E302
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = None,
-    *,
-    default: E | None = None,
-    strict: bool = True,
-    error: type[Exception] = InvalidPipelineError,
-) -> E | None:
-    """
-    Resolves a member or member value into the given string enum.
-
-    A missing ``value`` resolves to ``default``; with no default, it is an error
-    unless ``strict`` is off, in which case it resolves to ``None``.
-
-    Args:
-
-        enum: The string enum to resolve into.
-        value: A member or member value, or ``None`` when absent.
-        what: How error messages name the value; defaults to the enum's name.
-        default: The member a missing ``value`` resolves to.
-        strict: Whether a missing ``value`` with no ``default`` raises.
-        error: The exception class raised for a missing or invalid ``value``.
-
-    Returns:
-
-        The resolved member, or ``None`` when ``value`` is missing, there is no
-        ``default``, and ``strict`` is off.
-
-    Raises:
-
-        error: ``value`` is not one of the enum's values, or is missing while
-            required. The invalid-value message lists every accepted value.
-
-    Examples:
-
-        >>> from riko import Executor
-        >>> from riko.types._enums import resolve_enum
-        >>>
-        >>> resolve_enum(Executor, "thread")
-        <Executor.THREAD: 'thread'>
-        >>> resolve_enum(Executor, "bogus", error=ValueError)
-        Traceback (most recent call last):
-        ...
-        ValueError: Invalid Executor: 'bogus'. Expected one of auto, inline, thread, ...
-
-    """
-    what = enum.__name__ if what is None else what
-
-    if value is None and default is None and strict:
-        raise error(f"missing required {what}")
-    elif value is None:
-        result = default
-    else:
-        try:
-            result = value if isinstance(value, enum) else enum(value)
-        except ValueError as e:
-            accepted = ", ".join(member.value for member in enum)
-            raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}") from e
-
-    return result
-
-
 type ModuleNameLike = str | ModuleName
 type StrLike = str | Iterable[str]
 type FmtLike = Formats | str
 type BackendLike = Backends | str
 type ExecutorLike = Executor | str
+type IdentityModeLike = IdentityMode | str
 type DocumentShapeLike = DocumentShape | str
 type ConcurrencyLike = int | Literal["auto"]
