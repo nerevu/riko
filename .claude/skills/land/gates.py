@@ -12,13 +12,12 @@ Usage:
 A gate's marker is the content tree id of the working tree it passed on: every
 tracked and untracked, non-ignored file as ``git write-tree`` would store it.
 Each gate's id leaves out what that gate never reads under ``.claude/``: nothing
-for tidy, the markdown for ``lint`` and ``prettify`` (Ruff), and the whole folder
-for the other gates, so a skill-prose edit reruns tidy alone and a
-skill-script edit reruns tidy, lint, and prettify. It ignores ``HEAD`` and the
-index, so committing, staging, rebasing, or switching sessions keeps a marker
-valid while the content is unchanged; any other edit invalidates it. Markers
-live in ``.claude/gate-markers.json`` of each worktree. ``fingerprint`` prints
-the full tree id.
+for tidy, ``lint``, and ``prettify`` (Ruff and rumdl), and the whole folder for the
+other gates, so a skill edit reruns tidy, lint, and prettify alone. It ignores
+``HEAD`` and the index, so committing, staging, rebasing, or switching sessions
+keeps a marker valid while the content is unchanged; any other edit invalidates
+it. Markers live in ``.claude/gate-markers.json`` of each worktree.
+``fingerprint`` prints the full tree id.
 
 ``check`` exits 0 when the gate already passed on this tree (skip it) and 1 when
 it must run. ``record`` marks it passed on the current tree. ``run`` does both
@@ -74,8 +73,7 @@ EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
 HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
-RUFF_GATES = frozenset({"lint", "prettify"})
-TIDY_ONLY = (":(glob).claude/**/*.md",)
+SKILL_READERS = frozenset({None, "tidy", "lint", "prettify"})
 UNGATED = (".claude",)
 SCOPE_EXCLUDES = (
     "uv.lock",
@@ -107,18 +105,13 @@ def get_tree_id(gate: str | None = None) -> str:
     Gets the content tree id of the working tree, ignoring HEAD and the index.
 
     The id leaves out what ``gate`` never reads under ``.claude/``: nothing for
-    tidy, the markdown for the Ruff gates, the whole folder for the rest.
+    tidy and the Ruff/rumdl gates, the whole folder for the rest.
     """
     real_index = Path(
         _git("rev-parse", "--path-format=absolute", "--git-path", "index")
     )
 
-    if gate in RUFF_GATES:
-        unread: tuple[str, ...] = TIDY_ONLY
-    elif gate in {None, "tidy"}:
-        unread = ()
-    else:
-        unread = UNGATED
+    unread: tuple[str, ...] = () if gate in SKILL_READERS else UNGATED
 
     with tempfile.TemporaryDirectory(prefix="gates-") as tmp:
         index = Path(tmp) / "index"

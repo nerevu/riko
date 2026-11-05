@@ -34,7 +34,7 @@ _IMPORT_ERRORS = frozenset(
     {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
 )
 
-HOOK_PINNED: tuple[str, ...] = ("ruff",)
+HOOK_PINNED: tuple[str, ...] = ("ruff", "rumdl")
 
 
 class DependencyIssue(NamedTuple):

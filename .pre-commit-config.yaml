@@ -1,7 +1,7 @@
 repos:
-  # Pre-commit installs the locked ruff in its own environment, so the hooks match
-  # `manage lint` and CI from any Git client. `manage upgrade` rewrites the pin and
-  # `manage lint --deps` fails when it drifts from uv.lock.
+  # Pre-commit installs the locked ruff and rumdl in their own environments, so the
+  # hooks match `manage lint` and CI from any Git client. `manage upgrade` rewrites the
+  # pins and `manage lint --deps` fails when one drifts from uv.lock.
   - repo: local
     hooks:
       - id: ruff-check-imports
@@ -22,6 +22,12 @@ repos:
         language: python
         additional_dependencies: [ruff==0.16.10]
         types_or: [python, pyi]
+      - id: rumdl-check
+        name: rumdl (check)
+        entry: rumdl check --fix
+        language: python
+        additional_dependencies: [rumdl==0.3.2]
+        types: [markdown]
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

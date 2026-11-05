@@ -9,7 +9,8 @@ rewrites or bundles of unrelated changes.
 
 These instructions describe the current ``features`` branch. That branch uses
 Python 3.12 or newer, `uv`_ for dependency management, ``pytest`` for tests and
-doctests, ``ruff`` for formatting and linting, ``pyright`` for type checking, and
+doctests, ``ruff`` (Python) and ``rumdl`` (Markdown) for formatting and linting,
+``pyright`` for type checking, and
 ``tox`` for the supported-version matrix.
 
 Types of contributions
@@ -131,16 +132,17 @@ The common development commands are:
       even with ``--no-cov``.
 
 ``manage prettify``
-    - Sorts imports, applies Ruff fixes, and formats Python.
+    - Sorts imports, applies Ruff fixes, and formats Python, then formats Markdown
+      with rumdl.
     - Limits the scope with ``--where``.
     - Formats YAML instead with ``--yaml``.
 
 ``manage check``
-    - Runs Ruff checks against staged Python files.
+    - Runs Ruff checks against staged Python files and rumdl against staged Markdown.
     - Is a fast pre-commit check, not a replacement for the full lint suite.
 
 ``manage lint``
-    - Runs Ruff lint plus ``ruff format --check`` by default.
+    - Runs Ruff lint, ``ruff format --check``, and ``rumdl check`` by default.
     - Selects standard checks additively:
 
       - ``--rst``, ``--docs``, ``--actions``, ``--yaml``, and ``--docstrings``.

@@ -79,6 +79,7 @@ lint = [
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.414",
     "ruff>=0.16.10,<0.17.0",
+    "rumdl>=0.3.2,<0.4.0",
     "types-lxml>=2026.2.16",
     "types-networkx>=3.4.2",
 ]
@@ -224,6 +225,22 @@ split-on-trailing-comma = false
     "N806",  # Variable in function should be lowercase (generated _OUTPUT)
     "UP009",  # UTF-8 encoding declaration (generated header)
 ]
+
+[tool.rumdl]
+line-length = 88
+exclude = ["_docs/archive"]
+
+[tool.rumdl.MD013]
+reflow = true
+reflow-break-code-spans = false
+code-blocks = false
+headings = false
+
+[tool.rumdl.per-file-ignores]
+# Inspiration snapshots are copies of other projects' readmes: their relative links
+# resolve inside the source project, and GitHub readme conventions (an HTML logo before
+# the title, bold step labels) stay as their authors wrote them.
+"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057"]
 
 [tool.deptry]
 # `manage lint --deps` runs deptry from the repository root. The root conftest.py

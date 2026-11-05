@@ -76,12 +76,11 @@ def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):
     (tmp_path / ".claude" / "scratch.md").write_text("x\n")
 
     assert gates.get_tree_id("tidy") != ids["tidy"]
-    assert gates.get_tree_id("lint") == ids["lint"]
+    assert gates.get_tree_id("lint") != ids["lint"]
     assert gates.get_tree_id("test") == ids["test"]
 
     script.write_text("x = 2\n")
 
-    assert gates.get_tree_id("lint") != ids["lint"]
     assert gates.get_tree_id("test") == ids["test"]
 
     (tmp_path / "a.py").write_text("a = 2\n")
