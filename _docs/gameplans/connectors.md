@@ -2,19 +2,22 @@
 
 ## 1. Mission
 
-Create optional integrations whose connectors let Riko read from and write to external systems without
-placing protocol clients, credentials, or provider-specific behavior in Core.
+Create optional integrations whose connectors let Riko read from and write to external
+systems without placing protocol clients, credentials, or provider-specific behavior in
+Core.
 
 This plan owns concrete connector/Target adapter behavior, credential/session mechanics,
 acknowledgements, and optional protocol integrations. It consumes:
 
-- canonical `Target` / `Format` / `ReadNode` / `WriteNode` structure from `extensibility.md`;
+- canonical `Target` / `Format` / `ReadNode` / `WriteNode` structure from
+  `extensibility.md`;
 - provider-neutral write/action behavior from `effects.md`;
 - immutable `Context` / `Resource` and execution lifetime from `execution-semantics.md`;
 - state/checkpoint semantics from `execution-semantics.md`;
 - fan-out/pub-sub semantics from `fanout-topology.md`;
 - file/artifact codecs from `artifact-conversion.md`;
-- provider semantics from `provider-integrations.md` where the connector belongs to a SaaS integration.
+- provider semantics from `provider-integrations.md` where the connector belongs to a
+  SaaS integration.
 
 ## 2. Package boundaries
 
@@ -41,8 +44,8 @@ nerevu/riko-microsoft
 
 Provider-specific dependencies remain optional extras or separate distributions.
 
-Core knows how to **describe** a Target and how an execution invokes a registered target contract;
-it does not import every SDK needed to operate those targets.
+Core knows how to **describe** a Target and how an execution invokes a registered target
+contract; it does not import every SDK needed to operate those targets.
 
 ## 3. Non-negotiable decisions
 
@@ -72,18 +75,18 @@ Target(Backends.HTTP, url="https://example/api")
 Target(Backends.S3, bucket="reports", key="daily.jsonl")
 ```
 
-Concrete optional packages register adapters for target names; Workflow v2 can still parse and
-validate the Target definition without importing the SDK.
+Concrete optional packages register adapters for target names; Workflow v2 can still
+parse and validate the Target definition without importing the SDK.
 
 ### 3.2 AnyIO runtime; protocols are orthogonal
 
-Do not reintroduce Twisted as the **execution runtime**. A connector may wrap synchronous clients in
-the common worker adapter or use async clients compatible with the AnyIO runtime. No connector starts
-a private event loop/portal/task group.
+Do not reintroduce Twisted as the **execution runtime**. A connector may wrap
+synchronous clients in the common worker adapter or use async clients compatible with
+the AnyIO runtime. No connector starts a private event loop/portal/task group.
 
-Twisted protocol implementations are not categorically banned where they are genuinely superior;
-when used, they cooperate with the execution's asyncio/AnyIO runtime inside the optional connector
-package rather than becoming Riko's runtime.
+Twisted protocol implementations are not categorically banned where they are genuinely
+superior; when used, they cooperate with the execution's asyncio/AnyIO runtime inside
+the optional connector package rather than becoming Riko's runtime.
 
 ### 3.3 Credentials are references
 
@@ -93,13 +96,13 @@ Serialized configuration contains references such as:
 {"credential": "clients/contoso/sftp"}
 ```
 
-It never contains passwords, private keys, access tokens, or URI user-info. A credential Resource
-resolves material inside execution scope and redacts it from events/errors.
+It never contains passwords, private keys, access tokens, or URI user-info. A credential
+Resource resolves material inside execution scope and redacts it from events/errors.
 
 ### 3.4 Definition is not execution
 
-A Target can be normalized, validated structurally, fingerprinted, displayed, and serialized without
-opening a connection.
+A Target can be normalized, validated structurally, fingerprinted, displayed, and
+serialized without opening a connection.
 
 Execution preparation resolves:
 
@@ -115,15 +118,16 @@ No network probing occurs merely because a workflow file was loaded.
 
 ### 3.5 No hidden duplicate downloads
 
-HTTP Format selection should reuse known Target/path/media metadata before making additional requests.
-Network probing is explicit and bounded. Do not perform unconditional HEAD + GET solely for generic
-format detection.
+HTTP Format selection should reuse known Target/path/media metadata before making
+additional requests. Network probing is explicit and bounded. Do not perform
+unconditional HEAD + GET solely for generic format detection.
 
 ### 3.6 Streaming and lifecycle
 
-Connectors return lazy records, batches, `FeedResult`s, or artifact references where appropriate.
-Sessions are execution-owned Resources and close on exhaustion, cancellation, error, or early
-consumer termination. Connections are not opened once per item unless the protocol requires it.
+Connectors return lazy records, batches, `FeedResult`s, or artifact references where
+appropriate. Sessions are execution-owned Resources and close on exhaustion,
+cancellation, error, or early consumer termination. Connections are not opened once per
+item unless the protocol requires it.
 
 ## 4. Target registry and execution handoff
 
@@ -142,8 +146,8 @@ AIRTABLE
 ...
 ```
 
-Registered adapters may implement sync, async, or both read/write protocols. The private execution
-adapts missing modes once through its shared worker/portal boundary.
+Registered adapters may implement sync, async, or both read/write protocols. The private
+execution adapts missing modes once through its shared worker/portal boundary.
 
 Conceptually:
 
@@ -161,10 +165,11 @@ result = adapter.write(
 )
 ```
 
-Those are conceptual roles, not a second public API alongside `Pipeline.read()` / `Pipeline.write()`.
+Those are conceptual roles, not a second public API alongside `Pipeline.read()` /
+`Pipeline.write()`.
 
-Duplicate target-name registrations fail deterministically unless the extension registration policy
-explicitly allows a qualified namespace/override.
+Duplicate target-name registrations fail deterministically unless the extension
+registration policy explicitly allows a qualified namespace/override.
 
 ## 5. Format resolution and HTTP handling
 
@@ -178,15 +183,17 @@ explicit Format
 -> error
 ```
 
-Connectors provide trustworthy media metadata; they do not silently override an explicit/path-derived
-Format. Generic body sniffing is not the default contract.
+Connectors provide trustworthy media metadata; they do not silently override an
+explicit/path-derived Format. Generic body sniffing is not the default contract.
 
-An HTTP adapter should expose response metadata needed by downstream interpretation/provenance:
-status, final URL, selected headers, content/media type, request/provider ids, and timing where useful.
-Size/redirect/time limits remain explicit.
+An HTTP adapter should expose response metadata needed by downstream
+interpretation/provenance: status, final URL, selected headers, content/media type,
+request/provider ids, and timing where useful. Size/redirect/time limits remain
+explicit.
 
-Content extraction such as PDF/DOCX/HTML-to-text is downstream interpretation/transformation, not an
-arbitrary serialized `postprocess` callable hidden inside HTTP transport.
+Content extraction such as PDF/DOCX/HTML-to-text is downstream
+interpretation/transformation, not an arbitrary serialized `postprocess` callable hidden
+inside HTTP transport.
 
 ## 6. Storage and file Targets
 
@@ -201,35 +208,40 @@ FTP
 SFTP
 ```
 
-OpenDAL or other maintained storage abstractions may back several adapters internally, but public
-errors/events identify the Riko target plus underlying cause.
+OpenDAL or other maintained storage abstractions may back several adapters internally,
+but public errors/events identify the Riko target plus underlying cause.
 
-Directory reads require explicit glob/recursive/maximum-count policy. Remote object metadata should
-be accessible without forcing content materialization.
+Directory reads require explicit glob/recursive/maximum-count policy. Remote object
+metadata should be accessible without forcing content materialization.
 
 ### 6.1 File write behavior
 
-Generic `Pipeline.write()` semantics are owned by `effects.md`: records pass through unchanged,
-completion is reported through `WriteResult`, and graph position determines terminality.
+Generic `Pipeline.write()` semantics are owned by `effects.md`: records pass through
+unchanged, completion is reported through `WriteResult`, and graph position determines
+terminality.
 
 The FILE adapter specializes that contract:
 
 - streamable formats such as CSV/JSONL may encode per logical item;
 - framed document formats may emit bounded incremental framing when possible;
 - atomic replacement may use temp-write + flush/fsync/close + atomic rename;
-- failed/cancelled publication cleans partial artifacts best-effort and emits no success result;
-- keyed reconciliation against an existing document may stream the existing file where practical
-  (for example `ijson` for large JSON) instead of materializing it wholesale.
+- failed/cancelled publication cleans partial artifacts best-effort and emits no success
+  result;
+- keyed reconciliation against an existing document may stream the existing file where
+  practical (for example `ijson` for large JSON) instead of materializing it wholesale.
 
-The shipped compatibility `write`/`sink` collection verbs and `riko/targets.py` are migration inputs.
-The target architecture does **not** retain a separate public `sink()` terminal. Append/merge/replace/
-delete/upsert-style semantics are write-operation modes validated against Target capabilities.
+The shipped compatibility `write`/`sink` collection verbs and `riko/targets.py` are
+migration inputs. The target architecture does **not** retain a separate public `sink()`
+terminal. Append/merge/replace/ delete/upsert-style semantics are write-operation modes
+validated against Target capabilities.
 
-File-open flags remain adapter implementation detail rather than the semantic write-mode axis.
+File-open flags remain adapter implementation detail rather than the semantic write-mode
+axis.
 
 ## 7. Database / record-store Targets
 
-Database/store adapters such as POSTGRES/AIRTABLE may expose keyed mutation capabilities:
+Database/store adapters such as POSTGRES/AIRTABLE may expose keyed mutation
+capabilities:
 
 ```text
 append
@@ -261,11 +273,12 @@ Requirements:
 
 - parsed message metadata and raw MIME content remain distinguishable;
 - attachment bodies may become artifacts above a configured threshold;
-- mailbox checkpointing uses stable UID validity/UID semantics rather than timestamps alone;
+- mailbox checkpointing uses stable UID validity/UID semantics rather than timestamps
+  alone;
 - mailbox state persists through common FeedState/StateStore;
 - SMTP side effects declare idempotency limitations;
-- Microsoft 365-specific administration should prefer Microsoft provider adapters when generic SMTP/
-  IMAP semantics are insufficient.
+- Microsoft 365-specific administration should prefer Microsoft provider adapters when
+  generic SMTP/ IMAP semantics are insufficient.
 
 ## 9. Broker connectors
 
@@ -277,35 +290,39 @@ RabbitMQ
 Azure Service Bus
 ```
 
-Every adapter declares delivery/acknowledgement semantics. Publishers/consumers project the shared
-`Publisher` / `Subscription` protocols where applicable. Sessions are execution Resources.
+Every adapter declares delivery/acknowledgement semantics. Publishers/consumers project
+the shared `Publisher` / `Subscription` protocols where applicable. Sessions are
+execution Resources.
 
-At-least-once consumers expose message/change identity and acknowledgement handles needed to map
-successful disposition/checkpoint behavior. Best-effort transports state message-loss limitations
-explicitly.
+At-least-once consumers expose message/change identity and acknowledgement handles
+needed to map successful disposition/checkpoint behavior. Best-effort transports state
+message-loss limitations explicitly.
 
 ## 10. Structured source adapters
 
 ### 10.1 CKAN / public APIs
 
-Use maintained APIs with explicit pagination/filter support, bounded retries, and credential
-references. REST collection traversal/cursors remain owned by `rest-incremental.md`.
+Use maintained APIs with explicit pagination/filter support, bounded retries, and
+credential references. REST collection traversal/cursors remain owned by
+`rest-incremental.md`.
 
 ### 10.2 Prometheus exposition
 
-Parse current exposition formats through maintained parsers where possible. Preserve metric name,
-labels, value, timestamp, and sample type. One scrape is finite; recurrence belongs to
-`Pipeline.poll()` / feed-monitoring or external orchestration according to the intended run boundary.
+Parse current exposition formats through maintained parsers where possible. Preserve
+metric name, labels, value, timestamp, and sample type. One scrape is finite; recurrence
+belongs to `Pipeline.poll()` / feed-monitoring or external orchestration according to
+the intended run boundary.
 
 ### 10.3 Tabular files
 
-CSV remains core-compatible as a Format; XLS/XLSX and other optional formats live in connector/
-artifact extras. Frame conversion follows the capability/cost model from execution/tabular owners;
-connectors do not impose pandas as a universal dependency.
+CSV remains core-compatible as a Format; XLS/XLSX and other optional formats live in
+connector/ artifact extras. Frame conversion follows the capability/cost model from
+execution/tabular owners; connectors do not impose pandas as a universal dependency.
 
 ## 11. Singer compatibility
 
-Do not add permanent `fetchtap`/`singerexport` core modules that bypass common state/schema contracts.
+Do not add permanent `fetchtap`/`singerexport` core modules that bypass common
+state/schema contracts.
 
 Singer adapters map:
 
@@ -315,16 +332,16 @@ Singer RECORD -> records/batches
 Singer STATE  -> FeedState / StateStore
 ```
 
-RDP may project state for wire interchange but does not become a second checkpoint owner.
-Subprocesses are execution-owned Resources with cancellation, stderr capture, bounded line size,
-exit-code validation, and secret redaction.
+RDP may project state for wire interchange but does not become a second checkpoint
+owner. Subprocesses are execution-owned Resources with cancellation, stderr capture,
+bounded line size, exit-code validation, and secret redaction.
 
 ## 12. SaaS and REST APIs
 
-Generic public APIs may be represented through OpenAPI/MCP capabilities or HTTP/REST Targets rather
-than one core module per SaaS provider. Dedicated integrations are justified when provider semantics,
-long-running operations, batching, identity mapping, webhooks, auth, or administration exceed generic
-transport semantics.
+Generic public APIs may be represented through OpenAPI/MCP capabilities or HTTP/REST
+Targets rather than one core module per SaaS provider. Dedicated integrations are
+justified when provider semantics, long-running operations, batching, identity mapping,
+webhooks, auth, or administration exceed generic transport semantics.
 
 Provider-specific Actions remain actions; do not disguise commands as fake write modes.
 
@@ -338,7 +355,8 @@ An integration may expose:
 - MCP/capability records;
 - CLI command providers.
 
-These surfaces share service/resource implementations rather than duplicating execution logic.
+These surfaces share service/resource implementations rather than duplicating execution
+logic.
 
 ## 14. Phases
 
@@ -364,12 +382,12 @@ These surfaces share service/resource implementations rather than duplicating ex
 - FTP/SFTP;
 - directory limits/artifactization.
 
-Note (triage 2026-10-28): the async URL readers (`async_url_open`/`async_url_read`) dispatch only
-`http(s)://` to the network and open every other scheme as a local path, so `ftp://` fails async
-while sync `Fetch` reaches it through `urllib`. No tripwire: FTP/SFTP is expected to arrive as a
-Target adapter that need not route through `async_url_open`. When C2 lands, either route
-non-file schemes in the async readers to the adapter or make them raise a clear unsupported-scheme
-error.
+Note (triage 2026-10-28): the async URL readers (`async_url_open`/`async_url_read`)
+dispatch only `http(s)://` to the network and open every other scheme as a local path,
+so `ftp://` fails async while sync `Fetch` reaches it through `urllib`. No tripwire:
+FTP/SFTP is expected to arrive as a Target adapter that need not route through
+`async_url_open`. When C2 lands, either route non-file schemes in the async readers to
+the adapter or make them raise a clear unsupported-scheme error.
 
 ### C3 — Mail/brokers
 
@@ -382,11 +400,11 @@ error.
 - XLS/XLSX;
 - CKAN/Prometheus;
 - Singer/core-state/RDP bridge;
-- initial DB/record-store adapter proof: the **AIRTABLE** keyed record-store Target adapter
-  (`append`/`merge`/`replace`/`delete` by declared keys, batched requests, rate limits) is the first
-  such adapter, required by the M4 monthly-reports release
-  ([implementation-sequence.md](implementation-sequence.md)); monthly-dashboard MD2 is only its
-  scenario write-mode conformance proof.
+- initial DB/record-store adapter proof: the **AIRTABLE** keyed record-store Target
+  adapter (`append`/`merge`/`replace`/`delete` by declared keys, batched requests, rate
+  limits) is the first such adapter, required by the M4 monthly-reports release
+  ([implementation-sequence.md](implementation-sequence.md)); monthly-dashboard MD2 is
+  only its scenario write-mode conformance proof.
 
 ### C5 — Catalog/CLI integration
 
@@ -395,19 +413,23 @@ error.
 - deterministic conformance fixtures.
 
 Forward cross-cutting implementation order is owned by
-[implementation-sequence.md](implementation-sequence.md); these connector phases specialize R11 and
-do not create a competing Core sequence.
+[implementation-sequence.md](implementation-sequence.md); these connector phases
+specialize R11 and do not create a competing Core sequence.
 
 ## 15. Definition of done
 
 1. Core imports no optional connector protocol library merely to parse Workflow v2.
 2. No connector starts a private event loop/task group/portal.
-3. Credentials never appear in serialized Target definitions, records, or event payloads.
+3. Credentials never appear in serialized Target definitions, records, or event
+   payloads.
 4. Targets can be inspected/validated structurally without execution.
-5. HTTP probing is explicit/bounded and no generic hidden duplicate download is required.
+5. HTTP probing is explicit/bounded and no generic hidden duplicate download is
+   required.
 6. Every execution-owned session closes on early termination/cancellation/error.
 7. Long-lived/recurring source state uses common FeedState/StateStore semantics.
 8. Broker delivery semantics are declared against shared pub/sub/disposition contracts.
-9. Singer state maps to core state; RDP is an interchange projection rather than generic owner.
-10. Concrete adapters implement the same read/write/effect contracts without inventing `SourcePlan`,
-    `SinkPlan`, a second `sink()` API, or connector-specific execution lifecycle.
+9. Singer state maps to core state; RDP is an interchange projection rather than generic
+   owner.
+10. Concrete adapters implement the same read/write/effect contracts without inventing
+    `SourcePlan`, `SinkPlan`, a second `sink()` API, or connector-specific execution
+    lifecycle.

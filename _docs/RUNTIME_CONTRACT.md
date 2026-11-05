@@ -1,23 +1,25 @@
 # Riko Runtime Contract
 
-The **stable core** of what a riko pipeline is and guarantees — the item/stream model, pipe
-behavior, and the execution/delivery semantics that ship today. It is deliberately small and
-changes rarely. Planned capabilities and new features are **not** here; they live in the
-[gameplans](ROADMAP.md#gameplans), and [ROADMAP.md](ROADMAP.md) is the complete `§0–27` index
-mapping every section number to its home. What actually ships (as-built detail) is in
+The **stable core** of what a riko pipeline is and guarantees — the item/stream model,
+pipe behavior, and the execution/delivery semantics that ship today. It is deliberately
+small and changes rarely. Planned capabilities and new features are **not** here; they
+live in the [gameplans](ROADMAP.md#gameplans), and [ROADMAP.md](ROADMAP.md) is the
+complete `§0–27` index mapping every section number to its home. What actually ships
+(as-built detail) is in
 [IMPLEMENTED.md](IMPLEMENTED.md).
 
-> Section numbers are stable identifiers referenced across the codebase. The missing numbers
-> below (§4, §5, §11, §14–§22, §24, §25) are feature / end-state topics owned by gameplans —
-> find any of them via the [ROADMAP §-index](ROADMAP.md#index).
+> Section numbers are stable identifiers referenced across the codebase. The missing
+> numbers below (§4, §5, §11, §14–§22, §24, §25) are feature / end-state topics owned by
+> gameplans — find any of them via the [ROADMAP §-index](ROADMAP.md#index).
 >
 > **Target-architecture note.** The reconciled runtime model is one immutable public
-> `Pipeline[T]` plus private per-iteration `SyncExecution` / `AsyncExecution`, one immutable
-> public `Context`, and the common `FeedState` / `StateStore` checkpoint model. The
-> `Pipeline` iteration surface and the private executions ship today; the v1 `SyncPipe`/`AsyncPipe`
-> classes were deleted on 2026-10-02 and the v1 compiler on 2026-10-03 (cutover step 5); the
-> checkpoint model is still a planned contract. The full target is in
-> [execution-semantics.md](gameplans/execution-semantics.md); what actually ships is in
+> `Pipeline[T]` plus private per-iteration `SyncExecution` / `AsyncExecution`, one
+> immutable public `Context`, and the common `FeedState` / `StateStore` checkpoint
+> model. The `Pipeline` iteration surface and the private executions ship today; the v1
+> `SyncPipe`/`AsyncPipe` classes were deleted on 2026-10-02 and the v1 compiler on
+> 2026-10-03 (cutover step 5); the checkpoint model is still a planned contract. The
+> full target is in [execution-semantics.md](gameplans/execution-semantics.md); what
+> actually ships is in
 > [IMPLEMENTED.md](IMPLEMENTED.md).
 
 ## Index
@@ -39,14 +41,15 @@ mapping every section number to its home. What actually ships (as-built detail) 
 
 ## 0. Architectural direction
 
-Riko is an item-oriented pipeline engine. Its design favors explicit behavior over inference;
-at-least-once delivery over exactly-once claims; bounded resource use; simple defaults;
-conservative failure behavior; and compatibility with existing synchronous pipelines.
+Riko is an item-oriented pipeline engine. Its design favors explicit behavior over
+inference; at-least-once delivery over exactly-once claims; bounded resource use; simple
+defaults; conservative failure behavior; and compatibility with existing synchronous
+pipelines.
 
 The shipped `Pipeline` plus private-execution model below is the current contract. The
-remaining planned architecture (orchestration-owned pub/sub, canonical identity/idempotency,
-`FeedResult`/`FeedState`/`StateStore`, and Pipeline batch mode) is owned by
-[execution-semantics.md](gameplans/execution-semantics.md). Callable-node
+remaining planned architecture (orchestration-owned pub/sub, canonical
+identity/idempotency, `FeedResult`/`FeedState`/`StateStore`, and Pipeline batch mode) is
+owned by [execution-semantics.md](gameplans/execution-semantics.md). Callable-node
 specifics live in [callable-pipes.md](gameplans/callable-pipes.md), fan-out in
 [fanout-topology.md](gameplans/fanout-topology.md), and tabular batching in
 [tabular-interop.md](gameplans/tabular-interop.md).
@@ -85,32 +88,35 @@ type AsyncStream = AsyncIterator[Item]
 type Feed = Items | AsyncItems
 ```
 
-`Stream` and `AsyncStream` differ by iteration mechanism, not by whether the source is finite or
-live. Boundedness is **not** a declared `DecorationOptions` field today — planned execution
-characteristics are documented in
+`Stream` and `AsyncStream` differ by iteration mechanism, not by whether the source is
+finite or live. Boundedness is **not** a declared `DecorationOptions` field today —
+planned execution characteristics are documented in
 [execution-semantics.md §5](gameplans/execution-semantics.md#5-execution-characteristics).
-What ships is the behavioral bound in the §6 async primitives (bounded worker concurrency,
-no whole-source materialization). Each asynchronous execution resolves the source once and
-normalizes it to `AsyncIterator[Item]`. That bound governs the **item** stream, not the
-per-fetch **body**: under async iteration a single source read buffers its whole response
-(`async_url_open` → `response.content` / `Path.read_bytes`) before parsing, which then
-yields items lazily. Incremental `httpx.stream()` body reads are not implemented.
+What ships is the behavioral bound in the §6 async primitives (bounded worker
+concurrency, no whole-source materialization). Each asynchronous execution resolves the
+source once and normalizes it to `AsyncIterator[Item]`. That bound governs the **item**
+stream, not the per-fetch **body**: under async iteration a single source read buffers
+its whole response (`async_url_open` → `response.content` / `Path.read_bytes`) before
+parsing, which then yields items lazily. Incremental `httpx.stream()` body reads are not
+implemented.
 
 ## 3. Pipe behavior
 
-A `Pipeline` is a reusable definition that stores no items; each run (`pipeline(items)` /
-`items | pipeline`, `pipeline.open(items)`, or `iter(pipeline)` / `aiter(pipeline)` for a pipeline
-that is self-starting) creates a fresh **one-shot** private execution that owns the run's resources for
-the lifetime of the returned stream, or until its `open()` block exits. Iteration never restarts.
-Exhaustion ends the run normally, and a consumed or closed stream behaves like any exhausted Python
-iterator: another `for` loop yields nothing and `next(stream, default)` returns the default. Only
-iterating a started stream in the other mode raises `PipelineStateError`. Sync iteration pulls lazily; async iteration streams items as they are
-produced. One exception: under `with_execution(concurrency=N)` with `N > 1`, a sync run collects each
-item's whole output on the worker before yielding it, so a node whose per-item output is unbounded
-(`forever`) does not stream there; `concurrency=1` and the async run do.
-`AsyncStream`s behave like ordinary async iterators — riko does not detect or recreate a consumed
-feed. (The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were deleted
-at v1-cutover step 4, 2026-10-02.)
+A `Pipeline` is a reusable definition that stores no items; each run (`pipeline(items)`
+/ `items | pipeline`, `pipeline.open(items)`, or `iter(pipeline)` / `aiter(pipeline)`
+for a pipeline that is self-starting) creates a fresh **one-shot** private execution
+that owns the run's resources for the lifetime of the returned stream, or until its
+`open()` block exits. Iteration never restarts. Exhaustion ends the run normally, and a
+consumed or closed stream behaves like any exhausted Python iterator: another `for` loop
+yields nothing and `next(stream, default)` returns the default. Only iterating a started
+stream in the other mode raises `PipelineStateError`. Sync iteration pulls lazily; async
+iteration streams items as they are produced. One exception: under
+`with_execution(concurrency=N)` with `N > 1`, a sync run collects each item's whole
+output on the worker before yielding it, so a node whose per-item output is unbounded
+(`forever`) does not stream there; `concurrency=1` and the async run do. `AsyncStream`s
+behave like ordinary async iterators — riko does not detect or recreate a consumed feed.
+(The one-shot `SyncPipe`/`AsyncPipe` instances this section used to describe were
+deleted at v1-cutover step 4, 2026-10-02.)
 
 This describes the shipped API only. A seed may itself be one-shot; riko does not
 recreate it, so a second run takes a fresh seed.
@@ -118,66 +124,69 @@ recreate it, so a second run takes a fresh seed.
 ## 6. Async execution and backpressure
 
 Async mapping uses **bounded worker concurrency**: never one task per input item, never
-whole-source materialization, never unbounded result buffering. Order-preserving streaming
-ships via `async_map_stream` / `async_map_ordered_stream` (`riko/bado/itertools.py`).
-Their `limit` is a fixed worker count and must be at least 1; only the eager `async_map` reads
-`limit=0` as unlimited. Legitimate `None` results are preserved.
+whole-source materialization, never unbounded result buffering. Order-preserving
+streaming ships via `async_map_stream` / `async_map_ordered_stream`
+(`riko/bado/itertools.py`). Their `limit` is a fixed worker count and must be at least
+1; only the eager `async_map` reads `limit=0` as unlimited. Legitimate `None` results
+are preserved.
 
 ## 7. Timeout
 
-A lifetime (`total`) timeout applies to both sync and async (`TimeoutIterator`). The sync
-wrapper guards a blocked upstream read so it cannot overrun the deadline; async `timeout=0`
-means "no timeout" (matching sync).
+A lifetime (`total`) timeout applies to both sync and async (`TimeoutIterator`). The
+sync wrapper guards a blocked upstream read so it cannot overrun the deadline; async
+`timeout=0` means "no timeout" (matching sync).
 
 ## 8. Union and merge
 
-`union` is deterministic **sequential concatenation** (primary -> other 1 -> other 2 ...), via
-`itertools.chain`.
+`union` is deterministic **sequential concatenation** (primary -> other 1 -> other
+2 ...), via `itertools.chain`.
 
 Future provenance/checkpoint semantics are stricter: union preserves each input item's
-provenance and does not by itself collapse independently advancing recovery frontiers. See
+provenance and does not by itself collapse independently advancing recovery frontiers.
+See
 [execution-semantics.md](gameplans/execution-semantics.md).
 
 ## 9. Run status and exit codes
 
 The CLI (`riko/cli/manage.py`) returns process exit codes: `0` completed · `1` failed ·
-`2` CLI usage/config error. Richer future CLI exit/status contracts are planned and owned by
-[cli.md](gameplans/cli.md); see [IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes-shipped) for
-as-built detail.
+`2` CLI usage/config error. Richer future CLI exit/status contracts are planned and
+owned by [cli.md](gameplans/cli.md); see
+[IMPLEMENTED.md §9](IMPLEMENTED.md#9-exit-codes-shipped) for as-built detail.
 
 ## 10. Delivery guarantee
 
-Today delivery is **best-effort, in-process**: a run streams items from its source modules to its consumer within
-a single process, with per-item graceful error capture (§12). There is **no** durable
-checkpoint, source-position, acknowledgement, or replay machinery, so riko makes no cross-run
-durability guarantee yet.
+Today delivery is **best-effort, in-process**: a run streams items from its source
+modules to its consumer within a single process, with per-item graceful error capture
+(§12). There is **no** durable checkpoint, source-position, acknowledgement, or replay
+machinery, so riko makes no cross-run durability guarantee yet.
 
 The planned recovery/durability foundation is the common `FeedState` / `StateKey` /
 `StateRecord` / `StateStore` model plus explicit `.checkpoint()` boundaries and
 execution-derived idempotency defined in
-[execution-semantics.md](gameplans/execution-semantics.md). Source observation/cursor policy
-uses that foundation via [feed-monitoring.md](gameplans/feed-monitoring.md) and
-[rest-incremental.md](gameplans/rest-incremental.md). Orchestration may place durable run
-boundaries around it via [orchestration.md](gameplans/orchestration.md). Exactly-once is not
-claimed generically.
+[execution-semantics.md](gameplans/execution-semantics.md). Source observation/cursor
+policy uses that foundation via [feed-monitoring.md](gameplans/feed-monitoring.md) and
+[rest-incremental.md](gameplans/rest-incremental.md). Orchestration may place durable
+run boundaries around it via [orchestration.md](gameplans/orchestration.md).
+Exactly-once is not claimed generically.
 
 ## 12. Errors and dispositions
 
-Per-item processing is **graceful** today: errors are captured via `error_key` / `on_error`,
-not raised at call sites. Definition, configuration, and lifecycle boundaries may raise
-stable typed errors (`InvalidPipelineError`, `UnsupportedModuleError`,
-`UnsupportedWorkflowError`, `PipelineStateError`). Planned richer disposition/retry semantics remain in their owning
-gameplans.
+Per-item processing is **graceful** today: errors are captured via `error_key` /
+`on_error`, not raised at call sites. Definition, configuration, and lifecycle
+boundaries may raise stable typed errors (`InvalidPipelineError`,
+`UnsupportedModuleError`, `UnsupportedWorkflowError`, `PipelineStateError`). Planned
+richer disposition/retry semantics remain in their owning gameplans.
 
 ## 13. Filter semantics
 
-`filter` provides `permit` / `combine` / `stop`. Each rule's `op` is validated once at prep;
-a missing operand is treated as `None` and its comparison is skipped.
+`filter` provides `permit` / `combine` / `stop`. Each rule's `op` is validated once at
+prep; a missing operand is treated as `None` and its comparison is skipped.
 
 ## 23. AnyIO and Twisted
 
-AnyIO is the **sole** async runtime (`riko/bado/__init__.py`); backend selection is purely
-"does `anyio` import?" (`backend = "empty" if run is None else "anyio"`). There is **no
-Twisted** anywhere and **no `RIKO_ASYNC_BACKEND`** env var. `AsyncIterable` is the
-pipeline-level abstraction and async iteration is pull-based. Runtime and network-protocol
-support are orthogonal — protocols are source/sink adapters, which is roadmap.
+AnyIO is the **sole** async runtime (`riko/bado/__init__.py`); backend selection is
+purely "does `anyio` import?" (`backend = "empty" if run is None else "anyio"`). There
+is **no Twisted** anywhere and **no `RIKO_ASYNC_BACKEND`** env var. `AsyncIterable` is
+the pipeline-level abstraction and async iteration is pull-based. Runtime and
+network-protocol support are orthogonal — protocols are source/sink adapters, which is
+roadmap.

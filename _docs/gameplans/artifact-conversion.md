@@ -3,15 +3,15 @@
 ## 1. Mission
 
 Define explicit boundaries for serialized format conversion, contact/card serialization,
-template-driven reports, and rendered artifacts without turning Riko's record-stream core
-into a document-rendering framework.
+template-driven reports, and rendered artifacts without turning Riko's record-stream
+core into a document-rendering framework.
 
-This plan extends the connector and orchestration gameplans: connectors acquire and deliver
-bytes/records, Riko transforms records, and artifact/rendering extras turn finite data into
-versioned files or reports.
+This plan extends the connector and orchestration gameplans: connectors acquire and
+deliver bytes/records, Riko transforms records, and artifact/rendering extras turn
+finite data into versioned files or reports.
 
-In-memory Pandas/Arrow/Polars conversion is owned by `tabular-interop.md`; this plan owns
-serialized codecs and artifact/rendering boundaries.
+In-memory Pandas/Arrow/Polars conversion is owned by `tabular-interop.md`; this plan
+owns serialized codecs and artifact/rendering boundaries.
 
 ## 2. Inspiration integrated by this plan
 
@@ -95,33 +95,35 @@ schema/metadata behavior
 optional dependencies
 ```
 
-**Nested values in flat codecs.** A flat codec such as CSV must declare how it writes a cell
-whose value is a container (mapping, list, set). The rule:
+**Nested values in flat codecs.** A flat codec such as CSV must declare how it writes a
+cell whose value is a container (mapping, list, set). The rule:
 
-- default: flatten nested mappings into dotted columns that follow `DotDict` paths
-  (`{"a": {"b": 1}}` → column `a.b`), so headers are the union of the flattened keys in a
-  stable order;
-- option: a codec setting writes each container cell as compact JSON instead (sets sorted,
-  matching the `json`/`jsonl` writer), keeping one column per top-level key.
+* default: flatten nested mappings into dotted columns that follow `DotDict` paths
+  (`{"a": {"b": 1}}` → column `a.b`), so headers are the union of the flattened keys in
+  a stable order;
+* option: a codec setting writes each container cell as compact JSON instead (sets
+  sorted, matching the `json`/`jsonl` writer), keeping one column per top-level key.
 
 Open sub-decisions for the default:
 
-- **Lists and sets.** They have no natural dotted column, so the rule must say whether they
-  become JSON cells (one column, readable back, but mixed encodings within a row) or indexed
-  columns (`tags.0`, `tags.1`: purely tabular, but the column count follows the longest list
-  and a set must be sorted first).
-- **Headers versus streaming.** CSV writes its header row first, and incremental encoding is
-  allowed (`effects.md` §12), so a union of flattened keys across records would force
-  materialization when records differ in shape. The rule must pick first-record headers (a
-  later new key is dropped or raises), caller-declared columns, or materialization.
-- **Key collisions.** A literal `"a.b"` key and a nested `{"a": {"b": ...}}` flatten to the
-  same column; the rule must raise or name which one wins.
-Current gap: meza's `records2csv` writes every container cell with `str()`, so CSV output
-holds a Python repr that cannot be read back (`"{'b': [1, 2]}"`), and set cells follow
-hash order. The `json`/`jsonl` writer already encodes nested mappings and sorted sets.
-It also writes `bom=True`'s BOM as bytes into its text buffer (`TypeError`); strict-xfail tripwire
-`tests/public/test_write.py::TestExportFormats::test_csv_bom_is_written_in_the_given_encoding`
-(tracked as a meza defect in [upstream-fixes.md](upstream-fixes.md)).
+* **Lists and sets.** They have no natural dotted column, so the rule must say whether
+  they become JSON cells (one column, readable back, but mixed encodings within a row)
+  or indexed columns (`tags.0`, `tags.1`: purely tabular, but the column count follows
+  the longest list and a set must be sorted first).
+* **Headers versus streaming.** CSV writes its header row first, and incremental
+  encoding is allowed (`effects.md` §12), so a union of flattened keys across records
+  would force materialization when records differ in shape. The rule must pick
+  first-record headers (a later new key is dropped or raises), caller-declared columns,
+  or materialization.
+* **Key collisions.** A literal `"a.b"` key and a nested `{"a": {"b": ...}}` flatten to
+  the same column; the rule must raise or name which one wins. Current gap: meza's
+  `records2csv` writes every container cell with `str()`, so CSV output holds a Python
+  repr that cannot be read back (`"{'b': [1, 2]}"`), and set cells follow hash order.
+  The `json`/`jsonl` writer already encodes nested mappings and sorted sets. It also
+  writes `bom=True`'s BOM as bytes into its text buffer (`TypeError`); strict-xfail
+  tripwire
+  `tests/public/test_write.py::TestExportFormats::test_csv_bom_is_written_in_the_given_encoding`
+  (tracked as a meza defect in [upstream-fixes.md](upstream-fixes.md)).
 
 Arrow is an in-memory interchange type rather than an artifact format contract here;
 Arrow frame/table conversion is specified in `tabular-interop.md`. Arrow IPC/Feather, if
@@ -140,8 +142,8 @@ explicit codec/media type
 → bounded content sniffing only when explicitly allowed
 ```
 
-Do not redownload remote content to determine type. Reuse connector response metadata/body
-as specified in `connectors.md`.
+Do not redownload remote content to determine type. Reuse connector response
+metadata/body as specified in `connectors.md`.
 
 ## 7. Streaming versus materializing codecs
 
@@ -188,9 +190,9 @@ mapping = {
 }
 ```
 
-Allow constants and approved transformations, but do not load arbitrary Python lambdas from
-`WorkflowDocument`s (workflow documents). Python callers can still use callable pipes before the
-serializer.
+Allow constants and approved transformations, but do not load arbitrary Python lambdas
+from `WorkflowDocument`s (workflow documents). Python callers can still use callable
+pipes before the serializer.
 
 ## 10. vCard/contact output
 
@@ -210,8 +212,8 @@ Requirements:
 * source PII classification/provenance is retained in artifact metadata where useful;
 * no contact values are copied into routine diagnostic logs.
 
-Contact-domain normalization (e.g. international phone formatting) is an explicit transform,
-not hidden serializer behavior unless mandated by the vCard standard.
+Contact-domain normalization (e.g. international phone formatting) is an explicit
+transform, not hidden serializer behavior unless mandated by the vCard standard.
 
 ## 11. Standard output / standard input
 
@@ -227,8 +229,8 @@ TTY without an explicit output path/flag.
 ## 12. Tabular frame boundary
 
 This plan intentionally does not define `from_pandas`, `to_pandas`, `from_arrow`,
-`to_arrow`, Arrow batch semantics, Polars helpers, null coercion, or DataFrame index rules.
-Those contracts live in `tabular-interop.md`.
+`to_arrow`, Arrow batch semantics, Polars helpers, null coercion, or DataFrame index
+rules. Those contracts live in `tabular-interop.md`.
 
 Artifact codecs compose with those boundaries when useful:
 
@@ -280,8 +282,8 @@ fetch Airtable data
 ```
 
 The parsed report context should be durable and fingerprinted. Editing a template should
-allow rendering to rerun without refetching or recomputing upstream data when the context
-artifact is unchanged.
+allow rendering to rerun without refetching or recomputing upstream data when the
+context artifact is unchanged.
 
 This is preferable to a renderer reaching back into source connectors itself.
 
@@ -298,8 +300,8 @@ class ReportContext:
     pipeline_fingerprint: str
 ```
 
-Large tabular sections may be referenced by artifact rather than embedded in one giant JSON
-object.
+Large tabular sections may be referenced by artifact rather than embedded in one giant
+JSON object.
 
 ## 16. Template/version fingerprinting
 
@@ -340,9 +342,9 @@ records
 → HTML/Markdown renderer
 ```
 
-A general table renderer should not contain application-specific column names such as the
-legacy eBay LEGO mapping. Column selection/formatting belongs in configuration or upstream
-transforms.
+A general table renderer should not contain application-specific column names such as
+the legacy eBay LEGO mapping. Column selection/formatting belongs in configuration or
+upstream transforms.
 
 If the intermediate table is a Pandas/Arrow value, its conversion semantics come from
 `tabular-interop.md`.
@@ -448,8 +450,8 @@ Frame interoperability has its own phases in `tabular-interop.md`.
 
 ## 25. Definition of done
 
-1. Serialized format conversion is an explicit source/sink boundary, not scattered utility
-   code.
+1. Serialized format conversion is an explicit source/sink boundary, not scattered
+   utility code.
 2. Streaming formats remain lazy/chunked where practical.
 3. Terminal renderers cannot accidentally consume unbounded streams.
 4. Optional legacy/business formats do not become core dependencies.
@@ -458,5 +460,5 @@ Frame interoperability has its own phases in `tabular-interop.md`.
 7. Multi-format output reuses one report context.
 8. Artifacts are fingerprinted and lineage-aware.
 9. PII and renderer security boundaries are explicit.
-10. Pandas/Arrow/Polars contracts are referenced from `tabular-interop.md`, not duplicated
-    here.
+10. Pandas/Arrow/Polars contracts are referenced from `tabular-interop.md`, not
+    duplicated here.

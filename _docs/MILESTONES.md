@@ -3,8 +3,9 @@
 Consolidates the former `MILESTONE1_FILEMAP/TESTS.md` and `MILESTONE2_FILEMAP/TESTS.md`.
 It is the breadth-first companion to [PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md).
 
-This document owns **P-track history, retained file maps, and phase exit-test references**. It does
-**not** own the reconciled end-state API or forward implementation dependency graph.
+This document owns
+**P-track history, retained file maps, and phase exit-test references**. It does **not**
+own the reconciled end-state API or forward implementation dependency graph.
 
 Authoritative routing:
 
@@ -25,23 +26,24 @@ release gate
     gameplans/release-readiness.md
 ```
 
-Historical P8–P14 sketches below are useful provenance only. If an older phase shape conflicts with a
-reconciled gameplan, the gameplan wins.
+Historical P8–P14 sketches below are useful provenance only. If an older phase shape
+conflicts with a reconciled gameplan, the gameplan wins.
 
-Legend: **NEW** create · **MOD** edit in place · **EXT** separate distribution, not core.
+Legend: **NEW** create · **MOD** edit in place · **EXT** separate distribution, not
+core.
 
 ---
 
 ## Milestone 1 (Phases 1–7)
 
-Everything the M1 filemap/tests specified shipped. As-built locations live in `IMPLEMENTED.md`, while
-phase decisions/carryovers live in `PHASE_CHECKLISTS.md`.
+Everything the M1 filemap/tests specified shipped. As-built locations live in
+`IMPLEMENTED.md`, while phase decisions/carryovers live in `PHASE_CHECKLISTS.md`.
 
 The M1 exit-test tree includes:
 
 - `tests/public/test_modules.py` (P1 tiers), `test_config_public.py` (P2);
-- `tests/internal/test_config_dynamic.py` (since merged) / `test_preparation.py` (P2/P3), `test_inference.py` (P4),
-  `test_assignment.py` (P3);
+- `tests/internal/test_config_dynamic.py` (since merged) / `test_preparation.py`
+  (P2/P3), `test_inference.py` (P4), `test_assignment.py` (P3);
 - `tests/public/test_pipeline.py` (P5), `test_context_modes.py` (P6),
   `test_sync_async_parity.py` (P7);
 - `tests/typing/{valid,invalid}/` — Pyright gate on the public surface.
@@ -50,9 +52,9 @@ The M1 exit-test tree includes:
 
 ## Milestone 2 (Phases 8–14)
 
-The P-track remains useful for status/history, but architecture has since been reconciled across
-workflow definition, execution, resources, cache, effects, state, pub/sub, batching, CLI,
-orchestration, and agents.
+The P-track remains useful for status/history, but architecture has since been
+reconciled across workflow definition, execution, resources, cache, effects, state,
+pub/sub, batching, CLI, orchestration, and agents.
 
 ### Retained foundations
 
@@ -71,30 +73,34 @@ ResolverDispatcher
     compiler-free facade
 ```
 
-Retain runtime-registration -> entry-point -> built-in precedence, named-pipeline resolution separate
-from module resolution, compiler-local legacy output handling during migration, transitive
-`ModuleNotFoundError` preservation, and external package registration through entry points.
+Retain runtime-registration -> entry-point -> built-in precedence, named-pipeline
+resolution separate from module resolution, compiler-local legacy output handling during
+migration, transitive `ModuleNotFoundError` preservation, and external package
+registration through entry points.
 
-The future public `Pipeline` class requires the old internal callable alias named `Pipeline` to become
-`ModuleWrapper`; that is implementation-sequence R0, not a P8 redesign.
+The future public `Pipeline` class requires the old internal callable alias named
+`Pipeline` to become `ModuleWrapper`; that is implementation-sequence R0, not a P8
+redesign.
 
 #### P9 / P9A — discoverability
 
-Retain generated `Modules` / `Sources` / `Transforms` / `Sinks` discovery, `list_modules()`,
-`describe_module()`, and generated-code tooling.
+Retain generated `Modules` / `Sources` / `Transforms` / `Sinks` discovery,
+`list_modules()`, `describe_module()`, and generated-code tooling.
 
-Remaining stub/installed-environment work must target the final public `Pipeline` surface and must not
-encode removed `SyncPipe` / `AsyncPipe` APIs. Exact design lives in `gameplans/module-enums.md`.
+Remaining stub/installed-environment work must target the final public `Pipeline`
+surface and must not encode removed `SyncPipe` / `AsyncPipe` APIs. Exact design lives in
+`gameplans/module-enums.md`.
 
 #### P10 — bounded execution algorithms
 
-Retain bounded async mapping, ordered/unordered delivery, worker/executor, and shared-budget
-algorithms. Their current placement in legacy collection/runtime classes is temporary; R4B private
-execution reuses/refactors those mechanics.
+Retain bounded async mapping, ordered/unordered delivery, worker/executor, and
+shared-budget algorithms. Their current placement in legacy collection/runtime classes
+is temporary; R4B private execution reuses/refactors those mechanics.
 
 ### Superseded pending-phase sketches
 
-Do **not** implement these older P11–P14 shapes merely because they appear in historical notes:
+Do **not** implement these older P11–P14 shapes merely because they appear in historical
+notes:
 
 ```text
 public ExecutionContext
@@ -120,7 +126,8 @@ superseded-shape → replacement → owner map lives in
 
 ## Historical P-track file map
 
-These entries remain a map from phase names to implementation areas, not an alternative spec.
+These entries remain a map from phase names to implementation areas, not an alternative
+spec.
 
 | Area | P-track phase | Current interpretation |
 |---|---:|---|
@@ -142,8 +149,8 @@ These entries remain a map from phase names to implementation areas, not an alte
 | `riko-microsoft` | Graph/ARM/PowerShell + Service Bus/Event Grid + resources + provider actions; Autopilot is end-to-end scenario |
 | `riko-ai` | inference/tool/retrieval adapters composed with Pipeline/loop/state/pubsub contracts |
 
-Core changes should not be required per external integration once extension/resource/state/target/
-action contracts are stable.
+Core changes should not be required per external integration once
+extension/resource/state/target/ action contracts are stable.
 
 ---
 
@@ -152,35 +159,38 @@ action contracts are stable.
 The authoritative graph is
 [gameplans/implementation-sequence.md](gameplans/implementation-sequence.md).
 
-The R0–R12 stages and their edges live there; this doc keeps only the reconciliation caveats that
-frame how the P-track relates to that graph.
+The R0–R12 stages and their edges live there; this doc keeps only the reconciliation
+caveats that frame how the P-track relates to that graph.
 
-Feed-native module conversion occurs incrementally as its owning runtime capability lands; R10 is the
-final seam-removal/parity proof, not the start of the migration.
+Feed-native module conversion occurs incrementally as its owning runtime capability
+lands; R10 is the final seam-removal/parity proof, not the start of the migration.
 
-This R-sequence is not a renumbering of P8–P14; it captures cross-cutting foundations discovered
-during reconciliation.
+This R-sequence is not a renumbering of P8–P14; it captures cross-cutting foundations
+discovered during reconciliation.
 
-Note the namespace collision: `correctness-audit.md`, `rdp-connect.md`, and `rest-incremental.md` use
-their own unrelated `R<n>` labels. Always qualify an R label when ambiguity is possible.
+Note the namespace collision: `correctness-audit.md`, `rdp-connect.md`, and
+`rest-incremental.md` use their own unrelated `R<n>` labels. Always qualify an R label
+when ambiguity is possible.
 
 ---
 
 ## Pipeline / Workflow v2 / private-execution release gate
 
-This is the central cross-cutting API change and remains a release gate rather than a standalone
-P-phase.
+This is the central cross-cutting API change and remains a release gate rather than a
+standalone P-phase.
 
 Semantic owners for each cross-cutting piece are mapped in
-[gameplans/ownership.md](gameplans/ownership.md) and routed from ROADMAP's "Which doc for which
-info" table; this section keeps only the release-gate file map and exit tests, which it owns.
+[gameplans/ownership.md](gameplans/ownership.md) and routed from ROADMAP's "Which doc
+for which info" table; this section keeps only the release-gate file map and exit tests,
+which it owns.
 
 ### Target file map
 
-> **Superseded.** This pre-landing sketch names files that never existed after landing (the execution
-> package is `riko/execution/`, the `Pipeline` lives in `riko/definitions/_pipeline_definition.py` +
-> `riko/runtime/_pipeline.py`, and `Context`/`Resource` in `riko/definitions/`). The current source map
-> is [KEY_PATHS.md](KEY_PATHS.md); the table is kept as history only.
+> **Superseded.** This pre-landing sketch names files that never existed after landing
+> (the execution package is `riko/execution/`, the `Pipeline` lives in
+> `riko/definitions/_pipeline_definition.py` + `riko/runtime/_pipeline.py`, and
+> `Context`/`Resource` in `riko/definitions/`). The current source map is
+> [KEY_PATHS.md](KEY_PATHS.md); the table is kept as history only.
 
 The exact file split may evolve, but responsibilities must stay separated:
 
@@ -207,8 +217,8 @@ The exact file split may evolve, but responsibilities must stay separated:
 
 ### Configuration correctness / correctness-audit R2
 
-The current `PyPipe.__call__` can erase constructor options when omitted call-time kwargs are written
-as `None`, and object attributes can disagree with executed kwargs.
+The current `PyPipe.__call__` can erase constructor options when omitted call-time
+kwargs are written as `None`, and object attributes can disagree with executed kwargs.
 
 The final architecture discharges that defect by removing mutable pipe reconfiguration:
 
@@ -225,26 +235,30 @@ At minimum:
 - same Pipeline definition can run under sync and async execution;
 - each iteration creates fresh private runtime state;
 - a `RawWorkflow` normalizes once to a deterministic strict `Workflow`;
-- fan-in/branch semantics survive deterministic edge sorting because ports carry identity;
-- replayable sources replay, generator instances remain one-shot and are never secretly buffered;
+- fan-in/branch semantics survive deterministic edge sorting because ports carry
+  identity;
+- replayable sources replay, generator instances remain one-shot and are never secretly
+  buffered;
 - Mapping source is one record, not iterable keys;
 - native sync/async module implementation wins for matching mode;
-- sync-only under async does not block event loop; async-only under sync uses one execution portal;
-- resource rollback/cleanup holds on success, early close, failure, cancellation, partial consumption;
+- sync-only under async does not block event loop; async-only under sync uses one
+  execution portal;
+- resource rollback/cleanup holds on success, early close, failure, cancellation,
+  partial consumption;
 - EventSink is execution-local and out-of-band;
 - incomplete cache fills never replay;
 - write/action effects preserve records and emit result events;
 - `with_execution(...)` changes execution settings without altering step configuration;
-- legacy SyncPipe/AsyncPipe/Collection and target public sink names are absent from final target
-  surface;
+- legacy SyncPipe/AsyncPipe/Collection and target public sink names are absent from
+  final target surface;
 - no AnyIO/portal/private execution type leaks into stable imports.
 
 ---
 
 ## Pending phase exit-test ownership
 
-Detailed semantic tests live with owning gameplans. P-track categories remain historical/status
-buckets:
+Detailed semantic tests live with owning gameplans. P-track categories remain
+historical/status buckets:
 
 - **P8** registry/resolver precedence/compiler independence/entry-point proof;
 - **P9** installed-environment discovery/generated stubs/typing;
@@ -260,8 +274,8 @@ Do not copy owner-level contract tests here.
 
 ## M2 exit
 
-M2 is complete when retained P8/P9/P10 foundations and the reconciled R0–R12 implementation sequence
-satisfy their owner-level exit criteria, the M1 suite remains unregressed, Pyright is clean on the
-public surface, `Workflow` v2/private execution are established, and at least one external
-extension proves registration + resources + sync/async adaptation + pub/sub or StateStore integration
-with **no Core edit**.
+M2 is complete when retained P8/P9/P10 foundations and the reconciled R0–R12
+implementation sequence satisfy their owner-level exit criteria, the M1 suite remains
+unregressed, Pyright is clean on the public surface, `Workflow` v2/private execution are
+established, and at least one external extension proves registration + resources +
+sync/async adaptation + pub/sub or StateStore integration with **no Core edit**.

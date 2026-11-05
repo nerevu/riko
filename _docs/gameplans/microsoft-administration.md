@@ -2,13 +2,13 @@
 
 ## 1. Mission
 
-Define the administrative workflow semantics for Microsoft 365, Entra, and Azure changes:
-desired state, preflight, dry-run, approval, verification, audit evidence, certificate
-lifecycle, and manual handoffs.
+Define the administrative workflow semantics for Microsoft 365, Entra, and Azure
+changes: desired state, preflight, dry-run, approval, verification, audit evidence,
+certificate lifecycle, and manual handoffs.
 
 This plan consumes the Microsoft adapters in `azure-automation.md`; it does not redefine
-tenant context, credential resolution, PowerShell execution, Graph/ARM clients, retry, the
-generic capability catalog, or long-running-operation waiting.
+tenant context, credential resolution, PowerShell execution, Graph/ARM clients, retry,
+the generic capability catalog, or long-running-operation waiting.
 
 Related authoritative plans:
 
@@ -19,10 +19,12 @@ Related authoritative plans:
 * `execution-semantics.md` — retry, timeout, cancellation, and error policy;
 * `provider-integrations.md` — `OperationHandle` and shared operation waiting;
 * `orchestration.md` — deployment schedules and durable run boundaries;
-* `autopilot-provisioning.md` — a concrete downstream *scenario* (Windows Autopilot new-device
-  provisioning) that specializes this plan's preflight/ChangePlan/verify contract;
-* `monthly-dashboard.md` — a downstream *scenario* (MSP monthly reconciliation/dashboard) that routes
-  its destructive removals and shared-mailbox/proxy-address fixes through this plan's
+* `autopilot-provisioning.md` — a concrete downstream *scenario* (Windows Autopilot
+  new-device provisioning) that specializes this plan's preflight/ChangePlan/verify
+  contract;
+* `monthly-dashboard.md` — a downstream *scenario* (MSP monthly
+  reconciliation/dashboard) that routes its destructive removals and
+  shared-mailbox/proxy-address fixes through this plan's
   ChangePlan/approval/apply/verify contract.
 
 ## 2. Inspiration integrated by this plan
@@ -99,8 +101,8 @@ resolve MicrosoftContext + credential
 → emit audit evidence / handoff
 ```
 
-An AI agent may select from approved capabilities or interpret an unstructured request, but
-it may not bypass this sequence for privileged/destructive changes.
+An AI agent may select from approved capabilities or interpret an unstructured request,
+but it may not bypass this sequence for privileged/destructive changes.
 
 ## 5. Administrative capability metadata
 
@@ -211,9 +213,9 @@ Dry-run may:
 
 It may not perform writes or advance external mutation state.
 
-For PowerShell-backed actions, use `SupportsShouldProcess` / `-WhatIf` where reliable, but
-still emit the Riko `ChangePlan`; human-formatted PowerShell output is not the planning
-contract.
+For PowerShell-backed actions, use `SupportsShouldProcess` / `-WhatIf` where reliable,
+but still emit the Riko `ChangePlan`; human-formatted PowerShell output is not the
+planning contract.
 
 ## 10. Approval policy
 
@@ -240,8 +242,8 @@ Examples commonly requiring approval:
 * SAML signing-certificate rotation;
 * resource deletion.
 
-A changed plan requires a new authorization decision; approval for one fingerprint cannot
-silently authorize another.
+A changed plan requires a new authorization decision; approval for one fingerprint
+cannot silently authorize another.
 
 ## 11. Apply then verify
 
@@ -259,9 +261,9 @@ class AdminResult:
 
 Verification reads the authoritative endpoint after mutation.
 
-When the provider is eventually consistent or returns an asynchronous job, the reconciler
-uses the shared `OperationHandle`/`wait_operation` contract from `provider-integrations.md`.
-It does not define another generic polling loop.
+When the provider is eventually consistent or returns an asynchronous job, the
+reconciler uses the shared `OperationHandle`/`wait_operation` contract from
+`provider-integrations.md`. It does not define another generic polling loop.
 
 A provider error followed by verified desired state may be reported as a warning rather
 than blindly replaying a non-idempotent mutation.
@@ -271,9 +273,9 @@ than blindly replaying a non-idempotent mutation.
 ARM jobs, Intune actions, exports, provisioning, and certificate propagation may be
 asynchronous.
 
-The Microsoft adapter normalizes provider state into `OperationHandle`; the administrative
-layer only decides what completion means for the change plan and whether verification is
-required afterward.
+The Microsoft adapter normalizes provider state into `OperationHandle`; the
+administrative layer only decides what completion means for the change plan and whether
+verification is required afterward.
 
 ```text
 apply planned operation
@@ -283,8 +285,8 @@ apply planned operation
 → AdminResult
 ```
 
-Generic interval/event/hybrid waiting, timeouts, and wake-up semantics are specified only in
-`provider-integrations.md`.
+Generic interval/event/hybrid waiting, timeouts, and wake-up semantics are specified
+only in `provider-integrations.md`.
 
 ## 13. Audit search as a finite source
 
@@ -369,7 +371,8 @@ class Handoff:
 ```
 
 A run may end as `awaiting_handoff` rather than falsely reporting success. Ticketing,
-approval UI, and human-workflow systems may consume handoffs but are not part of Riko core.
+approval UI, and human-workflow systems may consume handoffs but are not part of Riko
+core.
 
 ## 17. Rollback and break-glass metadata
 
@@ -404,8 +407,8 @@ provider request IDs
 artifact references
 ```
 
-It excludes tokens, passwords, private keys, certificate private material, and unnecessary
-full sensitive payloads.
+It excludes tokens, passwords, private keys, certificate private material, and
+unnecessary full sensitive payloads.
 
 PowerShell stdout/stderr normalization and redaction are owned by `azure-automation.md`.
 
@@ -426,8 +429,8 @@ timed_out
 cancelled
 ```
 
-Adapters may map these to process exit codes, but provider-specific numeric codes are not the
-internal model.
+Adapters may map these to process exit codes, but provider-specific numeric codes are
+not the internal model.
 
 ## 20. Testing strategy
 
@@ -474,5 +477,5 @@ MA8  audit evidence + rollback metadata
 7. Long-running work uses the shared provider operation-wait contract.
 8. SAML/certificate workflows can return explicit manual handoffs.
 9. Audit evidence is machine-readable and secret-safe.
-10. Generic context, credential, retry, capability, and wait semantics are referenced from
-    their authoritative gameplans rather than redefined here.
+10. Generic context, credential, retry, capability, and wait semantics are referenced
+    from their authoritative gameplans rather than redefined here.

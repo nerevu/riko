@@ -405,9 +405,9 @@ Two more terms name the roles these forms play at run time:
   in-memory module, so never define it as a `WorkflowModule` or `WorkflowDocument`.
   The id is the store's lookup key, not part of the workflow. Sentences about the
   lookup itself say "`pipe_<id>` name";
-- **resolved workflow** (`ResolvedWorkflow`) — the `types.ModuleType` exposing `pipe`/`async_pipe` that
-  resolving a stored workflow yields, whether imported as is or built from a
-  `WorkflowDocument`. Never call it a `WorkflowModule` or a bare "workflow
+- **resolved workflow** (`ResolvedWorkflow`) — the `types.ModuleType` exposing
+  `pipe`/`async_pipe` that resolving a stored workflow yields, whether imported as is or
+  built from a `WorkflowDocument`. Never call it a `WorkflowModule` or a bare "workflow
   module". Write the stdlib type as `types.ModuleType` in prose, since
   `riko.ext.ModuleType` is the processor/operator/splitter literal.
 
@@ -431,21 +431,20 @@ How a concept gets its own type depends on who produces the value:
 - **the code can't tell which kind it holds** → no type, and say what it may be in the
   docstring (the modules `run-pipe` loads).
 
-Introduce "workflow document", "pipe definition", "workflow module", and "stored workflow" once per file (once per section
-in a long guide such as the cookbook), then use the type names. Docstrings are the
-exception: readers land on a class or function, not the top of its file, so each
-docstring glosses the terms it relies on in place — ``WorkflowDocument`` (a serialized
-``Workflow``), a resolved workflow (a module exposing ``pipe``/``async_pipe``) — rather
-than leaning on the module docstring. The older JSON has no
-document type of its own, so it is a "serialized `PipeDef`" (likewise "serialized
+Introduce "workflow document", "pipe definition", "workflow module", and "stored
+workflow" once per file (once per section in a long guide such as the cookbook), then
+use the type names. Docstrings are the exception: readers land on a class or function,
+not the top of its file, so each docstring glosses the terms it relies on in place —
+``WorkflowDocument`` (a serialized ``Workflow``), a resolved workflow (a module exposing
+``pipe``/``async_pipe``) — rather than leaning on the module docstring. The older JSON
+has no document type of its own, so it is a "serialized `PipeDef`" (likewise "serialized
 `PipeDag`"). Headings, CLI `--help` text, and runtime/log messages are read on their
 own: they use the plain prose terms without backticks. "v1"/"v2" appear only when
 quoting a surface that uses them (`--format {dag,v1,v2}`, `migrate_v1_to_v2`); never
 write "canonical document/workflow", "v1/v2 document", "authoring form/mapping",
-"released pipe definition", or "pipeline/workflow definition" for one of these forms.
-A changelog entry
-also describes a change against the **last release tag**: a name that only existed
-between releases is never "renamed" or "removed" in `docs/CHANGES.rst`.
+"released pipe definition", or "pipeline/workflow definition" for one of these forms. A
+changelog entry also describes a change against the **last release tag**: a name that
+only existed between releases is never "renamed" or "removed" in `docs/CHANGES.rst`.
 
 ### Preserving examples during cleanup
 
@@ -569,10 +568,10 @@ public-path rule for example imports.
 - Do not document `self` or `cls`.
 - Do not restate defaults obvious from the signature unless the default has
   semantic importance.
-- Use `Yields:` when the caller consumes the result as a stream; use `Returns:`
-  for a single value. Describe what the caller observes, not how the function is
-  implemented — a `pipe` that is `return parser(...)` still uses `Yields:`,
-  because every `pipe` hands back an iterator (see "The two returns of a pipe callable").
+- Use `Yields:` when the caller consumes the result as a stream; use `Returns:` for a
+  single value. Describe what the caller observes, not how the function is implemented —
+  a `pipe` that is `return parser(...)` still uses `Yields:`, because every `pipe` hands
+  back an iterator (see "The two returns of a pipe callable").
 - The summary names what the helper is *for*; the output description belongs in
   `Returns:`/`Yields:`, never in the summary. So do not lead with `Returns`/
   `Yields` (see the rule above) and do not narrate the body:
@@ -667,7 +666,7 @@ code block without interpreter prompts.
   `>>>` prompt. A bare `>>>` is valid doctest source (it expects no output), and
   it keeps the setup visually distinct from the workflow being demonstrated:
 
-  ```
+  ```text
   >>> from riko.modules.count import pipe
   >>>
   >>> next(pipe([{"x": x} for x in range(5)]))
@@ -677,7 +676,7 @@ code block without interpreter prompts.
   Also put one before each `def` / `async def`, which gives a nested block
   breathing room and separates it from the statements around it:
 
-  ```
+  ```text
   >>> from riko import run
   >>>
   >>> async def main():
@@ -693,7 +692,7 @@ code block without interpreter prompts.
   examples, and write names plainly (no RST markup) since the comment renders as
   code:
 
-  ```
+  ```text
   >>> # A falsy value passes unless strict is set
   >>> require_arg([], "others", "send")
   []

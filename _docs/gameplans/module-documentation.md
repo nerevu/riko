@@ -5,6 +5,8 @@ status.csv cannot be accurately regenerated from the current runtime catalog alo
 The file combines three different categories of information:
 
 Historical Yahoo Pipes migration data
+
+```text
 name
 new_name
 original
@@ -15,7 +17,11 @@ input
 intype
 output
 outtype
+```
+
 Current implementation metadata
+
+```text
 implemented
 new_type
 new_sub_type
@@ -26,16 +32,27 @@ field
 ftype
 ptype
 emit
+```
+
 Obsolete or redundant migration fields
+
+```text
 converted
 dictize
 pdictize
+```
 
-The current CSV already has stale runtime values. For example, regex, rename, and subelement are marked non-loopable even though they are processors other than input; regex is also recorded with emit=FALSE, while its current decorator explicitly sets emit=True.
+The current CSV already has stale runtime values. For example, regex, rename, and
+subelement are marked non-loopable even though they are processors other than input;
+regex is also recorded with emit=FALSE, while its current decorator explicitly sets
+emit=True.
 
-The generator should therefore derive runtime facts from code and merge them with a small static historical manifest.
+The generator should therefore derive runtime facts from code and merge them with a
+small static historical manifest.
 
-Recommended structure
+## Recommended structure
+
+```text
 riko/
   data/
     status.csv                 # generated; committed
@@ -46,19 +63,26 @@ scripts/
 
 tests/
   test_generate_status.py
+```
 
-I would not make this a [project.scripts] entry point. The existing entries are user-facing application commands, whereas status generation is a repository maintenance operation.
+I would not make this a [project.scripts] entry point. The existing entries are
+user-facing application commands, whereas status generation is a repository maintenance
+operation.
 
-1. Create a historical manifest
+## 1. Create a historical manifest
 
-The manifest should contain only facts that cannot be discovered from the current Python modules.
+The manifest should contain only facts that cannot be discovered from the current Python
+modules.
 
 I would use this schema:
 
+```text
 name,module,new_name,original,orig_type,deprecated,alt,input,intype,output,outtype,target_type,target_subtype,target_loopable
+```
 
 Meaning:
 
+```text
 Field   Purpose
 name    Original Yahoo Pipes identifier, such as pipecsv
 module  Actual Riko module name, such as csv
@@ -71,24 +95,32 @@ input through outtype   Historical input/output model
 target_type Intended type for an unimplemented pipe
 target_subtype  Intended subtype for an unimplemented pipe
 target_loopable Intended loopability for an unimplemented pipe
+```
 
-The separate module field is important. new_name is not consistently the importable module name: the current CSV maps pipecsv to fetchcsv, while the actual module is riko.modules.csv.
+The separate module field is important. new_name is not consistently the importable
+module name: the current CSV maps pipecsv to fetchcsv, while the actual module is
+riko.modules.csv.
 
 For implemented rows:
 
+```text
 pipecsv,csv,fetchcsv,TRUE,source,FALSE,,n/a,n/a,items,item,,,
 piperegex,regex,regex,TRUE,operator,FALSE,pipestrregex,item,text,items,text,,,
+```
 
 For unimplemented rows:
 
+```text
 pipemax,,max,FALSE,operator,FALSE,,items,number,items,number,operator,aggregator,FALSE
+```
 
 The generator uses target_* only when module is absent or cannot be found.
 
-2. Expose a stable runtime-options snapshot
+## 2. Expose a stable runtime-options snapshot
 
 The proposed ModuleMetadata gives the generator:
 
+```text
 name
 type
 subtype
@@ -97,24 +129,30 @@ pollable
 loopable
 has_sync
 has_async
+```
 
 That is enough for most status columns, but not:
 
+```text
 listize
 extract
 field
 ftype
 ptype
 emit
+```
 
-Those values currently live inside the decorator instance’s private _opts. The wrapper only exposes type, name, sub_type, and pollable.
+Those values currently live inside the decorator instance’s private _opts. The wrapper
+only exposes type, name, sub_type, and pollable.
 
-Do not have the generator inspect closure cells. Instead, attach a frozen normalized snapshot when the wrapper is created. Name it
-`FrozenDecorationOptions`: it is the immutable form of the existing `DecorationOptions` TypedDict
-(`riko/types/_options.py`), and `CallOptions` already names the per-node call options.
+Do not have the generator inspect closure cells. Instead, attach a frozen normalized
+snapshot when the wrapper is created. Name it `FrozenDecorationOptions`: it is the
+immutable form of the existing `DecorationOptions` TypedDict (`riko/types/_options.py`),
+and `CallOptions` already names the per-node call options.
 
 For example:
 
+```python
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal, Mapping
@@ -131,9 +169,11 @@ class FrozenDecorationOptions:
     ftype: BasicCastType
     ptype: BasicCastType
     emit: EmitMode
+```
 
 Inside the decorator:
 
+```python
 def _status_options(self) -> FrozenDecorationOptions:
     declared_emit = self._opts.get("emit")
 
@@ -152,28 +192,38 @@ def _status_options(self) -> FrozenDecorationOptions:
         ptype=self._opts["ptype"],
         emit=emit,
     )
+```
 
 Then attach it alongside the other wrapper metadata:
 
+```python
 setattr(wrapper, "options", self._status_options())
-Why emit needs three states
+```
 
-A boolean is not sufficient. When emit is unspecified, its resolved behavior can depend on module type, source status, or the actual returned value. The decorator internally treats an unspecified value differently from explicit True or False.
+### Why emit needs three states
+
+A boolean is not sufficient. When emit is unspecified, its resolved behavior can depend
+on module type, source status, or the actual returned value. The decorator internally
+treats an unspecified value differently from explicit True or False.
 
 Use:
 
+```text
 TRUE
 FALSE
 AUTO
+```
 
 in the generated CSV. Recording AUTO as FALSE would continue the current ambiguity.
 
-3. Build the generator around list_modules
+## 3. Build the generator around list_modules
 
-The generator should consume the same catalog used by the public discovery API rather than scanning modules independently.
+The generator should consume the same catalog used by the public discovery API rather
+than scanning modules independently.
 
 Suggested structure:
 
+```python
 from __future__ import annotations
 
 import argparse
@@ -185,9 +235,11 @@ from typing import Iterable
 
 from riko.modules import list_modules
 from riko.types.modules import ModuleMetadata
+```
 
 Core functions:
 
+```python
 COLUMNS = (
     "name",
     "module",
@@ -216,8 +268,7 @@ COLUMNS = (
 )
 
 
-def load_manifest(path: Path) -> tuple[ManifestRow, ...]:
-    ...
+def load_manifest(path: Path) -> tuple[ManifestRow, ...]: ...
 
 
 def load_runtime_modules() -> dict[str, ModuleMetadata]:
@@ -226,14 +277,11 @@ def load_runtime_modules() -> dict[str, ModuleMetadata]:
 
 
 def build_rows(
-    manifest: Iterable[ManifestRow],
-    modules: dict[str, ModuleMetadata],
-) -> tuple[dict[str, str], ...]:
-    ...
+    manifest: Iterable[ManifestRow], modules: dict[str, ModuleMetadata]
+) -> tuple[dict[str, str], ...]: ...
 
 
-def render_csv(rows: Iterable[dict[str, str]]) -> str:
-    ...
+def render_csv(rows: Iterable[dict[str, str]]) -> str: ...
 
 
 def generate(manifest_path: Path) -> str:
@@ -241,15 +289,20 @@ def generate(manifest_path: Path) -> str:
     modules = load_runtime_modules()
     rows = build_rows(manifest, modules)
     return render_csv(rows)
-4. Define field precedence explicitly
+```
+
+## 4. Define field precedence explicitly
 
 For each manifest row:
 
+```python
 runtime = modules.get(manifest.module)
 implemented = runtime is not None
+```
 
 Then populate fields as follows.
 
+```text
 Output field    Source
 name    Manifest
 module  Manifest/current catalog
@@ -268,32 +321,37 @@ listize–ptype   Runtime options when implemented
 emit    Runtime option mode when implemented
 dictize Remove, blank, or explicitly retain as legacy
 pdictize    Remove, blank, or explicitly retain as legacy
+```
 
-Derived fields must always override historical values. There should not be a manifest override for an implemented module’s type, subtype, loopable, or decorator options.
+Derived fields must always override historical values. There should not be a manifest
+override for an implemented module’s type, subtype, loopable, or decorator options.
 
-5. Include runtime-only modules automatically
+## 5. Include runtime-only modules automatically
 
-The current CSV omits several modules that are now listed in the code-level classifications. The current package lists aggregators, composers, sources, and transformers directly, including modules such as aggregate, timeout, join, loop, forever, geolocate, slugify, typecast, udf, and urlparse.
+The current CSV omits several modules that are now listed in the code-level
+classifications. The current package lists aggregators, composers, sources, and
+transformers directly, including modules such as aggregate, timeout, join, loop,
+forever, geolocate, slugify, typecast, udf, and urlparse.
 
 After processing the manifest:
 
-referenced = {
-    row.module
-    for row in manifest
-    if row.module is not None
-}
+```python
+referenced = {row.module for row in manifest if row.module is not None}
 
 for name, metadata in modules.items():
     if name not in referenced:
         rows.append(build_runtime_only_row(metadata))
+```
 
 A runtime-only row might look like:
 
+```text
 ,loop,loop,FALSE,TRUE,,operator,composer,FALSE,TRUE,FALSE,,,,,,,,pass,pass,,AUTO,
+```
 
 Do not invent a Yahoo Pipes name such as pipeloop unless it really had one.
 
-6. Deterministic ordering
+## 6. Deterministic ordering
 
 Preserve the broad grouping of the current file:
 
@@ -304,10 +362,13 @@ Deprecated historical aliases
 
 Within each group, sort by:
 
+```python
 row["name"] or row["module"]
+```
 
 For example:
 
+```python
 def status_rank(row: StatusRow) -> int:
     if row.deprecated:
         return 3
@@ -319,19 +380,19 @@ def status_rank(row: StatusRow) -> int:
         return 2
 
     return 1
+```
 
 Then:
 
-rows.sort(
-    key=lambda row: (
-        status_rank(row),
-        row.name or row.module,
-    )
-)
-7. Normalize serialization
+```python
+rows.sort(key=lambda row: (status_rank(row), row.name or row.module))
+```
+
+## 7. Normalize serialization
 
 Use one canonical representation:
 
+```python
 def csv_bool(value: bool) -> str:
     return "TRUE" if value else "FALSE"
 
@@ -344,34 +405,43 @@ def csv_optional(value: object | None) -> str:
         return str(value.value)
 
     return str(value)
+```
 
 Use:
 
-csv.DictWriter(
-    stream,
-    fieldnames=COLUMNS,
-    lineterminator="\n",
-)
+```python
+csv.DictWriter(stream, fieldnames=COLUMNS, lineterminator="\n")
+```
 
-The current CSV inconsistently uses blank cells, None, n/a, and booleans. The generator should distinguish:
+The current CSV inconsistently uses blank cells, None, n/a, and booleans. The generator
+should distinguish:
 
 blank: unknown or not applicable
 n/a: historical value explicitly designated not applicable
 AUTO: dynamically determined runtime behavior
 TRUE / FALSE: actual booleans
-8. CLI behavior
+
+## 8. CLI behavior
+
+```bash
 uv run python scripts/generate_status.py
+```
 
 Writes:
 
+```text
 riko/data/status.csv
+```
 
 Add check mode:
 
+```bash
 uv run python scripts/generate_status.py --check
+```
 
 Behavior:
 
+```python
 if args.check:
     existing = output_path.read_text(encoding="utf-8")
 
@@ -380,16 +450,20 @@ if args.check:
         return 1
 
     return 0
+```
 
 Useful arguments:
 
+```text
 --check
 --output PATH
 --manifest PATH
+```
 
-Avoid an --update-manifest option. The manifest represents intentional historical decisions and should not be inferred or silently rewritten.
+Avoid an --update-manifest option. The manifest represents intentional historical
+decisions and should not be inferred or silently rewritten.
 
-9. Validation rules
+## 9. Validation rules
 
 The generator should fail before writing when:
 
@@ -403,28 +477,36 @@ A manifest tries to override derived runtime metadata.
 A runtime module is omitted from the final result.
 A generated row has a column not listed in COLUMNS.
 
-Allow multiple historical aliases to point to the same runtime module, particularly deprecated aliases.
+Allow multiple historical aliases to point to the same runtime module, particularly
+deprecated aliases.
 
-10. Tests
+## 10. Tests
 
 Minimum test set:
 
+```python
 def test_generation_is_deterministic():
     first = generate(MANIFEST)
     second = generate(MANIFEST)
 
     assert first == second
+
+
 def test_checked_in_status_is_current():
     generated = generate(MANIFEST)
     existing = STATUS.read_text(encoding="utf-8")
 
     assert generated == existing
+
+
 def test_every_runtime_module_is_exported():
     rows = parse_generated_status()
     exported = {row["module"] for row in rows if row["module"]}
     runtime = set(list_modules())
 
     assert runtime <= exported
+
+
 def test_runtime_metadata_wins_over_manifest():
     row = get_row("regex")
 
@@ -433,6 +515,8 @@ def test_runtime_metadata_wins_over_manifest():
     assert row["new_sub_type"] == "transformer"
     assert row["loopable"] == "TRUE"
     assert row["emit"] == "TRUE"
+
+
 def test_input_is_the_only_non_loopable_processor():
     rows = parse_generated_status()
 
@@ -445,23 +529,25 @@ def test_input_is_the_only_non_loopable_processor():
     }
 
     assert modules == {"input"}
-Recommended implementation sequence
-Finalize ModuleMetadata and list_modules.
-Add immutable decoration-option metadata to wrappers.
-Extract historical-only information from the current CSV into status_manifest.csv.
-Implement the merge and validation functions.
-Generate the first new status.csv.
-Review the intentional diff, especially stale loopable and emit values.
-Add --check to CI.
-Later remove dictize and pdictize; code search currently finds them only in the status file and documentation, not in runtime implementation.
+```
 
-The important boundary is: code owns current behavior; the manifest owns history; status.csv is only the generated report.
+## Recommended implementation sequence
+
+Finalize ModuleMetadata and list_modules. Add immutable decoration-option metadata to
+wrappers. Extract historical-only information from the current CSV into
+status_manifest.csv. Implement the merge and validation functions. Generate the first
+new status.csv. Review the intentional diff, especially stale loopable and emit values.
+Add --check to CI. Later remove dictize and pdictize; code search currently finds them
+only in the status file and documentation, not in runtime implementation.
+
+The important boundary is: code owns current behavior; the manifest owns history;
+status.csv is only the generated report.
 
 ---
 
-# Shelf integration addendum
+## Shelf integration addendum
 
-## Built-in versus extension documentation
+### Built-in versus extension documentation
 
 `status.csv` remains a Yahoo Pipes migration and built-in runtime report. It must not
 become a cross-package connector catalog.
@@ -487,6 +573,6 @@ package-owned generated reference pages
 ```
 
 The status generator should support an explicit `builtins_only=True` catalog query so an
-installed plugin cannot make the checked-in `status.csv` nondeterministic.
-Tests must verify that entry-point modules are excluded from this historical report while
-remaining visible in the public module registry.
+installed plugin cannot make the checked-in `status.csv` nondeterministic. Tests must
+verify that entry-point modules are excluded from this historical report while remaining
+visible in the public module registry.

@@ -2,11 +2,13 @@
 
 > **Scope.** Provider-neutral inference for the `riko-ai` package. The prior-art
 > analysis (Langly/LangChain extraction) and native-reimplementation sketches live in
-> [ai-inference-research.md](../research/ai-inference-research.md); this file is the actionable plan.
+> [ai-inference-research.md](../research/ai-inference-research.md); this file is the
+> actionable plan.
 
 ## 1. Mission
 
-Extend the planned `riko-ai` package beyond basic text inference so it can provide model-driven reasoning for the capability system without owning external execution.
+Extend the planned `riko-ai` package beyond basic text inference so it can provide
+model-driven reasoning for the capability system without owning external execution.
 
 `riko-ai` must support:
 
@@ -23,13 +25,14 @@ Extend the planned `riko-ai` package beyond basic text inference so it can provi
 11. Reusable workflow profiles.
 12. Evaluation-driven model optimization.
 
-`riko-ai` proposes plans. It does not bypass `riko-mcp` validation, approval, credentials, or execution policy.
+`riko-ai` proposes plans. It does not bypass `riko-mcp` validation, approval,
+credentials, or execution policy.
 
 ---
 
-# 2. Package boundaries
+## 2. Package boundaries
 
-## `riko-ai` owns
+### `riko-ai` owns
 
 * provider SDK adapters;
 * `infer`;
@@ -45,7 +48,7 @@ Extend the planned `riko-ai` package beyond basic text inference so it can provi
 * AI usage accounting;
 * AI evaluations.
 
-## `riko-mcp` owns
+### `riko-mcp` owns
 
 * authoritative capability schemas;
 * MCP and OpenAPI connectivity;
@@ -59,7 +62,7 @@ Extend the planned `riko-ai` package beyond basic text inference so it can provi
 * deterministic verification;
 * external usage telemetry.
 
-## Execution rule
+### Execution rule
 
 ```text
 riko-ai proposal
@@ -81,19 +84,23 @@ riko-ai proposal
 
 ---
 
-# 3. Langly and AutoGen concepts assigned to AI
+## 3. Langly and AutoGen concepts assigned to AI
 
-The reviewed projects contained several useful model-driven ideas that do not belong in the MCP layer.
+The reviewed projects contained several useful model-driven ideas that do not belong in
+the MCP layer.
 
-## Provider abstraction
+### Provider abstraction
 
-AutoGen contained custom adaptation between Anthropic and OpenAI-style message and tool formats.
+AutoGen contained custom adaptation between Anthropic and OpenAI-style message and tool
+formats.
 
-Retain the idea of provider normalization, but expose provider-neutral Riko types rather than framework response classes.
+Retain the idea of provider normalization, but expose provider-neutral Riko types rather
+than framework response classes.
 
-## Model optimization
+### Model optimization
 
-Langly grouped models by performance, balance, and cost, and later used task scores and prices to choose a model.
+Langly grouped models by performance, balance, and cost, and later used task scores and
+prices to choose a model.
 
 Retain:
 
@@ -102,31 +109,33 @@ Retain:
 * task-family evaluation;
 * recorded selection rationale.
 
-## Decomposition
+### Decomposition
 
 Langly implemented prompted and structured decomposition.
 
 Retain decomposition as a bounded typed plan, not as an open-ended agent conversation.
 
-## Retrieval
+### Retrieval
 
 Langly generated hypothetical questions linked to source documents to improve retrieval.
 
-Apply the technique to capability retrieval and document retrieval, but treat generated retrieval aids as non-authoritative.
+Apply the technique to capability retrieval and document retrieval, but treat generated
+retrieval aids as non-authoritative.
 
-## Verification
+### Verification
 
 Langly graded questions, retrieved documents, final answers, and hallucination risk.
 
 Retain model verification only after deterministic validation.
 
-## Large-context processing
+### Large-context processing
 
-Langly calculated chunk sizes from model context windows and supported context-aware chunking.
+Langly calculated chunk sizes from model context windows and supported context-aware
+chunking.
 
 Retain token-aware chunking and bounded map-reduce summarization.
 
-## Agent libraries
+### Agent libraries
 
 Replace persona-heavy agent libraries with reusable workflow profiles containing:
 
@@ -139,9 +148,9 @@ Replace persona-heavy agent libraries with reusable workflow profiles containing
 
 ---
 
-# 4. Provider-neutral inference contracts
+## 4. Provider-neutral inference contracts
 
-## Provider
+### Provider
 
 ```python
 class AiProvider(Protocol):
@@ -152,7 +161,7 @@ class AiProvider(Protocol):
     ) -> StructuredInferenceResult[T]: ...
 ```
 
-## Content
+### Content
 
 ```python
 type AiContent = AiTextContent | AiImageContent | AiToolProposal | AiReasoningSummary
@@ -160,7 +169,7 @@ type AiContent = AiTextContent | AiImageContent | AiToolProposal | AiReasoningSu
 
 Do not expose private reasoning or provider-specific chain-of-thought fields.
 
-## Result
+### Result
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -170,7 +179,7 @@ class InferenceResult:
     usage: ModelUsage
 ```
 
-## Structured output
+### Structured output
 
 Use standard typed Python models and JSON Schema.
 
@@ -180,9 +189,9 @@ Provider-specific schema conversion remains internal.
 
 ---
 
-# 5. Public Riko modules
+## 5. Public Riko modules
 
-## `infer`
+### `infer`
 
 Generate or enrich content.
 
@@ -193,7 +202,7 @@ flow.infer(
 )
 ```
 
-## `capabilityselect`
+### `capabilityselect`
 
 Consume a `CapabilityCatalog` and emit a `SelectionOutcome`.
 
@@ -209,25 +218,25 @@ plan = catalog.capabilityselect(
 )
 ```
 
-## `taskplan`
+### `taskplan`
 
 Produce a bounded multi-step plan.
 
-## `verify`
+### `verify`
 
 Apply model-based verification after deterministic checks.
 
-## `summarize`
+### `summarize`
 
 Apply token-aware large-content summarization.
 
-## `research`
+### `research`
 
 Run a bounded evidence-backed research workflow.
 
 ---
 
-# 6. Model profiles
+## 6. Model profiles
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -257,7 +266,7 @@ Do not hard-code stale prices in selection logic.
 
 ---
 
-# 7. Model selection
+## 7. Model selection
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -283,7 +292,7 @@ Operator-specified models override automatic selection.
 
 ---
 
-# 8. AI usage and budgets
+## 8. AI usage and budgets
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -314,13 +323,14 @@ class AiBudget:
     deadline_seconds: float | None = None
 ```
 
-Budget exhaustion must produce a structured failure rather than silently selecting a cheaper or weaker model unless policy explicitly permits fallback.
+Budget exhaustion must produce a structured failure rather than silently selecting a
+cheaper or weaker model unless policy explicitly permits fallback.
 
 ---
 
-# 9. Semantic capability retrieval
+## 9. Semantic capability retrieval
 
-## Goal
+### Goal
 
 Reduce a large capability catalog to a bounded model-facing candidate set.
 
@@ -336,7 +346,7 @@ task
 → capability selection
 ```
 
-## Retrieval aid
+### Retrieval aid
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -367,9 +377,9 @@ A keyword-only path must always remain available.
 
 ---
 
-# 10. Capability selection
+## 10. Capability selection
 
-## Request
+### Request
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -383,7 +393,7 @@ class CapabilitySelectionRequest:
     budget: AiBudget
 ```
 
-## Output
+### Output
 
 ```text
 CapabilityPlan
@@ -391,7 +401,7 @@ CapabilityDiscoveryPlan
 NoCapabilityMatch
 ```
 
-## Requirements
+### Requirements
 
 The model may propose only IDs present in the supplied candidate set.
 
@@ -406,7 +416,7 @@ It may not:
 * execute the plan;
 * override confirmation requirements.
 
-## Confidence defaults
+### Confidence defaults
 
 ```text
 below 0.60
@@ -423,7 +433,7 @@ Confidence does not relax write or destructive-operation policy.
 
 ---
 
-# 11. Bounded discovery loop
+## 11. Bounded discovery loop
 
 When no existing capability fits:
 
@@ -447,9 +457,9 @@ The AI may formulate the discovery query but cannot directly fetch schemas.
 
 ---
 
-# 12. Bounded task decomposition
+## 12. Bounded task decomposition
 
-## Plan
+### Plan
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -481,7 +491,7 @@ class PlanStep:
     verification: VerificationPolicy | None
 ```
 
-## Example
+### Example
 
 ```text
 Request:
@@ -502,7 +512,7 @@ Step 4
     perform conversion
 ```
 
-## Limits
+### Limits
 
 * fixed maximum steps;
 * acyclic dependencies;
@@ -514,7 +524,7 @@ Step 4
 
 ---
 
-# 13. Model-based verification
+## 13. Model-based verification
 
 Deterministic validation runs first.
 
@@ -560,7 +570,7 @@ No unbounded “try again” behavior.
 
 ---
 
-# 14. Large-content summarization
+## 14. Large-content summarization
 
 ```python
 class SummarizationStrategy(StrEnum):
@@ -604,7 +614,7 @@ artifact.summarize(
 
 ---
 
-# 15. Bounded research workflow
+## 15. Bounded research workflow
 
 ```text
 rewrite question
@@ -619,7 +629,7 @@ rewrite question
 → emit citations
 ```
 
-## Source
+### Source
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -633,7 +643,7 @@ class ResearchSource:
     artifact_uri: str | None
 ```
 
-## Evidence
+### Evidence
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -645,7 +655,7 @@ class Evidence:
     claim_ids: tuple[str, ...]
 ```
 
-## Limits
+### Limits
 
 * maximum search rounds;
 * maximum sources;
@@ -660,7 +670,7 @@ This replaces search/scrape agent teams with one typed workflow.
 
 ---
 
-# 16. Reusable workflow profiles
+## 16. Reusable workflow profiles
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -703,9 +713,9 @@ approval = "policy"
 
 ---
 
-# 17. AI evaluation framework
+## 17. AI evaluation framework
 
-## Scenario
+### Scenario
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -725,7 +735,7 @@ class AiScenario:
     maximum_latency_ms: int | None = None
 ```
 
-## Evaluate independently
+### Evaluate independently
 
 * model selection;
 * capability retrieval;
@@ -739,9 +749,9 @@ class AiScenario:
 * cost;
 * latency.
 
-## Initial scenarios
+### Initial scenarios
 
-### Native versus MCP
+#### Native versus MCP
 
 ```text
 Fetch a JSON API into records.
@@ -753,14 +763,14 @@ Fetch a webpage as clean model-readable text.
 Expected: Fetch MCP.
 ```
 
-### APIs.guru discovery
+#### APIs.guru discovery
 
 ```text
 Convert 100 USD to GBP.
 Expected: exchange-rate API discovery and valid operation plan.
 ```
 
-### Translation
+#### Translation
 
 ```text
 Translate an English sentence to Swahili.
@@ -768,21 +778,21 @@ Expected: translation-capable API discovery or NoCapabilityMatch
 when credentials are unavailable.
 ```
 
-### IP geolocation
+#### IP geolocation
 
 ```text
 Resolve IPv4 and IPv6 addresses to city,
 region, and country.
 ```
 
-### Multi-step plan
+#### Multi-step plan
 
 ```text
 Find an IP’s country, determine its currency,
 and convert 100 USD.
 ```
 
-### Authentication failure
+#### Authentication failure
 
 The best API requires an unavailable credential.
 
@@ -796,7 +806,7 @@ or a lower-ranked usable API.
 
 ---
 
-# 18. Historical optimization
+## 18. Historical optimization
 
 Evaluation history may inform model routing.
 
@@ -824,7 +834,7 @@ Rules:
 
 ---
 
-# 19. Proposed repository layout
+## 19. Proposed repository layout
 
 ```text
 riko_ai/
@@ -908,9 +918,9 @@ riko_ai/
 
 ---
 
-# 20. Implementation phases
+## 20. Implementation phases
 
-## AI0 — Provider architecture
+### AI0 — Provider architecture
 
 * define provider-neutral types;
 * implement provider registry;
@@ -921,7 +931,7 @@ riko_ai/
 
 **Acceptance:** `infer` works without exposing provider SDK classes.
 
-## AI1 — Model profiles and budgets
+### AI1 — Model profiles and budgets
 
 * implement model profiles;
 * implement optimization tiers;
@@ -932,7 +942,7 @@ riko_ai/
 
 **Acceptance:** model selection is explainable and bounded.
 
-## AI2 — Base `infer`
+### AI2 — Base `infer`
 
 * implement processor and operator forms;
 * support field extraction;
@@ -944,7 +954,7 @@ riko_ai/
 
 **Acceptance:** normal Riko AI enrichment works without capability selection.
 
-## AI3 — Capability retrieval
+### AI3 — Capability retrieval
 
 * consume `CapabilityCatalog`;
 * implement deterministic candidate filtering;
@@ -955,7 +965,7 @@ riko_ai/
 
 **Acceptance:** large catalogs reduce to stable top-K candidates.
 
-## AI4 — Capability selection
+### AI4 — Capability selection
 
 * implement `CapabilitySelectionRequest`;
 * implement structured selection output;
@@ -965,7 +975,7 @@ riko_ai/
 
 **Acceptance:** model cannot invent executable capabilities.
 
-## AI5 — APIs.guru discovery queries
+### AI5 — APIs.guru discovery queries
 
 * formulate bounded API-discovery queries;
 * evaluate exchange-rate, translation, and IP-geolocation tasks;
@@ -973,7 +983,7 @@ riko_ai/
 
 **Acceptance:** discovery plans are useful but non-executable.
 
-## AI6 — Task decomposition
+### AI6 — Task decomposition
 
 * implement `TaskPlan`;
 * implement `PlanStep`;
@@ -983,7 +993,7 @@ riko_ai/
 
 **Acceptance:** multi-step plans are finite, typed, and inspectable.
 
-## AI7 — Verification and recovery
+### AI7 — Verification and recovery
 
 * run deterministic validation first;
 * implement semantic verification;
@@ -993,7 +1003,7 @@ riko_ai/
 
 **Acceptance:** no open-ended retries.
 
-## AI8 — Large-content summarization
+### AI8 — Large-content summarization
 
 * implement token-aware chunking;
 * implement stuff, map-reduce, refine, and hierarchical strategies;
@@ -1003,7 +1013,7 @@ riko_ai/
 
 **Acceptance:** large inputs remain bounded and traceable.
 
-## AI9 — Research workflow
+### AI9 — Research workflow
 
 * implement search selection;
 * implement retrieval selection;
@@ -1014,7 +1024,7 @@ riko_ai/
 
 **Acceptance:** research output is evidence-backed and bounded.
 
-## AI10 — Workflow profiles
+### AI10 — Workflow profiles
 
 * implement profile schema;
 * add initial profiles;
@@ -1024,7 +1034,7 @@ riko_ai/
 
 **Acceptance:** reusable workflows are declarative and reviewable.
 
-## AI11 — Evaluations and routing optimization
+### AI11 — Evaluations and routing optimization
 
 * port relevant Langly scenarios;
 * implement deterministic and model evaluators;
@@ -1036,9 +1046,9 @@ riko_ai/
 
 ---
 
-# 21. Testing requirements
+## 21. Testing requirements
 
-## Unit tests
+### Unit tests
 
 Cover:
 
@@ -1054,7 +1064,7 @@ Cover:
 * evidence;
 * profiles.
 
-## Deterministic fake provider
+### Deterministic fake provider
 
 Provide a fake provider capable of:
 
@@ -1066,7 +1076,7 @@ Provide a fake provider capable of:
 * token-limit failure;
 * partial response.
 
-## Golden fixtures
+### Golden fixtures
 
 Use golden fixtures for:
 
@@ -1079,7 +1089,7 @@ Use golden fixtures for:
 * research evidence;
 * evaluation reports.
 
-## Type checking
+### Type checking
 
 All public code must pass strict Pyright.
 
@@ -1087,10 +1097,10 @@ Provider SDK `Any` usage must remain isolated inside adapters.
 
 ---
 
-# 21.1 Connector selection boundary
+## 21.1 Connector selection boundary
 
-AI may select among connector, MCP, OpenAPI, SQL, and native Riko capabilities only after
-those capabilities have been deterministically discovered and normalized.
+AI may select among connector, MCP, OpenAPI, SQL, and native Riko capabilities only
+after those capabilities have been deterministically discovered and normalized.
 
 The model must not:
 
@@ -1106,7 +1116,7 @@ A universal source request is represented to the model as an inspectable `Source
 catalog capability. Deterministic resolution, policy, credentials, and execution remain
 outside the model.
 
-# 22. Explicit non-goals
+## 22. Explicit non-goals
 
 Do not implement:
 
@@ -1126,7 +1136,7 @@ Do not implement:
 
 ---
 
-# 23. Initial Claude Code prompt
+## 23. Initial Claude Code prompt
 
 ```text
 You are implementing AI0 of the authoritative Riko AI-Infer addendum.

@@ -2,8 +2,8 @@
 
 ## 1. Mission
 
-Promote recurring record transformations into precise named modules and isolate optional,
-domain-specific enrichment algorithms from Riko core.
+Promote recurring record transformations into precise named modules and isolate
+optional, domain-specific enrichment algorithms from Riko core.
 
 This plan incorporates Shelf milestones 7, 13.6, and 13.7.
 
@@ -78,7 +78,8 @@ split/select
 normalize_whitespace
 ```
 
-No arbitrary method names or callable imports are accepted from serialized configuration.
+No arbitrary method names or callable imports are accepted from serialized
+configuration.
 
 ## 5. `dropfields`
 
@@ -97,14 +98,14 @@ after any coalesce pipe that consumes staging columns.
 
 ## 6. Existing modules
 
-`regex` remains the replacement module for solicitation-ID normalization. `rename` remains
-field renaming only. Their docs gain cross-references but no new semantics.
+`regex` remains the replacement module for solicitation-ID normalization. `rename`
+remains field renaming only. Their docs gain cross-references but no new semantics.
 
 Unowned feature backlog on existing modules (no phase yet):
 
-- `filter`: full containment semantics (`2 in [1, 2, 3]`, `"a" in {"a": 1}`); today
+* `filter`: full containment semantics (`2 in [1, 2, 3]`, `"a" in {"a": 1}`); today
   `contains`/`doesnotcontain` are case-insensitive substring tests only.
-- `fetchpage`/`xpathfetchpage`: convert relative links to absolute, drop the closing tag
+* `fetchpage`/`xpathfetchpage`: convert relative links to absolute, drop the closing tag
   when the start token is a stripped HTML tag, and optionally clean HTML with Tidy.
 - `currency` option: decided to stay `str` — it arrives as serialized configuration (so a
   `Literal` would be the shape), but enumerating ISO 4217 codes is not worth the upkeep.
@@ -161,29 +162,30 @@ delegates to it rather than carrying a second, weaker copy.
 What remains is that `cast_datetime` timezone should be settable (per call via `conf`,
 or per pipeline via `Context`) with UTC as the default.
 
-One zone must govern every form. Today the opt-in `try_local_tz=True` resolves named days
-(`now`/`today`/`tomorrow`/`yesterday`) in the host zone, but counted offsets and
+One zone must govern every form. Today the opt-in `try_local_tz=True` resolves named
+days (`now`/`today`/`tomorrow`/`yesterday`) in the host zone, but counted offsets and
 `next`/`last` forms (`get_relative_date`) always offset from `dt.now(UTC)`, so under a
 non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
 `try_local_tz=False` is consistent: everything is UTC). The settable zone replaces both
 `now` computations with one. Tripwire (2026-10-10 naming triage):
 `tests/internal/test_values.py::TestCastDatetime::test_relative_offsets_share_the_named_day_zone`.
 
-The host zone is also applied as a fixed offset: `ensure_tzinfo(try_local_tz=True)` takes
-`dt.now(UTC).astimezone().tzinfo`, so a date in the other daylight-saving season gets
-today's offset (a July date resolved in January is an hour off). The settable zone must
-be a real zone resolved at each date. Tripwire (2026-11-01 land triage):
+The host zone is also applied as a fixed offset: `ensure_tzinfo(try_local_tz=True)`
+takes `dt.now(UTC).astimezone().tzinfo`, so a date in the other daylight-saving season
+gets today's offset (a July date resolved in January is an hour off). The settable zone
+must be a real zone resolved at each date. Tripwire (2026-11-01 land triage):
 `tests/internal/test_values.py::TestResolveAwareDatetime::test_local_zone_uses_the_dates_own_offset`.
 
-The same setting covers `typecast`'s date/datetime casts (it has no timezone option today)
-and the pending `dateformat` timezone setting (strict xfail in `tests/functional/test_script.py`).
+The same setting covers `typecast`'s date/datetime casts (it has no timezone option
+today) and the pending `dateformat` timezone setting (strict xfail in
+`tests/functional/test_script.py`).
 
 Related backlog: `riko/base/_dateutils.py` builds its abbreviation table from `pytz`
 (`pytz>=2019.3` in `pyproject.toml`); replace that with `zoneinfo`/`tzdata` and drop the
 dependency. Settle the preferred zone for each ambiguous abbreviation there: since the
-2026-10-31 determinism fix, `TZINFOS` picks the alphabetically last zone (`IST` is Europe/Dublin,
-`AST` Canada/Atlantic, `EET` Europe/Vilnius, `WAT` Africa/Porto-Novo), which is stable but not a
-considered choice.
+2026-10-31 determinism fix, `TZINFOS` picks the alphabetically last zone (`IST` is
+Europe/Dublin, `AST` Canada/Atlantic, `EET` Europe/Vilnius, `WAT` Africa/Porto-Novo),
+which is stable but not a considered choice.
 
 This is additive, so it is not SemVer-gated.
 
@@ -198,10 +200,10 @@ returns `""`.
 
 ## 7. Composition
 
-Do not add public `applys()` or `transform_csv()` abstractions. Users compose named modules
-through normal fluent chaining or `WorkflowDocument`s (workflow documents). The compiler may fuse
-compatible record transforms later, but fusion must preserve events, errors, ordering,
-and module-level observability.
+Do not add public `applys()` or `transform_csv()` abstractions. Users compose named
+modules through normal fluent chaining or `WorkflowDocument`s (workflow documents). The
+compiler may fuse compatible record transforms later, but fusion must preserve events,
+errors, ordering, and module-level observability.
 
 ## 8. Near-duplicate detection
 
@@ -241,16 +243,16 @@ flow.contactextract(
 )
 ```
 
-Missing optional dependencies raise a clear module-unavailable error; they do not silently
-return the unchanged item. Extracted values include confidence or provenance when the
-underlying implementation provides it. Address extraction is locale-sensitive and should
-not be enabled by default.
+Missing optional dependencies raise a clear module-unavailable error; they do not
+silently return the unchanged item. Extracted values include confidence or provenance
+when the underlying implementation provides it. Address extraction is locale-sensitive
+and should not be enabled by default.
 
 ## 10. Batch behavior
 
 Record implementations land first. Batch implementations may use Arrow or Narwhals
-expressions after the batch contract is stable. Record and batch paths must pass the same
-golden fixtures.
+expressions after the batch contract is stable. Record and batch paths must pass the
+same golden fixtures.
 
 ## 11. Phases
 

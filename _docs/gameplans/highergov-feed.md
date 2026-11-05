@@ -9,8 +9,8 @@
 ## Mission
 
 Ship Riko's first production use — the HigherGov ingestion pipeline — by implementing a
-reusable vertical slice of the eventual architecture rather than the whole protocol stack.
-The path combines:
+reusable vertical slice of the eventual architecture rather than the whole protocol
+stack. The path combines:
 
 1. HigherGov schema contracts and drift detection;
 2. mode-neutral callable `Pipeline` nodes for bounded concurrent I/O;
@@ -18,16 +18,17 @@ The path combines:
 4. Feed-native async sources/results where incremental I/O matters;
 5. explicit SQL/Airtable durable boundaries.
 
-HigherGov is an application consumer of the core execution/state/batch contracts. It must not
-freeze transitional `SyncPipe` / `AsyncPipe` behavior into the target architecture.
+HigherGov is an application consumer of the core execution/state/batch contracts. It
+must not freeze transitional `SyncPipe` / `AsyncPipe` behavior into the target
+architecture.
 
 ## HigherGov critical path
 
-Issue #176 moves schema work into the HigherGov minimum viable integration. HigherGov should
-not begin bulk transformation, scraping, or API processing until the applicable ingestion
-boundary has been checked against a version-controlled contract. The issue covers HigherGov
-CSV/API/scrape output and Airtable metadata, including distinguishing an empty field from a
-removed field.
+Issue #176 moves schema work into the HigherGov minimum viable integration. HigherGov
+should not begin bulk transformation, scraping, or API processing until the applicable
+ingestion boundary has been checked against a version-controlled contract. The issue
+covers HigherGov CSV/API/scrape output and Airtable metadata, including distinguishing
+an empty field from a removed field.
 
 The target critical path is:
 
@@ -40,8 +41,8 @@ HigherGov acceptance fixtures
 → shared state/batch/RDP projections as later needs require
 ```
 
-RDP remains an interchange/protocol projection; it does not need to block this application
-vertical slice.
+RDP remains an interchange/protocol projection; it does not need to block this
+application vertical slice.
 
 ## Core execution shape
 
@@ -64,25 +65,27 @@ pipeline = Pipeline().flat_map(processor)
 stream = pipeline(items)
 ```
 
-The same definition may run through async iteration when the surrounding application is async:
+The same definition may run through async iteration when the surrounding application is
+async:
 
 ```python
 answers = [answer async for answer in pipeline(items)]
 ```
 
-There is no target `pipeline.collect()` execution terminal and no separate final `SyncPipe.map` /
-`AsyncPipe.map` contract. `with_execution(...)` owns execution-wide concurrency/executor/order
-settings; step configuration remains fixed when the step is declared.
+There is no target `pipeline.collect()` execution terminal and no separate final
+`SyncPipe.map` / `AsyncPipe.map` contract. `with_execution(...)` owns execution-wide
+concurrency/executor/order settings; step configuration remains fixed when the step is
+declared.
 
 ## Migration principles
 
 ### 1. Do not use `itembuilder` as the callable bridge
 
-A Pipeline already has a source and callable nodes. Most HigherGov functions are one-input to
-one-output and use `map`; one-to-many operations use `flat_map`.
+A Pipeline already has a source and callable nodes. Most HigherGov functions are
+one-input to one-output and use `map`; one-to-many operations use `flat_map`.
 
-Do not add artificial `itembuilder`, `.output`, or a requirement that every callable return an
-iterator.
+Do not add artificial `itembuilder`, `.output`, or a requirement that every callable
+return an iterator.
 
 ### 2. Do not rewrite vectorized pandas transformations initially
 
@@ -95,17 +98,18 @@ process_fed_data(...)
 process_forecast_data(...)
 ```
 
-Insert schema validation immediately after each CSV load and before renaming/transformation.
-Moving dataframe-wide/vectorized work into Python dict processing increases migration surface,
-risks behavior drift, and may reduce performance.
+Insert schema validation immediately after each CSV load and before
+renaming/transformation. Moving dataframe-wide/vectorized work into Python dict
+processing increases migration surface, risks behavior drift, and may reduce
+performance.
 
 Row-oriented processing can be revisited only when measurements justify it.
 
 ### 3. Preserve batch-level Selenium lifecycle initially
 
-The current implementation partitions a DataFrame into chunks, creates one driver per chunk
-invocation, signs in, processes that chunk, and quits the driver. The first Riko migration maps
-**chunk items**, not individual opportunities:
+The current implementation partitions a DataFrame into chunks, creates one driver per
+chunk invocation, signs in, processes that chunk, and quits the driver. The first Riko
+migration maps **chunk items**, not individual opportunities:
 
 ```python
 items = [{"records": chunk.to_dict("records")} for chunk in dataframe_chunks]
@@ -117,20 +121,20 @@ def scrape_chunk(item, **kwargs):
     return {"records": result.to_dict("records")}
 ```
 
-Riko replaces outer executor orchestration while HigherGov initially retains browser creation and
-cleanup inside the chunk callable. A later declared `Resource` may own a reusable browser if the
-performance/lifecycle tradeoff proves worthwhile.
+Riko replaces outer executor orchestration while HigherGov initially retains browser
+creation and cleanup inside the chunk callable. A later declared `Resource` may own a
+reusable browser if the performance/lifecycle tradeoff proves worthwhile.
 
 ### 4. Preserve the existing redirect batch operation
 
-Keep the authenticated Selenium batch operation, including driver recreation after failures. Map
-the existing batch function; do not replace Selenium with `requests` unless independently tested
-and proven equivalent.
+Keep the authenticated Selenium batch operation, including driver recreation after
+failures. Map the existing batch function; do not replace Selenium with `requests`
+unless independently tested and proven equivalent.
 
 ### 5. Keep `highergov.utils.riko` small
 
-The first application adapter should contain only thin helpers around ordinary Pipeline use, for
-example:
+The first application adapter should contain only thin helpers around ordinary Pipeline
+use, for example:
 
 ```python
 def parallel_map_dataframe(...): ...
@@ -139,7 +143,8 @@ def fetch_content_parallel(...): ...
 def call_api_parallel(...): ...
 ```
 
-Do not create a HigherGov-specific runtime, resource manager, DataFrame DSL, or checkpoint layer.
+Do not create a HigherGov-specific runtime, resource manager, DataFrame DSL, or
+checkpoint layer.
 
 ---
 
@@ -147,17 +152,17 @@ Do not create a HigherGov-specific runtime, resource manager, DataFrame DSL, or 
 
 ### HG-0 — Golden outputs and ingestion contracts
 
-Capture representative fixtures for each HigherGov CSV type, opportunity API results, scrape
-output by source type, and Airtable Opportunities/Documents/NIGP metadata.
+Capture representative fixtures for each HigherGov CSV type, opportunity API results,
+scrape output by source type, and Airtable Opportunities/Documents/NIGP metadata.
 
-Record expected fields, required fields, types, nullability, stable external IDs where available,
-and representative payloads. Also capture before/after output fixtures for functions being moved
-to Pipeline execution.
+Record expected fields, required fields, types, nullability, stable external IDs where
+available, and representative payloads. Also capture before/after output fixtures for
+functions being moved to Pipeline execution.
 
 ### HG-1 — Minimal callable Pipeline nodes
 
-Implement only the callable functionality HigherGov needs, using the common decorator/preparation
-model described by `callable-pipes.md`.
+Implement only the callable functionality HigherGov needs, using the common
+decorator/preparation model described by `callable-pipes.md`.
 
 Conceptually:
 
@@ -176,18 +181,18 @@ Pipeline().map(fn)(items)
 Pipeline().flat_map(fn)(items)
 ```
 
-The public `Context` remains immutable environment/resource configuration. Callables receive
-prepared arguments through the existing wrapper mechanism; do not add `CallableContext`, signature
-injection, or mutable per-item context state.
+The public `Context` remains immutable environment/resource configuration. Callables
+receive prepared arguments through the existing wrapper mechanism; do not add
+`CallableContext`, signature injection, or mutable per-item context state.
 
-For blocking functions under async execution, adaptation occurs through the common execution
-bridge. For sync execution, native sync implementation wins. HigherGov code does not choose between
-separate public pipe classes.
+For blocking functions under async execution, adaptation occurs through the common
+execution bridge. For sync execution, native sync implementation wins. HigherGov code
+does not choose between separate public pipe classes.
 
 ### HG-2 — Schema contract and drift core
 
-Continue using raw Draft-07 JSON Schema as the authoritative contract. Do not make Pandera the
-source of truth.
+Continue using raw Draft-07 JSON Schema as the authoritative contract. Do not make
+Pandera the source of truth.
 
 ```python
 OPPORTUNITY_CSV_SCHEMA = {
@@ -222,36 +227,41 @@ class SchemaDriftReport(TypedDict):
     computed_field_errors: list[str]
 ```
 
-Rename behavior: Airtable stable field IDs can identify authoritative renames. CSV/API sources
-report removed + added; fuzzy similarity may be advisory only and must never remap automatically.
+Rename behavior: Airtable stable field IDs can identify authoritative renames. CSV/API
+sources report removed + added; fuzzy similarity may be advisory only and must never
+remap automatically.
 
-Added columns normally warn. Removed required columns fail before transformation. Removed optional
-columns warn unless a source-specific contract requires them.
+Added columns normally warn. Removed required columns fail before transformation.
+Removed optional columns warn unless a source-specific contract requires them.
 
 ### HG-3 — Source-specific schema adapters
 
-**HigherGov CSV** — inspect the header before transformation. Replace repeated per-mapping-key
-checks with one structured validation result.
+**HigherGov CSV** — inspect the header before transformation. Replace repeated
+per-mapping-key checks with one structured validation result.
 
-**HigherGov API** — validate one representative live/metadata result before bulk execution, then
-validate each returned item for required fields and normalize optional missing keys to `None`.
+**HigherGov API** — validate one representative live/metadata result before bulk
+execution, then validate each returned item for required fields and normalize optional
+missing keys to `None`.
 
-**HigherGov scrape output** — validate normalized output from each source-specific scraper
-(`sled`, `sled_forecast`, `grant`, `sam`, `forecast`). Normalize expected keys before validation so
-an empty scrape result differs from a missing field.
+**HigherGov scrape output** — validate normalized output from each source-specific
+scraper (`sled`, `sled_forecast`, `grant`, `sam`, `forecast`). Normalize expected keys
+before validation so an empty scrape result differs from a missing field.
 
 **Airtable** — use Metadata API before fetching records. Compare field ID, name, type,
-computed-field configuration, and linked-table information. Reindex record DataFrames against
-metadata fields so an entirely empty column still exists. Treat `.errorType` as computed-field
-health failure where applicable.
+computed-field configuration, and linked-table information. Reindex record DataFrames
+against metadata fields so an entirely empty column still exists. Treat `.errorType` as
+computed-field health failure where applicable.
 
 ### HG-4 — HigherGov integration
 
 1. **Content fetching** — stateless, I/O-bound, easy to compare.
-2. **API calls** — input schema -> API preflight -> bounded map -> output validation -> DataFrame.
-3. **Redirect batches** — retain current batch callable/browser lifecycle; replace outer executor.
+2. **API calls** — input schema -> API preflight -> bounded map -> output validation ->
+   DataFrame.
+3. **Redirect batches** — retain current batch callable/browser lifecycle; replace outer
+   executor.
 4. **Selenium scrape chunks** — use Riko only for chunk scheduling initially.
-5. **Document API calls** — later low-risk map/flat-map target after opportunity API processing.
+5. **Document API calls** — later low-risk map/flat-map target after opportunity API
+   processing.
 
 ### HG-5 — Drift sentinel
 
@@ -268,7 +278,8 @@ The sentinel returns one combined report routed through existing HigherGov alert
 
 ### HG-6 — Execution hardening driven by production
 
-Production findings feed the common execution owners rather than a HigherGov-specific runtime:
+Production findings feed the common execution owners rather than a HigherGov-specific
+runtime:
 
 - bounded in-flight work and reorder buffers;
 - early-close/cancellation cleanup;
@@ -281,14 +292,15 @@ These semantics belong to `execution-semantics.md` and `implementation-sequence.
 
 ### HG-7 — Optional row-stream CSV migration
 
-Only after schema and concurrency integration is stable: evaluate row-stream CSV processing,
-benchmark against pandas, migrate only row-local transformations, and retain vectorized/dataframe-
-wide operations in pandas.
+Only after schema and concurrency integration is stable: evaluate row-stream CSV
+processing, benchmark against pandas, migrate only row-local transformations, and retain
+vectorized/dataframe- wide operations in pandas.
 
 ### HG-8 — Feed-native streaming integration
 
-`Feed = AsyncIterable[Item]` remains the async stream vocabulary. HG-8 uses Feed-native source/parser
-support through the common Pipeline execution bridge for HigherGov's async I/O paths.
+`Feed = AsyncIterable[Item]` remains the async stream vocabulary. HG-8 uses Feed-native
+source/parser support through the common Pipeline execution bridge for HigherGov's async
+I/O paths.
 
 Relevant common work includes:
 
@@ -298,7 +310,8 @@ Relevant common work includes:
 - FeedResult metadata/state propagation;
 - Feed-native module migration.
 
-See `feed-native-streaming.md` rather than defining an application-specific async runtime.
+See `feed-native-streaming.md` rather than defining an application-specific async
+runtime.
 
 ### HG-9 — State/batch/RDP projections as needed
 
@@ -327,14 +340,16 @@ The first production Riko milestone is complete when:
 8. Existing worker/deployment limits remain unchanged unless deliberately tuned.
 9. Golden output fixtures match the pre-Riko implementation.
 10. Schema drift and processing failures are reported separately.
-11. The same Pipeline definitions are not forked into separate SyncPipe/AsyncPipe application APIs.
+11. The same Pipeline definitions are not forked into separate SyncPipe/AsyncPipe
+    application APIs.
 
 ---
 
 ## Async/Feed integration
 
-HigherGov uses Feed-native sources/results as the **asynchronous I/O layer between DataFrame-oriented
-boundaries**, not as a replacement for pandas or for the entire application pipeline.
+HigherGov uses Feed-native sources/results as the
+**asynchronous I/O layer between DataFrame-oriented boundaries**, not as a replacement
+for pandas or for the entire application pipeline.
 
 ```text
 SQL / CSV / Airtable
@@ -378,11 +393,11 @@ pipeline = (
 answers = [answer async for answer in pipeline(entry_feed(entries_df))]
 ```
 
-Recursive document summarization remains sequential **within one document** when later chunks depend
-on earlier summaries; concurrency is across independent documents.
+Recursive document summarization remains sequential **within one document** when later
+chunks depend on earlier summaries; concurrency is across independent documents.
 
-HTTP/provider retries should not be multiplied by an independent application retry loop. Use the
-common `RetryPolicy` and provider hints at the correct failure boundary.
+HTTP/provider retries should not be multiplied by an independent application retry loop.
+Use the common `RetryPolicy` and provider hints at the correct failure boundary.
 
 ### 2. Webpage-content fetching
 
@@ -417,11 +432,11 @@ pipeline = (
 stream = pipeline(dataframe_feed(cleaned_higher_df))
 ```
 
-If the callable later becomes native async, the Pipeline definition shape remains the same and the
-matching native implementation wins.
+If the callable later becomes native async, the Pipeline definition shape remains the
+same and the matching native implementation wins.
 
-Input schema validation occurs before yielding source records; output records are validated before
-downstream transformation.
+Input schema validation occurs before yielding source records; output records are
+validated before downstream transformation.
 
 ### 4. HigherGov document fetching
 
@@ -448,45 +463,52 @@ pipeline = (
 stream = pipeline(opportunity_feed(logic_mapped))
 ```
 
-One opportunity may expand to multiple documents, hence `flat_map`. Do not flatten summary chunks
-into independent records when chunk order/state is internal to one document summarization.
+One opportunity may expand to multiple documents, hence `flat_map`. Do not flatten
+summary chunks into independent records when chunk order/state is internal to one
+document summarization.
 
 ### 5. Airtable pagination and updates
 
-A Feed-native source may validate authoritative metadata before emitting records page-by-page.
-Writes remain bounded batches. When common Pipeline batch mode is used, batches are ordinary values
-and backend negotiation follows `execution-semantics.md` / `tabular-interop.md`.
+A Feed-native source may validate authoritative metadata before emitting records
+page-by-page. Writes remain bounded batches. When common Pipeline batch mode is used,
+batches are ordinary values and backend negotiation follows `execution-semantics.md` /
+`tabular-interop.md`.
 
 Do not define an Airtable-specific batch pipeline hierarchy.
 
 ### 6. Selenium scraping
 
-Represent each scrape chunk as one input item and execute the blocking callable with bounded thread
-execution. Browser ownership can remain inside the callable initially; if later promoted to a Riko
-resource, declare it through `Resource`/`resources=` and let the execution own cleanup.
+Represent each scrape chunk as one input item and execute the blocking callable with
+bounded thread execution. Browser ownership can remain inside the callable initially; if
+later promoted to a Riko resource, declare it through `Resource`/`resources=` and let
+the execution own cleanup.
 
 ### 7. URL redirect resolution
 
-Use a source of batches and map the existing redirect batch callable. A final ordinary reducer can
-combine result dictionaries/failure lists. Do not reduce the operation to one browser invocation per
-URL merely to make it look row-oriented.
+Use a source of batches and map the existing redirect batch callable. A final ordinary
+reducer can combine result dictionaries/failure lists. Do not reduce the operation to
+one browser invocation per URL merely to make it look row-oriented.
 
 ---
 
 ## Feed and schema drift
 
-Feed-native sources should establish schema validity before normal downstream processing when the
-source exposes enough metadata to do so.
+Feed-native sources should establish schema validity before normal downstream processing
+when the source exposes enough metadata to do so.
 
 **CSV source** — validate header before first row.
 
-**Airtable source** — Metadata API -> validate field IDs/types -> normalize empty fields -> emit.
+**Airtable source** — Metadata API -> validate field IDs/types -> normalize empty fields
+-> emit.
 
-**API source** — validate input boundary -> call API -> validate returned payload -> emit.
+**API source** — validate input boundary -> call API -> validate returned payload ->
+emit.
 
-**Scrape source** — validate normalized output shape/field health after each scrape result.
+**Scrape source** — validate normalized output shape/field health after each scrape
+result.
 
-A missing expected output key is schema drift. A present key whose value is `None` is an empty result.
+A missing expected output key is schema drift. A present key whose value is `None` is an
+empty result.
 
 ---
 
@@ -512,9 +534,9 @@ Pipeline/Feed
 
 The concrete tabular conversion contract belongs to `tabular-interop.md`.
 
-Keep SQL/Airtable/object storage as durable application/run boundaries rather than trying to carry
-one live stream through every HigherGov script before checkpoint/orchestration requirements justify
-it.
+Keep SQL/Airtable/object storage as durable application/run boundaries rather than
+trying to carry one live stream through every HigherGov script before
+checkpoint/orchestration requirements justify it.
 
 ---
 
@@ -544,8 +566,8 @@ Schema
     boundary inspection/diff/validation
 ```
 
-HigherGov does **not** initially require distributed leases, a second checkpoint protocol, an agent
-runtime, or the entire RDP/Connect feature set.
+HigherGov does **not** initially require distributed leases, a second checkpoint
+protocol, an agent runtime, or the entire RDP/Connect feature set.
 
 The practical architecture is:
 
@@ -558,12 +580,12 @@ SQL/Airtable for durable boundaries
 
 ---
 
-# Schema-drift implementation
+## Schema-drift implementation
 
-> Salvaged from the retired `productionizing.md`; this is application-enabling schema work, not a
-> parallel execution phase.
+> Salvaged from the retired `productionizing.md`; this is application-enabling schema
+> work, not a parallel execution phase.
 
-## `riko/types/schema.py`
+### `riko/types/schema.py`
 
 Add report types:
 
@@ -591,7 +613,7 @@ class SchemaDriftReport(TypedDict):
     computed_field_errors: list[str]
 ```
 
-## `riko/schema.py`
+### `riko/schema.py`
 
 Start with one simple module:
 
@@ -612,10 +634,10 @@ Behavior:
 - rename similarity -> advisory candidate only;
 - stable external field IDs -> authoritative rename detection.
 
-Do not require pandas in this module. HigherGov can provide DataFrame dtype/column information
-through an adapter.
+Do not require pandas in this module. HigherGov can provide DataFrame dtype/column
+information through an adapter.
 
-## HigherGov repository adapters
+### HigherGov repository adapters
 
 In HigherGov, add:
 
