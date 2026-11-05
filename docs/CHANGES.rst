@@ -247,9 +247,9 @@ Fixes
 
 - ``exchangerate`` now logs a warning when the response has no rate for a currency.
 
-- Fetching in a sync run no longer garbles text with no newline or only carriage-return
-  line endings, drops all but the first line of UTF-16 text, raises ``RuntimeError`` on
-  empty text, or keeps the response open after a decode failure/memoize on a local file.
+- Sync fetching no longer: garbles text with no newline or only carriage-return line
+  endings; drops all but the first line of UTF-16 text; raises ``RuntimeError`` on empty
+  text; or keeps a response open after a decode failure, or when memoizing a local file.
 
 - The ``fetchdata`` module now yields a dict instead of text for XML whose root holds
   only text, and yields nothing instead of an empty item or raising for an empty file.
@@ -539,10 +539,10 @@ Fixes
 - The ``strtransform`` module accepts a list of rule ``args`` instead of raising
   ``AttributeError``, and its ``count``/``find`` transforms may return an ``int``.
 
-- In an async run, the ``fetch`` module now honors ``conf['encoding']``.
+- Async fetching with the ``fetch`` module now honors ``conf['encoding']``.
 
-- In an async run, the ``fetchdata`` module infers the parse format from the response
-  ``Content-Type`` when the url has no extension.
+- Async fetching with the ``fetchdata`` module infers the parse format from the
+  response ``Content-Type`` when the url has no extension.
 
 - ``describe_module`` re-raises a nested ``ModuleNotFoundError`` naming the missing
   dependency, instead of returning ``None`` as if the module did not exist.
