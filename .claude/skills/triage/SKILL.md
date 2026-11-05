@@ -49,7 +49,9 @@ ships with an entry there plus a strict-xfail canary in
   prose journaling. Prove each new test fails on the old code with
   `python .claude/skills/triage/fail_first.py --ref <commit before the fix> --
   <test files> -k <selectors>` (it never touches the working tree); a test that
-  passes there either guards something else or does not probe the bug.
+  passes there either guards something else or does not probe the bug. When the fix
+  is uncommitted, pass `--old <path>=<pre-fix copy>` per fixed file instead of
+  `--ref`: it snapshots the working tree with those files swapped back.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.
