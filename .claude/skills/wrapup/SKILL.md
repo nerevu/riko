@@ -124,7 +124,12 @@ Owner semantics — each concept has one owner, update it there and nowhere else
   ask rather than guess which status doc it belongs in. Batch every such
   question into a single AskUserQuestion call in this phase.
 - **`docs/CHANGES.rst`** — user-observable changes only. No private
-  implementation-move journaling; internal refactors don't get entries.
+  implementation-move journaling; internal refactors don't get entries. When the
+  session changed a public `__init__.py`, run
+  `python .claude/skills/wrapup/surface_diff.py`: it exits 1 and names each public
+  name removed since the last release tag that neither `CHANGES.rst` nor
+  `MIGRATION.rst` mentions; add each one to the release's old→new rename list or its
+  removal bullet.
 - **`_docs/ROADMAP.md`** — only if routing/ownership itself changed.
 - **riko skill snapshot** (`~/.claude/skills/riko/references/`) — only if the
   session changed something the references describe (API surfaces, node/edge
