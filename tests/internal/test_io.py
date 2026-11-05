@@ -32,6 +32,7 @@ from riko.bado.itertools import (
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.base._sentinels import MISSING
+from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 from riko.definitions._targets import build_write
 from riko.definitions._write import WriteResult
 from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
@@ -53,7 +54,7 @@ from riko.runtime._write_session import (
     file_write_session,
     write_through,
 )
-from riko.types._enums import Formats
+from riko.types._enums import Formats, UserAgent
 from tests import aresolve, async_test, is_installed, run_python, skipif_issync
 from tests._lifecycle import ITEMS
 from tests._loopback import ForwardOnly, loopback_url
@@ -62,6 +63,7 @@ from tests._targets import RecordStore
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Generator, Iterator
 
+    from riko.types._enums import UserAgentLike
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
 
@@ -216,6 +218,24 @@ class TestLoadRssLinks:
         with pytest.raises((OSError, ValueError)):
             list(load_rss_links(html))
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="raising for an unsendable user agent in the rss link loaders is not "
+        "yet implemented: the ValueError is caught by the inline-HTML fallback, and "
+        "the url string is parsed as HTML, yielding no links",
+    )
+    @async_test
+    async def test_sync_and_async_loaders_reject_an_unsendable_user_agent(self):
+        url = "https://example.com/"
+        user_agent = "bot\r\nX-Injected: 1"
+
+        with pytest.raises(ValueError, match="Invalid user agent"):
+            await aload_rss_links(url, user_agent=user_agent)
+
+        with pytest.raises(ValueError, match="Invalid user agent"):
+            list(load_rss_links(url, user_agent=user_agent))
+
 
 class TestParseRss:
     def test_closes_the_fetched_file_when_parsing_fails(self, tmp_path, monkeypatch):
@@ -235,18 +255,39 @@ class TestParseRss:
         assert [source.closed for source in sources] == [True]
 
 
-def _read_sync(url: str) -> str:
-    with Fetch(url) as f:
+def _read_sync(url: str, user_agent: UserAgentLike | None = None) -> str:
+    with Fetch(url, user_agent=user_agent) as f:
         return f.read()
 
 
-def _read_async(url: str) -> str:
-    return run(partial(async_get, url)).text
+def _read_async(url: str, user_agent: UserAgentLike | None = None) -> str:
+    return run(partial(async_get, url, user_agent=user_agent)).text
 
 
 HTTP_READERS = [
     pytest.param(_read_sync, id="sync"),
     pytest.param(_read_async, id="async", marks=skipif_issync),
+]
+
+USER_AGENT_CASES = [
+    pytest.param(None, {f"riko/{__version__}"}, id="default"),
+    pytest.param(UserAgent.DEFAULT, {f"riko/{__version__}"}, id="default-enum"),
+    pytest.param("custom/1.0", {"custom/1.0"}, id="custom"),
+    pytest.param("random", {*DESKTOP_USER_AGENTS, *MOBILE_USER_AGENTS}, id="random"),
+    pytest.param(
+        UserAgent.RANDOM, {*DESKTOP_USER_AGENTS, *MOBILE_USER_AGENTS}, id="random-enum"
+    ),
+    pytest.param(UserAgent.DESKTOP, set(DESKTOP_USER_AGENTS), id="desktop"),
+    pytest.param(UserAgent.MOBILE, set(MOBILE_USER_AGENTS), id="mobile"),
+]
+
+USER_AGENT_REJECTIONS = [
+    pytest.param("", id="empty"),
+    pytest.param("bot\r\nX-Injected: 1", id="crlf"),
+    pytest.param("bot/1.0\t", id="tab"),
+    pytest.param("bôt/1.0", id="non-ascii"),
+    pytest.param(" bot/1.0", id="leading-space"),
+    pytest.param("bot/1.0 ", id="trailing-space"),
 ]
 
 
@@ -279,9 +320,22 @@ class TestFetch:
 
     @pytest.mark.simulated_network
     @pytest.mark.parametrize("read", HTTP_READERS)
-    def test_http_requests_send_the_default_user_agent(self, read):
+    @pytest.mark.parametrize(("user_agent", "expected"), USER_AGENT_CASES)
+    def test_http_requests_send_the_resolved_user_agent(
+        self, read, user_agent, expected
+    ):
         with loopback_url(echo="User-Agent") as url:
-            assert read(url) == f"riko/{__version__}"
+            assert read(url, user_agent) in expected
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize("read", HTTP_READERS)
+    @pytest.mark.parametrize("user_agent", USER_AGENT_REJECTIONS)
+    def test_http_requests_reject_an_unsendable_user_agent(self, read, user_agent):
+        with (
+            loopback_url(echo="User-Agent") as url,
+            pytest.raises(ValueError, match="Invalid user agent"),
+        ):
+            read(url, user_agent)
 
     @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):

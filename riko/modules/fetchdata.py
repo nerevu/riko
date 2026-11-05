@@ -65,7 +65,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `path` and `html5`.
+        objconf: The module configuration: `url`, `path`, `html5`, and `user_agent`.
 
     Returns:
 
@@ -94,7 +94,9 @@ async def async_parser(
     ext = splitext(url)[1].lstrip(".")
     path = ".".join(listize(objconf.path))
     binary = ext == "json"
-    f = await async_url_open(url, encoding=objconf.encoding, binary=binary)
+    f = await async_url_open(
+        url, encoding=objconf.encoding, binary=binary, user_agent=objconf.user_agent
+    )
     ext = ext or getattr(f, "ext", None) or ""
     content = any2dict(f, ext, objconf.html5, path=path)
     return auto_close(content, f)
@@ -113,7 +115,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `path` and `html5`.
+        objconf: The module configuration: `url`, `path`, `html5`, and `user_agent`.
 
     Returns:
 
@@ -139,7 +141,12 @@ def parser(
     ext = splitext(url)[1].lstrip(".")
     path = ".".join(listize(objconf.path))
 
-    with Fetch(url, encoding=objconf.encoding, binary=(ext == "json")) as f:
+    with Fetch(
+        url,
+        encoding=objconf.encoding,
+        binary=(ext == "json"),
+        user_agent=objconf.user_agent,
+    ) as f:
         ext = ext or f.ext
         yield from any2dict(f, ext, objconf.html5, path=path)
 
@@ -168,6 +175,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -231,6 +242,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             html5 (bool): Whether to use the HTML5 parser (default: False).
 
             encoding (str): File encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

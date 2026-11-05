@@ -57,7 +57,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`.
+        objconf: The module configuration: `url` and `user_agent`.
 
     Returns:
 
@@ -82,13 +82,15 @@ async def async_parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchsitefeed")
-    rss = await aload_rss_links(url)
+    rss = await aload_rss_links(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        content = await async_url_read(str(first.get("link")))
+        content = await async_url_read(
+            str(first.get("link")), user_agent=objconf.user_agent
+        )
         entries = parse_rss(content=content)
 
     return augment_entries(entries)
@@ -104,7 +106,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`.
+        objconf: The module configuration: `url` and `user_agent`.
 
     Returns:
 
@@ -126,13 +128,13 @@ def parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchsitefeed")
-    rss = load_rss_links(url)
+    rss = load_rss_links(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
-        entries = parse_rss(str(first.get("link")))
+        entries = parse_rss(str(first.get("link")), user_agent=objconf.user_agent)
 
     return augment_entries(entries)
 
@@ -149,6 +151,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -202,6 +208,10 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         conf (dict): The module configuration.
 
             url (str): The page to examine, local or remote. Required.
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

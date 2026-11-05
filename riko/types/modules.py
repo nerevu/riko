@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from riko.base._require_guards import TypeRequire
 
-    from ._enums import CastType, FmtLike, LocationType, SortableCastType
+    from ._enums import CastType, FmtLike, LocationType, SortableCastType, UserAgentLike
     from ._frozendict import FrozenConf
     from ._io import PathLike
     from ._scalars import BasicValue
@@ -286,6 +286,7 @@ class RegexRule(TypedDict):
 class FetchRawConf(TypedDict):
     url: Value | list[Value]
     offline: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class InputRawConf(TypedDict, total=False):
@@ -350,6 +351,7 @@ class CsvRawConf(TypedDict):
     dedupe: NotRequired[Value]
     col_names: NotRequired[Value | list[Value]]
     other_sep: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class CurrencyFormatRawConf(TypedDict, total=False):
@@ -369,18 +371,21 @@ class ExchangeRateRawConf(TypedDict, total=False):
     currency: Value
     memoize: Value
     precision: Value
+    user_agent: Value
 
 
 class FeedAutoDiscoveryRawConf(TypedDict):
     url: Value | list[Value]
     strict: NotRequired[Value]
     sort: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class FetchDataRawConf(TypedDict):
     url: Value | list[Value]
     path: NotRequired[Value]
     html5: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class FetchPageRawConf(TypedDict):
@@ -389,10 +394,12 @@ class FetchPageRawConf(TypedDict):
     end: NotRequired[Value]
     token: NotRequired[Value]
     detag: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class FetchSiteFeedRawConf(TypedDict):
     url: Value | list[Value]
+    user_agent: NotRequired[Value]
 
 
 class FetchTableRawConf(TypedDict):
@@ -405,12 +412,14 @@ class FetchTableRawConf(TypedDict):
     sanitize: NotRequired[Value]
     dedupe: NotRequired[Value]
     col_names: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class FetchTextRawConf(TypedDict):
     url: Value | list[Value]
     encoding: NotRequired[Value]
     strip_bom: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 class FilterRawRule(TypedDict):
@@ -584,6 +593,7 @@ class XpathFetchPageRawConf(TypedDict):
     url: Value | list[Value]
     xpath: NotRequired[Value]
     html5: NotRequired[Value]
+    user_agent: NotRequired[Value]
 
 
 # Parsed
@@ -684,6 +694,7 @@ class InputConf(TypedDict, total=False):
 class FetchConf(TypedDict, total=False):
     url: str
     encoding: str
+    user_agent: UserAgentLike
 
 
 class TailConf(TypedDict):
@@ -728,6 +739,7 @@ class CsvConf(TypedDict, total=False):
     skip_rows: int
     dedupe: bool
     sanitize: bool
+    user_agent: UserAgentLike
 
 
 class CurrencyFormatConf(TypedDict, total=False):
@@ -747,12 +759,14 @@ class ExchangeRateConf(TypedDict, total=False):
     encoding: str
     memoize: bool
     precision: int
+    user_agent: UserAgentLike
 
 
 class FeedAutoDiscoveryConf(TypedDict, total=False):
     url: Required[str]
     strict: bool
     sort: bool
+    user_agent: UserAgentLike
 
 
 class FetchDataConf(TypedDict):
@@ -760,6 +774,7 @@ class FetchDataConf(TypedDict):
     encoding: NotRequired[str]
     path: NotRequired[str]
     html5: NotRequired[bool]
+    user_agent: NotRequired[UserAgentLike]
 
 
 class FetchPageConf(TypedDict, total=False):
@@ -769,10 +784,12 @@ class FetchPageConf(TypedDict, total=False):
     end: NotRequired[str]
     token: NotRequired[str]
     detag: bool
+    user_agent: UserAgentLike
 
 
 class FetchSiteFeedConf(TypedDict):
     url: str
+    user_agent: NotRequired[UserAgentLike]
 
 
 class FetchTableConf(CsvConf, total=False):
@@ -783,6 +800,7 @@ class FetchTextConf(TypedDict, total=False):
     url: Required[str]
     encoding: str
     strip_bom: bool
+    user_agent: UserAgentLike
 
 
 class FilterConf(TypedDict, total=False):
@@ -929,6 +947,7 @@ class XpathFetchPageConf(TypedDict, total=False):
     xpath: str
     encoding: str
     html5: bool
+    user_agent: UserAgentLike
 
 
 require_module_conf: TypeRequire[object, AnyModuleConf] = require_from_form(

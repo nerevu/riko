@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from logging import Logger
 
+    from riko.types._enums import UserAgentLike
     from riko.types._rss import AugmentedRSSEntry, RSSEntry
     from riko.types._scalars import AnyStr
     from riko.types._values import BasicArg
@@ -45,12 +46,22 @@ logger: Logger = get_logger(__name__)
 
 @overload
 def parse_rss(
-    url: str, *, content: None = ..., **kwargs: BasicArg
+    url: str,
+    *,
+    content: None = ...,
+    user_agent: UserAgentLike | None = None,
+    **kwargs: BasicArg,
 ) -> list[ParserRSSEntry]: ...
 @overload
-def parse_rss(*, content: AnyStr, **kwargs: BasicArg) -> list[ParserRSSEntry]: ...
 def parse_rss(
-    url: BasicArg = "", *, content: AnyStr | None = None, **kwargs: BasicArg
+    *, content: AnyStr, user_agent: UserAgentLike | None = None, **kwargs: BasicArg
+) -> list[ParserRSSEntry]: ...
+def parse_rss(
+    url: BasicArg = "",
+    *,
+    content: AnyStr | None = None,
+    user_agent: UserAgentLike | None = None,
+    **kwargs: BasicArg,
 ) -> list[ParserRSSEntry]:
     """
     Fetches or reads an RSS/Atom feed and returns its parsed entries.
@@ -59,6 +70,10 @@ def parse_rss(
 
         url: URL, path, or source string used when ``content`` is not supplied.
         content: Feed content to parse directly instead of fetching ``url``.
+
+        user_agent: The HTTP ``User-Agent`` sent when fetching ``url``. A ``UserAgent``
+            member selects an agent of that kind (default: "riko/<version>").
+
         **kwargs: Additional options forwarded to ``Fetch`` when reading ``url``.
 
     Returns:
@@ -82,7 +97,7 @@ def parse_rss(
         source_name = str(url)
 
         try:
-            f = Fetch(source_name, binary=True, **kwargs)
+            f = Fetch(source_name, binary=True, user_agent=user_agent, **kwargs)
         except URLError as e:
             if "File name too long" not in str(e.reason):
                 raise

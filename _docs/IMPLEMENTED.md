@@ -124,6 +124,20 @@ timeout, and `async_url_open`/`async_url_read` (`riko/io/_async.py`) pass it to
 `httpx.TimeoutException` (async, re-exported as `TimeoutException` from
 `riko/bado/_backend.py` so tests need no direct `httpx` import).
 
+Every HTTP request sends the `User-Agent` that `resolve_user_agent`
+(`riko/types/_io.py`) picks: `riko/<version>` from `default_user_agent`
+(`riko/_package.py`) when unset or `UserAgent.DEFAULT`; a fresh draw per request from
+the generated `DESKTOP_USER_AGENTS`/`MOBILE_USER_AGENTS` pools
+(`riko/base/_user_agents.py`) for `DESKTOP`/`MOBILE`, or from both for `RANDOM`;
+otherwise the custom string, checked by `require_custom_user_agent`. The header reaches
+the sync `requests.get` call, the `urlopen` `Request` for local URLs, and the
+`AsyncClient` in `async_get`; local file reads ignore it. The ten HTTP-fetching modules
+pass their `user_agent` conf through. `manage codegen --user-agents`
+(`riko/cli/_gen_user_agents.py`) fills each pool with the 20 agents of that device type
+with the highest total share across fake-useragent's duplicate records
+(`Counter.most_common` over shares counted in integer billionths of a percent, ties in
+data order).
+
 `RIKO_*` overrides are read once by `load_settings` (`riko/base/_config.py`) into the
 frozen `Settings`. `_env_int` takes an optional `minimum` (`RIKO_CONCURRENCY_LIMIT` and
 `RIKO_DISCOVERY_TIMEOUT` ≥ 1; `RIKO_NODE_THREADS`, `RIKO_STREAMING_THRESHOLD`,

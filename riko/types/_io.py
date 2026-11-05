@@ -1,17 +1,23 @@
-"""Path and closeable I/O typing contracts and their closer getters."""
+"""Path, closeable, and HTTP I/O typing contracts and their getters and resolvers."""
 
 from __future__ import annotations
 
 from functools import partial
 from pathlib import Path
+from random import choice
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
+from riko._package import default_user_agent
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_async_callable, isinstance_strict
+from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
+
+from ._enums import UserAgent, require_custom_user_agent
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from ._enums import UserAgentLike
     from ._resource import Cleanup
     from ._wrappers import Func
 
@@ -19,6 +25,11 @@ type PathLike = str | Path
 type Closeable = SyncCloseable | AsyncCloseable
 type Closer = Func[object | Awaitable[object]]
 
+_USER_AGENT_POOLS: dict[str, tuple[str, ...]] = {
+    UserAgent.RANDOM: (*DESKTOP_USER_AGENTS, *MOBILE_USER_AGENTS),
+    UserAgent.DESKTOP: DESKTOP_USER_AGENTS,
+    UserAgent.MOBILE: MOBILE_USER_AGENTS,
+}
 ASYNC_CLOSE_MSG = (
     "a value whose only close is async cannot be closed under `for`; produce it "
     "with an async resource factory or lifecycle, or iterate with `async for`"
@@ -235,3 +246,44 @@ def require_closer[T](
         raise TypeError(msg)
 
     return closer
+
+
+def resolve_user_agent(user_agent: UserAgentLike | None = None) -> str:
+    """
+    Resolves the HTTP ``User-Agent`` a request sends.
+
+    Kwargs:
+
+        user_agent: The agent to send. A ``UserAgent`` member (or its value, e.g.,
+            ``"random"``) picks a common browser agent of that kind.
+            ``UserAgent.DEFAULT`` sends riko's own (default: "riko/<version>").
+
+    Returns:
+
+        The user agent string.
+
+    Raises:
+
+        ValueError: If ``user_agent`` is neither a ``UserAgent`` choice nor a
+            non-empty string of printable ASCII without leading or trailing whitespace.
+
+    Examples:
+
+        >>> from riko import UserAgent
+        >>>
+        >>> resolve_user_agent() == resolve_user_agent(UserAgent.DEFAULT)
+        True
+        >>> resolve_user_agent("custom/1.0")
+        'custom/1.0'
+        >>> resolve_user_agent(UserAgent.MOBILE) in MOBILE_USER_AGENTS
+        True
+
+    """
+    if user_agent is None or user_agent == UserAgent.DEFAULT:
+        resolved = default_user_agent()
+    elif pool := _USER_AGENT_POOLS.get(user_agent):
+        resolved = choice(pool)  # noqa: S311 (not security-sensitive)
+    else:
+        resolved = require_custom_user_agent(user_agent)
+
+    return resolved

@@ -2163,6 +2163,10 @@ schemeless string, so only a string that happens to contain `://` reaches `urlop
 neither loader accepts inline HTML (the module docs say "local or remote"); the
 collapsed body drops the `except ValueError` branch. Tripwire (strict xfail):
 `tests/internal/test_io.py::TestLoadRssLinks::test_sync_and_async_loaders_reject_inline_html_alike`.
+The same branch swallows the `ValueError` an unsendable `user_agent` raises, so both
+loaders yield no links instead of raising (2026-11-05 branch audit triage); dropping the
+branch fixes it, tripwire:
+`tests/internal/test_io.py::TestLoadRssLinks::test_sync_and_async_loaders_reject_an_unsendable_user_agent`.
 Same note, spooling: `seekable()`/`buffer()` (eager spool, text or bytes, a real
 `seek(0)` for meza's headerless csv in `csv.py`/`fetchtable.py`) and `ReplayReader`
 (lazy spool, bytes only, `replay()`; streamed JSON in `parsing/documents.py`), both in

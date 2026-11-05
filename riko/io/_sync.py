@@ -21,11 +21,11 @@ import mezmorize
 import requests
 from mezmorize.utils import get_cache_type
 
-from riko._package import default_user_agent
 from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
 from riko.base._paths import is_http_url, normalize_url
 from riko.base._sentinels import MISSING, is_missing_type
 from riko.coercion._canonical import repr_cache
+from riko.types._io import resolve_user_agent
 
 from ._reencode import reencode
 
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from _typeshed import WriteableBuffer
     from urllib3.response import HTTPResponse as URLLib3Response
 
+    from riko.types._enums import UserAgentLike
     from riko.types._scalars import AnyStr
     from riko.types._streams import Stream
     from riko.types._values import BasicArg
@@ -431,6 +432,7 @@ def opener(
     *,
     binary: Literal[True],
     timeout: float | None = settings.fetch_timeout,
+    user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
 @overload
@@ -443,6 +445,7 @@ def opener(
     *,
     binary: Literal[True],
     timeout: float | None = settings.fetch_timeout,
+    user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[addinfourl | URLLib3Response, str | None]: ...
 @overload
@@ -454,6 +457,8 @@ def opener(
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = settings.fetch_timeout,
+    *,
+    user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[StringIO, str | None]: ...
 @overload
@@ -465,6 +470,8 @@ def opener(
     offline: bool = ...,
     binary: Literal[False] = ...,
     timeout: float | None = settings.fetch_timeout,
+    *,
+    user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[StreamReader, str | None]: ...
 def opener(
@@ -475,6 +482,8 @@ def opener(
     offline: bool = True,
     binary: bool = False,
     timeout: float | None = settings.fetch_timeout,
+    *,
+    user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[FileLike, str | None]:
     """
@@ -496,8 +505,12 @@ def opener(
         params: Query parameters for http requests.
         offline: Whether to treat a schemeless path as a local file (not an http host).
         binary: Whether to return bytes rather than decoded text.
+
         timeout: Per-request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``, 30
             seconds). ``None``, ``0``, or ``inf`` waits forever.
+
+        user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
+            agent of that kind (default: "riko/<version>").
 
     Returns:
 
@@ -516,9 +529,9 @@ def opener(
     url = normalize_url(url, offline=offline)
     timeout = None if (not timeout) or isinf(timeout) else timeout
     r = None
+    headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     if is_http_url(url):
-        headers = {"User-Agent": default_user_agent()}
         r = requests.get(
             url, params=params, headers=headers, stream=not memoize, timeout=timeout
         )
@@ -537,7 +550,7 @@ def opener(
             encoding = r.encoding or encoding
             response = reencode(r.raw, encoding, decode=True, owner=r)
     else:
-        req = Request(url, headers={"User-Agent": default_user_agent()})  # noqa: S310
+        req = Request(url, headers=headers)  # noqa: S310
 
         if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
             response = buffer(r, binary=True) if memoize else r
@@ -566,13 +579,16 @@ def opener(
 
 
 @repr_cache
-def build_opener(memoize: bool = False, **kwargs: object) -> Opener:
+def build_opener(
+    memoize: bool = False, *, user_agent: UserAgentLike | None = None, **kwargs: object
+) -> Opener:
     """
     Builds a URL opener cached by call arguments.
 
     Kwargs:
 
         memoize: Whether the returned opener buffers responses for re-reading.
+        user_agent: The HTTP ``User-Agent`` each request resolves and sends.
 
     Returns:
 
@@ -595,7 +611,7 @@ def build_opener(memoize: bool = False, **kwargs: object) -> Opener:
         2
 
     """
-    wrapper = partial(opener, memoize=memoize, **kwargs)
+    wrapper = partial(opener, memoize=memoize, user_agent=user_agent, **kwargs)
     current_opener = wraps(opener)(wrapper)
 
     if memoize:
@@ -618,6 +634,9 @@ class Fetch[B: (Literal[True], Literal[False])]:
         memoize: Whether to buffer the body so it can be re-read.
         binary: Whether to expose bytes rather than decoded text.
 
+        user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
+            agent of that kind (default: "riko/<version>").
+
     """
 
     binary: B
@@ -630,6 +649,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         url: str = ...,
         *,
         binary: Literal[True],
+        user_agent: UserAgentLike | None = None,
         **kwargs: BasicArg | float,
     ) -> None: ...
     @overload
@@ -638,6 +658,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
         url: str = ...,
         *,
         binary: Literal[False] = ...,
+        user_agent: UserAgentLike | None = None,
         **kwargs: BasicArg | float,
     ) -> None: ...
     def __init__(
@@ -646,13 +667,19 @@ class Fetch[B: (Literal[True], Literal[False])]:
         *,
         memoize: BasicArg | float = False,
         binary: bool = False,
+        user_agent: UserAgentLike | None = None,
         **kwargs: BasicArg | float,
     ) -> None:
         # TODO: need to use separate timeouts for memoize and urlopen
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.content_type = None
         self.file = None
-        opener = build_opener(memoize=bool(url and memoize), binary=binary, **kwargs)
+        opener = build_opener(
+            memoize=bool(url and memoize),
+            user_agent=user_agent,
+            binary=binary,
+            **kwargs,
+        )
         self.file, self.content_type = opener(url)
 
     def __getattr__(self, name: str) -> object:
