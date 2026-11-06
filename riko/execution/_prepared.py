@@ -23,7 +23,7 @@ from riko.bado._util import async_partial, require_value
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
-from riko.base._guards import is_async_callable
+from riko.base._guards import is_async_callable, is_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._require_guards import (
     narrow_from_require,
@@ -32,6 +32,7 @@ from riko.base._require_guards import (
     typed_dict_keys,
     validator_from_require,
 )
+from riko.base._sentinels import SentinelValue
 from riko.definitions._nodes import (
     FROZEN_CONF,
     NO_OPTIONS,
@@ -90,6 +91,8 @@ type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
 _MODULE_FLAGS = ("loopable", "sequential_inputs")
 _CALLABLE_MODULE = "udf"
+_REFERENCE_KEYS = ("subkey", SentinelValue)
+_VALUE_SOURCE_MODULE = "strconcat"
 _EMPTY_EMBEDS: ResolvedModules = FrozenDict()
 
 
@@ -399,6 +402,17 @@ class ResolvedModule:
         return getattr(self.select_async(), "subtype", None) == "source"
 
 
+def _gen_references(value: FrozenJSON) -> Iterator[tuple[str, FrozenJSON]]:
+    if is_mapping(value):
+        yield from ((key, value[key]) for key in _REFERENCE_KEYS if key in value)
+
+        for child in value.values():
+            yield from _gen_references(child)
+    elif isinstance(value, tuple):
+        for child in value:
+            yield from _gen_references(child)
+
+
 def _gen_item_result(
     fn: Func[object],
     item: object = None,
@@ -579,6 +593,26 @@ class PreparedNode:
     def input_ports(self) -> tuple[ParsedPort, ...]:
         """The parsed target port of each incoming stream edge, in edge order."""
         return tuple(parse_port(edge.target_port) for edge in self.incoming)
+
+    @cached_property
+    def is_self_starting(self) -> bool:
+        """
+        Whether the node runs without a seed on its default input.
+
+        A source module does. So does ``strconcat`` when every part is a literal or a
+        ``terminal`` reference to a connected named input port. A ``subkey`` part reads
+        the default input item.
+        """
+        is_self_starting = self.is_source
+
+        if not is_self_starting and self.module.name == _VALUE_SOURCE_MODULE:
+            connected = {port.name for port in self.input_ports}
+            references = _gen_references(self.module.conf)
+            is_self_starting = all(
+                key == SentinelValue and name in connected for key, name in references
+            )
+
+        return is_self_starting
 
     @cached_property
     def takes_default_seed(self) -> bool:
@@ -901,6 +935,7 @@ class ExecutionPlan:
             >>> from riko.modules.hash import pipe
             >>>
             >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>>
             >>> flow = Workflow(
             ...     nodes=[a, b],
             ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))],
@@ -930,16 +965,13 @@ class ExecutionPlan:
 
         return max(demand.values(), default=0)
 
-    @cached_property
-    def _output_nodes(self) -> frozenset[str]:
-        return frozenset(endpoint.node for endpoint in self.index.outputs.values())
-
     def is_self_starting(self, node_id: str) -> bool:
         """
         Reports whether a node runs without a seed.
 
-        A source module is self-starting. So is a value feeder: a node that isn't
-        claimed by the workflow output and has at least one outgoing edge.
+        A source module or a built-in ``strconcat`` is self-starting when its conf reads
+        nothing from its default input. That means no ``subkey`` reference, and every
+        ``terminal`` reference names a connected named input port.
 
         Args:
 
@@ -953,31 +985,34 @@ class ExecutionPlan:
 
             >>> from riko import Endpoint, Workflow
             >>> from riko.ext import ModuleNode, StreamEdge
-            >>> from riko.modules.hash import pipe
+            >>> from riko.modules import hash, strconcat
             >>>
-            >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>> conf = {"part": "hello"}
+            >>> a = ModuleNode(id="a", name="strconcat", conf=conf)
+            >>> b = ModuleNode(id="b", name="hash")
+            >>>
             >>> flow = Workflow(
             ...     nodes=[a, b],
             ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:part"))],
             ...     outputs={"default": Endpoint("b", "out")},
             ... )
-            >>> module = ResolvedModule("hash", sync_pipe=pipe)
-            >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
+            >>> modules = {
+            ...     "a": ResolvedModule("strconcat", conf, sync_pipe=strconcat.pipe),
+            ...     "b": ResolvedModule("hash", sync_pipe=hash.pipe),
+            ... }
+            >>> plan = ExecutionPlan(workflow=flow, modules=modules)
             >>> plan.is_self_starting("a"), plan.is_self_starting("b")
             (True, False)
 
         """
-        outgoing = self.index.outgoing.get(node_id, ())
-        named = all(parse_port(edge.target_port).name is not None for edge in outgoing)
-        feeds_values = bool(outgoing) and named and node_id not in self._output_nodes
-        return self.nodes[node_id].is_source or feeds_values
+        return self.nodes[node_id].is_self_starting
 
     def require_self_starting(self, output: str) -> None:
         """
         Requires every default-seeded node that ``output`` runs to be self-starting.
 
         A node whose default input port gets neither an input stream nor a seed must be
-        a source module or a value feeder (see ``is_self_starting``).
+        self-starting (see ``is_self_starting``).
 
         Args:
 

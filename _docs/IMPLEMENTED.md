@@ -1239,8 +1239,9 @@ run:
   takes the default seed must be self-starting (`ExecutionPlan.require_self_starting`,
   2026-10-24) — a source module (`ResolvedModule.is_source`: declared
   `subtype == "source"`; missing metadata is not a source, a `CallableNode` never is) or
-  a value feeder (no output's node, at least one outgoing edge, all entering named
-  `in:<name>` ports) — so the default seed never reaches output; any other node that
+  a `strconcat` whose parts are literals or `terminal` references to connected named
+  ports (`PreparedNode.is_self_starting`, 2026-11-05; it replaced R4C's graph-position
+  value-feeder rule) — so the default seed never reaches output; any other node that
   takes it raises `InvalidPipelineError` ("requires a seed"). Every module node's
   `options` are applied as call options when the node is prepared, and a loop node's
   pipe receives its embed's `conf` (`PreparedNode.embed_or_self_conf`). An adapted node

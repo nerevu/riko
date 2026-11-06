@@ -52,8 +52,7 @@ def parser(
     """
     Joins the resolved parts into one string.
 
-    Unresolved parts are skipped, so a ``subkey`` that finds nothing adds
-    nothing.
+    Unresolved parts are skipped, so a ``subkey`` that finds nothing adds nothing.
 
     Args:
 

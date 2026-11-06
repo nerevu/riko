@@ -502,6 +502,15 @@ NATIVE_CLOSED_INPUTS = [
     pytest.param(_agen_endless, _apassthrough, id="generator"),
     pytest.param(ClosingAsyncIterator, _aclosing_passthrough, id="aclosing-iterator"),
 ]
+_TERMINAL_PART = {"terminal": "p", "type": "text"}
+_SUBKEY_PART = {"subkey": "word", "type": "text"}
+# A strconcat part, whether a stream reaches its in:p port, and whether it self-starts.
+STRCONCAT_STARTS = [
+    pytest.param("extVal", False, True, id="literal"),
+    pytest.param(_TERMINAL_PART, True, True, id="connected-terminal"),
+    pytest.param(_TERMINAL_PART, False, False, id="unconnected-terminal"),
+    pytest.param(_SUBKEY_PART, False, False, id="subkey"),
+]
 
 
 class TestPlanRun:
@@ -656,9 +665,29 @@ class TestPlanRun:
         assert seen == {"source": [{"x": 1}], "part": [{"t": "a"}]}
         assert ran == ["a"]
 
-    def test_run_starts_a_transformer_that_only_feeds_named_ports(self) -> None:
-        # A value feeder: its items fill another node's named input, so it never
-        # needs a seed of its own.
+    @pytest.mark.parametrize(("part", "connected", "expected"), STRCONCAT_STARTS)
+    def test_strconcat_starts_when_it_reads_no_default_input(
+        self, part: object, connected: bool, expected: bool
+    ) -> None:
+        conf = cast("Conf", {"part": part})
+        concat = ModuleNode(id="c", name="strconcat", conf=conf)
+        literal = ModuleNode(id="s", name="strconcat", conf={"part": "x"})
+        edge = StreamEdge(Endpoint("s", "out"), Endpoint("c", "in:p"))
+        nodes, edges = ([concat, literal], (edge,)) if connected else ([concat], ())
+        outputs = {"default": Endpoint("c", "out")}
+        flow = build_workflow(nodes, edges=edges, outputs=outputs)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        assert plan.is_self_starting("c") is expected
+
+        with SyncExecution() as execution:
+            if expected:
+                assert len(list(execution.run(plan))) == 1
+            else:
+                with pytest.raises(InvalidPipelineError, match="requires a seed"):
+                    execution.run(plan)
+
+    def test_run_starts_a_literal_strconcat_feeding_a_named_port(self) -> None:
         concat = ModuleNode(
             id="c",
             name="strconcat",
@@ -997,12 +1026,7 @@ class TestPlanRun:
         ):
             execution.run(plan, seed=[{"x": 1}])
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=pytest.fail.Exception,
-        reason="declaring a node as a value source is not yet implemented",
-    )
-    def test_run_never_starts_an_undeclared_value_feeder_unseeded(self) -> None:
+    def test_run_never_starts_a_non_self_starting_module_unseeded(self) -> None:
         attr = {
             "key": {"type": "text", "value": "k"},
             "value": {"terminal": "v", "type": "text"},

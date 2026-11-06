@@ -878,8 +878,8 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 plan with no nodes, streams the seed unchanged as its default output.
 
                 When omitted, every node whose default input port gets no input stream
-                must be self-starting (a source module, or a node that only feeds named
-                input ports).
+                must be self-starting (a source module or a ``strconcat`` that reads
+                nothing from its default input).
 
         Returns:
 

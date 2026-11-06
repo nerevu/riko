@@ -1181,19 +1181,17 @@ Deliver:
   second case fails outright: run unseeded, it raises "requires a seed" instead of
   starting its source root (triaged 2026-10-28). Strict xfail
   `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
-- an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule
-  starts any non-output node whose outgoing edges all enter named ports, inferred from
-  graph position alone, so an ordinary transform there runs on the internal placeholder
-  seed (`hash` feeding `itembuilder`'s `in:v` yields `{"k": 0}` unseeded). The rule
-  stays for v1 parity (the Yahoo Pipes String Builder root in `pipe_b962874`) until a
-  node can declare itself a value source; whether undeclared feeders then keep starting
-  themselves is this phase's call (if they do, delete the tripwire rather than flip it).
-  Strict xfail
-  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
-  Today's rule is asserted by
-  `TestPlanRun::test_run_starts_a_transformer_that_only_feeds_named_ports` and the
-  `is_self_starting` doctest in `riko/execution/_prepared.py`; flipping the tripwire
-  changes both.
+- value sources without a graph heuristic (triaged 2026-10-27; decided and landed
+  2026-11-05): R4C's rule started any non-output node whose outgoing edges all entered
+  named ports, so an ordinary transform there ran on the internal placeholder seed. No
+  generic node flag: a registered source starts unseeded, and so does a `strconcat`
+  whose parts are literals or `terminal` references to connected named ports (the Yahoo
+  Pipes String Builder root in `pipe_b962874`); nothing else does.
+  `PreparedNode.is_self_starting` (`riko/execution/_prepared.py`) owns the check; a
+  module capability contract replaces it only if plugins show a real need. Asserted by
+  `TestPlanRun::test_strconcat_starts_when_it_reads_no_default_input`,
+  `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`,
+  and the `is_self_starting` doctest.
 - a strict `Workflow.inputs` that holds only canonical schema mappings: today the field
   is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string
   or a non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails
