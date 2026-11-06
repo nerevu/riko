@@ -19,6 +19,9 @@ Rules (code, class, what it flags):
     RM402 close       a user callback's result is discarded (an awaitable never runs)
     RM403 close       ``async for`` over a call in an async generator, without
                       ``aclosing``
+    RM404 close       a bare ``.close()`` on a ``cast(...)`` or a generic-typed
+                      parameter (its ``close()`` may be async and return a
+                      coroutine that never runs)
     RM501 decode      ``.decode()`` on a chunk/line/raw value (use an incremental
                       decoder)
     RM502 find-slice  a ``.find()``/``.rfind()`` result sliced with no ``-1`` check
@@ -28,13 +31,14 @@ Rules (code, class, what it flags):
     RM801 parity      sync/async twins (``x``/``ax``, ``_x``/``_ax``) passing
                       different I/O keywords (``timeout``, ``encoding``, ...)
 
-Known gaps, found by running the rules on the pre-fix files: no rule for a sync
-``close()`` that returns a coroutine (bb14c8f9); an empty CSV fails inside meza; the
-exchangerate timeout rode ``Fetch``'s default, so RM801 never saw it. RM301 covers
-only the JSON-document surface of "last-wins"; most of that class's history is
-registry and id collisions, now guarded by ``Registry`` and tests. ``--since`` merges
-``REF...HEAD`` with the working-tree diff, so line numbers can drift when uncommitted
-edits sit above a committed hunk.
+Known gaps, found by running the rules on the pre-fix files: RM404 sees only a
+receiver typed in the same function, so a generic value reached through an attribute
+or a local slips past; an empty CSV fails inside meza; the exchangerate timeout rode
+``Fetch``'s default, so RM801 never saw it (the planned sync/async parity test
+covers it). RM301 covers only the JSON-document surface of "last-wins"; most of that
+class's history is registry and id collisions, now guarded by ``Registry`` and tests.
+``--since`` merges ``REF...HEAD`` with the working-tree diff, so line numbers can drift
+when uncommitted edits sit above a committed hunk.
 
 Out of scope (needs a type checker or a run): lying overloads and guards that narrow
 to ``Unknown`` (``reveal_types.py``); sync/async output parity (a harness run); a fix
@@ -124,6 +128,7 @@ EMPTY_DEFAULTS = {
 CALLBACK_NAME = re.compile(
     r"^_?(cleanup|callback|hook|on_[a-z_]+|factory|finalizer|teardown)$"
 )
+GENERIC_ANNOTATIONS = {"object", "Any"}
 CHUNK_NAME = re.compile(
     r"(chunk|raw|piece|block|part|line|buf|data|content|payload)", re.IGNORECASE
 )
@@ -336,6 +341,19 @@ def _calls_close(body: list[ast.stmt]) -> bool:
         for stmt in body
         for n in ast.walk(stmt)
     )
+
+
+def _is_narrowed(name: ast.Name) -> bool:
+    node: ast.AST | None = name
+    result = False
+
+    while node is not None and not result:
+        node = getattr(node, "_rm_parent", None)
+        result = isinstance(node, ast.If) and any(
+            isinstance(n, ast.Name) and n.id == name.id for n in ast.walk(node.test)
+        )
+
+    return result
 
 
 def _field_has_converter(value: ast.AST | None) -> bool:
@@ -622,6 +640,23 @@ class Scanner(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def _is_generic_param(self, node: ast.AST) -> bool:
+        func = self.function
+        result = False
+
+        if func is not None and isinstance(node, ast.Name):
+            args = func.args
+            params = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+            annotation = next((a.annotation for a in params if a.arg == node.id), None)
+            generic = GENERIC_ANNOTATIONS | {t.name for t in func.type_params}
+            result = (
+                annotation is not None
+                and bool(_annotation_names(annotation) & generic)
+                and not _is_narrowed(node)
+            )
+
+        return result
+
     def visit_Expr(self, node: ast.Expr) -> None:
         call = node.value
 
@@ -636,6 +671,26 @@ class Scanner(ast.NodeVisitor):
                 "close",
                 f"result of `{call.func.id}(...)` discarded; "
                 "an awaitable return never runs",
+            )
+        elif (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "close"
+            and not call.args
+            and (
+                (
+                    isinstance(call.func.value, ast.Call)
+                    and label(call.func.value.func).split(".")[-1] == "cast"
+                )
+                or self._is_generic_param(call.func.value)
+            )
+        ):
+            self.add(
+                node,
+                "RM404",
+                "close",
+                f"`{label(call.func.value)}.close()` result discarded on a generic "
+                "closeable; an async close never runs (use resolve_closer)",
             )
 
         self.generic_visit(node)

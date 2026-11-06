@@ -39,6 +39,14 @@ RULE_CASES = [
         "RM403",
         id="no-aclosing",
     ),
+    pytest.param(
+        "def f(value):\n    cast('SyncCloseable', value).close()\n",
+        "RM404",
+        id="cast-close",
+    ),
+    pytest.param(
+        "def f[T](value: T):\n    value.close()\n", "RM404", id="generic-close"
+    ),
     pytest.param("def f(raw):\n    return raw.decode('utf-8')\n", "RM501", id="decode"),
     pytest.param(
         "def f(s, m):\n    i = s.find(m)\n    return s[i:]\n", "RM502", id="find-slice"
@@ -72,6 +80,12 @@ CLEAN_CASES = [
         "async def f(s):\n    async with aclosing(g(s)) as r:\n"
         "        async for x in r:\n            yield x\n",
         id="aclosing",
+    ),
+    pytest.param("def f(stream: IO[str]):\n    stream.close()\n", id="typed-close"),
+    pytest.param(
+        "def f[T](result: T | Awaitable[T]):\n    if iscoroutine(result):\n"
+        "        result.close()\n",
+        id="narrowed-close",
     ),
     pytest.param(
         "def f(limit):\n    return limit or 10  # mistake-ok: RM101\n", id="suppressed"
