@@ -41,6 +41,11 @@ line carries, `path:line: text`; read those first and the moved spans only
 where an edit sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt`
 pass), `python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's
 wording changes, ignoring line breaks and markup; review those instead of the reflow.
+Whenever the scope touches Markdown, also run
+`python .claude/skills/tidy/heading_drift.py BASE`: it lists each heading the change
+adds, removes, or re-levels and exits 1 on a re-level or a wrapped issue number turned
+heading (`## 60:`), the start of a `rumdl fmt` cascade that demotes every later heading
+in the file. Restore the levels and escape the number (`\#60`).
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one read-only
 agent per top-level package, then applies fixes centrally. Every agent brief ends with
