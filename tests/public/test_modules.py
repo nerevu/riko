@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from riko.bado._backend import create_task_group, fail_after
+from riko.bado._backend import HTTPStatusError, create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
 from riko.base._config import DEF_CONCURRENCY_LIMIT
@@ -284,6 +284,19 @@ class TestFetchModules:
         )
         pipeline = Pipeline.from_module("fetchpage", conf=conf)
         assert list(pipeline) == await alist(pipeline) == ["café"]
+
+    @pytest.mark.simulated_network
+    @async_test
+    async def test_an_error_page_raises_asynchronously(self):
+        """A 404 page's title is an error, not an item, as in the sync run."""
+        body = b"<title>Not Found</title>"
+
+        with loopback_url(body, status=404, path="missing.html") as url:
+            conf = FetchPageConf({"url": url, "start": "<title>", "end": "</title>"})
+            pipeline = Pipeline.from_module("fetchpage", conf=conf)
+
+            with pytest.raises(HTTPStatusError):
+                await alist(pipeline)
 
     @pytest.mark.parametrize("name", FETCH_MODULES)
     def test_an_unopenable_url_raises(self, name):

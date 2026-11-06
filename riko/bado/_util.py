@@ -136,12 +136,20 @@ async def async_get(
 
         The final response after any redirects.
 
+    Raises:
+
+        httpx.HTTPStatusError: If the final response reports a client or server error (a
+            4xx or 5xx status).
+
     """
     resolved = None if timeout in {0, inf} else timeout
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     async with AsyncClient(follow_redirects=True, headers=headers) as client:
-        return await client.get(url, params=params, timeout=resolved)
+        response = await client.get(url, params=params, timeout=resolved)
+        response.raise_for_status()
+
+    return response
 
 
 @overload
