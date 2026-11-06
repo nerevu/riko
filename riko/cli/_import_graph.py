@@ -110,6 +110,17 @@ def is_type_checking(test: ast.expr) -> bool:
     return is_flag
 
 
+def is_not_type_checking(test: ast.expr) -> bool:
+    """Tells whether a test is exactly ``not TYPE_CHECKING``."""
+    match test:
+        case ast.UnaryOp(op=ast.Not(), operand=operand):
+            is_negated = is_type_checking(operand)
+        case _:
+            is_negated = False
+
+    return is_negated
+
+
 class _ImportVisitor(ast.NodeVisitor):
     def __init__(self, module: ModuleInfo) -> None:
         self.module = module
@@ -128,18 +139,28 @@ class _ImportVisitor(ast.NodeVisitor):
 
         return kind
 
+    def _visit_typing_only(self, children: list[ast.stmt]) -> None:
+        self._type_depth += 1
+
+        for child in children:
+            self.visit(child)
+
+        self._type_depth -= 1
+
     def visit_If(self, node: ast.If) -> None:
         if is_type_checking(node.test):
             self.visit(node.test)
-            self._type_depth += 1
+            self._visit_typing_only(node.body)
+
+            for child in node.orelse:
+                self.visit(child)
+        elif is_not_type_checking(node.test):
+            self.visit(node.test)
 
             for child in node.body:
                 self.visit(child)
 
-            self._type_depth -= 1
-
-            for child in node.orelse:
-                self.visit(child)
+            self._visit_typing_only(node.orelse)
         else:
             self.generic_visit(node)
 

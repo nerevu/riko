@@ -100,6 +100,9 @@ _ANY = "from typing import Any\n"
 _ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
 _UPWARD = "from riko.runtime.b import thing\n"
 _GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_NEGATED = (
+    "from typing import TYPE_CHECKING\nif not TYPE_CHECKING:\n    pass\nelse:\n    "
+)
 _LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
 
 
@@ -1300,7 +1303,12 @@ OPTIONAL_CASES = [
     pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
     pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
     pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
-    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
+    pytest.param(_try("import a") + "else:\n    import lxml\n", [6], id="try-else"),
+    pytest.param(
+        _try("import lxml.etree") + "else:\n    import lxml.html\n",
+        [],
+        id="try-else-same-module",
+    ),
     pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
     pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
     pytest.param(REQUESTS, [], id="also-required"),
@@ -1407,6 +1415,7 @@ class TestRelativeImportLint:
 ARCHITECTURE_IMPORTS = [
     pytest.param(_UPWARD, ["runtime"], id="upward"),
     pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
+    pytest.param(_NEGATED + _UPWARD, [], id="negated-type-checking-else-is-exempt"),
     pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
 ]
 

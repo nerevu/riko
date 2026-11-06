@@ -18,9 +18,10 @@ import ast
 import re
 import tomllib
 from importlib.metadata import packages_distributions
+from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
-from ._import_graph import is_type_checking
+from ._import_graph import is_not_type_checking, is_type_checking
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -87,17 +88,6 @@ def _get_requirement_name(requirement: str) -> str:
     return normalize_distribution(match.group(1))
 
 
-def _is_not_type_checking(test: ast.expr) -> bool:
-    """Tells whether a test is exactly ``not TYPE_CHECKING``."""
-    match test:
-        case ast.UnaryOp(op=ast.Not(), operand=operand):
-            is_negated = is_type_checking(operand)
-        case _:
-            is_negated = False
-
-    return is_negated
-
-
 def _catches_import_error(handler: ast.ExceptHandler) -> bool:
     """Tells whether an ``except`` clause catches a failed import."""
     match handler.type:
@@ -121,8 +111,11 @@ class RuntimeImport(NamedTuple):
     Attributes:
 
         name: The imported top-level module name.
+
         lineno: The import statement's line number.
-        guarded: Whether a ``try`` around it catches a failed import.
+
+        guarded: Whether a ``try`` catches its failed import, or it sits in the ``else``
+            of a ``try`` whose guarded body already imported its module.
 
     """
 
@@ -131,43 +124,68 @@ class RuntimeImport(NamedTuple):
     guarded: bool
 
 
-def _gen_import_nodes(
+def _gen_top_level_names(node: _ImportNode) -> Iterator[str]:
+    """Walks an import statement for each absolute name's top-level module."""
+    if isinstance(node, ast.Import):
+        names = map(attrgetter("name"), node.names)
+    else:
+        names = [] if node.level or not node.module else [node.module]
+
+    for name in names:
+        yield name.split(".")[0]
+
+
+def _gen_imports(
     node: ast.AST, typing_only: bool = False, guarded: bool = False
-) -> Iterator[tuple[_ImportNode, bool]]:
-    """Walks a tree for the import statements outside typing-only branches."""
+) -> Iterator[RuntimeImport]:
+    """Walks a tree for the run-time imports outside typing-only branches."""
     if isinstance(node, ast.Import | ast.ImportFrom):
         if not typing_only:
-            yield node, guarded
+            for name in _gen_top_level_names(node):
+                yield RuntimeImport(name, node.lineno, guarded)
     elif isinstance(node, ast.If):
         body_only = typing_only or is_type_checking(node.test)
-        orelse_only = typing_only or _is_not_type_checking(node.test)
+        orelse_only = typing_only or is_not_type_checking(node.test)
 
         for child in node.body:
-            yield from _gen_import_nodes(child, body_only, guarded)
+            yield from _gen_imports(child, body_only, guarded)
 
         for child in node.orelse:
-            yield from _gen_import_nodes(child, orelse_only, guarded)
+            yield from _gen_imports(child, orelse_only, guarded)
     elif isinstance(node, ast.Try | ast.TryStar):
         body_guarded = guarded or any(map(_catches_import_error, node.handlers))
+        proven: set[str] = set()
 
-        for child in [*node.body, *node.orelse]:
-            yield from _gen_import_nodes(child, typing_only, body_guarded)
+        for child in node.body:
+            for runtime in _gen_imports(child, typing_only, body_guarded):
+                if runtime.guarded:
+                    proven.add(runtime.name)
+
+                yield runtime
+
+        for child in node.orelse:
+            for runtime in _gen_imports(child, typing_only, guarded):
+                yield runtime._replace(
+                    guarded=runtime.guarded or runtime.name in proven
+                )
 
         for child in [*node.handlers, *node.finalbody]:
-            yield from _gen_import_nodes(child, typing_only, guarded)
+            yield from _gen_imports(child, typing_only, guarded)
     else:
         for child in ast.iter_child_nodes(node):
-            yield from _gen_import_nodes(child, typing_only, guarded)
+            yield from _gen_imports(child, typing_only, guarded)
 
 
 def gen_runtime_imports(source: str) -> Iterator[RuntimeImport]:
     """
     Walks Python source for the top-level modules it imports at run time.
 
-    An import is typing-only when it sits in the body of an ``if`` whose test is
-    exactly ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``, or in the ``else`` of
-    ``if not TYPE_CHECKING``; every other absolute import runs. It is guarded when it
-    sits in the body or ``else`` of a ``try`` whose ``except`` catches ``ImportError``.
+    An import is typing-only when it sits in the body of an ``if`` whose test is exactly
+    ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``, or in the ``else`` of ``if not
+    TYPE_CHECKING``. Every other absolute import runs. It is guarded when it sits in the
+    body of a ``try`` whose ``except`` catches ``ImportError``, or in that ``try``'s
+    ``else`` and imports a module the guarded body already imported. In the latter case,
+    the ``else`` runs only once the body has proven the module importable.
 
     Args:
 
@@ -192,14 +210,7 @@ def gen_runtime_imports(source: str) -> Iterator[RuntimeImport]:
         [('a', False), ('d', True)]
 
     """
-    for node, guarded in _gen_import_nodes(ast.parse(source)):
-        if isinstance(node, ast.Import):
-            names = [alias.name for alias in node.names]
-        else:
-            names = [] if node.level or not node.module else [node.module]
-
-        for name in names:
-            yield RuntimeImport(name.split(".")[0], node.lineno, guarded)
+    yield from _gen_imports(ast.parse(source))
 
 
 def gen_import_issues(
