@@ -210,6 +210,20 @@ identity-sensitive boundaries.
 The cache backend implementation itself is infrastructure and does not change the
 logical output of the node.
 
+Cache keys use the node's effective fingerprint (`execution-semantics.md`, "Callable
+and resource fingerprints"): the definition fingerprint plus the resolved inputs the
+node references, propagated from upstream. Scope inputs identify which data is
+requested, not whether it changed, so a different tenant or search term is a different
+key while updated records within that tenant are not. `version=` identifies semantic
+behavior, not source-data freshness; bumping it on every external change conflates
+the two. `Pipeline.cache()` is an explicit replay boundary, not a freshness-aware
+materialized view: a hit never executes upstream, so the cache cannot learn that
+upstream data changed, and a persistent or shared cache over a mutable source needs an
+explicit freshness/invalidation policy that observes changes outside the cache
+boundary and calls `invalidate()` when a refresh is due (decided 2026-11-05; keying on
+observation versions was rejected because it couples replay to monitoring and still
+needs a source check before a hit is known valid).
+
 ## 12. Non-goals
 
 Initial cache work does not add:
@@ -240,7 +254,11 @@ Required contracts:
 10. upstream failure still propagates;
 11. sync and async execution observe the same logical replay behavior;
 12. Workflow v2 round-trips CacheNode semantic policy but never cache contents/live
-    backend handles.
+    backend handles;
+13. with unchanged effective cache identity, changes to external upstream data do not
+    invalidate a completed cache entry: later executions replay the cached result
+    without executing upstream, and a new fill occurs only after explicit
+    invalidation, TTL expiry, eviction, or an effective identity change.
 
 ## 14. Definition of done
 

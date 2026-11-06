@@ -348,6 +348,12 @@ Rules:
 * the source adapter owns the syntax and validates which fields/operators are supported;
 * filter pushdown may reduce acquisition cost but must not silently change the logical
   workflow result compared with the declared source-selection semantics;
+* the adapter distinguishes a snapshot selection (a stable membership predicate such
+  as `tenant_id=123` for which the provider guarantees a complete listing) from an
+  incremental selection (a cursor, watermark, or change-window predicate such as
+  `updated_since=...`, which establishes no complete membership); the presence of
+  `source_filter` alone never implies snapshot completeness
+  ([feed-monitoring.md § 9.3](feed-monitoring.md#93-tombstones));
 * security-sensitive request fields cannot be introduced through an unvalidated filter;
 * a provider-specific executable filter language is not promoted into generic Riko core;
 * downstream `pipeline.filter(...)` remains available for transformations that cannot or

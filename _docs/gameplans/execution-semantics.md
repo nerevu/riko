@@ -956,6 +956,43 @@ lifecycle, cleanup, dependencies, and other semantic resource configuration stil
 participate. Resolved resource dependency fingerprints propagate transitively. Opaque
 external resources that affect a resumable scope require an explicit resource version.
 
+Two fingerprints exist per node (gameplan audit triage 2026-11-05):
+
+```text
+definition fingerprint  configuration, implementation/version=, declared resource
+                        identities; stable across executions with different
+                        Context.inputs
+effective fingerprint   computed at preparation from the definition fingerprint, the
+                        resolved {"input": name} values the node references, and its
+                        upstream nodes' effective fingerprints
+```
+
+Referenced inputs participate automatically and propagate through upstream
+dependencies: in `source(tenant={"input": "tenant"}) → normalize() → cache() →
+checkpoint()` a changed `tenant` changes the effective identity of all four nodes
+though only the source references it. Cache keys use the effective fingerprint plus
+the existing cache generation/policy; `StateKey` and idempotency keys use it in their
+existing `fingerprint` field. There is no scope declaration, no new public identity
+abstraction, and no new `StateKey` field. Where tenant selection comes through a
+Context resource rather than an input reference, that resource's stable configured
+identity/version participates instead; live credentials and tokens are never
+fingerprinted. Identical inputs and implementation fingerprints do not prove an
+external source's contents unchanged: cache reuse keeps its own freshness/invalidation
+semantics (`cache.md`). Ownership: R4D resolves and validates referenced inputs and
+retains their dependency information; R2B defines and computes effective fingerprints
+with canonical encoding; R5B keys caches by effective identity; R6 keys `StateKey`s
+and idempotency by it.
+
+Four identities/versions stay distinct and are never interchangeable:
+
+```text
+workflow format version         serialization grammar
+node/resource version=          semantic implementation contract
+source selection + cursor       which source records were observed and where
+                                acquisition resumes
+published data-product version  which completed output a consumer may reuse
+```
+
 Structural compilation may be cached process-locally with a bounded internal cache, but
 execution-sensitive semantic fingerprints are recomputed during execution preparation.
 Captured/global callable configuration is sampled then and is assumed semantically

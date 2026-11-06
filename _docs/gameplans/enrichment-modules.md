@@ -109,8 +109,14 @@ Unowned feature backlog on existing modules (no phase yet):
   when the start token is a stripped HTML tag, and optionally clean HTML with Tidy.
 * `xpathfetchpage`: a `detag` option matching `fetchpage`'s (GitHub issue #22).
 * `regex`: bound match time so a pathological pattern cannot stall a run (GitHub issue
-  #5). Stdlib `re` has no timeout; the options are the third-party `regex` engine's
-  `timeout=` or a per-node deadline from the common timeout policy.
+  #5). Stdlib `re` has no match timeout, and cancelling a task or imposing a per-node
+  deadline cannot reliably interrupt a running `re` operation, so a thread-level
+  timeout is insufficient: the match keeps running. The viable options are the
+  third-party `regex` engine's `timeout=` (preferred: targeted, no process-management
+  infrastructure) or process isolation that terminates the worker on timeout. No
+  in-suite tripwire: a timed `join()` detects a hang but cannot end the thread, so
+  the timeout tests run in an isolated subprocess under a hard external deadline
+  (gameplan audit triage 2026-11-05).
 * `currency` option: decided to stay `str` — it arrives as serialized configuration (so
   a `Literal` would be the shape), but enumerating ISO 4217 codes is not worth the
   upkeep.

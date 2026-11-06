@@ -386,7 +386,15 @@ Deliver:
 - explicit node/resource `id`;
 - explicit `version=` as the **authoritative** durable semantic identity;
 - stable definition metadata participating in identity;
-- best-effort automatic callable fingerprint helper using AST/config/distribution rules.
+- best-effort automatic callable fingerprint helper using AST/config/distribution rules;
+- the definition/effective fingerprint split: a node's definition fingerprint
+  (configuration, implementation/`version=`, declared resource identities) is stable
+  across executions, and its effective fingerprint, computed at preparation with
+  canonical encoding from the definition fingerprint, the resolved `{"input": name}`
+  values it references, and its upstream nodes' effective fingerprints, is what cache
+  keys (R5B) and `StateKey`s/idempotency keys (R6) use
+  ([execution-semantics.md § Callable and resource fingerprints](execution-semantics.md#callable-and-resource-fingerprints);
+  gameplan audit triage 2026-11-05).
 
 The scope reduction is intentional. Automatic introspection of arbitrary Python
 callables — AST plus closure plus globals plus decorators plus instance config plus
@@ -1199,6 +1207,13 @@ Deliver:
   `.inputs` misreports what it holds. Decide scalar-only (reject nested values at
   runtime) or JSON-valued (widen `Inputs`) alongside the declaration schema, and replace
   the converter list with a single typed converter in the same change.
+- referenced-input dependency information retained from resolution: which declared
+  inputs each node's configuration references, resolved and validated here, so that
+  the effective fingerprint (R2B,
+  [execution-semantics.md § Callable and resource fingerprints](execution-semantics.md#callable-and-resource-fingerprints))
+  can fold the resolved values into that node's identity and propagate them
+  downstream; a tenant or reporting-period input must give two executions of one
+  definition different cache keys and `StateKey`s (gameplan audit triage 2026-11-05).
 
 Audit note (2026-10-31 sibling audit): stored-workflow describe (`build_workflow_pipes`
 in `riko/runtime/_workflow_pipes.py`) returns its `description`/`inputs` dicts by
@@ -1477,7 +1492,11 @@ counted per client and reporting period, exported as one CSV record per client t
 the shipped `riko.export`. Acceptance: for every client, the run reports the billable
 user count (enabled users with at least one assigned license) and the billable device
 count (SuperOps managed assets), with reporting period and generated-at, from live APIs,
-registered through entry points with no Core edit.
+registered through entry points with no Core edit. Acceptance requires complete
+retrieval of every page of both provider listings: a failed, missing, or otherwise
+incomplete page fails that client's run rather than producing a possibly understated
+billable count, while a zero count stays valid when the API confirms an empty listing
+(gameplan audit triage 2026-11-05).
 
 **Not in M3:** R2B, R5B, R5C, R6 (no writes and no rerun de-duplication are needed for
 read-only counts); the Airtable adapter; cross-provider device reconciliation; license
@@ -1544,7 +1563,14 @@ Deliver:
   `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`);
 - node `version=` override plumbing;
 - declared resource bindings included in semantic fingerprints by resolved definition,
-  not Context lookup name.
+  not Context lookup name;
+- `FeedResult.metadata` carries observation outcome, declared source selection, and
+  completeness at result scope, established only after successful traversal, with
+  `_FeedItem.observation` staying optional per-item provenance; interpreting those
+  outcomes (unchanged, complete-empty, incremental-empty, incomplete) belongs to
+  [feed-monitoring.md § 8](feed-monitoring.md#8-m3--source-position-is-a-feedstate-payload),
+  and generic `Metadata` stays extensible rather than gaining three mandatory fields
+  (gameplan audit triage 2026-11-05).
 
 Normal parser APIs still receive values and their prepared arguments, not `_FeedItem`.
 
@@ -1585,6 +1611,12 @@ Deliver the locked cache semantics:
 
 - cache semantic identity belongs to the graph/Pipeline definition; mutable cache
   contents belong to the cache service;
+- cache keys use the node's effective fingerprint (R2B: definition fingerprint plus
+  resolved referenced inputs, propagated from upstream) with the existing
+  generation/policy, so a changed tenant or search-term input is a different key while
+  changed records within that selection are not: source-data freshness still needs
+  explicit invalidation, TTL, or an identity change
+  ([cache.md § 13](cache.md#13-testing) #13; gameplan audit triage 2026-11-05);
 - plain `.cache()` uses a deterministic bounded process-local Mezmoize `SimpleCache`
   resource;
 - explicit persistent/shared cache behavior is supplied through the normal CacheNode
@@ -1737,7 +1769,10 @@ Deliver public semantic types/protocols:
 
 Central execution derives idempotency keys from
 `(node_id, fingerprint, item_key, generation, iteration)` and injects them into R5C
-side-effecting nodes that declare support.
+side-effecting nodes that declare support. The `fingerprint` there, and in `StateKey`,
+is the R2B effective fingerprint, so executions of one definition over different
+referenced inputs never share a cursor, observation, or checkpoint; no new `StateKey`
+field or scope type is added (gameplan audit triage 2026-11-05).
 
 R6 adds checkpoint declarations to the canonical Workflow v2 structure (R4A did not
 build them) together with owner resolution, restore, persistence, CAS, cleanup, and
@@ -1808,6 +1843,14 @@ Deliver:
 - receive-time `func=` semantics in sync and async together: run at subscription
   delivery/materialization time, discard the return value, and preserve the original
   item;
+- an explicit disposition for bounded waiting (GitHub issue #82): the tripwire
+  `TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait` in
+  `tests/public/test_modules.py` exercises the legacy `receive` module this phase
+  deletes, and the object-first subscription contract specifies no `max_wait` equivalent
+  yet, so this phase either keeps bounded waiting on the new subscription API and
+  migrates that regression test, or retires the legacy timeout and closes #82 as
+  superseded; the tripwire does not simply vanish with the module (gameplan audit triage
+  2026-11-05);
 - `split()` upstream-once, active-branches-only, bounded, never lossy;
 - reachable positional output ports drive `split`'s active branch count: an explicit
   `splits` smaller than the highest reachable `out:N` index is a validation error, and a
@@ -2153,7 +2196,10 @@ as it moves to the Feed-native path. The collapsed table-reader body also owns t
 narrowing from a meza row to `Item`: the local `typings/meza/` stubs type rows as
 `dict[str, str | None]` (`read_csv`) or `object` (`read`), which the invariant `Item`
 dict union rejects, so `csv.py` and `fetchtable.py` each carry two `cast("Stream", ...)`
-today (2026-10-27 typed-boundary triage).
+today (2026-10-27 typed-boundary triage). The collapsed body also passes meza only its
+reader options instead of the whole objconf splat (`{**objconf, **renamed}` today):
+meza's `unicsv.reader` happens to filter unknown keys (`url`, `encoding`, `user_agent`)
+to its dialect set, so the splat works by accident (2026-11-05 branch audit triage).
 
 Audit note (2026-11-02 triage): the `rss/discovery.py` pair also diverges on input. The
 sync `load_rss_links` catches `ValueError` from `Fetch` and parses the string as inline

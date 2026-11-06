@@ -315,12 +315,39 @@ Key rules:
   excludes). Which observations count as complete snapshots is owned by
   [feed-monitoring.md § 9.3](feed-monitoring.md#93-tombstones).
 
+Those snapshot-destructive modes stage the complete logical input before any
+destructive operation and validate snapshot completeness and match-key uniqueness
+across the whole staged input, never per batch; reconciliation is limited to the
+declared source selection; and an incomplete traversal, duplicate key, failure, or
+early close publishes no destructive result. Staging need not be in memory: a
+temporary file, a staging table, or a provider-native transaction all serve. Ordinary
+append and non-destructive keyed upsert need no staging. A provider-backed target
+offers an equivalent safe reconciliation mechanism for a destructive mode or that
+mode is rejected at preparation; Riko never claims an atomicity the destination cannot
+deliver (gameplan audit triage 2026-11-05).
+
 Do not create a second public `sink()` API to distinguish these modes.
 
 ## 12. File/serialized writes
 
 Streaming formats such as CSV/JSONL may encode incrementally. Document formats may use
-framing or a bounded/temp artifact before atomic publication.
+framing or a bounded/temp artifact before atomic publication. Four words stay
+distinct:
+
+```text
+incremental   the input can be consumed or encoded progressively
+staging       the output is prepared without replacing the published result
+finalize      successful logical delivery publishes the replacement
+abort         discards unpublished work and preserves the previous result
+```
+
+`WriteCapabilities.incremental` therefore means incremental consumption/encoding,
+never incremental publication: a native record target consumes incrementally without
+serializing a format, and an incremental CSV writer encodes thousands of rows into a
+temporary file while the published destination stays untouched until `finalize`.
+Atomic publication and complete-input validation are separate guarantees: staging
+gives the latter, and a transaction, atomic rename, or equivalent backend mechanism is
+still required for the former (gameplan audit triage 2026-11-05).
 
 The generic rule is semantic rather than format-specific:
 
@@ -368,7 +395,15 @@ Required contracts:
 12. the legacy Python `write` module is absent after R5C while v1 serialized `write`
     migrates through the bounded v1 loader;
 13. provider waiting remains provider-owned rather than becoming a generic ActionNode
-    polling loop.
+    polling loop;
+14. a snapshot-destructive mode (merge with deletion, replace-by-snapshot) stages the
+    whole input and refuses to mutate on an undeclared or incomplete snapshot;
+15. a duplicate match key across separate input batches fails before any destructive
+    step;
+16. an incomplete traversal, failure, or early close of a replacing write aborts and
+    leaves the previous complete output readable (the last-good rule);
+17. an incremental format encodes progressively into staging while the published
+    replacement appears only at finalize.
 
 ## 14. Definition of done
 
