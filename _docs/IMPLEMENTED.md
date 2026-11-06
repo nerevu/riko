@@ -124,6 +124,15 @@ timeout, and `async_url_open`/`async_url_read` (`riko/io/_async.py`) pass it to
 `httpx.TimeoutException` (async, re-exported as `TimeoutException` from
 `riko/bado/_backend.py` so tests need no direct `httpx` import).
 
+A 4xx or 5xx response raises in both modes: `requests.HTTPError` (sync) or
+`httpx.HTTPStatusError` (async, from `raise_for_status` in `async_get`; re-exported as
+`HTTPStatusError` from `riko/bado/_backend.py`, `None` without the async extra). The
+sync `opener` registers its response's `close` on an `ExitStack` as soon as the response
+is acquired. Any later failure (status check, body read, buffering, decode) closes it; a
+memoized open closes it once the body is copied; a lazy open hands it to the returned
+stream (the reencoder's `owner`, the bare `addinfourl`, or `r.raw`). A missing
+`Content-Type` is `None` in both modes, never `""`.
+
 Every HTTP request sends the `User-Agent` that `resolve_user_agent`
 (`riko/types/_io.py`) picks: `riko/<version>` from `default_user_agent`
 (`riko/_package.py`) when unset or `UserAgent.DEFAULT`; a fresh draw per request from

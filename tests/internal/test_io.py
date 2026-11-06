@@ -11,17 +11,23 @@ from io import BytesIO, StringIO
 from os import environ, linesep
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 from urllib.request import urlopen
 from urllib.response import addinfourl
 
 import pytest
 from requests import Response
-from requests.exceptions import Timeout
+from requests.exceptions import ChunkedEncodingError, HTTPError, Timeout
 
 from riko._package import __version__
 from riko.bado import as_async, run
-from riko.bado._backend import Semaphore, TimeoutException, async_sleep, lowlevel
+from riko.bado._backend import (
+    HTTPStatusError,
+    Semaphore,
+    TimeoutException,
+    async_sleep,
+    lowlevel,
+)
 from riko.bado._util import async_get, async_return, gather_results
 from riko.bado.itertools import (
     async_map,
@@ -35,10 +41,15 @@ from riko.base._sentinels import MISSING
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 from riko.definitions._targets import build_write
 from riko.definitions._write import WriteResult
-from riko.io._async import _AsyncURLStream, _chunk_content, async_url_open
+from riko.io._async import (
+    _AsyncURLStream,
+    _chunk_content,
+    async_url_open,
+    async_url_read,
+)
 from riko.io._reencode import Reencoder, reencode
 from riko.io._serialization import CONVERSION_FUNCS
-from riko.io._sync import Fetch, ReplayReader
+from riko.io._sync import Fetch, ReplayReader, opener
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.parsing.documents import HAS_NATIVE_IJSON, IS_FASTFEEDPARSER, IS_LXML
@@ -264,9 +275,42 @@ def _read_async(url: str, user_agent: UserAgentLike | None = None) -> str:
     return run(partial(async_get, url, user_agent=user_agent)).text
 
 
+def _read_async_url(url: str) -> str:
+    return run(partial(async_url_read, url))
+
+
+def _open_async_url(url: str) -> None:
+    async def open_url() -> None:
+        async with async_url_open(url):
+            pass
+
+    run(open_url)
+
+
+def _capturing_urlopen(responses: list[addinfourl]) -> Callable[..., addinfourl]:
+    """Builds a ``urlopen`` stand-in that records each response it opens."""
+
+    def capture(*args, **kwargs) -> addinfourl:
+        responses.append(response := urlopen(*args, **kwargs))  # noqa: S310
+        return response
+
+    return capture
+
+
 HTTP_READERS = [
     pytest.param(_read_sync, id="sync"),
     pytest.param(_read_async, id="async", marks=skipif_issync),
+]
+
+HTTP_STATUS_READERS = [
+    pytest.param(_read_sync, HTTPError, id="sync"),
+    pytest.param(_read_async, HTTPStatusError, id="async-get", marks=skipif_issync),
+    pytest.param(
+        _read_async_url, HTTPStatusError, id="async-url-read", marks=skipif_issync
+    ),
+    pytest.param(
+        _open_async_url, HTTPStatusError, id="async-url-open", marks=skipif_issync
+    ),
 ]
 
 USER_AGENT_CASES = [
@@ -317,6 +361,67 @@ class TestFetch:
             Fetch("http://example.com/feed.txt", binary=True)
 
         assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("read", "error"), HTTP_STATUS_READERS)
+    @pytest.mark.parametrize("status", [404, 500])
+    def test_an_unsuccessful_status_raises(self, read, error, status):
+        """An error page is an error, not content, in sync and async reads alike."""
+        body = b"<title>Not Found</title>"
+
+        with (
+            loopback_url(body, status=status, path="missing.html") as url,
+            pytest.raises(error),
+        ):
+            read(url)
+
+    def test_an_empty_url_raises(self):
+        """A missing source is an error, not an empty stream."""
+        with pytest.raises(TypeError, match="a url is required"):
+            Fetch("")
+
+    def test_a_failed_status_check_closes_the_response(self):
+        """An HTTP error closes the streamed response before it propagates."""
+        response = Mock()
+        response.raise_for_status.side_effect = HTTPError("404 Client Error")
+
+        with (
+            patch("riko.io._sync.requests.get", return_value=response),
+            pytest.raises(HTTPError),
+        ):
+            Fetch("http://example.com/feed.txt", binary=True)
+
+        response.close.assert_called_once()
+
+    def test_a_failed_body_read_closes_the_response(self):
+        """A memoized HTTP fetch that fails mid-body closes the response."""
+        response = Mock()
+        type(response).content = PropertyMock(
+            side_effect=ChunkedEncodingError("connection broken")
+        )
+
+        with (
+            patch("riko.io._sync.requests.get", return_value=response),
+            pytest.raises(ChunkedEncodingError),
+        ):
+            Fetch("http://example.com/broken-body.txt", memoize=True, binary=True)
+
+        response.close.assert_called_once()
+
+    def test_a_failed_buffering_closes_the_response(self, tmp_path):
+        """A local fetch that fails while buffering closes the response it opened."""
+        path = tmp_path / "memo.txt"
+        path.write_text("hello")
+        responses: list[addinfourl] = []
+
+        with (
+            patch("riko.io._sync.urlopen", side_effect=_capturing_urlopen(responses)),
+            patch("riko.io._sync.buffer", side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            Fetch(path.as_uri(), memoize=True, binary=True)
+
+        assert [response.closed for response in responses] == [True]
 
     @pytest.mark.simulated_network
     @pytest.mark.parametrize("read", HTTP_READERS)
@@ -396,17 +501,27 @@ class TestFetch:
         """A memoized local fetch closes the response it buffered."""
         path = tmp_path / "memo.txt"
         path.write_text("hello")
-        responses = []
-
-        def capture(*args, **kwargs):
-            responses.append(response := urlopen(*args, **kwargs))  # noqa: S310
-            return response
+        responses: list[addinfourl] = []
 
         with (
-            patch("riko.io._sync.urlopen", side_effect=capture),
+            patch("riko.io._sync.urlopen", side_effect=_capturing_urlopen(responses)),
             Fetch(path.as_uri(), memoize=True, binary=True) as f,
         ):
             f.read()
+
+        assert [response.closed for response in responses] == [True]
+
+    def test_memoized_text_file_decodes_and_closes_its_response(self, tmp_path):
+        """A memoized local text open reads decoded text and closes the response."""
+        path = tmp_path / "memo.txt"
+        path.write_text("café", encoding="utf-8")
+        responses: list[addinfourl] = []
+
+        with patch("riko.io._sync.urlopen", side_effect=_capturing_urlopen(responses)):
+            f, _ = opener(path.as_uri(), memoize=True)
+
+        with f:
+            assert f.read() == "café"
 
         assert [response.closed for response in responses] == [True]
 

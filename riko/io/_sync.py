@@ -10,6 +10,7 @@ Attributes:
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO
 from math import isinf
@@ -88,7 +89,9 @@ def ext_from_content_type(content_type: str | None) -> str | None:
     return ext
 
 
-def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) -> str:
+def get_response_content_type(
+    r: HTTPResponse | addinfourl | requests.Response,
+) -> str | None:
     """
     Reads the response's ``Content-Type`` header.
 
@@ -98,7 +101,7 @@ def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) 
 
     Returns:
 
-        The lowercased content type, or ``""`` when the header is absent.
+        The lowercased content type, or ``None`` when the header is absent.
 
     Examples:
 
@@ -109,8 +112,8 @@ def get_response_content_type(r: HTTPResponse | addinfourl | requests.Response) 
         'application/json'
 
     """
-    content_type = r.headers.get("Content-Type", "")
-    return content_type.lower()
+    content_type = r.headers.get("Content-Type")
+    return None if content_type is None else content_type.lower()
 
 
 def get_response_encoding(
@@ -145,7 +148,7 @@ def get_response_encoding(
     """
     content_type = get_response_content_type(r)
 
-    if "charset=" in content_type:
+    if content_type is not None and "charset=" in content_type:
         ctype = content_type.split("charset=")[1]
         encoding = ctype.strip().strip('"').strip("'")
     else:
@@ -514,7 +517,7 @@ def opener(
 
     Returns:
 
-        A ``(stream, content_type)`` pair; ``content_type`` is ``None`` when the
+        A ``(stream, content_type)`` pair. ``content_type`` is ``None`` when the
         source reports none.
 
     Raises:
@@ -528,54 +531,46 @@ def opener(
     params = params or {}
     url = normalize_url(url, offline=offline)
     timeout = None if (not timeout) or isinf(timeout) else timeout
-    r = None
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
-    if is_http_url(url):
-        r = requests.get(
-            url, params=params, headers=headers, stream=not memoize, timeout=timeout
-        )
-        r.raise_for_status()
-        r.raw.decode_content = True
+    with ExitStack() as stack:
+        if is_http_url(url):
+            r = requests.get(
+                url, params=params, headers=headers, stream=not memoize, timeout=timeout
+            )
+            stack.callback(r.close)
+            r.raise_for_status()
+            r.raw.decode_content = True
 
-        if binary and memoize:
-            response = BytesIO(r.content)
-            r.close()
-        elif binary:
-            response = r.raw
-        elif memoize:
-            response = StringIO(r.text)
-            r.close()
-        else:
-            encoding = r.encoding or encoding
-            response = reencode(r.raw, encoding, decode=True, owner=r)
-    else:
-        req = Request(url, headers=headers)  # noqa: S310
-
-        if (r := urlopen(req, timeout=timeout)) and binary:  # noqa: S310
-            response = buffer(r, binary=True) if memoize else r
-        elif r:
-            encoding = get_response_encoding(r, encoding)
-
-            if not (binary or encoding):
-                encoding = ENCODING
-
-            if memoize and encoding:
-                response = buffer(r, encoding=encoding)
+            if binary and memoize:
+                response = BytesIO(r.content)
+            elif binary:
+                response = r.raw
             elif memoize:
-                response = buffer(r, binary=False)
-            elif encoding:
-                response = reencode(r.fp, encoding, decode=True, owner=r)
+                response = StringIO(r.text)
             else:
-                response = r
+                encoding = r.encoding or encoding
+                response = reencode(r.raw, encoding, decode=True, owner=r)
         else:
-            response = BytesIO() if binary else StringIO()
+            req = Request(url, headers=headers)  # noqa: S310
+            r = urlopen(req, timeout=timeout)  # noqa: S310
+            stack.callback(r.close)
 
-        if memoize:
-            r.close()
+            if binary and memoize:
+                response = buffer(r, binary=True)
+            elif binary:
+                response = r
+            elif memoize:
+                encoding = get_response_encoding(r, encoding or ENCODING)
+                response = buffer(r, encoding=encoding)
+            else:
+                encoding = get_response_encoding(r, encoding or ENCODING)
+                response = reencode(r.fp, encoding, decode=True, owner=r)
 
-    content_type = None if r is None else get_response_content_type(r)
-    return (response, content_type)
+        if not memoize:
+            stack.pop_all()
+
+    return (response, get_response_content_type(r))
 
 
 @repr_cache
@@ -630,12 +625,19 @@ class Fetch[B: (Literal[True], Literal[False])]:
 
     Args:
 
-        url: The resource to open; empty yields an empty stream.
+        url: The resource to open.
+
+    Kwargs:
+
         memoize: Whether to buffer the body so it can be re-read.
         binary: Whether to expose bytes rather than decoded text.
 
         user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
             agent of that kind (default: "riko/<version>").
+
+    Raises:
+
+        TypeError: If ``url`` is empty.
 
     """
 
@@ -646,7 +648,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     @overload
     def __init__(
         self: Fetch[Literal[True]],
-        url: str = ...,
+        url: str,
         *,
         binary: Literal[True],
         user_agent: UserAgentLike | None = None,
@@ -655,7 +657,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     @overload
     def __init__(
         self: Fetch[Literal[False]],
-        url: str = ...,
+        url: str,
         *,
         binary: Literal[False] = ...,
         user_agent: UserAgentLike | None = None,
@@ -663,7 +665,7 @@ class Fetch[B: (Literal[True], Literal[False])]:
     ) -> None: ...
     def __init__(
         self,
-        url: str = "",
+        url: str,
         *,
         memoize: BasicArg | float = False,
         binary: bool = False,
@@ -672,13 +674,9 @@ class Fetch[B: (Literal[True], Literal[False])]:
     ) -> None:
         # TODO: need to use separate timeouts for memoize and urlopen
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
-        self.content_type = None
         self.file = None
         opener = build_opener(
-            memoize=bool(url and memoize),
-            user_agent=user_agent,
-            binary=binary,
-            **kwargs,
+            memoize=bool(memoize), user_agent=user_agent, binary=binary, **kwargs
         )
         self.file, self.content_type = opener(url)
 

@@ -254,8 +254,14 @@ Fixes
 - ``exchangerate`` now logs a warning when the response has no rate for a currency.
 
 - Sync fetching no longer: garbles text with no newline or only carriage-return line
-  endings; drops all but the first line of UTF-16 text; raises ``RuntimeError`` on empty
-  text; or keeps a response open after a decode failure, or when memoizing a local file.
+  endings; drops all but the first line of UTF-16 text; or raises ``RuntimeError`` on
+  empty text. It also now closes responses after a failure while decoding, buffering, or
+  checking the status; or when memoizing a local file.
+
+- Async HTTP fetching (``riko.async_url_open``, ``riko.async_url_read``, and the async
+  ``fetch*``, ``csv``, ``exchangerate``, ``feedautodiscovery``, and ``xpathfetchpage``
+  modules) now raises ``httpx.HTTPStatusError`` for 4xx or 5xx responses, instead of
+  reading the error page as content.
 
 - The ``fetchdata`` module now yields a dict instead of text for XML whose root holds
   only text, and yields nothing instead of an empty item or raising for an empty file.
