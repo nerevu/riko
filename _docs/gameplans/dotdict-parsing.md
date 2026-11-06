@@ -77,6 +77,9 @@ The best design is:
 
 ## Recommended boundary
 
+Scheduled as R4L in [implementation-sequence.md](implementation-sequence.md) (after
+M1, before R4E; 2026-11-05).
+
 DotDict should handle:
 
 * nested paths

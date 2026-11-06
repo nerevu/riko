@@ -1262,6 +1262,39 @@ gating (`skip_if`), whose successor is still undecided. Write execution
 [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main) points
 here for merge sequencing; its correctness-audit rows remain the gate's defect half.
 
+### R4L — DotDict literal access
+
+Scheduled 2026-11-05 (gameplan audit triage) **after M1 and before R4E**, so strict conf
+validation builds on literal data access rather than under it.
+[dotdict-parsing.md](dotdict-parsing.md) owns the design (its "Recommended boundary" and
+phases 1–3); this slot owns scope and order. Until it lands, `DotDict.get` interprets
+stored business data as configuration — typed-value strings, numeric-string keys, dotted
+keys — so modules silently corrupt output (GitHub issue \#60: `count` nests
+`"riko pt. 1"` into `{"riko pt": {" 1": 1}}`).
+
+Deliver:
+
+- a raw access path (`DotDict.get_raw`, dotdict-parsing phase 1) and configuration code
+  that asks for parsing explicitly;
+- typed parsing, terminal references, subkeys, and casting moved into `parse_conf`
+  (phase 2);
+- `DotDict.get` and module output writes literal by default (phase 3), flipping the
+  strict xfails in `tests/internal/test_values.py`
+  (`TestDotDict::test_typed_value_shaped_business_data_reads_literally`,
+  `test_dot_only_key_keeps_the_empty_key`, `test_get_does_not_read_through_a_scalar`,
+  `test_numeric_string_key_reads_literally`) and
+  `tests/public/test_modules.py::TestCount::test_count_key_values_containing_dots_stay_literal`;
+- the compatibility mode for migrated `PipeDef`s (phase 4) only if the v1 migration
+  corpus needs it, scoped to the migration boundary.
+
+**Exit:**
+
+- **ADD:** literal data access and an explicit configuration-parsing path exist.
+- **MIGRATE:** every internal `DotDict.get` call that interpreted configuration uses
+  `parse_conf`; module output writes keys literally.
+- **DELETE:** no runtime path interprets business data as typed configuration; any
+  legacy typed-value compatibility is bounded to the v1 migration ingress.
+
 ### R4E — Module configuration contracts, strict conf validation, and `isasync` interface classification
 
 Scheduled 2026-10-04 **after M1 and before M2**. [extensibility.md](extensibility.md) E1
@@ -1455,11 +1488,11 @@ the point at which the announcement post (`_docs/reddit.md`) can go out. Decided
 2026-10-04:
 
 ```text
-M1  →  R4E  →  merge features → main  →  publish 0.x
+M1  →  R4L  →  R4E  →  merge features → main  →  publish 0.x
 ```
 
 Gate: M1 (which brings R4C's bare decorator form and `Pipeline.open()`, and R7's
-`subscribe`/`publish`/`split`), R4E, the
+`subscribe`/`publish`/`split`), R4L, R4E, the
 [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main) defect
 rows, and green wheel/sdist smoke steps in `publish.yml`. Its acceptance test is the
 post itself: every code sample in `_docs/reddit.md` runs against the released wheel and
