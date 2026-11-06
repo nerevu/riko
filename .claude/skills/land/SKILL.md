@@ -194,8 +194,11 @@ to an agent, which repeats their work by hand for many minutes.
    to that commit, its pre-branch-blame hunks included. A hunk that names
    something another hunk introduces goes in or after that hunk's step.
    Generated files (tier indexes, API-surface blocks,
-   verb tables) go with the step whose source change regenerates them; the
-   coverage-ratchet line in `pyproject.toml` goes in the last step. Message
+   verb tables) go with the step whose source change regenerates them. The
+   coverage-ratchet line in `pyproject.toml` goes with the step whose tests or
+   code moved it: `diff_uncovered.py --baseline-ref HEAD` names each file whose
+   missing count changed. Put it elsewhere only for a stated reason, such as a
+   later branch commit that also changes the ceiling, and say why. Message
    files: subject at most 50 characters, house tag included, and true to the
    step's diff; no body when the subject says it all (never a bullet that
    restates it), else at most five `-` bullets, one concept each, under 72
