@@ -1763,7 +1763,23 @@ front, so a failed run destroys it too. Tripwires:
 `tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
 and
 `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`,
-which share the `ATOMIC_PUBLICATION_PENDING` mark.
+which share the `ATOMIC_PUBLICATION_PENDING` mark. Early close (gameplan audit triage
+2026-11-05): this phase distinguishes incremental consumption/encoding from publication
+([effects.md § 12](effects.md#12-fileserialized-writes)). A replacing write stages its
+output and publishes only after a successful complete traversal and validation; a
+snapshot-destructive mode additionally validates match-key uniqueness across the
+complete staged input before mutating; and an early close never finalizes an incomplete
+replacement. Today `write_through`/`awrite_through` (`riko/runtime/_write_session.py`)
+finalize on a graceful `GeneratorExit`, so a consumer that stops early publishes the
+prefix as the replacement document;
+`TestWriteExecution::test_graceful_close_finalizes_prefix` in
+`tests/internal/test_io.py` pins that (its `TestAsyncWriteExecution` twin and
+`TestPipelineWrite::test_graceful_close_finalizes_prefix` in
+`tests/public/test_write.py` likewise) and flips with the tripwire
+`TestWriteExecution::test_graceful_close_keeps_original_content_for_replace` (an append
+write still finalizes what it wrote on a graceful close). Retitle the
+`WriteCapabilities.incremental` documentation (`riko/definitions/_write.py`) in the same
+change; the interrupted- and failed-replacement tripwires above stay.
 
 **Exit:**
 

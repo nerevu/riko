@@ -1318,6 +1318,19 @@ class TestWriteExecution:
         stream.close()
         assert path.read_bytes() == b'[{"x": 0}]'
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="withholding an early-closed replacement is not yet implemented",
+    )
+    def test_graceful_close_keeps_original_content_for_replace(self, tmp_path):
+        path = tmp_path / "out.json"
+        path.write_bytes(b'{"old": 1}')
+        stream = write_through(ITEMS, build_write(path, "replace"), terminating=_never)
+        next(stream)
+        stream.close()
+        assert path.read_bytes() == b'{"old": 1}'
+
     def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_always)
