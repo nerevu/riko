@@ -1,3 +1,5 @@
+.. source: ../../../../amzn-search-api/README.rst
+
 AMZN Search API |travis|
 ========================
 
@@ -32,7 +34,8 @@ Flask Extensions
 Production Server
 ^^^^^^^^^^^^^^^^^
 
-- `Memcached <https://memcached.org/>`_
+- `Memcached <https://memcached.org/>`_ (see `Cache backends`_ for which cache
+  each configuration mode uses)
 - `gunicorn <https://gunicorn.org/>`_
 - `gevent <https://www.gevent.org/>`_
 
@@ -70,7 +73,12 @@ Installation
 
 .. code-block:: bash
 
-    manage serve
+    ./manage.py serve
+
+The ``manage`` command used in the rest of this readme comes from the
+``manage.py`` package in ``dev-requirements.txt``
+(``pip install -r dev-requirements.txt``); ``./manage.py <command>`` or
+``python manage.py <command>`` works without it.
 
 Now *view the API documentation* at ``http://localhost:5000``
 
@@ -78,7 +86,8 @@ Scripts
 -------
 
 AMZN Search API comes with a built in script manager ``manage.py``. Use it to
-start the server, run tests, and initialize the database.
+start the server, run tests, and run linters. There is no database to
+initialize.
 
 Usage
 ^^^^^
@@ -116,6 +125,10 @@ Manager options
                                to 'Development'. See `config.py` for details
       -f FILE, --cfgfile=FILE  set the configuration file (absolute path)
 
+``-m`` always has a value (``Development`` when omitted), and the app loads the
+mode before it looks at a file, so ``-f`` has no effect when run through
+``manage`` (see `Known issues`_).
+
 Commands
 ^^^^^^^^
 
@@ -136,9 +149,11 @@ Type ``manage <command> --help`` to view any command's options
 
 .. code-block:: bash
 
-    manage manage serve --help
+    manage serve --help
 
 Output
+
+.. code-block:: text
 
     usage: manage serve [-?] [-t] [-T TIMEOUT] [-l] [-o] [-p PORT] [-h HOST]
 
@@ -153,6 +168,10 @@ Output
       -o, --offline         Offline mode
       -p PORT, --port PORT  The server port
       -h HOST, --host HOST  The server host
+
+``-T``, ``-l`` and ``-o`` are accepted by ``serve`` but have no effect: the
+server ignores them (``manage.py:36``). ``runserver`` takes only ``-t``, ``-p``
+and ``-h``.
 
 Example
 ^^^^^^^
@@ -176,24 +195,62 @@ variable                 description                                            
 ======================== ================================================================ =========================================
 __DOMAIN__               your custom domain                                               nerevu.com
 CACHE_TIMEOUT            amount of time (in seconds) to cache responses                   60 minutes
-API_RESULTS_PER_PAGE     the number of results returned per page                          24
-API_MAX_RESULTS_PER_PAGE the maximum number of results returned per page                  1024
+API_RESULTS_PER_PAGE     unused; the ``limit`` search parameter sets the result count     32
+API_MAX_RESULTS_PER_PAGE unused; ``limit`` has no maximum                                 1024
 API_URL_PREFIX           string to prefix each resource in the api url                    '/api/v1'
+DEBUG_MEMCACHE           use memcached (see `Cache backends`_)                            ``True`` in Production, ``False`` in
+                                                                                          Development and Test
+HOST                     the host ``manage serve`` binds to when ``-h`` is omitted        ``127.0.0.1`` (``0.0.0.0`` in
+                                                                                          Production)
 ======================== ================================================================ =========================================
+
+Cache backends
+^^^^^^^^^^^^^^
+
+The cache backend depends on the ``HEROKU`` environment variable and the
+configuration mode (``app/__init__.py:81-90``):
+
+=============================== ================= =============================================
+when                            backend           environment variables it reads
+=============================== ================= =============================================
+``HEROKU`` is set (any mode)    ``saslmemcached`` ``MEMCACHIER_SERVERS``, ``MEMCACHIER_USERNAME``,
+                                                  ``MEMCACHIER_PASSWORD``
+Production mode                 ``memcached``     ``MEMCACHE_SERVERS``
+Development and Test modes      ``simple``        none (an in-process cache)
+=============================== ================= =============================================
+
+In Production mode without ``MEMCACHE_SERVERS`` the memcached server list is
+``[None]``, so the cache is misconfigured (see `Known issues`_). ``HEROKU`` is
+not set by Heroku itself; set it yourself (``heroku config:set HEROKU=true``).
 
 Environment Variables
 ^^^^^^^^^^^^^^^^^^^^^
 
 AMZN Search API references the following environment variables:
 
-======================== ========================================
-variable                 description
-======================== ========================================
-AWS_ACCESS_KEY_ID        your AWS access key ID
-AWS_SECRET_ACCESS_KEY    your AWS access key secret
-AWS_ASSOCIATE_TAG_US     your AWS Associate tag for US region
-AWS_ASSOCIATE_TAG_UK     your AWS Associate tag for UK region
-======================== ========================================
+======================== ======================================== =================================================
+variable                 description                              when missing
+======================== ======================================== =================================================
+AWS_ACCESS_KEY_ID        your AWS access key ID                   every search request aborts (``SystemExit``)
+AWS_SECRET_ACCESS_KEY    your AWS access key secret               every search request aborts (``SystemExit``)
+AWS_ASSOCIATE_TAG_US     your AWS Associate tag for US region     the tag ``na`` is sent
+AWS_ASSOCIATE_TAG_UK     your AWS Associate tag for UK region     the tag ``na`` is sent
+HEROKU                   use the MemCachier cache and the         see `Cache backends`_
+                         ``<app>.herokuapp.com`` server name
+STAGE                    on Heroku, use the ``<app>-stage``       the production server name
+                         server name
+DIGITALOCEAN             use the ``api.nerevu.com`` server name   no server name is set (and no forced SSL)
+                         (checked only when ``HEROKU`` is unset)
+MEMCACHIER_SERVERS,      MemCachier credentials (when ``HEROKU``  see `Cache backends`_
+MEMCACHIER_USERNAME,     is set)
+MEMCACHIER_PASSWORD
+MEMCACHE_SERVERS         memcached server (Production mode)       see `Cache backends`_
+APP_SETTINGS             path to a config file, read only when    ignored
+                         neither a mode nor a file is given
+======================== ======================================== =================================================
+
+The associate tag is read per region as ``AWS_ASSOCIATE_TAG_<REGION>``. Setting
+a server name (``HEROKU`` or ``DIGITALOCEAN``) also turns on forced SSL.
 
 To set an environment variable, e.g. MY_ENV, *do the following*:
 
@@ -206,7 +263,19 @@ Usage Examples
 
 All resources live under the ``/api/v1`` prefix (they are also reachable at
 ``/<resource>/`` and ``/api/<resource>/``). Every response is JSON of the form
-``{"status": <code>, "objects": <result>}``.
+``{"status": <reason>, "objects": <result>}``, where ``status`` is the HTTP
+reason phrase of the response code (``"OK"`` for 200, ``"Bad Request"`` for
+400), not the number. The interactive Swagger UI documentation is served at the
+root URL.
+
+=============================== ====== ===================================================
+endpoint                        method description
+=============================== ====== ===================================================
+``/api/v1/search/``             GET    search Amazon (cached, see `Caching`_)
+``/api/v1/lorem/``              GET    a random "bacon ipsum" sentence (cached)
+``/api/v1/delete/<base>/``      GET    delete one cached response
+``/api/v1/reset/``              GET    delete every cached response
+=============================== ====== ===================================================
 
 *Search for items by keyword*
 
@@ -217,9 +286,53 @@ All resources live under the ``/api/v1`` prefix (they are also reachable at
 Accepts ``q`` (search term, required) plus optional ``condition``
 (``New``/``Used``), ``region`` (``US``/``UK``), and ``limit``:
 
+============= ========= ===========================================================
+parameter     default   description
+============= ========= ===========================================================
+``q``         none      the search keywords (required)
+``condition`` ``New``   item condition, ``New`` or ``Used``
+``region``    ``US``    the Amazon site to search, ``US`` or ``UK``; it also picks
+                        the ``AWS_ASSOCIATE_TAG_<REGION>`` variable
+``limit``     ``10``    the number of results to return
+============= ========= ===========================================================
+
+Every search uses ``SearchIndex=All`` and ``ResponseGroup=Medium``; these can't
+be overridden. Any other query parameter is passed through to the Amazon
+``ItemSearch`` call, and ``key``, ``secret`` and ``tag`` replace the AWS
+credentials and associate tag for that request (see `Known issues`_).
+
 .. code-block:: bash
 
     curl 'http://localhost:5000/api/v1/search/?q=guitar&condition=Used&region=UK&limit=5'
+
+A successful search returns ``objects`` as a list of records, one per item:
+
+============== ====== ============================================================
+field          type   description
+============== ====== ============================================================
+``asin``       str    Amazon Standard Identification Number
+``model``      str    model number
+``url``        str    affiliate offer URL (carries the associate tag)
+``title``      str    item title
+``price``      float  Amazon price; ``0`` when Amazon gives no price
+``country``    str    the ``region`` that was searched
+``currency``   str    currency code of ``price``
+``sales_rank`` str    Amazon sales rank, as a string
+============== ====== ============================================================
+
+Errors return the error message as ``objects``:
+
+====== ===================================================================
+status cause
+====== ===================================================================
+500    Amazon rejected the search (``SearchException``)
+503    the request to Amazon failed; reported as
+       ``Amazon Associates tag <tag> is invalid for region <region>``
+400    the region lookup failed; reported as ``region '<X>' does not exist``
+====== ===================================================================
+
+Missing ``AWS_ACCESS_KEY_ID`` or ``AWS_SECRET_ACCESS_KEY`` raises ``SystemExit``
+inside the request instead of returning an error response.
 
 *Get a random "bacon ipsum" sentence (handy for testing)*
 
@@ -232,6 +345,25 @@ Accepts ``q`` (search term, required) plus optional ``condition``
 .. code-block:: bash
 
     curl 'http://localhost:5000/api/v1/delete/lorem/'
+
+The response is ``{"objects": "Key: <url> deleted", "status": "OK"}`` whether or
+not the entry existed.
+
+Caching
+^^^^^^^
+
+``search`` and ``lorem`` responses are cached for ``CACHE_TIMEOUT`` (60
+minutes) and sent with matching ``Cache-Control: public, max-age`` and
+``Expires`` headers. The cache key is the full request URL, query string
+included, so each route alias (``/search/``, ``/api/search/``,
+``/api/v1/search/``) and each distinct query has its own entry. The delete
+route removes the entry whose URL is its own URL with ``delete/`` removed, so it
+must repeat the prefix and query string of the cached request:
+
+.. code-block:: bash
+
+    # clears the cached '/api/v1/search/?q=guitar', but not '/search/?q=guitar'
+    curl 'http://localhost:5000/api/v1/delete/search/?q=guitar'
 
 *Reset all caches*
 
@@ -426,7 +558,7 @@ Contributing
 2. Clone
 3. Code (if you are having problems committing because of git pre-commit
    hook errors, just run ``manage check`` to see what the issues are.)
-4. Use tabs **not** spaces
+4. Use spaces **not** tabs
 5. Add upstream ``git remote add upstream https://github.com/reubano/amzn-search-api.git``
 6. Rebase ``git rebase upstream/master``
 7. Test ``manage test``
@@ -437,7 +569,7 @@ Contributing
 
 1. Code (if you are having problems committing because of git pre-commit
    hook errors, just run ``manage check`` to see what the issues are.)
-2. Use tabs **not** spaces
+2. Use spaces **not** tabs
 3. Update upstream ``git fetch upstream``
 4. Rebase ``git rebase upstream/master``
 5. Test ``manage test``
@@ -457,6 +589,28 @@ About Flask
 
 `Flask <http://flask.pocoo.org>`_ is a BSD-licensed microframework for Python based on
 `Werkzeug <http://werkzeug.pocoo.org/>`_, `Jinja2 <http://jinja.pocoo.org>`_ and good intentions.
+
+Known issues
+------------
+
+- Amazon has retired the Product Advertising API 4.0 that ``python-amazon-simple-product-api``
+  (``app/api.py:9``) calls, so every search route documented here is intended; today
+  the upstream calls fail.
+- ``key``, ``secret`` and ``tag`` query parameters replace the AWS credentials
+  and associate tag for that request (``app/views.py:282-289`` passes the query
+  string to ``Amazon(**kwargs)``, which reads them at ``app/api.py:181-183``).
+- Missing AWS keys raise ``SystemExit`` inside the request handler
+  (``app/api.py:185-186``) instead of returning an error response.
+- In Production mode without ``MEMCACHE_SERVERS`` (and ``HEROKU`` unset) the
+  memcached server list is ``[None]`` (``app/__init__.py:86-88``).
+- ``-f/--cfgfile`` and ``APP_SETTINGS`` are never read when started through
+  ``manage``: ``-m`` defaults to ``Development`` (``manage.py:26-27``) and
+  ``create_app`` checks the mode first (``app/__init__.py:71-76``).
+- ``serve`` accepts ``-T``, ``-l`` and ``-o`` but ignores them (``manage.py:36``).
+- A non-integer ``limit`` raises ``ValueError`` (HTTP 500), since
+  ``int(limit)`` runs outside the error handling (``app/views.py:285``).
+- ``manage lint --strict`` runs pylint with ``tests/standard.rc``, but the file
+  is ``app/tests/standard.rc`` (``manage.py:86``).
 
 License
 -------

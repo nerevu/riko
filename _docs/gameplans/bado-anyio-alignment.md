@@ -1,41 +1,44 @@
 # bado ↔ AnyIO alignment gameplan
 
-> **Scope:** An unsequenced refinement — not yet a P-track phase; touches the
-> P7 (true async streaming) and P10 (bounded parallelism/backpressure) as-built primitives without
-> changing their contract. Purely a cleanup plan: trim `bado` helpers that AnyIO 4.14 now subsumes,
-> measured through the harness [performance.md](performance.md) owns before any primitive changes.
+> **Scope:** An unsequenced refinement — not yet a P-track phase; touches the P7 (true
+> async streaming) and P10 (bounded parallelism/backpressure) as-built primitives
+> without changing their contract. Purely a cleanup plan: trim `bado` helpers that AnyIO
+> 4.14 now subsumes, measured through the harness [performance.md](performance.md) owns
+> before any primitive changes.
 >
 > **Prerequisite:** AnyIO **4.14** (task return handles, `anyio.functools.reduce`, async
-> `itertools`). `pyproject.toml` currently pins `anyio>=4.0.0` — the replacements below require
-> bumping the `async` extra to `anyio>=4.14` first; until then they are advisory.
+> `itertools`). `pyproject.toml` currently pins `anyio>=4.0.0` — the replacements below
+> require bumping the `async` extra to `anyio>=4.14` first; until then they are
+> advisory.
 >
 > **Provenance.** Folded in from the untracked `_docs/async_eval.md` scratch analysis.
 >
-> **Ownership boundary.** [execution-semantics.md](execution-semantics.md) Appendix A owns the
-> *runtime semantics* of the async primitives (`async_map`/`async_map_stream`/`async_merge`/
-> `_pool_stream` — bounded concurrency, ordering, shared budgets, backpressure).
-> [performance.md](performance.md) owns the benchmark harness, the historical regression runner, and
-> the profiler methodology. **This** gameplan owns only the *AnyIO-version alignment audit* (which
-> `bado` helpers to remove/replace/keep) and how a measurement gates a helper replacement (§3, §4).
-> It changes no primitive contract.
+> **Ownership boundary.** [execution-semantics.md](execution-semantics.md) Appendix A
+> owns the *runtime semantics* of the async primitives
+> (`async_map`/`async_map_stream`/`async_merge`/ `_pool_stream` — bounded concurrency,
+> ordering, shared budgets, backpressure). [performance.md](performance.md) owns the
+> benchmark harness, the historical regression runner, and the profiler methodology.
+> **This** gameplan owns only the *AnyIO-version alignment audit* (which `bado` helpers
+> to remove/replace/keep) and how a measurement gates a helper replacement (§3, §4). It
+> changes no primitive contract.
 
 ## 1. AnyIO 4.14 — what changed the calculus
 
 Three additions make several older `bado` compatibility helpers reconsiderable:
 
-- **Task return handles** — `TaskGroup.start_soon()` returns a `TaskHandle`, and
-  `TaskGroup.create_task()` returns a handle whose `.return_value` can be retrieved after the group
-  exits. Removes hand-rolled index/collector bookkeeping.
-- **`anyio.functools.reduce(func, iterable, initial)`** — accepts sync **and** async iterables;
-  expects an **async** reducer.
-- **A substantial async `itertools`** (`starmap`, `batched`, `chain`, `islice`, `tee`, …) that
-  increasingly accepts both sync and async iterables — but **no** bounded-concurrency worker-pool
-  equivalent of Riko's `async_map`.
+* **Task return handles** — `TaskGroup.start_soon()` returns a `TaskHandle`, and
+  `TaskGroup.create_task()` returns a handle whose `.return_value` can be retrieved
+  after the group exits. Removes hand-rolled index/collector bookkeeping.
+* **`anyio.functools.reduce(func, iterable, initial)`** — accepts sync **and** async
+  iterables; expects an **async** reducer.
+* **A substantial async `itertools`** (`starmap`, `batched`, `chain`, `islice`, `tee`,
+  …) that increasingly accepts both sync and async iterables — but **no**
+  bounded-concurrency worker-pool equivalent of Riko's `async_map`.
 
 ## 2. Helper audit (all confirmed present in the current tree)
 
-Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.py` = `riko/bado/_util.py`,
-`itertools.py` = `riko/bado/itertools.py`.
+Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.py` =
+`riko/bado/_util.py`, `itertools.py` = `riko/bado/itertools.py`.
 
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
@@ -49,7 +52,8 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | `async_iter` | `itertools.py` | **Reduce usage, keep** | low | AnyIO itertools increasingly take sync iterables, cutting adapter need — but Riko's `cooperative=True` (scheduler checkpoints) is a real feature. Shift the model from "convert every sync iterable" to "adapt only when an API needs `AsyncIterable` or cooperative iteration." |
 | `async_map`, `async_map_stream`, `async_map_ordered_stream`, `async_merge`, `_pool_stream` | `itertools.py` | **Keep** | — | Encode Riko's concurrency/ordering/shared-budget/streaming/backpressure semantics on top of AnyIO primitives (`create_memory_object_stream`, `create_task_group`) — the layering AnyIO itself recommends, not a reinvention. |
 
-Already-AnyIO, no action: `Path`, `async_sleep`, task groups, memory streams, `CapacityLimiter`, `Semaphore`.
+Already-AnyIO, no action: `Path`, `async_sleep`, task groups, memory streams,
+`CapacityLimiter`, `Semaphore`.
 
 ## 2b. Missing async helpers (sync/async parity gaps)
 
@@ -63,56 +67,61 @@ missing — one a sync/async parity gap, one absent from both paths.
 
 ### `async_memoize`
 
-`memoize` is declared in the `Defaults` TypedDict, in `ExchangeRateConf`, and is exercised by
-`fetch`'s own doctest — but only the sync path honors it. An async pipeline that re-fetches the
-same url pays full cost every time, with no warning.
+`memoize` is declared in the `Defaults` TypedDict, in `ExchangeRateConf`, and is
+exercised by `fetch`'s own doctest — but only the sync path honors it. An async pipeline
+that re-fetches the same url pays full cost every time, with no warning.
 
-The sync path is broken too (2026-10-31 sibling audit). `fetch.parser` forwards only `encoding`, so the
-`fetch` module ignores `memoize` in both modes. A direct sync text-mode `Fetch(url, memoize=True)` for a
-local or `urlopen` URL raises `TypeError: cannot pickle 'TextIOWrapper'` and leaks the opener's
-`SpooledTemporaryFile` (HTTP text memoize works through `StringIO(r.text)`), and the cache key is the URL
+The sync path is broken too (2026-10-31 sibling audit). `fetch.parser` forwards only
+`encoding`, so the `fetch` module ignores `memoize` in both modes. A direct sync
+text-mode `Fetch(url, memoize=True)` for a local or `urlopen` URL raises
+`TypeError: cannot pickle 'TextIOWrapper'` and leaks the opener's `SpooledTemporaryFile`
+(HTTP text memoize works through `StringIO(r.text)`), and the cache key is the URL
 alone, so a text fetch after a binary fetch of the same URL returns bytes. Tripwire:
 `tests/internal/test_io.py::TestFetch::test_memoized_text_fetch_after_binary_reads_text`.
 
 Design notes:
 
-* The cache belongs at the **fetch** boundary (`async_url_read`/`async_url_open`), not in each
-  module, so every async source inherits it the way sync sources inherit `build_opener`'s.
+* The cache belongs at the **fetch** boundary (`async_url_read`/`async_url_open`), not
+  in each module, so every async source inherits it the way sync sources inherit
+  `build_opener`'s.
 * `mezmorize` is sync-only and is already slated for replacement — see
-  [rdp-connect.md](rdp-connect.md) § Milestone 10. **Do these together**: whatever replaces
-  `mezmorize` should be async-aware from the start rather than growing a second, divergent cache.
-* Keyed on the resolved url plus the arguments that change the payload (`params`, `encoding`);
-  `repr_cache` in `riko/_serialize.py` already solves the unhashable-argument problem and
-  documents the `_UNSUPPORTED` sentinel behavior.
-* Needs an eviction/TTL story that sync memoization currently ducks — a long-lived async service
-  is the likely consumer, unlike a one-shot sync script.
-* Separate the cache TTL from the network timeout. `build_opener` forwards the same `**kwargs` to
-  the opener and to `mezmorize.memoize(**kwargs)`, so one `timeout` sets both the `urlopen`
-  timeout and the cache entry lifetime (`riko/io/_sync.py` `Fetch.__init__` TODO).
-* Bound the opener memo. `build_opener` is `@repr_cache`-memoized, an unbounded store keyed on the
-  forwarded `**kwargs`, and each `memoize=True` entry builds its own mezmorize cache. Every caller
-  passes conf-level kwargs today, so it cannot grow per item (2026-10-29 unboundedness audit, latent,
-  no tripwire); keep it that way, or bound the store, when the cache moves to the fetch boundary.
+  [rdp-connect.md](rdp-connect.md) § Milestone 10. **Do these together**: whatever
+  replaces `mezmorize` should be async-aware from the start rather than growing a
+  second, divergent cache.
+* Keyed on the resolved url plus the arguments that change the payload (`params`,
+  `encoding`); `repr_cache` in `riko/_serialize.py` already solves the
+  unhashable-argument problem and documents the `_UNSUPPORTED` sentinel behavior.
+* Needs an eviction/TTL story that sync memoization currently ducks — a long-lived async
+  service is the likely consumer, unlike a one-shot sync script.
+* Separate the cache TTL from the network timeout. `build_opener` forwards the same
+  `**kwargs` to the opener and to `mezmorize.memoize(**kwargs)`, so one `timeout` sets
+  both the `urlopen` timeout and the cache entry lifetime (`riko/io/_sync.py`
+  `Fetch.__init__` TODO).
+* Bound the opener memo. `build_opener` is `@repr_cache`-memoized, an unbounded store
+  keyed on the forwarded `**kwargs`, and each `memoize=True` entry builds its own
+  mezmorize cache. Every caller passes conf-level kwargs today, so it cannot grow per
+  item (2026-10-29 unboundedness audit, latent, no tripwire); keep it that way, or bound
+  the store, when the cache moves to the fetch boundary.
 
 ### `throttle`
 
-Rate limiting has no implementation on either path. `delay` — removed as of this note — looked
-like throttling but was a fixed `await async_sleep(delay)` *before* each fetch, so under
-`async_map`/`AsyncCollection` with `connections=N` all N sleep concurrently and then fire
-together. It spaced requests only at `connections=1`.
+Rate limiting has no implementation on either path. `delay` — removed as of this note —
+looked like throttling but was a fixed `await async_sleep(delay)` *before* each fetch,
+so under `async_map`/`AsyncCollection` with `connections=N` all N sleep concurrently and
+then fire together. It spaced requests only at `connections=1`.
 
 Design notes:
 
-* Belongs alongside `connections` as a **collection/limiter-level** concern, not a per-fetch
-  conf key — concurrency and rate are the two axes of the same budget.
+* Belongs alongside `connections` as a **collection/limiter-level** concern, not a
+  per-fetch conf key — concurrency and rate are the two axes of the same budget.
 * AnyIO `CapacityLimiter` bounds concurrency but not *rate*; a token bucket over
-  `anyio.sleep` is the usual shape, and it must be **shared** across the task group to mean
-  anything (the same reason `async_map`'s `budget` semaphore is shared).
-* Per-host rather than global is what polite crawling actually needs; a single global rate is
-  the easy case and probably the right first step.
-* Interacts with retry/backoff in
-  [execution-semantics.md](execution-semantics.md) — a 429 handler and a throttle want the same
-  limiter, so design them together rather than bolting a sleep onto the fetch.
+  `anyio.sleep` is the usual shape, and it must be **shared** across the task group to
+  mean anything (the same reason `async_map`'s `budget` semaphore is shared).
+* Per-host rather than global is what polite crawling actually needs; a single global
+  rate is the easy case and probably the right first step.
+* Interacts with retry/backoff in [execution-semantics.md](execution-semantics.md) — a
+  429 handler and a throttle want the same limiter, so design them together rather than
+  bolting a sleep onto the fetch.
 
 ## 2c. Encoding-resolution precedence (sync/async parity)
 
@@ -143,8 +152,8 @@ Notes:
 * One helper (`resolve_encoding(explicit, charset)`) shared by `async_url_open`,
   `async_url_read`, and `_io.opener` — the divergence is a missing argument, not a
   different algorithm, so a second copy would drift again. It replaces
-  `riko/io/_sync.py::get_response_encoding` (declared charset, else `def_encoding`), which
-  keeps its off-table `get_` name until then rather than being renamed twice.
+  `riko/io/_sync.py::get_response_encoding` (declared charset, else `def_encoding`),
+  which keeps its off-table `get_` name until then rather than being renamed twice.
 * `fetchpage` (and any other async source that reads `objconf.encoding`) has to forward
   it; grep for `async_url_read(` / `async_url_open(` call sites when this lands.
 * Do this **with** `async_memoize` (§ 2b): encoding is part of the cache key, so both
@@ -152,21 +161,23 @@ Notes:
 * Self-describing documents add a link to the chain: an XML declaration or HTML
   `<meta charset>` should win over the default (but not over an explicit `encoding`).
   `fetchdata` decodes XML/HTML as text with the configured encoding, so a latin-1 or
-  UTF-16 document raises `UnicodeDecodeError` in both modes; reading those formats as bytes
-  lets the parser honor the declaration. That needs an explicit `encoding` to be
+  UTF-16 document raises `UnicodeDecodeError` in both modes; reading those formats as
+  bytes lets the parser honor the declaration. That needs an explicit `encoding` to be
   distinguishable from the `ENCODING` default first (the `Defaults` merge erases the
   difference today). Tripwire:
   `tests/public/test_modules.py::TestFetchdata::test_declared_encoding_is_honored`.
 * Line-ending translation is part of decode parity. `async_url_open` decodes through
   `TextIOWrapper` with universal newlines (`\r` and `\r\n` become `\n`); the sync
-  `Reencoder` translates only when the source contains no `\n` at all, so `b"abc\rdef\n"`
-  reads `'abc\ndef\n'` async and `'abc\rdef\n'` sync. Pick one policy (translate
-  everywhere, or `newline=""` everywhere) in the same shared decode helper. Tripwire:
+  `Reencoder` translates only when the source contains no `\n` at all, so
+  `b"abc\rdef\n"` reads `'abc\ndef\n'` async and `'abc\rdef\n'` sync. Pick one policy
+  (translate everywhere, or `newline=""` everywhere) in the same shared decode helper.
+  Tripwire:
   `tests/internal/test_io.py::TestAsyncUrlOpen::test_sync_and_async_decode_line_endings_alike`.
 
 ## 3. The replacement decision rule
 
-Do **not** require the AnyIO version to be faster. Replace a `bado` helper when **all** hold:
+Do **not** require the AnyIO version to be faster. Replace a `bado` helper when **all**
+hold:
 
 1. AnyIO now provides the same semantics;
 2. cancellation/exception behavior is at least as good;
@@ -174,51 +185,59 @@ Do **not** require the AnyIO version to be faster. Replace a `bado` helper when 
 4. benchmark performance is not materially worse;
 5. the replacement deletes meaningful Riko code/tests.
 
-So `Riko 41.2 µs` vs `AnyIO 42.0 µs` can still favor AnyIO if it removes 60 lines of concurrency
-machinery — but `Riko 40 µs` vs `AnyIO 30 µs` does **not** justify replacing `_pool_stream` if the
-AnyIO version loses backpressure or nested-budget semantics.
+So `Riko 41.2 µs` vs `AnyIO 42.0 µs` can still favor AnyIO if it removes 60 lines of
+concurrency machinery — but `Riko 40 µs` vs `AnyIO 30 µs` does **not** justify replacing
+`_pool_stream` if the AnyIO version loses backpressure or nested-budget semantics.
 
 ## 4. Measuring a helper replacement
 
-**Benchmark first, profile second.** A profiler shows where time goes; an A/B benchmark shows
-whether swapping a Riko abstraction for an AnyIO primitive actually helps. The harness and its
-audit (the fetch group simulates no latency, so async has nothing to win against until the latency
-fixture lands), the matrix design, and the profiler choices are owned by
-[performance.md](performance.md) §2 and §4; this section keeps only what the helper audit adds.
+**Benchmark first, profile second.** A profiler shows where time goes; an A/B benchmark
+shows whether swapping a Riko abstraction for an AnyIO primitive actually helps. The
+harness and its audit (the fetch group simulates no latency, so async has nothing to win
+against until the latency fixture lands), the matrix design, and the profiler choices
+are owned by [performance.md](performance.md) §2 and §4; this section keeps only what
+the helper audit adds.
 
-**Instrument `_pool_stream` instead of only CPU-profiling it** — AnyIO memory streams expose
-`.statistics()`:
+**Instrument `_pool_stream` instead of only CPU-profiling it** — AnyIO memory streams
+expose `.statistics()`:
 
 ```text
 current_buffer_used, tasks_waiting_send, tasks_waiting_receive
 ```
 
-Buffer full + `tasks_waiting_send` high ⇒ consumer-bound; buffer empty + `tasks_waiting_receive`
-high ⇒ producer/I/O-bound. Far more actionable than "`await result_recv.receive()` took 70% of wall
-time."
+Buffer full + `tasks_waiting_send` high ⇒ consumer-bound; buffer empty +
+`tasks_waiting_receive` high ⇒ producer/I/O-bound. Far more actionable than
+"`await result_recv.receive()` took 70% of wall time."
 
 ## 5. Sequenced first changes
 
-1. ~~**Delete `async_partial`.**~~ Kept 2026-11-02 as `maybe_async`'s deferred-call form (see its table row).
-2. **Delete or rewrite `gather_results`** via AnyIO 4.14 task handles (fixes the `None`-dropping bug regardless).
+1. ~~**Delete `async_partial`.**~~ Kept 2026-11-02 as `maybe_async`'s deferred-call form
+   (see its table row).
+2. **Delete or rewrite `gather_results`** via AnyIO 4.14 task handles (fixes the
+   `None`-dropping bug regardless).
 3. **Delete `async_json`;** use `response.json()` directly.
-4. **Audit `async_reduce` callers** (`sort`, `regex`); delegate to `anyio.functools.reduce` if the strict async-reducer contract suffices.
-5. ~~Rename `maybe_deferred` → `maybe_await`/`invoke`~~ **Done 2026-10-10 as `maybe_async`** (after
-   discord.py's `maybe_coroutine`; "coroutine" is reserved in riko). No `a` prefix: it has no sync
-   twin. `as_awaitable` (the value-taking form) keeps its name.
+4. **Audit `async_reduce` callers** (`sort`, `regex`); delegate to
+   `anyio.functools.reduce` if the strict async-reducer contract suffices.
+5. ~~Rename `maybe_deferred` → `maybe_await`/`invoke`~~
+   **Done 2026-10-10 as `maybe_async`** (after discord.py's `maybe_coroutine`;
+   "coroutine" is reserved in riko). No `a` prefix: it has no sync twin. `as_awaitable`
+   (the value-taking form) keeps its name.
 6. **Mark `async_return`** a next-major deprecation candidate (stable public API).
-7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless profiling shows a real problem.
-8. **Repair the benchmark harness** ([performance.md](performance.md) §2 — the missing latency
-   fixture) before using it to justify any of the above.
+7. **Leave** `coop_reduce`, `async_map*`, `async_merge`, `_pool_stream` alone unless
+   profiling shows a real problem.
+8. **Repair the benchmark harness** ([performance.md](performance.md) §2 — the missing
+   latency fixture) before using it to justify any of the above.
 
-The first three remove abstractions **without losing Riko-specific functionality**; `async_map*`/
-`_pool_stream` are exactly where Riko *should* own an abstraction over AnyIO.
+The first three remove abstractions **without losing Riko-specific functionality**;
+`async_map*`/ `_pool_stream` are exactly where Riko *should* own an abstraction over
+AnyIO.
 
 ## 6. Relationship to the P-track
 
-- **Unsequenced** — no phase owns this yet; slot it as refinement alongside P10's async carryovers.
-- **`async_return` deprecation is SemVer-gated** (stable surface) → schedule with the P12+ stable-error/
-  public-surface work and the migration-shim log tracked in
+* **Unsequenced** — no phase owns this yet; slot it as refinement alongside P10's async
+  carryovers.
+* **`async_return` deprecation is SemVer-gated** (stable surface) → schedule with the
+  P12+ stable-error/ public-surface work and the migration-shim log tracked in
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md), not a patch release.
-- **Live status** (done/next/suite count) lives only in the
+* **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.

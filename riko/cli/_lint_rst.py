@@ -9,9 +9,10 @@ from glob import glob
 from io import StringIO
 from os.path import basename, dirname, exists, isdir, join
 from pathlib import Path
+from subprocess import check_output
 from typing import TYPE_CHECKING
 
-from riko.base._paths import DOCS_DIR, ROOT_DIR
+from riko.base._paths import ARCHIVE_DIR, ROOT_DIR
 
 try:
     from docutils import nodes
@@ -37,13 +38,25 @@ def get_anchor(text: str) -> str:
     return kept.replace(" ", "-")
 
 
+def _gen_tracked_docs() -> Iterator[str]:
+    """Lists the tracked RST files outside the archived internal docs."""
+    args = ["git", "ls-files", "*.rst"]
+
+    for name in check_output(args, cwd=ROOT_DIR, text=True).splitlines():
+        if not (path := ROOT_DIR / name).is_relative_to(ARCHIVE_DIR):
+            yield str(path)
+
+
 def _gen_doc_files(where: str | None) -> Iterator[str]:
     """Resolves the RST files to check."""
-    for location in where.split(" ") if where else [ROOT_DIR, DOCS_DIR]:
-        if isdir(location):
-            yield from glob(str(Path(location) / "*.rst"))
-        elif Path(location).suffix == ".rst":
-            yield str(location)
+    if where:
+        for location in where.split(" "):
+            if isdir(location):
+                yield from glob(str(Path(location) / "*.rst"))
+            elif Path(location).suffix == ".rst":
+                yield str(location)
+    else:
+        yield from _gen_tracked_docs()
 
 
 def _render_rst(path: str) -> tuple[str, document]:

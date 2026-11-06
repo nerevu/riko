@@ -2,8 +2,9 @@
 
 ## 1. Mission
 
-Define Riko's provider-neutral side-effect contract: `Pipeline.write()`, first-class action nodes,
-completion/result reporting, and the boundary between graph semantics and concrete provider adapters.
+Define Riko's provider-neutral side-effect contract: `Pipeline.write()`, first-class
+action nodes, completion/result reporting, and the boundary between graph semantics and
+concrete provider adapters.
 
 This plan owns:
 
@@ -25,36 +26,39 @@ It consumes:
 
 ## 2. One public write effect
 
-`write()` is a public Pipeline operation/effect, not a public module category and not a terminal by
-definition:
+`write()` is a public Pipeline operation/effect, not a public module category and not a
+terminal by definition:
 
 ```python
 pipeline = pipeline.write(target, format=...)
 ```
 
-On success, input records continue downstream unchanged. If the write is the graph leaf, ordinary
-iteration naturally makes it terminal; if more nodes follow, chaining continues.
+On success, input records continue downstream unchanged. If the write is the graph leaf,
+ordinary iteration naturally makes it terminal; if more nodes follow, chaining
+continues.
 
-There is no *permanent* separate public `sink()` terminal. A second permanent verb would encode
-terminality and reconciliation as a separate surface even though both are properties of the write
-operation/graph position. The interim fluent `sink()` that once shipped as a bridge (drain the
-stream, return a `WriteResult`) was deleted with the v1 pipe classes at the v1 cutover; a `write()`
-at a graph leaf provides terminal consumption.
+There is no *permanent* separate public `sink()` terminal. A second permanent verb would
+encode terminality and reconciliation as a separate surface even though both are
+properties of the write operation/graph position. The interim fluent `sink()` that once
+shipped as a bridge (drain the stream, return a `WriteResult`) was deleted with the v1
+pipe classes at the v1 cutover; a `write()` at a graph leaf provides terminal
+consumption.
 
 Compatibility is intentionally asymmetric:
 
-- the interim fluent `sink()` verb is already gone, and any remaining sink-specific discovery
-  surface is removed at the R5C clean-break, not deprecated; there is no alias, deprecation period, or
-  loader compatibility, and no persisted-workflow obligation because no serialized `SinkNode` ever
-  existed;
+- the interim fluent `sink()` verb is already gone, and any remaining sink-specific
+  discovery surface is removed at the R5C clean-break, not deprecated; there is no
+  alias, deprecation period, or loader compatibility, and no persisted-workflow
+  obligation because no serialized `SinkNode` ever existed;
 - the shipped `riko.modules.write` Python module remains only until R5C replaces it with
-  `Pipeline.write()` / `WriteNode`, then is removed with no deprecated wrapper or discovery entry;
-- serialized `PipeDef`s (pipe definitions) that contain the legacy `write` module are migrated at the v1
-  loader boundary to canonical `WriteNode` during the bounded v1 compatibility window owned by
-  `extensibility.md`.
+  `Pipeline.write()` / `WriteNode`, then is removed with no deprecated wrapper or
+  discovery entry;
+- serialized `PipeDef`s (pipe definitions) that contain the legacy `write` module are
+  migrated at the v1 loader boundary to canonical `WriteNode` during the bounded v1
+  compatibility window owned by `extensibility.md`.
 
-Useful writer/adapter/codec mechanics may be refactored behind `WriteNode`; retaining implementation
-mechanics does not retain either superseded public API.
+Useful writer/adapter/codec mechanics may be refactored behind `WriteNode`; retaining
+implementation mechanics does not retain either superseded public API.
 
 ## 3. Target, Format, Resource
 
@@ -74,9 +78,9 @@ ReadNode / WriteNode
     operation-specific acquisition or mutation semantics
 ```
 
-Target does not own live clients. Resource bindings do not become durable Target data. Write mode,
-keys, reconciliation policy, or per-operation idempotency options belong to the write operation, not
-to reusable Target identity unless genuinely target-wide.
+Target does not own live clients. Resource bindings do not become durable Target data.
+Write mode, keys, reconciliation policy, or per-operation idempotency options belong to
+the write operation, not to reusable Target identity unless genuinely target-wide.
 
 Concrete Target granularity follows actual backends/providers:
 
@@ -103,7 +107,8 @@ TEXT
 ...
 ```
 
-Pure Python serialization such as list/tuple conversion is not a Target/Format write backend.
+Pure Python serialization such as list/tuple conversion is not a Target/Format write
+backend.
 
 ## 4. Read versus write versus action
 
@@ -128,7 +133,8 @@ write records to FILE/AIRTABLE/Postgres  -> WriteNode
 sync Intune device / reset endpoint      -> ActionNode
 ```
 
-Do not force provider commands into fake write modes merely to reuse destination vocabulary.
+Do not force provider commands into fake write modes merely to reuse destination
+vocabulary.
 
 ## 5. WriteNode semantics
 
@@ -140,57 +146,64 @@ input record
     -> same logical record downstream
 ```
 
-A write may buffer internally when the destination format requires framing/atomic publication, but
-that buffering must not change the Pipeline-level pass-through contract.
+A write may buffer internally when the destination format requires framing/atomic
+publication, but that buffering must not change the Pipeline-level pass-through
+contract.
 
-`WriteNode` executes through the existing private write-session mechanism (`build_write` →
-`WriteSession`); there is no separate effect-specific writer. The fluent verbs that first drove the
-sessions were deleted at the v1 cutover, so `WriteNode` is their next caller. Terminality (a `write`
-at a graph leaf) versus passthrough (more nodes follow) is a consumption difference, not a distinct
-node family — R5C adds the canonical caller, not a second implementation.
+`WriteNode` executes through the existing private write-session mechanism (`build_write`
+→ `WriteSession`); there is no separate effect-specific writer. The fluent verbs that
+first drove the sessions were deleted at the v1 cutover, so `WriteNode` is their next
+caller. Terminality (a `write` at a graph leaf) versus passthrough (more nodes follow)
+is a consumption difference, not a distinct node family — R5C adds the canonical caller,
+not a second implementation.
 
-**Targets without a path (open, R5C).** `WriteNode.from_prepared` records a target's `backend`
-and its `dest` when it has one; a native target object without `dest` (for example a keyed
-`AIRTABLE` record store) is not recorded, so the node alone cannot reach it. R5C decides how a
-`WriteNode` carries such a live target, presumably as a Context resource binding (extensibility
-E3.7: "Resource bindings to live clients are separate"). Tripwire:
+**Targets without a path (open, R5C).** `WriteNode.from_prepared` records a target's
+`backend` and its `dest` when it has one; a native target object without `dest` (for
+example a keyed `AIRTABLE` record store) is not recorded, so the node alone cannot reach
+it. R5C decides how a `WriteNode` carries such a live target, presumably as a Context
+resource binding (extensibility E3.7: "Resource bindings to live clients are separate").
+Tripwire:
 `tests/public/test_write.py::TestPipelineWrite::test_passthrough_reaches_a_target_without_a_path`
 (under the class-level write-node xfail). Its sibling
-`tests/public/test_write.py::TestPipelineWrite::test_non_file_target_execution_unsupported` makes
-the same call but expects `UnsupportedTargetError`, so when R5C flips `WRITE_NODE_PENDING` it must
-be rewritten against a target that stays unreachable, or retired.
+`tests/public/test_write.py::TestPipelineWrite::test_non_file_target_execution_unsupported`
+makes the same call but expects `UnsupportedTargetError`, so when R5C flips
+`WRITE_NODE_PENDING` it must be rewritten against a target that stays unreachable, or
+retired.
 
-**Composed and wrapped writes (R5C).** `a | Pipeline().write(dest)` already composes (`|` appends
-any workflow); running it waits on `WriteNode` execution, pinned by
+**Composed and wrapped writes (R5C).** `a | Pipeline().write(dest)` already composes
+(`|` appends any workflow); running it waits on `WriteNode` execution, pinned by
 `tests/public/test_write.py::TestPipelineWrite::test_composes_after_a_chain`.
 `tests/public/test_write.py::TestPipelineWrite::test_jsonl_has_no_array` is contained in
 `tests/public/test_write.py::TestPipelineWrite::test_replace_defers_truncation_until_consumed`
 (same `.jsonl` bytes) and merges into it at the flip. The private
-`write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their input stream `source`
-(the **source** reserved term means a creating module); rename it when `WriteNode` becomes their
-caller rather than ahead of it (triage 2026-10-25). When `WriteNode` execution lands and the `WRITE_NODE_PENDING` tripwires in
-`tests/public/test_write.py` flip, trim the internal copies that assert the same bytes and errors through
-`write_through` (`tests/internal/test_io.py` `TestWriteExecution`/`TestAsyncWriteExecution`/`TestSink`,
-plus `TestJsonl::test_singleton_has_no_array` and `TestCsv::test_passthrough_singleton_preserves_schema`),
-keeping only what has no public path: termination, the async
-terminate/throw cases (triage 2026-10-28).
+`write_through`/`awrite_through` in `riko/runtime/_write_session.py` still name their
+input stream `source` (the **source** reserved term means a creating module); rename it
+when `WriteNode` becomes their caller rather than ahead of it (triage 2026-10-25). When
+`WriteNode` execution lands and the `WRITE_NODE_PENDING` tripwires in
+`tests/public/test_write.py` flip, trim the internal copies that assert the same bytes
+and errors through `write_through` (`tests/internal/test_io.py`
+`TestWriteExecution`/`TestAsyncWriteExecution`/`TestSink`, plus
+`TestJsonl::test_singleton_has_no_array` and
+`TestCsv::test_passthrough_singleton_preserves_schema`), keeping only what has no public
+path: termination, the async terminate/throw cases (triage 2026-10-28).
 
-The write session stays concerned with **delivery only**. Per-item provenance/lineage is not the
-session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the appropriate record/value
-into the write effect and maintains lineage externally, rather than teaching the session about pipeline
-provenance.
+The write session stays concerned with **delivery only**. Per-item provenance/lineage is
+not the session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the
+appropriate record/value into the write effect and maintains lineage externally, rather
+than teaching the session about pipeline provenance.
 
-Successful completion aggregates per write node and emits a `WriteResult` through `EventSink`.
-`WriteResult` is out-of-band execution information, not a replacement stream value.
+Successful completion aggregates per write node and emits a `WriteResult` through
+`EventSink`. `WriteResult` is out-of-band execution information, not a replacement
+stream value.
 
-A provider/file adapter may report useful counts/metadata such as created/updated/deleted/bytes or
-artifact identity where its contract can do so truthfully. Core does not require every backend to
-invent unsupported counts.
+A provider/file adapter may report useful counts/metadata such as
+created/updated/deleted/bytes or artifact identity where its contract can do so
+truthfully. Core does not require every backend to invent unsupported counts.
 
 ## 6. ActionNode semantics
 
-`ActionNode` is a first-class node family with provider-owned stable `name` and schema-validated
-`params`:
+`ActionNode` is a first-class node family with provider-owned stable `name` and
+schema-validated `params`:
 
 ```json
 {
@@ -203,13 +216,15 @@ invent unsupported counts.
 }
 ```
 
-`params` are named action parameters validated by the registered action contract. They are distinct
-from module `conf`; `conf` is reserved for `ModuleNode` parser/module configuration.
+`params` are named action parameters validated by the registered action contract. They
+are distinct from module `conf`; `conf` is reserved for `ModuleNode` parser/module
+configuration.
 
-Like write, an action passes its input record through unchanged on success and emits `ActionResult`
-out-of-band through `EventSink`.
+Like write, an action passes its input record through unchanged on success and emits
+`ActionResult` out-of-band through `EventSink`.
 
-Actions are not part of `Modules`; they have their own registered provider/action vocabulary.
+Actions are not part of `Modules`; they have their own registered provider/action
+vocabulary.
 
 ## 7. EventSink boundary
 
@@ -219,8 +234,8 @@ The execution layer owns one event transport:
 pipeline = pipeline.with_execution(event_sink=events)
 ```
 
-This gameplan defines effect-specific event/result values; it does not create effect-specific
-callbacks or a parallel observer lifecycle.
+This gameplan defines effect-specific event/result values; it does not create
+effect-specific callbacks or a parallel observer lifecycle.
 
 Typical flow:
 
@@ -234,13 +249,14 @@ ActionNode succeeds
     -> original records continue
 ```
 
-Optional OpenTelemetry/CLI/UI consumers subscribe to the same execution event model through their
-own adapters.
+Optional OpenTelemetry/CLI/UI consumers subscribe to the same execution event model
+through their own adapters.
 
 ## 8. Sync/async adaptation
 
-Targets/actions may provide sync, async, or both implementations. The private execution layer adapts
-once at preparation/execution boundaries using its shared worker/portal machinery.
+Targets/actions may provide sync, async, or both implementations. The private execution
+layer adapts once at preparation/execution boundaries using its shared worker/portal
+machinery.
 
 Adapters must not create private event loops, portals, executors, or task groups.
 
@@ -252,50 +268,86 @@ Execution derives the common idempotency key from:
 (node_id, fingerprint, item_key, generation, iteration)
 ```
 
-An effect contract declares whether/how the backend can honor that key. A retryable/resumable effect
-that cannot honor idempotency fails validation unless the operation explicitly opts out according to
-the common execution policy.
+An effect contract declares whether/how the backend can honor that key. A
+retryable/resumable effect that cannot honor idempotency fails validation unless the
+operation explicitly opts out according to the common execution policy.
 
-Retries reuse the same idempotency key; retries never create a new generation merely because an
-attempt failed.
+Retries reuse the same idempotency key; retries never create a new generation merely
+because an attempt failed.
 
-Provider-native version/ETag/request-id mechanisms should be used where they provide the same safety
-more directly than re-hashing content.
+Provider-native version/ETag/request-id mechanisms should be used where they provide the
+same safety more directly than re-hashing content.
 
 ## 10. Completion and failure
 
-A successful write/action result is emitted only after the operation has met that adapter's success
-contract. For asynchronous provider jobs, the provider layer may return/track an `OperationHandle`;
-provider waiting remains owned by `provider-integrations.md`.
+A successful write/action result is emitted only after the operation has met that
+adapter's success contract. For asynchronous provider jobs, the provider layer may
+return/track an `OperationHandle`; provider waiting remains owned by
+`provider-integrations.md`.
 
 Failure rules:
 
 - failed required write/action fails according to common error/retry policy;
 - no successful `WriteResult`/`ActionResult` is emitted for a failed operation;
-- partial downstream side effects cannot be rolled back by Riko merely because later execution fails;
+- partial downstream side effects cannot be rolled back by Riko merely because later
+  execution fails;
 - checkpoint advancement must not cross a failed required effect;
 - cancellation/cleanup uses execution-owned lifetime primitives.
 
 ## 11. Write modes and reconciliation
 
-Append/merge/replace/delete/upsert-style vocabulary may be normalized as write-operation semantics
-when the Target supports them. Capability validation happens before source consumption where
-possible.
+Append/merge/replace/delete/upsert-style vocabulary may be normalized as write-operation
+semantics when the Target supports them. Capability validation happens before source
+consumption where possible.
 
 Key rules:
 
 - keyed/destructive modes declare their required keys/identity explicitly;
 - unsupported modes fail preparation rather than silently degrading;
-- destructive provider operations may additionally require plan/approval policy from higher-level
-  provider/Operations-as-Code owners;
-- a Target's supported capabilities do not make every operation safe by default.
+- destructive provider operations may additionally require plan/approval policy from
+  higher-level provider/Operations-as-Code owners;
+- a Target's supported capabilities do not make every operation safe by default;
+- a mode that deletes or replaces records absent from the input (merge with deletion,
+  replace-by-snapshot) requires the input to be declared a complete snapshot and
+  validates match-key uniqueness before any destructive step; a partial or paginated
+  input never implies completeness (Duckstring's `merge_table` treats every missing key
+  as a deletion and skips the duplicate-key check, which is the failure mode this rule
+  excludes). Which observations count as complete snapshots is owned by
+  [feed-monitoring.md § 9.3](feed-monitoring.md#93-tombstones).
+
+Those snapshot-destructive modes stage the complete logical input before any
+destructive operation and validate snapshot completeness and match-key uniqueness
+across the whole staged input, never per batch; reconciliation is limited to the
+declared source selection; and an incomplete traversal, duplicate key, failure, or
+early close publishes no destructive result. Staging need not be in memory: a
+temporary file, a staging table, or a provider-native transaction all serve. Ordinary
+append and non-destructive keyed upsert need no staging. A provider-backed target
+offers an equivalent safe reconciliation mechanism for a destructive mode or that
+mode is rejected at preparation; Riko never claims an atomicity the destination cannot
+deliver (gameplan audit triage 2026-11-05).
 
 Do not create a second public `sink()` API to distinguish these modes.
 
 ## 12. File/serialized writes
 
-Streaming formats such as CSV/JSONL may encode incrementally. Document formats may use framing or a
-bounded/temp artifact before atomic publication.
+Streaming formats such as CSV/JSONL may encode incrementally. Document formats may use
+framing or a bounded/temp artifact before atomic publication. Four words stay
+distinct:
+
+```text
+incremental   the input can be consumed or encoded progressively
+staging       the output is prepared without replacing the published result
+finalize      successful logical delivery publishes the replacement
+abort         discards unpublished work and preserves the previous result
+```
+
+`WriteCapabilities.incremental` therefore means incremental consumption/encoding,
+never incremental publication: a native record target consumes incrementally without
+serializing a format, and an incremental CSV writer encodes thousands of rows into a
+temporary file while the published destination stays untouched until `finalize`.
+Atomic publication and complete-input validation are separate guarantees: staging
+gives the latter, and a transaction, atomic rename, or equivalent backend mechanism is
+still required for the former (gameplan audit triage 2026-11-05).
 
 The generic rule is semantic rather than format-specific:
 
@@ -305,14 +357,20 @@ successful publication -> WriteResult
 failed/cancelled publication -> no successful result; clean partial artifact best-effort
 ```
 
-Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace` destinations
-for writing when the session is acquired, truncating the file before any record arrives, so an
-aborted replace write destroys the prior file instead of leaving it intact. A strict xfail in
-`tests/internal/test_io.py` marks it; the fix stages the replacement and publishes it only on
-`finalize`.
+A replacing publication keeps the previous complete output readable until the
+replacement publishes, so a consumer sees either the last successful output or the new
+one, never a partial one (the last-good rule Duckstring applies to every published
+data product; here it holds at durable output boundaries only, not at every item a
+node yields).
 
-Detailed codecs remain owned by `artifact-conversion.md`; concrete FILE adapter mechanics belong to
-`connectors.md`.
+Current gap: the shipped file write session opens incremental (CSV/JSONL) `replace`
+destinations for writing when the session is acquired, truncating the file before any
+record arrives, so an aborted replace write destroys the prior file instead of leaving
+it intact. A strict xfail in `tests/internal/test_io.py` marks it; the fix stages the
+replacement and publishes it only on `finalize`.
+
+Detailed codecs remain owned by `artifact-conversion.md`; concrete FILE adapter
+mechanics belong to `connectors.md`.
 
 ## 13. Testing
 
@@ -320,22 +378,36 @@ Required contracts:
 
 1. sync and async write both pass original records downstream unchanged;
 2. graph-leaf write and mid-pipeline write share the same semantics;
-3. successful write emits one node-level completion result with truthful backend metadata;
+3. successful write emits one node-level completion result with truthful backend
+   metadata;
 4. failed write emits no success result;
 5. ActionNode behaves analogously while remaining a distinct node family;
 6. idempotency key remains stable across retries;
-7. unsupported target mode/resource/action fails before source consumption when knowable;
-8. sync-only and async-only target/action implementations adapt through the common execution bridge;
+7. unsupported target mode/resource/action fails before source consumption when
+   knowable;
+8. sync-only and async-only target/action implementations adapt through the common
+   execution bridge;
 9. cancellation cleans up resources without detached tasks;
-10. Workflow v2 contains serializable Target/Format/resource references, never live handles;
-11. the unreleased `sink()` surface has no compatibility alias or serialized loader form;
-12. the legacy Python `write` module is absent after R5C while v1 serialized `write` migrates through
-    the bounded v1 loader;
-13. provider waiting remains provider-owned rather than becoming a generic ActionNode polling loop.
+10. Workflow v2 contains serializable Target/Format/resource references, never live
+    handles;
+11. the unreleased `sink()` surface has no compatibility alias or serialized loader
+    form;
+12. the legacy Python `write` module is absent after R5C while v1 serialized `write`
+    migrates through the bounded v1 loader;
+13. provider waiting remains provider-owned rather than becoming a generic ActionNode
+    polling loop;
+14. a snapshot-destructive mode (merge with deletion, replace-by-snapshot) stages the
+    whole input and refuses to mutate on an undeclared or incomplete snapshot;
+15. a duplicate match key across separate input batches fails before any destructive
+    step;
+16. an incomplete traversal, failure, or early close of a replacing write aborts and
+    leaves the previous complete output readable (the last-good rule);
+17. an incremental format encodes progressively into staging while the published
+    replacement appears only at finalize.
 
 ## 14. Definition of done
 
-Riko has one provider-neutral effect model: `write` for record mutation/reconciliation and `action`
-for provider commands, both pass logical records through, both report outcomes through the common
-EventSink, and concrete providers can implement them without redefining execution, identity, or
-lifecycle semantics.
+Riko has one provider-neutral effect model: `write` for record mutation/reconciliation
+and `action` for provider commands, both pass logical records through, both report
+outcomes through the common EventSink, and concrete providers can implement them without
+redefining execution, identity, or lifecycle semantics.

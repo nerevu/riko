@@ -36,23 +36,30 @@ at call sites.
   `riko/coercion/_configs.py`. `DynamicConf` lives in
   `riko/coercion/_dynamic_conf.py`. Edit the hand-maintained config contracts, not
   the generated objconf file.
-- **Names** — `riko/cli/_gen_names.py` derives both
-  `riko/modules/_names.py` (`Modules`/`Sources`/`Transforms`/`Sinks`) and
-  `riko/types/_module_ids.py` (`ModuleId`/`LoopableModuleId`/`BUILTIN_MODULE_IDS`) from the runtime
-  module catalog. Both artifacts are deterministic and generated; never hand-edit
-  them.
+- **Names** — `riko/cli/_gen_names.py` derives both `riko/modules/_names.py`
+  (`Modules`/`Sources`/`Transforms`/`Sinks`) and `riko/types/_module_ids.py`
+  (`ModuleId`/`LoopableModuleId`/`BUILTIN_MODULE_IDS`) from the runtime module catalog.
+  Both artifacts are deterministic and generated; never hand-edit them.
 - **API surface** — `riko/cli/_gen_api_surface.py` rewrites only the marked name
   blocks in `_docs/API_SURFACE.md` from the private declarations in
   `riko/base/_api_surface.py`. Surrounding prose stays hand-maintained.
 - **Verb tables** — `riko/cli/_gen_verbs.py` (`manage codegen --verbs`) rewrites the
   marked blocks in `CONTRIBUTING.rst` (`verbs`/`verb-pairs`, grid tables) and
-  `CLAUDE.md` (the compact `verb-rules`/`verb-pairs`, Markdown) from `riko/base/_verbs.py`, which `manage lint --docstrings` also
-  reads to match each summary's verb to its function name; `manage lint --docs`
-  flags stale blocks. Surrounding prose stays hand-maintained.
-- **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) generates each
-  whole `tests/<tier>/__init__.py`: the generated-file header naming its command, then a docstring
-  holding the tier's summary (`TIER_SUMMARIES`) and its `Index (file, ...)` rows from the tier
-  files' `Test<Subject>` classes. Edit the summary in the generator, never in the file.
+  `CLAUDE.md` (the compact `verb-rules`/`verb-pairs`, Markdown) from
+  `riko/base/_verbs.py`, which `manage lint --docstrings` also reads to match each
+  summary's verb to its function name; `manage lint --docs` flags stale blocks.
+  Surrounding prose stays hand-maintained.
+- **Test index** — `riko/cli/_gen_tier_index.py` (`manage codegen --tests`) generates
+  each whole `tests/<tier>/__init__.py`: the generated-file header naming its command,
+  then a docstring holding the tier's summary (`TIER_SUMMARIES`) and its
+  `Index (file, ...)` rows from the tier files' `Test<Subject>` classes. Edit the
+  summary in the generator, never in the file.
+- **User agents** — `riko/cli/_gen_user_agents.py` (`manage codegen --user-agents`)
+  writes `riko/base/_user_agents.py`, the `UserAgent` pools: `DESKTOP_USER_AGENTS` and
+  `MOBILE_USER_AGENTS`, each the 20 most common distinct agents of that device type in
+  the installed `fake-useragent`'s bundled `browsers.jsonl` (a lint-group dependency,
+  read without network). `UserAgent.RANDOM` draws from both. The drift guard in
+  `tests/internal/test_codegen.py` skips when `fake-useragent` is not installed.
 
 Tests under `tests/internal/` byte/structure-check generated outputs so source and
 generated artifacts cannot drift silently.
@@ -60,11 +67,11 @@ generated artifacts cannot drift silently.
 ## Pipeline fixtures
 
 `tests/workflows/*.json` and `examples/workflows/*.json` are workflow documents
-(`WorkflowDocument`s) — exactly what `Workflow.serialize` emits by default: indented, with sorted
-keys and a trailing newline — and the v2 runtime executes them directly. They are hand-maintained
-sources, not generated output. `tests/internal/test_codegen.py` reparses
-and reserializes each file, so a committed fixture that drifts from canonical form
-fails there.
+(`WorkflowDocument`s) — exactly what `Workflow.serialize` emits by default: indented,
+with sorted keys and a trailing newline — and the v2 runtime executes them directly.
+They are hand-maintained sources, not generated output. `tests/internal/test_codegen.py`
+reparses and reserializes each file, so a committed fixture that drifts from canonical
+form fails there.
 
 The `tests/pyworkflows/pipe_*.py` and `examples/pyworkflows/pipe_*.py` modules are a
 reduced covering set of hand-maintained typed probes. Their job is to put the
@@ -77,19 +84,23 @@ The compiler implementation lives under `riko/runtime/`; workflow loading lives 
 `riko/definitions/`:
 
 - `riko/runtime/_compile.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`.
-- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges, and outputs; `Workflow.index` builds it, and validation and execution planning both read it.
+- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus
+  `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning
+  `_normalize.py`/`_migrate.py`/`_serialize.py`.
+- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges,
+  and outputs; `Workflow.index` builds it, and validation and execution planning both
+  read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
 - `riko/types/_pipedef.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
   all three are exported on `riko.types`.
 
 The console scripts are v2-native. `riko/cli/_document.py` is their one document front
-door (`read_document`, `require_workflow`). `build-workflow` reads through `Workflow.parse`,
-which detects whether a document is a serialized `PipeDag`, a serialized `PipeDef`, or a
-`WorkflowDocument` (`get_document_shape`) unless `--format` pins the `DocumentShape`.
-`build-workflow` is the only lenient reader — it accepts all three
-and always emits a `WorkflowDocument`; `compile-workflow` and `run-pipe` go through
-`require_workflow`, which refuses anything older. The v1 compiler was deleted at
+door (`read_document`, `require_workflow`). `build-workflow` reads through
+`Workflow.parse`, which detects whether a document is a serialized `PipeDag`, a
+serialized `PipeDef`, or a `WorkflowDocument` (`get_document_shape`) unless `--format`
+pins the `DocumentShape`. `build-workflow` is the only lenient reader — it accepts all
+three and always emits a `WorkflowDocument`; `compile-workflow` and `run-pipe` go
+through `require_workflow`, which refuses anything older. The v1 compiler was deleted at
 cutover step 5 (2026-10-03).
 
 ## Discovery enums & export formats
@@ -160,51 +171,53 @@ sync when source is moved between package groups.
   `python -m riko.cli.manage`. Tox uses the module form to avoid that ambiguity.
 - **`uv`.** Use `uv run --active ...` when the current shell environment should win
   over the default `.venv`.
-- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked`
-  and runs ruff through `uv run --no-sync`; tox uses the lock runner. The pre-commit
-  ruff hooks are `language: python` local hooks pinning `ruff==<locked>` in pre-commit's
-  own environment, so they need neither `uv` on the Git client's `PATH` nor an active
-  venv (`uv run --active` without `VIRTUAL_ENV` silently falls back to a stale
-  `.venv`). That pin is the one copy of a locked version outside `uv.lock`:
-  `manage upgrade` rewrites it and `manage lint --deps` fails when it drifts. Upgrades
-  happen locally: `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package`
-  per `--package`) and syncs the active environment with every group and extra. Both hold
-  to `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
+- **`uv.lock` is the only tool-version source.** CI installs with `uv sync --locked` and
+  runs ruff and rumdl through `uv run --no-sync`; tox uses the lock runner. The
+  pre-commit ruff and rumdl hooks are `language: python` local hooks pinning
+  `ruff==<locked>` and `rumdl==<locked>` in pre-commit's own environment, so they need
+  neither `uv` on the Git client's `PATH` nor an active venv (`uv run --active` without
+  `VIRTUAL_ENV` silently falls back to a stale `.venv`). Those pins are the only copies
+  of locked versions outside `uv.lock`: `manage upgrade` rewrites them and
+  `manage lint --deps` fails when one drifts. Upgrades happen locally:
+  `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package` per `--package`) and
+  syncs the active environment with every group and extra. Both hold to
+  `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
   security fix included, so an urgent one needs uv's `exclude-newer-package` override
-  for that package. `--daily` skips when
-  `.cache/last-upgrade` holds today's date, which only a successful full upgrade and
-  sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never reaches tox (not in `pass_env`)
-  and must not be added; `[tool.pyright] pythonPlatform = "Linux"` keeps local type
-  checks on CI's platform.
+  for that package. `--daily` skips when `.cache/last-upgrade` holds today's date, which
+  only a successful full upgrade and sync writes. `PYRIGHT_PYTHON_FORCE_VERSION` never
+  reaches tox (not in `pass_env`) and must not be added;
+  `[tool.pyright] pythonPlatform = "Linux"` keeps local type checks on CI's platform.
 - **Test layout lint.** Each `tests/<tier>/__init__.py` is generated whole by
-  `manage codegen --tests` (`riko/cli/_gen_tier_index.py`) from the files' `Test<Subject>`
-  classes. `manage lint --tests` fails when the file differs from its generated form. An `Async<Subject>` class is left out
-  when its `<Subject>` or `Sync<Subject>` is in the same file, so a twin pair takes one
-  index entry. A bare section keyword (`Examples`, `Returns`) on its
-  own index line reads as a docstring section to pydocstyle, so name such subjects longer.
-  The bound checks take `[tool.pytest.ini_options] timeout` (`get_backstop`) as the outer bound
-  of a test with no `timeout` marker. One scope walk (top-level function, class, method) feeds
-  both the bound checks and the public `gen_bounds(tree)`, which yields `(owner, Bound,
-  is_marker)` for `.claude/skills/tidy/fit_bounds.py`. The table counts (`inline-tables`,
-  `rows-without-id`) go through the shared `_ratchet.ratchet_ceiling` against
-  `[tool.riko.tests]`, and `_lint._lint_tests` prints the sites only when a count is over its
-  ceiling. What these checks and the tracked-doc-read check cannot see is listed in the
-  `riko/cli/_lint_tests.py` module docstring.
+  `manage codegen --tests` (`riko/cli/_gen_tier_index.py`) from the files'
+  `Test<Subject>` classes. `manage lint --tests` fails when the file differs from its
+  generated form. An `Async<Subject>` class is left out when its `<Subject>` or
+  `Sync<Subject>` is in the same file, so a twin pair takes one index entry. A bare
+  section keyword (`Examples`, `Returns`) on its own index line reads as a docstring
+  section to pydocstyle, so name such subjects longer. The bound checks take
+  `[tool.pytest.ini_options] timeout` (`get_backstop`) as the outer bound of a test with
+  no `timeout` marker. One scope walk (top-level function, class, method) feeds both the
+  bound checks and the public `gen_bounds(tree)`, which yields
+  `(owner, Bound, is_marker)` for `.claude/skills/tidy/fit_bounds.py`. The table counts
+  (`inline-tables`, `rows-without-id`) go through the shared `_ratchet.ratchet_ceiling`
+  against `[tool.riko.tests]`, and `_lint._lint_tests` prints the sites only when a
+  count is over its ceiling. What these checks and the tracked-doc-read check cannot see
+  is listed in the `riko/cli/_lint_tests.py` module docstring.
 - **Basename lint.** `manage lint --basenames` fails when two modules under `riko/`
   (`__init__.py` aside) share a file name. Deliberate pairs are allowlisted in
   `DUPLICATE_BASENAMES` in `riko/base/_config.py`; an allowlisted name that is no longer
   shared also fails, so the allowlist is pruned when a pair is renamed away.
 - **Escape ratchet.** `manage lint --escapes` counts `typing.Any` references and
   `typing.cast` calls under `riko/` by import binding (an unrelated `cast`, such as a
-  coercion function, is not counted), including quoted annotations, quoted `cast` targets,
-  and quoted subscripts. The counts ratchet against `[tool.riko.typing]` `any`/`cast` in
-  `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as the coverage
-  ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml` diff).
+  coercion function, is not counted), including quoted annotations, quoted `cast`
+  targets, and quoted subscripts. The counts ratchet against `[tool.riko.typing]`
+  `any`/`cast` in `pyproject.toml` through `riko/cli/_ratchet.py`, the same ratchet as
+  the coverage ceiling: above fails, below lowers the ceiling (keep the `pyproject.toml`
+  diff).
 - **Ratchet staleness.** Recording or lowering a ceiling also records the day as
   `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
-  holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that key
-  there is no check. Exit codes never change. Under GitHub Actions the warning, and any
-  `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
+  holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that
+  key there is no check. Exit codes never change. Under GitHub Actions the warning, and
+  any `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
   annotations.
 - **Docstring parameter-section lint.** `manage lint --docstrings` flags a parameter
   with a default under `Args:`, one without under `Kwargs:`, and a `**kwargs` bag
@@ -223,35 +236,37 @@ sync when source is moved between package groups.
   public names from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION`
   to `riko.ext`, `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`,
   first match winning (`resolve_public_path` in `riko/cli/_docstyle.py`).
-- **Stale citation lint.** `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py`
-  citation (in the tracked `_docs/` root docs, gameplans, `CONTRIBUTING.rst`, `CLAUDE.md`, or
-  `docs/*.rst`) or `riko/*.py` citation (in the tracked `_docs/` root docs, `CLAUDE.md`,
-  `README.rst`, or `CONTRIBUTING.rst`; gameplans, `MILESTONES.md`, and `docs/` keep history) that names no
-  current file. A line saying the file was deleted, retired, removed, dropped, merged, or
-  superseded is exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
-  The same documents' `path::Class[::test]` and `Class::test` citations must name a current
-  test class or test (`gen_stale_test_symbol_citations` over `gen_test_symbols`); one whose file
-  is missing is left to the file check, and a citation must sit on one line to be checked.
-  Likewise, a `` `name` (`riko/…py`) `` or `` `Class.member` (`riko/…py`) `` pair in the `riko/*.py`
-  citation documents must name something that file binds at top level, imports included, or
-  that its top-level class binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`).
-  To cite a location rather than a definition, write `` `name` in `riko/…py` ``.
-  An `` `a`/`b` (`riko/…py`) `` pair checks both names, and a bare `b` after a dotted `a` takes
-  `a`'s class (`` `C.x()`/`y()` `` cites `C.y`).
-- **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS` phrase
-  (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
-  `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the section
-  ends at the next level-two heading. The check reads a tracked Markdown document, so it is a
-  lint rather than a pytest test (`_docs/gameplans/testing.md` §1).
-- **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON report
-  written to a fresh temp folder. That folder also holds the run's coverage data
+- **Stale citation lint.** `manage lint --docs` fails on a backticked
+  `tests/<tier>/test_*.py` citation (in the tracked `_docs/` root docs, gameplans,
+  `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst`) or `riko/*.py` citation (in the
+  tracked `_docs/` root docs, `CLAUDE.md`, `README.rst`, or `CONTRIBUTING.rst`;
+  gameplans, `MILESTONES.md`, and `docs/` keep history) that names no current file. A
+  line saying the file was deleted, retired, removed, dropped, merged, or superseded is
+  exempt (`gen_stale_test_citations`/`gen_stale_path_citations` in `riko/cli/_docs.py`).
+  The same documents' `path::Class[::test]` and `Class::test` citations must name a
+  current test class or test (`gen_stale_test_symbol_citations` over
+  `gen_test_symbols`); one whose file is missing is left to the file check, and a
+  citation must sit on one line to be checked. Likewise, a `` `name` (`riko/…py`) `` or
+  `` `Class.member` (`riko/…py`) `` pair in the `riko/*.py` citation documents must name
+  something that file binds at top level, imports included, or that its top-level class
+  binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`). To cite a
+  location rather than a definition, write `` `name` in `riko/…py` ``. An
+  `` `a`/`b` (`riko/…py`) `` pair checks both names, and a bare `b` after a dotted `a`
+  takes `a`'s class (`` `C.x()`/`y()` `` cites `C.y`).
+- **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS`
+  phrase (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
+  `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the
+  section ends at the next level-two heading. The check reads a tracked Markdown
+  document, so it is a lint rather than a pytest test (`_docs/gameplans/testing.md` §1).
+- **Coverage ratchet.** `manage test --ratchet` counts `missing_lines` from a JSON
+  report written to a fresh temp folder. That folder also holds the run's coverage data
   (`COVERAGE_FILE`), so another pytest run in the checkout cannot erase or combine it.
   Coverage runs on the `sysmon` core (Python 3.12 `sys.monitoring`; about the cost of a
-  no-coverage run) and measures the console scripts
-  through `patch = ["subprocess"]`. The root `conftest.py` puts the checkout first on
-  `PYTHONPATH`, so those subprocesses run the checkout under test (a git worktree included)
-  rather than whatever checkout the venv's editable install points at
-  (`TestSubprocessImports` in `tests/internal/test_cli.py`). Dev-only `manage` modules are listed in
+  no-coverage run) and measures the console scripts through `patch = ["subprocess"]`.
+  The root `conftest.py` puts the checkout first on `PYTHONPATH`, so those subprocesses
+  run the checkout under test (a git worktree included) rather than whatever checkout
+  the venv's editable install points at (`TestSubprocessImports` in
+  `tests/internal/test_cli.py`). Dev-only `manage` modules are listed in
   `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
   ceiling is specific to the full dev environment on Python 3.12; other environments run
   `--no-cov`.

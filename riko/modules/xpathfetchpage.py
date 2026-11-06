@@ -62,7 +62,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration: `url`, `xpath`, `html5`, and `user_agent`.
 
     Returns:
 
@@ -110,7 +110,9 @@ async def async_parser(
         ext = "html"
 
     # TODO: centralize error handling and retry logic
-    f = await async_url_open(url, encoding=objconf.encoding)
+    f = await async_url_open(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     content = any2dict(f, ext, objconf.html5, path=objconf.xpath)
     return auto_close(content, f)
 
@@ -125,7 +127,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `xpath` and `html5`.
+        objconf: The module configuration: `url`, `xpath`, `html5`, and `user_agent`.
 
     Returns:
 
@@ -158,7 +160,7 @@ def parser(
     if is_http_url(url) and not ext:
         ext = "html"
 
-    with Fetch(url, encoding=objconf.encoding) as f:
+    with Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent) as f:
         yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
 
 
@@ -184,6 +186,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -257,6 +263,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
                 (default: False).
 
             encoding (str): Page encoding (default: "utf-8").
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

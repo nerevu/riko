@@ -103,6 +103,8 @@ from pathlib import Path
 
 from typing_extensions import TypeIs
 
+from riko.base._config import LINE_LENGTH
+
 _REASONS = r"python -m|console script|entry point|fresh process|own process|subprocess"
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
 TIERS = ("public", "internal", "functional")
@@ -117,7 +119,6 @@ MIN_VALUE = 20
 CROSS_SUBJECT_MIN = 3
 UBIQUITOUS = 6
 MAX_DOCTEST_EXAMPLES = 6
-LINE_LENGTH = 88
 NEAR_MISS = 8
 MIN_MESSAGE = 12
 MAX_MESSAGE = 120

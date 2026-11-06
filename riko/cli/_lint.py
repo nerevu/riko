@@ -54,6 +54,7 @@ _TEXT_ROOTS: tuple[str, ...] = (
 )
 
 _ruff: str | None = shutil.which("ruff")
+_rumdl: str | None = shutil.which("rumdl")
 _pylint: str | None = shutil.which("pylint")
 _pyright: str | None = shutil.which("pyright")
 _actionlint: str | None = shutil.which("actionlint")
@@ -240,6 +241,21 @@ def _lint_python(where: str | None = "", unsafe_fixes: bool = False) -> int:
     return call([*args, *paths]) or call([_ruff, "format", "--check", *paths])
 
 
+def _get_markdown_paths(where: str | None = "") -> list[str]:
+    """Gets the directories and Markdown files in ``where``, or the repository root."""
+    paths = where.split(" ") if where else ["."]
+    return [path for path in paths if Path(path).is_dir() or path.endswith(".md")]
+
+
+def _lint_markdown(where: str | None = "") -> int:
+    """Checks Markdown style, formatting, and links with rumdl."""
+    if not _rumdl:
+        raise RuntimeError("rumdl not found")
+
+    paths = _get_markdown_paths(where)
+    return call([_rumdl, "check", *paths]) if paths else 0
+
+
 def _gen_yaml_files() -> Iterable[str]:
     """Collects tracked YAML files."""
     args = ["git", "ls-files", "*.yml", "*.yaml"]
@@ -265,28 +281,31 @@ def _lint_yaml(*where: str) -> int:
     return call([_yamlfmt, "-lint", *paths])
 
 
-def _load_staged() -> list[str]:
-    """Lists staged Python files that were added, copied, or modified."""
+def _load_staged(suffix: str) -> list[str]:
+    """Lists staged files with ``suffix`` that were added, copied, or modified."""
     args = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
     staged = check_output(args, text=True).splitlines()
-    return [name for name in staged if name.endswith(".py")]
+    return [name for name in staged if name.endswith(suffix)]
 
 
 def _lint_staged() -> int:
-    """Lints staged Python files with ruff."""
+    """Lints staged Python files with ruff and staged Markdown files with rumdl."""
     if not _ruff:
         raise RuntimeError("ruff not found")
+    elif not _rumdl:
+        raise RuntimeError("rumdl not found")
 
-    files = _load_staged()
+    files, documents = _load_staged(".py"), _load_staged(".md")
+    codes = [0]
 
-    if not files:
-        return_code = 0
-    else:
-        return_code = call([_ruff, "check", *files]) or call(
-            [_ruff, "format", "--check", *files]
-        )
+    if files:
+        check = call([_ruff, "check", *files])
+        codes.append(check or call([_ruff, "format", "--check", *files]))
 
-    return return_code
+    if documents:
+        codes.append(call([_rumdl, "check", *documents]))
+
+    return max(codes)
 
 
 def _format_yaml(*where: str) -> int:
@@ -298,9 +317,18 @@ def _format_yaml(*where: str) -> int:
     return call([_yamlfmt, *paths])
 
 
+def _format_markdown(*where: str) -> int:
+    """Formats Markdown files with rumdl."""
+    if not _rumdl:
+        raise RuntimeError("rumdl not found")
+
+    paths = _get_markdown_paths(" ".join(where))
+    return call([_rumdl, "fmt", *paths]) if paths else 0
+
+
 @click.command(name="check")
 def _check_command() -> None:
-    """Lint staged Python changes with ruff."""
+    """Lint staged Python changes with ruff and Markdown changes with rumdl."""
     exit(_lint_staged())
 
 
@@ -399,7 +427,8 @@ def _lint_command(
         return_codes: list[int] = []
 
         if all_ or not has_selector:
-            return_codes.append(_lint_python(_where, unsafe_fixes))
+            codes = _lint_python(_where, unsafe_fixes), _lint_markdown(_where)
+            return_codes.extend(codes)
 
         if rst or all_:
             return_codes.append(lint_rst(_where))
@@ -472,7 +501,7 @@ def _prettify_command(
     gen_config: bool = False,
     unsafe_fixes: bool = False,
 ) -> None:
-    """Prettify code with ruff."""
+    """Prettify code with ruff and Markdown with rumdl."""
     return_code = 0
 
     if yaml:
@@ -508,6 +537,9 @@ def _prettify_command(
                 return_code = e.returncode
             else:
                 return_code = 0
+
+        if not return_code:
+            return_code = _format_markdown(*where)
     else:
         raise RuntimeError("ruff not found")
 

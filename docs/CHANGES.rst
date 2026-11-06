@@ -62,6 +62,12 @@ New
 
 - Added ``jsonl`` (newline-delimited JSON) to ``riko.Formats``.
 
+- The HTTP-fetching modules (``csv``, ``exchangerate``, ``fetchtable``, ``fetchpage``,
+  ``feedautodiscovery``, ``fetchsitefeed``, ``fetchdata``, ``fetch``, ``fetchtext``, and
+  ``xpathfetchpage``) accept a ``user_agent`` conf, and ``riko.async_url_open`` accepts
+  the same ``user_agent`` argument. Pass a ``riko.UserAgent`` member or a custom agent
+  string. Leave unset to send ``riko/<version>``.
+
 - Added environment variables to override runtime defaults: ``RIKO_CONCURRENCY_LIMIT``,
   ``RIKO_SHIPPED_CALL_CACHE_SIZE``, ``RIKO_DISCOVERY_TIMEOUT``, ``RIKO_FETCH_TIMEOUT``,
   ``RIKO_PARSED_DATE_CACHE_SIZE``, ``RIKO_SHUTDOWN_TIMEOUT``, ``RIKO_BENCHMARK_DELAY``,
@@ -247,14 +253,23 @@ Fixes
 
 - ``exchangerate`` now logs a warning when the response has no rate for a currency.
 
-- Fetching in a sync run no longer garbles text with no newline or only carriage-return
-  line endings, drops all but the first line of UTF-16 text, raises ``RuntimeError`` on
-  empty text, or keeps the response open after a decode failure/memoize on a local file.
+- Sync fetching no longer: garbles text with no newline or only carriage-return line
+  endings; drops all but the first line of UTF-16 text; or raises ``RuntimeError`` on
+  empty text. It also now closes responses after a failure while decoding, buffering, or
+  checking the status; or when memoizing a local file.
+
+- Async HTTP fetching (``riko.async_url_open``, ``riko.async_url_read``, and the async
+  ``fetch*``, ``csv``, ``exchangerate``, ``feedautodiscovery``, and ``xpathfetchpage``
+  modules) now raises ``httpx.HTTPStatusError`` for 4xx or 5xx responses, instead of
+  reading the error page as content.
 
 - The ``fetchdata`` module now yields a dict instead of text for XML whose root holds
   only text, and yields nothing instead of an empty item or raising for an empty file.
 
 - ``fetchpage`` returns ``""`` without ``start`` or when ``end`` immediately follows it.
+
+- Sync and async HTTP fetching now sends ``riko/<version>`` instead of the default
+  client ``User-Agent``.
 
 - ``riko.async_url_open`` and the ``exchangerate`` module's ``url`` treat names like
   ``http_data.csv`` as files.
@@ -303,7 +318,9 @@ Dev
   replaced by additive selectors (``--config``, ``--names``, ``--api``, ``--tests``,
   ``--all``) and the ``pipes`` generator and ``gen-pipelines`` are gone;
   ``release-notes`` takes an optional version; ``publish``/``release --dry-run`` run a
-  real ``uv publish --dry-run``; and the ``benchmark`` script now times ``Pipeline``.
+  real ``uv publish --dry-run``; ``lint``, ``check``, and ``prettify`` also lint and
+  format Markdown with ``rumdl``; ``lint --rst`` checks every tracked RST file; and the
+  ``benchmark`` script now times ``Pipeline``.
 
 v0.77.3 (2026-08-31)
 --------------------
@@ -534,10 +551,10 @@ Fixes
 - The ``strtransform`` module accepts a list of rule ``args`` instead of raising
   ``AttributeError``, and its ``count``/``find`` transforms may return an ``int``.
 
-- In an async run, the ``fetch`` module now honors ``conf['encoding']``.
+- Async fetching with the ``fetch`` module now honors ``conf['encoding']``.
 
-- In an async run, the ``fetchdata`` module infers the parse format from the response
-  ``Content-Type`` when the url has no extension.
+- Async fetching with the ``fetchdata`` module infers the parse format from the
+  response ``Content-Type`` when the url has no extension.
 
 - ``describe_module`` re-raises a nested ``ModuleNotFoundError`` naming the missing
   dependency, instead of returning ``None`` as if the module did not exist.

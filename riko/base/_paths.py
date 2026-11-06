@@ -24,9 +24,11 @@ TESTS_DIR = ROOT_DIR / "tests"
 DOCS_DIR = ROOT_DIR / "docs"
 PYPROJECT = ROOT_DIR / "pyproject.toml"
 API_SURFACE_PATH = ROOT_DIR / "_docs" / "API_SURFACE.md"
+ARCHIVE_DIR = ROOT_DIR / "_docs" / "archive"
 CONFIG_PATH = PACKAGE_DIR / "coercion" / "_configs.py"
 MODULE_IDS_PATH = PACKAGE_DIR / "types" / "_module_ids.py"
 MODULE_NAMES_PATH = PACKAGE_DIR / "modules" / "_names.py"
+USER_AGENTS_PATH = PACKAGE_DIR / "base" / "_user_agents.py"
 
 
 def is_http_url(url: str) -> bool:

@@ -75,10 +75,12 @@ test = [
 lint = [
     "deptry>=0.25.1",
     "docutils>=0.21",
+    "fake-useragent>=2.2.0",
     "pygments>=2.20.0",
     "pylint>=4.0.5,<5.0.0",
     "pyright>=1.1.414",
     "ruff>=0.16.10,<0.17.0",
+    "rumdl>=0.3.2,<0.4.0",
     "types-lxml>=2026.2.16",
     "types-networkx>=3.4.2",
 ]
@@ -225,6 +227,22 @@ split-on-trailing-comma = false
     "UP009",  # UTF-8 encoding declaration (generated header)
 ]
 
+[tool.rumdl]
+line-length = 88
+exclude = ["_docs/archive"]
+
+[tool.rumdl.MD013]
+reflow = true
+reflow-break-code-spans = false
+code-blocks = false
+headings = false
+
+[tool.rumdl.per-file-ignores]
+# Inspiration snapshots are copies of other projects' readmes: their relative links
+# resolve inside the source project, and GitHub readme conventions (an HTML logo before
+# the title, bold step labels) stay as their authors wrote them.
+"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057"]
+
 [tool.deptry]
 # `manage lint --deps` runs deptry from the repository root. The root conftest.py
 # is pytest configuration (like the default-excluded tests/), and .claude/ holds
@@ -325,8 +343,8 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 361
-uncovered-lowered = 2026-11-03
+uncovered = 352
+uncovered-lowered = 2026-11-05
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and

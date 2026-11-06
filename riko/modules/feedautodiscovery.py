@@ -54,7 +54,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `strict` and `sort`.
+        objconf: The module configuration: `url`, `strict`, `sort`, and `user_agent`.
 
     Returns:
 
@@ -80,7 +80,9 @@ async def async_parser(
     """
     url: str = require_conf_key(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = await aload_rss_links(url, link_type=None, **rkwargs)
+    stream = await aload_rss_links(
+        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+    )
     return stream
 
 
@@ -94,7 +96,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url`, `strict` and `sort`.
+        objconf: The module configuration: `url`, `strict`, `sort`, and `user_agent`.
 
     Returns:
 
@@ -123,7 +125,9 @@ def parser(
     """
     url: str = require_conf_key(objconf, "url", "feedautodiscovery")
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
-    stream = load_rss_links(url, link_type=None, **rkwargs)
+    stream = load_rss_links(
+        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+    )
     return stream
 
 
@@ -146,6 +150,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -202,6 +210,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from xml.dom.minidom import Node
 
     from riko.io._filelike import StringFileLike
+    from riko.types._enums import UserAgentLike
     from riko.types._streams import Stream
 
 logger: Logger = get_logger(__name__)
@@ -79,12 +80,13 @@ async def aload_rss_links(
     link_type: str | Iterable[str] | None = None,
     convert_charrefs: bool = False,
     auto_sort: bool = False,
+    user_agent: UserAgentLike | None = None,
     **kwargs: bool,
 ) -> Stream:
     parser = _build_parser(link_type, convert_charrefs=convert_charrefs, **kwargs)
 
     try:
-        f = await async_url_open(url, timeout=TIMEOUT)
+        f = await async_url_open(url, timeout=TIMEOUT, user_agent=user_agent)
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:
@@ -102,12 +104,13 @@ def load_rss_links(
     link_type: str | Iterable[str] | None = None,
     convert_charrefs: bool = False,
     auto_sort: bool = False,
+    user_agent: UserAgentLike | None = None,
     **kwargs: bool,
 ) -> Stream:
     parser = _build_parser(link_type, convert_charrefs=convert_charrefs, **kwargs)
 
     try:
-        f = Fetch(url, timeout=TIMEOUT)
+        f = Fetch(url, timeout=TIMEOUT, user_agent=user_agent)
     except ValueError:
         entries = file2entries(filter(None, url.splitlines()), parser)
     else:

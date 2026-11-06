@@ -100,6 +100,9 @@ _ANY = "from typing import Any\n"
 _ANY_CAST = "from typing import Any, cast\nx: Any = cast(Any, y)\n"
 _UPWARD = "from riko.runtime.b import thing\n"
 _GUARDED = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    " + _UPWARD
+_NEGATED = (
+    "from typing import TYPE_CHECKING\nif not TYPE_CHECKING:\n    pass\nelse:\n    "
+)
 _LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
 
 
@@ -139,6 +142,10 @@ LOCK = """
 [[package]]
 name = "ruff"
 version = "0.16.10"
+
+[[package]]
+name = "rumdl"
+version = "0.3.2"
 """
 
 HOOKS = """
@@ -149,6 +156,8 @@ repos:
         additional_dependencies: [ruff==0.16.10]
       - id: ruff-format
         additional_dependencies: [ruff==0.16.9]
+      - id: rumdl-check
+        additional_dependencies: [rumdl==0.3.2]
 """
 
 TC, NOT_TC = "TYPE_CHECKING", "not TYPE_CHECKING"
@@ -186,7 +195,8 @@ class TestCodegenCommand:
             ([], ["config"]),
             (["--names", "--api"], ["names", "api"]),
             (["--tests", "--verbs"], ["tests", "verbs"]),
-            (["--all"], ["config", "names", "api", "tests", "verbs"]),
+            (["--user-agents"], ["user-agents"]),
+            (["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"]),
         ],
     )
     def test_codegen_selectors(
@@ -360,6 +370,7 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     monkeypatch.setattr(
         _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
     )
+    monkeypatch.setattr(_lint, "_lint_markdown", lambda *_: calls.append("rumdl") or 0)
     monkeypatch.setattr(_lint, "lint_rst", lambda *_: calls.append("rst") or 0)
     monkeypatch.setattr(_lint, "lint_docs", lambda: calls.append("docs") or 0)
     monkeypatch.setattr(
@@ -432,15 +443,33 @@ class TestLintCommand:
         assert _lint._lint_deps() == 1
         assert "stale pin" in capsys.readouterr().out
 
+    def test_staged_check_lints_python_with_ruff_and_markdown_with_rumdl(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[list[str]] = []
+        staged = "a.py\nREADME.md\nsetup.cfg\n"
+        monkeypatch.setattr(_lint, "_ruff", "ruff")
+        monkeypatch.setattr(_lint, "_rumdl", "rumdl")
+        monkeypatch.setattr(_lint, "check_output", lambda *_, **_kw: staged)
+        monkeypatch.setattr(_lint, "call", lambda args: calls.append(args) or 0)
+
+        assert _lint._lint_staged() == 0
+        assert calls == [
+            ["ruff", "check", "a.py"],
+            ["ruff", "format", "--check", "a.py"],
+            ["rumdl", "check", "README.md"],
+        ]
+
     @pytest.mark.parametrize(
         ("args", "expected"),
         [
-            ([], ["ruff"]),
+            ([], ["ruff", "rumdl"]),
             (["--rst", "--yaml"], ["rst", "yaml"]),
             (
                 ["--all"],
                 [
                     "ruff",
+                    "rumdl",
                     "rst",
                     "docs",
                     "docstrings",
@@ -825,6 +854,20 @@ class TestCitationLint:
         known = (name for name in (kept,))
         offenders = _docs._gen_citation_offenders(scan, known, *paths)
         assert list(offenders) == [f"a.md:1: {gone}", f"b.md:1: {gone}"]
+
+    @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
+    def test_history_words_exempt_their_wrapped_sentence_only(
+        self,
+        scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
+        template: str,
+        kept: str,
+    ) -> None:
+        gone = template.format("gone")
+        text = (
+            f"`{gone}` and its\nneighbors were deleted. See\n`{gone}`.\n\n"
+            f"- `{gone}` stays.\n- Another was removed.\n"
+        )
+        assert list(scan(text, (kept,))) == [(3, gone), (5, gone)]
 
     def test_test_symbols_cover_files_classes_and_tests(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -1260,7 +1303,12 @@ OPTIONAL_CASES = [
     pytest.param(_try("import lxml", "(ValueError, ImportError)"), [], id="tuple"),
     pytest.param(_try("import lxml", "ValueError"), [2], id="wrong-handler"),
     pytest.param(_try("pass", handler="import lxml"), [4], id="in-handler"),
-    pytest.param(_try("import a") + "else:\n    import lxml\n", [], id="try-else"),
+    pytest.param(_try("import a") + "else:\n    import lxml\n", [6], id="try-else"),
+    pytest.param(
+        _try("import lxml.etree") + "else:\n    import lxml.html\n",
+        [],
+        id="try-else-same-module",
+    ),
     pytest.param(_if(TC, "import lxml"), [], id="typing-only"),
     pytest.param("def f():\n    import lxml\n", [2], id="function-local"),
     pytest.param(REQUESTS, [], id="also-required"),
@@ -1307,10 +1355,13 @@ class TestHookPinLint:
         assert _pin_issues(tmp_path, HOOKS) == expected
 
     def test_hooks_must_pin_each_locked_tool(self, tmp_path: Path) -> None:
-        """A configuration that never pins ruff is reported."""
+        """A configuration that never pins a pinned tool is reported."""
         hooks = "repos: []\n"
         found = [message for _, message in _pin_issues(tmp_path, hooks)]
-        assert found == ["no hook pins 'ruff'; pin it as ruff==0.16.10"]
+        assert found == [
+            "no hook pins 'ruff'; pin it as ruff==0.16.10",
+            "no hook pins 'rumdl'; pin it as rumdl==0.3.2",
+        ]
 
     def test_upgrade_rewrites_hook_pins_to_the_lock(self, tmp_path: Path) -> None:
         """After an upgrade, every hook pin names the locked version."""
@@ -1364,6 +1415,7 @@ class TestRelativeImportLint:
 ARCHITECTURE_IMPORTS = [
     pytest.param(_UPWARD, ["runtime"], id="upward"),
     pytest.param(_GUARDED, [], id="type-checking-is-exempt"),
+    pytest.param(_NEGATED + _UPWARD, [], id="negated-type-checking-else-is-exempt"),
     pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
 ]
 

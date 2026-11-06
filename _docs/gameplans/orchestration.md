@@ -2,24 +2,29 @@
 
 ## 1. Mission
 
-Integrate bounded Riko pipeline and operation executions with cron, webhook servers, Airflow,
-Prefect, Dagster, and other runners without turning Riko or `riko-cli` into an orchestrator.
+Integrate bounded Riko pipeline and operation executions with cron, webhook servers,
+Airflow, Prefect, Dagster, and other runners without turning Riko or `riko-cli` into an
+orchestrator.
 
-This plan exists so scheduling, durable run boundaries, and external runners can be added without
-changing the meaning of Pipeline execution or making a scheduler/RMM/workflow SaaS the canonical
-source of an operation.
+This plan exists so scheduling, durable run boundaries, and external runners can be
+added without changing the meaning of Pipeline execution or making a
+scheduler/RMM/workflow SaaS the canonical source of an operation.
 
-This plan owns **deployment-level run boundaries, scheduling integration, and durable
-handoffs**. It does not redefine source state/checkpoints, Operations as Code source-of-truth or
-planning semantics, provider operation waiting, record-level retry, or artifact/frame semantics.
+This plan owns
+**deployment-level run boundaries, scheduling integration, and durable handoffs**. It
+does not redefine source state/checkpoints, Operations as Code source-of-truth or
+planning semantics, provider operation waiting, record-level retry, or artifact/frame
+semantics.
 
 Related authoritative plans:
 
-* `execution-semantics.md` — `Pipeline`, `Context`, `FeedState`, `StateStore`, checkpoints,
-  retry, timeout, cancellation, idempotency, and error policy inside a Riko execution;
+* `execution-semantics.md` — `Pipeline`, `Context`, `FeedState`, `StateStore`,
+  checkpoints, retry, timeout, cancellation, idempotency, and error policy inside a Riko
+  execution;
 * `operations-as-code.md` — `OperationSpec`, `OperationPlan`, Git-first source-of-truth,
   validate/plan/apply/verify coordination, deployment identity, and automation drift;
-* `feed-monitoring.md` — finite/repeated monitoring semantics and monitoring state payloads;
+* `feed-monitoring.md` — finite/repeated monitoring semantics and monitoring state
+  payloads;
 * `provider-integrations.md` — provider `OperationHandle` and `wait_operation`;
 * `mcp.md` — capability discovery, execution policy, and approval;
 * `artifact-conversion.md` — durable artifact references/rendering;
@@ -27,8 +32,8 @@ Related authoritative plans:
 
 ## 2. Architectural rule
 
-An orchestrator schedules and observes Riko runs. Riko executes a pipeline or an operation service
-invocation through its owning package.
+An orchestrator schedules and observes Riko runs. Riko executes a pipeline or an
+operation service invocation through its owning package.
 
 ```text
 orchestrator task or asset
@@ -38,21 +43,23 @@ orchestrator task or asset
 → report normalized run result
 ```
 
-There is no public `ExecutionContext` construction step. `Context` is the public immutable
-environment/resource definition; private `SyncExecution` / `AsyncExecution` objects own live
-resources and runtime state.
+There is no public `ExecutionContext` construction step. `Context` is the public
+immutable environment/resource definition; private `SyncExecution` / `AsyncExecution`
+objects own live resources and runtime state.
 
-The definition crosses a process or scheduler boundary as a `WorkflowDocument` (a workflow
-document, from `Workflow.serialize`) plus a `PipelineRef`. An `ExecutionPlan` holds resolved callables and is
-process-local; it is never the portable artifact an external executor consumes.
+The definition crosses a process or scheduler boundary as a `WorkflowDocument` (a
+workflow document, from `Workflow.serialize`) plus a `PipelineRef`. An `ExecutionPlan`
+holds resolved callables and is process-local; it is never the portable artifact an
+external executor consumes.
 
 Do not map every streaming module to an orchestrator task. A stream crosses a process or
 scheduler boundary only through explicit durable materialization such as an artifact,
 database table, object, or state boundary.
 
-For Operations as Code, the repository remains canonical even when a vendor scheduler or runner
-stores a generated copy. Orchestration decides **when and where** a bounded phase runs; it never
-becomes the owner of `OperationSpec`, `OperationPlan`, compatibility, or deployment-drift semantics.
+For Operations as Code, the repository remains canonical even when a vendor scheduler or
+runner stores a generated copy. Orchestration decides **when and where** a bounded phase
+runs; it never becomes the owner of `OperationSpec`, `OperationPlan`, compatibility, or
+deployment-drift semantics.
 
 ## 3. Common run adapter
 
@@ -86,14 +93,19 @@ class PipelineRunResult:
     metrics: Mapping[str, JsonValue]
 ```
 
-Open gap (triaged 2026-10-25, Flowfile comparison): `PipelineRunResult` does not identify what ran. A portable run manifest should add the canonical `digest` of the executed `Workflow` (the shared canonical encoding, never `hash()`) and the resolved module versions, so a stored result can be tied back to an exact definition without a catalog service. Unscheduled; settle it with O0.
+Open gap (triaged 2026-10-25, Flowfile comparison): `PipelineRunResult` does not
+identify what ran. A portable run manifest should add the canonical `digest` of the
+executed `Workflow` (the shared canonical encoding, never `hash()`) and the resolved
+module versions, so a stored result can be tied back to an exact definition without a
+catalog service. Unscheduled; settle it with O0.
 
-Airflow, Prefect, Dagster, webhook workers, and CLI commands should call the same execution
-service rather than each building a separate Riko runner.
+Airflow, Prefect, Dagster, webhook workers, and CLI commands should call the same
+execution service rather than each building a separate Riko runner.
 
-Operations as Code may expose its own reusable service requests/results from `riko-ops`; this plan
-does not duplicate those types merely to schedule them. Orchestrator adapters invoke the owning
-service and persist only the durable references required between tasks/runs.
+Operations as Code may expose its own reusable service requests/results from `riko-ops`;
+this plan does not duplicate those types merely to schedule them. Orchestrator adapters
+invoke the owning service and persist only the durable references required between
+tasks/runs.
 
 ## 4. Cron and standalone execution
 
@@ -104,8 +116,8 @@ The process:
 * executes one bounded run/request;
 * exits with stable machine-readable status;
 * emits run metadata when requested;
-* leaves recurrence to cron or the host platform unless the application explicitly owns a
-  `Pipeline.poll(...)` long-lived process.
+* leaves recurrence to cron or the host platform unless the application explicitly owns
+  a `Pipeline.poll(...)` long-lived process.
 
 Do not add an in-process forever scheduler to the base CLI.
 
@@ -116,13 +128,13 @@ A webhook adapter:
 1. authenticates and validates the request;
 2. normalizes event ID/idempotency key;
 3. persists or queues the event according to deployment policy;
-4. creates a `PipelineRunRequest` and starts a bounded pipeline run or returns an accepted
-   response;
+4. creates a `PipelineRunRequest` and starts a bounded pipeline run or returns an
+   accepted response;
 5. records the resulting run ID.
 
 Provider signature verification and `EventEnvelope` normalization belong to
-`provider-integrations.md`. The orchestrator owns **when/how a normalized event becomes a
-run**.
+`provider-integrations.md`. The orchestrator owns
+**when/how a normalized event becomes a run**.
 
 The request handler must not execute an unbounded feed monitor or agent network inline.
 
@@ -174,15 +186,16 @@ waiting.
 When a Riko action returns `OperationHandle`, `provider-integrations.md` owns the
 `wait_operation` interval/event/hybrid semantics.
 
-An orchestrator may instead choose to persist the handle and resume/check it in a later run,
-but it must preserve the same provider terminal-state and correlation semantics rather than
-inventing an incompatible waiter. Persisted handles/state use the common `StateStore` when
-modeled as Riko resumable state.
+An orchestrator may instead choose to persist the handle and resume/check it in a later
+run, but it must preserve the same provider terminal-state and correlation semantics
+rather than inventing an incompatible waiter. Persisted handles/state use the common
+`StateStore` when modeled as Riko resumable state.
 
-This distinction matters for workflows such as Windows Autopilot: the operation may plan and apply
-an import, receive an `OperationHandle`, wait for provider completion, and then verify authoritative
-Intune/Autopilot state. Whether that waiting occurs in one worker process or across a durable
-orchestrator handoff does not change provider waiting or Microsoft verification semantics.
+This distinction matters for workflows such as Windows Autopilot: the operation may plan
+and apply an import, receive an `OperationHandle`, wait for provider completion, and
+then verify authoritative Intune/Autopilot state. Whether that waiting occurs in one
+worker process or across a durable orchestrator handoff does not change provider waiting
+or Microsoft verification semantics.
 
 ## 8. Operations as Code lifecycle integration
 
@@ -196,26 +209,29 @@ validate
 → verify
 ```
 
-Orchestration may keep that lifecycle in one bounded run or split it at explicit durable boundaries.
-When split across tasks/runs:
+Orchestration may keep that lifecycle in one bounded run or split it at explicit durable
+boundaries. When split across tasks/runs:
 
 * `validate` and `plan` remain non-mutating;
-* the exact `OperationPlan` identity/fingerprint approved for apply must cross the boundary;
+* the exact `OperationPlan` identity/fingerprint approved for apply must cross the
+  boundary;
 * `apply` must not silently re-plan and execute a different plan;
-* if authoritative drift invalidates the plan, the operations service returns the appropriate
-  stale/replan outcome and normal approval rules apply again;
-* `verify` consumes the apply result and authoritative provider/domain verification contracts;
-* external scheduler metadata may reference plans/evidence but does not become their canonical
-  storage contract.
+* if authoritative drift invalidates the plan, the operations service returns the
+  appropriate stale/replan outcome and normal approval rules apply again;
+* `verify` consumes the apply result and authoritative provider/domain verification
+  contracts;
+* external scheduler metadata may reference plans/evidence but does not become their
+  canonical storage contract.
 
-The orchestrator can retry a **whole phase/run** only when the owning operation/provider contracts
-make that safe. It never replaces execution-level retry, provider waiting, or plan-bound approval.
+The orchestrator can retry a **whole phase/run** only when the owning operation/provider
+contracts make that safe. It never replaces execution-level retry, provider waiting, or
+plan-bound approval.
 
 ## 9. External runners and deployment targets
 
-An Operations as Code deployment may target GitHub Actions, Azure Automation, an RMM automation
-engine, or another runner. Such a system can both host a derived automation and schedule its runs.
-Those are separate roles from source-of-truth ownership:
+An Operations as Code deployment may target GitHub Actions, Azure Automation, an RMM
+automation engine, or another runner. Such a system can both host a derived automation
+and schedule its runs. Those are separate roles from source-of-truth ownership:
 
 ```text
 Git / version-controlled OperationSpec   canonical definition
@@ -225,30 +241,32 @@ orchestration                            run boundary/observation
 operations-as-code                       source identity, plan, deployment drift, verification
 ```
 
-An external runner must not be treated as authoritative merely because it can edit a generated
-script/workflow in its UI. Remote edits are automation drift unless explicitly imported back through
-the Operations as Code import/normalization flow.
+An external runner must not be treated as authoritative merely because it can edit a
+generated script/workflow in its UI. Remote edits are automation drift unless explicitly
+imported back through the Operations as Code import/normalization flow.
 
 ## 10. Airflow adapter
 
 Default integration: one `PythonOperator` or TaskFlow task per `PipelineRunRequest`.
 
-Split extract, transform, and delivery into separate Airflow tasks only when each boundary
-writes a durable artifact/table/object. Never pass a stream or large record collection
-through XCom.
+Split extract, transform, and delivery into separate Airflow tasks only when each
+boundary writes a durable artifact/table/object. Never pass a stream or large record
+collection through XCom.
 
 Use artifact references and lineage IDs instead. Airflow connections may supply/resolve
 named Riko `Context` resources but credentials must not be copied into task output.
 
-For an operation lifecycle, Airflow tasks may call the owning operations service for plan/apply/
-verify only when plan identity and approval references cross task boundaries explicitly.
+For an operation lifecycle, Airflow tasks may call the owning operations service for
+plan/apply/ verify only when plan identity and approval references cross task boundaries
+explicitly.
 
 ## 11. Prefect adapter
 
 Expose a task wrapper and result block.
 
-Prefect may retry the **whole task/run** according to deployment policy. Record/source-level
-retry inside the Riko execution remains governed by `execution-semantics.md`.
+Prefect may retry the **whole task/run** according to deployment policy.
+Record/source-level retry inside the Riko execution remains governed by
+`execution-semantics.md`.
 
 Prefect artifacts contain summaries and artifact references, not full streams.
 
@@ -270,8 +288,8 @@ implicitly changing source state.
 
 ## 13. dbt coordination
 
-`riko-dbt` supplies a reusable dbt execution service. Orchestrators decide when to invoke it.
-A typical durable flow is:
+`riko-dbt` supplies a reusable dbt execution service. Orchestrators decide when to
+invoke it. A typical durable flow is:
 
 ```text
 Riko load artifact/table
@@ -299,12 +317,24 @@ Whole-run retries require:
 * sinks/actions to honor the common execution-derived idempotency contract where their
   destination permits it;
 * durable outputs to commit before associated source/recovery state advances;
-* non-idempotent actions to fail retryable/resumable validation unless explicitly opted out
-  or governed by an appropriate manual/policy boundary;
+* non-idempotent actions to fail retryable/resumable validation unless explicitly opted
+  out or governed by an appropriate manual/policy boundary;
 * partial artifacts to be marked incomplete rather than silently reused.
 
-Only one layer should retry a given failure domain. A `CheckpointConflictError` propagates;
-the Riko state-store adapter does not automatically reload/rerun a conflicting operation.
+Only one layer should retry a given failure domain. A `CheckpointConflictError`
+propagates; the Riko state-store adapter does not automatically reload/rerun a
+conflicting operation.
+
+Note (2026-11-05, Duckstring evaluation triage): a consumer-freshness policy, where a
+downstream run asks how fresh its input data must be and the orchestrator decides which
+upstream runs that requires, is a possible opt-in adapter policy, not a core feature
+and not a scheduler (§ 4 stands). Its shape is a deterministic decision function over
+the published output state, the requested freshness, and the workflow dependency graph
+that returns the runs required; the adapter schedules and persists, and the function
+owns no worker pools, clients, or resource lifetimes, so it is testable with simulated
+time and completion events. It is reliable only once R6 state and R5C publication can
+say what was published, what changed, and what a consumer may reuse, so it is not
+sequenced before them (`_docs/research/duckstring-evaluation.md`).
 
 ## 15. Events and observability
 
@@ -319,11 +349,12 @@ warning/failure
 cancellation/deadline
 ```
 
-Adapters translate these to Airflow logs, Prefect events, Dagster metadata, or JSON logging
-without changing semantic meaning.
+Adapters translate these to Airflow logs, Prefect events, Dagster metadata, or JSON
+logging without changing semantic meaning.
 
-Operation plan/approval/verification evidence is referenced through the owning Operations as Code,
-policy, and artifact contracts rather than re-specified as orchestrator events.
+Operation plan/approval/verification evidence is referenced through the owning
+Operations as Code, policy, and artifact contracts rather than re-specified as
+orchestrator events.
 
 Detailed pipe/retry/checkpoint event schemas remain owned by their underlying contracts.
 
@@ -364,18 +395,21 @@ O10 cross-adapter contract tests and deployment templates
 
 1. No lazy stream crosses an orchestrator boundary implicitly.
 2. Every multi-task split occurs at a durable handoff.
-3. Public configuration uses `Context`; private execution owns resolved resource values and runtime state.
-4. Canonical Python pipeline run requests use `PipelineRef`, with serialized string shorthand
-   resolved before runtime.
+3. Public configuration uses `Context`; private execution owns resolved resource values
+   and runtime state.
+4. Canonical Python pipeline run requests use `PipelineRef`, with serialized string
+   shorthand resolved before runtime.
 5. Cancellation/deadlines reach the Riko execution.
 6. Run-level retries are distinguished from execution/provider retries.
 7. Webhook ingress consumes normalized verified events.
 8. Feed monitoring reuses, rather than redefines, `FeedState`/`StateStore` semantics.
 9. Provider jobs reuse, rather than redefine, `OperationHandle`/wait semantics.
-10. Operations as Code retains ownership of `OperationSpec`, `OperationPlan`, plan-bound approval
-    coordination, deployment identity, and source-of-truth semantics.
-11. A split validate/plan/apply/verify flow preserves the exact plan identity across durable
-    boundaries and never silently re-plans before apply.
-12. External runners remain execution/deployment targets rather than canonical operation stores.
-13. Orchestrator metadata uses artifact/frame/plan references rather than large hidden payloads.
+10. Operations as Code retains ownership of `OperationSpec`, `OperationPlan`, plan-bound
+    approval coordination, deployment identity, and source-of-truth semantics.
+11. A split validate/plan/apply/verify flow preserves the exact plan identity across
+    durable boundaries and never silently re-plans before apply.
+12. External runners remain execution/deployment targets rather than canonical operation
+    stores.
+13. Orchestrator metadata uses artifact/frame/plan references rather than large hidden
+    payloads.
 14. The base CLI remains a run adapter, not a scheduler daemon.

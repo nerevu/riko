@@ -37,6 +37,7 @@ class Run(Protocol):
 
 try:
     import anyio
+    from asyncer import asyncify
     from httpx import Response as HTTPXResponse
 except ImportError:
     AsyncClient: object = None
@@ -44,6 +45,7 @@ except ImportError:
     CancelScope: type | None = None
     CapacityLimiter: type | None = None
     Event: type | None = None
+    HTTPStatusError: type[Exception] | None = None
     HTTPXResponse: object = None
     MemoryObjectReceiveStream: object = None
     MemoryObjectSendStream: object = None
@@ -93,8 +95,7 @@ else:
     from anyio.itertools import chain as async_chain
     from anyio.lowlevel import checkpoint
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-    from asyncer import asyncify
-    from httpx import AsyncClient, TimeoutException
+    from httpx import AsyncClient, HTTPStatusError, TimeoutException
 
     backend = "anyio"
     run: Run = anyio.run
@@ -108,6 +109,7 @@ __all__ = [
     "CancelScope",
     "CapacityLimiter",
     "Event",
+    "HTTPStatusError",
     "HTTPXResponse",
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",

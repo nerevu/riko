@@ -71,7 +71,7 @@ async def async_parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url` and the table options.
+        objconf: The module configuration: `url`, `user_agent`, and the table options.
 
     Returns:
 
@@ -100,7 +100,9 @@ async def async_parser(
 
     """
     url: str = require_conf_key(objconf, "url", "fetchtable")
-    r = await async_url_open(url, encoding=objconf.encoding)
+    r = await async_url_open(
+        url, encoding=objconf.encoding, user_agent=objconf.user_agent
+    )
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     source = r if objconf.has_header else seekable(r, encoding=objconf.encoding)
@@ -120,7 +122,7 @@ def parser(
 
         _: The item. Unused.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `url` and the table options.
+        objconf: The module configuration: `url`, `user_agent`, and the table options.
 
     Returns:
 
@@ -148,7 +150,7 @@ def parser(
     url: str = require_conf_key(objconf, "url", "fetchtable")
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
-    f = Fetch(url, encoding=objconf.encoding)
+    f = Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     source = f if objconf.has_header else seekable(f, encoding=objconf.encoding)
     rkwargs = {**objconf, **renamed}
     ext = splitext(url)[1]
@@ -189,6 +191,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
             col_names (list): Column names to use in place of the header row
                 (default: None).
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 
@@ -259,6 +265,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
             col_names (list): Column names to use in place of the header row
                 (default: None).
+
+            user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
+                ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
+                request (default: "riko/<version>").
 
         context (Context): the run environment
 

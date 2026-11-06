@@ -15,7 +15,7 @@ from ._dynamic_conf import DynamicConf
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from riko.types._enums import CastType, FmtLike, LocationType
+    from riko.types._enums import CastType, FmtLike, LocationType, UserAgentLike
     from riko.types._io import PathLike
     from riko.types.modules import (
         FilterConfRule,
@@ -47,6 +47,7 @@ class InputObjconf(DynamicConf):
 class FetchObjconf(DynamicConf):
     url: str
     encoding: str
+    user_agent: UserAgentLike
 
 
 class TailObjconf(DynamicConf):
@@ -91,6 +92,7 @@ class CsvObjconf(DynamicConf):
     skip_rows: int
     dedupe: bool
     sanitize: bool
+    user_agent: UserAgentLike
 
 
 class CurrencyFormatObjconf(DynamicConf):
@@ -110,12 +112,14 @@ class ExchangeRateObjconf(DynamicConf):
     encoding: str
     memoize: bool
     precision: int
+    user_agent: UserAgentLike
 
 
 class FeedAutoDiscoveryObjconf(DynamicConf):
     url: str
     strict: bool
     sort: bool
+    user_agent: UserAgentLike
 
 
 class FetchDataObjconf(DynamicConf):
@@ -123,6 +127,7 @@ class FetchDataObjconf(DynamicConf):
     encoding: str
     path: str
     html5: bool
+    user_agent: UserAgentLike
 
 
 class FetchPageObjconf(DynamicConf):
@@ -132,10 +137,12 @@ class FetchPageObjconf(DynamicConf):
     end: str
     token: str
     detag: bool
+    user_agent: UserAgentLike
 
 
 class FetchSiteFeedObjconf(DynamicConf):
     url: str
+    user_agent: UserAgentLike
 
 
 class FetchTableObjconf(CsvObjconf):
@@ -146,6 +153,7 @@ class FetchTextObjconf(DynamicConf):
     url: str
     encoding: str
     strip_bom: bool
+    user_agent: UserAgentLike
 
 
 class FilterObjconf(DynamicConf):
@@ -292,3 +300,4 @@ class XpathFetchPageObjconf(DynamicConf):
     xpath: str
     encoding: str
     html5: bool
+    user_agent: UserAgentLike

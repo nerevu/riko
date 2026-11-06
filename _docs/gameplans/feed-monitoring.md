@@ -2,9 +2,9 @@
 
 ## 1. Mission
 
-Add first-class primitives for repeatedly observing finite sources and consuming resumable
-change feeds while emitting useful new, changed, deleted, threshold, or anomaly events
-without turning Riko into a scheduler, daemon, or workflow orchestrator.
+Add first-class primitives for repeatedly observing finite sources and consuming
+resumable change feeds while emitting useful new, changed, deleted, threshold, or
+anomaly events without turning Riko into a scheduler, daemon, or workflow orchestrator.
 
 Target shape:
 
@@ -22,12 +22,14 @@ monitoring policy**. It does not define a second persistence/checkpoint abstract
 
 Related authoritative plans:
 
-* `execution-semantics.md` — `Pipeline`, `FeedResult`, `FeedState`, `StateStore`, checkpoints,
-  identity/generation, retry, timeout, cancellation, error/disposition policy;
+* `execution-semantics.md` — `Pipeline`, `FeedResult`, `FeedState`, `StateStore`,
+  checkpoints, identity/generation, retry, timeout, cancellation, error/disposition
+  policy;
 * `orchestration.md` — deployment schedules, durable run boundaries, external workers;
-* `rest-incremental.md` — REST cursor extraction/encoding and source-side filter pushdown;
-* `provider-integrations.md` — `OperationHandle` and waiting for an already-started provider
-  operation;
+* `rest-incremental.md` — REST cursor extraction/encoding and source-side filter
+  pushdown;
+* `provider-integrations.md` — `OperationHandle` and waiting for an already-started
+  provider operation;
 * `fanout-topology.md` — delivery/fan-out topology;
 * `connectors.md` — source/sink transport and credential lifecycle.
 
@@ -35,20 +37,34 @@ Related authoritative plans:
 
 Relevant precedents:
 
-* **Chakula** — RSS `tail -f`, interval, bounded iteration count, initial/backfill control,
-  persisted cache, uniqueness, time lower bounds, explicit failure behavior;
-* **email-sub-api** — feed-monitor process with file/Redis state and notification action;
+* **Chakula** — RSS `tail -f`, interval, bounded iteration count, initial/backfill
+  control, persisted cache, uniqueness, time lower bounds, explicit failure behavior;
+* **email-sub-api** — feed-monitor process with file/Redis state and notification
+  action;
 * **AMS** — named threshold rules, enable/disable/restore, firing history;
 * **Meetup** — new-versus-changed detection and dry-run;
 * **CKAN tooling** — change fingerprints used to avoid unnecessary remote writes;
-* **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state, windows,
-  and explicit incremental cursors;
+* **HDX age API** — dataset freshness classified from age against an expected update
+  frequency (due/overdue/delinquent thresholds per frequency, archived means always
+  delinquent, invalid frequency is an error that counts toward a run's error limit),
+  with a `needs_update` flag as the rule output; `age` is the days between the
+  dataset's `last_updated` (when its data last changed) and the update run (when the
+  source was last observed), so the two timestamps are already separate inputs, and
+  each run upserts its record by dataset id without deleting anything;
+* **Duckstring** — a run that successfully checked a source is recorded separately from
+  a run that produced changed data, so freshness propagates to consumers without
+  rerunning them when all relevant consumer dependencies are unchanged; ETags,
+  modification timestamps, and content fingerprints avoid redundant acquisition, and
+  only a declared complete snapshot may turn absent keys into deletions
+  (`_docs/research/duckstring-evaluation.md`);
+* **Huginn / Streamz / Bytewax / dlt** — periodic sources, source-position state,
+  windows, and explicit incremental cursors;
 * **resumable database/API change feeds** — opaque resume positions, explicit deletion
   tombstones, replay-tolerant consumption, and declared history/ordering guarantees.
 
-These are design inputs, not compatibility targets. Do not copy provider-specific endpoint
-shapes, revision models, pickle state files, platform-specific notification systems, or a
-permanent scheduler into core.
+These are design inputs, not compatibility targets. Do not copy provider-specific
+endpoint shapes, revision models, pickle state files, platform-specific notification
+systems, or a permanent scheduler into core.
 
 ## 3. Ownership boundary
 
@@ -103,7 +119,8 @@ Do not add to core:
 * ML anomaly models;
 * provider-specific notification clients;
 * provider-specific revision-tree/change-feed models;
-* another generic retry, checkpoint store, state store, or operation-wait implementation.
+* another generic retry, checkpoint store, state store, or operation-wait
+  implementation.
 
 ## 5. M0 — finite observation contract
 
@@ -113,12 +130,12 @@ One observation is bounded and returns a rich result:
 result: FeedResult[AsyncIterable[Item]] = await poll_once(source, context)
 ```
 
-The result exposes items, source metadata, and optional `FeedState`. Finite source resources
-close on exhaustion, error, cancellation, or explicit early close.
+The result exposes items, source metadata, and optional `FeedState`. Finite source
+resources close on exhaustion, error, cancellation, or explicit early close.
 
 For finite results, final source state becomes committable only after `result.items`
-completes successfully. A downstream failure before that point must not commit final source
-position.
+completes successfully. A downstream failure before that point must not commit final
+source position.
 
 A recurring monitor composes those observations:
 
@@ -132,12 +149,12 @@ load owner state from StateStore
 → repeat
 ```
 
-The same finite observation can be invoked by an in-process service, cron, an orchestrator
-sensor, or an agent worker.
+The same finite observation can be invoked by an in-process service, cron, an
+orchestrator sensor, or an agent worker.
 
 A resumable change-feed source may instead keep emitting changes during one source
-iteration. It still uses the same `FeedState` / `StateStore` commit rule and does not create
-a second state model.
+iteration. It still uses the same `FeedState` / `StateStore` commit rule and does not
+create a second state model.
 
 ## 6. M1 — periodic source and bounded iterations
 
@@ -168,11 +185,11 @@ Requirements:
   `execution-semantics.md`.
 
 `interval` controls recurrence between completed observations; it is not a retry policy.
-The same `Pipeline` definition remains executable in sync or async mode through the common
-execution bridge.
+The same `Pipeline` definition remains executable in sync or async mode through the
+common execution bridge.
 
-Change-feed delivery cadence is source-specific. A source that can wait for changes does not
-need an artificial fixed polling interval merely to fit this API.
+Change-feed delivery cadence is source-specific. A source that can wait for changes does
+not need an artificial fixed polling interval merely to fit this API.
 
 ## 7. M2 — bootstrap and backfill policy
 
@@ -202,7 +219,8 @@ Source-specific timestamp/cursor interpretation remains inside the source/connec
 
 Change feeds may additionally expose a source-defined "current position" bootstrap that
 establishes state without replaying prior changes. The source owns how that position is
-obtained; the shared `FeedState` / `StateStore` lifecycle owns when it becomes committed.
+obtained; the shared `FeedState` / `StateStore` lifecycle owns when it becomes
+committed.
 
 ## 8. M3 — source position is a FeedState payload
 
@@ -229,28 +247,71 @@ file tail   file identity + byte offset
 ```
 
 A source may use an owner-level `StateKey[T]` (`item_key=None`, `generation=None`) for
-intrinsic source progress. Explicit incremental recovery boundaries use `.checkpoint()` and
-the enclosing stateful owner's identity rules from `execution-semantics.md`.
+intrinsic source progress. Explicit incremental recovery boundaries use `.checkpoint()`
+and the enclosing stateful owner's identity rules from `execution-semantics.md`.
 
-An opaque cursor is treated as an uninterpreted source token. When a checkpoint payload is
-opaque, generic monitoring/state code must:
+`observation` separates **when the source was last checked** from **when its contents
+last changed**. A successful observation that finds no content change commits updated
+observation metadata (observed-at, and the source's own last-modified/version where it
+exposes one), records no content change, and yields no change items. A downstream
+consumer may skip recomputation when its source data version is unchanged and no
+other relevant dependency has changed, including evaluation time, configuration, or
+external state; source observation alone does not determine whether downstream work
+is skippable (an HDX-style age classifier reevaluates when elapsed time crosses a
+freshness threshold even though `last_updated` and the content are unchanged, § 2).
+A derived cursor (a
+`max(updated_at)`-style position) stays where it was; a source-issued resume token
+returned with an empty result is still stored as the checkpoint, per the opaque-cursor
+rule below. ETags, `Last-Modified`, and content fingerprints may short-circuit
+acquisition, but they stay transport optimizations recorded as observation metadata:
+they never stand in for the checkpoint and never become correctness state (the HDX age
+API's `last_updated` versus run time, and Duckstring's checked-versus-changed runs,
+§ 2).
+
+An opaque cursor is treated as an uninterpreted source token. When a checkpoint payload
+is opaque, generic monitoring/state code must:
 
 * serialize and persist it through `FeedState` / `StateStore` without semantic
   transformation;
 * return it to the same source contract when resuming;
 * never increment it;
 * never numerically or lexicographically compare it;
-* never infer ordering from its textual/JSON representation.
+* never infer ordering from its textual/JSON representation;
+* store a token the source returns even when the observation yields no items, since a
+  new token can accompany an empty result.
 
-A source adapter may understand its own cursor format, but that knowledge does not leak into
-generic state logic.
+A source adapter may understand its own cursor format, but that knowledge does not leak
+into generic state logic.
+
+Zero yielded items does not say which of four outcomes an observation reached. The
+result-level observation metadata (`FeedResult.metadata`, whose carrier R5A supplies)
+records the underlying facts independently rather than as one exclusive state, since
+an unchanged observation can also be a complete-empty snapshot:
+
+* **unchanged** — the source establishes that its content version is unchanged:
+  update the observation history and any source-issued resume token; consumers skip
+  only when their other dependencies are unchanged; never infer deletions from an
+  empty change stream;
+* **complete-empty snapshot** — a successful, exhaustive observation establishes zero
+  members within the declared source selection: absence-derived deletion is permitted
+  within that selection, subject to § 9.3;
+* **incremental-empty** — a successful incremental poll yields no changes: commit
+  observation metadata and any advanced source-issued cursor; existing target records
+  stay, since absence is not deletion;
+* **incomplete** — acquisition failed, was cancelled, or stopped early: commit no
+  candidate source state, derive no deletions, and keep the previous published result.
+
+Completion is established only after successful traversal, never when a lazy
+`FeedResult` is constructed, and a successful traversal is distinct from complete
+snapshot membership: an incremental poll finishes successfully without representing
+the whole selection (gameplan audit triage 2026-11-05).
 
 ## 9. M3a — resumable change-feed contract
 
 A change feed is a source that emits source-observed changes together with a resumable
-position. It is not assumed to be a complete event log. Its resume position is an ordinary
-`FeedState` checkpoint payload; this section adds the change envelope and semantics, not a
-second state model.
+position. It is not assumed to be a complete event log. Its resume position is an
+ordinary `FeedState` checkpoint payload; this section adds the change envelope and
+semantics, not a second state model.
 
 Use a provider-neutral envelope:
 
@@ -287,9 +348,9 @@ metadata
     source-specific non-secret details, namespaced by the adapter
 ```
 
-`version` is optional because some sources expose only an entity identity and resume cursor.
-When a source exposes a stable version/revision/event identifier, that value should be
-preserved rather than synthesized from mutable record content.
+`version` is optional because some sources expose only an entity identity and resume
+cursor. When a source exposes a stable version/revision/event identifier, that value
+should be preserved rather than synthesized from mutable record content.
 
 ### 9.1 Change-feed semantics
 
@@ -360,12 +421,13 @@ change identity
     example: (customer-42, version-17)
 ```
 
-When a stable `version` exists, the default logical change identity is `(entity_id,
-version)`. If no stable version exists, an adapter may expose a source-native event ID in
-metadata or the application must configure a dedupe key appropriate to that source.
+When a stable `version` exists, the default logical change identity is
+`(entity_id, version)`. If no stable version exists, an adapter may expose a
+source-native event ID in metadata or the application must configure a dedupe key
+appropriate to that source.
 
-Do not use `entity_id` alone for change-feed dedupe when multiple versions of the entity are
-expected.
+Do not use `entity_id` alone for change-feed dedupe when multiple versions of the entity
+are expected.
 
 ### 9.3 Tombstones
 
@@ -381,11 +443,31 @@ Change(
 )
 ```
 
-Downstream policy may ignore, archive, propagate, alert on, or materialize the deletion. The
-monitoring layer must not silently convert an explicit tombstone into ordinary absence.
+Downstream policy may ignore, archive, propagate, alert on, or materialize the deletion.
+The monitoring layer must not silently convert an explicit tombstone into ordinary
+absence.
 
-Snapshot sources that cannot emit tombstones may still derive deletions through completed
-snapshot comparison; those feeds declare `deletion="absent"`.
+Snapshot sources that cannot emit tombstones may still derive deletions through
+complete-snapshot comparison; those feeds declare `deletion="absent"`.
+
+An observation is a complete snapshot within its declared source selection only when
+the source contract guarantees complete membership for that selection and the
+observation finished successfully, every required page included. Stable membership
+filters such as a tenant or project selection may define the snapshot boundary (for
+REST sources the carrier is `source_filter`,
+[rest-incremental.md § 12](rest-incremental.md#12-r6a--source-side-filter-pushdown);
+other sources use their own source-selection configuration, with no new generic scope
+field); cursor-based or incremental filters such as `updated_since` establish no
+complete membership and cannot support absence-derived deletions. Entity match keys
+must be unique within the declared selection; a duplicate key fails the comparison
+instead of silently collapsing. Absence-derived deletions are restricted to that same
+selection, so a tenant-scoped snapshot never touches target records outside its
+tenant: the target's reconciliation boundary matches the source selection even where
+match keys are unique only within it. A partial, interrupted, or otherwise incomplete
+observation never produces absence-derived deletions, and a feed that cannot assert
+completeness declares `deletion="unsupported"` rather than inferring it. The
+write-side half of this rule, which destructive modes require of their input, is
+[effects.md § 11](effects.md#11-write-modes-and-reconciliation).
 
 ### 9.4 Replay and idempotency
 
@@ -425,9 +507,9 @@ inline change
 → transform/enrich directly
 ```
 
-Hydration is an ordinary connector/source capability and may fail independently of receiving
-the change notification. Its retry/caching behavior follows the normal connector/runtime
-contracts.
+Hydration is an ordinary connector/source capability and may fail independently of
+receiving the change notification. Its retry/caching behavior follows the normal
+connector/runtime contracts.
 
 ## 10. M4 — one StateStore, heterogeneous state
 
@@ -450,16 +532,17 @@ class StateStore(Protocol):
     ) -> None: ...
 ```
 
-`AsyncStateStore` uses the same method names with awaitable operations. Execution resolves
-one mode-specific adapter per run.
+`AsyncStateStore` uses the same method names with awaitable operations. Execution
+resolves one mode-specific adapter per run.
 
 Initial implementations may be memory and file/SQLite stores; optional packages may
-provide Redis, databases, or object storage. Backend physical serialization is backend-owned.
-Configured stores expose coarse `StateStoreCapabilities` plus `validate_state(state)` so
-monitoring payload compatibility can be checked without a second codec/type registry.
+provide Redis, databases, or object storage. Backend physical serialization is
+backend-owned. Configured stores expose coarse `StateStoreCapabilities` plus
+`validate_state(state)` so monitoring payload compatibility can be checked without a
+second codec/type registry.
 
-All writes are CAS-only. A conflict raises `CheckpointConflictError`; monitoring does not
-automatically reload and rerun the observation.
+All writes are CAS-only. A conflict raises `CheckpointConflictError`; monitoring does
+not automatically reload and rerun the observation.
 
 Commit rule:
 
@@ -471,9 +554,9 @@ acquire
 
 A serialization or CAS failure is non-mutating.
 
-For a batch/change-feed response that contains a source-issued terminal cursor, that cursor
-is only a **candidate** until all required records/changes through that boundary complete
-the configured durable handoff.
+For a batch/change-feed response that contains a source-issued terminal cursor, that
+cursor is only a **candidate** until all required records/changes through that boundary
+complete the configured durable handoff.
 
 ## 11. M5 — exact deduplication
 
@@ -503,11 +586,11 @@ source event ID
 another source-native stable change identifier
 ```
 
-A repeated entity with a new version is not a duplicate merely because the entity ID is the
-same.
+A repeated entity with a new version is not a duplicate merely because the entity ID is
+the same.
 
-`uniq` remains the finite-stream deterministic operator. Monitored dedupe owns cross-poll or
-cross-resume history.
+`uniq` remains the finite-stream deterministic operator. Monitored dedupe owns
+cross-poll or cross-resume history.
 
 ## 12. M6 — approximate membership
 
@@ -539,13 +622,13 @@ Change detection answers: **has a known entity changed in selected business fiel
 pipeline.changed(key="product_id", fields=["price", "availability"], first="emit")
 ```
 
-Optional metadata may report previous/current selected values and changed fields. Metadata
-uses the common `Metadata` model and is namespaced/opt-in.
+Optional metadata may report previous/current selected values and changed fields.
+Metadata uses the common `Metadata` model and is namespaced/opt-in.
 
-This is independent of both source cursor advancement and source-emitted change identity. A
-change feed may emit a new source version even when the business fields selected by
-`changed()` are identical; conversely, a snapshot source may derive a business change without
-any source-native change event.
+This is independent of both source cursor advancement and source-emitted change
+identity. A change feed may emit a new source version even when the business fields
+selected by `changed()` are identical; conversely, a snapshot source may derive a
+business change without any source-native change event.
 
 ## 14. M8 — write-if-changed composition
 
@@ -560,10 +643,10 @@ records
 → provider sink write_policy="if_changed"
 ```
 
-Provider write semantics belong to `provider-integrations.md`; artifact fingerprint/lineage
-belongs to `artifact-conversion.md`. Monitoring may produce the changed event but does not
-own the remote-write contract. Side-effecting writes use the execution-derived idempotency
-key where the destination can honor it.
+Provider write semantics belong to `provider-integrations.md`; artifact
+fingerprint/lineage belongs to `artifact-conversion.md`. Monitoring may produce the
+changed event but does not own the remote-write contract. Side-effecting writes use the
+execution-derived idempotency key where the destination can honor it.
 
 ## 15. M9 — bounded windows and anomaly vocabulary
 
@@ -594,9 +677,9 @@ pipeline.anomaly(
 
 Do not add distributed watermarks, late-data correction, or ML model hosting to core.
 
-A change feed with `ordering="partial"` or `"none"` does not become globally ordered merely
-because it passes through a local window. Event-time/watermark semantics would require a
-separate explicit contract.
+A change feed with `ordering="partial"` or `"none"` does not become globally ordered
+merely because it passes through a local window. Event-time/watermark semantics would
+require a separate explicit contract.
 
 Window/alert persistence uses the same stateful-owner and `StateStore` rules when state
 must survive executions.
@@ -650,14 +733,14 @@ webhook = alerts.write(...)
 audit = alerts.write(...)
 ```
 
-Low-level compatibility modules may remain `send`/`receive`, but monitoring documentation
-uses the public `publish`/`subscribe` vocabulary. Attached local branches are execution-owned
-and do not require user drains for cleanup.
+Low-level compatibility modules may remain `send`/`receive`, but monitoring
+documentation uses the public `publish`/`subscribe` vocabulary. Attached local branches
+are execution-owned and do not require user drains for cleanup.
 
 Monitoring decides **what happened**; delivery adapters decide **how to notify**.
 
-Deletion changes are also ordinary records/events for routing purposes; there is no special
-hard-coded deletion sink.
+Deletion changes are also ordinary records/events for routing purposes; there is no
+special hard-coded deletion sink.
 
 ## 18. M12 — dry-run and explainability
 
@@ -673,8 +756,8 @@ Dry-run may acquire/evaluate, but must not:
 * mutate external observation state;
 * invoke side-effecting notification sinks.
 
-It should emit an explanation containing rule identity, observed value, baseline, and whether
-an alert would have fired.
+It should emit an explanation containing rule identity, observed value, baseline, and
+whether an alert would have fired.
 
 ## 19. Feed-aware identity defaults
 
@@ -687,9 +770,9 @@ entry id/guid
 → stable record hash only when explicitly enabled
 ```
 
-These values seed the private per-item `_FeedItem` identity/provenance model. Root identity
-is automatically namespaced by source node identity, and generation remains stable across
-retries.
+These values seed the private per-item `_FeedItem` identity/provenance model. Root
+identity is automatically namespaced by source node identity, and generation remains
+stable across retries.
 
 A convenience helper may compose the generic primitives, but it must return an ordinary
 `Pipeline` and must not create a second monitoring runtime.
@@ -721,15 +804,16 @@ monitor = {
 }
 ```
 
-The underlying source/pipeline uses the normal `RetryPolicy`; this plan does not introduce
-a second `retry={...}` schema.
+The underlying source/pipeline uses the normal `RetryPolicy`; this plan does not
+introduce a second `retry={...}` schema.
 
 Cancellation interrupts both retries and recurrence delays. A failed observation, failed
 change-feed read, or failed required handoff never advances source/observation state.
 
-Notification/provider delivery has its own provider idempotency and may use the same generic
-`RetryPolicy`; it must not cause source state to commit prematurely. A state-store CAS
-conflict propagates; it is not treated as an instruction to reload/rerun automatically.
+Notification/provider delivery has its own provider idempotency and may use the same
+generic `RetryPolicy`; it must not cause source state to commit prematurely. A
+state-store CAS conflict propagates; it is not treated as an instruction to reload/rerun
+automatically.
 
 ## 21. Deployment styles
 
@@ -800,14 +884,17 @@ Required tests include:
 6. `FeedState` resumes after restart simulation with a persistent store;
 7. opaque checkpoint payload round-trips exactly without comparison/coercion;
 8. failed handoff does not advance source state;
-9. source retries use the shared `RetryPolicy` rather than a monitoring-specific retry type;
+9. source retries use the shared `RetryPolicy` rather than a monitoring-specific retry
+   type;
 10. CAS conflict propagates and leaves state unchanged;
 11. failed-observation `raise`/`record_and_continue` behavior;
 12. change feed exposes entity identity separately from change/version identity;
-13. repeated `(entity_id, version)` may be deduped while a new version of the same entity emits;
+13. repeated `(entity_id, version)` may be deduped while a new version of the same
+    entity emits;
 14. tombstone/delete change survives normalization and routing;
 15. `event_log`/`latest_state`/`snapshot_delta` semantics are inspectable;
-16. `total`/`partial`/`none` ordering semantics are inspectable and never strengthened implicitly;
+16. `total`/`partial`/`none` ordering semantics are inspectable and never strengthened
+    implicitly;
 17. `replay="possible"` survives workflow serialization/introspection;
 18. reference and inline payload modes preserve the same change identity;
 19. exact dedupe remains bounded;
@@ -817,7 +904,21 @@ Required tests include:
 23. deterministic threshold/z-score fixtures;
 24. transition/cooldown firing semantics;
 25. dry-run performs no external mutation;
-26. in-process and orchestrated finite observation produce equivalent logical deltas.
+26. in-process and orchestrated finite observation produce equivalent logical deltas;
+27. an unchanged observation updates observation metadata, preserves the content
+    version, stores any new source-issued resume token, and yields no change items; a
+    consumer with no changed dependencies may skip recomputation, while an HDX-style
+    age classifier reevaluates when elapsed time crosses a freshness threshold even
+    though the dataset's `last_updated` and source content are unchanged (deterministic
+    clock and recorded source fixtures substituted through `Context`/`Resource`);
+28. a complete tenant-scoped snapshot may derive deletions within its selection and
+    leaves out-of-scope target records untouched; an incremental-filtered, partial, or
+    interrupted observation never yields absence-derived deletions; and a duplicate
+    entity key fails the snapshot comparison;
+29. the four observation outcomes of § 8 are told apart by result metadata, not item
+    count: a complete-empty snapshot may delete scoped records while an
+    incremental-empty poll may not, and an incomplete observation, whether it yielded
+    zero or many items, neither advances the checkpoint nor derives deletions.
 
 ## 24. Phases
 
@@ -842,17 +943,18 @@ M13  RSS/Atom monitoring helper
 ## 25. Definition of done
 
 1. Riko can repeatedly observe finite sources without a private event loop.
-2. Riko can represent a resumable source change without adopting a provider-specific event
-   model.
+2. Riko can represent a resumable source change without adopting a provider-specific
+   event model.
 3. Source observation/change feeds are clearly distinct from provider operation waiting.
 4. First-observation/backfill semantics are explicit.
-5. Source position, observation history, and alert state are distinct logical payloads but
-   reuse one `FeedState` / `StateStore` infrastructure.
+5. Source position, observation history, and alert state are distinct logical payloads
+   but reuse one `FeedState` / `StateStore` infrastructure.
 6. Opaque cursors round-trip through `FeedState` / `StateStore` without generic
    interpretation or comparison.
 7. Change feeds declare history, ordering, replay, deletion, and payload guarantees.
 8. Entity identity and change identity are separate concepts.
-9. Explicit source deletions are preserved as tombstones rather than converted to absence.
+9. Explicit source deletions are preserved as tombstones rather than converted to
+   absence.
 10. State can persist without a mandatory service dependency, and configured store
     capabilities are inspectable/validatable.
 11. Exact and approximate dedupe have explicit, distinct semantics.

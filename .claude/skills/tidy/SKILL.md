@@ -38,19 +38,27 @@ run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
 by hand. When the diff is mostly moved code (test reorganizations, file splits),
 `gates.py scope tidy --edits-only` lists just the added lines that no removed
 line carries, `path:line: text`; read those first and the moved spans only
-where an edit sits inside them.
+where an edit sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt`
+pass), `python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's
+wording changes, ignoring line breaks and markup; review those instead of the reflow.
+Whenever the scope touches Markdown, also run
+`python .claude/skills/tidy/heading_drift.py BASE`: it lists each heading the change
+adds, removes, or re-levels and exits 1 on a re-level or a wrapped issue number turned
+heading (`## 60:`), the start of a `rumdl fmt` cascade that demotes every later heading
+in the file. Restore the levels and escape the number (`\#60`).
 
-A wholesale run ("tidy the repo") takes every tracked file and fans out one
-read-only agent per top-level package, then applies fixes centrally.
-Every agent brief ends with the mid-run self-check: past about 10 minutes or
-100k tokens with mechanical, repeated work left, stop at a consistent point, run
-the gates, and report what is done, what is left, and the helper script that
-would speed up the rest (run `date` at the start and between items). About 10
-minutes in, send it a non-stopping status ping; pause one that is grinding,
-build the script, then resume it. When an agent finishes, inspect any scripts it wrote for itself (scratchpad,
-`/tmp`, new untracked files) and decide for each: promote it to a shared helper,
-fold it into an existing one,
-park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the user (agents never delete it); report the verdict.
+A wholesale run ("tidy the repo") takes every tracked file and fans out one read-only
+agent per top-level package, then applies fixes centrally. Every agent brief ends with
+the mid-run self-check: past about 10 minutes or 100k tokens with mechanical, repeated
+work left, stop at a consistent point, run the gates, and report what is done, what is
+left, and the helper script that would speed up the rest (run `date` at the start and
+between items). About 10 minutes in, send it a non-stopping status ping; pause one that
+is grinding, build the script, then resume it. When an agent finishes, inspect any
+scripts it wrote for itself (scratchpad, `/tmp`, new untracked files) and decide for
+each: promote it to a shared helper, fold it into an existing one, park it in
+`.claude/skills/drafts/` as an unapproved candidate, or drop it. A dropped or folded
+script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the
+user (agents never delete it); report the verdict.
 
 Also pull in the **touched neighborhood**: callers and docs of every symbol the
 diff renamed, removed, or changed in meaning. One call lists them:
@@ -166,65 +174,64 @@ neighborhood it affects:
    is correct, never dedupe it); docstrings that explain mechanism instead of
    what the caller gets.
 8. **Doc hygiene** — duplicated table rows or sections, broken cross-references
-   the docs lint does not cover, `_docs/` paths in shipped text.
-9. **Test ownership** — for each new or moved test (`manage lint --tests` already
-   holds the file to its index row and class layout): is it in the right tier
-   (functional if it runs a CLI command, `examples` pipeline, or stored fixture end
-   to end; public if it uses only supported names; else internal) and in the file
-   whose index row names its subject? Does a collected doctest or an existing test
-   already assert the same input and outcome? Doctests show basic usage. An edge or
-   error case in both places leaves the doctest when the doctest already shows
-   several other basic use cases. When it does not, prefer rewriting the doctest to
-   show basic usage and keeping the edge case in pytest. Basic usage lives in its
-   most appropriate doctest: move it into this doctest from elsewhere when this is
-   the better home (and follow the move down to the doctest it leaves), but never
-   duplicate it just to give a doctest something to run. Only when no basic usage
-   belongs in this doctest does the pytest copy go. When you add a doctest, grep
-   the tests for each of its inputs and remove a matching test or table row in the
-   same pass.
-   A new test with the same setup and assertion as an existing one (two is
-   enough) is a row in that test's table, and a regression test goes in its
-   subject's class, never a history-named file. Tables follow the
-   `tests/__init__.py` layout: module-level constant, one-line `pytest.param`
-   rows with ids (an `ids=[...]` list only when values and ids share one line);
-   a fold that grows the file needs its rows compacted (`overlap_scan.py`'s `rows`
-   section lists rows a few columns too long: shorten the id or `match`, or alias a
-   repeated value; never a bare `param` import). A doctest grown past basic
-   usage moves its extra cases into its subject's test table. If
-   `manage test --ratchet` reports more uncovered lines, find the lines the
-   change stopped executing before anything else.
-   When the change splits or merges a test file (a new or deleted
-   `tests/<tier>/test_*.py`, or classes moved between files), run this check over
-   every test in the files it touched, not only the moved ones: overlaps (same
-   input and outcome in either file, another tier, or a doctest), misfits (a class
-   asserting a subject another row owns, or a test in the wrong tier), move
-   candidates left behind in the source file, and helpers whose users changed
-   (now used by one file → beside its class; by several → `tests/_*.py`).
-   Start from `python .claude/skills/tidy/overlap_scan.py --files <each touched
-   file>` (static, about 2s). It lists candidates (unused or single-user helpers,
-   copied definitions and constants, helper bodies inlined in tests, same-shape
-   tests and standalone tests that fit a table, `pytest.param` rows a few columns
-   too long for one line, shared literals, doctest calls
-   repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
-   test messages a doctest also pins, doctests of six or more examples whose callee
-   has a table, tests with no assertion or asserts only inside a loop, same-named tests,
-   unsupported names in public and supported-only internal classes, out-of-order
-   or misplaced classes and helpers, classes that never name their riko-named subject,
-   functional classes with no end-to-end marker, tests that start a process
-   without saying why).
-   Read its full output once; never pipe it through `head`/`grep` and rerun
-   (`--limit` already caps it). Read and verify only those, never whole files.
-   Make the moves with
+   the docs lint does not cover, `_docs/` paths in shipped text. When the scope
+   touches `_docs/research/inspiration/`, run
+   `python .claude/skills/tidy/inspiration_drift.py`: a snapshot whose body differs
+   from its `source:` readme is a finding, and snapshot bodies are never edited.
+   `sync_snapshot.py` installs candidates and copies staged snapshots back;
+   `removed_content.py` lists dropped-content leads after a readme rewrite.
+9. **Test ownership** — for each new or moved test (`manage lint --tests` already holds
+   the file to its index row and class layout): is it in the right tier (functional if
+   it runs a CLI command, `examples` pipeline, or stored fixture end to end; public if
+   it uses only supported names; else internal) and in the file whose index row names
+   its subject? Does a collected doctest or an existing test already assert the same
+   input and outcome? Doctests show basic usage. An edge or error case in both places
+   leaves the doctest when the doctest already shows several other basic use cases. When
+   it does not, prefer rewriting the doctest to show basic usage and keeping the edge
+   case in pytest. Basic usage lives in its most appropriate doctest: move it into this
+   doctest from elsewhere when this is the better home (and follow the move down to the
+   doctest it leaves), but never duplicate it just to give a doctest something to run.
+   Only when no basic usage belongs in this doctest does the pytest copy go. When you
+   add a doctest, grep the tests for each of its inputs and remove a matching test or
+   table row in the same pass. A new test with the same setup and assertion as an
+   existing one (two is enough) is a row in that test's table, and a regression test
+   goes in its subject's class, never a history-named file. Tables follow the
+   `tests/__init__.py` layout: module-level constant, one-line `pytest.param` rows with
+   ids (an `ids=[...]` list only when values and ids share one line); a fold that grows
+   the file needs its rows compacted (`overlap_scan.py`'s `rows` section lists rows a
+   few columns too long: shorten the id or `match`, or alias a repeated value; never a
+   bare `param` import). A doctest grown past basic usage moves its extra cases into its
+   subject's test table. If `manage test --ratchet` reports more uncovered lines, find
+   the lines the change stopped executing before anything else. When the change splits
+   or merges a test file (a new or deleted `tests/<tier>/test_*.py`, or classes moved
+   between files), run this check over every test in the files it touched, not only the
+   moved ones: overlaps (same input and outcome in either file, another tier, or a
+   doctest), misfits (a class asserting a subject another row owns, or a test in the
+   wrong tier), move candidates left behind in the source file, and helpers whose users
+   changed (now used by one file → beside its class; by several → `tests/_*.py`). Start
+   from `python .claude/skills/tidy/overlap_scan.py --files <each touched file>`
+   (static, about 2s). It lists candidates (unused or single-user helpers, copied
+   definitions and constants, helper bodies inlined in tests, same-shape tests and
+   standalone tests that fit a table, `pytest.param` rows a few columns too long for one
+   line, shared literals, doctest calls repeated as `pytest.param` rows, doctest errors
+   repeated as `pytest.raises`, test messages a doctest also pins, doctests of six or
+   more examples whose callee has a table, tests with no assertion or asserts only
+   inside a loop, same-named tests, unsupported names in public and supported-only
+   internal classes, out-of-order or misplaced classes and helpers, classes that never
+   name their riko-named subject, functional classes with no end-to-end marker, tests
+   that start a process without saying why). Read its full output once; never pipe it
+   through `head`/`grep` and rerun (`--limit` already caps it). Read and verify only
+   those, never whole files. Make the moves with
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
-   `--with-helpers` so a moved method carries the helpers only it used,
-   `--plan-split` for each class's footprint before a split;
-   moves repoint doc citations), and find a test's current home with
-   `overlap_scan.py --where NAME`. Module constants that a move strands below
-   code go back to the top with `python .claude/skills/tidy/lift_constants.py
-   FILE...` (logger, then `type` aliases, then constants private first, each helper
-   a constant calls just above it; it reports what it cannot move). After editing any of these scripts, run the smoke tests:
+   `--with-helpers` so a moved method carries the helpers only it used, `--plan-split`
+   for each class's footprint before a split; moves repoint doc citations), and find a
+   test's current home with `overlap_scan.py --where NAME`. Module constants that a move
+   strands below code go back to the top with
+   `python .claude/skills/tidy/lift_constants.py FILE...` (logger, then `type` aliases,
+   then constants private first, each helper a constant calls just above it; it reports
+   what it cannot move). After editing any of these scripts, run the smoke tests:
    `uv run --active pytest .claude/skills/tidy/ --no-cov`.
 
 Verify every finding against the code before acting on it; drop what you
@@ -245,10 +252,10 @@ Sort each verified finding into one bucket:
   option saying what it buys and forecloses. Running as a subagent without
   AskUserQuestion, return these framed questions instead of deciding them.
 
-Then check whether any finding class appeared more than once in this run, or
-matches a phrase the Reserved terms table already rules out. If it is regex-able, propose
-adding it to `riko/cli/_lint_terms.py` (`BANNED_TERMS`, with its Reserved
-terms ruling) or a new `manage lint` check, so CI enforces it from then on.
+Then check whether any finding class appeared more than once in this run, or matches a
+phrase the Reserved terms table already rules out. If it is regex-able, propose adding
+it to `riko/cli/_lint_terms.py` (`BANNED_TERMS`, with its Reserved terms ruling) or a
+new `manage lint` check, so CI enforces it from then on.
 
 ## 5. Verify the fixes
 

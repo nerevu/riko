@@ -114,6 +114,9 @@ _HISTORY_WORDS = re.compile(
     r"\b(?:deleted|retired|removed|dropped|merged|superseded)\b", re.IGNORECASE
 )
 
+_BLOCK_START = re.compile(r"\s*(?:[-*+]|\d+[.)]|\||#{1,6})\s")
+_SENTENCE = re.compile(r"\S.*?(?:[.!?](?=\s)|\Z)", re.DOTALL)
+
 _CITING_DOCS = (ROOT_DIR / "CONTRIBUTING.rst", ROOT_DIR / "CLAUDE.md")
 _PATH_CITATION = re.compile(r"`(riko/[A-Za-z0-9_./-]+\.py)`")
 
@@ -281,13 +284,48 @@ def _phase_closure_offenders() -> list[str]:
     return offenders
 
 
+def _gen_paragraphs(text: str) -> Iterator[tuple[int, str]]:
+    """Splits text at blank lines and list, table, and heading starts."""
+    lines, start = text.splitlines(), None
+
+    for lineno, line in enumerate(chain(lines, ("",))):
+        blank = not line.strip()
+
+        if start is not None and (blank or _BLOCK_START.match(line)):
+            yield start + 1, "\n".join(lines[start:lineno])
+            start = None
+
+        if not blank and start is None:
+            start = lineno
+
+
+def _gen_current_citations(
+    text: str, citation: re.Pattern[str]
+) -> Iterator[tuple[int, re.Match[str]]]:
+    """
+    Finds ``citation`` matches outside the sentences that record history.
+
+    A sentence runs across wrapped lines and ends at ``.``, ``!``, or ``?``, a blank
+    line, or a line opening a list item, table row, or heading. One that says what it
+    cites was deleted, retired, removed, dropped, merged, or superseded is skipped.
+    """
+    for start, block in _gen_paragraphs(text):
+        for sentence in _SENTENCE.finditer(block):
+            flat = sentence[0].replace("\n", " ")
+
+            if not _HISTORY_WORDS.search(flat):
+                for match in citation.finditer(flat):
+                    offset = sentence.start() + match.start()
+                    yield (start + block.count("\n", 0, offset), match)
+
+
 def gen_stale_test_citations(
     text: str, known: Iterable[str]
 ) -> Iterator[tuple[int, str]]:
     """
     Finds the test-file citations in ``text`` that name no current test file.
 
-    A line that says the file was deleted, retired, removed, dropped, merged, or
+    A sentence that says the file was deleted, retired, removed, dropped, merged, or
     superseded records history, so its citations are not checked.
 
     Args:
@@ -314,13 +352,12 @@ def gen_stale_test_citations(
     """
     _known = frozenset(known)
 
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not _HISTORY_WORDS.search(line):
-            for cited in _TEST_CITATION.findall(line):
-                path = cited if cited.startswith("tests/") else f"tests/{cited}"
+    for lineno, match in _gen_current_citations(text, _TEST_CITATION):
+        cited = match[1]
+        path = cited if cited.startswith("tests/") else f"tests/{cited}"
 
-                if path not in _known:
-                    yield (lineno, cited)
+        if path not in _known:
+            yield (lineno, cited)
 
 
 def gen_stale_test_symbol_citations(
@@ -332,7 +369,7 @@ def gen_stale_test_symbol_citations(
     A citation is ``path::Class``, ``path::Class::test``, or ``Class::test``, where
     ``path`` is a ``tests/<tier>/test_<name>.py`` file (the ``tests/`` prefix may be
     omitted). A citation whose file is missing is left to the test-file check, and a
-    line that records history (deleted, retired, removed, dropped, merged,
+    sentence that records history (deleted, retired, removed, dropped, merged,
     superseded) is not checked.
 
     Args:
@@ -362,20 +399,16 @@ def gen_stale_test_symbol_citations(
     """
     _known = frozenset(known)
 
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if _HISTORY_WORDS.search(line):
-            continue
+    for lineno, match in _gen_current_citations(text, _SYMBOL_CITATION):
+        cited, method = match["path"], match["method"]
+        path = None if cited is None else f"tests/{cited.removeprefix('tests/')}"
+        symbol = match["cls"] if method is None else f"{match['cls']}::{method}"
+        key = symbol if path is None else f"{path}::{symbol}"
+        checked = method is not None or path is not None
+        present = path is None or path in _known
 
-        for match in _SYMBOL_CITATION.finditer(line):
-            cited, method = match["path"], match["method"]
-            path = None if cited is None else f"tests/{cited.removeprefix('tests/')}"
-            symbol = match["cls"] if method is None else f"{match['cls']}::{method}"
-            key = symbol if path is None else f"{path}::{symbol}"
-            checked = method is not None or path is not None
-            present = path is None or path in _known
-
-            if checked and present and key not in _known:
-                yield (lineno, match[0].lstrip("`"))
+        if checked and present and key not in _known:
+            yield (lineno, match[0].lstrip("`"))
 
 
 def gen_test_symbols(*paths: Path) -> Iterator[str]:
@@ -415,7 +448,7 @@ def gen_stale_path_citations(
     """
     Finds backticked ``riko/*.py`` citations that name no current source file.
 
-    A line that says the file was deleted, retired, removed, dropped, merged, or
+    A sentence that says the file was deleted, retired, removed, dropped, merged, or
     superseded records history, so its citations are not checked.
 
     Args:
@@ -441,11 +474,9 @@ def gen_stale_path_citations(
     """
     _known = frozenset(known)
 
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not _HISTORY_WORDS.search(line):
-            for cited in _PATH_CITATION.findall(line):
-                if cited not in _known:
-                    yield (lineno, cited)
+    for lineno, match in _gen_current_citations(text, _PATH_CITATION):
+        if match[1] not in _known:
+            yield (lineno, match[1])
 
 
 def gen_stale_source_symbol_citations(
@@ -457,9 +488,9 @@ def gen_stale_source_symbol_citations(
     The name is an identifier or ``Class.member``, optionally followed by a call or
     subscript (``name(...)``, ``Name[T]``). A ``first``/``name`` pair checks both, and
     a bare ``name`` after a dotted ``first`` takes its class (``C.x()``/``y()`` cites
-    ``C.y``). A citation whose file is missing is left to the source-file check. A line
-    that records history (deleted, retired, removed, dropped, merged, superseded) is not
-    checked.
+    ``C.y``). A citation whose file is missing is left to the source-file check. A
+    sentence that records history (deleted, retired, removed, dropped, merged,
+    superseded) is not checked.
 
     Args:
 
@@ -492,19 +523,17 @@ def gen_stale_source_symbol_citations(
     """
     _known = frozenset(known)
 
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not _HISTORY_WORDS.search(line):
-            for match in _SOURCE_SYMBOL_CITATION.finditer(line):
-                path, first, name = match["path"], match["first"], match["name"]
+    for lineno, match in _gen_current_citations(text, _SOURCE_SYMBOL_CITATION):
+        path, first, name = match["path"], match["first"], match["name"]
 
-                if first is not None and "." in first and "." not in name:
-                    name = f"{first.rpartition('.')[0]}.{name}"
+        if first is not None and "." in first and "." not in name:
+            name = f"{first.rpartition('.')[0]}.{name}"
 
-                for cited in (first, name):
-                    key = f"{path}::{cited}"
+        for cited in (first, name):
+            key = f"{path}::{cited}"
 
-                    if cited is not None and path in _known and key not in _known:
-                        yield (lineno, key)
+            if cited is not None and path in _known and key not in _known:
+                yield (lineno, key)
 
 
 def _gen_bound_names(*body: ast.stmt) -> Iterator[tuple[str, ast.stmt]]:

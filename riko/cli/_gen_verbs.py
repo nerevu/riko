@@ -6,11 +6,10 @@ from __future__ import annotations
 from functools import partial
 from itertools import chain
 from re import DOTALL, Match, Pattern, compile
-from textwrap import wrap
 from typing import TYPE_CHECKING, Literal
 
 from riko.base._paths import ROOT_DIR
-from riko.base._strutils import get_codegen_note
+from riko.base._strutils import get_codegen_note, wrap_words
 from riko.base._verbs import VERB_PAIRS, VERBS
 
 if TYPE_CHECKING:
@@ -111,9 +110,8 @@ def __gen_parts(
 
 
 def _gen_lines(row: Iterable[str], widths: Sequence[int]) -> Iterator[str]:
-    _wrap = partial(wrap, break_long_words=False, break_on_hyphens=False)
     row_pairs = zip(row, widths, strict=True)
-    wrapped = [_wrap(cell, width) for cell, width in row_pairs]
+    wrapped = [wrap_words(cell, width) for cell, width in row_pairs]
     wrapped_pairs = list(zip(wrapped, widths, strict=True))
     _gen_parts = partial(__gen_parts, wrapped_pairs)
     height = max(map(len, wrapped))

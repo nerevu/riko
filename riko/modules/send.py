@@ -75,7 +75,7 @@ async def async_parser(
         stream: The input stream, sync or async. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
-        objconf: The module configuration, containing `max_wait`.
+        objconf: The module configuration: `max_wait`.
 
         tuples: Iterable of (item, objconf). Note: this shares the `stream`
             iterator, so consuming it will consume `stream` as well.

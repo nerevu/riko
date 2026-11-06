@@ -56,7 +56,7 @@ def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> st
 
         word: The string to slice.
         _: The extracted conf value. Unused.
-        objconf: The module configuration, containing `start` and `length`.
+        objconf: The module configuration: `start` and `length`.
 
     Returns:
 

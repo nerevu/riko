@@ -69,7 +69,7 @@ def parser(
 
         _: The item. Unused.
         param: The parsed query parameters.
-        objconf: The module configuration, containing `base`, `path` and `ext`.
+        objconf: The module configuration: `base`, `path` and `ext`.
 
     Returns:
 

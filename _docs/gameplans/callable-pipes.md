@@ -1,12 +1,14 @@
 # Callable pipes gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md`. This plan is authoritative for callable-node behavior; common execution/state/resource/identity contracts live in [execution-semantics.md](execution-semantics.md).
+> **Provenance.** Extracted from `docs/ROADMAP.md`. This plan is authoritative for
+> callable-node behavior; common execution/state/resource/identity contracts live in
+> [execution-semantics.md](execution-semantics.md).
 
 ## 4. Callable pipes
 
-Callable transforms are ordinary nodes on the single immutable `Pipeline[T]` abstraction.
-The same definition runs through sync or async execution; the target API does not define
-separate final `SyncPipe.map` and `AsyncPipe.map` contracts.
+Callable transforms are ordinary nodes on the single immutable `Pipeline[T]`
+abstraction. The same definition runs through sync or async execution; the target API
+does not define separate final `SyncPipe.map` and `AsyncPipe.map` contracts.
 
 ```python
 pipeline = Pipeline().map(normalize)
@@ -15,8 +17,8 @@ stream = pipeline(items)
 
 ### Existing decorator model
 
-Continue to use the existing module definition/preparation machinery. Each decorator accepts a
-configured form and a bare form:
+Continue to use the existing module definition/preparation machinery. Each decorator
+accepts a configured form and a bare form:
 
 ```python
 @processor(...)
@@ -28,28 +30,33 @@ configured form and a bare form:
 @splitter
 ```
 
-The bare form is exactly the configured form with no options: `@processor` wraps the function
-the same way `@processor()` does, for sync and async implementations alike. Shipped in R4C:
-`Module.__new__` wraps a lone positional callable, and passing a function together with options
-raises `TypeError`; `tests/internal/test_modules.py::TestBareDecorator` pins bare/called
-equivalence. `@processor async def pipe` stays rejected (see below).
+The bare form is exactly the configured form with no options: `@processor` wraps the
+function the same way `@processor()` does, for sync and async implementations alike.
+Shipped in R4C: `Module.__new__` wraps a lone positional callable, and passing a
+function together with options raises `TypeError`;
+`tests/internal/test_modules.py::TestBareDecorator` pins bare/called equivalence.
+`@processor async def pipe` stays rejected (see below).
 
-Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection, or
-callable-context framework.
+Do not add a parallel `PipeTraits`, `TraitOverrides`, `@riko.pipe`, signature-injection,
+or callable-context framework.
 
-**Decorated functions on `|` (unscheduled; triage 2026-10-25, re-homed out of R4C 2026-11-03).** `pipeline | fn` raises `TypeError` for a
-plain function: map, flat-map, and whole-stream readings all fit it, so `.map(fn)` stays the only
-spelling. A function decorated with `@processor`/`@operator` declares its shape, so the target is to
-accept it on the right of `|` as an unregistered module. That needs a node that holds a decorated
-module without a registered name (today a `ModuleNode` needs `name` and a `CallableNode` always maps),
-with durable identity through `version=` and a process-executor story; design it with that node,
-not as a `|` special case. No R-phase owns that node yet; it needs R2B's `version=` first. Strict xfail
+**Decorated functions on `|` (unscheduled; triage 2026-10-25, re-homed out of R4C
+2026-11-03).** `pipeline | fn` raises `TypeError` for a plain function: map, flat-map,
+and whole-stream readings all fit it, so `.map(fn)` stays the only spelling. A function
+decorated with `@processor`/`@operator` declares its shape, so the target is to accept
+it on the right of `|` as an unregistered module. That needs a node that holds a
+decorated module without a registered name (today a `ModuleNode` needs `name` and a
+`CallableNode` always maps), with durable identity through `version=` and a
+process-executor story; design it with that node, not as a `|` special case. No R-phase
+owns that node yet; it needs R2B's `version=` first. Strict xfail
 `tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`
-marks it (2026-10-27). The typed `__or__` overloads on `PipelineDefinition` and `Pipeline` accept only
-a pipeline or a module name, so landing it also adds a decorated-module overload to both and drops
-the test's `pyright: ignore[reportOperatorIssue]`.
+marks it (2026-10-27). The typed `__or__` overloads on `PipelineDefinition` and
+`Pipeline` accept only a pipeline or a module name, so landing it also adds a
+decorated-module overload to both and drops the test's
+`pyright: ignore[reportOperatorIssue]`.
 
-Execution/planning characteristics may extend existing module options/metadata, including:
+Execution/planning characteristics may extend existing module options/metadata,
+including:
 
 ```python
 boundedness: Literal["preserve", "finite", "unbounded", "unknown"]
@@ -64,11 +71,12 @@ The earlier proposed:
 state_checkpoint: Literal["replay", "persist"]
 ```
 
-is superseded by `FeedState`, `StateStore`, stateful owners, and explicit `.checkpoint()`.
+is superseded by `FeedState`, `StateStore`, stateful owners, and explicit
+`.checkpoint()`.
 
 Execution `ordered=True` and semantic `stable_order=True` are distinct: one controls
-concurrent presentation, the other guarantees deterministic semantic ordering for identity
-derivation.
+concurrent presentation, the other guarantees deterministic semantic ordering for
+identity derivation.
 
 ### One callable API
 
@@ -118,8 +126,8 @@ Execution-wide settings belong to:
 pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-A retained node-level `execution=` hint only describes adaptation safety for that callable;
-it does not mutate Pipeline-wide execution settings.
+A retained node-level `execution=` hint only describes adaptation safety for that
+callable; it does not mutate Pipeline-wide execution settings.
 
 ### Settled `map` shape (R4C, decided 2026-10-16)
 
@@ -129,11 +137,12 @@ The R4C slice ships:
 pipeline.map(fn, *, resources=(), version=MISSING, identity=None, **kwargs)
 ```
 
-`stable_order=` and `execution=` stay in the conceptual signature above but are not part of
-this slice.
+`stable_order=` and `execution=` stay in the conceptual signature above but are not part
+of this slice.
 
-**Call shape.** Any plain one-argument function works unchanged: `fn(item) -> R`, as with
-Python's `map` (Beam `Map`, Dask `bag.map`, pandas `Series.map`, Polars `map_elements`).
+**Call shape.** Any plain one-argument function works unchanged: `fn(item) -> R`, as
+with Python's `map` (Beam `Map`, Dask `bag.map`, pandas `Series.map`, Polars
+`map_elements`).
 
 ```python
 pipeline.map(itemgetter("content"))
@@ -141,17 +150,19 @@ pipeline.map(str.upper)
 pipeline.map(partial(scale, factor=2))
 ```
 
-* `fn` receives the upstream value as is: a scalar from an earlier `map` reaches it unwrapped
-  (`Pipeline().map(len)(["hi"])` yields `2`), never as `{"content": value}`.
-* The return value is the next item as is: a mapping stays an item, a scalar becomes a plain
-  value. Nothing is assigned to a `"udf"` field (`TestCallableNodes` already expects this). A
-  returned iterator is one item, not a fan-out; fanning out is `flat_map`.
-* `async def fn(item)` has the same shape; iterating with `for` / `async for` picks the mode.
+* `fn` receives the upstream value as is: a scalar from an earlier `map` reaches it
+  unwrapped (`Pipeline().map(len)(["hi"])` yields `2`), never as `{"content": value}`.
+* The return value is the next item as is: a mapping stays an item, a scalar becomes a
+  plain value. Nothing is assigned to a `"udf"` field (`TestCallableNodes` already
+  expects this). A returned iterator is one item, not a fan-out; fanning out is
+  `flat_map`.
+* `async def fn(item)` has the same shape; iterating with `for` / `async for` picks the
+  mode.
 * Exceptions propagate; `None` is a valid result. There is no filtering.
 * No `context=` is passed and there is no per-item execution state.
 
-**Resources become keyword arguments.** Declared resource aliases are passed as keywords named
-after the alias, not as one `resources=ResourceView`:
+**Resources become keyword arguments.** Declared resource aliases are passed as keywords
+named after the alias, not as one `resources=ResourceView`:
 
 ```python
 def enrich(item, *, db):
@@ -162,56 +173,60 @@ pipeline.map(enrich, resources="db")  # enrich(item, db=<db>)
 pipeline.map(enrich, resources={"db": "primary"})  # alias "db" -> Context's "primary"
 ```
 
-This is declaration-driven, so it does not break the ban on signature injection: Riko never
-inspects `fn` to discover dependencies; the node declares the binding and execution calls
-`fn(item, **view)`. The function stays testable outside Riko (`enrich(item, db=fake_db)`).
-Built-in module parsers keep receiving `resources=ResourceView`; the two authoring contracts
-share the upstream binding model (`ResourcesLike` -> immutable local -> Context name mapping)
-and differ only in the final invocation adapter. An alias must be a valid Python identifier,
-checked when the node is built.
+This is declaration-driven, so it does not break the ban on signature injection: Riko
+never inspects `fn` to discover dependencies; the node declares the binding and
+execution calls `fn(item, **view)`. The function stays testable outside Riko
+(`enrich(item, db=fake_db)`). Built-in module parsers keep receiving
+`resources=ResourceView`; the two authoring contracts share the upstream binding model
+(`ResourcesLike` -> immutable local -> Context name mapping) and differ only in the
+final invocation adapter. An alias must be a valid Python identifier, checked when the
+node is built.
 
-**Extra keyword arguments are fixed on the node.** `pipeline.map(enrich, resources="db", timeout=10)`
-calls `enrich(item, timeout=10, db=<db>)`. Rules:
+**Extra keyword arguments are fixed on the node.**
+`pipeline.map(enrich, resources="db", timeout=10)` calls
+`enrich(item, timeout=10, db=<db>)`. Rules:
 
 1. Keyword arguments are fixed per node, JSON-native and frozen like
-   `ModuleNode.options`, and identity-significant (`timeout=10` and `timeout=20` are different
-   nodes). A live object goes in through `functools.partial` or `resources=`.
+   `ModuleNode.options`, and identity-significant (`timeout=10` and `timeout=20` are
+   different nodes). A live object goes in through `functools.partial` or `resources=`.
 2. Resource aliases and keyword arguments must be disjoint. A collision
-   (`pipeline.map(fn, resources="db", db=1)`) raises `InvalidPipelineError` when `.map()` is
-   called. No precedence rule.
-3. `map()`'s own parameter names (`resources`, `version`, `identity`) are reserved and never
-   reach `fn`; a function needing one of those names fixes it with `partial`.
+   (`pipeline.map(fn, resources="db", db=1)`) raises `InvalidPipelineError` when
+   `.map()` is called. No precedence rule.
+3. `map()`'s own parameter names (`resources`, `version`, `identity`) are reserved and
+   never reach `fn`; a function needing one of those names fixes it with `partial`.
 
-`partial(enrich, timeout=10)` and `map(enrich, timeout=10)` invoke identically, but their
-fingerprints are not promised to match; `version=` is the durable identity escape hatch.
+`partial(enrich, timeout=10)` and `map(enrich, timeout=10)` invoke identically, but
+their fingerprints are not promised to match; `version=` is the durable identity escape
+hatch.
 
-**Graph representation.** A new `CallableNode` family (`fn`, `version`, `identity`, keyword
-arguments, plus the shared `resources`). At plan time it resolves to the existing `udf` module by
-name for its execution metadata (loopability, sync/async availability), but its prepared call
-applies `fn` directly rather than running `udf`'s parser, so values reach `fn` unwrapped and a
-returned iterator stays one item (as built 2026-10-22); `PreparedNode` becomes a
-`ModuleNode | CallableNode` tagged union. `ModuleNode` stays
-JSON-native. Rejected: `ModuleNode("udf")` with a non-JSON callable slot (breaks the JSON-native
-property), and registering `fn` as a pipeline-local module (mutates a process-global registry
-from an immutable definition).
+**Graph representation.** A new `CallableNode` family (`fn`, `version`, `identity`,
+keyword arguments, plus the shared `resources`). At plan time it resolves to the
+existing `udf` module by name for its execution metadata (loopability, sync/async
+availability), but its prepared call applies `fn` directly rather than running `udf`'s
+parser, so values reach `fn` unwrapped and a returned iterator stays one item (as built
+2026-10-22); `PreparedNode` becomes a `ModuleNode | CallableNode` tagged union.
+`ModuleNode` stays JSON-native. Rejected: `ModuleNode("udf")` with a non-JSON callable
+slot (breaks the JSON-native property), and registering `fn` as a pipeline-local module
+(mutates a process-global registry from an immutable definition).
 
-**Serialization.** `Workflow.serialize()` (and codegen) raises a clear error on a workflow that
-contains a callable node; no `pkg.mod:qualname` reference form.
+**Serialization.** `Workflow.serialize()` (and codegen) raises a clear error on a
+workflow that contains a callable node; no `pkg.mod:qualname` reference form.
 
 **Typing.** `map` changes the item type: `Callable[[T], R]` gives `Pipeline[R]`
-(`.map(itemgetter("content"))` is `Pipeline[str]`). This needs a PEP 695 `[R]` declaration on
-`PipelineDefinition` plus a `Pipeline` override (`Self` cannot change its type parameter);
-keyword-taking callables type-check through `Callable[Concatenate[T, ...], R]`. Verify with a
-pyright probe.
+(`.map(itemgetter("content"))` is `Pipeline[str]`). This needs a PEP 695 `[R]`
+declaration on `PipelineDefinition` plus a `Pipeline` override (`Self` cannot change its
+type parameter); keyword-taking callables type-check through
+`Callable[Concatenate[T, ...], R]`. Verify with a pyright probe.
 
-**Not in this slice.** `@processor async def pipe` (a single async implementation named `pipe`)
-keeps raising `TypeError`: the registry finds interfaces by attribute name, so an async wrapper
-in the `pipe` slot would run as sync. Lifting it means classifying by `isasync` instead of name
-across the import utilities, `ModuleDefinition`, and codegen; it stays a target of this gameplan
-(§ Sync and async implementations) and is scheduled in R4E, not R4C.
+**Not in this slice.** `@processor async def pipe` (a single async implementation named
+`pipe`) keeps raising `TypeError`: the registry finds interfaces by attribute name, so
+an async wrapper in the `pipe` slot would run as sync. Lifting it means classifying by
+`isasync` instead of name across the import utilities, `ModuleDefinition`, and codegen;
+it stays a target of this gameplan (§ Sync and async implementations) and is scheduled
+in R4E, not R4C.
 
-Likely follow-up: `.map(str.upper, field="title")` to transform one field in place, over the
-existing `field` / `assign` call options.
+Likely follow-up: `.map(str.upper, field="title")` to transform one field in place, over
+the existing `field` / `assign` call options.
 
 ### Sync and async implementations
 
@@ -226,26 +241,29 @@ def pipe(item, **kwargs): ...
 async def pipe(item, **kwargs): ...
 ```
 
-**Deferred past R4C (decided 2026-10-16):** the R4C bare form wraps `@processor def pipe` and
-`@processor async def async_pipe`, but `@processor async def pipe` keeps raising `TypeError`
-until interfaces are classified by `isasync` rather than by attribute name. That change is
-scheduled in R4E ([implementation-sequence.md](implementation-sequence.md), 2026-10-22 triage);
+**Deferred past R4C (decided 2026-10-16):** the R4C bare form wraps
+`@processor def pipe` and `@processor async def async_pipe`, but
+`@processor async def pipe` keeps raising `TypeError` until interfaces are classified by
+`isasync` rather than by attribute name. That change is scheduled in R4E
+([implementation-sequence.md](implementation-sequence.md), 2026-10-22 triage);
 `tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises` pins the
 current `TypeError` until then.
 
-A single async implementation need not be renamed `async_pipe`. `isasync=True` remains the
-explicit escape hatch when Python cannot classify the callable reliably. Dual
-implementations may still use `pipe` + `async_pipe` so both forms can coexist in one module.
+A single async implementation need not be renamed `async_pipe`. `isasync=True` remains
+the explicit escape hatch when Python cannot classify the callable reliably. Dual
+implementations may still use `pipe` + `async_pipe` so both forms can coexist in one
+module.
 
 Native implementation wins for the execution mode. Sync execution bridges async-only
-components through the execution's shared portal; async execution adapts unknown sync work
-to a worker unless explicitly inline-safe. Never create an async runtime per item.
+components through the execution's shared portal; async execution adapts unknown sync
+work to a worker unless explicitly inline-safe. Never create an async runtime per item.
 
 ### Feed-native parser inference
 
 An async generator parser is inferred as Feed-native. A legacy coroutine returning a
-completed iterable remains a compatibility fallback. `parser_mode=` is only an escape hatch
-when inference is ambiguous. Rollout by module is owned by `feed-native-streaming.md`.
+completed iterable remains a compatibility fallback. `parser_mode=` is only an escape
+hatch when inference is ambiguous. Rollout by module is owned by
+`feed-native-streaming.md`.
 
 ### Callable Context
 
@@ -255,23 +273,26 @@ Callable invocation continues through the ordinary wrapper-prepared kwargs path:
 result = fn(item, **pipe_kwargs)
 ```
 
-The public `Context` may be supplied as the immutable environment/configuration definition:
+The public `Context` may be supplied as the immutable environment/configuration
+definition:
 
 ```python
 def transform(item: Item, *, context: Context, **kwargs) -> Item: ...
 ```
 
 **Undecided (2026-10-16; decided by R4D, assigned 2026-10-22):** the R4C `map` passes no
-`context=` (§ Settled `map` shape). Whether a callable node should ever receive `context=` is
-open. R4D decides it together with the `{"input": name}` reference grammar: if that grammar
-applies to a callable node's keyword arguments (`pipeline.map(search, q={"input": "q"})` calls
-`search(item, q=<value>)`), run input values reach a callable declaratively and the likely ruling
-is no `context=`; R4D adopts `context=` only for a concrete need references cannot express (e.g.
-reading `Context.mode`). See [implementation-sequence.md](implementation-sequence.md) R4D.
+`context=` (§ Settled `map` shape). Whether a callable node should ever receive
+`context=` is open. R4D decides it together with the `{"input": name}` reference
+grammar: if that grammar applies to a callable node's keyword arguments
+(`pipeline.map(search, q={"input": "q"})` calls `search(item, q=<value>)`), run input
+values reach a callable declaratively and the likely ruling is no `context=`; R4D adopts
+`context=` only for a concrete need references cannot express (e.g. reading
+`Context.mode`). See [implementation-sequence.md](implementation-sequence.md) R4D.
 
-Do not turn `Context` into mutable per-item execution state. Position, item key, generation,
-and observation live in the private `_FeedItem` runtime wrapper; task groups, state-store
-adapters, channels, portals, and resolved resource values stay on the private execution.
+Do not turn `Context` into mutable per-item execution state. Position, item key,
+generation, and observation live in the private `_FeedItem` runtime wrapper; task
+groups, state-store adapters, channels, portals, and resolved resource values stay on
+the private execution.
 
 There is no public `ExecutionContext`, `CallableContext`, `call_kwargs`, or per-item
 `context.bind(...)` execution model.
@@ -294,48 +315,50 @@ type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 
 to an immutable local-name -> Context-name mapping.
 
-Resolved resource values are passed through the existing module wrapper/preparation machinery in
-the same way current `stream`, `objconf`, and `tuples` arguments are prepared. Only directly
-declared bindings are visible to the callable/parser. Transitive resource dependencies
-affect lifecycle/fingerprinting but are not implicitly exposed.
+Resolved resource values are passed through the existing module wrapper/preparation
+machinery in the same way current `stream`, `objconf`, and `tuples` arguments are
+prepared. Only directly declared bindings are visible to the callable/parser. Transitive
+resource dependencies affect lifecycle/fingerprinting but are not implicitly exposed.
 
-The local alias is identity-significant; the Context lookup target name is not. The resolved
-effective resource definition is identity-significant. Missing bindings fail preparation
-before resource opening/source consumption.
+The local alias is identity-significant; the Context lookup target name is not. The
+resolved effective resource definition is identity-significant. Missing bindings fail
+preparation before resource opening/source consumption.
 
 ### Callable fingerprints and `version=`
 
-Automatic fingerprinting is best-effort; explicit `version=` is the authoritative durable
-identity. Write the version whenever a checkpoint or an idempotent side effect must survive a
-process restart or a dependency upgrade:
+Automatic fingerprinting is best-effort; explicit `version=` is the authoritative
+durable identity. Write the version whenever a checkpoint or an idempotent side effect
+must survive a process restart or a dependency upgrade:
 
 ```python
 pipeline.map(transform, version="normalize-v3")
 ```
 
 Automatic inspection remains excellent for process-local caching, debugging, obvious
-structural-change detection, and generated default node identity — but it cannot see through a
-changed third-party callee, a runtime-derived global, a C extension, generated code, or
-monkeypatching. See [execution-semantics.md](execution-semantics.md#callable-and-resource-fingerprints)
-for the owning contract.
+structural-change detection, and generated default node identity — but it cannot see
+through a changed third-party callee, a runtime-derived global, a C extension, generated
+code, or monkeypatching. See
+[execution-semantics.md](execution-semantics.md#callable-and-resource-fingerprints) for
+the owning contract.
 
 Semantic fingerprints are resolved during execution preparation and fixed for that run.
-Inspectable Python callables use normalized AST while ignoring formatting, comments, source
-locations, docstrings, and annotations. Relevant defaults, kwdefaults, closure nonlocals,
-durable referenced globals, decorators, and captured configuration participate.
+Inspectable Python callables use normalized AST while ignoring formatting, comments,
+source locations, docstrings, and annotations. Relevant defaults, kwdefaults, closure
+nonlocals, durable referenced globals, decorators, and captured configuration
+participate.
 
 `functools.partial` includes the wrapped callable and bound arguments. Bound methods and
 callable instances include durable instance configuration. Stable builtins/stdlib use
-qualified identity. Opaque third-party/native implementations require a resolvable package
-identity/version or an explicit node version.
+qualified identity. Opaque third-party/native implementations require a resolvable
+package identity/version or an explicit node version.
 
 ```python
 version: NonNullHashable | MissingType = MISSING
 ```
 
 `MISSING` means automatic inspection; `None` is invalid. Explicit `version=` replaces
-automatic implementation inspection for callables owned by the node while stable namespace
-and non-callable configuration still participate.
+automatic implementation inspection for callables owned by the node while stable
+namespace and non-callable configuration still participate.
 
 ### Identity semantics
 
@@ -347,23 +370,24 @@ identity: IdentityMode  # "preserve" | "derive" | "combine"
 ```
 
 The values are an `IdentityMode` `StrEnum` (`PRESERVE`/`DERIVE`/`COMBINE`, bare strings
-accepted), since callers supply them at a Python call site (decided 2026-10-22). R4C's `map`
-accepts and carries all three without semantics; R5A decides which apply to a one-to-one node
-(strict xfail `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
+accepted), since callers supply them at a Python call site (decided 2026-10-22). R4C's
+`map` accepts and carries all three without semantics; R5A decides which apply to a
+one-to-one node (strict xfail
+`tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
 
 * `preserve`: 1 -> 1 identity/generation preservation;
 * `derive`: deterministic child identity/generation;
 * `combine`: output identity/generation from all contributors.
 
-For derive operations, semantic child identity is preferred. Positional fallback requires a
-stable semantic ordering guarantee. Combine semantics may declare whether contributor order
-is significant.
+For derive operations, semantic child identity is preferred. Positional fallback
+requires a stable semantic ordering guarantee. Combine semantics may declare whether
+contributor order is significant.
 
 ### Strict flat-map
 
-With `strict=False`, normal Python iterable semantics apply. With `strict=True`, accidental
-bare mappings are rejected, the result must be iterable/async iterable as required, and
-emitted values must satisfy the Riko item contract.
+With `strict=False`, normal Python iterable semantics apply. With `strict=True`,
+accidental bare mappings are rejected, the result must be iterable/async iterable as
+required, and emitted values must satisfy the Riko item contract.
 
 Strictness is a node semantic option, not an execution type.
 
@@ -381,20 +405,20 @@ task groups/portal
 worker pools
 ```
 
-Planning fails before workers start when required configuration cannot be safely serialized.
-No process-only public Context type is introduced.
+Planning fails before workers start when required configuration cannot be safely
+serialized. No process-only public Context type is introduced.
 
-Shipped (R4C, repo-audit triage 2026-10-29): a callable node never reads the run's `Context`, so
-the process executor ships its calls without one, and an
-unpicklable resource it does not declare no longer refuses the run. Module nodes still ship the
+Shipped (R4C, repo-audit triage 2026-10-29): a callable node never reads the run's
+`Context`, so the process executor ships its calls without one, and an unpicklable
+resource it does not declare no longer refuses the run. Module nodes still ship the
 `Context`, because wrappers read its `inputs`/`test`/`mode`. Regression:
 `tests/public/test_pipeline.py::TestExecutionSettings::test_a_process_mapped_callable_ignores_unused_context_resources`.
 
 ### Side effects and idempotency
 
 Pure callables need no idempotency contract. A side-effecting callable declares the
-capability needed by execution validation and accepts the centrally derived idempotency key.
-The callable does not reconstruct provenance itself.
+capability needed by execution validation and accepts the centrally derived idempotency
+key. The callable does not reconstruct provenance itself.
 
 The common dimensions are:
 
@@ -402,8 +426,8 @@ The common dimensions are:
 (node_id, fingerprint, item_key, generation, iteration)
 ```
 
-If the destination cannot genuinely honor idempotency, retryable/resumable validation fails
-unless the node explicitly opts out with `require_idempotency=False`.
+If the destination cannot genuinely honor idempotency, retryable/resumable validation
+fails unless the node explicitly opts out with `require_idempotency=False`.
 
 ### State/checkpoints
 
@@ -428,37 +452,41 @@ owner when the concrete Pipeline is compiled. Restore belongs to that owner.
 ### Planning diagnostics
 
 Planner output should expose declared/resolved semantic metadata without a second trait
-runtime. Useful fields include boundedness, ordering, stable order, sync/async availability,
-adaptation policy, identity mode, side-effect/idempotency support, declared resources,
-callable/resource fingerprint source, and Feed-native vs legacy parser mode. Resource affinity
-(which nodes share a declared resource, and whether that resource may cross workers) is derived
-from `resources=` and the Resource definition at plan time; it is never declared as node metadata.
+runtime. Useful fields include boundedness, ordering, stable order, sync/async
+availability, adaptation policy, identity mode, side-effect/idempotency support,
+declared resources, callable/resource fingerprint source, and Feed-native vs legacy
+parser mode. Resource affinity (which nodes share a declared resource, and whether that
+resource may cross workers) is derived from `resources=` and the Resource definition at
+plan time; it is never declared as node metadata.
 
 Structural compilation may be cached; execution-sensitive callable/resource fingerprints
 are recomputed at execution preparation.
 
 ### Per-item gating (`skip_if`)
 
-The module decorators accept a `skip_if` callable that passes an item through untouched when the
-predicate matches. It is a callable, so it is not JSON-native and cannot be a `ModuleNode` option;
-since v1-cutover step 4 (2026-10-02) no `Pipeline` form expresses it, and `examples/kazeeki.py` /
-`tests/pyworkflows/pipe_kazeeki_full.py` dropped their guards (the kazeeki async-parity row is a
-strict xfail because the ungated budget math yields `NaN`). The strict-xfail tripwire is
+The module decorators accept a `skip_if` callable that passes an item through untouched
+when the predicate matches. It is a callable, so it is not JSON-native and cannot be a
+`ModuleNode` option; since v1-cutover step 4 (2026-10-02) no `Pipeline` form expresses
+it, and `examples/kazeeki.py` / `tests/pyworkflows/pipe_kazeeki_full.py` dropped their
+guards (the kazeeki async-parity row is a strict xfail because the ungated budget math
+yields `NaN`). The strict-xfail tripwire is
 `tests/public/test_pipeline.py::TestConditionalNodes`, written against
-`.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on the callable
-node, or conditional routing from the fan-out plan; either way the tripwire is rewritten to the
-chosen form and un-xfailed here. Call-time `skip_if` on a direct module call (honored by the
-released `prepare`, which folded call kwargs into the options) was retired on 2026-10-16 rather than
-restored ahead of that decision: `skip_if` and the other decoration options are fixed at decoration,
-and a direct call or `prepare` passing one raises `TypeError` (`Module._validate_call_keywords`,
-rows `DECORATION_OPTION_CALLS` in `tests/internal/test_modules.py`).
+`.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on
+the callable node, or conditional routing from the fan-out plan; either way the tripwire
+is rewritten to the chosen form and un-xfailed here. Call-time `skip_if` on a direct
+module call (honored by the released `prepare`, which folded call kwargs into the
+options) was retired on 2026-10-16 rather than restored ahead of that decision:
+`skip_if` and the other decoration options are fixed at decoration, and a direct call or
+`prepare` passing one raises `TypeError` (`Module._validate_call_keywords`, rows
+`DECORATION_OPTION_CALLS` in `tests/internal/test_modules.py`).
 
 ### Definition of done
 
 1. `Pipeline.map` / `Pipeline.flat_map` are mode-neutral callable APIs.
 2. Existing decorators/module preparation remain the definition mechanism.
 3. No `state_checkpoint="replay|persist"` option remains.
-4. Public `Context` remains immutable/environmental; per-item provenance remains private.
+4. Public `Context` remains immutable/environmental; per-item provenance remains
+   private.
 5. Resources use the common declaration/preparation model.
 6. Callable fingerprints and `version=` support durable state/idempotency identity.
 7. Ambiguous custom identity uses only `preserve` / `derive` / `combine`.

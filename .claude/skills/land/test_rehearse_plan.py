@@ -44,10 +44,20 @@ def repo(tmp_path, monkeypatch):
 @pytest.mark.parametrize("skills", [True, False])
 def test_skill_steps_run_the_skill_smoke_tests(tmp_path, monkeypatch, skills):
     labels = []
-    record = lambda _root, commands: labels.extend(c[0] for c in commands) or "ok"
+    record = lambda _root, commands, _log=None: (
+        labels.extend(c[0] for c in commands) or "ok"
+    )
     monkeypatch.setattr(rehearse_plan, "run_checks", record)
     rehearse_plan.check(tmp_path, full=False, skills=skills)
     assert ("skill-tests" in labels) is skills
+
+
+def test_failed_check_logs_its_output_and_quotes_the_errors(tmp_path):
+    script = "print('a.md:1: error here'); print('Success!'); raise SystemExit(1)"
+    command = ("lint", (sys.executable, "-c", script))
+    result = rehearse_plan.run_checks(tmp_path, [command], tmp_path / "02")
+    assert result == "lint: a.md:1: error here (log: 02.lint.log)"
+    assert "Success!" in (tmp_path / "02.lint.log").read_text()
 
 
 def test_rewritten_fixup_target_names_its_replacement(repo):

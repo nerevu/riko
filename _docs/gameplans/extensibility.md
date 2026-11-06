@@ -1,57 +1,65 @@
 # Extensibility & ecosystem gameplan
 
-> **Scope.** This plan owns the contracts/ecosystem plane: module contracts, plugins, canonical
-> workflow serialization, observability integrations, adapter packages, optional execution drivers,
-> and GUI integration. Runtime semantics are consumed from their owning gameplans rather than
-> redefined here.
+> **Scope.** This plan owns the contracts/ecosystem plane: module contracts, plugins,
+> canonical workflow serialization, observability integrations, adapter packages,
+> optional execution drivers, and GUI integration. Runtime semantics are consumed from
+> their owning gameplans rather than redefined here.
 
 Related authoritative plans:
 
-- [execution-semantics.md](execution-semantics.md) — immutable `Pipeline`, Context/Resource,
-  execution, identity/idempotency, `FeedState`/`StateStore`, checkpoints, batch semantics;
-- [fanout-topology.md](fanout-topology.md) — publish/subscribe/split/routing/fan-in topology;
+- [execution-semantics.md](execution-semantics.md) — immutable `Pipeline`,
+  Context/Resource, execution, identity/idempotency, `FeedState`/`StateStore`,
+  checkpoints, batch semantics;
+- [fanout-topology.md](fanout-topology.md) — publish/subscribe/split/routing/fan-in
+  topology;
 - [cache.md](cache.md) — `Pipeline.cache()` / CacheNode replay semantics;
 - [effects.md](effects.md) — `write` / action effect semantics and result reporting;
-- [connectors.md](connectors.md) — connector/session/credential contracts and concrete adapters;
+- [connectors.md](connectors.md) — connector/session/credential contracts and concrete
+  adapters;
 - [cli.md](cli.md) — Click-native CLI extension layer;
 - [mcp.md](mcp.md) — capability catalog/execution policy;
-- [operations-as-code.md](operations-as-code.md) — operation source-of-truth, OperationSpec/Plan,
-  import/compatibility/deployment semantics consumed by operation-pack extensions;
+- [operations-as-code.md](operations-as-code.md) — operation source-of-truth,
+  OperationSpec/Plan, import/compatibility/deployment semantics consumed by
+  operation-pack extensions;
 - [implementation-sequence.md](implementation-sequence.md) — forward dependency order;
-- [release-readiness.md](release-readiness.md) — pre-1.0 Python API compatibility/removal policy.
+- [release-readiness.md](release-readiness.md) — pre-1.0 Python API
+  compatibility/removal policy.
 
-This gameplan also retains the useful conclusions from prior-art research on issue #10: Pypes,
-Mario, RssPercolator, Plagger, Turtle, node-machine, and the later comparison with Bonobo, petl,
-Singer, Streamz, Bytewax, and FastPipe.
+This gameplan also retains the useful conclusions from prior-art research on issue #10:
+Pypes, Mario, RssPercolator, Plagger, Turtle, node-machine, and the later comparison
+with Bonobo, petl, Singer, Streamz, Bytewax, and FastPipe.
 
-The organizing rule is **contracts before interfaces**: CLI, GUI, plugins, connectors, operation
-packs, and optional drivers consume authoritative Pipeline/module/resource/state/operation contracts
-rather than inventing parallel models.
+The organizing rule is **contracts before interfaces**: CLI, GUI, plugins, connectors,
+operation packs, and optional drivers consume authoritative
+Pipeline/module/resource/state/operation contracts rather than inventing parallel
+models.
 
 ## E0. Roadmap principles
 
-1. **Contracts before interfaces.** Every extension surface consumes the same semantic contracts.
-2. **Local semantics are authoritative.** Generated code and optional drivers must preserve the
-   in-process Pipeline semantics.
-3. **Explicit resources, identity, side effects, and boundedness.** A module declares what it needs
-   and what semantic guarantees it provides.
-4. **Optional integrations stay optional.** Plugin loading, OpenTelemetry, cloud SDKs, databases,
-   and protocol clients do not inflate the minimal install.
-5. **Version data, not runtime objects.** Workflow files store serializable definitions/references,
-   never live clients, portals, channels, cache contents, or private execution objects.
-6. **Secure by default.** Loading a workflow or operation pack never installs or downloads
-   executable code.
-7. **Evidence before optimization.** Optional execution drivers/per-node optimizations require
-   measurable benefit without semantic drift.
+1. **Contracts before interfaces.** Every extension surface consumes the same semantic
+   contracts.
+2. **Local semantics are authoritative.** Generated code and optional drivers must
+   preserve the in-process Pipeline semantics.
+3. **Explicit resources, identity, side effects, and boundedness.** A module declares
+   what it needs and what semantic guarantees it provides.
+4. **Optional integrations stay optional.** Plugin loading, OpenTelemetry, cloud SDKs,
+   databases, and protocol clients do not inflate the minimal install.
+5. **Version data, not runtime objects.** Workflow files store serializable
+   definitions/references, never live clients, portals, channels, cache contents, or
+   private execution objects.
+6. **Secure by default.** Loading a workflow or operation pack never installs or
+   downloads executable code.
+7. **Evidence before optimization.** Optional execution drivers/per-node optimizations
+   require measurable benefit without semantic drift.
 8. **Extensions specialize owners.** Operation packs, integrations, and CLIs register
-   implementations/references; they do not redefine `OperationSpec`, capability policy, provider
-   waiting, or Core execution.
+   implementations/references; they do not redefine `OperationSpec`, capability policy,
+   provider waiting, or Core execution.
 
 ## E1. Module contract v1
 
-Extend the existing `ModuleMetadata` / decorator metadata into one self-describing module contract
-sufficient for validation, generated documentation, CLI/GUI inspection, plugin discovery, and
-execution planning.
+Extend the existing `ModuleMetadata` / decorator metadata into one self-describing
+module contract sufficient for validation, generated documentation, CLI/GUI inspection,
+plugin discovery, and execution planning.
 
 A module definition should expose, where applicable:
 
@@ -70,16 +78,18 @@ process/thread/inline adaptation safety
 short description/examples/docs/distribution metadata
 ```
 
-Do not add a second traits/runtime framework when existing decorator/module metadata can express the
-same information.
+Do not add a second traits/runtime framework when existing decorator/module metadata can
+express the same information.
 
 Placement (2026-10-23 file-split audit): `ModuleMetadata`, `ReturnInference`, and
-`get_module_provider` sit at the head of `riko/types/modules.py`, whose body is the per-module
-`RawConf`/`Conf` TypedDicts that `manage codegen --config` reads. When this contract grows, give it its
-own `riko/types/` file (re-exported from `riko.types.modules` and `riko.ext`, where `ModuleMetadata` is
-EXTENSION-tier) rather than growing it inside the conf catalog.
+`get_module_provider` sit at the head of `riko/types/modules.py`, whose body is the
+per-module `RawConf`/`Conf` TypedDicts that `manage codegen --config` reads. When this
+contract grows, give it its own `riko/types/` file (re-exported from
+`riko.types.modules` and `riko.ext`, where `ModuleMetadata` is EXTENSION-tier) rather
+than growing it inside the conf catalog.
 
-State/checkpoint declarations are references to the common core model, not a module-specific store:
+State/checkpoint declarations are references to the common core model, not a
+module-specific store:
 
 ```text
 stateless
@@ -90,12 +100,13 @@ source/observation FeedState production
 
 A module does not declare a custom checkpoint protocol or lease mechanism.
 
-Resource requirements use the common `resources=` declaration and execution wrapper preparation.
-Resolved resource values never become durable module-definition data.
+Resource requirements use the common `resources=` declaration and execution wrapper
+preparation. Resolved resource values never become durable module-definition data.
 
-Port declarations follow the Workflow v2 grammar. Fixed-output modules declare their ports directly;
-configurable modules such as split/route derive the declared port set deterministically from
-normalized node configuration. Edges connect declared ports; edges never create ports.
+Port declarations follow the Workflow v2 grammar. Fixed-output modules declare their
+ports directly; configurable modules such as split/route derive the declared port set
+deterministically from normalized node configuration. Edges connect declared ports;
+edges never create ports.
 
 Deliverables:
 
@@ -106,27 +117,30 @@ Deliverables:
 - deterministic built-in/plugin catalog export for docs/GUI;
 - conformance helpers for extension authors.
 
-Acceptance: built-ins and plugins validate through the same definition contract; invalid config or
-resource/topology requirements fail before source consumption (the config half is scheduled as R4E in
-[implementation-sequence.md](implementation-sequence.md)); catalog generation does not import
-uninstalled optional dependencies unnecessarily.
+Acceptance: built-ins and plugins validate through the same definition contract; invalid
+config or resource/topology requirements fail before source consumption (the config half
+is scheduled as R4E in [implementation-sequence.md](implementation-sequence.md));
+catalog generation does not import uninstalled optional dependencies unnecessarily.
 
-Open decision (triaged 2026-10-06): `ModuleDefinition(sync_pipe=…/async_pipe=…)` accepts plain
-undecorated callables (documented, and run by both executions), but its slots and
-`ResolvedModule`'s are typed `SyncModuleWrapper`/`AsyncModuleWrapper`, whose declared members
-(`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`, `isasync`) a plain callable lacks.
-Readers cope with `getattr` defaults, and `gen_registry_catalog` skips such definitions by catching
-`AttributeError`. The module contract decides one of: normalize plain callables at the definition
-boundary (stamping declared metadata), reject them, or type the slots honestly. Do not stamp
-metadata or widen the slot types ahead of that decision. Since 2026-10-21
-`ModuleDefinition.from_module(module, *, name, description)` (which replaced the `module=` kwarg) reads
-a module's callables, name, and docstring summary once into a plain keyword-only record; it is the
-definition-boundary normalization point this decision would extend. Since 2026-10-22 a `Pipeline.map`
-callable node borrows the built-in `udf` wrapper for this metadata (`_resolve_callable` in
-`riko/execution/_prepared.py`; `udf`'s parser never runs), so the ruling covers callable nodes too:
-stamping or honest slot types would let a callable node resolve without a donor module. The same
-decision settles whether `SyncModuleWrapper`/`AsyncModuleWrapper` join `riko.ext`; until then a
-caller registering a plain callable casts to the private protocol (2026-10-30 surface triage).
+Open decision (triaged 2026-10-06): `ModuleDefinition(sync_pipe=…/async_pipe=…)` accepts
+plain undecorated callables (documented, and run by both executions), but its slots and
+`ResolvedModule`'s are typed `SyncModuleWrapper`/`AsyncModuleWrapper`, whose declared
+members (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`, `isasync`) a
+plain callable lacks. Readers cope with `getattr` defaults, and `gen_registry_catalog`
+skips such definitions by catching `AttributeError`. The module contract decides one of:
+normalize plain callables at the definition boundary (stamping declared metadata),
+reject them, or type the slots honestly. Do not stamp metadata or widen the slot types
+ahead of that decision. Since 2026-10-21
+`ModuleDefinition.from_module(module, *, name, description)` (which replaced the
+`module=` kwarg) reads a module's callables, name, and docstring summary once into a
+plain keyword-only record; it is the definition-boundary normalization point this
+decision would extend. Since 2026-10-22 a `Pipeline.map` callable node borrows the
+built-in `udf` wrapper for this metadata (`_resolve_callable` in
+`riko/execution/_prepared.py`; `udf`'s parser never runs), so the ruling covers callable
+nodes too: stamping or honest slot types would let a callable node resolve without a
+donor module. The same decision settles whether `SyncModuleWrapper`/`AsyncModuleWrapper`
+join `riko.ext`; until then a caller registering a plain callable casts to the private
+protocol (2026-10-30 surface triage).
 
 ## E2. Plugin ecosystem v1
 
@@ -150,8 +164,8 @@ PipeResolver
     compiler-free resolution facade
 ```
 
-Preserve that separation. Plugin work extends it rather than merging module and composed-Pipeline
-resolution again.
+Preserve that separation. Plugin work extends it rather than merging module and
+composed-Pipeline resolution again.
 
 Requirements:
 
@@ -163,21 +177,23 @@ Requirements:
 - no remote-code installation during workflow load;
 - no core edit per healthy external integration.
 
-An installed Python plugin has host-process privileges; package installation is a trust decision.
+An installed Python plugin has host-process privileges; package installation is a trust
+decision.
 
-The evidence for all of this is one real external package, not another hundred internal tests. Keep
-the `implementation-sequence.md` R12 proof as a hard pre-1.0 release criterion: entry-point
-registration, a declared `Resource` dependency, a sync-only or async-only implementation adapted in
-the opposite execution mode, an external `Publisher`/`Subscription` or `StateStore`, generated
-discoverability that includes the extension, and no core edit.
+The evidence for all of this is one real external package, not another hundred internal
+tests. Keep the `implementation-sequence.md` R12 proof as a hard pre-1.0 release
+criterion: entry-point registration, a declared `Resource` dependency, a sync-only or
+async-only implementation adapted in the opposite execution mode, an external
+`Publisher`/`Subscription` or `StateStore`, generated discoverability that includes the
+extension, and no core edit.
 
-Note the division of labor with R4B: R4B proves the **runtime architecture** can hold real external
-resources early. R12 proves the **external package API**.
+Note the division of labor with R4B: R4B proves the **runtime architecture** can hold
+real external resources early. R12 proves the **external package API**.
 
 ## E3. Canonical Workflow v2 specification
 
-Workflow v2 is the single normalized graph/storage contract consumed by validation, compilation,
-serialization, CLI/GUI tooling, and private execution preparation.
+Workflow v2 is the single normalized graph/storage contract consumed by validation,
+compilation, serialization, CLI/GUI tooling, and private execution preparation.
 
 ### E3.1 One normalization boundary
 
@@ -196,35 +212,39 @@ both
     -> compile / serialize / execute
 ```
 
-No compiler/runtime subsystem independently reinterprets authoring shorthand, old port names, inline
-targets, omitted outputs, or legacy v1 shapes.
+No compiler/runtime subsystem independently reinterprets authoring shorthand, old port
+names, inline targets, omitted outputs, or legacy v1 shapes.
 
-During the remaining 0.x line, Riko accepts serialized `PipeDef`s (pipe definitions, the released v1 format) only at the loader/migration
-boundary, warns when migration occurs, normalizes immediately to v2, and serializes v2 only.
-`migrate_v1_to_v2()` is pure and testable. A `PipeDef` module node named `write` migrates
-deterministically to canonical `WriteNode` plus its Target/Format representation; execution never
-keeps a parallel v1 `write` runtime.
+During the remaining 0.x line, Riko accepts serialized `PipeDef`s (pipe definitions, the
+released v1 format) only at the loader/migration boundary, warns when migration occurs,
+normalizes immediately to v2, and serializes v2 only. `migrate_v1_to_v2()` is pure and
+testable. A `PipeDef` module node named `write` migrates deterministically to canonical
+`WriteNode` plus its Target/Format representation; execution never keeps a parallel v1
+`write` runtime.
 
-`PipeDef` terminal `_OUTPUT` pseudo-nodes are loader syntax only. `migrate_v1_to_v2()` consumes the
-pseudo-node and its terminal wire, translates the producer endpoint to top-level canonical
-`outputs`, and drops the pseudo-node before canonical validation. No canonical node/edge or v2
-serializer recreates it.
+`PipeDef` terminal `_OUTPUT` pseudo-nodes are loader syntax only. `migrate_v1_to_v2()`
+consumes the pseudo-node and its terminal wire, translates the producer endpoint to
+top-level canonical `outputs`, and drops the pseudo-node before canonical validation. No
+canonical node/edge or v2 serializer recreates it.
 
-The v1 loader is intentionally temporary. At **1.0**, normal workflow loading is v2-only and rejects
-v1 input. The offline `migrate_v1_to_v2()` utility may remain as a rescue/conversion tool without
-making v1 executable. Unreleased branch-only experiments, including the discarded public `sink()`
-surface, receive no loader compatibility and are not accepted as legacy grammar merely because a
-prototype once existed.
+The v1 loader is intentionally temporary. At **1.0**, normal workflow loading is v2-only
+and rejects v1 input. The offline `migrate_v1_to_v2()` utility may remain as a
+rescue/conversion tool without making v1 executable. Unreleased branch-only experiments,
+including the discarded public `sink()` surface, receive no loader compatibility and are
+not accepted as legacy grammar merely because a prototype once existed.
 
-> **Superseded — clean-break policy.** The temporary-0.x-v1-loader framing in this section (and the
-> acceptance bullets in §E3.10) is superseded by the R4A clean-break policy: v1 is **not** a maintained
-> runtime ingress. Each commit deletes the v1 construct its v2 replacement lands, the v1→v2 cutover
-> completes at **R4B**, and `migrate_v1_to_v2()` is a one-shot corpus/offline tool rather than a live
-> loader. Authoritative owner + deletion ledger: `implementation-sequence.md` R4A clean-break policy.
+> **Superseded — clean-break policy.** The temporary-0.x-v1-loader framing in this
+> section (and the acceptance bullets in §E3.10) is superseded by the R4A clean-break
+> policy: v1 is **not** a maintained runtime ingress. Each commit deletes the v1
+> construct its v2 replacement lands, the v1→v2 cutover completes at **R4B**, and
+> `migrate_v1_to_v2()` is a one-shot corpus/offline tool rather than a live loader.
+> Authoritative owner + deletion ledger: `implementation-sequence.md` R4A clean-break
+> policy.
 
 ### E3.2 Canonical graph envelope
 
-Canonical v2 uses top-level `nodes` and `edges` with explicit named outputs and typed inputs.
+Canonical v2 uses top-level `nodes` and `edges` with explicit named outputs and typed
+inputs.
 
 Every edge endpoint has the full form:
 
@@ -250,14 +270,15 @@ Top-level outputs are explicit references:
 }
 ```
 
-There is no fake `type:"output"` module. Authoring may omit `outputs` only when exactly one
-unambiguous leaf exists; normalization materializes `outputs.default`.
+There is no fake `type:"output"` module. Authoring may omit `outputs` only when exactly
+one unambiguous leaf exists; normalization materializes `outputs.default`.
 
-A `Workflow` must contain at least one executable node. Top-level `outputs` describe how a
-non-empty graph is exposed; they do not make an empty graph meaningful. The bare-bones DAG (`PipeDag`) reader is
-`Workflow.parse`, which routes through this normalization boundary, so `Workflow.parse({"modules":
-[]})` is a definition error rather than an output-only pseudo-graph — shipped behaviour as of the
-CLI cutover, raising `InvalidPipelineError("workflow has no nodes")`.
+A `Workflow` must contain at least one executable node. Top-level `outputs` describe how
+a non-empty graph is exposed; they do not make an empty graph meaningful. The bare-bones
+DAG (`PipeDag`) reader is `Workflow.parse`, which routes through this normalization
+boundary, so `Workflow.parse({"modules": []})` is a definition error rather than an
+output-only pseudo-graph — shipped behaviour as of the CLI cutover, raising
+`InvalidPipelineError("workflow has no nodes")`.
 
 ### E3.3 Node families
 
@@ -272,12 +293,13 @@ ActionNode
 SubscribeNode
 ```
 
-`ModuleNode` covers registered transforms/operators including split, branch, route, union, merge,
-join, and loop. Loop remains a specialized registered module, not a separate LoopNode.
+`ModuleNode` covers registered transforms/operators including split, branch, route,
+union, merge, join, and loop. Loop remains a specialized registered module, not a
+separate LoopNode.
 
-`ReadNode` and `WriteNode` reference serializable Target/Format definitions. `ActionNode` references
-a registered provider/action identity. `CacheNode` carries cache semantic policy but never cache
-contents. `SubscribeNode` owns subscription policy.
+`ReadNode` and `WriteNode` reference serializable Target/Format definitions.
+`ActionNode` references a registered provider/action identity. `CacheNode` carries cache
+semantic policy but never cache contents. `SubscribeNode` owns subscription policy.
 
 Node field meanings are consistent:
 
@@ -293,25 +315,29 @@ params  registered action parameters; ActionNode only
 Other node families use their own typed structural fields rather than `conf`.
 
 **Closed means hand-written (decided 2026-10-12).** The family→class table in
-`riko/definitions/_normalize.py` stays an explicit dict guarded by a completeness test against the
-`NodeFamily` literal; it is not derived from subclass registration. A subclass hook
-(`__attrs_init_subclass__` or `__init_subclass__` on `Node`) earns its place only if this union is
-deliberately opened to extensions. If that decision is ever taken, the table becomes a registry by
-design and the hook is the right mechanism, with two constraints: use `__attrs_init_subclass__`,
-because plain `__init_subclass__` fires twice for a `slots=True` attrs subclass (once on the
-discarded pre-slots class), and give the registry a `replace`-tolerant policy so that double fire or
-a redefinition cannot raise at import. The `NodeFamily` literal cannot be derived at runtime, so the
-completeness test stays even then. Until that decision, no hook: it would silently admit any `Node`
-subclass defined anywhere, tests included, into a set this section declares closed.
+`riko/definitions/_normalize.py` stays an explicit dict guarded by a completeness test
+against the `NodeFamily` literal; it is not derived from subclass registration. A
+subclass hook (`__attrs_init_subclass__` or `__init_subclass__` on `Node`) earns its
+place only if this union is deliberately opened to extensions. If that decision is ever
+taken, the table becomes a registry by design and the hook is the right mechanism, with
+two constraints: use `__attrs_init_subclass__`, because plain `__init_subclass__` fires
+twice for a `slots=True` attrs subclass (once on the discarded pre-slots class), and
+give the registry a `replace`-tolerant policy so that double fire or a redefinition
+cannot raise at import. The `NodeFamily` literal cannot be derived at runtime, so the
+completeness test stays even then. Until that decision, no hook: it would silently admit
+any `Node` subclass defined anywhere, tests included, into a set this section declares
+closed.
 
-**Landed 2026-09-29:** a loop's embedded module is the node field `ModuleNode.embed: Embed | None`
-rather than a `conf.embed` entry, so `conf` means registered module configuration and nothing else.
-`WorkflowDocument`s (workflow documents) carry a node-level `embed` key; `LoopConf` is deleted; loop stays a registered
-module (no `LoopNode`); `Pipeline.pipe`/`from_module` take `embed=` and `options=`.
+**Landed 2026-09-29:** a loop's embedded module is the node field
+`ModuleNode.embed: Embed | None` rather than a `conf.embed` entry, so `conf` means
+registered module configuration and nothing else. `WorkflowDocument`s (workflow
+documents) carry a node-level `embed` key; `LoopConf` is deleted; loop stays a
+registered module (no `LoopNode`); `Pipeline.pipe`/`from_module` take `embed=` and
+`options=`.
 
-Resource slots are declared by the owning contract; canonical nodes use a normalized `resources`
-mapping. Authoring singular `resource` sugar is allowed only where the owning contract has exactly
-one resource slot.
+Resource slots are declared by the owning contract; canonical nodes use a normalized
+`resources` mapping. Authoring singular `resource` sugar is allowed only where the
+owning contract has exactly one resource slot.
 
 ### E3.4 Edge families and topology
 
@@ -322,8 +348,8 @@ StreamEdge
 PublishEdge
 ```
 
-`PublishEdge` connects a producer output to a `SubscribeNode`; publication is relationship/delivery
-semantics, not a PublishNode.
+`PublishEdge` connects a producer output to a `SubscribeNode`; publication is
+relationship/delivery semantics, not a PublishNode.
 
 Port grammar:
 
@@ -345,16 +371,16 @@ _OUTPUT2 -> out:1
 _OUTPUT3 -> out:2
 ```
 
-A source stream port may have many outgoing edges. A target stream port has at most one incoming
-StreamEdge. Fan-in operands use distinct `in`, `in:1`, `in:2`, ... ports so ordering never depends on
-edge-list/traversal order.
+A source stream port may have many outgoing edges. A target stream port has at most one
+incoming StreamEdge. Fan-in operands use distinct `in`, `in:1`, `in:2`, ... ports so
+ordering never depends on edge-list/traversal order.
 
-Split uses positional output ports (`out`, `out:1`, ...). Branch/route use semantic output ports such
-as `out:matched`, `out:unmatched`, `out:a`. The node/module contract declares valid ports; edge
-presence does not define the operator's port set.
+Split uses positional output ports (`out`, `out:1`, ...). Branch/route use semantic
+output ports such as `out:matched`, `out:unmatched`, `out:a`. The node/module contract
+declares valid ports; edge presence does not define the operator's port set.
 
-Same-name serialized subscription targeting follows the fanout contract; explicit node ids can
-select one declaration when necessary.
+Same-name serialized subscription targeting follows the fanout contract; explicit node
+ids can select one declaration when necessary.
 
 ### E3.5 Node identity
 
@@ -369,9 +395,10 @@ filter-2
 write-1
 ```
 
-Generated ids identify this normalized graph definition. They are not promised stable across
-structural edits. Authors provide explicit ids when a logical node/boundary must survive revisions,
-for example durable state/checkpoint ownership or external references.
+Generated ids identify this normalized graph definition. They are not promised stable
+across structural edits. Authors provide explicit ids when a logical node/boundary must
+survive revisions, for example durable state/checkpoint ownership or external
+references.
 
 Graph `id` remains distinct from semantic fingerprint/version identity.
 
@@ -386,20 +413,21 @@ Structural references use:
 {"input": "customer_id"}
 ```
 
-Canonical input declarations use full JSON Schema. Authoring shorthands normalize to that form.
-Requiredness is inferred from absence of a default; `default:null` means the input has a default of
-null and therefore must also be nullable. Canonical object schemas use
-`additionalProperties:false` where the contract is closed.
+Canonical input declarations use full JSON Schema. Authoring shorthands normalize to
+that form. Requiredness is inferred from absence of a default; `default:null` means the
+input has a default of null and therefore must also be nullable. Canonical object
+schemas use `additionalProperties:false` where the contract is closed.
 
 ### E3.7 Targets and Formats
 
-A `Target` is a destination identified by its `backend`. The base `Target` protocol and its
-`SupportsRead`/`SupportsWrite`/`SupportsActions` capability refinements are behavior contracts (in `riko.types`); concrete
-`<Backend>Target` adapters implement them (in `riko.definitions`). `Format` is an immutable serializable
-interpretation/serialization spec. Resource bindings to live clients are separate.
+A `Target` is a destination identified by its `backend`. The base `Target` protocol and
+its `SupportsRead`/`SupportsWrite`/`SupportsActions` capability refinements are behavior
+contracts (in `riko.types`); concrete `<Backend>Target` adapters implement them (in
+`riko.definitions`). `Format` is an immutable serializable interpretation/serialization
+spec. Resource bindings to live clients are separate.
 
-Canonical endpoint/provider vocabulary belongs under `Backends` (renamed from `Targets` for symmetry
-with `Formats`), for example:
+Canonical endpoint/provider vocabulary belongs under `Backends` (renamed from `Targets`
+for symmetry with `Formats`), for example:
 
 ```text
 FILE
@@ -422,15 +450,16 @@ XML
 TEXT
 ```
 
-Backends use concrete granularity; adapters own behavior. A dedicated `TargetRegistry` parallels
-`ModuleRegistry`: it stores one self-describing adapter class per `backend` — the class is its own
-factory — exactly as `ModuleRegistry` stores one definition per name, and `resolve(backend)` returns the
-adapter class the caller then constructs. Two configurations of the same backend (prod vs. staging) are
-two constructions of one adapter, not two registrations. Sync/async is a session-layer concern, so one
-adapter serves both its capabilities.
+Backends use concrete granularity; adapters own behavior. A dedicated `TargetRegistry`
+parallels `ModuleRegistry`: it stores one self-describing adapter class per `backend` —
+the class is its own factory — exactly as `ModuleRegistry` stores one definition per
+name, and `resolve(backend)` returns the adapter class the caller then constructs. Two
+configurations of the same backend (prod vs. staging) are two constructions of one
+adapter, not two registrations. Sync/async is a session-layer concern, so one adapter
+serves both its capabilities.
 
-Read owns acquisition + interpretation. Write owns mutation/reconciliation. Format resolution order
-is:
+Read owns acquisition + interpretation. Write owns mutation/reconciliation. Format
+resolution order is:
 
 ```text
 explicit Format
@@ -440,32 +469,35 @@ explicit Format
 -> error
 ```
 
-No generic content sniffing is part of canonical resolution. HTTP Content-Type is secondary to an
-explicit/path-derived format rather than silently overriding it.
+No generic content sniffing is part of canonical resolution. HTTP Content-Type is
+secondary to an explicit/path-derived format rather than silently overriding it.
 
-Formats are inline/self-contained in canonical nodes; inferred formats are made explicit by
-normalization. Reusable Targets may be top-level declarations referenced by nodes; inline authoring
-Targets normalize deterministically.
+Formats are inline/self-contained in canonical nodes; inferred formats are made explicit
+by normalization. Reusable Targets may be top-level declarations referenced by nodes;
+inline authoring Targets normalize deterministically.
 
 ### E3.8 Loop, checkpoint, cache, and effects structure
 
-Workflow v2 defines the **structure** needed for later runtime phases even when those phases have not
-landed yet.
+Workflow v2 defines the **structure** needed for later runtime phases even when those
+phases have not landed yet.
 
 - loop remains a `ModuleNode` with structural `embed` and existing loop-owned options;
 - absence of `until`/`max_iterations` means current one-run-per-parent loop semantics;
 - presence of either iterative control opts into iterative semantics;
-- checkpoint declarations may exist before a resumable owner is bound; compilation later resolves
-  every reachable checkpoint to exactly one owner;
+- checkpoint declarations may exist before a resumable owner is bound; compilation later
+  resolves every reachable checkpoint to exactly one owner;
 - CacheNode contains cache semantic identity/policy, not contents/live backends;
-- WriteNode contains serializable target/resource/write-operation fields, not resolved resource values;
-- ActionNode contains serializable target/resource/`params` fields, not module `conf` or resolved resource values;
-- SubscribeNode contains subscription policy; PublishEdge structurally defines publishers.
+- WriteNode contains serializable target/resource/write-operation fields, not resolved
+  resource values;
+- ActionNode contains serializable target/resource/`params` fields, not module `conf` or
+  resolved resource values;
+- SubscribeNode contains subscription policy; PublishEdge structurally defines
+  publishers.
 
 ### E3.9 Strict canonical validation
 
-Canonical v2 is a closed contract. Unknown structural fields are errors rather than ignored
-forward-compatibility bags.
+Canonical v2 is a closed contract. Unknown structural fields are errors rather than
+ignored forward-compatibility bags.
 
 Validation rejects, before source consumption where applicable:
 
@@ -487,76 +519,81 @@ invalid registered action params when the action contract is available
 invalid registered target configuration when the target contract is available
 ```
 
-Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError` subtype, rather
-than leaking traversal accidents such as `IndexError`/`KeyError`. At the `PipeDag` reader boundary
-this now holds: `Workflow.parse({"modules": []})` fails immediately with that domain-error family,
-stating that the workflow has no nodes.
+Invalid graph/workflow structure raises `InvalidPipelineError`, a `PipelineError`
+subtype, rather than leaking traversal accidents such as `IndexError`/`KeyError`. At the
+`PipeDag` reader boundary this now holds: `Workflow.parse({"modules": []})` fails
+immediately with that domain-error family, stating that the workflow has no nodes.
 
-Forward compatibility comes from explicit `format_version`, not from an older runtime silently
-executing a workflow whose new semantics it does not understand.
+Forward compatibility comes from explicit `format_version`, not from an older runtime
+silently executing a workflow whose new semantics it does not understand.
 
-Extensions add registered vocabulary — modules, targets, actions, their schemas — rather than
-arbitrary graph grammar fields.
+Extensions add registered vocabulary — modules, targets, actions, their schemas — rather
+than arbitrary graph grammar fields.
 
 ### E3.10 Serialization and acceptance
 
-Canonical serialization is deterministic. Array/map ordering is stable for byte-comparison/golden
-fixtures, but semantic operator order comes from ids/ports/contracts rather than incidental JSON
-array order.
+Canonical serialization is deterministic. Array/map ordering is stable for
+byte-comparison/golden fixtures, but semantic operator order comes from
+ids/ports/contracts rather than incidental JSON array order.
 
 Acceptance:
 
-- every supported Pipeline topology round-trips without losing ports, stateful-owner identity,
-  checkpoint placement, Target/Format/resource/input references, named outputs, cache/effect nodes,
-  or publish edges;
+- every supported Pipeline topology round-trips without losing ports, stateful-owner
+  identity, checkpoint placement, Target/Format/resource/input references, named
+  outputs, cache/effect nodes, or publish edges;
 - normalize(normalize(x)) is stable;
 - v1 migration followed by v2 serialization never emits v1-only structure;
-- a `PipeDef` `_OUTPUT` pseudo-node migrates to top-level canonical `outputs` and is never emitted
-  by v2 normalization/serialization;
-- empty v1 DAGs and empty v2 workflows fail with `InvalidPipelineError` before graph traversal or
-  source consumption;
-- a `PipeDef` `write` module normalizes to canonical `WriteNode` rather than executing a legacy module;
-- normal v1 loading warns/migrates during 0.x and is rejected at the 1.0 runtime boundary, while an
-  offline migration utility may remain;
+- a `PipeDef` `_OUTPUT` pseudo-node migrates to top-level canonical `outputs` and is
+  never emitted by v2 normalization/serialization;
+- empty v1 DAGs and empty v2 workflows fail with `InvalidPipelineError` before graph
+  traversal or source consumption;
+- a `PipeDef` `write` module normalizes to canonical `WriteNode` rather than executing a
+  legacy module;
+- normal v1 loading warns/migrates during 0.x and is rejected at the 1.0 runtime
+  boundary, while an offline migration utility may remain;
 - GUI/CLI validation consumes the same normalized model as execution preparation;
-- a structurally valid node whose runtime capability is not implemented may round-trip, while
-  execution fails with a clear unsupported-capability error.
+- a structurally valid node whose runtime capability is not implemented may round-trip,
+  while execution fails with a clear unsupported-capability error.
 
-An `OperationSpec` may reference/reuse a `WorkflowDocument`, but this gameplan does
-not extend the workflow format with Operations as Code source-of-truth, plan/apply/verify, import,
-compatibility, deployment, or drift semantics. Those stay in `operations-as-code.md`.
+An `OperationSpec` may reference/reuse a `WorkflowDocument`, but this gameplan does not
+extend the workflow format with Operations as Code source-of-truth, plan/apply/verify,
+import, compatibility, deployment, or drift semantics. Those stay in
+`operations-as-code.md`.
 
 ### E3.11 Reuse of the shipped graph index
 
-R4A does not reinterpret topology from scratch. One immutable, runtime-neutral graph index
-(`GraphIndex`/`GraphEdge` in `riko/types/_workflow.py`) is constructed once by `Workflow.index`
-(its v1 builder
-`parse_pipe_def` was deleted at cutover step 5): wire-level `edges`/`incoming`/`outgoing` carry full
-port identity, node-level `order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`/`required` carry
-scheduling facts, and `cyclic` names the nodes a cycle passes through. Topology is interpreted
-once, deterministically, and frozen. It lives in the definitions layer so that `Workflow.validate()`
-and R4B's `ExecutionPlan` read the same index: validation rejects a non-empty `cyclic` rather than
-walking the edges itself (folded in 2026-10-05; the earlier separate `cyclic_nodes` pass is gone).
+R4A does not reinterpret topology from scratch. One immutable, runtime-neutral graph
+index (`GraphIndex`/`GraphEdge` in `riko/types/_workflow.py`) is constructed once by
+`Workflow.index` (its v1 builder `parse_pipe_def` was deleted at cutover step 5):
+wire-level `edges`/`incoming`/`outgoing` carry full port identity, node-level
+`order`/`dependencies`/`dependents`/`roots`/`leaves`/`outputs`/`required` carry
+scheduling facts, and `cyclic` names the nodes a cycle passes through. Topology is
+interpreted once, deterministically, and frozen. It lives in the definitions layer so
+that `Workflow.validate()` and R4B's `ExecutionPlan` read the same index: validation
+rejects a non-empty `cyclic` rather than walking the edges itself (folded in 2026-10-05;
+the earlier separate `cyclic_nodes` pass is gone).
 
 The v1 legacy artifacts the index once carried (`_OUTPUT` as a real node, verbatim
-`_INPUT`/`_OTHER`/`_OUTPUT` ports, dropped orphan nodes) left with the v1 builder: the index now
-indexes only canonical `Workflow`s, keeps every declared node, and stores canonical ports, so
-disconnection stays a validation question (E3.9). Validation does not reject a node no output
-needs: a pure off-output branch is skipped, and an off-output write node is owned by R5C
-(implementation-sequence.md § R5C, repo-audit triage 2026-10-29).
+`_INPUT`/`_OTHER`/`_OUTPUT` ports, dropped orphan nodes) left with the v1 builder: the
+index now indexes only canonical `Workflow`s, keeps every declared node, and stores
+canonical ports, so disconnection stays a validation question (E3.9). Validation does
+not reject a node no output needs: a pure off-output branch is skipped, and an
+off-output write node is owned by R5C (implementation-sequence.md § R5C, repo-audit
+triage 2026-10-29).
 
-R4B's `ExecutionPlan` consumes the same structural facts (`order`/`edges`/`dependencies`) and adds
-execution interpretation — resolved implementations, resource bindings, sync/async policy. The index
-holds structural facts only; execution concepts (resolved callables, portals, resource values, task
-groups) never move onto it.
+R4B's `ExecutionPlan` consumes the same structural facts
+(`order`/`edges`/`dependencies`) and adds execution interpretation — resolved
+implementations, resource bindings, sync/async policy. The index holds structural facts
+only; execution concepts (resolved callables, portals, resource values, task groups)
+never move onto it.
 
 ## E4. Observability hooks
 
 Observability extends, rather than replaces, execution semantics.
 
-R4B establishes the minimal execution-owned `EventSink` transport. Feature owners define their
-semantic event/result payloads; this section owns ecosystem consumers/integration rather than a
-second callback lifecycle.
+R4B establishes the minimal execution-owned `EventSink` transport. Feature owners define
+their semantic event/result payloads; this section owns ecosystem consumers/integration
+rather than a second callback lifecycle.
 
 Useful lifecycle events include:
 
@@ -574,13 +611,14 @@ cancellation/deadline
 artifact publication
 ```
 
-Optional OpenTelemetry integration consumes those events and does not become a required runtime.
-Payload logging is opt-in and bounded; secrets and sensitive values are redacted.
+Optional OpenTelemetry integration consumes those events and does not become a required
+runtime. Payload logging is opt-in and bounded; secrets and sensitive values are
+redacted.
 
 ### Core state versus optional distributed state
 
-Earlier drafts deferred all durable checkpointing/recovery to an optional driver. That is
-superseded.
+Earlier drafts deferred all durable checkpointing/recovery to an optional driver. That
+is superseded.
 
 Core owns the local semantic durability contract:
 
@@ -594,17 +632,20 @@ stateful-owner restore/cleanup
 identity/generation/idempotency
 ```
 
-Optional execution drivers may add **distributed coordination mechanics** such as worker ownership,
-partition assignment, or remote state-store implementations, but they must project the same core
-state semantics. They do not introduce a parallel checkpoint type or change recovery meaning.
+Optional execution drivers may add **distributed coordination mechanics** such as worker
+ownership, partition assignment, or remote state-store implementations, but they must
+project the same core state semantics. They do not introduce a parallel checkpoint type
+or change recovery meaning.
 
-Backpressure/buffering boundaries and bounded concurrency should be inspectable in execution plans.
-Finite windows may be ordinary operators where useful; distributed stream processing is not implied.
+Backpressure/buffering boundaries and bounded concurrency should be inspectable in
+execution plans. Finite windows may be ordinary operators where useful; distributed
+stream processing is not implied.
 
 ## E5. Integrations and connectors
 
-Integration and connector design follows [connectors.md](connectors.md): protocols and dependencies live in
-optional packages unless they are broadly useful, small, and deterministic enough for core.
+Integration and connector design follows [connectors.md](connectors.md): protocols and
+dependencies live in optional packages unless they are broadly useful, small, and
+deterministic enough for core.
 
 Useful adapter categories:
 
@@ -628,23 +669,24 @@ Source/target interoperability includes:
 - explicit acknowledgement/delivery semantics;
 - incremental source state represented through common `FeedState` / `StateStore`.
 
-Singer compatibility maps Singer STATE to the common core state model; RDP may project it for wire
-interchange but does not become a second checkpoint owner.
+Singer compatibility maps Singer STATE to the common core state model; RDP may project
+it for wire interchange but does not become a second checkpoint owner.
 
-Multi-destination broadcast uses the shared Publisher/Subscription/fanout contract when the graph
-actually broadcasts. Multiple independent WriteNodes are ordinary explicit graph effects. Multi-source
-fan-in uses `union`/`merge` semantics from execution/fanout owners.
+Multi-destination broadcast uses the shared Publisher/Subscription/fanout contract when
+the graph actually broadcasts. Multiple independent WriteNodes are ordinary explicit
+graph effects. Multi-source fan-in uses `union`/`merge` semantics from execution/fanout
+owners.
 
-Provider-native operation import/export/deployment adapters are specialized provider extensions and
-follow `provider-integrations.md`; their common normalized operation/compatibility model remains
-owned by `operations-as-code.md`.
+Provider-native operation import/export/deployment adapters are specialized provider
+extensions and follow `provider-integrations.md`; their common normalized
+operation/compatibility model remains owned by `operations-as-code.md`.
 
 ## E6. Experimental execution drivers
 
 Optional drivers are allowed only after the local semantic contracts are stable.
 
-A driver accepts a validated/prepared Pipeline definition or execution plan and reports normalized
-outcomes. It must not reinterpret:
+A driver accepts a validated/prepared Pipeline definition or execution plan and reports
+normalized outcomes. It must not reinterpret:
 
 ```text
 graph topology
@@ -665,9 +707,9 @@ Possible experiments:
 - remote worker/scatter-gather for eligible stateless or checkpoint-safe scopes;
 - artifact transfer across explicit durable boundaries.
 
-Per-node execution/adaptation hints may optimize particular callables, but ordinary users should not
-need to hand-annotate every node. Pipeline-wide execution settings remain expressed through the
-common `with_execution(...)` contract.
+Per-node execution/adaptation hints may optimize particular callables, but ordinary
+users should not need to hand-annotate every node. Pipeline-wide execution settings
+remain expressed through the common `with_execution(...)` contract.
 
 Non-goals for initial drivers:
 
@@ -680,16 +722,16 @@ generic distributed locks/leases in core
 exactly-once claims
 ```
 
-An Operations as Code external deployment target is not automatically an E6 execution driver. If a
-GitHub Action, RMM, or Azure Automation job runs a generated artifact out of process, deployment and
-run-boundary semantics come from `operations-as-code.md`, `provider-integrations.md`, and
-`orchestration.md` respectively.
+An Operations as Code external deployment target is not automatically an E6 execution
+driver. If a GitHub Action, RMM, or Azure Automation job runs a generated artifact out
+of process, deployment and run-boundary semantics come from `operations-as-code.md`,
+`provider-integrations.md`, and `orchestration.md` respectively.
 
 ## E7. Visual tooling and 1.0 ecosystem readiness
 
-A GUI is a separate consumer of exported module/workflow contracts. It should generate palette,
-forms, validation, graph views, and help from static catalog/schema data and execute only through the
-same service/API paths as Python/CLI.
+A GUI is a separate consumer of exported module/workflow contracts. It should generate
+palette, forms, validation, graph views, and help from static catalog/schema data and
+execute only through the same service/API paths as Python/CLI.
 
 The GUI must understand:
 
@@ -707,9 +749,9 @@ stored workflow outputs
 
 It does not need private execution objects to render or validate a workflow.
 
-An Operations as Code/control-plane UI may additionally render `OperationSpec`, `OperationPlan`,
-compatibility, approvals, deployments, and drift by consuming `riko-ops` service contracts. Those
-are not added to Core's workflow/GUI contract here.
+An Operations as Code/control-plane UI may additionally render `OperationSpec`,
+`OperationPlan`, compatibility, approvals, deployments, and drift by consuming
+`riko-ops` service contracts. Those are not added to Core's workflow/GUI contract here.
 
 The ecosystem side of 1.0 readiness includes:
 
@@ -721,12 +763,12 @@ The ecosystem side of 1.0 readiness includes:
 - persisted-workflow migration/cutoff policy;
 - benchmark/regression evidence.
 
-Internal Python API compatibility/removal policy and release-package gating remain owned by
-[release-readiness.md](release-readiness.md). In particular, target execution configuration is
-`with_execution(...)`, not `with_config(executor=...)`.
+Internal Python API compatibility/removal policy and release-package gating remain owned
+by [release-readiness.md](release-readiness.md). In particular, target execution
+configuration is `with_execution(...)`, not `with_config(executor=...)`.
 
-Do not use this ecosystem plan to settle public/private import-tier cleanup; that work is maintained
-separately in the API-surface/release documents.
+Do not use this ecosystem plan to settle public/private import-tier cleanup; that work
+is maintained separately in the API-surface/release documents.
 
 ## E8. Prior-art conclusions
 
@@ -749,7 +791,8 @@ The useful ideas survive, but they map onto the reconciled architecture:
 
 ### Non-goals
 
-Unless product direction changes materially, prefer adapters/drivers rather than absorbing:
+Unless product direction changes materially, prefer adapters/drivers rather than
+absorbing:
 
 - distributed worker coordination/partition ownership;
 - cluster deployment/hosted workflow management;
@@ -759,12 +802,14 @@ Unless product direction changes materially, prefer adapters/drivers rather than
 - Bonobo-style service-container-centric application architecture;
 - concurrency primitives as the primary user-facing abstraction.
 
-Durable local checkpoint/recovery is **not** on this non-goal list; its semantic contract is core.
+Durable local checkpoint/recovery is **not** on this non-goal list; its semantic
+contract is core.
 
 ### Product test
 
-> Does this make Riko better at expressing, inspecting, or executing configuration-driven
-> record-stream transformations, or mainly reproduce infrastructure another project specializes in?
+> Does this make Riko better at expressing, inspecting, or executing
+> configuration-driven record-stream transformations, or mainly reproduce infrastructure
+> another project specializes in?
 
 If the latter, prefer an adapter/driver or higher ecosystem package.
 
@@ -782,8 +827,8 @@ module/plugin contracts + runtime feature implementations
 observability/adapters/drivers/GUI consumers
 ```
 
-Forward runtime dependency order is owned by `implementation-sequence.md`; E1–E7 specialize that
-foundation rather than form a competing core sequence.
+Forward runtime dependency order is owned by `implementation-sequence.md`; E1–E7
+specialize that foundation rather than form a competing core sequence.
 
 ---
 
@@ -798,8 +843,9 @@ PipeResolver
 entry-point registration
 ```
 
-Unqualified/built-in namespace reservations and `pipe_` / `pipe:` pipeline-name reservations must be
-validated deterministically rather than accepted into a registry slot that can never resolve.
+Unqualified/built-in namespace reservations and `pipe_` / `pipe:` pipeline-name
+reservations must be validated deterministically rather than accepted into a registry
+slot that can never resolve.
 
 One-sided module implementations remain valid because execution adapts the missing mode:
 
@@ -821,28 +867,31 @@ async def pipe(item, **kwargs): ...
 register(ModuleDefinition(name="example.lookup", async_pipe=pipe))
 ```
 
-Supplying both sync and async implementations is an optimization when they genuinely differ, not a
-parity requirement.
+Supplying both sync and async implementations is an optimization when they genuinely
+differ, not a parity requirement.
 
-`register_target` returns the registered class (landed with the `riko.ext` extension-point layout), so
-`@register_target` is the one-line registration form; explicit opt-in per class remains the supported
-alternative to subclass-hook auto-registration (see E3.3).
+`register_target` returns the registered class (landed with the `riko.ext`
+extension-point layout), so `@register_target` is the one-line registration form;
+explicit opt-in per class remains the supported alternative to subclass-hook
+auto-registration (see E3.3).
 
 ## 25. Operation packs and extension registration
 
-Operations as Code creates an additional ecosystem consumer without moving operation semantics into
-Core. `operations-as-code.md` remains authoritative for `OperationSpec`, `OperationPlan`,
-validate/plan/apply/verify, import/compatibility/deployment, and drift.
+Operations as Code creates an additional ecosystem consumer without moving operation
+semantics into Core. `operations-as-code.md` remains authoritative for `OperationSpec`,
+`OperationPlan`, validate/plan/apply/verify, import/compatibility/deployment, and drift.
 
-A provisional installed-package seam may expose version-controlled operation definitions:
+A provisional installed-package seam may expose version-controlled operation
+definitions:
 
 ```toml
 [project.entry-points."riko.operations"]
 example = "riko_example.operations:definitions"
 ```
 
-This gameplan owns the **registration mechanics** only. The provider returns references/serialized
-operation definitions accepted by `riko-ops`; it does not define another operation model.
+This gameplan owns the **registration mechanics** only. The provider returns
+references/serialized operation definitions accepted by `riko-ops`; it does not define
+another operation model.
 
 Requirements:
 
@@ -851,17 +900,17 @@ Requirements:
 - no credential material in package definitions;
 - loading a pack never executes an operation or installs remote code;
 - compatibility/API-version mismatch is reported before planning;
-- operation-pack dependencies may reference provider/capability IDs but do not bypass capability
-  discovery/policy;
+- operation-pack dependencies may reference provider/capability IDs but do not bypass
+  capability discovery/policy;
 - external operation packs require no edit to `nerevu/riko` Core.
 
 Provider importer/deployer implementations register through the plugin that ships their
-integration; `provider-integrations.md` owns those provider-specific contracts. CLI operation commands
-register through `riko.commands`; `cli.md` owns that adapter surface.
+integration; `provider-integrations.md` owns those provider-specific contracts. CLI
+operation commands register through `riko.commands`; `cli.md` owns that adapter surface.
 
-Before freezing `riko.operations` as public, prove it with at least one external pack and one
-cross-provider scenario. If the proof shows ordinary package/resource registries are sufficient,
-reuse them rather than adding a redundant registry.
+Before freezing `riko.operations` as public, prove it with at least one external pack
+and one cross-provider scenario. If the proof shows ordinary package/resource registries
+are sufficient, reuse them rather than adding a redundant registry.
 
 ## Prior-art sources
 
@@ -873,5 +922,5 @@ Research sources retained by this plan:
 - JSON Schema;
 - OpenTelemetry Python.
 
-Related issues include plugin discovery, benchmarks, pipeline format, GUI, protocol adapters, and
-operation-pack distribution.
+Related issues include plugin discovery, benchmarks, pipeline format, GUI, protocol
+adapters, and operation-pack distribution.

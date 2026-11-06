@@ -5,7 +5,7 @@ new module (`example.shout`) via an entry point.
 
 ## Layout
 
-```
+```text
 riko-example-ext/
 ├── pyproject.toml       # declares the entry point
 └── riko_example_ext.py  # the pipe (authored like a built-in module)
@@ -51,5 +51,7 @@ Pipeline().pipe("example.shout").first([{"content": "hi"}])
 When you don't need a discoverable, installable plugin, skip the entry point and call
 `riko.ext.register_module` directly:
 
-- [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=` callables.
-- [`../register_alias.py`](../register_alias.py): aliasing a built-in with `ModuleDefinition.from_module`.
+- [`../register_module.py`](../register_module.py): explicit `sync_pipe=`/`async_pipe=`
+  callables.
+- [`../register_alias.py`](../register_alias.py): aliasing a built-in with
+  `ModuleDefinition.from_module`.

@@ -2,12 +2,12 @@
 
 ## 1. Mission
 
-Create a separate `riko-cli` package that provides one coherent command-line interface for
-the Riko ecosystem without becoming another application monolith.
+Create a separate `riko-cli` package that provides one coherent command-line interface
+for the Riko ecosystem without becoming another application monolith.
 
 The CLI supports inspection/validation/execution of Riko pipelines, plugin commands,
-MCP/OpenAPI capabilities, AI workflows/conversations, site tooling, artifacts, reproducible
-noninteractive workflows, and optional command-shell behavior.
+MCP/OpenAPI capabilities, AI workflows/conversations, site tooling, artifacts,
+reproducible noninteractive workflows, and optional command-shell behavior.
 
 The CLI owns:
 
@@ -24,7 +24,7 @@ implementations.
 
 ---
 
-# 2. Package and entry point
+## 2. Package and entry point
 
 ```text
 nerevu/riko-cli
@@ -41,7 +41,7 @@ Optional packages remain independently installable/discoverable (`riko-mcp`, `ri
 
 ---
 
-# 3. Prerequisites
+## 3. Prerequisites
 
 Riko provides:
 
@@ -60,7 +60,7 @@ missing service-layer behavior.
 
 ---
 
-# 4. Architectural rule
+## 4. Architectural rule
 
 The CLI is a thin adapter over reusable application services.
 
@@ -72,27 +72,27 @@ async def plan_command(
     return CommandResult(data=outcome)
 ```
 
-Substantial operations must also be callable from Python, MCP/server adapters, notebooks,
-tests, and scheduled automation without invoking the CLI parser.
+Substantial operations must also be callable from Python, MCP/server adapters,
+notebooks, tests, and scheduled automation without invoking the CLI parser.
 
 ---
 
-# 5. Base implementation choices
+## 5. Base implementation choices
 
-## 5.1 Click-native parsing
+### 5.1 Click-native parsing
 
 Use Click as the command framework. The extension API is Click-native end-to-end; do not
-define an argparse compatibility contract or pass `argparse.Namespace` / `ArgumentParser`
-objects through plugin/domain APIs.
+define an argparse compatibility contract or pass `argparse.Namespace` /
+`ArgumentParser` objects through plugin/domain APIs.
 
 Convert Click values into typed request/domain objects at the command adapter boundary.
 
-## 5.2 Configuration
+### 5.2 Configuration
 
-Use `tomllib`, `pathlib`, and environment handling directly. Do not require a configuration
-framework.
+Use `tomllib`, `pathlib`, and environment handling directly. Do not require a
+configuration framework.
 
-## 5.3 Async entry point
+### 5.3 Async entry point
 
 One top-level AnyIO boundary:
 
@@ -103,15 +103,15 @@ def main() -> int:
 
 Commands/services do not start nested private event loops.
 
-## 5.4 Optional terminal enhancements
+### 5.4 Optional terminal enhancements
 
-Rich/prompt-toolkit or equivalent enhancements are optional. Click's supported completion
-mechanism should be used rather than introducing a second parser/completion model. Optional
-renderers cannot alter command data or exit-code contracts.
+Rich/prompt-toolkit or equivalent enhancements are optional. Click's supported
+completion mechanism should be used rather than introducing a second parser/completion
+model. Optional renderers cannot alter command data or exit-code contracts.
 
 ---
 
-# 6. Click-native command plugin system
+## 6. Click-native command plugin system
 
 Packages register command providers through entry points:
 
@@ -133,27 +133,27 @@ class CommandProvider(Protocol):
     def commands(self) -> tuple[click.Command, ...]: ...
 ```
 
-Providers may return `click.Command` / `click.Group` objects. Nested command structure is
-therefore expressed by Click itself instead of a second `CommandSpec.configure(parser)`
-layer.
+Providers may return `click.Command` / `click.Group` objects. Nested command structure
+is therefore expressed by Click itself instead of a second
+`CommandSpec.configure(parser)` layer.
 
 Built-in commands use the same registration path internally.
 
 ### Collision policy
 
-Top-level and nested command paths must resolve uniquely. Registry construction fails with
-both provider/distribution identities on a collision; installation order never silently
-wins. Test-only registration may allow explicit replacement, but installed plugins do not
-replace built-ins by default.
+Top-level and nested command paths must resolve uniquely. Registry construction fails
+with both provider/distribution identities on a collision; installation order never
+silently wins. Test-only registration may allow explicit replacement, but installed
+plugins do not replace built-ins by default.
 
-### Lazy imports
+#### Lazy imports
 
 `riko --help` must not eagerly import model SDKs, MCP transports, database clients, site
 engines, etc. Heavy dependencies are imported only when the relevant command runs.
 
 ---
 
-# 7. CLI application context
+## 7. CLI application context
 
 `CliContext` is a CLI-owned adapter context, not a Riko execution context:
 
@@ -170,7 +170,8 @@ class CliContext:
 ```
 
 The immutable Riko `Context` holds definitions/configuration and declared resources. A
-pipeline/service execution creates its private runtime state only when actually executed.
+pipeline/service execution creates its private runtime state only when actually
+executed.
 
 Project context remains simple immutable filesystem metadata:
 
@@ -182,13 +183,13 @@ class ProjectContext:
     riko_directory: Path
 ```
 
-Project detection walks upward from the current directory and prefers the nearest `.riko/`,
-`pyproject.toml`, or `.git/` marker. `--project` overrides it without silently changing the
-process working directory.
+Project detection walks upward from the current directory and prefers the nearest
+`.riko/`, `pyproject.toml`, or `.git/` marker. `--project` overrides it without silently
+changing the process working directory.
 
 ---
 
-# 8. Configuration precedence
+## 8. Configuration precedence
 
 ```text
 package defaults
@@ -200,14 +201,15 @@ package defaults
 ```
 
 Suggested user/project locations remain `$XDG_CONFIG_HOME/riko/` and `.riko/`.
-Package-specific files remain owned by their packages (`mcp.toml`, `ai.toml`, `site.toml`).
+Package-specific files remain owned by their packages (`mcp.toml`, `ai.toml`,
+`site.toml`).
 
-The CLI normalizes resolved configuration into immutable `Context` / package request objects.
-It does not inject mutable runtime clients into a public `ExecutionContext`.
+The CLI normalizes resolved configuration into immutable `Context` / package request
+objects. It does not inject mutable runtime clients into a public `ExecutionContext`.
 
-Resolved secrets never appear in config display, debug dumps, tracebacks, machine output,
-plans, command history, or conversation exports. Credential references are preferred over
-command-line secret values.
+Resolved secrets never appear in config display, debug dumps, tracebacks, machine
+output, plans, command history, or conversation exports. Credential references are
+preferred over command-line secret values.
 
 Commands:
 
@@ -221,7 +223,7 @@ riko config validate
 
 ---
 
-# 9. Global options
+## 9. Global options
 
 Keep global options stable and limited:
 
@@ -245,10 +247,10 @@ optional.
 
 ---
 
-# 10. Output contract
+## 10. Output contract
 
-`stdout` contains primary command output; `stderr` contains logs/progress/warnings/prompts.
-JSON stdout must contain only valid JSON/JSONL.
+`stdout` contains primary command output; `stderr` contains
+logs/progress/warnings/prompts. JSON stdout must contain only valid JSON/JSONL.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -261,30 +263,31 @@ class CommandResult:
 ```
 
 Handlers return domain data, not preformatted terminal strings. Deterministic JSON
-serialization supports public dataclasses/enums/paths/datetime/Decimal/mappings/sequences and
-explicit public JSON protocols. Unknown objects raise a structured serialization error;
-JSON mode never falls back to `repr()`.
+serialization supports public
+dataclasses/enums/paths/datetime/Decimal/mappings/sequences and explicit public JSON
+protocols. Unknown objects raise a structured serialization error; JSON mode never falls
+back to `repr()`.
 
 ---
 
-# 11. Event rendering
+## 11. Event rendering
 
-Long-running services emit structured events. The CLI owns rendering/subscription hooks, not
-Riko's private execution object.
+Long-running services emit structured events. The CLI owns rendering/subscription hooks,
+not Riko's private execution object.
 
-A service/Pipeline run receives the CLI event sink through the supported public Context or
-execution-configuration/service adapter boundary. Do not construct or expose:
+A service/Pipeline run receives the CLI event sink through the supported public Context
+or execution-configuration/service adapter boundary. Do not construct or expose:
 
 ```python
 ExecutionContext(event_sink=...)
 ```
 
-Human mode may render interactive progress on a TTY; JSONL emits structured event records;
-noninteractive mode uses stable stderr/JSONL without animation.
+Human mode may render interactive progress on a TTY; JSONL emits structured event
+records; noninteractive mode uses stable stderr/JSONL without animation.
 
 ---
 
-# 12. Error and exit-code contract
+## 12. Error and exit-code contract
 
 Stable exit codes:
 
@@ -302,12 +305,12 @@ Stable exit codes:
 130  interrupted by user
 ```
 
-Structured errors contain a stable code/message/details/exit code/retryable flag. `--trace`
-adds traceback diagnostics to stderr after redaction.
+Structured errors contain a stable code/message/details/exit code/retryable flag.
+`--trace` adds traceback diagnostics to stderr after redaction.
 
 ---
 
-# 13. Approval
+## 13. Approval
 
 `riko-cli` supplies a prompt/approval implementation to owning services:
 
@@ -319,17 +322,18 @@ class PromptService(Protocol):
 Approval display includes capability/origin/host, redacted arguments, effects, relevant
 schema/plan identity, rationale, and output shape.
 
-`--yes` may confirm only actions already allowed by active policy. It never grants private
-network access, destructive permission, missing credentials, or validation bypass.
+`--yes` may confirm only actions already allowed by active policy. It never grants
+private network access, destructive permission, missing credentials, or validation
+bypass.
 
 `--no-input` never hangs or assumes approval; required approval returns exit code 4.
 
-Initial approval scopes may be `ONCE` and `CONVERSATION`. Persistent approval state remains
-owned by the relevant package/service.
+Initial approval scopes may be `ONCE` and `CONVERSATION`. Persistent approval state
+remains owned by the relevant package/service.
 
 ---
 
-# 14. Built-in command tree
+## 14. Built-in command tree
 
 ```text
 riko version
@@ -358,18 +362,19 @@ riko artifacts copy URI PATH
 riko artifacts hash URI
 ```
 
-Pipeline validation/description do not execute. Execution resolves the pipeline definition
-and uses normal iteration/private execution semantics.
+Pipeline validation/description do not execute. Execution resolves the pipeline
+definition and uses normal iteration/private execution semantics.
 
 **Open (2026-10-04): which Python files `riko pipeline run FILE` accepts.** Today's
 `run-pipe -p` runs two Python shapes with different signatures:
 
-- a **pipe script** (`examples/*.py`, README example): `pipe(test=False)`, optionally
+* a **pipe script** (`examples/*.py`, README example): `pipe(test=False)`, optionally
   `async_pipe`, `main(*, test=)`, and `print_results`, all looked up by attribute in
   `riko/cli/runpipe.py`;
-- a **workflow module** (`WorkflowModule`, `compile_workflow`/`compile-workflow` output and the
-  hand-maintained `examples/pyworkflows/*.py`): `pipe(item=None, context=None, **_)` plus
-  `DEPENDENCIES`, which is also what the pipeline resolver loads as a sub-pipe.
+* a **workflow module** (`WorkflowModule`, `compile_workflow`/`compile-workflow` output
+  and the hand-maintained `examples/pyworkflows/*.py`):
+  `pipe(item=None, context=None, **_)` plus `DEPENDENCIES`, which is also what the
+  pipeline resolver loads as a sub-pipe.
 
 The workflow module runs only because `**_` swallows `test=`. C4 must decide whether
 Python files remain `pipeline run` inputs and, if so, which entry-point signature is the
@@ -390,7 +395,7 @@ resolution; runtime service code does not guess bare-string reference kinds.
 
 ---
 
-# 15. `riko-mcp` commands
+## 15. `riko-mcp` commands
 
 Registered by `riko-mcp` as Click commands/groups:
 
@@ -425,7 +430,7 @@ from OpenAPI operations.
 
 ---
 
-# 16. `riko-ai` commands
+## 16. `riko-ai` commands
 
 Registered by `riko-ai`:
 
@@ -445,12 +450,12 @@ riko ai evaluation show/compare
 
 Selection/planning remains separate from execution.
 
-Agent-style iterative behavior in service implementations reuses ordinary Riko `Pipeline`
-/`loop`; the CLI never builds an `AgentGraph`.
+Agent-style iterative behavior in service implementations reuses ordinary Riko
+`Pipeline` /`loop`; the CLI never builds an `AgentGraph`.
 
 ---
 
-# 17. Workflow commands
+## 17. Workflow commands
 
 ```text
 riko workflow validate FILE
@@ -465,11 +470,11 @@ owned by `riko-cli`.
 
 ---
 
-# 18. Conversation CLI
+## 18. Conversation CLI
 
 `riko-ai` owns conversation model/runner/memory/persistence/planning/model turns;
-`riko-mcp` owns validated capability execution; `riko-cli` owns terminal input, rendering,
-approval prompts, and command adapters.
+`riko-mcp` owns validated capability execution; `riko-cli` owns terminal input,
+rendering, approval prompts, and command adapters.
 
 ```text
 riko chat
@@ -479,32 +484,32 @@ riko chat list/show/export/delete
 riko chat run ...
 ```
 
-Conversation stores remain `riko-ai` services. The CLI selects/configures them; it does not
-reimplement persistence.
+Conversation stores remain `riko-ai` services. The CLI selects/configures them; it does
+not reimplement persistence.
 
 Conversation events are rendered structurally and provider streaming objects do not leak
-through the CLI boundary. Workflow extraction must omit credentials, hidden model reasoning,
-transient sessions, and conversation-only approvals.
+through the CLI boundary. Workflow extraction must omit credentials, hidden model
+reasoning, transient sessions, and conversation-only approvals.
 
 ---
 
-# 19. Site plugin
+## 19. Site plugin
 
-`riko-site` registers Click commands for validate/assemble/build/preview/serve, route/manifest
-inspection, drafts, and review actions. The CLI calls reusable site services; preview server
-implementation stays in `riko-site`.
+`riko-site` registers Click commands for validate/assemble/build/preview/serve,
+route/manifest inspection, drafts, and review actions. The CLI calls reusable site
+services; preview server implementation stays in `riko-site`.
 
 ---
 
-# 20. Non-AI command shell
+## 20. Non-AI command shell
 
 A later `riko shell` may tokenize input with `shlex` and dispatch through the same Click
-command registry. It must not create a second command implementation or support arbitrary OS
-shell escape initially.
+command registry. It must not create a second command implementation or support
+arbitrary OS shell escape initially.
 
 ---
 
-# 21. Old CLI migration
+## 21. Old CLI migration
 
 Old monolithic responsibilities are split by ownership:
 
@@ -524,24 +529,27 @@ compatibility.
 
 ---
 
-# 22. Logging and diagnostics
+## 22. Logging and diagnostics
 
-Logs go to stderr. `-v` / `-vv` raise verbosity; `--trace` includes traceback diagnostics.
-JSON logging remains machine-readable. The library side shipped 2026-10-16: one `Gogo("riko")`
-configuration in `riko/base/_logging.py` (both handlers on stderr), `get_logger(__name__)`, and
-`set_log_level`; the user CLI maps `-v`/`-vv`/`-q` onto `set_log_level` the way `manage` does
-through `resolve_log_level` (`riko/cli/_logging.py`). `--trace` and `--log-format` remain here.
+Logs go to stderr. `-v` / `-vv` raise verbosity; `--trace` includes traceback
+diagnostics. JSON logging remains machine-readable. The library side shipped 2026-10-16:
+one `Gogo("riko")` configuration in `riko/base/_logging.py` (both handlers on stderr),
+`get_logger(__name__)`, and `set_log_level`; the user CLI maps `-v`/`-vv`/`-q` onto
+`set_log_level` the way `manage` does through `resolve_log_level`
+(`riko/cli/_logging.py`). `--trace` and `--log-format` remain here.
 
 `riko doctor` inspects Python/Riko versions, command plugins/API compatibility, optional
 dependencies, configuration/project paths, writable data/cache paths, and integration
-configuration without exposing keys. External network probes require explicit `--network`.
+configuration without exposing keys. External network probes require explicit
+`--network`.
 
 Where a configured state store is relevant, diagnostics may report its coarse
-`StateStoreCapabilities` (serialization, persistent, portable) without leaking state values.
+`StateStoreCapabilities` (serialization, persistent, portable) without leaking state
+values.
 
 ---
 
-# 23. Cache/data directories
+## 23. Cache/data directories
 
 Support XDG-style configuration/data/cache/state locations plus `.riko/` project-local
 configuration/artifacts/cache/state. A small cross-platform path utility (optionally
@@ -549,12 +557,12 @@ configuration/artifacts/cache/state. A small cross-platform path utility (option
 
 ---
 
-# 24. Security rules
+## 24. Security rules
 
-The CLI must not evaluate Python from arguments, execute arbitrary shell commands, accept
-model-generated subprocess commands, print secrets, auto-approve destructive operations,
-execute stale/unvalidated plans, accept model-selected arbitrary schema URLs, or weaken
-network/security policy through convenience flags.
+The CLI must not evaluate Python from arguments, execute arbitrary shell commands,
+accept model-generated subprocess commands, print secrets, auto-approve destructive
+operations, execute stale/unvalidated plans, accept model-selected arbitrary schema
+URLs, or weaken network/security policy through convenience flags.
 
 Prefer credential references:
 
@@ -562,12 +570,12 @@ Prefer credential references:
 --credential exchange_api
 ```
 
-over plaintext command-line keys. When sensitive input is unavoidable, prefer environment,
-stdin, terminal secret prompt, or secret-provider references.
+over plaintext command-line keys. When sensitive input is unavoidable, prefer
+environment, stdin, terminal secret prompt, or secret-provider references.
 
 ---
 
-# 25. Repository layout
+## 25. Repository layout
 
 ```text
 riko_cli/
@@ -588,12 +596,12 @@ riko_cli/
 ```
 
 Package-specific Click command adapters stay in their owning packages (`riko_mcp/cli/`,
-`riko_ai/cli/`, `riko_site/cli/`). A separate argparse-style `specification.py` layer is not
-part of the target architecture.
+`riko_ai/cli/`, `riko_site/cli/`). A separate argparse-style `specification.py` layer is
+not part of the target architecture.
 
 ---
 
-# 26. Implementation phases
+## 26. Implementation phases
 
 ```text
 C0  architecture + command inventory
@@ -610,12 +618,13 @@ C10 generated command docs/completion/examples
 C11 optional rich TUI after line-oriented CLI stabilizes
 ```
 
-C1 acceptance specifically requires third-party packages to register native Click commands
-without argparse adapters. C2 acceptance requires no public `ExecutionContext` construction.
+C1 acceptance specifically requires third-party packages to register native Click
+commands without argparse adapters. C2 acceptance requires no public `ExecutionContext`
+construction.
 
 ---
 
-# 27. Pull-request sequence
+## 27. Pull-request sequence
 
 Keep CLI adapters separate from unrelated domain refactors. Suggested progression:
 
@@ -650,11 +659,11 @@ riko-site
 
 ---
 
-# 28. Testing strategy
+## 28. Testing strategy
 
-Unit/contract tests cover Click command/group registration, nested paths, collisions, plugin
-API-version mismatch, configuration precedence/project detection/redaction, serialization,
-exit codes, noninteractive prompts, and approval scopes.
+Unit/contract tests cover Click command/group registration, nested paths, collisions,
+plugin API-version mismatch, configuration precedence/project detection/redaction,
+serialization, exit codes, noninteractive prompts, and approval scopes.
 
 CLI integration tests invoke the real console entry point and assert stdout/stderr/exit
 codes/JSON validity/redaction for root help, version, command listing, module listing,
@@ -663,40 +672,44 @@ pipeline validation, and config display.
 Plugin fixtures include valid, duplicate, incompatible-version, missing-dependency, and
 failing-handler providers.
 
-Conversation/site/MCP integrations use deterministic fake service implementations. Terminal
-coverage includes TTY/non-TTY, redirected progress, Ctrl-C/EOF, and optional completion.
-Snapshots normalize nondeterministic timestamps/IDs/terminal width and never contain
-secrets.
+Conversation/site/MCP integrations use deterministic fake service implementations.
+Terminal coverage includes TTY/non-TTY, redirected progress, Ctrl-C/EOF, and optional
+completion. Snapshots normalize nondeterministic timestamps/IDs/terminal width and never
+contain secrets.
 
 ---
 
-# 29. Performance requirements
+## 29. Performance requirements
 
-Measure base startup, root help, plugin discovery, config loading, and dispatch. Root help
-must avoid network calls and optional provider SDK imports. A sub-second target is required;
-the initial aspirational target remains roughly 250 ms on a typical development machine,
-excluding cold-Python variability.
+Measure base startup, root help, plugin discovery, config loading, and dispatch. Root
+help must avoid network calls and optional provider SDK imports. A sub-second target is
+required; the initial aspirational target remains roughly 250 ms on a typical
+development machine, excluding cold-Python variability.
 
 ---
 
-# 30. Definition of done
+## 30. Definition of done
 
 1. Plugin APIs are Click-native; no argparse contract remains.
 2. CLI constructs immutable public `Context`, never public `ExecutionContext`.
 3. Pipeline execution uses the single Pipeline/private-execution architecture.
-4. Canonical orchestration requests use `PipelineRef` rather than runtime string guessing.
-5. JSON/stdout, stderr/logging, exit codes, approval, and redaction contracts are stable.
+4. Canonical orchestration requests use `PipelineRef` rather than runtime string
+   guessing.
+5. JSON/stdout, stderr/logging, exit codes, approval, and redaction contracts are
+   stable.
 6. Heavy package SDKs remain lazy and root help is fast/offline.
 7. MCP/AI/site/conversation business logic stays in reusable owning-package services.
-8. The shell/TUI reuse the same command/service contracts rather than creating another CLI.
+8. The shell/TUI reuse the same command/service contracts rather than creating another
+   CLI.
 
 ---
 
-# 31. Operations as Code command adapter
+## 31. Operations as Code command adapter
 
 `riko-ops` owns `OperationSpec`, `OperationPlan`, repository/source-of-truth behavior,
-validate/plan/apply/verify services, import/normalization, compatibility, deployment identity, and
-automation drift. `riko-cli` owns only the terminal adapter for those services.
+validate/plan/apply/verify services, import/normalization, compatibility, deployment
+identity, and automation drift. `riko-cli` owns only the terminal adapter for those
+services.
 
 Register through the same Click-native command-provider seam:
 
@@ -724,33 +737,38 @@ Canonical terminology is deliberate:
 
 * **validate** checks the operation/configuration without provider mutation;
 * **plan** creates an `OperationPlan` and does not apply it;
-* **apply** applies the exact validated/approved `OperationPlan` through the owning service;
-* **verify** verifies the operation's declared postconditions through domain/provider services;
+* **apply** applies the exact validated/approved `OperationPlan` through the owning
+  service;
+* **verify** verifies the operation's declared postconditions through domain/provider
+  services;
 * **import** acquires/normalizes external operational assets but does not deploy them;
 * **compatibility** reports target fit/lossiness and never implies deployment;
 * **deploy** publishes a derived target automation through provider deployment hooks;
-* **diff** compares canonical source/deployment identity through Operations as Code drift services.
+* **diff** compares canonical source/deployment identity through Operations as Code
+  drift services.
 
-Do not add `riko operation execute` as a synonym for `apply`. `execute` remains appropriate for
-Pipeline/capability execution surfaces; the Operations as Code lifecycle uses
-`validate → plan → apply → verify` consistently.
+Do not add `riko operation execute` as a synonym for `apply`. `execute` remains
+appropriate for Pipeline/capability execution surfaces; the Operations as Code lifecycle
+uses `validate → plan → apply → verify` consistently.
 
-`plan`, `compatibility`, `inspect`, and normal import analysis are non-mutating. Importers may need
-read access to remote provider assets but must not mutate them. `apply` and `deploy` pass through
-common capability/policy/approval rules; `--yes` cannot authorize a stale plan, an effect forbidden
-by policy, or missing credentials.
+`plan`, `compatibility`, `inspect`, and normal import analysis are non-mutating.
+Importers may need read access to remote provider assets but must not mutate them.
+`apply` and `deploy` pass through common capability/policy/approval rules; `--yes`
+cannot authorize a stale plan, an effect forbidden by policy, or missing credentials.
 
-Imported scripts/workflows are untrusted data until validated. CLI convenience must never turn
-source text into arbitrary local shell/Python execution, auto-install dependencies, serialize
-resolved secrets, or treat AI-generated normalization as authorization. Plans and compatibility
-reports must redact sensitive values using their owning contracts.
+Imported scripts/workflows are untrusted data until validated. CLI convenience must
+never turn source text into arbitrary local shell/Python execution, auto-install
+dependencies, serialize resolved secrets, or treat AI-generated normalization as
+authorization. Plans and compatibility reports must redact sensitive values using their
+owning contracts.
 
-The command adapter belongs after the reusable `riko-ops` services stabilize; add it as a later CLI
-phase rather than coupling Operations as Code implementation to parser work:
+The command adapter belongs after the reusable `riko-ops` services stabilize; add it as
+a later CLI phase rather than coupling Operations as Code implementation to parser work:
 
 ```text
 C12 Operations as Code command provider + noninteractive JSON/approval tests
 ```
 
-CLI tests own argument parsing/rendering/exit codes/redaction for these commands. Operation,
-provider, compatibility, planning, and drift contract tests stay with their authoritative owners.
+CLI tests own argument parsing/rendering/exit codes/redaction for these commands.
+Operation, provider, compatibility, planning, and drift contract tests stay with their
+authoritative owners.

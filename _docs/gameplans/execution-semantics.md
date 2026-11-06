@@ -1,12 +1,22 @@
 # Execution semantics gameplan
 
-> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level overview. This gameplan is the authoritative detail for the runtime execution-semantics contract. It reconciles the reusable `Pipeline` definition model, sync/async execution, resources, fan-out, metadata/state propagation, checkpointing, durable identity, batching, retry/error policy, timeout, merge, and memory limits. Numbered `## N.` headings are retained where other documents reference the corresponding runtime-contract sections.
+> **Provenance.** Extracted from `docs/ROADMAP.md` so the roadmap stays a high-level
+> overview. This gameplan is the authoritative detail for the runtime
+> execution-semantics contract. It reconciles the reusable `Pipeline` definition model,
+> sync/async execution, resources, fan-out, metadata/state propagation, checkpointing,
+> durable identity, batching, retry/error policy, timeout, merge, and memory limits.
+> Numbered `## N.` headings are retained where other documents reference the
+> corresponding runtime-contract sections.
 >
-> **Status vocabulary.** Existing/shipped behavior is identified explicitly. Everything described as the target contract is planned API/runtime behavior and must not be presented as already shipped until implementation lands.
+> **Status vocabulary.** Existing/shipped behavior is identified explicitly. Everything
+> described as the target contract is planned API/runtime behavior and must not be
+> presented as already shipped until implementation lands.
 
 ## Canonical definition and execution model
 
-`Pipeline[T]` is the sole reusable public pipeline definition. A pipeline is an immutable DAG; fluent chaining is shorthand for creating a new definition that shares prior structure.
+`Pipeline[T]` is the sole reusable public pipeline definition. A pipeline is an
+immutable DAG; fluent chaining is shorthand for creating a new definition that shares
+prior structure.
 
 ```python
 pipeline = (
@@ -16,11 +26,13 @@ pipeline = (
 )
 ```
 
-> **Shipped (2026-09-27):** module-name fluent chaining — the canonical `Pipeline(workflow)`
-> constructor plus the `Pipeline.from_module(name, conf=...)` classmethod for
-> starting from a module, `.pipe(name, conf=...)`, attribute chaining, and `|` (name, `(name, conf)`
-> pair, or one-module template) — each deriving a new definition that shares prior structure. Per-run
-> seeds (`pipeline(items)`, `items | pipeline`) replaced the `source=` parameter on 2026-10-24. Callable `.map`/`.flat_map` in the example above remain target API owned by
+> **Shipped (2026-09-27):** module-name fluent chaining — the canonical
+> `Pipeline(workflow)` constructor plus the `Pipeline.from_module(name, conf=...)`
+> classmethod for starting from a module, `.pipe(name, conf=...)`, attribute chaining,
+> and `|` (name, `(name, conf)` pair, or one-module template) — each deriving a new
+> definition that shares prior structure. Per-run seeds (`pipeline(items)`,
+> `items | pipeline`) replaced the `source=` parameter on 2026-10-24. Callable
+> `.map`/`.flat_map` in the example above remain target API owned by
 > [callable-pipes.md](callable-pipes.md); a strict-xfail tripwire guards the deferral.
 
 Execution is deliberately separate from definition:
@@ -30,9 +42,13 @@ list(pipeline)  # fresh private SyncExecution
 aiter(pipeline)  # fresh private AsyncExecution
 ```
 
-`iter(pipeline)` creates a new one-shot private `SyncExecution`; `aiter(pipeline)` creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition creates independent executions with independent resource, portal, state-store-adapter, and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
+`iter(pipeline)` creates a new one-shot private `SyncExecution`; `aiter(pipeline)`
+creates a new one-shot private `AsyncExecution`. Reusing the same pipeline definition
+creates independent executions with independent resource, portal, state-store-adapter,
+and fan-out lifetimes. There is no normal public `Execution(...)` construction API.
 
-The same `Pipeline` definition may run sync or async. Native implementations win and the runtime adapts only where the matching implementation is absent.
+The same `Pipeline` definition may run sync or async. Native implementations win and the
+runtime adapts only where the matching implementation is absent.
 
 | Module implements | Sync execution | Async execution |
 |---|---|---|
@@ -40,11 +56,15 @@ The same `Pipeline` definition may run sync or async. Native implementations win
 | sync only | native sync | sync on a worker unless explicitly inline-safe |
 | async only | async on the execution portal | native async |
 
-Legacy `SyncPipe` / `AsyncPipe` / collection classes are current implementation/characterization inputs only. When `Pipeline` plus private executions land, those released Python classes are removed under the pre-1.0 clean-break policy rather than retained as compatibility wrappers.
+Legacy `SyncPipe` / `AsyncPipe` / collection classes are current
+implementation/characterization inputs only. When `Pipeline` plus private executions
+land, those released Python classes are removed under the pre-1.0 clean-break policy
+rather than retained as compatibility wrappers.
 
 ### Definition configuration vs execution configuration
 
-Step configuration is fixed when that step is declared. `with_config()` does not mutate the last/current step.
+Step configuration is fixed when that step is declared. `with_config()` does not mutate
+the last/current step.
 
 Execution-wide settings use a separate immutable definition operation:
 
@@ -52,60 +72,100 @@ Execution-wide settings use a separate immutable definition operation:
 pipeline = pipeline.with_execution(executor="thread", concurrency=8, ordered=False)
 ```
 
-There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are convenience readers equivalent to `next(stream)` inside `with pipeline.open(seed) as stream` and `await anext(stream)` inside its `async with` twin: each starts a fresh execution, reads one item, and closes the run. They add no new way to run. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare `StopIteration` never leaks into an enclosing iterator and silently truncates it. `pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers that may stop early: each call returns a fresh, single-use run handle that is a context manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))` and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so `with`/`async with` selects sync or async exactly as `for`/`async for` does, and the run closes in the task that opened it when the block exits, including on `break`. The handle carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent `open()` calls on one definition get independent runs. It is iteration with a guaranteed close, not a terminal or a public `Execution`: it adds no new way to run and exposes no execution object. `async with pipeline` directly is rejected because `__aexit__` would need per-run state on the definition. Normal execution remains Python iteration (`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
+There is no executing `collect()` terminal in the target API. `first()` / `afirst()` are
+convenience readers equivalent to `next(stream)` inside
+`with pipeline.open(seed) as stream` and `await anext(stream)` inside its `async with`
+twin: each starts a fresh execution, reads one item, and closes the run. They add no new
+way to run. On an empty pipeline they raise `EmptyPipelineError` (a `PipelineError` and
+a `LookupError`, decided 2026-10-04) unless a `default=` is given, so a bare
+`StopIteration` never leaks into an enclosing iterator and silently truncates it.
+`pipeline.open()` (decided 2026-10-04) is the scoped form of iteration for consumers
+that may stop early: each call returns a fresh, single-use run handle that is a context
+manager in both modes — `with pipeline.open() as stream` is `closing(iter(pipeline))`
+and `async with pipeline.open() as stream` is `aclosing(aiter(pipeline))` — so
+`with`/`async with` selects sync or async exactly as `for`/`async for` does, and the run
+closes in the task that opened it when the block exits, including on `break`. The handle
+carries the run; the immutable `Pipeline` stores nothing, so nested or concurrent
+`open()` calls on one definition get independent runs. It is iteration with a guaranteed
+close, not a terminal or a public `Execution`: it adds no new way to run and exposes no
+execution object. `async with pipeline` directly is rejected because `__aexit__` would
+need per-run state on the definition. Normal execution remains Python iteration
+(`list(pipeline)`, `for`, `async for`). `take()` remains a transform.
 
-Stream exhaustion (decided 2026-10-25, revised 2026-10-26): a consumed or closed stream behaves exactly like an exhausted Python generator. Another `for`/`async for` yields nothing, and `next`/`anext` raise `StopIteration`/`StopAsyncIteration`, so `next(stream, default)`, `zip_longest`, and `islice` behave normally. The 2026-10-25 rule that raised `PipelineStateError` on a second pass or after close was withdrawn: a stream must not behave differently from a Python iterator, so only `next` signals the end. Iterating a started stream in the other mode still raises. A partly consumed stream may still be re-entered (`header = next(stream); for row in stream: ...`). Consumed, closed, and failed are one finished state.
+Stream exhaustion (decided 2026-10-25, revised 2026-10-26): a consumed or closed stream
+behaves exactly like an exhausted Python generator. Another `for`/`async for` yields
+nothing, and `next`/`anext` raise `StopIteration`/`StopAsyncIteration`, so
+`next(stream, default)`, `zip_longest`, and `islice` behave normally. The 2026-10-25
+rule that raised `PipelineStateError` on a second pass or after close was withdrawn: a
+stream must not behave differently from a Python iterator, so only `next` signals the
+end. Iterating a started stream in the other mode still raises. A partly consumed stream
+may still be re-entered (`header = next(stream); for row in stream: ...`). Consumed,
+closed, and failed are one finished state.
 
-Open gap (triaged 2026-10-25, Flowfile comparison): run-to-node inspection. A developer cannot yet execute a workflow up to a selected node and read a bounded sample there without running downstream nodes. Bounded reading already exists (`first()`, `open()`, `take()`); the missing piece is truncating the graph to the target node and its ancestors (`GraphIndex`) before planning. The side-effect-aware half — refusing or stubbing upstream write/action nodes during a preview — depends on R5C's `WriteNode`/`ActionNode` and the side-effect classification in [extensibility.md](extensibility.md) E1, so do not build an interim preview mode before those land. Unscheduled; previews are ordinary executions with no implicit caching.
+Open gap (triaged 2026-10-25, Flowfile comparison): run-to-node inspection. A developer
+cannot yet execute a workflow up to a selected node and read a bounded sample there
+without running downstream nodes. Bounded reading already exists (`first()`, `open()`,
+`take()`); the missing piece is truncating the graph to the target node and its
+ancestors (`GraphIndex`) before planning. The side-effect-aware half — refusing or
+stubbing upstream write/action nodes during a preview — depends on R5C's
+`WriteNode`/`ActionNode` and the side-effect classification in
+[extensibility.md](extensibility.md) E1, so do not build an interim preview mode before
+those land. Unscheduled; previews are ordinary executions with no implicit caching.
 
-**Seeds are run arguments, not definition state (direction adopted 2026-10-10, shipped 2026-10-24;
-replaces the earlier "immutability does not imply source replayability" ruling).** A definition stores
-no items. Before it shipped, a seeded `Pipeline` kept its seed on the definition
-(`PipelineDefinition.source`), so a one-shot generator was consumed by the first `iter(pipeline)` and
-the second run silently yielded nothing — execution-owned state carried on an immutable definition.
-Now a pipeline whose first node
-is a `Sources` module stays directly iterable (`list(pipeline)`, `pipeline.open()`); an *open*
-pipeline (its first node has an open input) takes its seed per run: `pipeline(items)` (positional, so
-no public parameter needs a name), `items | pipeline` as its operator spelling, and
-`pipeline.open(items)` / `pipeline.first(items)`. Each run is single-use and cannot be composed
-further (the call and `open` forms are distinguished below); composition by name/template is
-unchanged, and the run argument's type is `InputLike` (formerly `SourceLike`). One-shot seeds
-(iterators, generators, subscriptions) keep their native semantics *within* a run; re-running means
-passing a fresh seed, so the definition itself is always re-runnable.
+**Seeds are run arguments, not definition state (direction adopted 2026-10-10, shipped
+2026-10-24; replaces the earlier "immutability does not imply source replayability"
+ruling).** A definition stores no items. Before it shipped, a seeded `Pipeline` kept its
+seed on the definition (`PipelineDefinition.source`), so a one-shot generator was
+consumed by the first `iter(pipeline)` and the second run silently yielded nothing —
+execution-owned state carried on an immutable definition. Now a pipeline whose first
+node is a `Sources` module stays directly iterable (`list(pipeline)`,
+`pipeline.open()`); an *open* pipeline (its first node has an open input) takes its seed
+per run: `pipeline(items)` (positional, so no public parameter needs a name),
+`items | pipeline` as its operator spelling, and `pipeline.open(items)` /
+`pipeline.first(items)`. Each run is single-use and cannot be composed further (the call
+and `open` forms are distinguished below); composition by name/template is unchanged,
+and the run argument's type is `InputLike` (formerly `SourceLike`). One-shot seeds
+(iterators, generators, subscriptions) keep their native semantics *within* a run;
+re-running means passing a fresh seed, so the definition itself is always re-runnable.
 
-Decided 2026-10-10 (lands with R4C's `Pipeline.open()`, whose signature this fixes):
-(1) iterating, opening, or calling `first` on an open pipeline with no seed **raises**
-`InvalidPipelineError` ("requires a seed") as a missing required argument (the `require_arg` rule).
-Before it shipped, it did not even yield `[]`: a node with no input received the internal one-item
-placeholder seed `[{"forever": True}]`, which lets a `Sources` module fire once but leaked into the
-output of any other first module (`Pipeline.from_module("reverse")` yielded `[{'forever': True}]`).
-Now the placeholder stays internal: `ExecutionPlan.gen_build_order` requires every placeholder-fed
-node to start itself — a source module or a value feeder whose outgoing edges all enter named ports
-(decided 2026-10-23) — and raises "requires a seed" otherwise. (3) `Pipeline(source=…)` is removed outright
-(`Pipeline` is unreleased, so no deprecation): R4C's DELETE of `PipelineDefinition.source` leaves no
-stored seed for it to set. (2) Call and `open` get distinct roles, mirroring `iter(f)` vs
-`with open(f)` ("call to iterate, `open` to scope"): `pipeline(items)` / `items | pipeline` is the
-seeded `iter`/`aiter` and returns a stream (sync- and async-iterable, **not** a context manager);
-`pipeline.open(items)` / `pipeline.open()` is the only scoped form and returns a `PipelineRun` context
-manager that closes the run in the opening task. Both classes are private behind public typing
-protocols in `riko.types`. Neither carries `first`/`afirst`: `pipeline.first(items)` /
-`pipeline.afirst(items)` is the one spelling (on a partly consumed run "first" would mean "next";
-inside a block, `next(stream, None)` / `await anext(stream, None)` is the documented idiom). Every
-run entry point takes the seed as its first positional argument. Mitigations: the stream's
-`__enter__`/`__aenter__` raise a `TypeError` pointing at `open()`, and the public `PipelineStream`
-protocol omits `__enter__`/`__exit__`/`__aenter__`/`__aexit__` so pyright reports `with pipeline(items)`
-(pyright does not report a `@deprecated` dunder used through `with`, so marking them deprecated would
-flag nothing); a run garbage-collected unclosed emits
-a `ResourceWarning`, like an unclosed file; the README glossary, `open()` docstring, FAQ early-exit
-entry, and the COOKBOOK's async early-exit examples state the rule and use `open()`.
-Shipped 2026-10-24: `source=` is gone, shipped prose calls the value the "seed" (Reserved terms in
-`_docs/DOCUMENTATION_STANDARD.md`), and the gameplan examples once written as
-`Pipeline(source=subscription)` (agents.md, highergov-feed.md, callable-pipes.md, § Fan-out) use the
-seeded-run forms.
+Decided 2026-10-10 (lands with R4C's `Pipeline.open()`, whose signature this fixes): (1)
+iterating, opening, or calling `first` on an open pipeline with no seed **raises**
+`InvalidPipelineError` ("requires a seed") as a missing required argument (the
+`require_arg` rule). Before it shipped, it did not even yield `[]`: a node with no input
+received the internal one-item placeholder seed `[{"forever": True}]`, which lets a
+`Sources` module fire once but leaked into the output of any other first module
+(`Pipeline.from_module("reverse")` yielded `[{'forever': True}]`). Now the placeholder
+stays internal: `ExecutionPlan.gen_build_order` requires every placeholder-fed node to
+start itself — a source module or a value feeder whose outgoing edges all enter named
+ports (decided 2026-10-23) — and raises "requires a seed" otherwise. (3)
+`Pipeline(source=…)` is removed outright (`Pipeline` is unreleased, so no deprecation):
+R4C's DELETE of `PipelineDefinition.source` leaves no stored seed for it to set. (2)
+Call and `open` get distinct roles, mirroring `iter(f)` vs `with open(f)` ("call to
+iterate, `open` to scope"): `pipeline(items)` / `items | pipeline` is the seeded
+`iter`/`aiter` and returns a stream (sync- and async-iterable, **not** a context
+manager); `pipeline.open(items)` / `pipeline.open()` is the only scoped form and returns
+a `PipelineRun` context manager that closes the run in the opening task. Both classes
+are private behind public typing protocols in `riko.types`. Neither carries
+`first`/`afirst`: `pipeline.first(items)` / `pipeline.afirst(items)` is the one spelling
+(on a partly consumed run "first" would mean "next"; inside a block,
+`next(stream, None)` / `await anext(stream, None)` is the documented idiom). Every run
+entry point takes the seed as its first positional argument. Mitigations: the stream's
+`__enter__`/`__aenter__` raise a `TypeError` pointing at `open()`, and the public
+`PipelineStream` protocol omits `__enter__`/`__exit__`/`__aenter__`/`__aexit__` so
+pyright reports `with pipeline(items)` (pyright does not report a `@deprecated` dunder
+used through `with`, so marking them deprecated would flag nothing); a run
+garbage-collected unclosed emits a `ResourceWarning`, like an unclosed file; the README
+glossary, `open()` docstring, FAQ early-exit entry, and the COOKBOOK's async early-exit
+examples state the rule and use `open()`. Shipped 2026-10-24: `source=` is gone, shipped
+prose calls the value the "seed" (Reserved terms in `_docs/DOCUMENTATION_STANDARD.md`),
+and the gameplan examples once written as `Pipeline(source=subscription)` (agents.md,
+highergov-feed.md, callable-pipes.md, § Fan-out) use the seeded-run forms.
 
 ## Execution lifetime primitives
 
-Every private execution owns exactly three lifetime primitives. Resources, fan-out, state adapters, batching, and loops attach to these rather than inventing their own ownership mechanics.
+Every private execution owns exactly three lifetime primitives. Resources, fan-out,
+state adapters, batching, and loops attach to these rather than inventing their own
+ownership mechanics.
 
 | primitive | owns | used by |
 |---|---|---|
@@ -113,9 +173,14 @@ Every private execution owns exactly three lifetime primitives. Resources, fan-o
 | task group (AnyIO task group or equivalent) | lifetime and cancellation scope of every execution-spawned task | subscriptions, split/publish branches, merge workers, internal service tasks |
 | bridge (AnyIO `BlockingPortal` / worker adaptation) | crossing between sync and async execution | async-only components under sync execution (one persistent portal, pulled item by item), blocking sync work under async execution (a worker thread whose output is pulled on demand) |
 
-The write-session lifecycle behind `write()` is one of these context-managed components: R4B owns its acquisition and cleanup by entering it on the execution exit stack, exactly like any other resource. The session mechanism itself already exists (established alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same session without a second write-specific lifecycle stack.
+The write-session lifecycle behind `write()` is one of these context-managed components:
+R4B owns its acquisition and cleanup by entering it on the execution exit stack, exactly
+like any other resource. The session mechanism itself already exists (established
+alongside R3); R4B changes only the owner, so `WriteNode` under R5C acquires the same
+session without a second write-specific lifecycle stack.
 
-A write session exposes three **distinct** operations, and neither R4B execution nor R5C `WriteNode` may collapse them:
+A write session exposes three **distinct** operations, and neither R4B execution nor R5C
+`WriteNode` may collapse them:
 
 | operation | meaning |
 |---|---|
@@ -123,11 +188,27 @@ A write session exposes three **distinct** operations, and neither R4B execution
 | `abort` | abandon the logical delivery; for framed/buffered targets, discard the staged/unpublished document |
 | `close` | release runtime resources (close handles/staging); **never commits** |
 
-The governing invariant is **`close` never chooses commit semantics** — semantic completion belongs to the execution host, not to resource release. The exit-stack context manager only *acquires* the session on entry and *closes it* on exit; it does not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and graceful close → `finalize` (the consumed prefix), `terminate()` and any failure → `abort`, always followed by `close`. Abort promises no rollback of bytes/items already emitted by an incremental target (CSV/JSONL); it only discards staged content for framed targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy are execution-time facts and must not leak into the R4A workflow IR (see `implementation-sequence.md` R4A) — the IR carries declarative Target/Format/`WriteOperation` intent only.
+The governing invariant is **`close` never chooses commit semantics** — semantic
+completion belongs to the execution host, not to resource release. The exit-stack
+context manager only *acquires* the session on entry and *closes it* on exit; it does
+not `finalize` in its exit path. The host maps outcomes explicitly: full exhaustion and
+graceful close → `finalize` (the consumed prefix), `terminate()` and any failure →
+`abort`, always followed by `close`. Abort promises no rollback of bytes/items already
+emitted by an incremental target (CSV/JSONL); it only discards staged content for framed
+targets (JSON/GeoJSON). `PreparedWrite`, `WriteCapabilities`, and the session strategy
+are execution-time facts and must not leak into the R4A workflow IR (see
+`implementation-sequence.md` R4A) — the IR carries declarative
+Target/Format/`WriteOperation` intent only.
 
 Two invariants govern their use.
 
-**Lifecycle composition is not execution-mode adaptation.** `AsyncExitStack` does compose synchronous and asynchronous context managers in one unwind order — but that is a composition guarantee, not a threading guarantee. Entering a synchronous context manager through `enter_context()` still runs its `__enter__`/`__exit__` on the event-loop thread. "AsyncExitStack supports sync context managers" therefore does **not** mean "synchronous resource startup is safe on the event loop." The two decisions are made separately:
+**Lifecycle composition is not execution-mode adaptation.** `AsyncExitStack` does
+compose synchronous and asynchronous context managers in one unwind order — but that is
+a composition guarantee, not a threading guarantee. Entering a synchronous context
+manager through `enter_context()` still runs its `__enter__`/`__exit__` on the
+event-loop thread. "AsyncExitStack supports sync context managers" therefore does
+**not** mean "synchronous resource startup is safe on the event loop." The two decisions
+are made separately:
 
 ```text
 async context manager
@@ -140,39 +221,120 @@ potentially blocking sync acquisition or cleanup
     -> worker adaptation, then registered on the stack
 ```
 
-Worker adaptation must enter and exit a sync lifecycle resource on the same thread, so thread-affine
-clients such as `sqlite3` connections work under async execution. Today entry and exit may land on
-different worker threads; R11 (provider sessions) owns the fix, and a strict xfail,
-`tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`, marks it. The same thread rule keeps a sync-closeable seed's `close()` on the event loop (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a seed close that blocks; R11 owns that bound with the entry-thread exit (triage 2026-11-03; tripwire `tests/internal/test_plan_runs.py::TestAsyncPlanRun::test_arun_bounds_a_blocking_sync_seed_close`).
+Worker adaptation must enter and exit a sync lifecycle resource on the same thread, so
+thread-affine clients such as `sqlite3` connections work under async execution. Today
+entry and exit may land on different worker threads; R11 (provider sessions) owns the
+fix, and a strict xfail,
+`tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`,
+marks it. The same thread rule keeps a sync-closeable seed's `close()` on the event loop
+(it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
+seed close that blocks; R11 owns that bound with the entry-thread exit (triage
+2026-11-03; tripwire
+`tests/internal/test_plan_runs.py::TestAsyncPlanRun::test_arun_bounds_a_blocking_sync_seed_close`).
 
-The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an async factory that yields a resolved value — is bridged through the execution portal and the produced value is owned on the sync `ExitStack`. Async *cleanup* is bridged through the portal only for a value the execution itself produced on the portal loop (decided 2026-10-31), because its cleanup then runs on the loop that owns it: an async factory's async (or awaitable-returning) cleanup, and an `@asynccontextmanager`/async-generator lifecycle, which is entered and exited in one portal task. Every portal close, the async-stream closes included, is bounded by `shutdown_timeout`, and an expiry is recorded as a cleanup error. The portal is entered onto the `ExitStack` before every cleanup it bridges, so it stops after them. A sync factory with an async cleanup is rejected with `InvalidPipelineError` before the factory runs. Every caller-made owned value (`Resource(value)`, a sync-read seed, a native pipe's raw return, a node stream) whose only close is async (`aclose()`, or an async `close`) is rejected with `InvalidPipelineError` when it is opened or built, before any item is read, with a message naming the fix (an async factory or lifecycle, or `async for`); a bridged async-only stream keeps closing on the portal per the adaptation rule below. Under async execution every such close is awaited.
+The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an
+async factory that yields a resolved value — is bridged through the execution portal and
+the produced value is owned on the sync `ExitStack`. Async *cleanup* is bridged through
+the portal only for a value the execution itself produced on the portal loop (decided
+2026-10-31), because its cleanup then runs on the loop that owns it: an async factory's
+async (or awaitable-returning) cleanup, and an `@asynccontextmanager`/async-generator
+lifecycle, which is entered and exited in one portal task. Every portal close, the
+async-stream closes included, is bounded by `shutdown_timeout`, and an expiry is
+recorded as a cleanup error. The portal is entered onto the `ExitStack` before every
+cleanup it bridges, so it stops after them. A sync factory with an async cleanup is
+rejected with `InvalidPipelineError` before the factory runs. Every caller-made owned
+value (`Resource(value)`, a sync-read seed, a native pipe's raw return, a node stream)
+whose only close is async (`aclose()`, or an async `close`) is rejected with
+`InvalidPipelineError` when it is opened or built, before any item is read, with a
+message naming the fix (an async factory or lifecycle, or `async for`); a bridged
+async-only stream keeps closing on the portal per the adaptation rule below. Under async
+execution every such close is awaited.
 
-Open (backburner): an awaitable seed is also resolved on the portal, so its value could qualify for a bridged close; it stays rejected until decided.
+Open (backburner): an awaitable seed is also resolved on the portal, so its value could
+qualify for a bridged close; it stays rejected until decided.
 
-Delivery is staged over one close landscape (2026-10-31 triage). Stage 1 (landed): `get_sync_closer`/`get_async_closer` in `riko/types/_io.py` classify how a value closes (replacing `_has_async_close`), and `require_value` in `riko/bado/_util.py` is the one awaitable-rejection helper. Stage 2 (landed): one `run_bridged`/`maybe_async`/`asyncify` pair plus a per-execution `register_owned` replace `close_resource`/`aclose_resource`/`close_with`/`aclose_with`, `_adapt._maybe_close`/`_close_returned`, and the inline `queue_callback(x.close)`/`x.aclose` sites; it carries the rule above and a regression table (seed, native return, node stream, raw return × sync/async) for values whose only close is async, which leaked a never-awaited coroutine before it; under sync execution a sync-iterable seed whose only close is `aclose()` was silently never closed (verified 2026-10-31) and is now rejected. Stage 2 decisions (2026-10-31): under async execution a sync close keeps its per-kind threading (resource close/cleanup on a worker; seeds close inline; a sync node's stream and raw return keep their worker); under sync execution `shutdown_timeout` bounds every portal close, the existing async-stream closes included. There is no stage 3. Close-once invariant: a value is close-once or has one closer, with dedupe state in the value, never a registry. Riko-made async generators close idempotently; a foreign value closable from two places (async seed, sync node raw return and stream, native closeable non-generator output) enters through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a run's streams, close-once. `aauto_close` (`riko/bado/itertools.py`) and `maybe_closing`/`maybe_aclosing` use `run_bridged`/`maybe_async`/`asyncify` (`riko/bado/_util.py`); closers come only from `get_sync_closer`/`get_async_closer`. Follow-up, no owner yet (2026-11-02): sync execution still registers each non-endpoint node stream on its exit stack with no run object, so an upstream sync generator closes at execution exit, not when its downstream node finishes. `Workflow.require_executable` refuses fan-out, so each node stream has one consumer; when fan-out lands, a sync node's early input close must become per-consumer.
+Delivery is staged over one close landscape (2026-10-31 triage). Stage 1 (landed):
+`get_sync_closer`/`get_async_closer` in `riko/types/_io.py` classify how a value closes
+(replacing `_has_async_close`), and `require_value` in `riko/bado/_util.py` is the one
+awaitable-rejection helper. Stage 2 (landed): one `run_bridged`/`maybe_async`/`asyncify`
+pair plus a per-execution `register_owned` replace
+`close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
+`_adapt._maybe_close`/`_close_returned`, and the inline
+`queue_callback(x.close)`/`x.aclose` sites; it carries the rule above and a regression
+table (seed, native return, node stream, raw return × sync/async) for values whose only
+close is async, which leaked a never-awaited coroutine before it; under sync execution a
+sync-iterable seed whose only close is `aclose()` was silently never closed (verified
+2026-10-31) and is now rejected. Stage 2 decisions (2026-10-31): under async execution a
+sync close keeps its per-kind threading (resource close/cleanup on a worker; seeds close
+inline; a sync node's stream and raw return keep their worker); under sync execution
+`shutdown_timeout` bounds every portal close, the existing async-stream closes included.
+There is no stage 3. Close-once invariant: a value is close-once or has one closer, with
+dedupe state in the value, never a registry. Riko-made async generators close
+idempotently; a foreign value closable from two places (async seed, sync node raw return
+and stream, native closeable non-generator output) enters through `_Owned`, whose
+`inline` keeps the threading; `_RunStream` owns a run's streams, close-once.
+`aauto_close` (`riko/bado/itertools.py`) and `maybe_closing`/`maybe_aclosing` use
+`run_bridged`/`maybe_async`/`asyncify` (`riko/bado/_util.py`); closers come only from
+`get_sync_closer`/`get_async_closer`. Follow-up, no owner yet (2026-11-02): sync
+execution still registers each non-endpoint node stream on its exit stack with no run
+object, so an upstream sync generator closes at execution exit, not when its downstream
+node finishes. `Workflow.require_executable` refuses fan-out, so each node stream has
+one consumer; when fan-out lands, a sync node's early input close must become
+per-consumer.
 
-**Adaptation happens only at an execution boundary chosen during preparation.** Module, parser, factory, and extension code never creates event loops, portals, executors, worker threads, or task groups. Those belong to the execution that prepared the graph.
+**Adaptation happens only at an execution boundary chosen during preparation.** Module,
+parser, factory, and extension code never creates event loops, portals, executors,
+worker threads, or task groups. Those belong to the execution that prepared the graph.
 
 ## Context and resources
 
-There is one public `Context`; there is no public `ExecutionContext`. `Context` is an immutable environment/configuration definition. Resolved resource values belong to the private execution.
+There is one public `Context`; there is no public `ExecutionContext`. `Context` is an
+immutable environment/configuration definition. Resolved resource values belong to the
+private execution.
 
 ```python
 ctx2 = ctx.with_module(...)
 ctx3 = ctx2.with_resource(...)
 ```
 
-A `Pipeline` binds its environment with `pipeline.with_context(ctx)`, which stores the Context on the immutable definition (`pipeline.context`) for every run. `pipeline.with_resource(name, definition, *, credential=, lazy=)` is sugar that delegates to `Context.with_resource` on the pipeline's Context (or a default one) and derives a new pipeline, so `Context` stays the single resource provider; both carry through every chaining step, as do the `with_execution` settings.
+A `Pipeline` binds its environment with `pipeline.with_context(ctx)`, which stores the
+Context on the immutable definition (`pipeline.context`) for every run.
+`pipeline.with_resource(name, definition, *, credential=, lazy=)` is sugar that
+delegates to `Context.with_resource` on the pipeline's Context (or a default one) and
+derives a new pipeline, so `Context` stays the single resource provider; both carry
+through every chaining step, as do the `with_execution` settings.
 
-`with_module()` and `with_resource()` derive a child Context. A child may shadow an inherited module definition or provided resource; duplicate declarations within one normalization scope remain invalid. Built-ins remain static/global defaults, while Context-local module definitions may shadow them. Resource dependency names are late-bound against the effective Context during preparation, so a child resource override propagates through dependents without rebuilding those definitions.
+`with_module()` and `with_resource()` derive a child Context. A child may shadow an
+inherited module definition or provided resource; duplicate declarations within one
+normalization scope remain invalid. Built-ins remain static/global defaults, while
+Context-local module definitions may shadow them. Resource dependency names are
+late-bound against the effective Context during preparation, so a child resource
+override propagates through dependents without rebuilding those definitions.
 
-**Immutability is a whole-definition invariant.** "Immutable" here means: derive a new Context/resource rather than mutating an existing one, so a definition already shared across executions or child Contexts never changes underfoot. `Context` and `Resource` reject attribute assignment (private slots included), and their built-in containers are frozen recursively at construction (`freeze` in `riko/types/_frozendict.py`): `inputs` and factory `args`/`kwargs` read back as tuples, `FrozenDict`s, and frozensets, while opaque leaf values such as caller-owned clients are kept by identity and are not frozen. A factory still receives plain mutable copies (`thaw`) on each call. The internal derive/clone path is the sole sanctioned writer, and only before the new definition is handed out.
+**Immutability is a whole-definition invariant.** "Immutable" here means: derive a new
+Context/resource rather than mutating an existing one, so a definition already shared
+across executions or child Contexts never changes underfoot. `Context` and `Resource`
+reject attribute assignment (private slots included), and their built-in containers are
+frozen recursively at construction (`freeze` in `riko/types/_frozendict.py`): `inputs`
+and factory `args`/`kwargs` read back as tuples, `FrozenDict`s, and frozensets, while
+opaque leaf values such as caller-owned clients are kept by identity and are not frozen.
+A factory still receives plain mutable copies (`thaw`) on each call. The internal
+derive/clone path is the sole sanctioned writer, and only before the new definition is
+handed out.
 
 ### Resource definition taxonomy
 
-`Resource[T]` is the broad public resource wrapper. `T` is deliberately unconstrained: the resolved resource value may be any Python value, including `None` or a callable object. Riko must therefore use a private sentinel for unresolved/missing state rather than overloading `None`. A resource value is not required to implement `close()` or `aclose()` merely to satisfy the `Resource` type.
+`Resource[T]` is the broad public resource wrapper. `T` is deliberately unconstrained:
+the resolved resource value may be any Python value, including `None` or a callable
+object. Riko must therefore use a private sentinel for unresolved/missing state rather
+than overloading `None`. A resource value is not required to implement `close()` or
+`aclose()` merely to satisfy the `Resource` type.
 
-Use **resource value** as the generic term for the value a resource definition resolves to. Prefer the concrete domain noun — client, session, connection, pool, stream, and so on — when known. Reserve **handle** for a genuine reference/control object whose purpose is to identify or control something else, such as `OperationHandle`, an OS handle, a task handle, or an acknowledgement handle.
+Use **resource value** as the generic term for the value a resource definition resolves
+to. Prefer the concrete domain noun — client, session, connection, pool, stream, and so
+on — when known. Reserve **handle** for a genuine reference/control object whose purpose
+is to identify or control something else, such as `OperationHandle`, an OS handle, a
+task handle, or an acknowledgement handle.
 
 Reusable Context declarations use a narrower public category:
 
@@ -180,7 +342,14 @@ Reusable Context declarations use a narrower public category:
 type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 ```
 
-The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFactory` (a generator/context-manager recipe that `with_resource` normalizes into a reusable resource). A bare `ValueFactory` (an ordinary producer callable) is intentionally **excluded**: it becomes a definition only through `Resource.from_factory(...)`, which forces the cleanup decision (see "Resource factories and construction"). This is the implemented alias and is preferred over the earlier `ReusableResource[T] | ResourceFactory[T]` target, because `ResourceFactory` would fold the bare `ValueFactory` back in and lose that distinction.
+The union admits an already-wrapped `ReusableResource` or a bare `LifecycleFactory` (a
+generator/context-manager recipe that `with_resource` normalizes into a reusable
+resource). A bare `ValueFactory` (an ordinary producer callable) is intentionally
+**excluded**: it becomes a definition only through `Resource.from_factory(...)`, which
+forces the cleanup decision (see "Resource factories and construction"). This is the
+implemented alias and is preferred over the earlier
+`ReusableResource[T] | ResourceFactory[T]` target, because `ResourceFactory` would fold
+the bare `ValueFactory` back in and lose that distinction.
 
 Conceptually:
 
@@ -190,7 +359,16 @@ Resource[T]                   # variant carried as data, not a subclass:
 └── ReusableResource[T]       # Context-storable definition
 ```
 
-`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The owned/external/lifecycle/factory distinction is the record `Resource._plan` holds — `ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`, classified once by the constructor — not a private subclass hierarchy. `reusable` follows the `OneShotResource` vs `ReusableResource` type, and the markers are declaration types only: calling one, or a `from_*` constructor through one, raises `TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review); `external`, `strategy`, and `async_native` derive from the plan. The execution layer consumes the plan and never re-inspects the original generator/context-manager/instance shape. `Resource` is the public facade, with one constructor per intent:
+`Resource`, `OneShotResource`, and `ReusableResource` are the only classes. The
+owned/external/lifecycle/factory distinction is the record `Resource._plan` holds —
+`ExternalPlan`/`OwnedPlan`/`ValueFactoryPlan`/`SyncLifecyclePlan`/`AsyncLifecyclePlan`,
+classified once by the constructor — not a private subclass hierarchy. `reusable`
+follows the `OneShotResource` vs `ReusableResource` type, and the markers are
+declaration types only: calling one, or a `from_*` constructor through one, raises
+`TypeError`, so only `Resource`'s constructors choose reusability (2026-10-21 review);
+`external`, `strategy`, and `async_native` derive from the plan. The execution layer
+consumes the plan and never re-inspects the original generator/context-manager/instance
+shape. `Resource` is the public facade, with one constructor per intent:
 
 | API | Accepted input | Interpretation | Parser receives | Lifecycle / cleanup | Resource type | Reusable? |
 |---|---|---|---|---|---|---|
@@ -210,15 +388,35 @@ Resource.from_factory(f, ...) → call    (a producer; Riko manages the result)
 context.with_resource(...)    → bind    (a definition to a new Context; resolved later)
 ```
 
-**NOTE — wrapper reusability is not input/factory reusability.** "Reusable?" describes the *wrapper*, not the Python object used to construct it. A lifecycle factory may itself be callable repeatedly, yet `Resource.from_lifecycle(...)` still yields a `OneShotResource`: that wrapper represents exactly one lifecycle acquisition and is not Context-storable. Conversely `Resource.from_factory(...)` yields a `ReusableResource` because it retains the factory *recipe* and can acquire a fresh value per execution. So the wrapper's reusability tracks "can this definition be stored in a Context and re-resolved," not "can the underlying callable be invoked more than once." (This is a resource-semantics invariant; it belongs here, not in `API_SURFACE.md`, which governs import/compatibility boundaries.)
+**NOTE — wrapper reusability is not input/factory reusability.** "Reusable?" describes
+the *wrapper*, not the Python object used to construct it. A lifecycle factory may
+itself be callable repeatedly, yet `Resource.from_lifecycle(...)` still yields a
+`OneShotResource`: that wrapper represents exactly one lifecycle acquisition and is not
+Context-storable. Conversely `Resource.from_factory(...)` yields a `ReusableResource`
+because it retains the factory *recipe* and can acquire a fresh value per execution. So
+the wrapper's reusability tracks "can this definition be stored in a Context and
+re-resolved," not "can the underlying callable be invoked more than once." (This is a
+resource-semantics invariant; it belongs here, not in `API_SURFACE.md`, which governs
+import/compatibility boundaries.)
 
-A one-shot `Resource(value, ...)`/`from_lifecycle(...)` (`OneShotResource`) is not a `ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is an explicitly one-shot execution-local adaptation/compatibility boundary. `Resource.from_external(value)` may wrap any actual caller-owned resource value and never closes it; independent executions using the same Context may therefore receive the same external object concurrently, and concurrency/thread safety remains the caller's responsibility. Use a factory when each execution requires an isolated instance.
+A one-shot `Resource(value, ...)`/`from_lifecycle(...)` (`OneShotResource`) is not a
+`ResourceDefinition` and cannot be stored in a reusable Context. Its legitimate use is
+an explicitly one-shot execution-local adaptation/compatibility boundary.
+`Resource.from_external(value)` may wrap any actual caller-owned resource value and
+never closes it; independent executions using the same Context may therefore receive the
+same external object concurrently, and concurrency/thread safety remains the caller's
+responsibility. Use a factory when each execution requires an isolated instance.
 
-Live external resource values are runtime/process-local. Contexts containing them have no durable serialization guarantee, and canonical workflow/resource serialization stores references/configuration rather than sockets, sessions, locks, tokens, or other live objects.
+Live external resource values are runtime/process-local. Contexts containing them have
+no durable serialization guarantee, and canonical workflow/resource serialization stores
+references/configuration rather than sockets, sessions, locks, tokens, or other live
+objects.
 
 ### Resource factories and construction
 
-The primary owned lifecycle form remains an explicit sync/async generator or context manager, following `contextlib`, pytest fixtures, FastAPI `yield` dependencies, `dependency-injector`, and Dagster resource patterns:
+The primary owned lifecycle form remains an explicit sync/async generator or context
+manager, following `contextlib`, pytest fixtures, FastAPI `yield` dependencies,
+`dependency-injector`, and Dagster resource patterns:
 
 ```python
 def db(ctx):
@@ -232,13 +430,18 @@ def db(ctx):
 ctx.with_resource("db", db)
 ```
 
-Arbitrary callable objects are **not** inferred to be factories merely because `callable(x)` is true; callable resource values are legitimate Python objects. Bare classes/constructors likewise are not implicit resource factories. Use `Resource.from_factory(...)` to state that intent explicitly:
+Arbitrary callable objects are **not** inferred to be factories merely because
+`callable(x)` is true; callable resource values are legitimate Python objects. Bare
+classes/constructors likewise are not implicit resource factories. Use
+`Resource.from_factory(...)` to state that intent explicitly:
 
 ```python
 ctx.with_resource("client", Resource.from_factory(Client, base_url=url))
 ```
 
-**`ValueFactory` cleanup is mandatory; `LifecycleFactory` cleanup is intrinsic.** The two factory shapes carry cleanup differently, and `from_factory` encodes that split statically:
+**`ValueFactory` cleanup is mandatory; `LifecycleFactory` cleanup is intrinsic.** The
+two factory shapes carry cleanup differently, and `from_factory` encodes that split
+statically:
 
 ```text
 Resource.from_factory(value_factory, cleanup=fn)     # accepted — explicit cleanup callable
@@ -249,9 +452,18 @@ Resource.from_factory(lifecycle_factory, cleanup=fn) # rejected — use from_lif
 Resource(value_factory)                              # rejected statically — a producer is not a resolved value
 ```
 
-An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no inherent cleanup, so Riko refuses to guess: it requires either `cleanup=<callable>` (Riko runs it at cleanup) or `cleanup=False` (the produced value is deliberately not closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own cleanup, so supplying `cleanup=` there is an error — reach for `Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield` semantics. This keeps "who tears this down" an explicit declaration rather than a runtime inference.
+An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value with no
+inherent cleanup, so Riko refuses to guess: it requires either `cleanup=<callable>`
+(Riko runs it at cleanup) or `cleanup=False` (the produced value is deliberately not
+closed). A `LifecycleFactory` (generator/context-manager recipe) already defines its own
+cleanup, so supplying `cleanup=` there is an error — reach for
+`Resource.from_lifecycle(...)` when you want `__enter__`/`__exit__`/post-`yield`
+semantics. This keeps "who tears this down" an explicit declaration rather than a
+runtime inference.
 
-`Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments using normal partial-like semantics, then validates the remaining invocation contract. The only valid remaining signatures are exactly:
+`Resource.from_factory(factory, *args, **kwargs)` first binds its explicit arguments
+using normal partial-like semantics, then validates the remaining invocation contract.
+The only valid remaining signatures are exactly:
 
 ```text
 ()
@@ -259,18 +471,36 @@ An ordinary `ValueFactory` (a plain producer callable) resolves to a bare value 
 (ctx, resources)
 ```
 
-where `ctx` and `resources` are reserved semantic parameter names. Remaining arbitrary parameters are configuration mistakes, not implicit DI requests. A factory that needs constructor/configuration values binds them through `from_factory`; a real resource dependency is declared through `resources=` and read from the supplied `ResourceView`.
+where `ctx` and `resources` are reserved semantic parameter names. Remaining arbitrary
+parameters are configuration mistakes, not implicit DI requests. A factory that needs
+constructor/configuration values binds them through `from_factory`; a real resource
+dependency is declared through `resources=` and read from the supplied `ResourceView`.
 
-Return annotations are optional. They improve static inference of `T` but do not determine runtime validity. A factory may be sync or async, and any factory may return an awaitable; execution awaits the acquisition result exactly once before lifecycle classification. Factory/result classification is therefore two-stage:
+Return annotations are optional. They improve static inference of `T` but do not
+determine runtime validity. A factory may be sync or async, and any factory may return
+an awaitable; execution awaits the acquisition result exactly once before lifecycle
+classification. Factory/result classification is therefore two-stage:
 
-1. normalization records the definition/acquisition shape that can be known statically (recognized generator/async-generator/context-manager factory or explicit ordinary factory);
-2. after acquisition, execution validates the produced value's actual lifecycle capability when that cannot be known earlier.
+1. normalization records the definition/acquisition shape that can be known statically
+   (recognized generator/async-generator/context-manager factory or explicit ordinary
+   factory);
+2. after acquisition, execution validates the produced value's actual lifecycle
+   capability when that cannot be known earlier.
 
-A factory must not return another `Resource`/`ResourceDefinition` for recursive interpretation. That is a configuration error: choose the appropriate definition/construction method at declaration time. Likewise, when Riko can unambiguously detect that a `Resource` or recognized lifecycle definition was supplied where an already-resolved resource value was expected, the error should suggest the appropriate resource/factory form rather than silently nesting it. Arbitrary callable values are not rejected on that basis alone.
+A factory must not return another `Resource`/`ResourceDefinition` for recursive
+interpretation. That is a configuration error: choose the appropriate
+definition/construction method at declaration time. Likewise, when Riko can
+unambiguously detect that a `Resource` or recognized lifecycle definition was supplied
+where an already-resolved resource value was expected, the error should suggest the
+appropriate resource/factory form rather than silently nesting it. Arbitrary callable
+values are not rejected on that basis alone.
 
 ### Factory-result lifecycle precedence
 
-For `Resource.from_factory(...)`, explicit `cleanup=` is authoritative: the resolved factory result is `T` directly and Riko does not additionally interpret it as a context manager or closeable object. Without explicit cleanup, lifecycle interpretation follows this order:
+For `Resource.from_factory(...)`, explicit `cleanup=` is authoritative: the resolved
+factory result is `T` directly and Riko does not additionally interpret it as a context
+manager or closeable object. Without explicit cleanup, lifecycle interpretation follows
+this order:
 
 ```text
 context manager / async context manager
@@ -283,9 +513,15 @@ otherwise
     -> ResourceError
 ```
 
-When a value supports both context-manager and close/aclose protocols, context-manager semantics win because they can encode setup, exception-aware cleanup, transactions, and suppression. If both sync and async context-manager protocols exist, the protocol matching sync or async execution wins; bridging is used only when the matching native protocol is unavailable. The same native-mode preference applies to close/aclose capability fallback.
+When a value supports both context-manager and close/aclose protocols, context-manager
+semantics win because they can encode setup, exception-aware cleanup, transactions, and
+suppression. If both sync and async context-manager protocols exist, the protocol
+matching sync or async execution wins; bridging is used only when the matching native
+protocol is unavailable. The same native-mode preference applies to close/aclose
+capability fallback.
 
-Closeability is a runtime capability, not a bound on `T`. Internal structural protocols may be modeled permissively because Riko ignores their return values:
+Closeability is a runtime capability, not a bound on `T`. Internal structural protocols
+may be modeled permissively because Riko ignores their return values:
 
 ```python
 class Closeable(Protocol):
@@ -302,35 +538,89 @@ Riko-owned explicit cleanup is a stricter callback contract:
 type Cleanup[T] = Callable[[T], None | Awaitable[None]]
 ```
 
-It receives only the resolved resource value. Callers that need exception-aware cleanup or richer lifecycle state use a generator/context manager instead of expanding the cleanup callback signature.
+It receives only the resolved resource value. Callers that need exception-aware cleanup
+or richer lifecycle state use a generator/context manager instead of expanding the
+cleanup callback signature.
 
 ### Dependency graph, eager validation, and laziness
 
-Resource dependency graphs are validated completely during preparation, regardless of laziness. Validation includes missing names, aliases, supported definition/factory shapes, invocation signatures, duplicate declarations, and cycles. A cycle is invalid even when every member is lazy.
+Resource dependency graphs are validated completely during preparation, regardless of
+laziness. Validation includes missing names, aliases, supported definition/factory
+shapes, invocation signatures, duplicate declarations, and cycles. A cycle is invalid
+even when every member is lazy.
 
-`lazy=True` delays acquisition only; it never delays definition/graph validation. Dependency demand counts as use: an eager resource that depends on a lazy resource acquires that dependency first, while an entirely unused lazy subgraph remains unopened.
+`lazy=True` delays acquisition only; it never delays definition/graph validation.
+Dependency demand counts as use: an eager resource that depends on a lazy resource
+acquires that dependency first, while an entirely unused lazy subgraph remains unopened.
 
-Dependency bindings stay symbolic until preparation and resolve against the effective Context. Only directly declared resource dependencies appear in a factory/parser `ResourceView`; transitive dependencies affect lifecycle and semantic identity but are not automatically exposed. A factory may read immutable Context configuration or Context-local module definitions through `ctx`, but only `resources=` creates managed lifecycle dependency edges.
+Dependency bindings stay symbolic until preparation and resolve against the effective
+Context. Only directly declared resource dependencies appear in a factory/parser
+`ResourceView`; transitive dependencies affect lifecycle and semantic identity but are
+not automatically exposed. A factory may read immutable Context configuration or
+Context-local module definitions through `ctx`, but only `resources=` creates managed
+lifecycle dependency edges.
 
-Acquisition is dependency-first and cleanup is dependent-first. Dependencies remain open for at least the lifetime of every dependent that uses them. Independent eager resources enter in deterministic declaration order. Every reusable resource resolves at most once per execution; concurrent first-use of one lazy resource is single-flight within that execution. A failed acquisition is memoized as failed for the remainder of that execution rather than silently retried on each subsequent use; the shared single-flight waiters observe the same failure. Re-executing the same Pipeline starts a fresh execution that acquires again, producing fresh owned factory resource values while external resources resolve to their caller-supplied object.
+Acquisition is dependency-first and cleanup is dependent-first. Dependencies remain open
+for at least the lifetime of every dependent that uses them. Independent eager resources
+enter in deterministic declaration order. Every reusable resource resolves at most once
+per execution; concurrent first-use of one lazy resource is single-flight within that
+execution. A failed acquisition is memoized as failed for the remainder of that
+execution rather than silently retried on each subsequent use; the shared single-flight
+waiters observe the same failure. Re-executing the same Pipeline starts a fresh
+execution that acquires again, producing fresh owned factory resource values while
+external resources resolve to their caller-supplied object.
 
-Opening/resolution is transactional with respect to established ownership. If acquisition or post-acquisition validation fails, the execution unwinds every successfully established lifecycle, including the partially acquired current resource when Riko has a valid cleanup path. Riko never invents cleanup for an arbitrary object merely because validation failed.
+Opening/resolution is transactional with respect to established ownership. If
+acquisition or post-acquisition validation fails, the execution unwinds every
+successfully established lifecycle, including the partially acquired current resource
+when Riko has a valid cleanup path. Riko never invents cleanup for an arbitrary object
+merely because validation failed.
 
 ### Cleanup, errors, and cancellation
 
-The single execution exit stack owns resource unwind. Native generator/context-manager exception semantics are preserved: a real `__exit__`/`__aexit__` or generator cleanup may observe, replace, or suppress an execution exception according to normal Python semantics. Riko itself never suppresses an error on a resource's behalf. A simple `cleanup=` callback cannot suppress the primary execution error.
+The single execution exit stack owns resource unwind. Native generator/context-manager
+exception semantics are preserved: a real `__exit__`/`__aexit__` or generator cleanup
+may observe, replace, or suppress an execution exception according to normal Python
+semantics. Riko itself never suppresses an error on a resource's behalf. A simple
+`cleanup=` callback cannot suppress the primary execution error.
 
-All required cleanup is attempted. A single cleanup error is raised directly when no primary error exists; multiple independent cleanup failures use `ExceptionGroup`. When execution already failed or was cancelled, that primary outcome remains primary while cleanup failures are retained/reported alongside it according to the common error-grouping policy.
+All required cleanup is attempted. A single cleanup error is raised directly when no
+primary error exists; multiple independent cleanup failures use `ExceptionGroup`. When
+execution already failed or was cancelled, that primary outcome remains primary while
+cleanup failures are retained/reported alongside it according to the common
+error-grouping policy.
 
-Cancellation does not make the cleanup guarantee vacuous. Required async cleanup runs inside a bounded cancellation-shielded unwind so ambient execution cancellation does not immediately abort `await`-based cleanup. The bound is one execution-level configurable shutdown/cleanup budget shared by the unwind, not a separate timeout on every resource. No per-resource timeout is part of the initial contract. A sync close or cleanup that the unwind runs on a worker thread is abandoned when the budget expires (anyio `abandon_on_cancel`, triage 2026-11-03): the unwind records the `TimeoutError` and returns, the call finishes on its thread, its thread-limiter slot is released early, and an error it raises afterwards is logged as a warning (`tests/internal/test_execution.py::TestAsyncExecution::test_async_shutdown_timeout_abandons_a_blocking_sync_cleanup`).
+Cancellation does not make the cleanup guarantee vacuous. Required async cleanup runs
+inside a bounded cancellation-shielded unwind so ambient execution cancellation does not
+immediately abort `await`-based cleanup. The bound is one execution-level configurable
+shutdown/cleanup budget shared by the unwind, not a separate timeout on every resource.
+No per-resource timeout is part of the initial contract. A sync close or cleanup that
+the unwind runs on a worker thread is abandoned when the budget expires (anyio
+`abandon_on_cancel`, triage 2026-11-03): the unwind records the `TimeoutError` and
+returns, the call finishes on its thread, its thread-limiter slot is released early, and
+an error it raises afterwards is logged as a warning
+(`tests/internal/test_execution.py::TestAsyncExecution::test_async_shutdown_timeout_abandons_a_blocking_sync_cleanup`).
 
-The currently shipped `riko/resources.py` is a thin migration slice, not the target abstraction. Its public-looking `open()`/`aopen()`/`close()`/`aclose()` helpers and direct lifecycle discovery on resolved values are implementation scaffolding for the current migration and must not define the R3/R4 design. In the target runtime, execution owns acquisition, entry, adaptation, rollback, and cleanup.
+The currently shipped `riko/resources.py` is a thin migration slice, not the target
+abstraction. Its public-looking `open()`/`aopen()`/`close()`/`aclose()` helpers and
+direct lifecycle discovery on resolved values are implementation scaffolding for the
+current migration and must not define the R3/R4 design. In the target runtime, execution
+owns acquisition, entry, adaptation, rollback, and cleanup.
 
 ### Resource identity
 
-Resource **definitions**, never live resource values, participate in semantic identity. Do not fingerprint an external object's `id()`, `repr()`, attributes, or runtime state. External resource values are opaque; when durable semantics depend on one, stable binding metadata and explicit `version=` provide the durable identity.
+Resource **definitions**, never live resource values, participate in semantic identity.
+Do not fingerprint an external object's `id()`, `repr()`, attributes, or runtime state.
+External resource values are opaque; when durable semantics depend on one, stable
+binding metadata and explicit `version=` provide the durable identity.
 
-For factory-backed definitions, automatic identity includes the acquisition callable, canonically encodable bound `*args/**kwargs`, explicit `cleanup=` callable when present, lifecycle/ownership/lazy configuration, direct dependency bindings, and transitive resolved dependency fingerprints. Changing cleanup is semantic because cleanup may commit, roll back, acknowledge, or otherwise affect external state. Explicit `version=` remains the authoritative durability boundary and may intentionally declare two implementation revisions semantically equivalent.
+For factory-backed definitions, automatic identity includes the acquisition callable,
+canonically encodable bound `*args/**kwargs`, explicit `cleanup=` callable when present,
+lifecycle/ownership/lazy configuration, direct dependency bindings, and transitive
+resolved dependency fingerprints. Changing cleanup is semantic because cleanup may
+commit, roll back, acknowledge, or otherwise affect external state. Explicit `version=`
+remains the authoritative durability boundary and may intentionally declare two
+implementation revisions semantically equivalent.
 
 ### Execution-bound resource view
 
@@ -341,9 +631,18 @@ resources.db
 resources["db"]
 ```
 
-The view is a real `Mapping`, so `resources["db"]` is the canonical, always-correct accessor and attribute access (`resources.db`) is **convenience-only**. Because it is a `Mapping`, the method names `keys`, `values`, `items`, and `get` (plus dunders) are **reserved**: a resource bound to one of those names is reachable only via subscript — `resources["keys"]` returns the resource, while `resources.keys` stays the bound `Mapping` method. Attribute access is therefore defined only for binding names that do not collide with a `Mapping` member; prefer `resources[name]` whenever a name could shadow one. This is why the local alias is the identity-significant handle (below) — callers choose non-colliding aliases at the binding site.
+The view is a real `Mapping`, so `resources["db"]` is the canonical, always-correct
+accessor and attribute access (`resources.db`) is **convenience-only**. Because it is a
+`Mapping`, the method names `keys`, `values`, `items`, and `get` (plus dunders) are
+**reserved**: a resource bound to one of those names is reachable only via subscript —
+`resources["keys"]` returns the resource, while `resources.keys` stays the bound
+`Mapping` method. Attribute access is therefore defined only for binding names that do
+not collide with a `Mapping` member; prefer `resources[name]` whenever a name could
+shadow one. This is why the local alias is the identity-significant handle (below) —
+callers choose non-colliding aliases at the binding site.
 
-`Context.resources.db` continues to denote the immutable resource definition, not the resolved resource value.
+`Context.resources.db` continues to denote the immutable resource definition, not the
+resolved resource value.
 
 Nodes declare resources using the common metadata input:
 
@@ -359,11 +658,18 @@ The accepted public form is:
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 ```
 
-and is normalized immediately to an immutable local-name -> Context-name binding. The local alias is identity-significant; the Context lookup name is not. The resolved effective resource definition and its transitive dependencies are identity-significant.
+and is normalized immediately to an immutable local-name -> Context-name binding. The
+local alias is identity-significant; the Context lookup name is not. The resolved
+effective resource definition and its transitive dependencies are identity-significant.
 
-Resource arguments are prepared by the existing module wrapper/preparation machinery in the same way that stream/objconf/tuples arguments are prepared today. This is not a separate signature-based dependency-injection system. Only declared direct resource bindings are visible to the parser/factory. Transitive dependencies participate in lifecycle and fingerprinting but are not automatically exposed.
+Resource arguments are prepared by the existing module wrapper/preparation machinery in
+the same way that stream/objconf/tuples arguments are prepared today. This is not a
+separate signature-based dependency-injection system. Only declared direct resource
+bindings are visible to the parser/factory. Transitive dependencies participate in
+lifecycle and fingerprinting but are not automatically exposed.
 
-Missing resource bindings fail compilation/preparation before resources are opened or source consumption begins. Initially all declared resource bindings are required.
+Missing resource bindings fail compilation/preparation before resources are opened or
+source consumption begins. Initially all declared resource bindings are required.
 
 ## Feed results, metadata, and per-item provenance
 
@@ -383,13 +689,21 @@ class FeedResult[ItemsT]:
     state: FeedState | None = None
 ```
 
-`SyncFeedResult` and `AsyncFeedResult` are aliases over iterable and async-iterable item containers. `Metadata` is a typed Objectify-like mapping with both attribute and mapping access.
+`SyncFeedResult` and `AsyncFeedResult` are aliases over iterable and async-iterable item
+containers. `Metadata` is a typed Objectify-like mapping with both attribute and mapping
+access.
 
-Metadata is preserved through ordinary transforms when still truthful. Operators that invalidate or replace metadata must say so explicitly. A common result-level `metadata.generation` may seed item generations; if output items no longer share one truthful generation, result-level generation is invalidated and private per-item provenance remains authoritative.
+Metadata is preserved through ordinary transforms when still truthful. Operators that
+invalidate or replace metadata must say so explicitly. A common result-level
+`metadata.generation` may seed item generations; if output items no longer share one
+truthful generation, result-level generation is invalidated and private per-item
+provenance remains authoritative.
 
-`assign=` / `emit=` remain the common wrapper behavior over Feed-native parser output; introducing `FeedResult` does not change those semantics.
+`assign=` / `emit=` remain the common wrapper behavior over Feed-native parser output;
+introducing `FeedResult` does not change those semantics.
 
-Per-item execution identity is carried privately rather than exposed as a second public result model. Conceptually:
+Per-item execution identity is carried privately rather than exposed as a second public
+result model. Conceptually:
 
 ```python
 @dataclass
@@ -416,7 +730,9 @@ class Subscription[T](Protocol): ...
 class Channel[T](Publisher[T], Subscription[T], Protocol): ...
 ```
 
-Current `send` / `receive` modules are transitional implementation inputs only. R7 removes those Python modules when the final `publish` / `subscribe` API lands; no low-level compatibility wrapper survives in the target surface.
+Current `send` / `receive` modules are transitional implementation inputs only. R7
+removes those Python modules when the final `publish` / `subscribe` API lands; no
+low-level compatibility wrapper survives in the target surface.
 
 Local declaration:
 
@@ -431,21 +747,30 @@ An external subscription is an ordinary seed:
 stream = pipeline(subscription)
 ```
 
-`publish()` accepts a local subscription pipeline or an external `Publisher`. A published local subscription branch is attached to the owning execution. The user does not drain that branch to make cleanup occur; branch terminal values are discarded unless the branch has an explicit write/action/subscription-`func`/routing effect.
+`publish()` accepts a local subscription pipeline or an external `Publisher`. A
+published local subscription branch is attached to the owning execution. The user does
+not drain that branch to make cleanup occur; branch terminal values are discarded unless
+the branch has an explicit write/action/subscription-`func`/routing effect.
 
-Calling `list(events)` independently creates a fresh execution; subscriptions are not replay buffers.
+Calling `list(events)` independently creates a fresh execution; subscriptions are not
+replay buffers.
 
-Multiple subscriptions may share a display name. Python object identity distinguishes them. Serialized configuration may use the concise declaration:
+Multiple subscriptions may share a display name. Python object identity distinguishes
+them. Serialized configuration may use the concise declaration:
 
 ```json
 {"name": "events"}
 ```
 
-and a target name resolves all same-name declarations unless an explicit serialized id selects one.
+and a target name resolves all same-name declarations unless an explicit serialized id
+selects one.
 
 ### Subscriber scheduling and buffering
 
-Sync subscribers execute inline by default. Execution concurrency is an explicit opt-in. Async orchestration is execution-owned; transitional code may use `asyncio.create_task()` only while the current hub machinery exists and only when the owning execution tracks cleanup.
+Sync subscribers execute inline by default. Execution concurrency is an explicit opt-in.
+Async orchestration is execution-owned; transitional code may use
+`asyncio.create_task()` only while the current hub machinery exists and only when the
+owning execution tracks cleanup.
 
 Async subscriptions default to rendezvous behavior:
 
@@ -460,7 +785,9 @@ For bounded buffering:
 overflow: Literal["block", "drop"] = "block"
 ```
 
-`drop` drops the oldest buffered item and keeps the newest, matching the current sync behavior. Per-subscription item order is guaranteed. Ordering between independent subscriptions is unspecified.
+`drop` drops the oldest buffered item and keeps the newest, matching the current sync
+behavior. Per-subscription item order is guaranteed. Ordering between independent
+subscriptions is unspecified.
 
 Subscription errors use only:
 
@@ -470,9 +797,14 @@ Literal["raise", "ignore"]
 
 with `"raise"` the default. `"ignore"` is per-item continuation.
 
-A subscriber `func=` may be sync or async. It runs at subscription receive/materialization time rather than ordinary downstream UDF evaluation time; its return value is discarded and the original item continues. This timing and pass-through contract must match in sync and async execution.
+A subscriber `func=` may be sync or async. It runs at subscription
+receive/materialization time rather than ordinary downstream UDF evaluation time; its
+return value is discarded and the original item continues. This timing and pass-through
+contract must match in sync and async execution.
 
-When multiple publishers target one subscription, the subscription completes only after all attached publishers complete. Concurrent publishers preserve actual delivery order; no artificial global ordering is imposed.
+When multiple publishers target one subscription, the subscription completes only after
+all attached publishers complete. Concurrent publishers preserve actual delivery order;
+no artificial global ordering is imposed.
 
 ### `split()`
 
@@ -485,15 +817,20 @@ When multiple publishers target one subscription, the subscription completes onl
 - per-branch buffers are bounded and default to zero-buffer/rendezvous semantics;
 - split is never lossy and has no drop overflow mode.
 
-Branch isolation is observable, but the runtime chooses the cheapest safe copy/share strategy. There is no public copy-mode knob initially.
+Branch isolation is observable, but the runtime chooses the cheapest safe copy/share
+strategy. There is no public copy-mode knob initially.
 
-`publish(..., isolate=True)` similarly isolates a branch by default, with `isolate=False` as the explicit escape hatch.
+`publish(..., isolate=True)` similarly isolates a branch by default, with
+`isolate=False` as the explicit escape hatch.
 
-Shared ancestry alone never implies fan-out. Fan-out must be represented by `split()` or `publish()`.
+Shared ancestry alone never implies fan-out. Fan-out must be represented by `split()` or
+`publish()`.
 
 ## Identity, fingerprints, and idempotency
 
-Durable checkpoint identity, per-item generation, idempotency, and semantic fingerprints share one canonical freezing/encoding system. They must not each invent independent serialization or hashing rules.
+Durable checkpoint identity, per-item generation, idempotency, and semantic fingerprints
+share one canonical freezing/encoding system. They must not each invent independent
+serialization or hashing rules.
 
 ### Hashable identity values
 
@@ -504,38 +841,60 @@ type NonNullHashable = ...
 type Hashable = NonNullHashable | None
 ```
 
-`NonNullHashable` includes the supported scalar identity types plus recursive tuples. The canonical system distinguishes types that Python normally conflates (`bool`/`int`, `int`/`float`, `float`/`Decimal`) and handles `datetime`, `date`, `struct_time`, `PurePath`, `bytes`, UUID, enums, mappings, dataclasses, sets/frozensets, lists, and tuples according to the durable rules below.
+`NonNullHashable` includes the supported scalar identity types plus recursive tuples.
+The canonical system distinguishes types that Python normally conflates (`bool`/`int`,
+`int`/`float`, `float`/`Decimal`) and handles `datetime`, `date`, `struct_time`,
+`PurePath`, `bytes`, UUID, enums, mappings, dataclasses, sets/frozensets, lists, and
+tuples according to the durable rules below.
 
 Key canonicalization rules:
 
-- `bool` is handled before `int`; `datetime` before `date`; enums before their scalar bases;
-- finite floats use a deterministic representation, infinities use explicit tags, all NaNs share a stable tag, and `-0.0` canonicalizes with `+0.0`;
+- `bool` is handled before `int`; `datetime` before `date`; enums before their scalar
+  bases;
+- finite floats use a deterministic representation, infinities use explicit tags, all
+  NaNs share a stable tag, and `-0.0` canonicalizes with `+0.0`;
 - Decimal equivalent representations normalize within the Decimal type;
-- naive datetimes use `ensure_tzinfo(..., try_local_tz=False)` and therefore UTC fallback; aware datetimes normalize to UTC;
-- mappings are order-independent and sort by canonical encoded key, including heterogeneous key types;
+- naive datetimes use `ensure_tzinfo(..., try_local_tz=False)` and therefore UTC
+  fallback; aware datetimes normalize to UTC;
+- mappings are order-independent and sort by canonical encoded key, including
+  heterogeneous key types;
 - sets/frozensets are order-independent while preserving the set/frozenset distinction;
-- list and tuple remain distinct; only tuple participates in logical `Hashable` identity;
+- list and tuple remain distinct; only tuple participates in logical `Hashable`
+  identity;
 - mapping wrappers such as Objectify/DotDict canonicalize by contents, not wrapper type;
-- dataclasses/enums include stable `module.qualname` type identity; local/non-import-stable definitions require explicit versioning when used durably;
+- dataclasses/enums include stable `module.qualname` type identity;
+  local/non-import-stable definitions require explicit versioning when used durably;
 - paths are lexical and preserve path flavor; no filesystem resolution occurs;
-- bytes use lowercase hex; mutable bytearray/memoryview may be freezeable for fingerprints but are not logical hashable identity values;
+- bytes use lowercase hex; mutable bytearray/memoryview may be freezeable for
+  fingerprints but are not logical hashable identity values;
 - UUID uses lowercase 32-digit hex;
 - strings preserve exact Unicode code points; no NFC/NFKC normalization is applied;
 - cyclic structures are rejected for durable identity.
 
-A shared internal `_freeze(obj) -> FrozenValue` generalizes the current `_to_hashable()` machinery. Durable consumers raise on unsupported values; process-local representation caching may instead treat a value as uncacheable.
+A shared internal `_freeze(obj) -> FrozenValue` generalizes the current `_to_hashable()`
+machinery. Durable consumers raise on unsupported values; process-local representation
+caching may instead treat a value as uncacheable.
 
 ### Canonical bytes and digest
 
-Canonical frozen values encode to fixed UTF-8 JSON bytes. `Context(identity_encoder="auto")` may select the fastest installed Riko-supported/conformance-tested encoder, but every supported encoder must emit byte-for-byte identical canonical output. Explicitly requesting an unavailable backend fails preparation. Encoder acceleration belongs to the existing `perf` extra and the selected backend is not semantically fingerprinted.
+Canonical frozen values encode to fixed UTF-8 JSON bytes.
+`Context(identity_encoder="auto")` may select the fastest installed
+Riko-supported/conformance-tested encoder, but every supported encoder must emit
+byte-for-byte identical canonical output. Explicitly requesting an unavailable backend
+fails preparation. Encoder acceleration belongs to the existing `perf` extra and the
+selected backend is not semantically fingerprinted.
 
-Durable digests are domain/version separated and use one fixed algorithm for the identity-format version:
+Durable digests are domain/version separated and use one fixed algorithm for the
+identity-format version:
 
 ```python
 hashlib.blake2b(data, digest_size=16).hexdigest()
 ```
 
-The result is a 32-character lowercase hex string. Domains are fixed Riko-owned values (for example fingerprint, generation, idempotency, state-key encoding); callers do not supply arbitrary digest-domain strings. The domain/version participate in the hashed bytes but are not embedded in the returned hex text.
+The result is a 32-character lowercase hex string. Domains are fixed Riko-owned values
+(for example fingerprint, generation, idempotency, state-key encoding); callers do not
+supply arbitrary digest-domain strings. The domain/version participate in the hashed
+bytes but are not embedded in the returned hex text.
 
 ### Callable and resource fingerprints
 
@@ -546,23 +905,40 @@ automatic fingerprint  = convenience / best-effort identity
 explicit version=      = authoritative durable semantic identity
 ```
 
-Automatic inspection cannot be complete, and the architecture must not depend on it being complete. A normalized AST says nothing about a changed third-party library called from the body, runtime-derived module globals, C extension callables, dynamically generated code, or a monkeypatched module. Closing those gaps would turn durable identity into a Python-semantics hashing project.
+Automatic inspection cannot be complete, and the architecture must not depend on it
+being complete. A normalized AST says nothing about a changed third-party library called
+from the body, runtime-derived module globals, C extension callables, dynamically
+generated code, or a monkeypatched module. Closing those gaps would turn durable
+identity into a Python-semantics hashing project.
 
-Automatic fingerprints are therefore suitable for process-local caching, debugging, and obvious semantic-change detection. They do not determine canonical Workflow v2 node IDs. Graph-node identity and generated IDs are owned by the Workflow v2 specification in `extensibility.md`.
+Automatic fingerprints are therefore suitable for process-local caching, debugging, and
+obvious semantic-change detection. They do not determine canonical Workflow v2 node IDs.
+Graph-node identity and generated IDs are owned by the Workflow v2 specification in
+`extensibility.md`.
 
-Explicit `version=` is the authoritative semantic identity wherever checkpoints, idempotent side effects, or other durable behavior must survive a process restart, dependency upgrade, or deploy:
+Explicit `version=` is the authoritative semantic identity wherever checkpoints,
+idempotent side effects, or other durable behavior must survive a process restart,
+dependency upgrade, or deploy:
 
 ```python
 pipeline.map(transform, version="normalize-v3")
 ```
 
-Docs, examples, and the checkpoint/idempotency guidance treat an explicit version as the normal thing to write at a durability boundary, not as an escape hatch for hard cases.
+Docs, examples, and the checkpoint/idempotency guidance treat an explicit version as the
+normal thing to write at a durability boundary, not as an escape hatch for hard cases.
 
 Within that contract:
 
-Inspectable Python callables are fingerprinted from normalized AST, excluding formatting, comments, source locations, docstrings, and annotations. Defaults, kwdefaults, closure nonlocals, durably freezeable referenced globals, decorators, and relevant captured configuration participate.
+Inspectable Python callables are fingerprinted from normalized AST, excluding
+formatting, comments, source locations, docstrings, and annotations. Defaults,
+kwdefaults, closure nonlocals, durably freezeable referenced globals, decorators, and
+relevant captured configuration participate.
 
-`functools.partial` includes its wrapped callable and bound args/kwargs. Bound methods/callable instances include durable instance configuration. Stable builtins/stdlib callables use qualified identity; opaque third-party/native implementations may use owning distribution version when resolvable and otherwise require an explicit node version.
+`functools.partial` includes its wrapped callable and bound args/kwargs. Bound
+methods/callable instances include durable instance configuration. Stable
+builtins/stdlib callables use qualified identity; opaque third-party/native
+implementations may use owning distribution version when resolvable and otherwise
+require an explicit node version.
 
 Callable-accepting nodes support a common:
 
@@ -570,46 +946,106 @@ Callable-accepting nodes support a common:
 version: NonNullHashable | MissingType = MISSING
 ```
 
-`MISSING` means automatic inspection. `None` is invalid. An explicit version replaces automatic callable implementation inspection for callables owned by that node while stable callable/type namespace and non-callable node configuration still participate.
+`MISSING` means automatic inspection. `None` is invalid. An explicit version replaces
+automatic callable implementation inspection for callables owned by that node while
+stable callable/type namespace and non-callable node configuration still participate.
 
-Resource definitions, not live resource values, are fingerprinted. `Resource.version` overrides automatic resource implementation identity only; ownership, lazy/eager lifecycle, cleanup, dependencies, and other semantic resource configuration still participate. Resolved resource dependency fingerprints propagate transitively. Opaque external resources that affect a resumable scope require an explicit resource version.
+Resource definitions, not live resource values, are fingerprinted. `Resource.version`
+overrides automatic resource implementation identity only; ownership, lazy/eager
+lifecycle, cleanup, dependencies, and other semantic resource configuration still
+participate. Resolved resource dependency fingerprints propagate transitively. Opaque
+external resources that affect a resumable scope require an explicit resource version.
 
-Structural compilation may be cached process-locally with a bounded internal cache, but execution-sensitive semantic fingerprints are recomputed during execution preparation. Captured/global callable configuration is sampled then and is assumed semantically stable for that execution; Riko does not continuously mutation-watch it.
+Two fingerprints exist per node (gameplan audit triage 2026-11-05):
+
+```text
+definition fingerprint  configuration, implementation/version=, declared resource
+                        identities; stable across executions with different
+                        Context.inputs
+effective fingerprint   computed at preparation from the definition fingerprint, the
+                        resolved {"input": name} values the node references, and its
+                        upstream nodes' effective fingerprints
+```
+
+Referenced inputs participate automatically and propagate through upstream
+dependencies: in `source(tenant={"input": "tenant"}) → normalize() → cache() →
+checkpoint()` a changed `tenant` changes the effective identity of all four nodes
+though only the source references it. Cache keys use the effective fingerprint plus
+the existing cache generation/policy; `StateKey` and idempotency keys use it in their
+existing `fingerprint` field. There is no scope declaration, no new public identity
+abstraction, and no new `StateKey` field. Where tenant selection comes through a
+Context resource rather than an input reference, that resource's stable configured
+identity/version participates instead; live credentials and tokens are never
+fingerprinted. Identical inputs and implementation fingerprints do not prove an
+external source's contents unchanged: cache reuse keeps its own freshness/invalidation
+semantics (`cache.md`). Ownership: R4D resolves and validates referenced inputs and
+retains their dependency information; R2B defines and computes effective fingerprints
+with canonical encoding; R5B keys caches by effective identity; R6 keys `StateKey`s
+and idempotency by it.
+
+Four identities/versions stay distinct and are never interchangeable:
+
+```text
+workflow format version         serialization grammar
+node/resource version=          semantic implementation contract
+source selection + cursor       which source records were observed and where
+                                acquisition resumes
+published data-product version  which completed output a consumer may reuse
+```
+
+Structural compilation may be cached process-locally with a bounded internal cache, but
+execution-sensitive semantic fingerprints are recomputed during execution preparation.
+Captured/global callable configuration is sampled then and is assumed semantically
+stable for that execution; Riko does not continuously mutation-watch it.
 
 ### Provenance propagation
 
-Root identity is automatically namespaced by the source node's canonical graph ID. A generated Workflow v2 node ID is sufficient within one normalized definition. Use explicit `id=` where the logical node identity must remain stable across structural revisions that could change the generated ID.
+Root identity is automatically namespaced by the source node's canonical graph ID. A
+generated Workflow v2 node ID is sufficient within one normalized definition. Use
+explicit `id=` where the logical node identity must remain stable across structural
+revisions that could change the generated ID.
 
 Generation propagation follows operator semantics:
 
 - 1 -> 1: preserve;
-- 1 -> N: derive deterministic child generation, preferring semantic child identity over position;
+- 1 -> N: derive deterministic child generation, preferring semantic child identity over
+  position;
 - N -> 1: derive from contributors plus relevant operator/group identity;
 - N -> N: derive from the exact contributing input generations.
 
-Positional derivation is allowed only when stable ordering is guaranteed. N-to-1 contributor generation is accumulated incrementally rather than retaining all contributor values.
+Positional derivation is allowed only when stable ordering is guaranteed. N-to-1
+contributor generation is accumulated incrementally rather than retaining all
+contributor values.
 
-Built-ins infer identity behavior from known semantics/module metadata. Ambiguous custom operators have only:
+Built-ins infer identity behavior from known semantics/module metadata. Ambiguous custom
+operators have only:
 
 ```python
 identity: IdentityMode  # StrEnum: "preserve" | "derive" | "combine"
 ```
 
-A custom derive operator may additionally need `stable_order=True` before positional fallback is safe. Combine semantics may declare whether contributor order is significant. Execution `ordered=True` and operator semantic `stable_order=True` are distinct concepts.
+A custom derive operator may additionally need `stable_order=True` before positional
+fallback is safe. Combine semantics may declare whether contributor order is
+significant. Execution `ordered=True` and operator semantic `stable_order=True` are
+distinct concepts.
 
 `union()` preserves each input item's provenance; it does not combine identities.
 
 ### Idempotency
 
-Every Riko side-effecting node/effect supports idempotency where its destination permits it; pure transforms require none. Execution derives and injects a key centrally rather than asking effect implementations to reconstruct provenance:
+Every Riko side-effecting node/effect supports idempotency where its destination permits
+it; pure transforms require none. Execution derives and injects a key centrally rather
+than asking effect implementations to reconstruct provenance:
 
 ```text
 (node_id, fingerprint, item_key, generation, iteration)
 ```
 
-Generation remains stable across retries and comes from source/upstream semantics, never a random retry UUID.
+Generation remains stable across retries and comes from source/upstream semantics, never
+a random retry UUID.
 
-If a retryable/resumable workflow reaches a side effect whose backend cannot honor idempotency, validation fails unless that node explicitly opts out:
+If a retryable/resumable workflow reaches a side effect whose backend cannot honor
+idempotency, validation fails unless that node explicitly opts out:
 
 ```python
 .write(..., require_idempotency=False)
@@ -619,7 +1055,9 @@ Riko does not add a generic distributed lease/lock abstraction to this contract.
 
 ## Stateful execution and checkpoints
 
-State persistence uses one `StateStore` capability for recovery checkpoints and source/observation state. The existing `hash` module is not a checkpoint mechanism because Python hash values are not a durable identity contract.
+State persistence uses one `StateStore` capability for recovery checkpoints and
+source/observation state. The existing `hash` module is not a checkpoint mechanism
+because Python hash values are not a durable identity contract.
 
 ### Public state values
 
@@ -645,11 +1083,17 @@ class StateKey[T]:
     generation: Hashable = None
 ```
 
-`StateKey[T]` is a phantom generic linking the key to the payload type for static checking. The generic parameter has no runtime, serialization, equality, or fingerprint significance. `StateStore` itself is not generic because one store naturally contains heterogeneous records.
+`StateKey[T]` is a phantom generic linking the key to the payload type for static
+checking. The generic parameter has no runtime, serialization, equality, or fingerprint
+significance. `StateStore` itself is not generic because one store naturally contains
+heterogeneous records.
 
-`item_key=None` denotes owner-level state and requires `generation=None`. Per-item recovery uses a non-null item key. Nested tuple identity components may still contain `None`.
+`item_key=None` denotes owner-level state and requires `generation=None`. Per-item
+recovery uses a non-null item key. Nested tuple identity components may still contain
+`None`.
 
-`StateVersion = NonNullHashable` is an opaque CAS token. Riko never increments or interprets it.
+`StateVersion = NonNullHashable` is an opaque CAS token. Riko never increments or
+interprets it.
 
 ### Store protocols and CAS
 
@@ -685,7 +1129,9 @@ class AsyncStateStore(Protocol):
 type StateStoreLike = StateStore | AsyncStateStore
 ```
 
-Stores must be uniformly sync or uniformly async; mixed method modes fail preparation. Each execution resolves one private mode-specific state-store adapter and applies sync/async bridging once when the adapter is prepared.
+Stores must be uniformly sync or uniformly async; mixed method modes fail preparation.
+Each execution resolves one private mode-specific state-store adapter and applies
+sync/async bridging once when the adapter is prepared.
 
 All mutations are CAS-protected:
 
@@ -695,15 +1141,24 @@ save(..., expected_version=version)  # update exact revision
 delete(..., expected_version=version)  # delete exact revision
 ```
 
-There is no unconditional mutation escape hatch. A missing actual record conflicts with an expected existing version; an existing record conflicts with expected `MISSING`. `CheckpointConflictError` carries the key, expected version, and actual version (`MISSING` when absent). CAS conflicts propagate; Riko does not automatically reload and rerun the operation.
+There is no unconditional mutation escape hatch. A missing actual record conflicts with
+an expected existing version; an existing record conflicts with expected `MISSING`.
+`CheckpointConflictError` carries the key, expected version, and actual version
+(`MISSING` when absent). CAS conflicts propagate; Riko does not automatically reload and
+rerun the operation.
 
-Backends must prevent stale resurrection across delete/recreate races with their own monotonic revision/tombstone mechanism as needed. That mechanism is not exposed in the public checkpoint model.
+Backends must prevent stale resurrection across delete/recreate races with their own
+monotonic revision/tombstone mechanism as needed. That mechanism is not exposed in the
+public checkpoint model.
 
 `save()` returns only the resulting `StateVersion`; `delete()` returns `None`.
 
 ### Store capabilities and state serialization
 
-Physical serialization of `StateKey` and `FeedState[T]` is backend-owned. Riko does not impose one universal state codec. To help users choose stores without creating an exhaustive Python type registry, configured store instances expose coarse capabilities plus concrete preflight validation.
+Physical serialization of `StateKey` and `FeedState[T]` is backend-owned. Riko does not
+impose one universal state codec. To help users choose stores without creating an
+exhaustive Python type registry, configured store instances expose coarse capabilities
+plus concrete preflight validation.
 
 ```python
 StateSerializationId = NewType("StateSerializationId", str)
@@ -738,11 +1193,20 @@ class StateStoreCapabilities:
 type StateStoreCapabilitiesLike = StateStoreCapabilities | StateStoreCapabilitiesRaw
 ```
 
-Known formats use Riko's canonical identifiers. Third-party formats use `<provider>:<name>`, for example `acme:state-v2`. `"memory"` is not a serialization format; an in-memory Python-object store reports `serialization="python"`.
+Known formats use Riko's canonical identifiers. Third-party formats use
+`<provider>:<name>`, for example `acme:state-v2`. `"memory"` is not a serialization
+format; an in-memory Python-object store reports `serialization="python"`.
 
-Capabilities describe the configured store **instance**, not merely what its backend class could support. For example, SQLite `:memory:` may report `persistent=False` while a file-backed instance reports `persistent=True`; JSON and pickle instances of the same backend may differ in portability.
+Capabilities describe the configured store **instance**, not merely what its backend
+class could support. For example, SQLite `:memory:` may report `persistent=False` while
+a file-backed instance reports `persistent=True`; JSON and pickle instances of the same
+backend may differ in portability.
 
-`persistent=True` means the configured store is intended to make saved state available to a later independent Riko execution after the current process ends. It does not claim a particular fsync, replication, HA, or disaster-recovery guarantee. `portable=True` means the configured representation is intended to be independently interpretable rather than tied to this Python/backend implementation; a concrete state must still validate.
+`persistent=True` means the configured store is intended to make saved state available
+to a later independent Riko execution after the current process ends. It does not claim
+a particular fsync, replication, HA, or disaster-recovery guarantee. `portable=True`
+means the configured representation is intended to be independently interpretable rather
+than tied to this Python/backend implementation; a concrete state must still validate.
 
 Stores expose:
 
@@ -757,13 +1221,19 @@ with:
 def validate_state[T](self, state: FeedState[T]) -> None: ...
 ```
 
-Validation returns `None` on success and raises `StateSerializationError` on failure. The exception should identify useful location/reason information when the backend can provide it. There is no exhaustive public `supported_types` list.
+Validation returns `None` on success and raises `StateSerializationError` on failure.
+The exception should identify useful location/reason information when the backend can
+provide it. There is no exhaustive public `supported_types` list.
 
-Preflight is a convenience only. `save()` performs authoritative validation itself. Serialization must succeed before any mutation occurs; a `StateSerializationError` leaves the existing record unchanged. A CAS failure likewise leaves the record unchanged.
+Preflight is a convenience only. `save()` performs authoritative validation itself.
+Serialization must succeed before any mutation occurs; a `StateSerializationError`
+leaves the existing record unchanged. A CAS failure likewise leaves the record
+unchanged.
 
 ### `checkpoint()`
 
-A generic checkpoint is a side-effecting identity/durability boundary that persists the current logical value and then passes that value through unchanged:
+A generic checkpoint is a side-effecting identity/durability boundary that persists the
+current logical value and then passes that value through unchanged:
 
 ```python
 pipeline = pipeline.checkpoint(id="normalized")
@@ -775,21 +1245,45 @@ Conceptually the payload is:
 FeedState(checkpoint=current_value, observation=current_observation)
 ```
 
-Checkpointing commits state; it does not independently decide how to restore. Restore belongs to an enclosing resumable/stateful owner such as `loop`, polling, or a stateful source.
+Checkpointing commits state; it does not independently decide how to restore. Restore
+belongs to an enclosing resumable/stateful owner such as `loop`, polling, or a stateful
+source.
 
-A reachable checkpoint requires a configured `state_store` before source consumption begins. `Context(state_store=...)` takes a resource definition (the same reusable resource-definition contract as ordinary Context resources) and is a first-class Context capability, not a magic ordinary resource binding.
+A reachable checkpoint requires a configured `state_store` before source consumption
+begins. `Context(state_store=...)` takes a resource definition (the same reusable
+resource-definition contract as ordinary Context resources) and is a first-class Context
+capability, not a magic ordinary resource binding.
 
-A checkpoint may exist in a reusable/unbound pipeline fragment, but compilation of a concrete graph requires every reachable checkpoint to resolve to exactly one enclosing resumable owner. Nested scopes bind to the nearest enclosing owner. The compiled graph records that owner explicitly.
+A checkpoint may exist in a reusable/unbound pipeline fragment, but compilation of a
+concrete graph requires every reachable checkpoint to resolve to exactly one enclosing
+resumable owner. Nested scopes bind to the nearest enclosing owner. The compiled graph
+records that owner explicitly.
 
-One `(stateful owner, item_key, generation)` has one active recovery frontier. Multiple independently advancing checkpointed branches are invalid unless they reconverge into one explicit logical recovery state. Plain `union()` is a stream merge and does not perform that collapse.
+One `(stateful owner, item_key, generation)` has one active recovery frontier. Multiple
+independently advancing checkpointed branches are invalid unless they reconverge into
+one explicit logical recovery state. Plain `union()` is a stream merge and does not
+perform that collapse.
 
-`boundary_id` records the compiled checkpoint node id. An explicit `.checkpoint(id=...)` stabilizes this boundary identity across edits when required. `boundary_id` is not part of `StateKey`; advancing to a later boundary CAS-updates the same active recovery record.
+`boundary_id` records the compiled checkpoint node id. An explicit `.checkpoint(id=...)`
+stabilizes this boundary identity across edits when required. `boundary_id` is not part
+of `StateKey`; advancing to a later boundary CAS-updates the same active recovery
+record.
 
-Restore resumes **after** the successfully crossed boundary with the stored logical value. Recovery records are not history. Each stateful scope owns and cleans up its active recovery checkpoint when that resumable scope completes successfully; nested owners clean up independently.
+Restore resumes **after** the successfully crossed boundary with the stored logical
+value. Recovery records are not history. Each stateful scope owns and cleans up its
+active recovery checkpoint when that resumable scope completes successfully; nested
+owners clean up independently.
 
-A stateful semantic fingerprint covers the full resumable scope owned by the stateful node: embedded logic, checkpoint placement, termination policy, relevant callable versions, and the statically declared reachable resource dependency graph. Unrelated downstream graph structure is excluded. A fingerprint mismatch is treated as no compatible recovery checkpoint; execution starts fresh under the new fingerprint and old persisted data may remain available for inspection/migration.
+A stateful semantic fingerprint covers the full resumable scope owned by the stateful
+node: embedded logic, checkpoint placement, termination policy, relevant callable
+versions, and the statically declared reachable resource dependency graph. Unrelated
+downstream graph structure is excluded. A fingerprint mismatch is treated as no
+compatible recovery checkpoint; execution starts fresh under the new fingerprint and old
+persisted data may remain available for inspection/migration.
 
-The configured state-store implementation itself is infrastructure and is excluded from the semantic fingerprint. The canonical identity format/version matters; the selected performance encoder implementation does not.
+The configured state-store implementation itself is infrastructure and is excluded from
+the semantic fingerprint. The canonical identity format/version matters; the selected
+performance encoder implementation does not.
 
 ### Item/generation key configuration
 
@@ -807,37 +1301,56 @@ generation_key = None  # item_key itself uniquely identifies the logical occurre
 generation_key = "version"  # or callable
 ```
 
-Python APIs may accept callables directly. Serialized forms use symbolic Context references rather than serialized arbitrary Python callables.
+Python APIs may accept callables directly. Serialized forms use symbolic Context
+references rather than serialized arbitrary Python callables.
 
-`StateKey` performs canonical identity validation once when constructed; state-store operations do not repeat the same logical validation. Invalid identity uses Riko-specific exceptions rooted at `IdentityError` (for example `InvalidIdentityError`, `StateKeyError`, `IdentityEncodingError`, `CyclicIdentityError`).
+`StateKey` performs canonical identity validation once when constructed; state-store
+operations do not repeat the same logical validation. Invalid identity uses
+Riko-specific exceptions rooted at `IdentityError` (for example `InvalidIdentityError`,
+`StateKeyError`, `IdentityEncodingError`, `CyclicIdentityError`).
 
-`StateKey` equality compares cached canonical identity, not Python's raw numeric equality. Its `__hash__()` is only process-local and may use Python hashing over the canonical value; durable digests are a separate concern. `StateRecord` is immutable but is not required to be canonically hashable.
+`StateKey` equality compares cached canonical identity, not Python's raw numeric
+equality. Its `__hash__()` is only process-local and may use Python hashing over the
+canonical value; durable digests are a separate concern. `StateRecord` is immutable but
+is not required to be canonically hashable.
 
 ## Loop/resumable iteration
 
-Agents reuse `Pipeline`; there is no separate `AgentGraph`. Agent runtime protocols reuse `Publisher`, `Subscription`, and `StateStore`.
+Agents reuse `Pipeline`; there is no separate `AgentGraph`. Agent runtime protocols
+reuse `Publisher`, `Subscription`, and `StateStore`.
 
-The existing `loop` construct gains iterative state semantics while the Pipeline DAG itself remains acyclic. In iterative mode:
+The existing `loop` construct gains iterative state semantics while the Pipeline DAG
+itself remains acyclic. In iterative mode:
 
 - each iteration's single embedded result becomes the next state;
 - zero or multiple embedded results raise `LoopStateError`;
 - existing non-iterative loop behavior may continue to permit zero/many results;
 - `until(state, iteration)` receives the latest state and a zero-based iteration index;
-- `until` is checked before the first iteration (while semantics) and remains sync-only initially;
+- `until` is checked before the first iteration (while semantics) and remains sync-only
+  initially;
 - `max_iterations: int | None = None`;
 - `max_iterations` without an explicit `until` means fixed-count iteration;
-- if an explicit `until` remains false when `max_iterations` is exhausted, raise `LoopIterationError`;
+- if an explicit `until` remains false when `max_iterations` is exhausted, raise
+  `LoopIterationError`;
 - the default termination behavior preserves today's one-run loop semantics.
 
-Loop checkpointing is explicit rather than automatic. A checkpoint crossed after a successful iteration commits before the next iteration begins. Resume persists both application state and the iteration counter so `max_iterations` remains a total bound across restarts. `LoopState[T](value, iteration)` is the checkpoint payload shape used for this purpose.
+Loop checkpointing is explicit rather than automatic. A checkpoint crossed after a
+successful iteration commits before the next iteration begins. Resume persists both
+application state and the iteration counter so `max_iterations` remains a total bound
+across restarts. `LoopState[T](value, iteration)` is the checkpoint payload shape used
+for this purpose.
 
-An explicit loop `id=` stabilizes the stateful owner's logical identity when structural edits would otherwise change its generated node id.
+An explicit loop `id=` stabilizes the stateful owner's logical identity when structural
+edits would otherwise change its generated node id.
 
 ---
 
 ## 5. Execution characteristics
 
-> **Current gap:** the present `DecorationOptions` surface does not yet contain the complete planned execution metadata below. These declarations describe semantic planning characteristics; they do not replace the concrete execution settings configured with `with_execution()`.
+> **Current gap:** the present `DecorationOptions` surface does not yet contain the
+> complete planned execution metadata below. These declarations describe semantic
+> planning characteristics; they do not replace the concrete execution settings
+> configured with `with_execution()`.
 
 ### 5.1 Boundedness
 
@@ -857,7 +1370,8 @@ Examples:
 | arbitrary `flat_map` | `unknown` |
 | finite-expansion `flat_map` | `preserve` |
 
-Blocking operators may declare `require_bounded=True`; `unbounded` and `unknown` inputs are rejected when a finite input is required.
+Blocking operators may declare `require_bounded=True`; `unbounded` and `unknown` inputs
+are rejected when a finite input is required.
 
 ### 5.2 Ordering
 
@@ -873,31 +1387,58 @@ ordering: Literal["preserve", "destroy", "establish"]
 | merge | destroy |
 | sort | establish |
 
-Sort details come from the existing normalized `SortConfRule` rather than a duplicate metadata model. For multiple rules, the first configured rule is primary, so stable sorts are applied in reverse configuration order.
+Sort details come from the existing normalized `SortConfRule` rather than a duplicate
+metadata model. For multiple rules, the first configured rule is primary, so stable
+sorts are applied in reverse configuration order.
 
-Semantic `stable_order` metadata used for deterministic identity derivation is distinct from execution `ordered=True`.
+Semantic `stable_order` metadata used for deterministic identity derivation is distinct
+from execution `ordered=True`.
 
 ### 5.3 Side effects
 
-Side-effect metadata must be strong enough for execution to determine whether a node requires idempotency support and whether retries/resume are safe. Pure nodes require no idempotency contract; side-effecting nodes declare their capability and accept the execution-derived idempotency key.
+Side-effect metadata must be strong enough for execution to determine whether a node
+requires idempotency support and whether retries/resume are safe. Pure nodes require no
+idempotency contract; side-effecting nodes declare their capability and accept the
+execution-derived idempotency key.
 
 ### 5.4 Determinism
 
-Determinism metadata influences replay/retry safety, semantic identity, caching, and planner diagnostics. It must not be inferred from arbitrary source inspection heuristics.
+Determinism metadata influences replay/retry safety, semantic identity, caching, and
+planner diagnostics. It must not be inferred from arbitrary source inspection
+heuristics.
 
 ---
 
 ## 6. Async execution and backpressure
 
-> **Shipped:** see [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped) for current bounded-concurrency primitives. **Target:** the reusable `Pipeline` execution layer owns the sync/async adaptation and lifecycle described here.
+> **Shipped:** see
+> [IMPLEMENTED.md §6](../IMPLEMENTED.md#6-async-execution-and-backpressure-shipped) for
+> current bounded-concurrency primitives. **Target:** the reusable `Pipeline` execution
+> layer owns the sync/async adaptation and lifecycle described here.
 
 ### 6.1 Bounded concurrency
 
-Bound concurrency rather than spawning work proportional to source size. Backpressure is structural: bounded queues/reorder buffers pause producers instead of silently dropping or relaxing ordering.
+Bound concurrency rather than spawning work proportional to source size. Backpressure is
+structural: bounded queues/reorder buffers pause producers instead of silently dropping
+or relaxing ordering.
 
-`with_execution(concurrency=N)` is a per-execution ceiling, not a per-node allowance: the eligible nodes of one execution share at most `N` concurrent workers, so total parallelism never scales with graph size. A permit is held only while a callable runs and is released before any channel send or reorder-buffer wait, so a blocked producer can never starve the consumer that would unblock it. How the ceiling is apportioned across stages is a planner decision that defaults to one shared pool; per-stage allocation may arrive with the planner but never as a node-level concurrency knob. The per-call budget in the current async primitives is an implementation detail the execution layer wraps, not the contract.
+`with_execution(concurrency=N)` is a per-execution ceiling, not a per-node allowance:
+the eligible nodes of one execution share at most `N` concurrent workers, so total
+parallelism never scales with graph size. A permit is held only while a callable runs
+and is released before any channel send or reorder-buffer wait, so a blocked producer
+can never starve the consumer that would unblock it. How the ceiling is apportioned
+across stages is a planner decision that defaults to one shared pool; per-stage
+allocation may arrive with the planner but never as a node-level concurrency knob. The
+per-call budget in the current async primitives is an implementation detail the
+execution layer wraps, not the contract.
 
-Open decision (triaged 2026-10-16): plan reuse across runs. `riko/runtime/_run.py` builds a fresh `ExecutionPlan` (`from_workflow`) on every `iter`/`aiter`, so module resolution and each node's prepared call are redone per run; on a two-module pipeline that is about 98% of a small run's fixed cost. Caching the plan per `Pipeline` removes it, but a registry `register`/`reset` must then invalidate the cached plan (a generation counter on the dispatcher is the likely shape). Decide alongside the per-run seed and `Pipeline.open()` work, which reshapes the same entry points.
+Open decision (triaged 2026-10-16): plan reuse across runs. `riko/runtime/_run.py`
+builds a fresh `ExecutionPlan` (`from_workflow`) on every `iter`/`aiter`, so module
+resolution and each node's prepared call are redone per run; on a two-module pipeline
+that is about 98% of a small run's fixed cost. Caching the plan per `Pipeline` removes
+it, but a registry `register`/`reset` must then invalidate the cached plan (a generation
+counter on the dispatcher is the likely shape). Decide alongside the per-run seed and
+`Pipeline.open()` work, which reshapes the same entry points.
 
 ### 6.2 Ordering
 
@@ -913,43 +1454,98 @@ ordered = False
 
 emits completion order.
 
-The current `async_map()` documentation/implementation discrepancy must be corrected; public documentation and behavior must agree.
+The current `async_map()` documentation/implementation discrepancy must be corrected;
+public documentation and behavior must agree.
 
 ### 6.3 Reorder buffer
 
-Ordered concurrent execution uses a bounded reorder buffer. When the buffer fills, producers/workers pause until missing earlier positions permit progress. Ordering is never silently relaxed.
+Ordered concurrent execution uses a bounded reorder buffer. When the buffer fills,
+producers/workers pause until missing earlier positions permit progress. Ordering is
+never silently relaxed.
 
-**Open gap (R7, 2026-10-20).** The sync pool (`_map_ordered` in `riko/execution/_pools.py`) already slides its window, but async `async_map_ordered_stream` still maps fixed `limit + buffer` batches: one slow item holds back every result in its batch and stops new work from starting. A sliding window needs worker tasks alive across a `yield`. On the default async processor path (`_aprocess_stream`) those tasks would sit in the consumer's task, which the abandoned-iteration constraint in §6.5 forbids. An attempt over `_pool_stream` broke a bare `break`, `afirst`, and plain-exception propagation. So the port waits for R7's dedicated-task hosting. Tripwire: `tests/internal/test_io.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
+**Open gap (R7, 2026-10-20).** The sync pool (`_map_ordered` in
+`riko/execution/_pools.py`) already slides its window, but async
+`async_map_ordered_stream` still maps fixed `limit + buffer` batches: one slow item
+holds back every result in its batch and stops new work from starting. A sliding window
+needs worker tasks alive across a `yield`. On the default async processor path
+(`_aprocess_stream`) those tasks would sit in the consumer's task, which the
+abandoned-iteration constraint in §6.5 forbids. An attempt over `_pool_stream` broke a
+bare `break`, `afirst`, and plain-exception propagation. So the port waits for R7's
+dedicated-task hosting. Tripwire:
+`tests/internal/test_io.py::TestAsyncMapStream::test_ordered_yields_ready_results_while_a_later_item_runs`.
 
 ### 6.4 Cancellation
 
 Final async execution uses structured concurrency:
 
-> Every execution-spawned task belongs to exactly one execution-owned task group. Subscriptions, concurrent branches, merge workers, and internal service tasks are created under the execution's task-group tree. Detached `asyncio.create_task()` is not permitted outside explicitly characterized transitional code scheduled for removal.
+> Every execution-spawned task belongs to exactly one execution-owned task group.
+> Subscriptions, concurrent branches, merge workers, and internal service tasks are
+> created under the execution's task-group tree. Detached `asyncio.create_task()` is not
+> permitted outside explicitly characterized transitional code scheduled for removal.
 
-This is what makes the ownership rule enforceable rather than aspirational: children share the owning cancellation scope, and the scope cannot exit while a child is still running.
+This is what makes the ownership rule enforceable rather than aspirational: children
+share the owning cancellation scope, and the scope cannot exit while a child is still
+running.
 
-The final execution owns cancellation and cleanup. On cancellation it stops accepting new work, cancels queued work where supported, allows unavoidable running threads to finish, and deterministically cleans up execution-owned resources/channels/portal state. Required resource cleanup follows the bounded shielded-unwind rule above so ambient cancellation does not immediately cancel cleanup itself.
+The final execution owns cancellation and cleanup. On cancellation it stops accepting
+new work, cancels queued work where supported, allows unavoidable running threads to
+finish, and deterministically cleans up execution-owned resources/channels/portal state.
+Required resource cleanup follows the bounded shielded-unwind rule above so ambient
+cancellation does not immediately cancel cleanup itself.
 
-A future explicit cancellation policy may distinguish draining from cancelling pending work, but cancellation correctness must not depend on users draining published subscription branches.
+A future explicit cancellation policy may distinguish draining from cancelling pending
+work, but cancellation correctness must not depend on users draining published
+subscription branches.
 
 ### 6.5 Cleanup
 
-When downstream execution stops early, active feeds are closed with `aclose()` when available. This applies to truncation, timeout, failure, cancellation, and consumer abandonment.
+When downstream execution stops early, active feeds are closed with `aclose()` when
+available. This applies to truncation, timeout, failure, cancellation, and consumer
+abandonment.
 
-**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of `async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived in the consumer's task; garbage collection then finalized it from another task and cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict). Nothing on the R4B run path spawned into that group, so it was removed rather than replaced by dedicated-task hosting: the abandoned generator now holds only the exit stack, and its finalizer unwinds resources without touching the consumer's scopes. A bare `break` is therefore safe but releases the run only at garbage collection; `async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the prompt-release spelling, and a started run collected unclosed warns with a `ResourceWarning`. Regression: `tests/public/test_pipeline.py::TestAsyncClose::test_bare_break_leaves_the_callers_cancel_scope_intact`. **R7 constraint:** when fan-out introduces execution-spawned tasks, their task group must not be entered in the consumer's task across a `yield` — host it in a dedicated execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this regression trips.
+**Resolved: abandoned async iteration (2026-10-05).** A bare `break` out of
+`async for item in pipeline` used to leave `Pipeline.__aiter__`'s async generator
+suspended inside an eagerly entered `AsyncExecution` task group whose cancel scope lived
+in the consumer's task; garbage collection then finalized it from another task and
+cancelled the consumer (the PEP 789 async-generator/structured-concurrency conflict).
+Nothing on the R4B run path spawned into that group, so it was removed rather than
+replaced by dedicated-task hosting: the abandoned generator now holds only the exit
+stack, and its finalizer unwinds resources without touching the consumer's scopes. A
+bare `break` is therefore safe but releases the run only at garbage collection;
+`async with pipeline.open() as stream` (R4C, shipped 2026-10-24) is the prompt-release
+spelling, and a started run collected unclosed warns with a `ResourceWarning`.
+Regression:
+`tests/public/test_pipeline.py::TestAsyncPipelineStream::test_bare_break_leaves_the_callers_cancel_scope_intact`.
+**R7 constraint:** when fan-out introduces execution-spawned tasks, their task group
+must not be entered in the consumer's task across a `yield` — host it in a dedicated
+execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this
+regression trips.
 
-Execution resource cleanup follows the resource rules above. If both execution and cleanup fail, cleanup is still attempted comprehensively; multiple independent failures use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup budget; no per-resource timeout exists initially.
+Execution resource cleanup follows the resource rules above. If both execution and
+cleanup fail, cleanup is still attempted comprehensively; multiple independent failures
+use `ExceptionGroup`. The resource unwind shares the execution-level shutdown/cleanup
+budget; no per-resource timeout exists initially.
 
 ### Execution-mode adaptation (`Pipeline` sync <-> async)
 
-A single `SyncExecution` owns one lazily-created AnyIO `BlockingPortal` if async-only components are encountered. It is reused for async steps, async sources, async resources, and async pub/sub for that execution. Never create one portal per item. The portal closes on exhaustion, explicit close, or exception. Independent executions get independent portals.
+A single `SyncExecution` owns one lazily-created AnyIO `BlockingPortal` if async-only
+components are encountered. It is reused for async steps, async sources, async
+resources, and async pub/sub for that execution. Never create one portal per item. The
+portal closes on exhaustion, explicit close, or exception. Independent executions get
+independent portals.
 
-Cross-mode adaptation occurs only at an execution boundary chosen during preparation. Individual parser, module, factory, or extension code never creates event loops, portals, executors, worker threads, or task groups; it declares what it implements and the execution decides where that runs.
+Cross-mode adaptation occurs only at an execution boundary chosen during preparation.
+Individual parser, module, factory, or extension code never creates event loops,
+portals, executors, worker threads, or task groups; it declares what it implements and
+the execution decides where that runs.
 
-If the async extra is absent and sync execution requires an async-only component, raise a Riko-level installation/capability error rather than leaking a deep AnyIO/Asyncer import failure.
+If the async extra is absent and sync execution requires an async-only component, raise
+a Riko-level installation/capability error rather than leaking a deep AnyIO/Asyncer
+import failure.
 
-Unknown synchronous extension code under async execution is treated as potentially blocking. Riko does not inspect names, bytecode, imports, or timing to guess whether a function blocks.
+Unknown synchronous extension code under async execution is treated as potentially
+blocking. Riko does not inspect names, bytecode, imports, or timing to guess whether a
+function blocks.
 
 | execution policy | behavior |
 |---|---|
@@ -958,13 +1554,21 @@ Unknown synchronous extension code under async execution is treated as potential
 | `thread` | worker thread |
 | `process` | existing process machinery; no new contract implied here |
 
-Built-in pure transforms may be marked inline because Riko owns/tests them. A future planner may combine consecutive compatible sync-only steps into a worker "sync island", or partition the graph into streaming regions separated by operators that declare `require_bounded=True` ([§5.1](#51-boundedness)), as an internal optimization; this must not change the public API or cross operator/resource/side-effect boundaries unsafely. Planner output for such regions is exposed through the planning diagnostics owned by `callable-pipes.md`, not a second explain surface.
+Built-in pure transforms may be marked inline because Riko owns/tests them. A future
+planner may combine consecutive compatible sync-only steps into a worker "sync island",
+or partition the graph into streaming regions separated by operators that declare
+`require_bounded=True` ([§5.1](#51-boundedness)), as an internal optimization; this must
+not change the public API or cross operator/resource/side-effect boundaries unsafely.
+Planner output for such regions is exposed through the planning diagnostics owned by
+`callable-pipes.md`, not a second explain surface.
 
 ---
 
 ## 7. Timeout
 
-> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped) for the current total-timeout primitive. **Remaining:** complete idle/item semantics and ensure a blocked `anext()` itself is bounded.
+> **Shipped:** see [IMPLEMENTED.md §7](../IMPLEMENTED.md#7-timeout-shipped) for the
+> current total-timeout primitive. **Remaining:** complete idle/item semantics and
+> ensure a blocked `anext()` itself is bounded.
 
 ```python
 timeout(seconds, mode="total" | "idle" | "item", on_timeout="stop" | "error")
@@ -982,29 +1586,50 @@ Definitions:
 - `idle`: maximum interval between emitted items;
 - `item`: maximum wait for the next upstream item.
 
-`on_timeout="stop"` is normal completion. `on_timeout="error"` enters the configured error policy.
+`on_timeout="stop"` is normal completion. `on_timeout="error"` enters the configured
+error policy.
 
 ### 7.1 Async receive timeout
 
-The current sync and async legacy `receive` implementations do not have equivalent timeout behavior: sync polling honors `max_wait`, while the async path can block indefinitely. Feed-native async receive must bound the wait itself and map expiry to the common timeout policy rather than inventing separate receive-only semantics. R7 removes the legacy module after the object-first subscription runtime lands.
+The current sync and async legacy `receive` implementations do not have equivalent
+timeout behavior: sync polling honors `max_wait`, while the async path can block
+indefinitely. Feed-native async receive must bound the wait itself and map expiry to the
+common timeout policy rather than inventing separate receive-only semantics. R7 removes
+the legacy module after the object-first subscription runtime lands.
+
+Triaged 2026-11-05 (GitHub issue #82). The strict-xfail tripwire
+`tests/public/test_modules.py::TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait`
+pins the hang: an async receive with no publisher should stop after `max_wait` as the
+sync one does. PR #85's local fix was declined: it raised a new public
+`ReceiveTimeoutError` where sync stops quietly, a receive-only semantics this phase
+deletes along with the module.
 
 ### 7.2 A blocked `anext()` must not outlive the deadline
 
-Checking a deadline only before/after `await anext(...)` does not bound a stalled source. The async implementation must put the awaited next-item operation inside the cancellation/deadline scope using the remaining timeout and map expiration to the same `on_timeout` contract.
+Checking a deadline only before/after `await anext(...)` does not bound a stalled
+source. The async implementation must put the awaited next-item operation inside the
+cancellation/deadline scope using the remaining timeout and map expiration to the same
+`on_timeout` contract.
 
 ---
 
 ## 8. Union and merge
 
-> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped) for sequential `union` and the current internal async merge primitive. **Remaining:** user-facing concurrent merge policy.
+> **Shipped:** see [IMPLEMENTED.md §8](../IMPLEMENTED.md#8-union-shipped) for sequential
+> `union` and the current internal async merge primitive. **Remaining:** user-facing
+> concurrent merge policy.
 
 ### 8.1 Union
 
-`union()` is a stream concatenation/merge operation that preserves each input item's provenance. It does not combine logical identities merely because streams reconverge. Consequently, plain `union()` is not sufficient to collapse independently advancing checkpoint frontiers into one recovery state.
+`union()` is a stream concatenation/merge operation that preserves each input item's
+provenance. It does not combine logical identities merely because streams reconverge.
+Consequently, plain `union()` is not sufficient to collapse independently advancing
+checkpoint frontiers into one recovery state.
 
 ### 8.2 Merge
 
-A future async-native concurrent merge may expose bounded source queues and explicit scheduling/error policy, for example:
+A future async-native concurrent merge may expose bounded source queues and explicit
+scheduling/error policy, for example:
 
 ```python
 merge(
@@ -1016,7 +1641,10 @@ merge(
 )
 ```
 
-The top-level input collection is fixed at plan time. Per-source buffers remain bounded. `fair` rotates among ready sources; `ready` emits the next available source result. Failure-continuation semantics must preserve independent source provenance/state domains.
+The top-level input collection is fixed at plan time. Per-source buffers remain bounded.
+`fair` rotates among ready sources; `ready` emits the next available source result.
+Failure-continuation semantics must preserve independent source provenance/state
+domains.
 
 ---
 
@@ -1047,16 +1675,20 @@ Rules:
 - ordered execution holds the affected position;
 - an execution-derived idempotency key is reused across retries;
 - only one layer owns retrying a given operation;
-- a side effect in a retryable/resumable scope must genuinely support idempotency unless the node explicitly opts out;
-- `CheckpointConflictError` is **not** automatically reloaded/rerun by the state-store adapter; CAS conflicts propagate to the caller/runtime policy.
+- a side effect in a retryable/resumable scope must genuinely support idempotency unless
+  the node explicitly opts out;
+- `CheckpointConflictError` is **not** automatically reloaded/rerun by the state-store
+  adapter; CAS conflicts propagate to the caller/runtime policy.
 
-Codec/identity/configuration errors are not transient merely because retry exists. Backend transport errors may be eligible according to an explicit retry policy.
+Codec/identity/configuration errors are not transient merely because retry exists.
+Backend transport errors may be eligible according to an explicit retry policy.
 
 ---
 
 ## 12. Errors and dispositions
 
-> **Current gap:** current code has limited `on_error`/`error_key` behavior; the richer sink/disposition contract remains planned.
+> **Current gap:** current code has limited `on_error`/`error_key` behavior; the richer
+> sink/disposition contract remains planned.
 
 ### 12.1 Error policies
 
@@ -1064,49 +1696,81 @@ Codec/identity/configuration errors are not transient merely because retry exist
 error_policy: Literal["fail", "skip", "dead_letter"]
 ```
 
-`skip` requires explicit data-loss authorization. `dead_letter` advances only after the durable error sink acknowledges the failed item. A failure that is not successfully disposed must not advance resumable state past that item.
+`skip` requires explicit data-loss authorization. `dead_letter` advances only after the
+durable error sink acknowledges the failed item. A failure that is not successfully
+disposed must not advance resumable state past that item.
 
 ### 12.2 Error sink
 
-A future error sink writes a structured `ItemFailure` and returns/awaits acknowledgement. Sink implementation must participate in the same side-effect/idempotency rules as other durable writes.
+A future error sink writes a structured `ItemFailure` and returns/awaits
+acknowledgement. Sink implementation must participate in the same
+side-effect/idempotency rules as other durable writes.
 
 ### 12.3 Drop policy
 
-Intentional filtering is distinct from failure. The planned drop policy may distinguish silent completion, external disposition, and treating attempted drop as error. The default preserves current filter behavior: a deliberately filtered item is considered successfully disposed without public output.
+Intentional filtering is distinct from failure. The planned drop policy may distinguish
+silent completion, external disposition, and treating attempted drop as error. The
+default preserves current filter behavior: a deliberately filtered item is considered
+successfully disposed without public output.
 
 ### 12.4 Disposition sink
 
-External disposition must be acknowledged before the item is treated as advanced when configured as part of the durability contract.
+External disposition must be acknowledged before the item is treated as advanced when
+configured as part of the durability contract.
 
 ### 12.5 Internal counters
 
-Execution may maintain aggregate emitted/dropped/dead-lettered/failed/retried counts without requiring a per-item public event stream for the normal path.
+Execution may maintain aggregate emitted/dropped/dead-lettered/failed/retried counts
+without requiring a per-item public event stream for the normal path.
 
-Open gap (triaged 2026-10-25, Flowfile comparison): [events.md](events.md) §1 names this plan as the owner of execution/node lifecycle payloads, and its §7 taxonomy lists execution start/finish, node start/finish, and per-node input/output counts and active/wait time. No phase in [implementation-sequence.md](implementation-sequence.md) schedules those payloads; only cache, effect, and fanout events have owning phases. They are the foundation for node-level run traces (which node dropped records, where time went) consumed by CLI/debugger/GUI through the one `EventSink`. Unscheduled; when scheduled, define them as aggregate per-node counters plus lifecycle events (not per-item events), emitted with the no-op default so they cost nothing unobserved, and never altering ordering, resource lifetimes, or write behavior.
+Open gap (triaged 2026-10-25, Flowfile comparison): [events.md](events.md) §1 names this
+plan as the owner of execution/node lifecycle payloads, and its §7 taxonomy lists
+execution start/finish, node start/finish, and per-node input/output counts and
+active/wait time. No phase in [implementation-sequence.md](implementation-sequence.md)
+schedules those payloads; only cache, effect, and fanout events have owning phases. They
+are the foundation for node-level run traces (which node dropped records, where time
+went) consumed by CLI/debugger/GUI through the one `EventSink`. Unscheduled; when
+scheduled, define them as aggregate per-node counters plus lifecycle events (not
+per-item events), emitted with the no-op default so they cost nothing unobserved, and
+never altering ordering, resource lifetimes, or write behavior.
 
 ---
 
 ## 13. Filter semantics
 
-> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped) for `permit` / `combine` / `stop`.
+> **Shipped:** see [IMPLEMENTED.md §13](../IMPLEMENTED.md#13-filter-semantics-shipped)
+> for `permit` / `combine` / `stop`.
 
-A filtered-out item under the default completion-style drop policy is intentionally disposed and may allow recovery state to advance. With `filter(stop=True)`, the first rejected item is intentionally dropped, upstream consumption stops, and normal completion remains distinct from a processing failure.
+A filtered-out item under the default completion-style drop policy is intentionally
+disposed and may allow recovery state to advance. With `filter(stop=True)`, the first
+rejected item is intentionally dropped, upstream consumption stops, and normal
+completion remains distinct from a processing failure.
 
 ---
 
 ## 15. Stateful operators
 
-The old proposed `state_checkpoint="replay" | "persist"` switch is superseded by the generic `StateStore` / `FeedState` / `.checkpoint()` model above.
+The old proposed `state_checkpoint="replay" | "persist"` switch is superseded by the
+generic `StateStore` / `FeedState` / `.checkpoint()` model above.
 
-Stateful operators declare their resumable scope and identity semantics. Checkpoint placement is explicit. Restore belongs to the stateful owner. Persisted source observations/final state and recovery checkpoints share the same store abstraction but retain their own owner semantics; a successful recovery scope removes its active recovery frontier rather than publishing a synthetic "completed" checkpoint record.
+Stateful operators declare their resumable scope and identity semantics. Checkpoint
+placement is explicit. Restore belongs to the stateful owner. Persisted source
+observations/final state and recovery checkpoints share the same store abstraction but
+retain their own owner semantics; a successful recovery scope removes its active
+recovery frontier rather than publishing a synthetic "completed" checkpoint record.
 
-For finite `FeedResult.items`, final `FeedResult.state` becomes committable only after item consumption completes successfully. A downstream failure before successful completion must not commit a final source state. Infinite feeds require explicit incremental checkpoint boundaries rather than waiting for final completion.
+For finite `FeedResult.items`, final `FeedResult.state` becomes committable only after
+item consumption completes successfully. A downstream failure before successful
+completion must not commit a final source state. Infinite feeds require explicit
+incremental checkpoint boundaries rather than waiting for final completion.
 
 ---
 
 ## 16. Batch model
 
-The earlier public `Batch` / `BatchPipe` / `BatchPolicy` proposal is superseded. Riko keeps one `Pipeline[T]`; batch mode changes the values flowing through it rather than introducing a parallel pipeline hierarchy.
+The earlier public `Batch` / `BatchPipe` / `BatchPolicy` proposal is superseded. Riko
+keeps one `Pipeline[T]`; batch mode changes the values flowing through it rather than
+introducing a parallel pipeline hierarchy.
 
 ```python
 Pipeline(batch=False)(items)
@@ -1122,11 +1786,15 @@ Batches are ordinary pipeline values. Therefore:
 pipeline.map(func)
 ```
 
-always passes the current logical value to `func`: an individual item in item mode or the current batch in batch mode. There is no separate `BatchPipe.map()` contract.
+always passes the current logical value to `func`: an individual item in item mode or
+the current batch in batch mode. There is no separate `BatchPipe.map()` contract.
 
 ### 16.1 Backend negotiation
 
-Batch representation is negotiated from **operator capability and conversion cost**, not from a global ranking of libraries. There is no `Arrow > Polars > Pandas` preference: a Pandas-native graph must not be routed through Arrow, and a Polars graph must not convert unless an operator forces it.
+Batch representation is negotiated from **operator capability and conversion cost**, not
+from a global ranking of libraries. There is no `Arrow > Polars > Pandas` preference: a
+Pandas-native graph must not be routed through Arrow, and a Polars graph must not
+convert unless an operator forces it.
 
 Negotiation resolves per boundary:
 
@@ -1141,27 +1809,44 @@ and chooses, in order:
 3. the cheapest supported conversion, by declared conversion cost;
 4. Python objects as the universal fallback.
 
-Ties at equal cost resolve deterministically so identical graphs negotiate identically across processes; the tiebreak is a documented stable order, not a claim about which library is better. Arrow still usually wins between frame libraries because it usually *is* the cheapest bridge — it wins on measured cost, not rank.
+Ties at equal cost resolve deterministically so identical graphs negotiate identically
+across processes; the tiebreak is a documented stable order, not a claim about which
+library is better. Arrow still usually wins between frame libraries because it usually
+*is* the cheapest bridge — it wins on measured cost, not rank.
 
-Nodes declare accepted representations and conversion costs the same way they declare other execution metadata. A node that accepts anything imposes no conversion; a node that accepts only one representation forces exactly one conversion at its own boundary rather than for the whole graph.
+Nodes declare accepted representations and conversion costs the same way they declare
+other execution metadata. A node that accepts anything imposes no conversion; a node
+that accepts only one representation forces exactly one conversion at its own boundary
+rather than for the whole graph.
 
-An explicit `batch_backend=` forces a supported backend for the execution; requesting an unavailable or incompatible backend raises rather than silently choosing another representation.
+An explicit `batch_backend=` forces a supported backend for the execution; requesting an
+unavailable or incompatible backend raises rather than silently choosing another
+representation.
 
-Batching must remain streaming/bounded. It may not require materializing an unbounded source. Stateful boundaries, source completion, and operator semantics determine when buffered values must be made visible/committed; implementation details may use internal batching helpers without exposing a second public pipeline type.
+Batching must remain streaming/bounded. It may not require materializing an unbounded
+source. Stateful boundaries, source completion, and operator semantics determine when
+buffered values must be made visible/committed; implementation details may use internal
+batching helpers without exposing a second public pipeline type.
 
 ---
 
 ## 22. Memory limits
 
-Initial execution limits are item-count based and enforced rather than advisory. Relevant bounded structures include merge queues, ordered-concurrency reorder buffers, subscription/split buffers, and batch builders.
+Initial execution limits are item-count based and enforced rather than advisory.
+Relevant bounded structures include merge queues, ordered-concurrency reorder buffers,
+subscription/split buffers, and batch builders.
 
-Byte-aware accounting may be added for merge/reorder buffers, pending provenance, error/disposition channels, and batches without requiring a universal deep-Python-object size estimator in the initial implementation.
+Byte-aware accounting may be added for merge/reorder buffers, pending provenance,
+error/disposition channels, and batches without requiring a universal deep-Python-object
+size estimator in the initial implementation.
 
 ---
 
 ## Appendix A. Async primitive reference
 
-This appendix describes implementation building blocks, not additional public API. AnyIO/Asyncer remain private implementation dependencies and are never surfaced through `riko` / `riko.ext` contracts.
+This appendix describes implementation building blocks, not additional public API.
+AnyIO/Asyncer remain private implementation dependencies and are never surfaced through
+`riko` / `riko.ext` contracts.
 
 ### Sync and async iteration
 
@@ -1175,7 +1860,12 @@ A Feed/stream's finiteness is independent of its iteration mechanism.
 
 ### Pub/sub implementation
 
-The current sync backend may continue to use generator coroutines + bounded/deque buffering internally until R7 replaces the hub. The current async backend may continue to use AnyIO memory object streams, including zero-buffer rendezvous behavior; the public `buffer_size = 0` default matches that primitive deliberately, so backpressure is structural rather than a configured number. Those mechanisms are implementation details behind the public `Publisher` / `Subscription` / `Channel` protocols.
+The current sync backend may continue to use generator coroutines + bounded/deque
+buffering internally until R7 replaces the hub. The current async backend may continue
+to use AnyIO memory object streams, including zero-buffer rendezvous behavior; the
+public `buffer_size = 0` default matches that primitive deliberately, so backpressure is
+structural rather than a configured number. Those mechanisms are implementation details
+behind the public `Publisher` / `Subscription` / `Channel` protocols.
 
 Final lifecycle is execution-owned:
 
@@ -1185,13 +1875,30 @@ Final lifecycle is execution-owned:
 - cancellation/normal completion close all execution-owned channel ends;
 - multiple independent pipeline executions never share implicit pub/sub lifecycle state.
 
-Structured concurrency is the final contract, not a preference: every branch, subscriber, and internal service task runs under the execution's task-group tree, per [§6.4](#64-cancellation). Transitional code may use `asyncio.create_task()` for subscriber concurrency while the old hub machinery still exists, provided the owning execution tracks, joins/cancels, and cleans up those tasks deterministically, and provided that code is explicitly marked as scheduled for replacement in R7.
+Structured concurrency is the final contract, not a preference: every branch,
+subscriber, and internal service task runs under the execution's task-group tree, per
+[§6.4](#64-cancellation). Transitional code may use `asyncio.create_task()` for
+subscriber concurrency while the old hub machinery still exists, provided the owning
+execution tracks, joins/cancels, and cleans up those tasks deterministically, and
+provided that code is explicitly marked as scheduled for replacement in R7.
 
 ### Producer/consumer bridges
 
-Sync execution uses one persistent portal when bridging async-only components: the async stream is pulled one `__anext__` at a time on the portal loop and re-exposed as a lazy sync iterator. Async execution runs unknown sync extension work on workers unless explicitly inline-safe: the sync component runs on a worker thread, reads its async inputs lazily from there, and its output is pulled one item per `__anext__` as the consumer asks for it. Both directions are demand-driven — no background producer task, no channel, and no unbounded queue — so an error surfaces only after every item already produced has been delivered, and abandoning the stream closes the producer. The runtime must never spin up an async runtime per item.
+Sync execution uses one persistent portal when bridging async-only components: the async
+stream is pulled one `__anext__` at a time on the portal loop and re-exposed as a lazy
+sync iterator. Async execution runs unknown sync extension work on workers unless
+explicitly inline-safe: the sync component runs on a worker thread, reads its async
+inputs lazily from there, and its output is pulled one item per `__anext__` as the
+consumer asks for it. Both directions are demand-driven — no background producer task,
+no channel, and no unbounded queue — so an error surfaces only after every item already
+produced has been delivered, and abandoning the stream closes the producer. The runtime
+must never spin up an async runtime per item.
 
-A loop `embed` that exists only on the other side (sync or async) is adapted at execution time, to match whether the host pipe actually runs sync or async, into a wrapper that preserves the embed's discovery metadata (`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and subpipe detection treat the adapter as a native embed rather than seeing through it.
+A loop `embed` that exists only on the other side (sync or async) is adapted at
+execution time, to match whether the host pipe actually runs sync or async, into a
+wrapper that preserves the embed's discovery metadata
+(`name`/`type`/`subtype`/`subtypes`/`pollable`/`loopable`), so the loop machinery and
+subpipe detection treat the adapter as a native embed rather than seeing through it.
 
 ### Non-goals
 

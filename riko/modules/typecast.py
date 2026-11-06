@@ -52,7 +52,7 @@ def parser(
 
         content: The value to cast.
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration, containing `type`.
+        objconf: The module configuration: `type`.
 
     Returns:
 

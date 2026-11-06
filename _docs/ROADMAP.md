@@ -1,20 +1,22 @@
 # Riko Roadmap
 
-This is riko's **map**: the index of gameplans that hold detailed plans plus pointers to the
-authoritative specs. The shipped runtime contract lives in
+This is riko's **map**: the index of gameplans that hold detailed plans plus pointers to
+the authoritative specs. The shipped runtime contract lives in
 [RUNTIME_CONTRACT.md](RUNTIME_CONTRACT.md); as-built detail lives in
 [IMPLEMENTED.md](IMPLEMENTED.md); live P-track status lives in
-[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). Historical/pending P-track file maps and exit tests live
-in [MILESTONES.md](MILESTONES.md), while forward implementation dependency order lives in
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). Historical/pending P-track file maps and
+exit tests live in [MILESTONES.md](MILESTONES.md), while forward implementation
+dependency order lives in
 [implementation-sequence.md](gameplans/implementation-sequence.md).
 
-R-phase completion in the forward sequence follows explicit **ADD → MIGRATE → DELETE** exit
-criteria; `implementation-sequence.md` owns that phase-closure rule.
+R-phase completion in the forward sequence follows explicit **ADD → MIGRATE → DELETE**
+exit criteria; `implementation-sequence.md` owns that phase-closure rule.
 
 ## Documentation authority
 
-Documentation follows the same dependency discipline as code. Each namespace has one reason to
-change, and lower-authority documents do not override higher-authority contracts:
+Documentation follows the same dependency discipline as code. Each namespace has one
+reason to change, and lower-authority documents do not override higher-authority
+contracts:
 
 ```text
 ROADMAP
@@ -45,33 +47,37 @@ archive/
     superseded historical material only; never authoritative
 ```
 
-`_docs/gameplans/` is the authoritative namespace for active plans. A concept should have one
-semantic owner there; other active gameplans may sequence or consume that contract but must point
-back to the owner instead of restating competing answers. When a plan is superseded, move it to
-`_docs/archive/`. Research/ADR notebooks belong in `_docs/research/`. Neither namespace may satisfy
-an active ownership or ROADMAP-index requirement.
+`_docs/gameplans/` is the authoritative namespace for active plans. A concept should
+have one semantic owner there; other active gameplans may sequence or consume that
+contract but must point back to the owner instead of restating competing answers. When a
+plan is superseded, move it to `_docs/archive/`. Research/ADR notebooks belong in
+`_docs/research/`. Neither namespace may satisfy an active ownership or ROADMAP-index
+requirement.
 
-Planned/end-state architecture is owned by matching gameplans, not by the shipped runtime contract.
-The core target is deliberately split by responsibility:
+Planned/end-state architecture is owned by matching gameplans, not by the shipped
+runtime contract. The core target is deliberately split by responsibility:
 
-- [execution-semantics.md](gameplans/execution-semantics.md) — Pipeline execution, resources,
-  identity/provenance/state/batching/retry;
-- [extensibility.md](gameplans/extensibility.md) — `Workflow` v2 graph/serialization contract;
+- [execution-semantics.md](gameplans/execution-semantics.md) — Pipeline execution,
+  resources, identity/provenance/state/batching/retry;
+- [extensibility.md](gameplans/extensibility.md) — `Workflow` v2 graph/serialization
+  contract;
 - [events.md](gameplans/events.md) — one execution-owned EventSink transport;
 - [cache.md](gameplans/cache.md) — explicit Pipeline cache/replay semantics;
 - [effects.md](gameplans/effects.md) — provider-neutral write/action side effects;
-- [fanout-topology.md](gameplans/fanout-topology.md) — split/routing/pub-sub/fan-in topology.
+- [fanout-topology.md](gameplans/fanout-topology.md) — split/routing/pub-sub/fan-in
+  topology.
 
 ## Core and ecosystem boundary
 
-**Riko Core is the configurable Python pipeline engine.** Its job is to define, compose, inspect,
-and execute reusable Pipelines with common contracts for Workflow v2 definitions, Context/resources,
-sync/async execution, events, identity/idempotency, cache/replay, state/checkpoints, effects,
-fan-out, batching, retry, and artifacts.
+**Riko Core is the configurable Python pipeline engine.** Its job is to define, compose,
+inspect, and execute reusable Pipelines with common contracts for Workflow v2
+definitions, Context/resources, sync/async execution, events, identity/idempotency,
+cache/replay, state/checkpoints, effects, fan-out, batching, retry, and artifacts.
 
-The broader **Riko ecosystem is built on Core**. Connect/RDP, provider integrations, MCP/AI,
-Microsoft administration, site generation, orchestration adapters, and Operations as Code consume
-Core contracts while owning their domain semantics in separate gameplans/packages.
+The broader **Riko ecosystem is built on Core**. Connect/RDP, provider integrations,
+MCP/AI, Microsoft administration, site generation, orchestration adapters, and
+Operations as Code consume Core contracts while owning their domain semantics in
+separate gameplans/packages.
 
 ```text
 Riko Core
@@ -84,10 +90,11 @@ applications and products
     managed services / hosted tooling / vertical solutions / control planes
 ```
 
-The roadmap may point to strategic ecosystem opportunities, but they do not expand what the `riko`
-package promises. Migration and automation portability are compatibility goals/reports, not
-guarantees of lossless translation between vendors. Commercial packaging is documented separately
-in [commercialization.md](gameplans/commercialization.md) and owns no runtime contract.
+The roadmap may point to strategic ecosystem opportunities, but they do not expand what
+the `riko` package promises. Migration and automation portability are compatibility
+goals/reports, not guarantees of lossless translation between vendors. Commercial
+packaging is documented separately in
+[commercialization.md](gameplans/commercialization.md) and owns no runtime contract.
 
 ## Which doc for which info
 
@@ -109,7 +116,7 @@ in [commercialization.md](gameplans/commercialization.md) and owns no runtime co
 | Git-first **Operations as Code** | [operations-as-code.md](gameplans/operations-as-code.md) |
 | **Commercial ecosystem strategy** | [commercialization.md](gameplans/commercialization.md) |
 | Public / EXT / private import surface | [API_SURFACE.md](API_SURFACE.md) |
-| User migration / changelog | [MIGRATION.rst](MIGRATION.rst) · [CHANGES.rst](CHANGES.rst) |
+| User migration / changelog | [MIGRATION.rst](../docs/MIGRATION.rst) · [CHANGES.rst](../docs/CHANGES.rst) |
 
 Tie-breakers:
 
@@ -239,7 +246,8 @@ The complete `§0–27` routing map:
 | [testing.md](gameplans/testing.md) | Test-suite layering/consolidation and cross-package scenario placement. |
 
 Implementation status remains authoritative only in
-[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests remain in
-[MILESTONES.md](MILESTONES.md). Forward implementation dependency order is authoritative in
-[implementation-sequence.md](gameplans/implementation-sequence.md). Historical phase language in
-P-track documents must not override newer target API decisions in the owning gameplans.
+[PHASE_CHECKLISTS.md](PHASE_CHECKLISTS.md). P-track phase history/file maps/exit tests
+remain in [MILESTONES.md](MILESTONES.md). Forward implementation dependency order is
+authoritative in [implementation-sequence.md](gameplans/implementation-sequence.md).
+Historical phase language in P-track documents must not override newer target API
+decisions in the owning gameplans.

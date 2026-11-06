@@ -7,9 +7,11 @@ cross-cutting invariants, coding style, and project quirks. Long-form detail liv
 in `_docs/`:
 
 - `_docs/KEY_PATHS.md` — per-package/per-file roles + local "don't-revert" invariants
-- `_docs/INTERNALS.md` — codegen, discovery/export surfaces, import tooling, tooling gotchas
+- `_docs/INTERNALS.md` — codegen, discovery/export surfaces, import tooling, tooling
+  gotchas
 - `_docs/DOCUMENTATION_STANDARD.md` — **read before writing docstrings/doctests**
-- `_docs/PHASE_CHECKLISTS.md` — live status (start here); `_docs/ROADMAP.md` — authority/router index
+- `_docs/PHASE_CHECKLISTS.md` — live status (start here); `_docs/ROADMAP.md` —
+  authority/router index
 
 ## Key Paths
 
@@ -37,17 +39,34 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 Important concrete locations:
 
 - `export`/`Formats`/`list_formats`: `riko/runtime/_export.py`
-- graph index for validation and execution planning: `GraphIndex` in `riko/types/_workflow.py`, built by `Workflow.index`
-- v2 code generator behind `compile_workflow`/`compile-workflow`: `riko/runtime/_compile.py`
-- workflow loading/saving: `Workflow.parse`/`load`/`serialize` in `riko/definitions/_workflow_definition.py`, over the data-returning `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door `riko/cli/_document.py` keeps only `read_document`/`require_workflow`
+- graph index for validation and execution planning: `GraphIndex` in
+  `riko/types/_workflow.py`, built by `Workflow.index`
+- v2 code generator behind `compile_workflow`/`compile-workflow`:
+  `riko/runtime/_compile.py`
+- workflow loading/saving: `Workflow.parse`/`load`/`serialize` in
+  `riko/definitions/_workflow_definition.py`, over the data-returning
+  `_normalize.py`/`_migrate.py`/`_serialize.py`; the CLI front door
+  `riko/cli/_document.py` keeps only `read_document`/`require_workflow`
 - pub/sub: `riko/runtime/_pubsub/`
-- executions: `riko/execution/_execution.py` (base) + `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners are `riko/runtime/_run.py`
-- stored workflows: the `workflow` decorator and `build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the `WorkflowResolver` in `_workflow_resolver.py`
-- pipelines: composition on `PipelineDefinition` in `riko/definitions/_pipeline_definition.py`; the node/edge families in `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in `riko/runtime/_pipeline.py`
-- context/resource definitions: `riko/definitions/_context.py` + `_resource_definition.py`; their lifecycle plan: `Resource._plan`; owned-value closers: `resolve_closer`/`require_closer` in `riko/types/_io.py`, closed through `run_bridged`/`maybe_async` in `riko/bado/_util.py`
+- executions: `riko/execution/_execution.py` (base) +
+  `_sync_execution.py`/`_async_execution.py`; the frozen `ExecutionPlan` and its
+  `from_workflow` constructor are in `riko/execution/_prepared.py`; the pipeline runners
+  are `riko/runtime/_run.py`
+- stored workflows: the `workflow` decorator and `build_workflow_pipes` in
+  `riko/runtime/_workflow_pipes.py`, the stores in `_workflow_stores.py`, the
+  `WorkflowResolver` in `_workflow_resolver.py`
+- pipelines: composition on `PipelineDefinition` in
+  `riko/definitions/_pipeline_definition.py`; the node/edge families in
+  `riko/definitions/_nodes.py`; the runnable `Pipeline` subclass in
+  `riko/runtime/_pipeline.py`
+- context/resource definitions: `riko/definitions/_context.py` +
+  `_resource_definition.py`; their lifecycle plan: `Resource._plan`; owned-value
+  closers: `resolve_closer`/`require_closer` in `riko/types/_io.py`, closed through
+  `run_bridged`/`maybe_async` in `riko/bado/_util.py`
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
-- exceptions/API declarations: `riko/base/_exceptions.py` (public facade `riko/base/exceptions.py`) + `_api_surface.py`
+- exceptions/API declarations: `riko/base/_exceptions.py` (public facade
+  `riko/base/exceptions.py`) + `_api_surface.py`
 - generated config objects: `riko/coercion/_configs.py`
 - generated discovery/id files: `riko/modules/_names.py` + `riko/types/_module_ids.py`
 
@@ -130,13 +149,14 @@ new permanent bullet here.
   idempotency, fingerprints) uses the shared canonical encoding layer in
   `riko/coercion/_canonical.py` (`canonicalize`/`canonical_bytes`/`digest`), never
   Python's randomized `hash()` or an ad-hoc encoder (`freeze*` names are reserved for
-  immutability, e.g. `freeze`/`freeze_json`). It distinguishes types Python conflates and
-  raises on unsupported/cyclic values; process-local caches may bypass instead of raising.
-- **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with
-  no mutable call cache; call-site options cannot leak across items/concurrent
-  invocations. A node is prepared once per execution plan
-  (`PreparedNode.sync_interface`/`async_interface`), and the prepared state is plain data so
-  the process executor can ship it.
+  immutability, e.g. `freeze`/`freeze_json`). It distinguishes types Python conflates
+  and raises on unsupported/cyclic values; process-local caches may bypass instead of
+  raising.
+- **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with no
+  mutable call cache; call-site options cannot leak across items/concurrent invocations.
+  A node is prepared once per execution plan
+  (`PreparedNode.sync_interface`/`async_interface`), and the prepared state is plain
+  data so the process executor can ship it.
 - **Immutable definitions, mutable execution** — `Context`, resource definitions,
   module definitions, and write intent are structural snapshots. Derive changed
   definitions; never smuggle execution-owned mutable state back onto them.
@@ -222,36 +242,38 @@ new permanent bullet here.
   a guard with its consumer: moving it would need an import the layer rules bar
   (`is_conf_rule`, `_is_seed`), or it decides between alternative forms for a single
   consumer (`is_pipedag`/`is_pipedeflike`/`is_raw_workflow` in `_serialize.py`).
-- **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller **supplies the value at a
-  Python call site** (a parameter, or a field callers construct) or for a runtime
-  **state** — they get named members and one import instead of magic strings; `.value`
-  is canonical. Use a `Literal[...]` when the value only **arrives as a serialized/JSON
-  string**, is produced internally and merely read/matched (a return tag / discriminant),
-  or is a fixed `ClassVar` tag. Non-string internal markers/states use a plain `Enum`.
-  **Carve-out:** the metadata axes `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay
-  `Literal` even though they appear as `list_modules(...)` args — their canonical form is
-  the bare metadata string; the discovery *tree* is the enum layer. A lone sentinel
-  option beside another type (`concurrency: int | Literal["auto"]`) is also `Literal` —
-  a one-member enum buys no choice, only a public name; promote it to a `StrEnum` when a
-  second member arrives.
-- **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only when it
-  has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`, `write`/`awrite`);
-  sibling sync/async classes never share a method name across colors. An async-only helper
-  keeps a plain name (`maybe_async`, `pull_stream`). An `async_` prefix only says the function
-  is async-flavored and may be a plain `def` (`async_pipe`, `async_get_temp_file`). Names that
-  mirror stdlib/AnyIO (`enter_async_context`, `run_sync`) are exempt.
+- **`StrEnum` vs `Literal`.** Use a `StrEnum` when a caller
+  **supplies the value at a Python call site** (a parameter, or a field callers
+  construct) or for a runtime **state** — they get named members and one import instead
+  of magic strings; `.value` is canonical. Use a `Literal[...]` when the value only
+  **arrives as a serialized/JSON string**, is produced internally and merely
+  read/matched (a return tag / discriminant), or is a fixed `ClassVar` tag. Non-string
+  internal markers/states use a plain `Enum`. **Carve-out:** the metadata axes
+  `ModuleType`/`ModuleCategory`/`ModuleSubtype` stay `Literal` even though they appear
+  as `list_modules(...)` args — their canonical form is the bare metadata string; the
+  discovery *tree* is the enum layer. A lone sentinel option beside another type
+  (`concurrency: int | Literal["auto"]`) is also `Literal` — a one-member enum buys no
+  choice, only a public name; promote it to a `StrEnum` when a second member arrives.
+- **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
+  when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,
+  `write`/`awrite`); sibling sync/async classes never share a method name across colors.
+  An async-only helper keeps a plain name (`maybe_async`, `pull_stream`). An `async_`
+  prefix only says the function is async-flavored and may be a plain `def`
+  (`async_pipe`, `async_get_temp_file`). Names that mirror stdlib/AnyIO
+  (`enter_async_context`, `run_sync`) are exempt.
 - **Function-verb vocabulary.** Name a function by what it does. The eight verbs a
-  developer weighs are in the table below; each row's rule is the test.
-  `require` is not "`resolve` but raising": it is the general narrow-or-raise /
-  prerequisite-enforcement verb, and `require(resolve(...))` is one specialization of
-  it, which is why the `require_str`/`require_mapping`/`require_options` guard family
-  carries it. `build` absorbs the old `prepare`/`convert`/`make`. Specialized verbs are
-  not alternatives to weigh: `cast` (coercion), `compile` (compiler), `generate`
-  (codegen: returns generated source), `gen_` (generators: a generator function must use it, a method that yields may),
-  `migrate` (version migration), `serialize`, `register`, `read`/`write`/`open`/`close`,
-  `bind` (resource binding only; fixing a call's configuration is `prepare`),
-  and `is`/`has` for predicates (an attrs `validator=` callable keeps the predicate
-  name it checks, `_is_single`/`_has_pipe`: attrs owns the raise).
+  developer weighs are in the table below; each row's rule is the test. `require` is not
+  "`resolve` but raising": it is the general narrow-or-raise / prerequisite-enforcement
+  verb, and `require(resolve(...))` is one specialization of it, which is why the
+  `require_str`/`require_mapping`/`require_options` guard family carries it. `build`
+  absorbs the old `prepare`/`convert`/`make`. Specialized verbs are not alternatives to
+  weigh: `cast` (coercion), `compile` (compiler), `generate` (codegen: returns generated
+  source), `gen_` (generators: a generator function must use it, a method that yields
+  may), `migrate` (version migration), `serialize`, `register`,
+  `read`/`write`/`open`/`close`, `bind` (resource binding only; fixing a call's
+  configuration is `prepare`), and `is`/`has` for predicates (an attrs `validator=`
+  callable keeps the predicate name it checks, `_is_single`/`_has_pipe`: attrs owns the
+  raise).
 
 Rows are in decision order: take the first verb whose rule fits, and start the
 docstring summary with its word (`manage lint --docstrings` enforces the match). The
@@ -287,9 +309,9 @@ may describe the inner step (`require_from_keys` builds a guard that requires). 
 lint's `COMPOUND_FUNCTIONS` allowlist records those exceptions.
 
 Defaults split `normalize` from `resolve`: filling an omitted field with the default its
-contract fixes (an embed without `conf` means `conf: {}`) rewrites a shorthand, so it is a
-`normalize`; substituting a default the caller supplies or chooses (`resolve_enum(default=)`)
-is a fallback, so it is a `resolve`.
+contract fixes (an embed without `conf` means `conf: {}`) rewrites a shorthand, so it is
+a `normalize`; substituting a default the caller supplies or chooses
+(`resolve_enum(default=)`) is a fallback, so it is a `resolve`.
 
 ## Project Quirks
 
@@ -309,24 +331,29 @@ is a fallback, so it is a `resolve`.
   `mezmorize`'s console script in some install orders; use
   `python -m riko.cli.manage` if the wrong executable wins.
 - **Codegen selectors** — `manage codegen` defaults to config; `--config`,
-  `--names`, `--api`, `--tests`, `--verbs` are additive; `--all` runs all generators.
+  `--names`, `--api`, `--tests`, `--verbs`, `--user-agents` are additive; `--all`
+  runs all generators.
 - **Generated files are never hand-edited** — `riko/coercion/_configs.py`,
-  `riko/modules/_names.py`, `riko/types/_module_ids.py`, the marked name blocks in
-  `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md` and `CONTRIBUTING.rst`, and
+  `riko/modules/_names.py`, `riko/types/_module_ids.py`, `riko/base/_user_agents.py`,
+  the marked name blocks in `_docs/API_SURFACE.md`, the verb tables in `CLAUDE.md`
+  and `CONTRIBUTING.rst`, and
   the `tests/<tier>/__init__.py` tier indexes all have canonical sources and drift
   guards. The `workflows`/`pyworkflows` fixture trees are not generated; they are
   `WorkflowDocument`s plus hand-maintained typed probes.
   Details: `_docs/INTERNALS.md`.
-- **Lint selectors are additive** — bare `manage lint` is Ruff; `manage lint --all`
-  runs the whole standard suite (Ruff, RST, `--docs`, `--docstrings`, `--terms`, `--literals`,
-  `--deps`, `--bindings`, `--tests`, `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of those need a separate run. Type
-  verification (`--check-types`/`--verify-types`), pylint strict mode, and
-  distribution checks remain explicit heavyweight checks.
-- **Whole-tree gates run through `gates.py`** — every full `lint --all`, `test --ratchet`,
-  `--check-types`, `--verify-types`, `prettify`, or `codegen` run, in any skill or ad hoc, goes
-  through `python .claude/skills/land/gates.py run <gate> [--mutates] [--lock] -- <command>` with
-  `/land`'s exact command, so the pass is recorded against the tree and `/land` skips it instead of
-  rerunning. A bare run records nothing. Targeted runs (one file, `-k`) stay bare.
+- **Lint selectors are additive** — bare `manage lint` is Ruff plus rumdl (Markdown);
+  `manage lint --all` runs the whole standard suite (Ruff, rumdl, RST, `--docs`,
+  `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
+  `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of
+  those need a separate run. Type verification (`--check-types`/`--verify-types`),
+  pylint strict mode, and distribution checks remain explicit heavyweight checks.
+- **Whole-tree gates run through `gates.py`** — every full `lint --all`,
+  `test --ratchet`, `--check-types`, `--verify-types`, `prettify`, or `codegen` run, in
+  any skill or ad hoc, goes through
+  `python .claude/skills/land/gates.py run <gate> [--mutates] [--lock] -- <command>`
+  with `/land`'s exact command, so the pass is recorded against the tree and `/land`
+  skips it instead of rerunning. A bare run records nothing. Targeted runs (one file,
+  `-k`) stay bare.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
   `_docs/` model; transient scratch material does not belong in authoritative root
   docs.
@@ -338,9 +365,11 @@ is a fallback, so it is a `resolve`.
   lower-level conversion ownership remains with meza where the runtime contract says
   so. Workarounds for meza defects are tracked in `_docs/gameplans/upstream-fixes.md`.
 - **Tunable knobs live in `riko/base/_config.py`** — static project policy
-  (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the import
-  linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
+  (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the
+  import linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
   `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_normalize`/
-  `_migrate`) plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed value logs a warning and falls back
-  to the default). Existing names (`DEF_CONCURRENCY_LIMIT`, `TIMEOUT`, `EXCHANGE_API`, …)
-  re-source from `settings`; add operator-tunable defaults here, not as scattered literals.
+  `_migrate`; `LINE_LENGTH`, the 88-column width the generators and tidy scans share)
+  plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed
+  value logs a warning and falls back to the default). Existing names
+  (`DEF_CONCURRENCY_LIMIT`, `TIMEOUT`, `EXCHANGE_API`, …) re-source from `settings`; add
+  operator-tunable defaults here, not as scattered literals.

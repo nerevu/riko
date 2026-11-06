@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import importlib.util
+import json
 from importlib import import_module
 from importlib.resources import files
 from keyword import iskeyword
@@ -47,10 +48,22 @@ from riko.base._api_surface import (
     STABLE,
     TYPES,
 )
-from riko.base._paths import CONFIG_PATH, MODULE_IDS_PATH, MODULE_NAMES_PATH
+from riko.base._config import LINE_LENGTH
+from riko.base._paths import (
+    CONFIG_PATH,
+    MODULE_IDS_PATH,
+    MODULE_NAMES_PATH,
+    USER_AGENTS_PATH,
+)
 from riko.base._strutils import get_codegen_note, pythonise
 from riko.cli._gen_api_surface import generate_api_surface
 from riko.cli._gen_config import objconf_structure, render
+from riko.cli._gen_user_agents import (
+    USER_AGENT_COUNT,
+    generate_user_agents,
+    get_top_agents,
+    load_user_agents,
+)
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
@@ -67,7 +80,7 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import _build_resolved_workflow
-from riko.types._enums import ExecutionMode
+from riko.types._enums import ExecutionMode, UserAgent
 from riko.types._workflow import Endpoint
 from riko.types.modules import (
     ConfArg,
@@ -76,7 +89,7 @@ from riko.types.modules import (
     SortRawConf,
     SortRawRule,
 )
-from tests import TESTS_DIR, async_test
+from tests import TESTS_DIR, async_test, is_installed
 from tests._workflows import EXAMPLES_DIR, SPLIT_PENDING, run_document, run_workflow
 
 if TYPE_CHECKING:
@@ -532,6 +545,44 @@ class TestConfigCodegen:
 
     def test_fetchtable_inherits_csv(self):
         assert objconf_structure()["FetchTableObjconf"][0] == "CsvObjconf"
+
+
+USER_AGENT_ENTRIES = [
+    pytest.param("x" * 100 + " y", id="long-token"),
+    pytest.param(" " + "lead " * 20, id="leading-space"),
+]
+
+
+@pytest.mark.skipif(
+    not is_installed("fake_useragent"), reason="fake-useragent is not installed"
+)
+class TestUserAgentCodegen:
+    """Run ``manage codegen --user-agents`` to update the random user-agent pools."""
+
+    def test_user_agents_match_generated(self):
+        assert USER_AGENTS_PATH.read_text() == load_user_agents()
+
+    @pytest.mark.parametrize("device", [UserAgent.DESKTOP, UserAgent.MOBILE])
+    def test_generated_pools_hold_distinct_agents_of_their_device(self, device):
+        text = files("fake_useragent.data").joinpath("browsers.jsonl").read_text()
+        rows = [json.loads(line) for line in text.splitlines() if line]
+        matching = {row["useragent"] for row in rows if row["type"] == device}
+        agents = get_top_agents(text, device)
+        namespace: dict[str, object] = {}
+        exec(generate_user_agents({device: agents}, "0"), namespace)
+
+        assert len(set(agents)) == len(agents) == USER_AGENT_COUNT
+        assert matching.issuperset(agents)
+        assert namespace[f"{device.upper()}_USER_AGENTS"] == tuple(agents)
+
+    @pytest.mark.parametrize("agent", USER_AGENT_ENTRIES)
+    def test_generated_entries_round_trip_within_the_line_length(self, agent):
+        source = generate_user_agents({UserAgent.DESKTOP: [agent]}, "0")
+        namespace: dict[str, object] = {}
+        exec(source, namespace)
+
+        assert namespace["DESKTOP_USER_AGENTS"] == (agent,)
+        assert max(map(len, source.splitlines())) <= LINE_LENGTH
 
 
 def _render(flow: Workflow) -> str:
