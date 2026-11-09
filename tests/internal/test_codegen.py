@@ -67,7 +67,7 @@ from riko.cli._gen_user_agents import (
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode
-from riko.definitions._workflow_definition import Workflow, normalize_workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
@@ -186,10 +186,7 @@ EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime._export, EXPORT),
     (riko.runtime._compile, CODEGEN),
-    (
-        riko.definitions._workflow_definition,
-        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
-    ),
+    (riko.definitions._workflow_definition, {"Workflow"}),
     (riko.ext, EXTENSION),
     (riko.ext.codegen, EXT_CODEGEN),
     (riko.ext.modules, EXT_MODULES),
@@ -301,8 +298,12 @@ class TestWorkflowModule:
     def test_generated_matches_document_failure(self, path: Path, tmp_path: Path):
         """A document that cannot run standalone fails the same way once generated."""
         flow = Workflow.parse(path.read_text())
-        module = _build(flow, path.stem, tmp_path)
-        generated = _failure(lambda: list(module.pipe(context=Context(test=True))))
+
+        def run_generated() -> list[object]:
+            module = _build(flow, path.stem, tmp_path)
+            return list(module.pipe(context=Context(test=True)))
+
+        generated = _failure(run_generated)
         assert generated == _failure(lambda: run_workflow(flow))
 
     @pytest.mark.parametrize("stem", ASYNC_FIXTURES)
@@ -364,17 +365,17 @@ DESCRIBE_INPUT_CASES = [
     pytest.param(ExecutionMode.DESCRIBE_INPUTS, DESCRIBED_INPUTS, id="inputs"),
     pytest.param(
         ExecutionMode.DESCRIBE,
-        {"inputs": DESCRIBED_INPUTS, "dependencies": ["rename"]},
+        {"input_schemas": DESCRIBED_INPUTS, "dependencies": ["rename"]},
         id="inputs-and-dependencies",
     ),
 ]
 
 
 def _inputs_workflow() -> Workflow:
-    """Builds a one-node workflow that declares an input."""
+    """Builds a one-node workflow whose input has a schema."""
     node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
     outputs = {"default": Endpoint(node.id, "out")}
-    return Workflow(nodes=[node], outputs=outputs, inputs=DESCRIBED_INPUTS)
+    return Workflow(nodes=[node], outputs=outputs, input_schemas=DESCRIBED_INPUTS)
 
 
 DESCRIBED_DEPENDENCIES = [
@@ -412,7 +413,8 @@ class TestWorkflowModuleDescribe:
     def test_generated_pipe_describes_inputs(self, mode, expected, tmp_path: Path):
         """Describing inputs reports the declared schemas, alone or with more."""
         module = _build(_inputs_workflow(), "pipe_inputs", tmp_path)
-        assert module.pipe(context=Context(mode=mode)) == expected
+        stream = module.pipe(context=Context(mode=mode))
+        assert next(stream) == expected
 
     @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
     @async_test
@@ -438,7 +440,7 @@ class TestCompileWorkflow:
             "value": ConfArg(type="text", value="riko"),
         }
         conf = {"attrs": [attrs], "EXTRA": ConfArg(type="text", value="x")}
-        flow = normalize_workflow({"nodes": [{"name": "itembuilder", "conf": conf}]})
+        flow = Workflow.from_raw({"nodes": [{"name": "itembuilder", "conf": conf}]})
         module = _build(flow, "pipe_verbatim", tmp_path)
         assert module.flow == flow
         assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
@@ -649,13 +651,14 @@ class TestWorkflowProbes:
 
     @pytest.mark.parametrize("name", _describing_probes("def pipe("))
     def test_probe_describes_inputs_and_dependencies(self, name: str):
-        """Describing everything reports what each describe mode reports on its own."""
+        """Describing everything yields what each describe mode yields on its own."""
         probe = import_module(name)
-        inputs = probe.pipe(context=Context(mode=ExecutionMode.DESCRIBE_INPUTS))
+        schemas = next(probe.pipe(context=Context(mode=ExecutionMode.DESCRIBE_INPUTS)))
         mode = ExecutionMode.DESCRIBE_DEPENDENCIES
         dependencies = list(probe.pipe(context=Context(mode=mode)))
-        expected = {"inputs": inputs, "dependencies": dependencies}
-        assert probe.pipe(context=Context(mode=ExecutionMode.DESCRIBE)) == expected
+        expected = {"input_schemas": schemas, "dependencies": dependencies}
+        context = Context(mode=ExecutionMode.DESCRIBE)
+        assert list(probe.pipe(context=context)) == [expected]
 
     @pytest.mark.parametrize("name", _describing_probes("def async_pipe("))
     @async_test
@@ -666,17 +669,10 @@ class TestWorkflowProbes:
         dependencies = [
             item async for item in probe.async_pipe(context=Context(mode=mode))
         ]
-        expected = {"inputs": probe.INPUTS, "dependencies": dependencies}
+        expected = {"input_schemas": probe.INPUT_SCHEMAS, "dependencies": dependencies}
         context = Context(mode=ExecutionMode.DESCRIBE)
         assert [item async for item in probe.async_pipe(context=context)] == [expected]
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="a hand-written probe still reports the inputs its input node scans, "
-        "not the declared inputs the pipe built from its document reports, until "
-        "workflows declare their inputs",
-    )
     def test_probe_describes_the_inputs_its_document_declares(self):
         """A probe's describe-inputs output matches the pipe built from its document."""
         name = "pipe_975789b47f17690a21e89b10a702bcbd"
@@ -684,9 +680,9 @@ class TestWorkflowProbes:
         generated = _build_resolved_workflow(name, flow, dispatcher)
         probe = import_module(f"tests.pyworkflows.{name}")
         context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
-        declared = generated.pipe(context=context)
-        assert declared == dict(flow.inputs)
-        assert probe.pipe(context=context) == declared
+        schemas = next(generated.pipe(context=context))
+        assert schemas == dict(flow.input_schemas)
+        assert next(probe.pipe(context=context)) == schemas
 
 
 def id_func(val):

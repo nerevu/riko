@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
+INPUT_SCHEMAS = {}
 DEPENDENCIES = ["itembuilder", "loop", "rssitembuilder", "union"]
 
 
@@ -136,11 +136,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         sw_730 = union(sw_674, conf={}, context=context, others=[sw_688])
         _OUTPUT = sw_730
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

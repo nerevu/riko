@@ -34,11 +34,12 @@ from ._pipedef import CountValues
 if TYPE_CHECKING:
     from riko.base._require_guards import TypeRequire
     from riko.coercion._dynamic_conf import DynamicConf
+    from riko.definitions._workflow_definition import Inputs
 
     from ._enums import BasicCastType, ExecutionMode, FmtLike
     from ._scalars import PrimitiveValue
     from ._streams import Item, ItemOrValue
-    from ._values import BasicArg, Inputs, RikoList
+    from ._values import BasicArg, RikoList
     from ._wrappers import ParserOutput
     from .modules import AnyConfRule, OptionValues, Skip
 

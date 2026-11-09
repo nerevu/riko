@@ -138,10 +138,46 @@ it once, while a ``processor`` fed a ``stream`` resolves it once per input ``ite
         ]
     }
 
-Expansion rules (``Workflow.parse``)
-------------------------------------
+Workflow inputs
+---------------
 
-``Workflow.parse(dag)`` expands a ``PipeDag`` into a validated ``Workflow``:
+A ``PipeDag`` has no input schema, but a ``WorkflowDocument`` may list them under a
+top-level ``input_schemas``. It maps each input to its schema (a `JSON Schema`_
+(draft 7)). Any JSON Schema keyword is allowed, and ``type`` must name JSON types. A
+bare JSON type name is shorthand (``"string"`` reads as ``{"type": "string"}``).
+
+An input is required if its schema has no ``default``. ``"default": null`` allows
+``null``. A parsed workflow input's schema is available as ``flow.input_schemas``.
+``flow.validate()`` validates them.
+
+A ``conf`` value written as ``{"input": "<name>"}`` takes that input's value.
+Each run reads the values from its ``Context``, fills each schema's default, and
+checks each value against its input's schema before any source is read:
+
+.. code-block:: python
+
+    >>> from riko import Context, Pipeline, Workflow
+    >>>
+    >>> document = {
+    ...     "input_schemas": {"word": {"type": "string", "default": "hello"}},
+    ...     "nodes": [
+    ...         {
+    ...             "name": "strconcat",
+    ...             "conf": {"part": [{"input": "word"}, "!"]},
+    ...             "options": {"emit": True},
+    ...         }
+    ...     ],
+    ... }
+    >>> pipeline = Pipeline(Workflow.parse(document))
+    >>> list(pipeline)
+    ['hello!']
+    >>> list(pipeline.with_context(Context(inputs={"word": "bye"})))
+    ['bye!']
+
+Conversion rules (``Workflow.parse``)
+-------------------------------------
+
+``Workflow.parse(dag)`` converts a ``PipeDag`` into a validated ``Workflow``:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
@@ -149,9 +185,8 @@ Expansion rules (``Workflow.parse``)
    target's ``in`` port, or the port named by the wire's third entry.
 4. Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow's default output
    is its single leaf: the one module that never appears as a wire source.
-5. The result is validated: an empty ``modules`` list, a wire referencing an unknown
-   module, a cycle, a wire with the wrong number of entries, or more than one leaf all
-   raise ``InvalidPipelineError``.
+5. The validated result raises ``InvalidPipelineError`` for: empty ``modules``, a wire
+   referencing an unknown module, a cycle, or a wire with the wrong number of entries.
 
 .. code-block:: python
 
@@ -173,25 +208,46 @@ Expansion rules (``Workflow.parse``)
     >>> list(Pipeline(flow))
     [{'forever': True}, {'forever': True}, {'forever': True}]
 
-The result is an ordinary ``Workflow``: list the modules it uses from its ``nodes``, run
-it with ``Pipeline``, serialize it to a ``WorkflowDocument`` with
-``flow.serialize()``, or hand it to ``compile_workflow``.
+The result is an ordinary ``Workflow``. List its modules with ``nodes``, run it with
+``Pipeline``, serialize it to a ``WorkflowDocument`` with ``flow.serialize()``, or hand
+it to ``compile_workflow``.
 
-A pipe definition (``PipeDef``) converts the same way: ``Workflow.parse`` detects one,
-and ``riko.ext.migrate_v1_to_v2`` converts one explicitly. Convert a serialized one
-once before registering its directory with ``riko.ext.register_workflow_store``, which
-reads ``WorkflowDocument``\s only:
+``Workflow.parse`` also converts a pipe definition (``PipeDef``). It migrates the
+``input`` module's configuration into a workflow input by converting ``type`` as
+follows: ``int`` to integer, ``float`` and ``decimal`` to number, ``bool`` to boolean,
+``url`` to URI string, and anything else to string.
+
+It also converts the ``default`` to match, and the ``prompt`` becomes the schema's
+description. Convert a serialized ``PipeDef`` with ``build-workflow`` before registering
+its directory with ``riko.ext.register_workflow_store``.
 
 .. code-block:: python
 
-    import json
-    from pathlib import Path
-
-    from riko.ext import migrate_v1_to_v2
-
-    path = Path("workflows/pipe_demo.json")
-    pipe_def = json.loads(path.read_text())
-    path.write_bytes(migrate_v1_to_v2(pipe_def).serialize())
+    >>> from riko import Workflow
+    >>>
+    >>> pipe_def = {
+    ...     'modules': [
+    ...         {'id': 'sw-1', 'type': 'fetch', 'conf': {}},
+    ...         {'id': 'sw-2', 'type': 'write', 'conf': {'fmt': 'json'}},
+    ...     ],
+    ...     'wires': [
+    ...         {
+    ...             'id': '_w1',
+    ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-1'},
+    ...             'tgt': {'id': '_INPUT', 'moduleid': 'sw-2'},
+    ...         }
+    ...     ],
+    ... }
+    >>> flow = Workflow.parse(pipe_def)
+    >>> node = flow.nodes["sw-2"]
+    >>> node.backend.value
+    'file'
+    >>> node.fmt.value
+    'json'
+    >>> flow.outputs['default']
+    Endpoint(node='sw-2', port='out')
+    >>> Workflow.parse(flow.serialize()) == flow
+    True
 
 Commands
 --------
@@ -243,3 +299,4 @@ For fuller worked examples, see the `example workflow documents`_
 .. _test_workflow: ../tests/public/test_workflow.py
 .. _test_script: ../tests/functional/test_script.py
 .. _example workflow documents: ../examples/workflows
+.. _JSON Schema: https://json-schema.org/understanding-json-schema/

@@ -27,8 +27,10 @@ from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union_pipe
 from riko.runtime._module_registry import module_registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
+from riko.runtime._run import build_description
 from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
 from riko.runtime._workflow_stores import MappingStore
+from riko.types._enums import ExecutionMode
 from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
 from tests._execution import (
@@ -504,6 +506,7 @@ NATIVE_CLOSED_INPUTS = [
 ]
 _TERMINAL_PART = {"terminal": "p", "type": "text"}
 _SUBKEY_PART = {"subkey": "word", "type": "text"}
+_URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
 # A strconcat part, whether a stream reaches its in:p port, and whether it self-starts.
 STRCONCAT_STARTS = [
     pytest.param("extVal", False, True, id="literal"),
@@ -511,6 +514,31 @@ STRCONCAT_STARTS = [
     pytest.param(_TERMINAL_PART, False, False, id="unconnected-terminal"),
     pytest.param(_SUBKEY_PART, False, False, id="subkey"),
 ]
+# A fetch url, whether a stream reaches its in:_1_URL port, and whether it self-starts.
+SOURCE_STARTS = [
+    pytest.param("file://riko/data/feed.xml", False, True, id="literal"),
+    pytest.param(_URL_TERMINAL, True, True, id="normalized-terminal"),
+    pytest.param(_URL_TERMINAL, False, False, id="unconnected-terminal"),
+    pytest.param({"subkey": "link", "type": "url"}, False, False, id="subkey"),
+    pytest.param({**_URL_TERMINAL, "subkey": ""}, True, True, id="empty-subkey"),
+]
+
+
+INPUT_SOURCES = [
+    pytest.param(None, None, 1, id="schema-default"),
+    pytest.param(Context(inputs={"q": 2}), None, 2, id="context"),
+    pytest.param(None, {"q": 5}, 5, id="planned"),
+    pytest.param(Context(inputs={"q": 2}), {"q": 5}, 5, id="planned-over-context"),
+]
+
+
+def _build_default_input_plan(default: int) -> ExecutionPlan:
+    """Builds a plan whose one node emits the ``q`` input, defaulted to ``default``."""
+    conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
+    node = ModuleNode(id="b", name="itembuilder", conf=conf)
+    schemas = {"q": {"type": "integer", "default": default}}
+    flow = Workflow(input_schemas=schemas).with_node(node)
+    return ExecutionPlan.from_workflow(flow, dispatcher)
 
 
 class TestPlanRun:
@@ -686,6 +714,20 @@ class TestPlanRun:
             else:
                 with pytest.raises(InvalidPipelineError, match="requires a seed"):
                     execution.run(plan)
+
+    @pytest.mark.parametrize(("url", "connected", "expected"), SOURCE_STARTS)
+    def test_source_starts_only_when_it_reads_no_default_input(
+        self, url: object, connected: bool, expected: bool
+    ) -> None:
+        source = ModuleNode(id="f", name="fetch", conf=cast("Conf", {"url": url}))
+        feeder = ModuleNode(id="s", name="strconcat", conf={"part": "x"})
+        edge = StreamEdge(Endpoint("s", "out"), Endpoint("f", "in:_1_URL"))
+        nodes, edges = ([source, feeder], (edge,)) if connected else ([source], ())
+        outputs = {"default": Endpoint("f", "out")}
+        flow = build_workflow(nodes, edges=edges, outputs=outputs)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        assert plan.is_self_starting("f") is expected
 
     def test_run_starts_a_literal_strconcat_feeding_a_named_port(self) -> None:
         concat = ModuleNode(
@@ -1044,13 +1086,13 @@ class TestPlanRun:
         ):
             execution.run(plan)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=InvalidPipelineError,
-        reason="root-derived stored-workflow subtypes are not yet implemented",
-    )
-    def test_run_starts_a_stored_source_workflow_that_declares_inputs(self) -> None:
-        raw = '{"inputs": {"q": {"type": "string"}}, "nodes": [{"name": "forever"}]}'
+    def test_describing_a_run_mode_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unexpected describe"):
+            build_description(Workflow(), ExecutionMode.RUN)
+
+    def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
+        schemas = '{"q": {"type": "string", "default": "x"}}'
+        raw = f'{{"input_schemas": {schemas}, "nodes": [{{"name": "forever"}}]}}'
         resolved = _build_resolved_workflow(
             "pipe_demo", Workflow.parse(raw), dispatcher
         )
@@ -1060,6 +1102,40 @@ class TestPlanRun:
 
         with SyncExecution() as execution:
             assert next(iter(execution.run(plan))) == {"forever": True}
+
+    @pytest.mark.parametrize(("given", "values", "expected"), INPUT_SOURCES)
+    def test_run_uses_the_inputs_its_plan_was_built_from(
+        self, given: Context | None, values: dict[str, int] | None, expected: int
+    ) -> None:
+        plan = _build_default_input_plan(1)
+        planned = plan if values is None else plan.with_inputs(values)
+
+        with SyncExecution(given) as execution:
+            assert list(execution.run(planned)) == [{"q": expected}]
+
+    def test_run_resolves_each_plan_s_own_input_default(self) -> None:
+        """A later run of another plan does not inherit an earlier run's inputs."""
+        with SyncExecution() as execution:
+            first = list(execution.run(_build_default_input_plan(1)))
+            second = list(execution.run(_build_default_input_plan(2)))
+            assert (first, second) == ([{"q": 1}], [{"q": 2}])
+
+    def test_a_stored_workflow_ignores_the_outer_context_s_other_inputs(self) -> None:
+        conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
+        raw = {
+            "input_schemas": {"q": {"type": "string", "default": "x"}},
+            "nodes": [{"name": "itembuilder", "conf": conf}],
+        }
+        resolved = _build_resolved_workflow(
+            "pipe_demo", Workflow.parse(raw), dispatcher
+        )
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        stored = ResolverDispatcher(module_registry, resolver)
+        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
+        context = Context(inputs={"q": "y", "other": 1})
+
+        with SyncExecution(context) as execution:
+            assert list(execution.run(plan)) == [{"q": "y"}]
 
     @pytest.mark.xfail(
         strict=True,
@@ -1097,6 +1173,18 @@ async def _acollect(stream, seen):
 
 
 class TestAsyncPlanRun:
+    @async_test
+    async def test_arun_resolves_each_plan_s_own_input_default(self) -> None:
+        """A later run of another plan does not inherit an earlier run's inputs."""
+        async with AsyncExecution() as execution:
+            first = [
+                i async for i in await execution.arun(_build_default_input_plan(1))
+            ]
+            second = [
+                i async for i in await execution.arun(_build_default_input_plan(2))
+            ]
+            assert (first, second) == ([{"q": 1}], [{"q": 2}])
+
     @async_test
     async def test_arun_executes_async_native_source(self) -> None:
         @tag_source

@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3177 passed / 111 xfailed**. The user commits.
+Suite: **3276 passed / 102 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -105,7 +105,7 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is st
 | **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
 | **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/public/test_write.py`) |
 | **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ✅ done | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` waits on R5A; closed 2026-11-03 with decorated functions on `\|` re-homed as unscheduled (needs R2B's `version=`; strict xfail `TestPipelineChaining::test_or_composes_a_decorated_processor`) |
-| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail for explicit value sources, flipped 2026-11-05 (only a source or a `strconcat` reading nothing from its default input starts unseeded; `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs` (stored-workflow subtype from its roots) |
+| **R4D** workflow input schemas | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail for explicit value sources, flipped 2026-11-05 (only a source or a `strconcat` reading nothing from its default input starts unseeded; `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_with_input_schemas` (stored-workflow subtype from its roots), flipped 2026-11-09 (a stored workflow's pipe is tagged `"source"` when it can run without a seed; declared inputs don't affect the tag) |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
 | **R4L** DotDict literal access | ⏳ pending | slot added 2026-11-05, after M1 and before R4E; owner `gameplans/dotdict-parsing.md`; flips the `TestDotDict` literal-access tripwires in `tests/internal/test_values.py` and `TestCount::test_count_key_values_containing_dots_stay_literal` in `tests/public/test_modules.py` (GitHub issue #60) |
 | **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
@@ -196,8 +196,8 @@ deleted at v1-cutover step 4; one-shot lifetime is now owned by
 surface. `describe_input`/`describe_dependencies` are read-only properties derived from
 `mode`; generated workflow modules dispatch on `mode` through `build_workflow_pipes`
 (`riko/runtime/_workflow_pipes.py`), where `DESCRIBE` returns
-`{"inputs", "dependencies"}`; `test`/`inputs` stay independent fields; verbosity is
-process-level (`set_log_level`), not a `Context` field.
+`{"input_schemas", "dependencies"}`; `test`/`inputs` stay independent fields;
+verbosity is process-level (`set_log_level`), not a `Context` field.
 
 **Decisions.**
 

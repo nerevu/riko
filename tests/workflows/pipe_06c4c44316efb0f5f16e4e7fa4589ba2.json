@@ -34,6 +34,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "numberinput1": {
+            "default": "5",
+            "description": "How many items do you want in the feed?",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-106": {
             "conf": {
@@ -59,25 +66,9 @@
         },
         "sw-131": {
             "conf": {
-                "debug": {
-                    "type": "int",
-                    "value": ""
-                },
-                "default": {
-                    "type": "int",
-                    "value": "5"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "numberinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "How many items do you want in the feed?"
                 }
             },
             "family": "module",

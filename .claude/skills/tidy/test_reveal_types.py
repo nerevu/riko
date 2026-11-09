@@ -32,15 +32,18 @@ def test_get_probe_lines(spec: str, reveal: str) -> None:
 
 
 def test_reveals_a_symbol_and_a_call(capsys: pytest.CaptureFixture[str]) -> None:
-    specs = (
-        "riko.definitions._normalize:require_edge",
-        "riko.base._require_guards:require_from_keys({'x'}, {'y'})",
-    )
-    expected = "TypeRequire[Mapping[str, object], dict[str, object]]"
+    reveals = {
+        "riko.definitions._normalize:require_raw_edge": (
+            "TypeRequire[Mapping[str, object], RawEdge]"
+        ),
+        "riko.base._require_guards:require_from_keys({'x'}, {'y'})": (
+            "TypeRequire[Mapping[str, object], dict[str, object]]"
+        ),
+    }
 
-    assert reveal_types.main(list(specs)) == 0
+    assert reveal_types.main(list(reveals)) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines == [f"{spec} -> {expected}" for spec in specs]
+    assert lines == [f"{spec} -> {reveal}" for spec, reveal in reveals.items()]
 
 
 @pytest.mark.parametrize(
@@ -53,7 +56,7 @@ def test_reveals_a_symbol_and_a_call(capsys: pytest.CaptureFixture[str]) -> None
             id="unknown-name",
         ),
         pytest.param(
-            "riko.definitions._normalize:require_edge(",
+            "riko.definitions._normalize:require_raw_edge(",
             "(syntax error)",
             "",
             id="unclosed-paren",
@@ -64,8 +67,8 @@ def test_reveals_a_symbol_and_a_call(capsys: pytest.CaptureFixture[str]) -> None
 def test_keeps_labels_after_a_bad_spec(
     capsys: pytest.CaptureFixture[str], bad: str, result: str, error: str
 ) -> None:
-    good = "riko.definitions._normalize:require_edge"
-    expected = "TypeRequire[Mapping[str, object], dict[str, object]]"
+    good = "riko.definitions._normalize:require_raw_edge"
+    expected = "TypeRequire[Mapping[str, object], RawEdge]"
 
     assert reveal_types.main([good, bad, good]) == 1
     captured = capsys.readouterr()

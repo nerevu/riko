@@ -1061,7 +1061,7 @@ as ``pipe_<id>.py`` in a package. Register the package with
     >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
     DEPENDENCIES: list[str] = ["itembuilder", "rename"]
     >>> print(next(l for l in source.splitlines() if l.startswith('pipe')))
-    pipe = build_workflow_pipes(
+    pipe = build_workflow_pipes(flow, dispatcher).sync_pipe
 
 The ``build-workflow``, ``compile-workflow``, and ``run-pipe`` commands work on the same
 forms stored as files: ``build-workflow`` expands a serialized ``PipeDag`` into a
@@ -1149,13 +1149,13 @@ installed before execution.
     ['itembuilder', 'rename']
 
 A *compiled* workflow module's ``pipe`` function (see `Compiling workflow documents`_)
-can additionally report its input declarations or dependencies (the modules and stored
+can additionally report its inputs' schemas or dependencies (the modules and stored
 workflows it uses) at run time.
 
 Pass a ``Context`` whose ``mode`` is ``ExecutionMode.DESCRIBE_INPUTS`` or
-``DESCRIBE_DEPENDENCIES`` and the generated ``pipe()`` will return the input
-declarations or list of module and stored-workflow names instead of running.
-``DESCRIBE`` returns both as a mapping with ``inputs`` and ``dependencies`` keys.
+``DESCRIBE_DEPENDENCIES`` and the generated ``pipe()`` will return the inputs'
+schemas or list of module and stored-workflow names instead of running.
+``DESCRIBE`` returns both as a mapping with ``input_schemas`` and ``dependencies`` keys.
 
 .. code-block:: python
 
@@ -1173,10 +1173,10 @@ declarations or list of module and stored-workflow names instead of running.
     >>> namespace = {}
     >>> exec(compile_workflow(flow, 'pipe_demo'), namespace)
     >>> pipe = namespace['pipe']
-    >>> pipe(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
+    >>> list(pipe(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)))
     ['itembuilder', 'rename']
-    >>> pipe(context=Context(mode=ExecutionMode.DESCRIBE))
-    {'inputs': {}, 'dependencies': ['itembuilder', 'rename']}
+    >>> next(pipe(context=Context(mode=ExecutionMode.DESCRIBE)))
+    {'input_schemas': {}, 'dependencies': ['itembuilder', 'rename']}
 
 Performance and memory
 ----------------------

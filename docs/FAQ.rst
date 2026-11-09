@@ -863,10 +863,10 @@ What execution modes are available?
 Mode                     Behavior
 =======================  =========================================================
 RUN                      Run normally (the default)
-DESCRIBE_INPUTS          Return the input declarations instead of running
+DESCRIBE_INPUTS          Return the inputs' schemas instead of running
 DESCRIBE_DEPENDENCIES    Return the module and stored-workflow names it uses
-DESCRIBE                 Return the input declarations, the same as
-                         DESCRIBE_INPUTS
+DESCRIBE                 Return the inputs' schemas and the dependencies,
+                         keyed ``"input_schemas"`` and ``"dependencies"``
 =======================  =========================================================
 
 Only a workflow module's ``pipe`` honors the describe modes today; a ``Pipeline``

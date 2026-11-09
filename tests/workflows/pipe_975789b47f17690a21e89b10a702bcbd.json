@@ -67,28 +67,19 @@
             }
         }
     ],
+    "input_schemas": {
+        "q": {
+            "default": "Here's #: some #hashtags to play #with",
+            "description": "Status update",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-417": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "Here's #: some #hashtags to play #with"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "q"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Status update"
                 }
             },
             "family": "module",

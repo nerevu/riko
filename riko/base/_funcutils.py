@@ -366,8 +366,12 @@ def resolve_default(
 
     Examples:
 
-        >>> resolve_default(None), resolve_default(0, 5), resolve_default(None, 5)
-        ({}, 0, 5)
+        >>> resolve_default(None)
+        {}
+        >>> resolve_default(0, 5)
+        0
+        >>> resolve_default(None, 5)
+        5
         >>> resolve_default("ctx", "", "; context")
         '; context'
 

@@ -12,18 +12,24 @@ New
   ``pipeline.pipe(name)``, ``pipeline | name``, or ``pipeline.map(fn)``. Run it with
   ``pipeline(items)``, ``for``/``async for``, ``pipeline.first(items)``, or
   ``with pipeline.open(items)``. A pipeline starting from a source module runs with no
-  items (``list(pipeline)``). ``with_context``, ``with_resource``, and
-  ``with_execution(concurrency=…, shutdown_timeout=…)`` configure a run.
+  items (``list(pipeline)``). ``with_context``, ``with_resource``,
+  ``with_input_schemas``, and ``with_execution(concurrency=…, shutdown_timeout=…)``
+  configure a run.
 
 - Added ``riko.Resource`` to provide a value to ``pipeline.with_resource``:
   ``Resource(…)`` owns and closes a value, ``Resource.from_external`` shares one you
   manage, and ``from_factory``/``from_lifecycle`` build one per run. Only a reusable
   resource (``from_external``/``from_factory``) can go in a ``Context``.
 
-- Added the ``Workflow`` graph (``Node``, ``Edge``, ``Endpoint``) that a ``Pipeline``
-  runs. ``Workflow.parse``/``Workflow.load`` read a workflow document
+- Added the ``Workflow`` graph (``RikoNode``, ``PortEdge``, ``Endpoint``) that a
+  ``Pipeline`` runs. ``Workflow.parse``/``Workflow.load`` read a workflow document
   (``riko.WorkflowDocument``), a bare-bones DAG (``PipeDag``), or a pipe definition
-  (``PipeDef``); ``flow.serialize`` writes a ``WorkflowDocument``.
+  (``PipeDef``), ``Workflow.from_raw`` builds one from a ``WorkflowLike``, and
+  ``flow.serialize`` writes a ``WorkflowDocument``.
+
+- ``Workflow.parse`` creates JSON Schema input schemas (``InputSchema``).
+  ``Workflow.validate_input_schemas`` validates them, and ``flow.input_schemas``
+  lists them.
 
 - Added type aliases for workflows, pipelines, and call options to ``riko`` and
   ``riko.types`` (e.g., ``WorkflowLike``, ``WorkflowModule``, ``RawWorkflow``,
@@ -40,9 +46,8 @@ New
 - Added ``riko.PipelineError``, ``riko.InvalidPipelineError``,
   ``riko.EmptyPipelineError``, and ``riko.UnsupportedTargetError``.
 
-- Added ``normalize_workflow`` (``WorkflowLike`` -> ``Workflow``), ``migrate_v1_to_v2``
-  (``PipeDef`` -> ``Workflow``), the node and edge classes (e.g., ``ModuleNode``), and
-  the write-target classes (e.g., ``FileTarget``) to ``riko.ext``.
+- Added the node and edge classes (e.g., ``ModuleNode``) and the write-target classes
+  (e.g., ``FileTarget``) to ``riko.ext``.
 
 - Extension authors can register workflow stores (``register_workflow_store``) and write
   targets (``register_target``); ``reset_workflow_resolver``/``reset_target_registry``
@@ -51,10 +56,11 @@ New
 - Module pipe callables gained ``prepare``. It applies a call's configuration and call
   options for reuse over items. ``riko.ext.PreparedCall`` annotates its return value.
 
-- Added ``ModuleMetadata.provider`` and ``list_modules(provider=…)``. A module's provider
-  is the first dotted segment of its name (``"riko"`` for the built-ins). Each provider
-  gets its own discovery class, with the prefix left off its members: ``example.lookup``
-  is ``Example.LOOKUP``, and ``Modules.EXAMPLE_LOOKUP`` keeps the full name.
+- Added ``ModuleMetadata.provider`` and ``list_modules(provider=…)``. The provider is
+  the first dotted segment of a module's name (``"riko"`` for the built-ins). Each
+  custom provider gets a discovery class. E.g., ``Example.LOOKUP`` refers to
+  ``example.lookup``. ``Modules`` lists all modules and retains the provider prefix.
+  E.g., ``Modules.EXAMPLE_LOOKUP``.
 
 - Added to ``riko``: ``async_chain`` to chain async iterables, ``alist`` to collect an
   (a)sync iterable into a list, ``materialize`` to collect one into an iterator, and a
@@ -84,11 +90,13 @@ Changes
   ``PipeDef`` also rejects configuration keys that differ only in case.
 
 - Reading workflow JSON (``build-workflow``, ``compile-workflow``, workflow stores)
-  raises ``InvalidPipelineError`` on a repeated keys instead of keeping the last value.
+  raises ``InvalidPipelineError`` on repeated keys instead of keeping the last value.
 
-- ``Context`` and its ``inputs`` are now immutable; derive changes with ``replace``.
-  ``Context().inputs`` is ``None`` when unset, and ``inputs={}`` uses each input's
-  default instead of prompting.
+- ``Context`` and its ``inputs`` are now immutable. Derive changes with ``replace``.
+  ``inputs`` can hold any JSON value. ``inputs`` is ``None`` when unset, and holds
+  ``InputSchema`` ``default`` values when set to ``{}``. In a workflow run, an ``input``
+  module no longer prompts for an input named in ``input_schemas``: it uses the value in
+  ``inputs``, else the schema's ``default``. The run raises when neither is present.
 
 - The fetch modules now raise for unopenable URLs instead of yielding empty content.
 
@@ -109,9 +117,13 @@ Changes
   ``compile-workflow``, ``run-pipe``, and workflow stores take a ``WorkflowDocument``;
   convert a ``PipeDef`` with ``build-workflow`` first.
 
-- Under ``ExecutionMode.DESCRIBE`` a workflow module's ``pipe`` returns (``async_pipe``
-  yields) ``{"inputs": …, "dependencies": […]}``. ``DESCRIBE_INPUTS`` returns inputs as
-  ``{name: schema}``. A migrated ``PipeDef`` reports none until it declares them.
+- Under ``ExecutionMode.DESCRIBE`` a workflow module's ``pipe`` and ``async_pipe`` yield
+  ``{"input_schemas": …, "dependencies": […]}`` as one item. ``DESCRIBE_INPUTS`` yields
+  each input's schema as ``{name: schema}``, and ``DESCRIBE_DEPENDENCIES`` yields each
+  dependency name.
+
+- A stored workflow's pipe is tagged ``"source"`` when it can run without a seed, and
+  ``"transformer"`` when it needs one. Its declared ``inputs`` don't affect the tag.
 
 - Moved ``examples/pipelines`` to ``examples/workflows`` and ``examples/pypipelines`` to
   ``examples/pyworkflows``.
@@ -206,11 +218,8 @@ Removed
 - Passing a decoration option (e.g., ``skip_if``, ``ftype``, ``ptype``) to a module call
   now raises ``TypeError``. Set it in the decorator instead.
 
-- Removed ``build_pipeline``, ``parse_pipe_def``, and ``extract_dependencies``. Convert
-  a ``PipeDef`` with ``migrate_v1_to_v2`` to create a ``Workflow``, then run it with
-  ``Pipeline`` or read its modules from ``nodes``.
-
-- Removed ``convert_dag``. Use ``Workflow.parse`` instead.
+- Removed ``build_pipeline`` and ``extract_dependencies``. Removed ``convert_dag`` and
+  ``parse_pipe_def``. Use ``Workflow.parse`` instead.
 
 - Removed the ``regex`` rule's ``offset`` key. Replacement positions are now computed.
   Moved the rule's ``default`` to the module conf for when no field rules match; a rule

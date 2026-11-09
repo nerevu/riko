@@ -13,19 +13,17 @@ from functools import partial, update_wrapper
 from inspect import isasyncgenfunction
 from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, overload
 
-from riko.bado.itertools import as_async
 from riko.base._config import SUBPIPE_TYPE
 from riko.base._guards import is_async_callable
 from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._wrapping import stamp_wrapper_meta
-from riko.types._enums import ExecutionMode
-from riko.types._frozendict import normalize_mapping
+from riko.execution._prepared import ExecutionPlan
 from riko.types._wrappers import require_subpipe
 
 from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+    from collections.abc import AsyncIterator, Callable, Iterator
 
     from riko.definitions._context import Context
     from riko.definitions._workflow_definition import Workflow
@@ -55,9 +53,9 @@ class SubPipes(NamedTuple):
         >>> from riko import Workflow
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> pipes = build_workflow_pipes(Workflow(), dispatcher, subtype="source")
-        >>> pipes.sync_pipe.type, pipes.async_pipe.type
-        ('pipe', 'pipe')
+        >>> pipes = build_workflow_pipes(Workflow(), dispatcher)
+        >>> pipes.sync_pipe.type, pipes.async_pipe.subtype
+        ('pipe', 'transformer')
 
     """
 
@@ -161,25 +159,14 @@ def workflow(
     return tag
 
 
-def build_workflow_pipes(
-    flow: Workflow,
-    dispatcher: Dispatcher,
-    *dependencies: str,
-    subtype: ModuleSubtype,
-    inputs: Mapping[str, object] | None = None,
-) -> SubPipes:
+def build_workflow_pipes(flow: Workflow, dispatcher: Dispatcher) -> SubPipes:
     """
     Builds the ``pipe`` and ``async_pipe`` callables that run a ``Workflow``.
 
     Each callable takes one item, a stream, or nothing. Normally the callable runs
     ``flow`` and yields its default output. When the ``Context`` asks to describe the
-    workflow, nothing runs.
-
-    With ``describe_input``, ``pipe`` returns the input declarations and ``async_pipe``
-    yields them as a single item. With ``describe_dependencies``, ``pipe`` returns the
-    ``dependencies`` names as a list and ``async_pipe`` yields each name. With both,
-    ``pipe`` returns ``{"inputs": ..., "dependencies": [...]}`` and ``async_pipe``
-    yields it as a single item.
+    workflow, nothing runs. The callables are tagged ``"source"`` when they can run
+    without a seed, and ``"transformer"`` otherwise.
 
     Args:
 
@@ -188,68 +175,40 @@ def build_workflow_pipes(
         dispatcher: Finds each node's pipe by name, whether a module such as
             ``fetch`` or a stored workflow's ``pipe_<id>``.
 
-        subtype: How the pipe callables are tagged. E.g., ``"source"`` (needs no input)
-            or ``"transformer"`` (takes an item).
-
-        dependencies: The names of the modules and stored workflows, such as ``fetch``
-            or a ``pipe_<id>``, that the workflow's nodes use. Reported when describing
-            dependencies.
-
-    Kwargs:
-
-        inputs: The workflow's input declarations. Reported when describing inputs.
-
     Returns:
 
         The sync and async callables. Each is tagged as a stored workflow's pipe, which
         lets ``loop`` run it without the ``conf`` and ``emit`` it passes other embeds.
+
+    Raises:
+
+        InvalidPipelineError: If ``flow`` cannot be planned.
 
     Examples:
 
         >>> from riko import Workflow
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> pipe = build_workflow_pipes(
-        ...     Workflow(), dispatcher, subtype="transformer",
-        ... ).sync_pipe
+        >>> pipe = build_workflow_pipes(Workflow(), dispatcher).sync_pipe
         >>> list(pipe([{"x": 1}]))
         [{'x': 1}]
 
     """
-    inputs = normalize_mapping(inputs)
-    description = {"inputs": inputs, "dependencies": list(dependencies)}
+    plan = ExecutionPlan.from_workflow(flow, dispatcher)
+    self_starting = plan.is_self_starting_output()
+    subtype: ModuleSubtype = "source" if self_starting else "transformer"
 
     def pipe(
         item: InputLike | None = None, context: Context | None = None, **_: object
-    ) -> Iterator[object] | dict[str, object] | list[str]:
-        if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, context=context)
-            result: Iterator[object] | dict[str, object] | list[str]
-            result = run_pipeline(definition, dispatcher, seed=item)
-        elif context.mode is ExecutionMode.DESCRIBE:
-            result = description
-        elif context.describe_input:
-            result = inputs
-        else:
-            result = list(dependencies)
-
-        return result
+    ) -> Iterator[object | dict[str, object] | str]:
+        definition = PipelineDefinition(flow, context=context)
+        return run_pipeline(definition, dispatcher, seed=item)
 
     def async_pipe(
         item: InputLike | None = None, context: Context | None = None, **_: object
-    ) -> AsyncIterator[object]:
-        if context is None or context.mode is ExecutionMode.RUN:
-            definition = PipelineDefinition(flow, context=context)
-            result: AsyncIterator[object]
-            result = arun_pipeline(definition, dispatcher, seed=item)
-        elif context.mode is ExecutionMode.DESCRIBE:
-            result = as_async([description])
-        elif context.describe_input:
-            result = as_async([inputs])
-        else:
-            result = as_async(dependencies)
-
-        return result
+    ) -> AsyncIterator[object | dict[str, object] | str]:
+        definition = PipelineDefinition(flow, context=context)
+        return arun_pipeline(definition, dispatcher, seed=item)
 
     sync_pipe = workflow(subtype=subtype, isasync=False)(pipe)
     _async_pipe = workflow(subtype=subtype, isasync=True)(async_pipe)

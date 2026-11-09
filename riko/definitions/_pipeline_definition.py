@@ -43,7 +43,7 @@ from ._module_definition import get_callable_name
 from ._nodes import CallableNode, ModuleNode, WriteNode
 from ._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._targets import build_write
-from ._workflow_definition import Workflow
+from ._workflow_definition import InputSchema, InputSchemas, Workflow
 from ._write import WriteMode
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     )
     from ._write import Destination
 
-_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
+_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, input_schemas={})
 
 T_co = TypeVar("T_co", covariant=True, default=Item)
 
@@ -164,6 +164,11 @@ class PipelineDefinition(Generic[T_co]):
     settings: ExecutionSettings = field(
         default=DEF_EXECUTION_SETTINGS, kw_only=True, repr=False, validator=_is_settings
     )
+
+    @property
+    def mode(self) -> ExecutionMode:
+        """The pipeline's run mode (``ExecutionMode.RUN`` with no context)."""
+        return resolve_default(self.context, Context()).mode
 
     def __repr__(self) -> str:
         context = resolve_default(self.context, "", "; context")
@@ -334,6 +339,7 @@ class PipelineDefinition(Generic[T_co]):
 
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
+
             mode: How the items reconcile with the destination's contents.
             fmt: The serialization format, or ``None`` to derive one.
             keys: The match keys a keyed destination needs.
@@ -481,6 +487,45 @@ class PipelineDefinition(Generic[T_co]):
 
         """
         return evolve(self, context=context)
+
+    def with_input_schemas(self, **schemas: InputSchema) -> Self:
+        """
+        Derives a pipeline that gives its workflow inputs the given schemas.
+
+        ``schemas`` are JSON Schemas (``InputSchema``). A node configuration refers to
+        an input as ``{"input": name}``. An input whose schema has no ``default`` is
+        required.
+
+        A run fills values from its context's ``inputs`` or an ``InputSchema``
+        ``default``. It rejects missing inputs and invalid values (a value that doesn't
+        match the ``InputSchema``).
+
+        Kwargs:
+
+            schemas: Each input's schema, keyed by input name. They replace existing
+                input schemas.
+
+        Returns:
+
+            A new pipeline whose workflow gives its inputs the schemas.
+
+        Raises:
+
+            InvalidPipelineError: If an input's schema is neither a mapping nor
+                JSON-native.
+
+        Examples:
+
+            >>> conf = {"url": {"input": "feed"}}
+            >>> fetch = PipelineDefinition.from_module("fetch", conf=conf)
+            >>> definition = fetch.with_input_schemas(feed={"type": "string"})
+            >>> dict(definition.workflow.input_schemas["feed"])
+            {'type': 'string'}
+
+        """
+        flow = self.workflow
+        merged: InputSchemas = {**flow.input_schemas, **schemas}
+        return evolve(self, workflow=evolve(flow, input_schemas=merged))
 
     @overload
     def with_resource[R](

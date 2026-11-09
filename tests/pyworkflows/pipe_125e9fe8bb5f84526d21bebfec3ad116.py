@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.definitions._inputs import resolve_inputs
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
@@ -27,24 +28,22 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = [("", "textinput1", "Enter Text", "text", "defunkt")]
+INPUT_SCHEMAS = {
+    "textinput1": {"default": "defunkt", "description": "Enter Text", "type": "string"}
+}
 DEPENDENCIES = ["fetchdata", "input", "itembuilder", "loop", "rename"]
 
 
 @workflow(subtype="transformer")
 def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
+        inputs = resolve_inputs(
+            INPUT_SCHEMAS, None if context is None else context.inputs
+        )
         sw_479 = _input(
             item,
-            conf=InputRawConf(
-                {
-                    "debug": {"type": "text", "value": ""},
-                    "default": {"type": "text", "value": "defunkt"},
-                    "name": {"type": "text", "value": "textinput1"},
-                    "position": {"type": "float", "value": ""},
-                    "prompt": {"type": "text", "value": "Enter Text"},
-                }
-            ),
+            conf=InputRawConf({"input_key": {"type": "text", "value": "textinput1"}}),
+            inputs=inputs,
             context=context,
         )
         sw_467 = itembuilder(
@@ -112,11 +111,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_351
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

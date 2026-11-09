@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from ._frozendict import FrozenConf
     from ._io import PathLike
     from ._scalars import BasicValue
+    from ._workflow import InputRef
     from ._wrappers import Func
 
 # Shared
@@ -87,6 +88,7 @@ type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
+    | InputRef
     | ParsedParam
     | bool
     | float
@@ -234,7 +236,7 @@ class ModuleMetadata:
 
 class ConfArg(TypedDict):
     type: str
-    value: int | str | bool
+    value: int | str | bool | InputRef
 
 
 class Terminal(TypedDict):
@@ -290,8 +292,8 @@ class FetchRawConf(TypedDict):
 
 
 class InputRawConf(TypedDict, total=False):
-    name: Required[ConfArg]
-    prompt: Required[ConfArg]
+    name: ConfArg
+    prompt: ConfArg
     type: ConfArg
     debug: ConfArg
     default: ConfArg

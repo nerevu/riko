@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
+INPUT_SCHEMAS = {}
 DEPENDENCIES = ["fetch"]
 
 
@@ -37,11 +37,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_478
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

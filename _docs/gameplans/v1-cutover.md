@@ -249,7 +249,7 @@ step 3 rebuilt it on `riko/runtime/_codegen.py` over canonical v2, so
   `_codegen.render_value`), leaving only the `Id` placeholder and `PyKwargValue`, whose
   sole importer is `_compile.py`. Nothing in `_codegen.py` depends on the v1 compiler.
   `write_file` went at step 4 with its last consumer.
-- **Keep `migrate_v1_to_v2`**: its v1 translation (`migrate_pipe_def`) lives in
+- **Keep `migrate_v1_to_v2`**: its v1 translation (`parse_pipedef`) lives in
   `riko/definitions/_migrate.py` with no `_compile` import (its `_lower_keys` helper is
   private to that module). Delete the then-orphaned v1 wire/pipe-def types from
   `riko/types/_compiler.py` except those migrate and `Workflow.parse` retain.

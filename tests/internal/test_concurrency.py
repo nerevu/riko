@@ -696,9 +696,7 @@ def _nested_plan() -> ExecutionPlan:
     pipe = cast("SyncModuleWrapper", _passthru)
     passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
     inner = build_chain(ModuleNode(id="i", name="passthru"))
-    pipes = build_workflow_pipes(
-        inner, build_dispatcher(passthru), subtype="transformer"
-    )
+    pipes = build_workflow_pipes(inner, build_dispatcher(passthru))
     stored = ModuleDefinition(
         name="stored", sync_pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
     )

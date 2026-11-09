@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.definitions._inputs import resolve_inputs
 from riko.modules.fetch import pipe as fetch
 from riko.modules.input import pipe as _input
 from riko.modules.sort import pipe as sort
@@ -19,13 +20,22 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = [("", "numberinput1", "How many items do you want in the feed?", "int", "5")]
+INPUT_SCHEMAS = {
+    "numberinput1": {
+        "default": "5",
+        "description": "How many items do you want in the feed?",
+        "type": "string",
+    }
+}
 DEPENDENCIES = ["fetch", "input", "sort", "tail"]
 
 
 @workflow(subtype="transformer")
 def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
+        inputs = resolve_inputs(
+            INPUT_SCHEMAS, None if context is None else context.inputs
+        )
         sw_123 = fetch(
             item,
             conf=FetchRawConf(
@@ -54,18 +64,8 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         sw_131 = _input(
             None,
-            conf=InputRawConf(
-                {
-                    "debug": {"type": "int", "value": ""},
-                    "default": {"type": "int", "value": "5"},
-                    "name": {"type": "text", "value": "numberinput1"},
-                    "position": {"type": "float", "value": ""},
-                    "prompt": {
-                        "type": "text",
-                        "value": "How many items do you want in the feed?",
-                    },
-                }
-            ),
+            conf=InputRawConf({"input_key": {"type": "text", "value": "numberinput1"}}),
+            inputs=inputs,
             context=context,
         )
         sw_106 = tail(
@@ -76,11 +76,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_106
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

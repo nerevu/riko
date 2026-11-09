@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.definitions._inputs import resolve_inputs
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
 from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
@@ -18,32 +19,26 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = [
-    ("", "urlinput1", "Enter a URL", "url", "file://riko/data/www.bbc.co.uk_news.html")
-]
+INPUT_SCHEMAS = {
+    "urlinput1": {
+        "default": "file://riko/data/www.bbc.co.uk_news.html",
+        "description": "Enter a URL",
+        "type": "string",
+    }
+}
 DEPENDENCIES = ["fetchsitefeed", "input", "truncate"]
 
 
 @workflow(subtype="transformer")
 def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
+        inputs = resolve_inputs(
+            INPUT_SCHEMAS, None if context is None else context.inputs
+        )
         sw_242 = _input(
             item,
-            conf=InputRawConf(
-                {
-                    "debug": {
-                        "type": "url",
-                        "value": "file://riko/data/www.bbc.co.uk_news.html",
-                    },
-                    "default": {
-                        "type": "url",
-                        "value": "file://riko/data/www.bbc.co.uk_news.html",
-                    },
-                    "name": {"type": "text", "value": "urlinput1"},
-                    "position": {"type": "float", "value": ""},
-                    "prompt": {"type": "text", "value": "Enter a URL"},
-                }
-            ),
+            conf=InputRawConf({"input_key": {"type": "text", "value": "urlinput1"}}),
+            inputs=inputs,
             context=context,
         )
         sw_234 = fetchsitefeed(
@@ -59,11 +54,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_246
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from functools import partial
 from importlib.metadata import EntryPoint
@@ -55,6 +56,8 @@ from tests._execution import module_workflow, registered_modules
 from tests._workflows import register_documents
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from riko.types._wrappers import SyncModuleWrapper
 
 _NAME = "acme.mod"
@@ -122,7 +125,7 @@ class TestWorkflowDecorator:
 class TestBuildWorkflowPipes:
     def test_an_unseeded_pipe_requires_a_seed(self):
         flow = module_workflow("reverse")
-        pipes = build_workflow_pipes(flow, dispatcher, subtype="transformer")
+        pipes = build_workflow_pipes(flow, dispatcher)
 
         with pytest.raises(InvalidPipelineError, match="requires a seed"):
             list(pipes.sync_pipe())
@@ -601,7 +604,7 @@ EMBED_CYCLES = [
 
 
 def _stored_resolver(
-    documents: dict[str, list[str | dict[str, str]]],
+    documents: dict[str, list[str | dict[str, str]]], directory: Path
 ) -> WorkflowResolver:
     """Builds a resolver over stored workflows that name ``documents``' values."""
 
@@ -616,13 +619,13 @@ def _stored_resolver(
 
         return result
 
-    modules = {
-        name: _build_resolved_workflow(
-            name, Workflow.parse({"nodes": [node(dep) for dep in deps]}), dispatcher
-        )
-        for name, deps in documents.items()
-    }
-    return WorkflowResolver(module_store=MappingStore(modules))
+    for name, deps in documents.items():
+        document = {"nodes": [node(dep) for dep in deps]}
+        (directory / f"{name}.json").write_text(json.dumps(document))
+
+    resolver = WorkflowResolver(document_store=DirectoryStore(directory))
+    resolver.register_dispatcher(ResolverDispatcher(module_registry, resolver))
+    return resolver
 
 
 def _demo_resolver(**interfaces: object) -> WorkflowResolver:
@@ -709,12 +712,32 @@ class TestWorkflowResolver:
         assert resolver._module_store is None
         assert resolver._document_store is document_store
 
+    def test_require_walks_a_dependency_held_in_the_module_store(self, tmp_path):
+        """
+        A stored document may depend on a stored workflow the module store holds.
+
+        The module store wins, so a malformed document of the same name is never read.
+        """
+        leaf = Workflow.parse({"nodes": [{"name": "forever"}]})
+        modules = MappingStore(
+            {"pipe_b": _build_resolved_workflow("pipe_b", leaf, dispatcher)}
+        )
+        (tmp_path / "pipe_a.json").write_text(
+            json.dumps({"nodes": [{"name": "pipe_b"}]})
+        )
+        (tmp_path / "pipe_b.json").write_text("not a workflow document")
+        document_store = DirectoryStore(tmp_path)
+        resolver = WorkflowResolver(module_store=modules, document_store=document_store)
+        resolver.register_dispatcher(ResolverDispatcher(module_registry, resolver))
+
+        assert resolver.require("pipe_a").type == "pipe"
+
     @pytest.mark.parametrize(("documents", "cycle"), EMBED_CYCLES)
     def test_require_rejects_a_stored_workflow_that_embeds_itself(
-        self, documents, cycle
+        self, documents, cycle, tmp_path
     ) -> None:
         """A stored workflow that reaches itself is refused instead of recursing."""
-        resolver = _stored_resolver(documents)
+        resolver = _stored_resolver(documents, tmp_path)
 
         if cycle is None:
             assert resolver.require("pipe_a").type == "pipe"
@@ -807,14 +830,24 @@ def _document_resolver(directory, **kwargs) -> WorkflowResolver:
 class TestResolvedDocuments:
     workflows = TESTS_DIR / "workflows"
 
-    def test_document_loads_once_with_both_interfaces(self):
+    def test_document_loads_once_with_both_interfaces(self, monkeypatch):
+        """A second lookup reuses the resolved workflow without rereading its file."""
         resolver = _document_resolver(self.workflows)
+        read, loads = DirectoryStore.load, []
+
+        def counting(self, name):
+            loads.append(name)
+            return read(self, name)
+
+        monkeypatch.setattr(DirectoryStore, "load", counting)
         module = resolver.load("pipe_gigs")
+        seen = len(loads)
 
         assert module is not None
         assert callable(module.pipe)
         assert callable(module.async_pipe)
         assert resolver.load("pipe_gigs") is module
+        assert len(loads) == seen
         assert resolver.require_interfaces("pipe_gigs") == {"pipe", "async_pipe"}
 
     def test_reset_forgets_resolved_documents(self):
@@ -845,7 +878,7 @@ class TestResolvedDocuments:
         register_documents(tmp_path)
         context = Context(ExecutionMode.DESCRIBE_DEPENDENCIES)
         pipe = dispatcher.require("pipe_exclaim")
-        assert pipe(context=context) == ["strconcat"]
+        assert list(pipe(context=context)) == ["strconcat"]
 
     def test_registering_a_dispatcher_rebuilds_documents(self):
         resolver = _document_resolver(self.workflows)
@@ -870,21 +903,19 @@ class TestResolvedDocuments:
         with pytest.raises(UnsupportedWorkflowError, match="no dispatcher"):
             resolver.load("pipe_gigs")
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="a fresh stored-workflow description per call is not yet implemented",
-    )
     def test_document_description_is_fresh_per_call(self, tmp_path):
         register_documents(tmp_path)
         context = Context(ExecutionMode.DESCRIBE)
         pipe = dispatcher.require("pipe_exclaim")
-        first = pipe(context=context)
-        assert isinstance(first, dict)
-        first["dependencies"].append("mutated")
-        first["inputs"]["mutated"] = {}
+        first = cast("dict[str, object]", next(pipe(context=context)))
+        dependencies, schemas = first["dependencies"], first["input_schemas"]
+        assert isinstance(dependencies, list)
+        assert isinstance(schemas, dict)
+        dependencies.append("mutated")
+        schemas["mutated"] = {}
 
-        assert pipe(context=context) == {"inputs": {}, "dependencies": ["strconcat"]}
+        stream = pipe(context=context)
+        assert next(stream) == {"input_schemas": {}, "dependencies": ["strconcat"]}
 
 
 class TestTargetRegistry:

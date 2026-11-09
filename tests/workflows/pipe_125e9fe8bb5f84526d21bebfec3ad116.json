@@ -45,6 +45,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "textinput1": {
+            "default": "defunkt",
+            "description": "Enter Text",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-142": {
             "conf": {
@@ -110,25 +117,9 @@
         },
         "sw-479": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "defunkt"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "textinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Enter Text"
                 }
             },
             "family": "module",

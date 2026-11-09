@@ -11,19 +11,69 @@ from attrs import define, field
 
 from riko.bado._util import maybe_aclosing
 from riko.base._exceptions import PipelineStateError
+from riko.coercion._sequences import listize
+from riko.definitions._context import DEPENDENCY_MODES, INPUT_MODES
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
+from riko.types._enums import ExecutionMode
+from riko.types._frozendict import thaw
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
     from types import NotImplementedType
 
     from riko.definitions._pipeline_definition import PipelineDefinition
+    from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import InputLike, PipelineStream
     from riko.types._wrappers import Dispatcher
 
 _SUBJECT = "pipeline run"
+
+
+def build_description(
+    flow: Workflow, mode: ExecutionMode
+) -> dict[str, object] | list[str]:
+    """
+    Builds what a describe mode reports about ``flow``.
+
+    Each call builds a fresh description, so a caller may change it freely.
+
+    Args:
+
+        flow: The ``Workflow`` to describe.
+        mode: The describe mode, e.g. ``ExecutionMode.DESCRIBE_INPUTS``.
+
+    Returns:
+
+        The inputs' schemas under ``DESCRIBE_INPUTS``, the names of the modules and
+        stored workflows the nodes run under ``DESCRIBE_DEPENDENCIES``, or both, keyed
+        ``"input_schemas"`` and ``"dependencies"``, under ``DESCRIBE``.
+
+    Examples:
+
+        >>> from riko import ExecutionMode, Workflow
+        >>>
+        >>> raw = {"input_schemas": {"q": "string"}, "nodes": [{"name": "forever"}]}
+        >>> flow = Workflow.parse(raw)
+        >>> build_description(flow, ExecutionMode.DESCRIBE)
+        {'input_schemas': {'q': {'type': 'string'}}, 'dependencies': ['forever']}
+
+    """
+    schemas: dict[str, object] = thaw(flow.input_schemas)
+    dependencies = list(flow.dependencies)
+    description: dict[str, object] | list[str]
+
+    if mode in INPUT_MODES and mode in DEPENDENCY_MODES:
+        description = {"input_schemas": schemas, "dependencies": dependencies}
+    elif mode in INPUT_MODES:
+        description = schemas
+    elif mode in DEPENDENCY_MODES:
+        description = dependencies
+    else:
+        raise ValueError(f"Unexpected describe {mode=}.")
+
+    return description
 
 
 def run_pipeline[T](
@@ -52,12 +102,15 @@ def run_pipeline[T](
 
     Yields:
 
-        The items produced at the definition's default output.
+        - When ExecutionMode.RUN: The items produced at the definition's default output.
+        - When ExecutionMode.DESCRIBE_DEPENDENCIES: each dependency.
+        - Else: the one description (see ``build_description``).
 
     Raises:
 
-        InvalidPipelineError: If the definition's workflow cannot be planned, or no
-            ``seed`` is given and the definition is not self-starting.
+        InvalidPipelineError: If the definition's workflow cannot be planned, a declared
+            input is missing or invalid, or no ``seed`` is given and the definition is
+            not self-starting.
 
     Examples:
 
@@ -69,10 +122,15 @@ def run_pipeline[T](
         [{'count': 1}]
 
     """
-    plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
+    if (mode := definition.mode) is ExecutionMode.RUN:
+        plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
+        settings = definition.settings
 
-    with SyncExecution(definition.context, settings=definition.settings) as execution:
-        yield from execution.run(plan, seed=seed)
+        with SyncExecution(definition.context, settings=settings) as execution:
+            yield from execution.run(plan, seed=seed)
+    else:
+        description = build_description(definition.workflow, mode)
+        yield from listize(description)  # pyright: ignore[reportReturnType] (not ``T``)
 
 
 async def arun_pipeline[T](
@@ -103,12 +161,15 @@ async def arun_pipeline[T](
 
     Yields:
 
-        The items produced at the definition's default output.
+        - When ExecutionMode.RUN: The items produced at the definition's default output.
+        - When ExecutionMode.DESCRIBE_DEPENDENCIES: each dependency.
+        - Else: the one description (see ``build_description``).
 
     Raises:
 
-        InvalidPipelineError: If the definition's workflow cannot be planned, or no
-            ``seed`` is given and the definition is not self-starting.
+        InvalidPipelineError: If the definition's workflow cannot be planned, a declared
+            input is missing or invalid, or no ``seed`` is given and the definition is
+            not self-starting.
 
     Examples:
 
@@ -126,15 +187,21 @@ async def arun_pipeline[T](
         [{'count': 1}]
 
     """
-    plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
-    execution = AsyncExecution(definition.context, settings=definition.settings)
+    if (mode := definition.mode) is ExecutionMode.RUN:
+        plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
+        execution = AsyncExecution(definition.context, settings=definition.settings)
 
-    async with execution:
-        stream = await execution.arun(plan, seed=seed)
+        async with execution:
+            stream = await execution.arun(plan, seed=seed)
 
-        async with maybe_aclosing(stream) as items:
-            async for item in items:
-                yield item
+            async with maybe_aclosing(stream) as items:
+                async for item in items:
+                    yield item
+    else:
+        description = build_description(definition.workflow, mode)
+
+        for item in listize(description):
+            yield item  # pyright: ignore[reportReturnType] (not ``T``)
 
 
 @define(eq=False)
@@ -452,4 +519,4 @@ class _PipelineRun[T]:
         await self.stream.aclose()
 
 
-__all__ = ["arun_pipeline", "run_pipeline"]
+__all__ = ["arun_pipeline", "build_description", "run_pipeline"]

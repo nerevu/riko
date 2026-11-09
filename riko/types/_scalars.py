@@ -11,29 +11,18 @@ from typing_extensions import TypeIs
 from riko.base._typing import HashableType
 
 type AnyStr = str | bytes
-type BasicValue = str | int
-type NumLike = float | int | Decimal
-type Scalar = str | int | float | Decimal
-type Temporal = datetime | date | struct_time
-type DateLike = str | int | datetime | date | struct_time
+type BasicValue = int | str
+type NumLike = int | float | Decimal
+type Scalar = NumLike | str
+type Temporal = date | datetime | struct_time
+type DateLike = BasicValue | Temporal
 type SortableValue = Scalar | Temporal
 type PrimitiveValue = SortableValue | None
 type NonNullHashable = (
-    bool
-    | int
-    | float
-    | Decimal
-    | str
-    | bytes
-    | date
-    | datetime
-    | struct_time
-    | PurePath
-    | UUID
-    | tuple[Hashable, ...]
+    bool | Scalar | bytes | Temporal | PurePath | UUID | tuple[Hashable, ...]
 )
 type Hashable = NonNullHashable | None
-type DateDict = dict[str, str | int | date | bool]
+type DateDict = dict[str, bool | int | str | date]
 
 
 def is_non_null_hashable(value: object) -> TypeIs[NonNullHashable]:

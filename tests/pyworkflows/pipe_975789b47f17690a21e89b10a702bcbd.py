@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.definitions._inputs import resolve_inputs
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
@@ -28,27 +29,26 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = [("", "q", "Status update", "text", "Here's #: some #hashtags to play #with")]
+INPUT_SCHEMAS = {
+    "q": {
+        "default": "Here's #: some #hashtags to play #with",
+        "description": "Status update",
+        "type": "string",
+    }
+}
 DEPENDENCIES = ["filter", "input", "itembuilder", "regex", "rename", "tokenizer"]
 
 
 @workflow(subtype="transformer")
 def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
+        inputs = resolve_inputs(
+            INPUT_SCHEMAS, None if context is None else context.inputs
+        )
         sw_417 = _input(
             item,
-            conf=InputRawConf(
-                {
-                    "debug": {"type": "text", "value": ""},
-                    "default": {
-                        "type": "text",
-                        "value": "Here's #: some #hashtags to play #with",
-                    },
-                    "name": {"type": "text", "value": "q"},
-                    "position": {"type": "float", "value": ""},
-                    "prompt": {"type": "text", "value": "Status update"},
-                }
-            ),
+            conf=InputRawConf({"input_key": {"type": "text", "value": "q"}}),
+            inputs=inputs,
             context=context,
         )
         sw_424 = itembuilder(
@@ -152,11 +152,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_501
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

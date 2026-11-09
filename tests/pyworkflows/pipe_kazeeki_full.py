@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pprint import pprint
+from typing import TYPE_CHECKING
 
 from riko import Pipeline
 from riko.base._paths import get_path
@@ -28,8 +29,11 @@ from riko.types.modules import (
     TokenizerConf,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 DEF_CUR_CODE = "USD"
-INPUTS: list = []
+INPUT_SCHEMAS: dict = {}
 DEPENDENCIES = ["rename", "regex"]
 
 
@@ -372,13 +376,13 @@ def print_content(output):
 def pipe(context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         context = Context() if context is None else context
-        output: list | dict = list(build().with_context(context))
+        output: Iterable[object] = list(build().with_context(context))
     elif context.mode is ExecutionMode.DESCRIBE:
-        output = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        output = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        output = INPUTS
+        output = iter([INPUT_SCHEMAS])
     else:
-        output = DEPENDENCIES
+        output = iter(DEPENDENCIES)
 
     return output
 

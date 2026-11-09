@@ -456,7 +456,7 @@ def def_from_require[D, R](
         >>> optional_mapping("abc")
         Traceback (most recent call last):
         ...
-        TypeError: value must be a mapping
+        TypeError: value must be a mapping, not str
         >>> optional_count = def_from_require(require_instance, int, default=0)
         >>> optional_count(None), optional_count(3)
         (0, 3)

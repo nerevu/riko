@@ -23,6 +23,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "gid": {
+            "default": "1276",
+            "description": "MP Guardian ID",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-579": {
             "conf": {
@@ -59,25 +66,9 @@
         },
         "sw-606": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "1276"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "gid"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "MP Guardian ID"
                 }
             },
             "family": "module",

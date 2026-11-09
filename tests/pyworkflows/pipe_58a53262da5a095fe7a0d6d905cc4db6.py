@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
+INPUT_SCHEMAS = {}
 DEPENDENCIES = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
 
 
@@ -106,11 +106,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         sw_625 = reverse(sw_596, conf={}, context=context)
         _OUTPUT = sw_625
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

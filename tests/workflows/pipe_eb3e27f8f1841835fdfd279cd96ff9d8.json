@@ -56,28 +56,24 @@
             }
         }
     ],
+    "input_schemas": {
+        "q": {
+            "default": "maverick",
+            "description": "Caption search term",
+            "type": "string"
+        },
+        "url": {
+            "default": "file://riko/data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml",
+            "description": "Caption URL",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-521": {
             "conf": {
-                "debug": {
-                    "type": "url",
-                    "value": ""
-                },
-                "default": {
-                    "type": "url",
-                    "value": "file://riko/data/rsc-ne-scotland.org.uk_mashe_ititle_xml_jisc10bean.xml"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "url"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Caption URL"
                 }
             },
             "family": "module",
@@ -202,25 +198,9 @@
         },
         "sw-621": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "maverick"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "q"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Caption search term"
                 }
             },
             "family": "module",

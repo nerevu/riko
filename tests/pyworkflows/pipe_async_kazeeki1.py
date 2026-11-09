@@ -15,7 +15,7 @@ from tests.pyworkflows._pipe_kazeeki import fetchdata_conf, regex_conf, rename_c
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-INPUTS: list = []
+INPUT_SCHEMAS: dict = {}
 DEPENDENCIES = ["fetchdata", "rename", "regex"]
 
 
@@ -29,9 +29,11 @@ def async_pipe(context: Context | None = None, **_) -> AsyncIterator:
     if context is None or context.mode is ExecutionMode.RUN:
         stream = aiter(build().with_context(Context() if context is None else context))
     elif context.mode is ExecutionMode.DESCRIBE:
-        stream = as_async([{"inputs": INPUTS, "dependencies": DEPENDENCIES}])
+        stream = as_async(
+            [{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}]
+        )
     elif context.describe_input:
-        stream = as_async(INPUTS)
+        stream = as_async([INPUT_SCHEMAS])
     else:
         stream = as_async(DEPENDENCIES)
 

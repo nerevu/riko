@@ -1,12 +1,17 @@
 # vim: sw=4:ts=4:expandtab
 """Hand-written sync Kazeeki workflow module (variant 1)."""
 
+from typing import TYPE_CHECKING
+
 from riko import Pipeline
 from riko.definitions._context import Context
 from riko.types._enums import ExecutionMode
 from tests.pyworkflows._pipe_kazeeki import fetchdata_conf, regex_conf, rename_conf
 
-INPUTS: list = []
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+INPUT_SCHEMAS: dict = {}
 DEPENDENCIES = ["fetchdata", "rename", "regex"]
 
 
@@ -19,13 +24,13 @@ def build() -> Pipeline:
 def pipe(context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
         context = Context() if context is None else context
-        output: list | dict = list(build().with_context(context))
+        output: Iterable[object] = list(build().with_context(context))
     elif context.mode is ExecutionMode.DESCRIBE:
-        output = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        output = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        output = INPUTS
+        output = iter([INPUT_SCHEMAS])
     else:
-        output = DEPENDENCIES
+        output = iter(DEPENDENCIES)
 
     return output
 

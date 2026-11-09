@@ -34,8 +34,8 @@ _WORKFLOW_BUILDERS = frozenset(
     {
         "Workflow",
         "load_workflow",
-        "migrate_v1_to_v2",
-        "normalize_workflow",
+        "Workflow.parse",
+        "Workflow.from_raw",
         "require_workflow",
     }
 )

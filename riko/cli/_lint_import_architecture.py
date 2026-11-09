@@ -17,10 +17,10 @@ from riko.base._graph import (
     SetGraph,
     cyclic_nodes,
     descendants,
-    freeze_graph,
     gen_redundant_edges,
 )
 from riko.base._iterutils import gen_non_null
+from riko.types._frozendict import freeze
 
 from ._import_graph import (
     InvalidArchitectureError,
@@ -34,7 +34,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from pathlib import Path
 
-_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze_graph(_RAW_LAYER_DEPENDENCIES)
+_LAYER_DEPENDENCIES: FrozenGraph[str] = freeze(
+    _RAW_LAYER_DEPENDENCIES, mapping_value_func=frozenset
+)
 
 
 class ViolationCodes(StrEnum):
@@ -279,9 +281,9 @@ def load_architecture_report(
 
     return ArchitectureReport(
         declared=dependencies,
-        observed=freeze_graph(observed, key=_graph_sort_key),
-        type_only=freeze_graph(type_only, key=_graph_sort_key),
-        local_only=freeze_graph(local_only, key=_graph_sort_key),
+        observed=freeze(observed, key=_graph_sort_key),
+        type_only=freeze(type_only, key=_graph_sort_key),
+        local_only=freeze(local_only, key=_graph_sort_key),
         unclassified=tuple(sorted(unclassified, key=_module_sort_key)),
         violations=tuple(sorted(issues, key=_issue_sort_key)),
     )

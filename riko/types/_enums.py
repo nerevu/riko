@@ -166,7 +166,7 @@ class ExecutionMode(StrEnum):
     """
     Whether a workflow module's pipe runs its workflow or only describes it.
 
-    A ``Pipeline`` ignores the describe modes and always runs.
+    A ``Pipeline`` run under a describe mode yields the description and runs nothing.
 
     Examples:
 

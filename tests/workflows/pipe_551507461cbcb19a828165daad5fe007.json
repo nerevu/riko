@@ -23,6 +23,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "urlinput1": {
+            "default": "file://riko/data/www.bbc.co.uk_news.html",
+            "description": "Enter a URL",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-234": {
             "conf": {
@@ -37,25 +44,9 @@
         },
         "sw-242": {
             "conf": {
-                "debug": {
-                    "type": "url",
-                    "value": "file://riko/data/www.bbc.co.uk_news.html"
-                },
-                "default": {
-                    "type": "url",
-                    "value": "file://riko/data/www.bbc.co.uk_news.html"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "urlinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Enter a URL"
                 }
             },
             "family": "module",

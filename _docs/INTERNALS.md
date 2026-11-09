@@ -84,12 +84,13 @@ The compiler implementation lives under `riko/runtime/`; workflow loading lives 
 `riko/definitions/`:
 
 - `riko/runtime/_compile.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus
-  `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning
+- `riko/definitions/_workflow_definition.py` —
+  `Workflow.from_raw`/`parse`/`load`/`serialize` (`Workflow.parse` also reads a
+  `PipeDef`, a pipe definition), over the data-returning
   `_normalize.py`/`_migrate.py`/`_serialize.py`.
-- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges,
-  and outputs; `Workflow.index` builds it, and validation and execution planning both
-  read it.
+- `WorkflowIndex` (`riko/types/_workflow.py`) — derives the topology from node ids,
+  edges, and outputs; `Workflow.index` builds it, and validation and execution planning
+  both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
 - `riko/types/_pipedef.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
   all three are exported on `riko.types`.

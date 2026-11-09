@@ -26,27 +26,22 @@ from typing import TYPE_CHECKING, Literal, Self, overload
 
 from attrs import define, evolve, field
 
-from riko.base._guards import require_mapping
-from riko.base._require_guards import def_from_require
 from riko.base._typing import resolve_enum
 from riko.types._enums import ExecutionMode
-from riko.types._frozendict import (
-    FrozenDict,
-    freeze,
-    instances_freezer,
-    mapping_converter,
-)
+from riko.types._frozendict import FrozenDict, instances_freezer, mapping_converter
 from riko.types._resource import is_lifecycle_factory
 
+from ._inputs import freeze_inputs
 from ._resource_definition import Resource, ReusableResource
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from riko.types._frozendict import FrozenInputs
     from riko.types._resource import LifecycleFactory
-    from riko.types._values import Inputs
 
     from ._resource_definition import ResourceDefinition, ReusableResources
+    from ._workflow_definition import Inputs
 
 type ResourcesInput = Mapping[str, ReusableResource[object]]
 
@@ -57,10 +52,6 @@ EMPTY_RESOURCES: ReusableResources = FrozenDict()
 _normalize_mode = partial(
     resolve_enum, ExecutionMode, default=ExecutionMode.RUN, error=ValueError
 )
-_input_converter = [
-    def_from_require(require_mapping, what="Context 'inputs'", error=TypeError),
-    freeze,
-]
 _freezer = instances_freezer(ReusableResource, "Context resource", error=TypeError)
 _resources_converter = mapping_converter(
     _freezer, ResourcesInput, what="Context 'resources'", error=TypeError
@@ -74,12 +65,15 @@ class Context:
 
     Attributes:
 
-        mode: Whether a workflow module's pipe runs its workflow or only describes it
-            (a ``Pipeline`` always runs).
+        mode: Whether a workflow module's pipe or a ``Pipeline`` runs its workflow or
+            only describes it. Under a describe mode, a ``Pipeline`` run yields the
+            description and runs nothing.
 
-        inputs: Read-only input values an ``input`` module reads in place of its
-            default, or ``None`` when none were given (an ``input`` module then
-            prompts unless ``test``).
+        inputs: Read-only JSON input values keyed by input name. They fill the
+            workflow's inputs and are what an ``input`` module reads in place of its
+            default. When not given, an ``input`` module whose input has no schema
+            prompts unless ``test`` is set; given ``{}``, it uses its default instead
+            of prompting.
 
         test: Whether to use defaults instead of prompting.
 
@@ -88,7 +82,7 @@ class Context:
     """
 
     mode: ExecutionMode = field(default=ExecutionMode.RUN, converter=_normalize_mode)
-    inputs: Inputs | None = field(default=None, converter=_input_converter)
+    inputs: FrozenInputs | None = field(default=None, converter=freeze_inputs)
     test: bool = field(default=False, converter=bool)
     resources: ReusableResources = field(
         default=EMPTY_RESOURCES,
@@ -233,7 +227,7 @@ class Context:
 
     @property
     def describe_input(self) -> bool:
-        """Whether a workflow module's pipe reports its input declarations instead."""
+        """Whether a workflow module's pipe reports its inputs' schemas instead."""
         return self.mode in INPUT_MODES
 
     @property

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import (
     is_known_sequence,
     is_mapping,
@@ -170,7 +171,9 @@ def resolve_sentinel[D, VT](
         else:
             parsed = default
     elif is_type_value(value):
-        parsed = value["value"]
+        if is_mapping(parsed := value["value"]):
+            msg = f"unresolved input reference {dict(parsed)!r}: run it in a workflow "
+            raise InvalidPipelineError(msg + "that gives the input a schema")
 
         if (
             not (type_ := value.get("type"))

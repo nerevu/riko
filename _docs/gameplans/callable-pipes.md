@@ -280,14 +280,13 @@ definition:
 def transform(item: Item, *, context: Context, **kwargs) -> Item: ...
 ```
 
-**Undecided (2026-10-16; decided by R4D, assigned 2026-10-22):** the R4C `map` passes no
-`context=` (§ Settled `map` shape). Whether a callable node should ever receive
-`context=` is open. R4D decides it together with the `{"input": name}` reference
-grammar: if that grammar applies to a callable node's keyword arguments
-(`pipeline.map(search, q={"input": "q"})` calls `search(item, q=<value>)`), run input
-values reach a callable declaratively and the likely ruling is no `context=`; R4D adopts
-`context=` only for a concrete need references cannot express (e.g. reading
-`Context.mode`). See [implementation-sequence.md](implementation-sequence.md) R4D.
+**Decided (R4D, 2026-11-06):** a callable node never receives `context=`. Run input
+values reach it declaratively: `{"input": name}` references apply to a callable node's
+keyword arguments as they do to module configuration, so
+`pipeline.with_input_schemas(q={"type": "string"}).map(search, q={"input": "q"})` calls
+`search(item, q=<value>)`. Revisit only for a concrete need references cannot express
+(e.g. reading `Context.mode`). See
+[implementation-sequence.md](implementation-sequence.md) R4D.
 
 Do not turn `Context` into mutable per-item execution state. Position, item key,
 generation, and observation live in the private `_FeedItem` runtime wrapper; task

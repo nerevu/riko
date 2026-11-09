@@ -15,7 +15,7 @@ from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist, async_map
 from riko.base._config import get_worker_cnt, settings
 from riko.base._paths import get_path
-from riko.definitions._workflow_definition import normalize_workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.modules.regex import pipe as regex
@@ -25,7 +25,6 @@ from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from riko.definitions._workflow_definition import Workflow
     from riko.types._streams import Item, Items
     from riko.types._workflow import RawEdge, RawNode, RawWorkflow
     from riko.types._wrappers import (
@@ -97,7 +96,7 @@ def build_fanin() -> Workflow:
         "edges": edges,
         "outputs": {"default": {"node": UNION_ID, "port": "out"}},
     }
-    return normalize_workflow(raw)
+    return Workflow.from_raw(raw)
 
 
 fanin: Workflow = build_fanin()

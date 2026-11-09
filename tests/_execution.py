@@ -27,12 +27,12 @@ if TYPE_CHECKING:
         AsyncIterator,
         Awaitable,
         Generator,
-        Mapping,
         Sequence,
     )
 
     from riko.definitions._module_definition import ModuleDefinition
     from riko.definitions._settings import ExecutionSettings
+    from riko.definitions._workflow_definition import Outputs
     from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
@@ -90,7 +90,7 @@ def build_workflow(
     edges: Sequence[StreamEdge] = (),
     resources: Sequence[str] = (),
     *,
-    outputs: Mapping[str, Endpoint] | None = None,
+    outputs: Outputs | None = None,
 ) -> Workflow:
     if outputs is None:
         outputs = {"default": Endpoint(nodes[-1].id, "out")}

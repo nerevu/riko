@@ -19,7 +19,7 @@ from math import inf
 from operator import itemgetter, methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
-from types import MappingProxyType
+from types import SimpleNamespace
 from typing import (
     TYPE_CHECKING,
     ClassVar,
@@ -48,8 +48,8 @@ from riko.base._exceptions import (
     IdentityEncodingError,
     InvalidPipelineError,
 )
-from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
-from riko.base._guards import require_mapping, require_sequence
+from riko.base._graph import cyclic_nodes, descendants, topological_sort
+from riko.base._guards import require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import get_path
@@ -100,8 +100,8 @@ from riko.types._enums import CastType, Executor
 from riko.types._frozendict import FrozenDict, freeze
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
-from riko.types._workflow import Edge as EdgeBase
-from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
+from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
+from riko.types._workflow import PortEdge as EdgeBase
 from tests import ROUND_TRIPS
 from tests._execution import build_workflow
 from tests._loopback import ForwardOnly
@@ -118,7 +118,7 @@ _INVALID: list[tuple[Func[object], object]] = [
     (require_strlike, 1),
     (require_finite, float("nan")),
     (require_mapping, "abc"),
-    (require_sequence, "abc"),
+    (require_listlike, "abc"),
 ]
 
 _UNSORTABLE = object()
@@ -476,6 +476,18 @@ class TestCastValue:
     @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
     def test_overflow_degrades_to_the_default(self, content, type_, expected):
         assert cast_value(content, type_) == expected
+
+    def test_a_datetime_casts_to_its_date(self):
+        moment = datetime(2010, 10, 14, 5, tzinfo=UTC)
+        assert cast_value(moment, CastType.DATE) == date(2010, 10, 14)
+
+    def test_a_location_value_is_left_uncast(self):
+        conf = {"type": "location", "value": "isle of wight, uk"}
+        assert resolve_conf(None, conf=conf) == "isle of wight, uk"
+
+    def test_permissive_freeze_keeps_a_frozen_mapping(self):
+        frozen = FrozenDict({"a": 1})
+        assert freeze(frozen) is frozen
 
 
 class TestOverloadTypes:
@@ -1123,6 +1135,11 @@ class TestGenNonNull:
         with pytest.raises(TypeError, match=match):
             list(gen_non_null(items, **positions))
 
+    def test_a_position_then_an_attribute_selects_a_field(self):
+        items = [(SimpleNamespace(n=1),), (SimpleNamespace(n=None),)]
+        selected = gen_non_null(items, cmp_pos=0, cmp_attr="n", arg_pos=0, arg_attr="n")
+        assert list(selected) == [1]
+
 
 DESCENDANT_CASES = [
     pytest.param("a", {"a": {"b"}, "b": {"c"}}, frozenset({"b", "c"}), id="transitive"),
@@ -1137,8 +1154,8 @@ class TestGraph:
         assert descendants(node, graph) == expected
 
     def test_cyclic_nodes_accepts_a_frozen_graph(self):
-        graph = freeze_graph({"a": {"b"}, "b": {"a"}, "c": set()})
-        assert isinstance(graph, MappingProxyType)
+        graph = freeze({"a": {"b"}, "b": {"a"}, "c": set()})
+        assert isinstance(graph, FrozenDict)
         assert sorted(cyclic_nodes(graph)) == ["a", "b"]
 
     def test_topological_sort_key_orders_ready_nodes(self):
@@ -1172,16 +1189,16 @@ class TestGraphIndex:
             return descendants(source, graph)
 
         monkeypatch.setattr(workflow_types, "descendants", counting)
-        edge = GraphEdge("a", "b", "out", "in")
+        edge = WorkflowEdge("a", "b", "out", "in")
         outputs = {"default": Endpoint("b", "out")}
-        index = GraphIndex(["a", "b"], [edge], outputs)
+        index = WorkflowIndex(["a", "b"], [edge], outputs)
 
         assert index.cyclic == ()
         assert index.order == ("a", "b")
         assert calls == []
         assert index.required["default"] == ("a", "b")
         assert len(calls) == 1
-        assert index == GraphIndex(["a", "b"], [edge], outputs)
+        assert index == WorkflowIndex(["a", "b"], [edge], outputs)
 
     def test_only_a_default_port_edge_closes_a_node_to_a_seed(self) -> None:
         edges = (

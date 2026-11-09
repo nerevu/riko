@@ -32,6 +32,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, ClassVar, Final, Literal, NewType, Required, TypedDict
 
 from attrs import define, field
+from typing_extensions import TypeIs
 
 from riko.base._funcutils import map_values
 from riko.base._graph import (
@@ -42,6 +43,7 @@ from riko.base._graph import (
     reverse_graph,
     topological_sort,
 )
+from riko.base._guards import is_mapping
 from riko.base._require_guards import (
     require_instance,
     require_nonblank_str,
@@ -52,10 +54,23 @@ from riko.base._require_guards import (
 from ._frozendict import FrozenDict, freeze
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Mapping
+
+    from riko.definitions._resource_definition import ResourcesLike
+    from riko.definitions._workflow_definition import (
+        RawInputSchemas,
+        RawNodes,
+        RawOutputs,
+        RawPortEdges,
+    )
 
     from ._enums import BackendLike, FmtLike, StrLike
-    from ._frozendict import FrozenSetMapping, FrozenTupleMapping
+    from ._frozendict import (
+        FrozenOutputs,
+        FrozenSetMapping,
+        FrozenWorkflowEdgeCollection,
+        FrozenWorkflowEdges,
+    )
     from ._io import PathLike
     from ._options import RawCallOptions
     from ._pipedef import Embed
@@ -82,9 +97,36 @@ ResolvedWorkflow = NewType("ResolvedWorkflow", ModuleType)
 
 
 class InputRef(TypedDict):
-    """A structural reference to a declared workflow input."""
+    """A structural reference to a workflow input."""
 
     input: str
+
+
+def is_input_ref(value: object) -> TypeIs[InputRef]:
+    """
+    Checks whether ``value`` is a reference to a workflow input.
+
+    Args:
+
+        value: The value to check.
+
+    Returns:
+
+        Whether ``value`` is a mapping with only a string ``input`` key.
+
+    Examples:
+
+        >>> is_input_ref({"input": "query"})
+        True
+        >>> is_input_ref({"input": "q", "x": 1})
+        False
+
+    """
+    return (
+        is_mapping(value)
+        and set(value) == {"input"}
+        and isinstance(value["input"], str)
+    )
 
 
 class RawEndpoint(TypedDict, total=False):
@@ -120,17 +162,17 @@ class RawNode(TypedDict, total=False):
     format: FmtLike
     mode: str
     keys: StrLike
-    resources: str | Sequence[str] | Mapping[str, str]
+    resources: ResourcesLike
 
 
 class RawWorkflow(TypedDict, total=False):
     """Shorthand workflow mapping that is normalized into a ``Workflow``."""
 
-    nodes: Sequence[RawNode] | Mapping[str, RawNode]
-    outputs: Mapping[str, RawEndpoint]
-    inputs: Mapping[str, str | Mapping[str, object]]
-    edges: Sequence[RawEdge]
-    resources: str | Sequence[str]
+    nodes: RawNodes
+    edges: RawPortEdges
+    outputs: RawOutputs
+    input_schemas: RawInputSchemas
+    resources: ResourcesLike
     version: str
 
 
@@ -176,7 +218,7 @@ _is_endpoint = validator_from_require(require_instance, Endpoint)
 
 
 @define(frozen=True, slots=True)
-class Edge:
+class PortEdge:
     """A directed edge from a source port to a target port; its family says how."""
 
     family: ClassVar[EdgeFamily]
@@ -248,7 +290,7 @@ def parse_port(port: Port) -> ParsedPort:
 
 
 @dataclass(frozen=True, slots=True)
-class GraphEdge:
+class WorkflowEdge:
     """
     One directed edge between two workflow node ports.
 
@@ -277,7 +319,7 @@ class GraphEdge:
 
 
 @define(frozen=True, slots=True)
-class GraphIndex:
+class WorkflowIndex:
     """
     Immutable, runtime-neutral interpretation of a workflow's topology.
 
@@ -308,8 +350,8 @@ class GraphIndex:
 
     Examples:
 
-        >>> edge = GraphEdge("a", "b", "out", "in")
-        >>> index = GraphIndex(["a", "b"], [edge], {"default": Endpoint("b", "out")})
+        >>> edge = WorkflowEdge("a", "b", "out", "in")
+        >>> index = WorkflowIndex(["a", "b"], [edge], {"default": Endpoint("b", "out")})
         >>> index.order, index.roots, index.leaves
         (('a', 'b'), ('a',), ('b',))
         >>> index.required["default"]
@@ -318,24 +360,26 @@ class GraphIndex:
     """
 
     node_ids: tuple[NodeId, ...] = field(converter=tuple)
-    edges: tuple[GraphEdge, ...] = field(converter=tuple)
-    outputs: FrozenDict[str, Endpoint] = field(converter=FrozenDict)
+    edges: FrozenWorkflowEdges = field(converter=tuple)
+    outputs: FrozenOutputs = field(converter=FrozenDict)
 
-    def _group_edges(self, key: Callable[[GraphEdge], str]) -> FrozenTupleMapping:
-        grouped: dict[str, list[GraphEdge]] = defaultdict(list)
+    def _freeze_edges(
+        self, key: Callable[[WorkflowEdge], str]
+    ) -> FrozenWorkflowEdgeCollection:
+        grouped: dict[str, list[WorkflowEdge]] = defaultdict(list)
 
         for edge in self.edges:
             grouped[key(edge)].append(edge)
 
-        return FrozenDict.from_frozen(map_values(tuple, grouped))
+        return freeze(grouped)
 
     @cached_property
-    def incoming(self) -> FrozenTupleMapping:
-        return self._group_edges(attrgetter("target"))
+    def incoming(self) -> FrozenWorkflowEdgeCollection:
+        return self._freeze_edges(attrgetter("target"))
 
     @cached_property
-    def outgoing(self) -> FrozenTupleMapping:
-        return self._group_edges(attrgetter("source"))
+    def outgoing(self) -> FrozenWorkflowEdgeCollection:
+        return self._freeze_edges(attrgetter("source"))
 
     @cached_property
     def downstream(self) -> FrozenSetMapping:
@@ -392,9 +436,9 @@ class GraphIndex:
 
         Examples:
 
-            >>> named = GraphEdge("a", "c", "out", "in:count")
-            >>> default = GraphEdge("b", "d", "out", "in")
-            >>> index = GraphIndex(["a", "b", "c", "d"], [named, default], {})
+            >>> named = WorkflowEdge("a", "c", "out", "in:count")
+            >>> default = WorkflowEdge("b", "d", "out", "in")
+            >>> index = WorkflowIndex(["a", "b", "c", "d"], [named, default], {})
             >>> index.is_open("c"), index.is_open("d")
             (True, False)
 
@@ -407,8 +451,6 @@ __all__ = [
     "DocumentNodeFamily",
     "EdgeFamily",
     "Endpoint",
-    "GraphEdge",
-    "GraphIndex",
     "InputRef",
     "NodeFamily",
     "NodeId",
@@ -416,5 +458,8 @@ __all__ = [
     "Port",
     "PortDirection",
     "ResourceName",
+    "WorkflowEdge",
+    "WorkflowIndex",
+    "is_input_ref",
     "parse_port",
 ]

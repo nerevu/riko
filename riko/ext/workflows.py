@@ -2,18 +2,17 @@
 """
 Provides workflow authoring for extension authors.
 
-This namespace contains the workflow node and edge classes, workflow normalization and
-migration, stored-workflow registration, and the dispatcher protocol. It is part of the
-SemVer-guaranteed ``riko.ext`` surface. Every name here is also re-exported from
-``riko.ext``.
+This namespace contains the workflow node and edge classes, stored-workflow
+registration, and the dispatcher protocol. It is part of the SemVer-guaranteed
+``riko.ext`` surface. Every name here is also re-exported from ``riko.ext``.
 
 Examples:
 
     Basic usage::
 
-        >>> from riko.ext import normalize_workflow
+        >>> from riko import Workflow
         >>>
-        >>> flow = normalize_workflow(
+        >>> flow = Workflow.from_raw(
         ...     {
         ...         "nodes": [
         ...             {"id": "fetch-1", "name": "fetch"},
@@ -42,7 +41,6 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._workflow_definition import migrate_v1_to_v2, normalize_workflow
 from riko.runtime._workflow_resolver import (
     register_workflow_store,
     reset_workflow_resolver,
@@ -60,8 +58,6 @@ __all__ = [
     "StreamEdge",
     "SubscribeNode",
     "WriteNode",
-    "migrate_v1_to_v2",
-    "normalize_workflow",
     "register_workflow_store",
     "reset_workflow_resolver",
 ]

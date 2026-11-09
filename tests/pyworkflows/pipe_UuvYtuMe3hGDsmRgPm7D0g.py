@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.definitions._inputs import resolve_inputs
 from riko.modules.csv import pipe as csv
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
@@ -27,24 +28,22 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = [("", "name", "Name", "text", "Lancaster")]
+INPUT_SCHEMAS = {
+    "name": {"default": "Lancaster", "description": "Name", "type": "string"}
+}
 DEPENDENCIES = ["csv", "filter", "input", "loop", "rename"]
 
 
 @workflow(subtype="transformer")
 def pipe(item: Item | None = None, context: Context | None = None, **_):
     if context is None or context.mode is ExecutionMode.RUN:
+        inputs = resolve_inputs(
+            INPUT_SCHEMAS, None if context is None else context.inputs
+        )
         sw_371 = _input(
             item,
-            conf=InputRawConf(
-                {
-                    "debug": {"type": "text", "value": ""},
-                    "default": {"type": "text", "value": "Lancaster"},
-                    "name": {"type": "text", "value": "name"},
-                    "position": {"type": "float", "value": ""},
-                    "prompt": {"type": "text", "value": "Name"},
-                }
-            ),
+            conf=InputRawConf({"input_key": {"type": "text", "value": "name"}}),
+            inputs=inputs,
             context=context,
         )
         sw_340 = csv(
@@ -189,11 +188,11 @@ def pipe(item: Item | None = None, context: Context | None = None, **_):
         )
         _OUTPUT = sw_573
     elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
+        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
     elif context.describe_input:
-        _OUTPUT = INPUTS
+        _OUTPUT = iter([INPUT_SCHEMAS])
     else:
-        _OUTPUT = DEPENDENCIES
+        _OUTPUT = iter(DEPENDENCIES)
 
     return _OUTPUT
 

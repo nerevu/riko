@@ -12,28 +12,19 @@
             }
         }
     ],
+    "input_schemas": {
+        "textinput1": {
+            "default": "yhoo",
+            "description": "Stock Symbol:",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-1": {
             "conf": {
-                "default": {
-                    "type": "text",
-                    "value": "yhoo"
-                },
                 "input_key": {
                     "type": "text",
                     "value": "textinput1"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "textinput1"
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Stock Symbol:"
-                },
-                "test": {
-                    "type": "bool",
-                    "value": "true"
                 },
                 "type": {
                     "type": "text",

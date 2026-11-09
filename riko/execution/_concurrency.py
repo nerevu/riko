@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from riko.definitions._context import Context
+    from riko.types._wrappers import Func
 
     from ._prepared import ExecutionPlan, PreparedNode
 
@@ -27,7 +28,7 @@ __all__ = ["build_item_call", "require_process_safe", "run_item", "run_shipped_i
 
 
 @lru_cache(maxsize=config.shipped_call_cache_size)
-def _load_call(payload: bytes) -> Callable[[object], Iterable[object]]:
+def _load_call(payload: bytes) -> Func[Iterable[object]]:
     return pickle.loads(payload)  # noqa: S301
 
 

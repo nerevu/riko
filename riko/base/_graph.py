@@ -6,7 +6,7 @@ Derived from the public-domain implementation by Paul Harrison.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Hashable, Iterable, Iterator, Mapping
+from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping, Sequence
 from graphlib import CycleError, TopologicalSorter
 from itertools import chain
 from types import MappingProxyType
@@ -18,17 +18,19 @@ from ._funcutils import map_values
 from ._iterutils import sort_stably
 
 if TYPE_CHECKING:
-    from _typeshed import SupportsRichComparison
+    from riko.types._frozendict import FrozenDict, SortKey
 
-type Nodes[T: Hashable] = Collection[T]
-type Graph[T: Hashable] = Mapping[T, Nodes[T]]
-type NodeList[T: Hashable] = list[T]
-type NodeSet[T: Hashable] = set[T]
-type SetGraph[T: Hashable] = Mapping[T, NodeSet[T]]
-type SCC[T: Hashable] = list[tuple[T, ...]]
-type FrozenGraph[T: Hashable] = MappingProxyType[T, frozenset[T]]
-type AnyGraph[T] = Graph[T] | FrozenGraph[T]
-type SortKey[T] = Callable[[T], SupportsRichComparison] | None
+type GraphNode[T: Hashable] = T
+type GraphEdge[T] = tuple[GraphNode[T], GraphNode[T]]
+type GraphNodes[T: Hashable] = Collection[GraphNode[T]]
+type NodeList[T: Hashable] = list[GraphNode[T]]
+type NodeSet[T: Hashable] = set[GraphNode[T]]
+type FrozenNodeSet[T: Hashable] = frozenset[GraphNode[T]]
+type SCC[T: Hashable] = list[tuple[GraphNode[T], ...]]
+type Graph[T: Hashable] = Mapping[GraphNode[T], GraphNodes[T]]
+type SetGraph[T: Hashable] = Mapping[GraphNode[T], NodeSet[T]]
+type FrozenGraph[T: Hashable] = FrozenDict[T, FrozenNodeSet[T]]
+type AnyGraph[T: Hashable] = Graph[T] | FrozenGraph[T]
 
 
 def _build_digraph[T: Hashable](graph: Graph[T]) -> nx.DiGraph[T]:
@@ -136,7 +138,7 @@ def native_topological_sort[T: Hashable](
         static_order = list(ts.static_order())
     else:
         ts.prepare()
-        static_order: list[T] = []
+        static_order: Sequence[T] = []
 
         while ts.is_active():
             ready = sorted(ts.get_ready(), key=key, reverse=not reverse)
@@ -216,7 +218,9 @@ def topological_sort[T: Hashable](
     return result
 
 
-def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> list[T]:
+def cyclic_nodes[T: Hashable](
+    graph: Graph[T], groups: SCC[T] | None = None
+) -> NodeList[T]:
     """
     Collects the nodes that lie on a cycle.
 
@@ -246,7 +250,7 @@ def cyclic_nodes[T: Hashable](graph: Graph[T], groups: SCC[T] | None = None) -> 
     return list(chain.from_iterable(filter(is_cyclic, _groups)))
 
 
-def get_cycle[T: Hashable](source: T, graph: AnyGraph[T]) -> list[T]:
+def get_cycle[T: Hashable](source: GraphNode[T], graph: AnyGraph[T]) -> NodeList[T]:
     """
     Gets the first cycle reachable from a node.
 
@@ -277,8 +281,8 @@ def get_cycle[T: Hashable](source: T, graph: AnyGraph[T]) -> list[T]:
 
 
 def edges_to_graph[T: Hashable](
-    edges: Iterable[tuple[T, T]], *nodes: T
-) -> dict[T, set[T]]:
+    edges: Iterable[tuple[T, T]], *nodes: GraphNode[T]
+) -> SetGraph[T]:
     """
     Builds a successor graph from ``(source, target)`` edges.
 
@@ -297,7 +301,7 @@ def edges_to_graph[T: Hashable](
         {'c': set(), 'a': {'b'}, 'b': set()}
 
     """
-    graph: dict[T, set[T]] = {node: set() for node in nodes}
+    graph: SetGraph[T] = {node: set() for node in nodes}
 
     for source, target in edges:
         graph.setdefault(source, set()).add(target)
@@ -306,7 +310,7 @@ def edges_to_graph[T: Hashable](
     return graph
 
 
-def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> dict[T, set[T]]:
+def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> SetGraph[T]:
     """
     Flips a graph's edges by mapping each node to the nodes that point to it.
 
@@ -324,7 +328,7 @@ def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> dict[T, set[T]]:
         {'a': set(), 'b': {'a'}}
 
     """
-    reversed_: dict[T, set[T]] = {node: set() for node in graph}
+    reversed_: SetGraph[T] = {node: set() for node in graph}
 
     for source, targets in graph.items():
         for target in targets:
@@ -333,7 +337,7 @@ def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> dict[T, set[T]]:
     return reversed_
 
 
-def leaves[T: Hashable](graph: AnyGraph[T]) -> list[T]:
+def leaves[T: Hashable](graph: AnyGraph[T]) -> NodeList[T]:
     """
     Collects the nodes nothing comes after.
 
@@ -354,7 +358,7 @@ def leaves[T: Hashable](graph: AnyGraph[T]) -> list[T]:
     return [node for node, successors in graph.items() if not successors]
 
 
-def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]]:
+def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[GraphEdge[T]]:
     """
     Lists the edges of an acyclic graph that another path already implies.
 
@@ -377,16 +381,9 @@ def gen_redundant_edges[T: Hashable](graph: AnyGraph[T]) -> Iterator[tuple[T, T]
     yield from sort_stably(set(digraph.edges).difference(kept))
 
 
-def freeze_graph[T: Hashable](
-    graph: AnyGraph[T], key: SortKey[T] = None
-) -> FrozenGraph[T]:
-    ordered = graph if key is None else {k: graph[k] for k in sorted(graph, key=key)}
-    return MappingProxyType(map_values(frozenset, ordered))
-
-
 def descendants[T: Hashable](
-    source: T, graph: AnyGraph[T] = MappingProxyType({})
-) -> frozenset[T]:
+    source: GraphNode[T], graph: AnyGraph[T] = MappingProxyType({})
+) -> FrozenNodeSet[T]:
     digraph = _build_digraph(graph)
 
     if source not in digraph:

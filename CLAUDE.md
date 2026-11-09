@@ -39,7 +39,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 Important concrete locations:
 
 - `export`/`Formats`/`list_formats`: `riko/runtime/_export.py`
-- graph index for validation and execution planning: `GraphIndex` in
+- graph index for validation and execution planning: `WorkflowIndex` in
   `riko/types/_workflow.py`, built by `Workflow.index`
 - v2 code generator behind `compile_workflow`/`compile-workflow`:
   `riko/runtime/_compile.py`
@@ -149,7 +149,7 @@ new permanent bullet here.
   idempotency, fingerprints) uses the shared canonical encoding layer in
   `riko/coercion/_canonical.py` (`canonicalize`/`canonical_bytes`/`digest`), never
   Python's randomized `hash()` or an ad-hoc encoder (`freeze*` names are reserved for
-  immutability, e.g. `freeze`/`freeze_json`). It distinguishes types Python conflates
+  immutability, e.g. `freeze`/`json_freeze`). It distinguishes types Python conflates
   and raises on unsupported/cyclic values; process-local caches may bypass instead of
   raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with no

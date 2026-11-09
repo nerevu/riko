@@ -20,21 +20,21 @@ from riko.bado._util import maybe_async
 from riko.base._config import FOREVER_ITEM
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
+from riko.definitions._context import Context
+from riko.definitions._inputs import resolve_inputs
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from riko.types._frozendict import FrozenDict
+from riko.types._frozendict import FrozenDict, FrozenWorkflowEdges
 from riko.types._workflow import parse_port
 
-from ._prepared import require_default_output_port
+from ._prepared import ExecutionPlan, require_default_output_port
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
     from anyio.from_thread import BlockingPortal
 
-    from riko.definitions._context import Context
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
-    from riko.types._workflow import GraphEdge
     from riko.types._wrappers import Func
 
 type SyncExecSteps[T] = dict[str, Iterator[T]]
@@ -126,6 +126,31 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         if self._closing:
             raise PipelineStateError("closing", action, subject="execution")
 
+    def _resolve_plan(
+        self, plan: ExecutionPlan
+    ) -> tuple[ExecutionPlan, Context | None]:
+        """
+        Resolves the plan's input values and the context its nodes run under.
+
+        The run's context is derived from the execution's. The execution's own context
+        stays as given, so a later run of another plan resolves that plan's defaults
+        rather than this run's values.
+        """
+        if plan.inputs is None:
+            given = None if self.context is None else self.context.inputs
+            values = resolve_inputs(plan.workflow.input_schemas, given)
+            resolved = plan.with_inputs(values)
+        else:
+            resolved = plan
+
+        if resolved.inputs is None:
+            context = self.context
+        else:
+            given_context = resolve_default(self.context, Context())
+            context = given_context.replace(inputs=resolved.inputs)
+
+        return resolved, context
+
     def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
         """Runs a cleanup callback and saves its failure for the shutdown report."""
         try:
@@ -203,7 +228,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
     def _resolve_node_inputs[I, V: (Iterator[Any], AsyncIterator[Any])](
         self,
-        incoming: tuple[GraphEdge, ...],
+        incoming: FrozenWorkflowEdges,
         steps: Mapping[str, V],
         seed: I | None,
         *,

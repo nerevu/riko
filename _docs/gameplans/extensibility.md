@@ -404,8 +404,11 @@ Graph `id` remains distinct from semantic fingerprint/version identity.
 
 ### E3.6 Inputs
 
-Workflow inputs are top-level typed declarations and execution values arrive through
-`Context.inputs`.
+Each workflow input has one schema, given under the workflow's top-level
+`input_schemas`, and execution values arrive through `Context.inputs`. "Schema" is the
+one user-visible term, always named by its owner (an input's schema, a field's schema);
+the reserved-terms row in `_docs/DOCUMENTATION_STANDARD.md` owns the wording (ruled
+2026-11-08).
 
 Structural references use:
 
@@ -413,10 +416,22 @@ Structural references use:
 {"input": "customer_id"}
 ```
 
-Canonical input declarations use full JSON Schema. Authoring shorthands normalize to
-that form. Requiredness is inferred from absence of a default; `default:null` means the
-input has a default of null and therefore must also be nullable. Canonical object
-schemas use `additionalProperties:false` where the contract is closed.
+An input's schema is full JSON Schema. Authoring shorthands normalize to that form.
+Requiredness is inferred from absence of a default; `default:null` means the input has a
+default of null and therefore must also be nullable. Canonical object schemas use
+`additionalProperties:false` where the contract is closed.
+
+Infer everything that can be inferred; authors write only what cannot (decided
+2026-11-08, owned by R4E, which brings conf-field schemas). A reference in a typed conf
+field takes that field's schema, and an input's schema is the merge of what the author
+wrote and every field the input feeds. Validation rejects a written schema the field
+does not accept, and an input feeding fields no single value satisfies. Serialization
+writes the merged schema, so a stored document stays self-describing. Describe-inputs
+mode reports the merged schema, whether the input is required, and every field that uses
+it: one view, never a module-side and a workflow-side copy. Until R4E, every referenced
+input needs a written schema. A migrated `PipeDef` `input` module's v1 cast type maps
+into its schema (`int` → integer, `float`/`decimal` → number, `bool` → boolean, `url` →
+URI string; free-form types such as `date` stay strings the node casts).
 
 ### E3.7 Targets and Formats
 
@@ -513,7 +528,8 @@ missing referenced node
 more than one StreamEdge into one target stream port
 invalid/missing required fan-in positions
 undeclared resource slot
-unresolved Target/Resource/Input reference
+unresolved Target/Resource reference, or an input reference with no schema (none written
+and, once conf-field schemas exist, none the field supplies)
 invalid registered module conf when the module contract is available (R4E)
 invalid registered action params when the action contract is available
 invalid registered target configuration when the target contract is available

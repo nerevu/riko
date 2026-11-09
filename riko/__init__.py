@@ -27,7 +27,7 @@ from riko.base._exceptions import (
 )
 from riko.base._paths import get_path, get_temp_file
 from riko.definitions._context import Context
-from riko.definitions._nodes import Node
+from riko.definitions._nodes import RikoNode
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
@@ -53,7 +53,7 @@ from riko.types._enums import (
     SortableCastType,
     UserAgent,
 )
-from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
+from riko.types._workflow import Endpoint, PortEdge, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
 
@@ -73,7 +73,6 @@ __all__ = [
     "CastType",
     "Context",
     "DocumentShape",
-    "Edge",
     "EmptyPipelineError",
     "Endpoint",
     "ExecutionMode",
@@ -83,14 +82,15 @@ __all__ = [
     "IdentityMode",
     "InvalidPipelineError",
     "Modules",
-    "Node",
     "OneShotResource",
     "Pipeline",
     "PipelineError",
     "PipelineStateError",
+    "PortEdge",
     "Resource",
     "ReusableResource",
     "RikoError",
+    "RikoNode",
     "Sinks",
     "SortableCastType",
     "Sources",

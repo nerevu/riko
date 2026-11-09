@@ -66,9 +66,9 @@ They live in the private execution modules `riko/execution/_pools.py` and
 `riko/execution/_concurrency.py`; what was `collections.py` survives only as
 `riko/runtime/_export.py` (`Formats`, `export`, `list_formats`).
 
-**Workflow graph index** is a retained foundation. `Workflow.index` (`GraphIndex` in
+**Workflow graph index** is a retained foundation. `Workflow.index` (`WorkflowIndex` in
 `riko/types/_workflow.py`; formerly the v1 `parse_pipe_def`, deleted at cutover step 5)
-builds one immutable `GraphIndex` (`riko/types/_workflow.py`) that interprets a
+builds one immutable `WorkflowIndex` (`riko/types/_workflow.py`) that interprets a
 workflow's edges exactly once — wire-level `edges`/`incoming`/`outgoing` (ports kept
 verbatim) plus node-level `order`/`upstream`/`downstream`/`roots`/`leaves`/`outputs`. It
 replaces the old `ParsedPipeDef` `graph`+`wires` fields; R4A's
@@ -82,8 +82,8 @@ execution concepts (resolved callables, portals, resource values, task groups) o
 The reuse seam runs *through* the compiler, not around it. Graph
 parsing/validation/ordering/resolution is kept and adapted; the legacy
 generator-construction tail is replaced. Concretely: graph ordering (`topological_sort`,
-cycles reported by `GraphIndex.cyclic`),
-`ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `GraphIndex`, and the
+cycles reported by `WorkflowIndex.cyclic`),
+`ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `WorkflowIndex`, and the
 argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
 preparation. What was replaced (and deleted at cutover step 5, 2026-10-03) is
 `_gen_steps`/`_build_pipeline`/`build_pipeline`, which resolved, wire, invoke, and
@@ -176,7 +176,7 @@ R4B  private executions + lifetime + EventSink transport
 R4C  callable nodes (pure 1→1 `map`)
               |
               v
-R4D  workflow input declarations
+R4D  workflow input schemas
               |
               v
 R5A  FeedResult / _FeedItem / provenance
@@ -618,7 +618,7 @@ Deliver:
 - full `source`/`target` edge endpoints with explicit node/port; reject `src`/`tgt` and
   `from`/`to`;
 - top-level named `outputs`, with omitted output sugar only for one unambiguous leaf;
-- top-level typed `inputs` declarations normalized to full JSON Schema;
+- top-level `inputs`, each input's schema normalized to full JSON Schema;
 - resource references and declared resource slots;
 - configured immutable serializable `Target` and `Format` definitions/references;
 - `TargetRegistry` contract and sync/async target capability protocols;
@@ -1106,7 +1106,7 @@ Deliver:
   context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
 
 Resolved (triaged 2026-10-16, decided 2026-10-23): which node a seed targets. The
-default port alone decides openness: `GraphIndex.is_open` is true when no edge enters
+default port alone decides openness: `WorkflowIndex.is_open` is true when no edge enters
 the node's bare default `in` port, so a node wired only through named `in:<name>` or
 positional `in:<n>` ports is open (`GraphEdge.is_positional` is renamed `is_default` and
 the edge-level `is_positional` no longer exists). A seed feeds the single open node that
@@ -1148,15 +1148,15 @@ for durable identity, and [callable-pipes.md](callable-pipes.md) § Existing dec
 model keeps the target. Strict xfail
 `tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`.
 
-### R4D — Workflow input declarations
+### R4D — Workflow input schemas
 
-**Goal:** make workflow inputs top-level typed declarations in the canonical IR, with
+**Goal:** give each workflow input a top-level schema in the canonical IR, with
 execution values arriving through `Context.inputs`, per
 [extensibility.md § E3.6](extensibility.md#e36-inputs).
 
 Deliver:
 
-- `Workflow` input declarations (canonical full JSON Schema; authoring shorthands
+- each `Workflow` input's schema (canonical full JSON Schema; authoring shorthands
   normalize to it; requiredness inferred from an absent default; `default: null` implies
   nullable); until then a strict `Workflow` accepts a non-mapping declaration (tripwire
   `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`);
@@ -1170,35 +1170,45 @@ Deliver:
 - validation of `Context.inputs` against the declarations at plan/preparation time,
   before resources open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
-- a stored workflow's module subtype derived from what its roots need: today a workflow
-  store tags the pipe `"transformer" if flow.inputs else "source"`
-  (`riko/runtime/_workflow_resolver.py`, and the generated module's
-  `workflow(subtype=…)` in `riko/runtime/_compile.py`), so a workflow whose root takes
-  an input stream but declares no inputs counts as a source and starts itself as a node
-  of another pipeline, while one that declares inputs over a source root counts as a
-  transformer. Routed here from R4C's per-run seed work (2026-10-24) because the fix
-  belongs with the input declarations it reads. Since R4C's self-starting check, the
-  second case fails outright: run unseeded, it raises "requires a seed" instead of
-  starting its source root (triaged 2026-10-28). Strict xfail
-  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
+- a stored workflow's module subtype derived from what its roots need (triaged
+  2026-10-28; landed 2026-11-09): `build_workflow_pipes`
+  (`riko/runtime/_workflow_pipes.py`) tags the pipe `"source"` when it can run without a
+  seed (`ExecutionPlan.is_self_starting_output`) and `"transformer"` otherwise; declared
+  inputs don't affect the tag. The old rule,
+  `"transformer" if flow.inputs else "source"`, made a workflow whose root takes an
+  input stream but declares no inputs a source that started itself as a node of another
+  pipeline, and made one that declares inputs over a source root a transformer that
+  raised "requires a seed" when run unseeded. Routed here from R4C's per-run seed work
+  (2026-10-24) because the fix belongs with the input schemas it reads. Strict xfail
+  flipped:
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_with_input_schemas`.
 - value sources without a graph heuristic (triaged 2026-10-27; decided and landed
   2026-11-05): R4C's rule started any non-output node whose outgoing edges all entered
   named ports, so an ordinary transform there ran on the internal placeholder seed. No
-  generic node flag: a registered source starts unseeded, and so does a `strconcat`
-  whose parts are literals or `terminal` references to connected named ports (the Yahoo
-  Pipes String Builder root in `pipe_b962874`); nothing else does.
+  generic node flag. Registered source modules are eligible to start unseeded, but only
+  when their configuration has no `subkey` dependencies and all `terminal` references
+  resolve to connected named ports. The same condition applies to explicitly recognized
+  value-feeder modules (`strconcat`, the Yahoo Pipes String Builder root in
+  `pipe_b962874`). Other transformers require a default input. Terminal names use the
+  runtime's existing normalization (`replacer(name, "")`), so `1_URL` matches the port
+  `in:_1_URL`; an empty `subkey`/`terminal` counts as unset, as conf resolution treats
+  it. The `Sources` registry and `ftype=NONE` classification are unchanged: they
+  establish source capability, not unconditional permission to run without input
+  (revised 2026-11-06).
   `PreparedNode.is_self_starting` (`riko/execution/_prepared.py`) owns the check; a
   module capability contract replaces it only if plugins show a real need. Asserted by
   `TestPlanRun::test_strconcat_starts_when_it_reads_no_default_input`,
   `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`,
   and the `is_self_starting` doctest.
-- a strict `Workflow.inputs` that holds only canonical schema mappings: today the field
-  is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string
-  or a non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails
-  in `tests/internal/test_definitions.py` mark it for this phase. Narrow the field's
-  static input type (`inputs_converter`'s `accepted`, today `Mapping[str, object]`) to
-  one schema mapping per name in the same change: narrowing it alone fails pyright
-  wherever a stored `Workflow.inputs` is passed back to the constructor.
+- a strict `Workflow.input_schemas` that holds only canonical schema mappings: today
+  the field is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare
+  type-name string or a non-schema value (`{"q": 5}`) that re-normalization then
+  rejects; the strict xfail
+  `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`
+  marks it for this phase. Narrow the field's static input type
+  (`input_schemas_converter`'s `accepted`, today `Mapping[str, object]`) to one schema
+  mapping per name in the same change: narrowing it alone fails pyright wherever a
+  stored `Workflow.input_schemas` is passed back to the constructor.
 - the `Context.inputs` value type: `Inputs` (`Mapping[str, str | int | bool]`) types the
   field as scalar-valued, yet its converter list deep-freezes nested values
   (`{"tags": ["a"]}` is stored as `('a',)`), so pyright rejects valid calls and
@@ -1216,12 +1226,12 @@ Deliver:
 Audit note (2026-10-31 sibling audit): stored-workflow describe (`build_workflow_pipes`
 in `riko/runtime/_workflow_pipes.py`) returns its `description`/`inputs` dicts by
 reference in the DESCRIBE and `describe_input` modes, so a caller's mutation leaks into
-later calls. Return fresh or frozen data when input declarations land (tripwire
+later calls. Return fresh or frozen data when input schemas land (tripwire
 `tests/internal/test_resolution.py::TestResolvedDocuments::test_document_description_is_fresh_per_call`).
 
 **Exit:**
 
-- **ADD:** typed input declarations and `{"input": …}` references exist in the Workflow
+- **ADD:** typed input schemas and `{"input": …}` references exist in the Workflow
   v2 IR and are validated against `Context.inputs` during preparation.
 - **MIGRATE:** the `input` module's default/prompt/`test` behavior and the generated
   module's describe-inputs mode read the declared inputs instead of scanning node
@@ -1230,11 +1240,11 @@ later calls. Return fresh or frozen data when input declarations land (tripwire
   `tests/public/test_pipeline.py` marks it for this phase. The hand-maintained probes in
   `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their describe-inputs
   branches still return `[]` or the scanned `input`-node tuples while the generated pipe
-  returns the declared `Workflow.inputs` mapping (strict xfail
+  returns the declared `Workflow.input_schemas` mapping (strict xfail
   `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`),
   and `migrate_v1_to_v2` declares nothing from a `PipeDef`'s `input` modules (strict
   xfail
-  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_declared_input`).
+  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_workflow_input`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists
   beside the IR.
 
@@ -1304,6 +1314,15 @@ fails mid-run with whatever error the parser hits.
 
 Deliver:
 
+- input schemas inferred from conf fields (vocabulary and rule:
+  [extensibility.md § E3.6](extensibility.md#e36-inputs), decided 2026-11-08): an
+  `{"input": name}` reference in a typed conf field takes that field's schema, so
+  authors write only what the fields cannot supply (a default, a description, a narrower
+  rule); each input's schema is the merge of what was written and every field it feeds;
+  a build-time check rejects an input whose written schema the field does not accept, or
+  that feeds fields no value can satisfy; `flow.serialize()` writes each input's merged
+  schema, so a stored document stays self-describing without the module catalog;
+  describe-inputs mode reports the merged schema, so there is one view;
 - `ModuleDefinition` declares its configuration contract, derived from the existing
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
@@ -1712,7 +1731,7 @@ Deliver:
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 - a write node that feeds no workflow output still runs: execution today plans only each
-  output's upstream subgraph (`GraphIndex.required`), so an effect branch hanging off
+  output's upstream subgraph (`WorkflowIndex.required`), so an effect branch hanging off
   the main path would be skipped. Pure off-output branches stay skipped (their values
   are discarded, per [fanout-topology.md](fanout-topology.md)), so validation does not
   reject unreachable nodes (repo-audit triage 2026-10-29). Tripwire:
@@ -2530,7 +2549,7 @@ R0–R4C have landed (status: the R-track table in
 [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4C closed 2026-11-03 with
 `Pipeline.map`, the bare decorator form, and `Pipeline.open()`). The branch is working
 toward the **M1 v1-parity merge** (§ 4): R4D → R5A → R7 → merge. The next coding PR is
-therefore **R4D — workflow input declarations**: top-level typed `Workflow` inputs with
+therefore **R4D — workflow input schemas**: top-level typed `Workflow` inputs with
 execution values arriving through `Context.inputs`, per that section and
 [extensibility.md § E3.6](extensibility.md#e36-inputs); not an Operations as Code,
 state-store, cache, or pub/sub PR.

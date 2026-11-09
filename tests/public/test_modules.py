@@ -60,11 +60,13 @@ from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
+    ConfArg,
     CsvConf,
     ExchangeRateConf,
     FeedAutoDiscoveryConf,
     FetchConf,
     FetchDataConf,
+    FetchDataRawConf,
     FetchPageConf,
     FetchSiteFeedConf,
     FetchTableConf,
@@ -297,6 +299,12 @@ class TestFetchModules:
 
             with pytest.raises(HTTPStatusError):
                 await alist(pipeline)
+
+    def test_a_direct_call_rejects_an_unresolved_input_reference(self):
+        conf = FetchDataRawConf(url=ConfArg(type="url", value={"input": "u"}))
+
+        with pytest.raises(InvalidPipelineError, match="unresolved input reference"):
+            next(fetchdata_pipe(conf=conf))
 
     @pytest.mark.parametrize("name", FETCH_MODULES)
     def test_an_unopenable_url_raises(self, name):

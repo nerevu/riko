@@ -2,8 +2,10 @@
 """
 Obtains and casts user input.
 
-Values come from ``inputs`` when supplied, from the configured default in test
-mode, and otherwise from stdin.
+Values come from ``inputs`` when supplied, from the configured default in test mode, and
+otherwise from stdin. In a workflow run, each workflow input with a schema arrives in
+``inputs``. ``default`` and ``prompt`` apply only when ``pipe`` is called on its own,
+outside a workflow run, or for an ``input_key`` with no schema in the workflow.
 
 Examples:
 
@@ -39,7 +41,7 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item
-    from riko.types._values import Inputs
+    from riko.types._values import BasicMapping
 
 logger: Logger = get_logger(__name__)
 
@@ -60,14 +62,14 @@ def parser(
     objconf: InputObjconf,
     skip: bool = False,
     *,
-    inputs: Inputs | None = None,
+    inputs: BasicMapping | None = None,
     **kwargs: object,
 ) -> PrimitiveValue:
     """
-    Obtains one user input value and casts it.
+    Obtains and casts one user input value.
 
-    Reads ``inputs[input_key]`` when ``inputs`` is given, falls back to
-    ``default`` when skipping, and otherwise prompts on stdin.
+    Reads ``inputs[input_key]`` when ``inputs`` is given, ``default`` when ``skip`` is
+    set, and otherwise prompts on stdin.
 
     Args:
 
@@ -121,18 +123,19 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when no input value is given or
-                prompting is skipped (default: "").
+            default (scalar): Value used when no input value is given or prompting is
+                skipped, e.g., when the pipe runs outside a workflow or for an
+                ``input_key`` with no schema in the workflow (default: "").
 
-            type (str): Type to cast the value to, one of "bool", "date",
-                "datetime", "decimal", "float", "int", "location", "none",
-                "pass", "text", "url" (default: "text").
+            type (str): Type to cast the value to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text", "url"
+                (default: "text").
 
-            input_key (str): Key read from ``inputs`` to find the value — not
-                the field it is assigned to (default: "content").
+            input_key (str): Key read from ``inputs`` to find the value. Not the field
+                it is assigned to (default: "content").
 
-            test (bool): Whether to use ``default`` instead of prompting
-                (default: False).
+            test (bool): Whether to use ``default`` instead of prompting (default:
+                False).
 
         context (Context): the run environment
 
@@ -186,18 +189,19 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when no input value is given or
-                prompting is skipped (default: "").
+            default (scalar): Value used when no input value is given or prompting is
+                skipped, e.g., when the pipe runs outside a workflow or for an
+                ``input_key`` with no schema in the workflow (default: "").
 
-            type (str): Type to cast the value to, one of "bool", "date",
-                "datetime", "decimal", "float", "int", "location", "none",
-                "pass", "text", "url" (default: "text").
+            type (str): Type to cast the value to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text", "url"
+                (default: "text").
 
-            input_key (str): Key read from ``inputs`` to find the value — not
-                the field it is assigned to (default: "content").
+            input_key (str): Key read from ``inputs`` to find the value. Not the field
+                it is assigned to (default: "content").
 
-            test (bool): Whether to use ``default`` instead of prompting
-                (default: False).
+            test (bool): Whether to use ``default`` instead of prompting (default:
+                False).
 
         context (Context): the run environment
 

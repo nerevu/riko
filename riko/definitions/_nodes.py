@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from functools import partial
-from itertools import filterfalse
+from itertools import chain, filterfalse
 from keyword import iskeyword
 from typing import TYPE_CHECKING, ClassVar, Self
 
@@ -36,6 +36,7 @@ from attrs.validators import is_callable
 
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import require_mapping
+from riko.base._iterutils import gen_non_null
 from riko.base._require_guards import (
     def_from_require,
     def_from_typed_dict,
@@ -54,23 +55,26 @@ from riko.types._frozendict import (
     FrozenJSON,
     FrozenParams,
     FrozenPolicy,
-    freeze_json,
+    json_freeze,
     optional_mapping_converter,
 )
 from riko.types._options import CallOptions
 from riko.types._pipedef import Embed
 from riko.types._scalars import is_non_null_hashable
-from riko.types._workflow import Edge, NodeId
+from riko.types._workflow import NodeId, PortEdge
 from riko.types.modules import ConfValues, MaybeFrozenConf
 
+from ._inputs import gen_input_references
 from ._resource_definition import ResourcesLike
 from ._write import WriteMode
 
 if TYPE_CHECKING:
+    from riko.types._pipedef import EmbedLike
     from riko.types._scalars import NonNullHashable
     from riko.types._workflow import EdgeFamily, NodeFamily
     from riko.types._wrappers import Func
 
+    from ._workflow_definition import PortEdges
     from ._write import PreparedWrite
 
 type ConfInput = MaybeFrozenConf | Mapping[str, ConfValues]
@@ -158,7 +162,7 @@ def require_binding(
 optional_str = narrow_def_from_require(require_str)
 
 keys_converter = partial(normalize_strs, what="WriteNode 'keys'")
-json_converter = partial(optional_mapping_converter, freeze_json)
+json_converter = partial(optional_mapping_converter, json_freeze)
 binding_converter = narrow_def_from_require(
     require_binding, EMPTY_BINDINGS, "node 'resources'", accepted=ResourcesLike
 )
@@ -169,9 +173,7 @@ _is_alias = lambda name: name.isidentifier() and not iskeyword(name)
 _kw_converter = json_converter(what="CallableNode 'kwargs'")
 
 
-def _normalize_embed_conf(
-    value: Mapping[str, object], what: str | None = None, **_
-) -> Mapping[str, object]:
+def _normalize_embed_conf(value: EmbedLike, what: str | None = None, **_) -> EmbedLike:
     """Fills an omitted embed ``conf`` with an empty configuration."""
     return value if "conf" in value else {**value, "conf": {}}
 
@@ -199,7 +201,7 @@ def require_embed_fields(value: Embed, what: str = "embed") -> Embed:
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class Node:
+class RikoNode:
     """The identity, resource bindings, and label every node family carries."""
 
     family: ClassVar[NodeFamily]
@@ -215,9 +217,14 @@ class Node:
         """Collects the Context resource names this node binds."""
         return set(self.resources.values())
 
+    @property
+    def referenced_inputs(self) -> set[str]:
+        """Collects the workflow input names this node's configuration refers to."""
+        return set()
+
 
 @define(frozen=True, slots=True, kw_only=True)
-class ModuleNode(Node):
+class ModuleNode(RikoNode):
     """
     A module node: any module, including split/branch/route/union/join/loop.
 
@@ -242,14 +249,21 @@ class ModuleNode(Node):
             def_from_require(require_mapping, what="ModuleNode 'embed'"),
             def_from_require(_normalize_embed_conf),
             def_from_typed_dict(Embed, what="ModuleNode 'embed'"),
-            freeze_json,
+            json_freeze,
         ],
         validator=validator_from_require(require_embed_fields, optional=True),
     )
 
+    @property
+    def referenced_inputs(self) -> set[str]:
+        """Collects the workflow input names the conf and the embed conf refer to."""
+        embed_conf = None if self.embed is None else self.embed["conf"]
+        confs = gen_non_null((self.conf, embed_conf))
+        return set(chain.from_iterable(map(gen_input_references, confs)))
+
 
 @define(frozen=True, slots=True, kw_only=True)
-class CallableNode[T](Node):
+class CallableNode[T](RikoNode):
     """
     A callable node: applies a Python callable to each item it receives.
 
@@ -302,9 +316,14 @@ class CallableNode[T](Node):
             msg += f"{shared}"
             raise InvalidPipelineError(msg)
 
+    @property
+    def referenced_inputs(self) -> set[str]:
+        """Collects the workflow input names the keyword arguments refer to."""
+        return set(gen_input_references(self.kwargs))
+
 
 @define(frozen=True, slots=True, kw_only=True)
-class ReadNode(Node):
+class ReadNode(RikoNode):
     """A node that acquires records from a backend, interpreting them via a format."""
 
     family: ClassVar[NodeFamily] = "read"
@@ -313,7 +332,7 @@ class ReadNode(Node):
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class WriteNode(Node):
+class WriteNode(RikoNode):
     """A node that writes an item stream to a backend destination with a format."""
 
     family: ClassVar[NodeFamily] = "write"
@@ -368,7 +387,7 @@ class WriteNode(Node):
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class ActionNode(Node):
+class ActionNode(RikoNode):
     """A node that runs a backend command that is not a data write."""
 
     family: ClassVar[NodeFamily] = "action"
@@ -379,7 +398,7 @@ class ActionNode(Node):
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class CacheNode(Node):
+class CacheNode(RikoNode):
     """A node carrying cache identity and policy, never cache contents."""
 
     family: ClassVar[NodeFamily] = "cache"
@@ -389,7 +408,7 @@ class CacheNode(Node):
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class SubscribeNode(Node):
+class SubscribeNode(RikoNode):
     """A node owning subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
@@ -399,22 +418,20 @@ class SubscribeNode(Node):
 
 
 @define(frozen=True, slots=True)
-class StreamEdge(Edge):
+class StreamEdge(PortEdge):
     """A stream edge delivering items from a source port to a target port."""
 
     family: ClassVar[EdgeFamily] = "stream"
 
 
 @define(frozen=True, slots=True)
-class PublishEdge(Edge):
+class PublishEdge(PortEdge):
     """A publish edge delivering a producer's output stream to a subscribe node."""
 
     family: ClassVar[EdgeFamily] = "publish"
 
 
-def get_family_edges(
-    edges: Iterable[Edge], family: EdgeFamily = "stream"
-) -> list[Edge]:
+def get_family_edges(edges: PortEdges, family: EdgeFamily = "stream") -> list[PortEdge]:
     """
     Selects the edges of one family, in listing order.
 
@@ -443,7 +460,7 @@ def get_family_edges(
     return [edge for edge in edges if edge.family == family]
 
 
-def require_runnable_node(value: Node) -> RunnableNode:
+def require_runnable_node(value: RikoNode) -> RunnableNode:
     if not isinstance(value, (ModuleNode, CallableNode)):
         msg = f"{value.family} node execution is not yet supported"
         raise InvalidPipelineError(msg)
@@ -456,9 +473,9 @@ __all__ = [
     "CacheNode",
     "CallableNode",
     "ModuleNode",
-    "Node",
     "PublishEdge",
     "ReadNode",
+    "RikoNode",
     "StreamEdge",
     "SubscribeNode",
     "WriteNode",
