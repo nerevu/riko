@@ -28,7 +28,6 @@ from ast import literal_eval
 from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from functools import partial
 from json import loads
 from operator import add, sub
 from time import gmtime, struct_time
@@ -58,7 +57,7 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions
     from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
     from riko.types._values import BasicArg
-    from riko.types._wrappers import Func, PreCaster
+    from riko.types._wrappers import PreCaster
 
 logger: Logger = get_logger(__name__)
 
@@ -652,14 +651,29 @@ def cast_value[T](
     return value
 
 
-cast_none: Func[None] = partial(cast_value, type_=CastType.NONE)
+def cast_none(content: object, **_: object) -> None:
+    """
+    Discards content, for use as a caster that yields ``None``.
+
+    Equivalent to ``cast_value`` with ``type_=NONE``.
+
+    Args:
+
+        content: The value to discard.
+
+    Examples:
+
+        >>> cast_none(5)
+        >>> cast_none("x", field="title")
+
+    """
 
 
 def cast_pass[T](content: T, **_: object) -> T:
     """
-    Passes content through unchanged.
+    Passes content through unchanged, for use as a caster.
 
-    A thin wrapper over ``cast_value`` with ``type_=PASS`` for use as a caster.
+    Equivalent to ``cast_value`` with ``type_=PASS``.
 
     Args:
 
@@ -675,6 +689,7 @@ def cast_pass[T](content: T, **_: object) -> T:
         5
         >>> cast_pass("x")
         'x'
+        >>> cast_pass(None)
 
     """
-    return cast_value(content, type_=CastType.PASS)
+    return content

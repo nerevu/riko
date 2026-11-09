@@ -84,15 +84,15 @@ def narrow_from_require[T, R](
 def narrow_from_require[T, R](
     require: Require[T, R], *args: object, **kwargs: object
 ) -> Callable[[R], R]: ...
-def narrow_from_require[T, R](
-    require: Require[T, R], *args: object, accepted: object = None, **kwargs: object
+def narrow_from_require[R](
+    require: Func[R], *args: object, accepted: object = None, **kwargs: object
 ) -> Func[R]:
     """
     Advertises a typed converter to callers but validates any object at runtime.
 
     The advertised input is the guard's output type, or ``accepted`` when given.
-    ``accepted`` only sets that static type. ``args`` and ``kwargs`` are applied as
-    ``functools.partial`` does. A class applied before the value (as
+    ``accepted`` only sets that static type. Each call runs
+    ``require(*args, value, **kwargs)``. A class applied before the value (as
     ``require_instance`` takes it) also sets the advertised type.
 
     Args:
@@ -120,7 +120,11 @@ def narrow_from_require[T, R](
         ('db',)
 
     """
-    return partial(require, *args, **kwargs)
+
+    def narrow(value: object) -> R:
+        return require(*args, value, **kwargs)
+
+    return narrow
 
 
 def _get_key_qualifier(annotation: object) -> str | None:
@@ -426,8 +430,7 @@ def def_from_require[D, R](
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
 
     A ``None`` value becomes ``default``. Anything else is checked with
-    ``require(*args, value, **kwargs)``. ``args`` are applied before the value
-    (just like ``functools.partial``). ``what`` is forwarded only when given.
+    ``require(*args, value, **kwargs)``. ``what`` is forwarded only when given.
 
     Args:
 
@@ -460,10 +463,9 @@ def def_from_require[D, R](
 
     """
     extra = resolve_default(what, kwargs, {**kwargs, "what": what})
-    fallback = partial(require, *args, **extra)
 
     def optional(value: object) -> R | D | None:
-        return default if value is None else fallback(value)
+        return default if value is None else require(*args, value, **extra)
 
     return optional
 
@@ -797,14 +799,17 @@ def require_instances[K, T](
         TypeError: count 'b' must be of type int, not str
 
     """
-    require = partial(require_instance, cls, error=error)
-
     if is_mapping(value):
         items = value.items()
-        result = {k: require(v, f"{what} {k!r}") for k, v in items}
+        result = {
+            k: require_instance(cls, v, f"{what} {k!r}", error=error) for k, v in items
+        }
     else:
         items = enumerate(value)
-        result = [require(v, f"{what} position {k!r}") for k, v in items]
+        result = [
+            require_instance(cls, v, f"{what} position {k!r}", error=error)
+            for k, v in items
+        ]
 
     return result
 
@@ -957,7 +962,11 @@ def require_from_form[T](
             return typed(require_mapping(value, what, error=error), what)
 
     elif len(classes) == 1 and not literals:
-        check = partial(require_instance, classes[0], error=error)
+        cls = classes[0]
+
+        def check(value: object, what: str) -> object:
+            return require_instance(cls, value, what, error=error)
+
     else:
         is_mappable = len(shapes) < len(classes)
         names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])

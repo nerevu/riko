@@ -1448,7 +1448,10 @@ stubs are rewritten once, with the conf contract. The last three
 `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
 sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2
 `embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`isasync` interface classification here should type that split instead.
+`isasync` interface classification here should type that split instead; the
+cast on the worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial`
+because the process executor pickles it) and on its async twin's `sync_call` closure
+narrows the same `NodeCall` output union and goes with it (2026-11-11 triage).
 `manage lint --escapes` lowers its ceilings as these go. The stub rewrite also gives
 call options one owner (2026-11-03 repo-audit triage, deferred here): `Module.prepare`
 copies `count` into `prepared.opts` where nothing reads it, while `_PreparedCall`
@@ -1889,7 +1892,10 @@ Deliver:
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
 - receive-time `func=` semantics in sync and async together: run at subscription
   delivery/materialization time, discard the return value, and preserve the original
-  item;
+  item; the migrated subscriber resolves `func`'s accepted keyword names once at
+  subscription (the legacy `_apply` in `riko/modules/receive.py` calls
+  `inspect.signature(func)` per received item; left alone because this phase deletes
+  the module, 2026-11-09 triage);
 - an explicit disposition for bounded waiting (GitHub issue #82): the tripwire
   `TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait` in
   `tests/public/test_modules.py` exercises the legacy `receive` module this phase

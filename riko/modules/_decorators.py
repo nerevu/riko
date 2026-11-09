@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
 from contextlib import aclosing
 from functools import partial, wraps
-from itertools import chain
+from itertools import chain, repeat
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -819,8 +819,8 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         extra: dict[str, object],
     ) -> SyncProcessorWrapperInternalOutput:
         if is_listlike(item):
-            run = partial(self._run, context=context, extra=extra)
-            processed = chain.from_iterable(map(run, item))
+            runs = map(self._run, item, repeat(context), repeat(extra))
+            processed = chain.from_iterable(runs)
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
 
@@ -844,7 +844,11 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         processed: AsyncProcessorWrapperInternalOutput
 
         if is_streamlike(item):
-            _run = partial(self._arun, context=context, extra=extra)
+            arun = self._arun
+
+            async def _run(value: ItemOrValue) -> AsyncProcessorWrapperInternalOutput:
+                return await arun(value, context, extra)
+
             run = cast("AsyncItemProcessor", _run)
             processed = _aprocess_stream(run, as_async(item))
         else:

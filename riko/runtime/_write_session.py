@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager
 from enum import Enum, auto
-from functools import partial
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
@@ -489,9 +488,13 @@ class _AsyncFileWriteSession(_FileWriteSession):
         if validate:
             collected = self._gen_csv_records(collected)
 
-        kwargs = {"skip_header": await self.askip_header} if self.csv_format else {}
-        serialize = partial(serialize_items, **kwargs)
-        result = await asyncify(serialize, collected, self.fmt)
+        args = (serialize_items, collected, self.fmt)
+
+        if self.csv_format:
+            skip_header = await self.askip_header
+            result = await asyncify(*args, skip_header=skip_header)
+        else:
+            result = await asyncify(*args)
 
         if result and self.jsonl_format:
             result = _normalize_jsonl(_cast_text(result))

@@ -90,7 +90,7 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
     Kwargs:
 
         newline: Whether to write one JSON object per line instead of an array.
-        **kwargs: Extra keyword arguments forwarded to ``json.dumps``.
+        **kwargs: Extra keyword arguments forwarded to the JSON encoder.
 
     Returns:
 
@@ -109,7 +109,7 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
 
     """
     options = {"sort_keys": True, "ensure_ascii": False, **kwargs}
-    dump = partial(dumps, cls=_SortedSetEncoder, **options)
+    dump = _SortedSetEncoder(**options).encode
     return StringIO("\n".join(map(dump, items)) if newline else dump(list(items)))
 
 
@@ -240,8 +240,9 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
 
     """
     convert = _require_converter(fmt)
-    require = partial(require_mapping, what="item", error=TypeError)
-    thawed = (thaw(require(item)) for item in items)
+    thawed = (
+        thaw(require_mapping(item, what="item", error=TypeError)) for item in items
+    )
     first = next(thawed, None)
 
     if first is None and fmt == Formats.GEOJSON:

@@ -454,9 +454,8 @@ def _gen_stream_results[T](
     **kwargs: FrozenJSON,
 ) -> Iterator[T]:
     """Applies a callable node's ``fn`` to each item of a stream, one result each."""
-    call = partial(fn, **kwargs, **normalize_mapping(resources))
-    require = partial(require_value, msg=_AWAITABLE_RESULT)
-    return (require(call(item)) for item in items)
+    options = dict(**kwargs, **normalize_mapping(resources))
+    return (require_value(fn(item, **options), _AWAITABLE_RESULT) for item in items)
 
 
 async def _agen_stream_results[T](

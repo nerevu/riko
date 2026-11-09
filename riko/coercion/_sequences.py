@@ -170,7 +170,11 @@ def truncate_content(content: object, length: int = 20) -> object:
             content[:length] + "…".encode() if len(content) > length else content
         )
     elif is_mapping(content):
-        truncated = map_values(partial(truncate_content, length=length), content)
+
+        def truncate(value: object) -> object:
+            return truncate_content(value, length)
+
+        truncated = map_values(truncate, content)
     elif isinstance(content, Sequence):
         truncated = [truncate_content(v, length) for v in content]
     else:

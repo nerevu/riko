@@ -331,6 +331,10 @@ doctests show real returned values.
 - Let ``ruff`` format code instead of hand-tuning style around the formatter.
 - Avoid unrelated formatting, renaming, or cleanup in a focused pull request.
 
+The `Refactoring guide`_ compares ``map()``, ``functools.partial()``, ``repeat()``, and
+generator expressions so you can pick the faster form in performance-sensitive Python
+code.
+
 Function names
 ^^^^^^^^^^^^^^
 
@@ -519,6 +523,7 @@ Useful links
 .. _issue: https://github.com/nerevu/riko/issues
 .. _README: README.rst
 .. _Cookbook: docs/COOKBOOK.rst
+.. _Refactoring guide: docs/REFACTORING.rst
 .. _FAQ: docs/FAQ.rst
 .. _Installation guide: docs/INSTALLATION.rst
 .. _Issue tracker: https://github.com/nerevu/riko/issues
