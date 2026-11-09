@@ -182,7 +182,14 @@ independently creates a fresh execution. A subscription definition is not a repl
 buffer: items published in one execution are observed through the subscription's `func=`
 or an explicit effect inside the attached branch, never by draining the subscription
 afterwards (decided 2026-10-10; the `TestSubscriptions` tripwires and the Cookbook
-fan-out examples are written against this form).
+fan-out examples are written against this form). Until R7 lands, those examples stay
+plain code blocks beside "Pending." notes: the three `publish`/`subscribe`/`split`
+blocks in `docs/COOKBOOK.rst` and the fan-out block in `docs/FAQ.rst`. Their tripwires
+are the `PUBSUB_PENDING` strict xfail in `tests/public/test_pipeline.py`
+("Pipeline.subscribe()/publish() are not available yet") and `SPLIT_METHOD_PENDING`
+in `tests/_workflows.py` ("Pipeline.split() is not available yet"). R7 promotes each
+block to a doctest with its observed output and drops the note; `manage lint --rst`
+flags a plain Python block that keeps neither marker.
 
 A possible future extension is an explicit, opt-in *retaining* subscription mode that
 buffers published items for a later drain. It is not the default, is not part of R7, and

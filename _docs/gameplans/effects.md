@@ -405,6 +405,13 @@ Required contracts:
 17. an incremental format encodes progressively into staging while the published
     replacement appears only at finalize.
 
+Until R5C lands, the Cookbook's write-node example (`docs/COOKBOOK.rst`, the
+`.write("report.csv", mode="replace")` block beside its "Pending." note) stays a plain
+code block, and the `WRITE_NODE_PENDING` strict xfail in `tests/public/test_write.py`
+("write nodes do not execute yet") is the tripwire that trips at landing. R5C promotes
+that block to a doctest with the written output as its observed value and drops the
+note; `manage lint --rst` flags a plain Python block that keeps neither marker.
+
 ## 14. Definition of done
 
 Riko has one provider-neutral effect model: `write` for record mutation/reconciliation

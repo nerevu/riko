@@ -656,13 +656,15 @@ keeps the default concurrency limit in flight. The process executor raises there
 
 .. code-block:: python
 
-    from riko import Pipeline, Sources, get_path
-
-    url = get_path('feed.xml')
-    pipeline = (
-        Pipeline.from_module(Sources.FETCH, conf={'url': url})
-        .with_execution(executor='thread', concurrency=4, ordered=False)
-    )
+    >>> from riko import Pipeline, Sources, get_path
+    >>>
+    >>> url = get_path('feed.xml')
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.FETCH, conf={'url': url})
+    ...     .with_execution(executor='thread', concurrency=4, ordered=False)
+    ... )
+    >>> sorted(item['title'] for item in pipeline)[:2]
+    ['Comments By Section', 'Comments By User']
 
 Parallel execution is not automatically faster. Pool startup, serialization,
 network behavior, ordering, and workload size can outweigh concurrency gains.
@@ -917,6 +919,7 @@ For runtime registration, call ``register_module`` instead:
 
 .. code-block:: python
 
+    # your_ext/__init__.py
     from riko.ext import ModuleDefinition, register_module
     from your_ext import shout
 

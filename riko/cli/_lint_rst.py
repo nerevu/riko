@@ -29,6 +29,98 @@ if TYPE_CHECKING:
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
+_PYTHON_BLOCK_RE = re.compile(r"^(?P<indent>\s*)\.\. code-block:: python\s*$")
+_NOTE_RE = re.compile(r"^\s*\.\. note::\s*$")
+_PENDING_NOTE = "Pending."
+_PROMPT = ">>>"
+PLAIN_BLOCK_MESSAGE = (
+    "Python code block without '>>>' prompts needs a leading '#' comment or an "
+    f"adjacent '{_PENDING_NOTE}' note"
+)
+
+
+def _get_indent(line: str) -> int:
+    """Gets the indentation width of a line."""
+    return len(line) - len(line.lstrip())
+
+
+def _get_block_end(lines: list[str], start: int, indent: int) -> int:
+    """Gets the index just past the directive body that starts at ``start``."""
+    end = start
+
+    while end < len(lines) and (
+        not lines[end].strip() or _get_indent(lines[end]) > indent
+    ):
+        end += 1
+
+    return end
+
+
+def _is_pending_note(lines: list[str], index: int) -> bool:
+    """Checks whether the directive at ``index`` is a note that begins ``Pending.``."""
+    content = next((line for line in lines[index + 1 :] if line.strip()), "")
+    note_match = _NOTE_RE.match(lines[index])
+    return bool(note_match) and content.strip().startswith(_PENDING_NOTE)
+
+
+def _has_adjacent_pending_note(
+    lines: list[str], start: int, end: int, indent: int
+) -> bool:
+    """Checks whether a ``Pending.`` note immediately precedes or follows a block."""
+    before = start - 1
+
+    while before >= 0 and (
+        not lines[before].strip() or _get_indent(lines[before]) > indent
+    ):
+        before -= 1
+
+    after = next((i for i in range(end, len(lines)) if lines[i].strip()), len(lines))
+    preceded = before >= 0 and _is_pending_note(lines, before)
+    followed = after < len(lines) and _is_pending_note(lines, after)
+    return preceded or followed
+
+
+def gen_plain_block_lines(text: str) -> Iterator[int]:
+    """
+    Finds the Python code blocks in ``text`` that neither run nor say why not.
+
+    A ``.. code-block:: python`` without ``>>>`` prompts is never executed as a doctest,
+    so it must mark itself as intentional: its first line is a ``#`` comment (naming the
+    file it depicts or why it does not run), or a ``.. note::`` whose text begins
+    ``Pending.`` sits immediately before or after it.
+
+    Args:
+
+        text: The RST source.
+
+    Yields:
+
+        int: The 1-based line number of each unmarked directive.
+
+    Examples:
+
+        >>> doctest = ".. code-block:: python\\n\\n    >>> 1 + 1\\n    2\\n"
+        >>> list(gen_plain_block_lines(doctest))
+        []
+        >>> plain = ".. code-block:: python\\n\\n    x = 1\\n"
+        >>> list(gen_plain_block_lines(plain))
+        [1]
+
+    """
+    lines = text.splitlines()
+
+    for index, line in enumerate(lines):
+        if match := _PYTHON_BLOCK_RE.match(line):
+            indent = len(match["indent"])
+            end = _get_block_end(lines, index + 1, indent)
+            block = lines[index + 1 : end]
+            body = [stripped for raw in block if (stripped := raw.strip())]
+            runs = any(stripped.startswith(_PROMPT) for stripped in body)
+            commented = bool(body) and body[0].startswith("#")
+            noted = _has_adjacent_pending_note(lines, index, end, indent)
+
+            if not (runs or commented or noted):
+                yield index + 1
 
 
 def get_anchor(text: str) -> str:
@@ -143,7 +235,7 @@ def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[s
 
 
 def lint_rst(where: str | None = None) -> int:
-    """Validates RST rendering and internal links."""
+    """Validates RST rendering, internal links, and plain Python code-block markers."""
     if publish_doctree is None:
         raise RuntimeError("docutils not found")
 
@@ -155,6 +247,10 @@ def lint_rst(where: str | None = None) -> int:
         cache[path] = _get_doc_anchors(doctree)
         problems.extend(_render_errors(path, doctree))
         problems.extend(_get_link_errors(path, text, cache))
+        problems.extend(
+            f"{path}:{lineno}: {PLAIN_BLOCK_MESSAGE}"
+            for lineno in gen_plain_block_lines(text)
+        )
 
     for problem in problems:
         print(problem)

@@ -643,7 +643,11 @@ Label:  The thread executor uses a pool.
 Every `>>>` block anywhere — Python source, `README.rst`, or `docs/*.rst` — is
 executable test code (`--doctest-modules` + `--doctest-glob=*.rst`). Never use
 `>>>` for illustrative pseudocode; if an example must not execute, use a plain
-code block without interpreter prompts.
+code block without interpreter prompts and mark it as intentional: start it with a
+`#` comment naming the file it depicts (`# pipe.py`) or why it does not run, or put
+it directly beside a `.. note::` that begins "Pending." (`manage lint --rst` flags a
+plain Python block that carries neither marker, so a doctest that loses its prompts
+is caught unless it also gains one).
 
 - Treat doctests as executable user documentation first, tests second.
 - Show actual returned values, not boolean assertions

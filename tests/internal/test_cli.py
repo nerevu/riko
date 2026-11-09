@@ -56,6 +56,7 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
+from riko.cli._lint_rst import gen_plain_block_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -1081,6 +1082,45 @@ class TestLiteralLint:
         (tmp_path / "CHANGES.rst").write_text("Set ``'auto'``.\n", encoding="utf-8")
         found = [issue.path.name for issue in gen_literal_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+
+PLAIN_BLOCK_CASES = [
+    pytest.param(
+        ".. code-block:: python\n\n    # pipe.py\n    x = 1\n", [], id="file-comment"
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    x = 1\n\n.. note::\n\n   Pending. Soon.\n",
+        [],
+        id="pending-note-after",
+    ),
+    pytest.param(
+        ".. note::\n\n   Pending. Soon.\n\n.. code-block:: python\n\n    x = 1\n",
+        [],
+        id="pending-note-before",
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    x = 1\n\n.. note::\n\n   Use ``x``.\n",
+        [1],
+        id="other-note-after",
+    ),
+    pytest.param(
+        "Intro.\n\n.. code-block:: python\n\n    x = 1\n\nOutro.\n\n"
+        ".. code-block:: python\n\n    >>> x\n    1\n\n"
+        ".. code-block:: python\n\n    y = 2\n",
+        [3, 14],
+        id="only-unmarked-blocks-with-their-lines",
+    ),
+]
+
+
+class TestRstLint:
+    """The plain Python code-block marker check."""
+
+    @pytest.mark.parametrize(("text", "expected"), PLAIN_BLOCK_CASES)
+    def test_plain_python_blocks_need_a_marker(
+        self, text: str, expected: list[int]
+    ) -> None:
+        assert list(gen_plain_block_lines(text)) == expected
 
 
 BINDING_CASES = [

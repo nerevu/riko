@@ -497,27 +497,28 @@ the definition.
 
 .. code-block:: python
 
-    from riko import get_path, Pipeline, Sources
-
-    fetch_conf = {'url': get_path('feed.xml')}
-    filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-
-    # The following pipeline will:
-    #   1. fetch a (cached) RSS feed
-    #   2. filter for items with an 'a' in the title
-    #   3. hash each title
-    #   4. perform the hashing in parallel four items at a time
-    #
-    # Note: no point in sorting before the hash since unordered execution (the
-    # default) doesn't guarantee order
-    pipeline = (
-        Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
-        .filter(conf={'rule': filter_rule})                     # 2
-        .hash(options={'field': 'title'})                       # 3
-        .with_execution(concurrency=4)                          # 4
-    )
-
-    sorted(item['title'] for item in pipeline)[:3]
+    >>> from riko import get_path, Pipeline, Sources
+    >>>
+    >>> fetch_conf = {'url': get_path('feed.xml')}
+    >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
+    >>>
+    >>> # The following pipeline will:
+    >>> #   1. fetch a (cached) RSS feed
+    >>> #   2. filter for items with an 'a' in the title
+    >>> #   3. hash each title
+    >>> #   4. perform the hashing in parallel four items at a time
+    >>> #
+    >>> # Note: no point in sorting before the hash since unordered execution (the
+    >>> # default) doesn't guarantee order
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
+    ...     .filter(conf={'rule': filter_rule})                     # 2
+    ...     .hash(options={'field': 'title'})                       # 3
+    ...     .with_execution(concurrency=4)                          # 4
+    ... )
+    >>>
+    >>> sorted(item['title'] for item in pipeline)[:3]
+    ['Donations', 'FAQ', 'General Comments']
 
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -620,6 +621,7 @@ E.g., ``pipe.py``
 
 .. code-block:: python
 
+    # pipe.py
     from riko import Pipeline, Sources
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
