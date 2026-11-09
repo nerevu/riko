@@ -3,40 +3,49 @@ Bare-bones DAG format
 
 A ``riko`` **workflow document** (``WorkflowDocument``) is a serialized ``Workflow``:
 explicit JSON in which every node is named and identified, every edge names the port it
-leaves and the port it enters, and the workflow outputs are listed. The **bare-bones
-DAG** (``PipeDag``) is a minimal format that captures only the essentials.
-``Workflow.parse`` expands it into a validated ``Workflow``, which ``flow.serialize()``
-writes as a ``WorkflowDocument``. ``PipeDag`` and the older ``PipeDef`` are importable
-from ``riko.types`` for annotating input.
+leaves and the port it enters, and the outputs are listed. The **bare-bones DAG**
+(``PipeDag``) is a minimal format that captures only the essentials. ``Workflow.parse``
+expands it into a validated ``Workflow``, which ``flow.serialize()`` writes as a
+``WorkflowDocument``. ``PipeDag`` and the older pipe definition (``PipeDef``) are
+importable from ``riko.types`` for annotating input.
 
-Schema
-------
+PipeDag schema
+--------------
+
+- ``modules``: a list of module entries, each with these keys:
+
+  - ``id``: *optional* and defaults to ``sw-{n}`` (1-based listing order). Required
+    only when ``wires`` is given.
+  - ``name``: the module to run (older DAGs spell it ``type``).
+  - ``conf``: **opaque** configuration passed verbatim to the module.
+  - ``options``: *optional* call options handed to the module (``emit``, ``assign``,
+    ``field``, ``count``), as opposed to the configuration it parses.
+
+  Any other key is offered to the workflow node as-is. A typo is reported rather than
+  dropped.
+
+- ``wires``: *optional* list of ``[source_id, target_id]`` pairs. Also accepts
+  ``[source_id, target_id, target_port]`` triples for when the edge enters a port other
+  than the default ``in``.
 
 .. code-block:: json
 
     {
         "modules": [
             {"id": "sw-1", "name": "forever", "conf": {}},
-            {"id": "sw-2", "name": "truncate", "conf": {"count": {"type": "int", "value": "3"}}}
+            {
+                "id": "sw-2",
+                "name": "truncate",
+                "conf": {"count": {"type": "int", "value": "3"}}
+            }
         ],
         "wires": [
             ["sw-1", "sw-2"]
         ]
     }
 
-- **``modules``**: each entry names the module to run in ``name`` (older DAGs spell it
-  ``type``). ``conf`` is **opaque**. It is copied through verbatim, so any module's
-  native configuration is valid without transformation. ``id`` is *optional* and
-  defaults to ``sw-{n}`` (1-based listing order). Supply ids only when ``wires``
-  reference them. A module may also carry ``options``: the call options handed to the
-  module (``emit``, ``assign``, ``field``, ``count``) as opposed to the configuration it
-  parses. Any other key is offered to the workflow node as-is, so a typo is reported
-  rather than dropped.
-- **``wires``**: *optional* list of ``[source_id, target_id]`` pairs, or
-  ``[source_id, target_id, target_port]`` triples when the edge enters a port other
-  than the default ``in``. When ``wires`` is omitted or empty, the modules are chained
-  **linearly in listing order**, so the concise form drops both ``wires`` and ``id``
-  (see `pipe_forever`_):
+When ``wires`` is omitted or empty, the modules are chained
+**linearly in listing order** (see `pipe_forever`_):
 
 .. code-block:: json
 
@@ -47,15 +56,18 @@ Schema
         ]
     }
 
-Provide ``wires`` when the module listing order is **not** the execution order —
-e.g. the source is listed after the operator it feeds
-(see `pipe_reordered`_):
+Provide ``wires`` when the module listing order is **not** the execution order. E.g.,
+the source is listed after the operator it feeds (see `pipe_reordered`_):
 
 .. code-block:: json
 
     {
         "modules": [
-            {"id": "trunc", "name": "truncate", "conf": {"count": {"type": "int", "value": "2"}}},
+            {
+                "id": "trunc",
+                "name": "truncate",
+                "conf": {"count": {"type": "int", "value": "2"}}
+            },
             {"id": "gen", "name": "forever", "conf": {}}
         ],
         "wires": [
@@ -68,10 +80,10 @@ Loading and saving
 
 ``Workflow.parse`` reads all three shapes: a ``PipeDag``, a ``PipeDef``, or a
 ``WorkflowDocument``. It takes a mapping or JSON text (``str`` or ``bytes``), detects
-which shape it holds, and returns a validated ``Workflow``. Pass ``shape="dag"``,
-``"v1"`` (a ``PipeDef``), or ``"v2"`` (a ``WorkflowDocument``) to pin the reading
-instead. ``flow.serialize()`` writes the ``WorkflowDocument``, which parses back to an
-equal ``Workflow``, and ``Workflow.load(path)`` reads and parses a file:
+its shape, and returns a validated ``Workflow``. Pass ``shape="dag"``, ``"v1"`` (a
+``PipeDef``), or ``"v2"`` (a ``WorkflowDocument``) to pin the reading instead.
+``flow.serialize()`` writes the ``WorkflowDocument``, which parses back to an
+equivalent ``Workflow``. ``Workflow.load(path)`` reads and parses a file:
 
 .. code-block:: python
 
@@ -98,9 +110,10 @@ equal ``Workflow``, and ``Workflow.load(path)`` reads and parses a file:
 Fan-in
 ------
 
-A wire's optional third entry names the port it enters, so an operator that takes more
-than one stream — ``union``, ``join`` — is expressible directly. The first input port is
-``in``; the additional ones are ``in:1``, ``in:2``, and so on:
+A wire's optional third entry names the port it enters. An operator that takes more than
+one stream (such as ``union`` or ``join``) is expressible directly. The first stream
+enters the default port ``in``. Each additional stream enters a numbered port starting
+at ``in:1``, so ``in:1`` is the second input:
 
 .. code-block:: json
 
@@ -119,74 +132,51 @@ than one stream — ``union``, ``join`` — is expressible directly. The first i
 Conf values from another node
 -----------------------------
 
-A ``conf`` entry written as ``{"terminal": "<name>", "type": ...}`` (a *terminal
-reference*) takes its value from the node wired into the port ``in:<name>``. A name that
-starts with a digit gets a leading underscore, so ``1_URL`` is wired into ``in:_1_URL``.
-Each time the module resolves its ``conf``, the entry receives the next item that node
-produces. A module with no stream wired into ``in`` (such as ``fetch`` below) resolves
-it once, while a ``processor`` fed a ``stream`` resolves it once per input ``item``.
+A ``conf`` entry written as ``{"terminal": "<name>", "type": ...}`` is a *terminal
+reference*. It takes its value from the node wired into the ``in:<name>`` port. A name
+that starts with a digit gets a leading underscore, so ``1_URL`` is wired into
+``in:_1_URL``. Each time the module resolves its ``conf``, the entry receives the next
+item that node produces. A module with no stream wired into ``in`` (such as ``fetch``
+below) resolves it once. A ``processor`` module fed a ``stream`` resolves it once per input
+``item``.
 
 .. code-block:: json
 
     {
         "modules": [
-            {"id": "url", "name": "urlbuilder", "conf": {"base": "https://example.com/feed.xml"}},
-            {"id": "feed", "name": "fetch", "conf": {"url": {"terminal": "1_URL", "type": "url"}}}
+            {
+                "id": "url",
+                "name": "urlbuilder",
+                "conf": {"base": "https://example.com/feed.xml"}
+            },
+            {
+                "id": "feed",
+                "name": "fetch",
+                "conf": {"url": {"terminal": "1_URL", "type": "url"}}
+            }
         ],
         "wires": [
             ["url", "feed", "in:_1_URL"]
         ]
     }
 
-Workflow inputs
----------------
-
-A ``PipeDag`` has no input schema, but a ``WorkflowDocument`` may list them under a
-top-level ``input_schemas``. It maps each input to its schema (a `JSON Schema`_
-(draft 7)). Any JSON Schema keyword is allowed, and ``type`` must name JSON types. A
-bare JSON type name is shorthand (``"string"`` reads as ``{"type": "string"}``).
-
-An input is required if its schema has no ``default``. ``"default": null`` allows
-``null``. A parsed workflow input's schema is available as ``flow.input_schemas``.
-``flow.validate()`` validates them.
-
-A ``conf`` value written as ``{"input": "<name>"}`` takes that input's value.
-Each run reads the values from its ``Context``, fills each schema's default, and
-checks each value against its input's schema before any source is read:
-
-.. code-block:: python
-
-    >>> from riko import Context, Pipeline, Workflow
-    >>>
-    >>> document = {
-    ...     "input_schemas": {"word": {"type": "string", "default": "hello"}},
-    ...     "nodes": [
-    ...         {
-    ...             "name": "strconcat",
-    ...             "conf": {"part": [{"input": "word"}, "!"]},
-    ...             "options": {"emit": True},
-    ...         }
-    ...     ],
-    ... }
-    >>> pipeline = Pipeline(Workflow.parse(document))
-    >>> list(pipeline)
-    ['hello!']
-    >>> list(pipeline.with_context(Context(inputs={"word": "bye"})))
-    ['bye!']
-
 Conversion rules (``Workflow.parse``)
 -------------------------------------
 
-``Workflow.parse(dag)`` converts a ``PipeDag`` into a validated ``Workflow``:
+When calling ``Workflow.parse`` on a ``PipeDag``, the following occurs:
 
 1. Modules missing an ``id`` are assigned ``sw-{n}`` in 1-based listing order.
 2. When ``wires`` is omitted or empty, consecutive modules are wired in listing order.
 3. Each wire becomes an edge leaving the source's ``out`` port and entering the
-   target's ``in`` port, or the port named by the wire's third entry.
-4. Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow's default output
-   is its single leaf: the one module that never appears as a wire source.
-5. The validated result raises ``InvalidPipelineError`` for: empty ``modules``, a wire
-   referencing an unknown module, a cycle, or a wire with the wrong number of entries.
+   target's ``in`` port (or the port named by the wire's third entry).
+4. Empty ``modules``, a wire referencing an unknown module, a cycle, or a wire with the
+   wrong number of entries raise ``InvalidPipelineError``.
+
+Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow's default output is
+its single leaf: the one module that never appears as a wire source. The result is a
+validated ``Workflow``. List its modules with ``nodes``, run it with ``Pipeline``,
+serialize it to a ``WorkflowDocument`` with ``flow.serialize()``, or hand it to
+``compile_workflow``.
 
 .. code-block:: python
 
@@ -208,46 +198,145 @@ Conversion rules (``Workflow.parse``)
     >>> list(Pipeline(flow))
     [{'forever': True}, {'forever': True}, {'forever': True}]
 
-The result is an ordinary ``Workflow``. List its modules with ``nodes``, run it with
-``Pipeline``, serialize it to a ``WorkflowDocument`` with ``flow.serialize()``, or hand
-it to ``compile_workflow``.
+When calling ``Workflow.parse`` on a ``PipeDef``, you must list every wire. Each wire is
+an object whose ``src`` and ``tgt`` name a module and a port (``_OUTPUT`` or
+``_INPUT``). The ``output`` module marks the workflow's output. Additionally, each
+module must name its module in ``type`` and provide both an ``id`` and a ``conf``.
 
-``Workflow.parse`` also converts a pipe definition (``PipeDef``). It migrates the
-``input`` module's configuration into a workflow input by converting ``type`` as
-follows: ``int`` to integer, ``float`` and ``decimal`` to number, ``bool`` to boolean,
-``url`` to URI string, and anything else to string.
-
-It also converts the ``default`` to match, and the ``prompt`` becomes the schema's
-description. Convert a serialized ``PipeDef`` with ``build-workflow`` before registering
-its directory with ``riko.ext.register_workflow_store``.
+The ``PipeDef`` below builds the same pipeline as the ``PipeDag`` above:
 
 .. code-block:: python
 
-    >>> from riko import Workflow
+    >>> from riko import Pipeline, Workflow
     >>>
     >>> pipe_def = {
     ...     'modules': [
-    ...         {'id': 'sw-1', 'type': 'fetch', 'conf': {}},
-    ...         {'id': 'sw-2', 'type': 'write', 'conf': {'fmt': 'json'}},
+    ...         {'id': 'sw-1', 'type': 'forever', 'conf': {}},
+    ...         {
+    ...             'id': 'sw-2',
+    ...             'type': 'truncate',
+    ...             'conf': {'count': {'type': 'int', 'value': '3'}},
+    ...         },
+    ...         {'id': '_OUTPUT', 'type': 'output', 'conf': {}},
     ...     ],
     ...     'wires': [
     ...         {
-    ...             'id': '_w1',
     ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-1'},
     ...             'tgt': {'id': '_INPUT', 'moduleid': 'sw-2'},
-    ...         }
+    ...         },
+    ...         {
+    ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-2'},
+    ...             'tgt': {'id': '_INPUT', 'moduleid': '_OUTPUT'},
+    ...         },
     ...     ],
     ... }
     >>> flow = Workflow.parse(pipe_def)
-    >>> node = flow.nodes["sw-2"]
-    >>> node.backend.value
-    'file'
-    >>> node.fmt.value
-    'json'
+    >>> list(flow.nodes)
+    ['sw-1', 'sw-2']
     >>> flow.outputs['default']
     Endpoint(node='sw-2', port='out')
+    >>> list(Pipeline(flow))
+    [{'forever': True}, {'forever': True}, {'forever': True}]
+
+Unlike ``PipeDag``, ``PipeDef`` can have inputs. The below example extends the above by
+showing how you can feed ``truncate`` a count read from an ``input`` module. Its wire
+enters at the terminal ``count``:
+
+.. code-block:: python
+
+    >>> from riko import Context, Pipeline, Workflow
+    >>>
+    >>> pipe_def = {
+    ...     'modules': [
+    ...         {'id': 'sw-1', 'type': 'forever', 'conf': {}},
+    ...         {
+    ...             'id': 'sw-2',
+    ...             'type': 'truncate',
+    ...             'conf': {'count': {'terminal': 'count', 'type': 'int'}},
+    ...         },
+    ...         {
+    ...             'id': 'sw-3',
+    ...             'type': 'input',
+    ...             'conf': {
+    ...                 'name': 'count',
+    ...                 'type': 'int',
+    ...                 'default': '3',
+    ...                 'prompt': 'How many items?',
+    ...             },
+    ...         },
+    ...         {'id': '_OUTPUT', 'type': 'output', 'conf': {}},
+    ...     ],
+    ...     'wires': [
+    ...         {
+    ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-1'},
+    ...             'tgt': {'id': '_INPUT', 'moduleid': 'sw-2'},
+    ...         },
+    ...         {
+    ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-3'},
+    ...             'tgt': {'id': 'count', 'moduleid': 'sw-2'},
+    ...         },
+    ...         {
+    ...             'src': {'id': '_OUTPUT', 'moduleid': 'sw-2'},
+    ...             'tgt': {'id': '_INPUT', 'moduleid': '_OUTPUT'},
+    ...         },
+    ...     ],
+    ... }
+    >>> flow = Workflow.parse(pipe_def)
+    >>> dict(flow.input_schemas['count'])
+    {'type': 'integer', 'default': 3, 'description': 'How many items?'}
+    >>> pipeline = Pipeline(flow)
+    >>> list(pipeline)
+    [{'forever': True}, {'forever': True}, {'forever': True}]
+    >>> list(pipeline.with_context(Context(inputs={'count': 2})))
+    [{'forever': True}, {'forever': True}]
     >>> Workflow.parse(flow.serialize()) == flow
     True
+
+Workflow inputs
+---------------
+
+While a ``PipeDag`` has no inputs, a ``WorkflowDocument`` may list a top-level
+``input_schemas``. It maps each input to its `JSON Schema`_ (draft 7) ``InputSchema``.
+Any JSON Schema keyword is allowed, and ``type`` must name JSON types. A bare JSON type
+name is shorthand (``"string"`` reads as ``{"type": "string"}``). An input whose schema
+has no ``default`` is required, and a node's ``conf`` or ``map`` keyword refers to an
+input as ``{"input": name}``.
+
+A run fills values from its context's ``inputs`` or ``InputSchema``\'s ``default``. It
+also checks the given values against their ``InputSchema``. It rejects missing inputs
+and invalid values, and substitutes values for their references.
+
+.. code-block:: python
+
+    >>> from riko import Context, Pipeline, Workflow
+    >>>
+    >>> document = {
+    ...     "input_schemas": {
+    ...         "count": {
+    ...             "type": "integer",
+    ...             "default": 3,
+    ...             "description": "How many items?",
+    ...         }
+    ...     },
+    ...     "nodes": [
+    ...         {"id": "sw-1", "name": "forever"},
+    ...         {
+    ...             "id": "sw-2",
+    ...             "name": "truncate",
+    ...             "conf": {"count": {"input": "count"}},
+    ...         },
+    ...     ],
+    ...     "edges": [{"source": {"node": "sw-1"}, "target": {"node": "sw-2"}}],
+    ... }
+    >>> flow = Workflow.parse(document)
+    >>> pipeline = Pipeline(flow)
+    >>> list(pipeline)
+    [{'forever': True}, {'forever': True}, {'forever': True}]
+    >>> list(pipeline.with_context(Context(inputs={"count": 2})))
+    [{'forever': True}, {'forever': True}]
+
+``"default": null`` allows ``null``. ``flow.input_schemas`` lists a parsed workflow's
+input schemas, and ``flow.validate()`` validates them.
 
 Commands
 --------
@@ -266,12 +355,16 @@ Three console scripts work on these files:
     run-pipe -p flow.json
 
 ``build-workflow`` is the lenient one. It reads a serialized ``PipeDag``, a serialized
-pipe definition (``PipeDef``, the older ``{"src": ..., "tgt": ...}`` wire format), or a
-``WorkflowDocument``, and always emits a validated ``WorkflowDocument``. It detects
-which form it was given. Pass ``--format {dag,v1,v2}`` to pin the reading instead. The
-output is indented for reading by default. ``-c``/``--compact`` writes the byte-stable
-single-line form. A file it cannot read or cannot validate is reported on stderr
+``PipeDef``, or a ``WorkflowDocument``, and emits a validated ``WorkflowDocument``. It
+detects which form it was given. Pass ``--format {dag,v1,v2}`` to pin the reading
+instead. The output is indented for reading by default. ``-c``/``--compact`` writes a
+byte-stable single-line form. It reports on stderr if it can't read or validate a file,
 and exits non-zero.
+
+Convert a serialized ``PipeDef`` with ``build-workflow`` before registering its
+directory with ``riko.ext.register_workflow_store``. It migrates the ``input`` module's
+configuration to `Workflow inputs`_. It also converts the ``default``, and the
+``prompt`` becomes the schema's description.
 
 ``compile-workflow`` takes ``WorkflowDocument``\s only. Hand it a serialized ``PipeDag``
 or ``PipeDef`` and it exits with a message telling you to run ``build-workflow``
