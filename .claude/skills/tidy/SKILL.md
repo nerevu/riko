@@ -71,7 +71,11 @@ python .claude/skills/land/gates.py scope tidy | python .claude/skills/tidy/neig
 removed or re-signed definition with its surviving references across `riko/`,
 `tests/`, `docs/`, `_docs/`, `examples/`, `README.rst`, and `CONTRIBUTING.rst`,
 and the names the same file added, so a rename reads as one. Grep by hand only
-for a term the diff changed in meaning without touching its definition.
+for a term the diff changed in meaning without touching its definition. Apply the
+stale names it finds in checked batches with
+`python .claude/skills/tidy/replace_exact.py FILE SPEC.json` (a JSON list of
+`[old, new, expected_count]`; any count mismatch writes nothing), so a rename never
+also hits an unrelated use of the same text.
 
 ## 2. Load the rules (one batch)
 
