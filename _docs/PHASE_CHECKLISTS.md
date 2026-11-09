@@ -210,7 +210,8 @@ verbosity is process-level (`set_log_level`), not a `Context` field.
 - `Context` stays a hand-written class (the legacy-kwarg shim fought `@dataclass`
   sugar).
 
-**Carryover:** none.
+**Carryover:** retiring the describe modes in favor of `describe_module` and the
+`Workflow.input_schemas`/`.dependencies` attributes → R4E (ruled 2026-11-09).
 
 ## P7 — Sync/async parity + true async streaming
 

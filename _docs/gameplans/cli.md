@@ -378,7 +378,8 @@ definition and uses normal iteration/private execution semantics.
 
 The workflow module runs only because `**_` swallows `test=`. C4 must decide whether
 Python files remain `pipeline run` inputs and, if so, which entry-point signature is the
-contract (R4D's input schemas replace the `test`/describe-inputs behavior). No
+contract (R4D's input schemas replace the `test` behavior; R4E retires the describe
+modes in favor of `describe_module()` and `Workflow` attributes). No
 tripwire: current behavior is correct, so there is nothing for a strict xfail to probe.
 
 Where a run service is used, canonical Python constructs:

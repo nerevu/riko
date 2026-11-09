@@ -1322,7 +1322,8 @@ Deliver:
   a build-time check rejects an input whose written schema the field does not accept, or
   that feeds fields no value can satisfy; `flow.serialize()` writes each input's merged
   schema, so a stored document stays self-describing without the module catalog;
-  describe-inputs mode reports the merged schema, so there is one view;
+  `describe_module()` and the `Workflow.input_schemas` attribute report the merged
+  schema, so there is one view;
 - `ModuleDefinition` declares its configuration contract, derived from the existing
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
@@ -1337,6 +1338,12 @@ Deliver:
   (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is
   needed;
 - the same check for built-in and entry-point modules;
+- the describe modes retired (ruled 2026-11-09, [release-readiness.md
+  § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)):
+  a stored workflow's `describe_module()` entry carries its inputs' schemas and
+  dependencies; `ExecutionMode.DESCRIBE*`, `Context.describe_input`/
+  `describe_dependencies`, and the describe branches in generated pipes and the
+  `pyworkflows` probes are removed (a CHANGES "Removed" line), so a pipe only runs;
 - interface classification by `isasync` rather than by attribute name, so a single async
   implementation named `pipe` (`@processor async def pipe`) wraps as the async interface
   instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;

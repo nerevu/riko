@@ -176,6 +176,12 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   than global Pipeline execution config.
 - **Collapse the runtime-utility surface.** De-emphasize backend/bridge helpers from the
   stable API; users write normal Python iteration.
+- **Metadata by query or attribute, not by run mode (ruled 2026-11-09).** A pipe only
+  yields and only runs. A workflow's inputs' schemas and dependencies come from
+  `describe_module()` or the `Workflow.input_schemas`/`.dependencies` attributes, never
+  from a `Context.mode` describe mode. R4E retires `ExecutionMode.DESCRIBE*`,
+  `Context.describe_input`/`describe_dependencies`, and the describe branches in
+  generated pipes and the `pyworkflows` probes.
 
 **Migration shape:**
 

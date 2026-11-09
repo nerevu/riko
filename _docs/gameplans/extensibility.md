@@ -426,10 +426,11 @@ Infer everything that can be inferred; authors write only what cannot (decided
 field takes that field's schema, and an input's schema is the merge of what the author
 wrote and every field the input feeds. Validation rejects a written schema the field
 does not accept, and an input feeding fields no single value satisfies. Serialization
-writes the merged schema, so a stored document stays self-describing. Describe-inputs
-mode reports the merged schema, whether the input is required, and every field that uses
-it: one view, never a module-side and a workflow-side copy. Until R4E, every referenced
-input needs a written schema. A migrated `PipeDef` `input` module's v1 cast type maps
+writes the merged schema, so a stored document stays self-describing.
+`describe_module()` and the `Workflow.input_schemas` attribute report the merged schema,
+whether the input is required, and every field that uses it: one view, never a
+module-side and a workflow-side copy. Until R4E, every referenced input needs a written
+schema. A migrated `PipeDef` `input` module's v1 cast type maps
 into its schema (`int` → integer, `float`/`decimal` → number, `bool` → boolean, `url` →
 URI string; free-form types such as `date` stay strings the node casts).
 
