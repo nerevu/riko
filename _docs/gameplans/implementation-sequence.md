@@ -311,7 +311,7 @@ Do not force every current legacy call site through the new hierarchy in this PR
 Establish the public types and use them in new code; migrate old call sites when
 touched.
 
-As built, the tree in `riko/base/exceptions.py` has `RikoError`, the
+As built, the tree in `riko/base/_exceptions.py` has `RikoError`, the
 `ModuleError`/`TargetError`/ `PipelineError` (incl. `PipelineStateError`)/`PubSubError`
 families, and the `IdentityError` branch's
 `IdentityEncodingError`/`CyclicIdentityError`. The rest of the tree lands with its first

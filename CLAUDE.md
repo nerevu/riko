@@ -66,7 +66,7 @@ Important concrete locations:
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/_exceptions.py` (public facade
-  `riko/base/exceptions.py`) + `_api_surface.py`
+  `riko/exceptions.py`) + `_api_surface.py`
 - generated config objects: `riko/coercion/_configs.py`
 - generated discovery/id files: `riko/modules/_names.py` + `riko/types/_module_ids.py`
 

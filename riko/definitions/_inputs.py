@@ -114,7 +114,7 @@ def compile_input_schema(name: str, schema: InputSchema) -> Func[object]:
         >>> compile_input_schema("q", {"type": "strng"})
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
+        riko.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
 
     """
     thawed = thaw(schema)
@@ -327,7 +327,7 @@ def resolve_inputs(schemas: InputSchemas, given: RawInputs | None) -> Inputs | N
         >>> resolve_inputs(schemas, {"limit": "x"})
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...is invalid: data must be integer
+        riko.exceptions.InvalidPipelineError: ...is invalid: data must be integer
 
     """
     if given is None and not schemas:

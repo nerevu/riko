@@ -226,7 +226,7 @@ class ExecutionSettings:
             True
             >>> ExecutionSettings(executor="process").async_policy
             Traceback (most recent call last):
-            riko.base.exceptions.InvalidPipelineError: ...requires synchronous execution
+            riko.exceptions.InvalidPipelineError: ...requires synchronous execution
 
         """
         executor, concurrency = self.executor, self.concurrency

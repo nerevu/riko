@@ -348,7 +348,7 @@ def json_freeze(value: object, key: SortKey[object] | None = None) -> FrozenJSON
         >>> json_freeze({"a": {1, 2}})
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...d pipeline: set is not JSON-native
+        riko.exceptions.InvalidPipelineError: ...d pipeline: set is not JSON-native
 
     """
     return _freeze_value(value, True, key=key)
@@ -427,7 +427,7 @@ def instances_freezer[T](
         >>> freezer({"b": "x"})
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...'b' must be of type int, not str
+        riko.exceptions.InvalidPipelineError: ...'b' must be of type int, not str
 
     """
 
@@ -486,7 +486,7 @@ def mapping_converter[FV](
         >>> converter("abc")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...inputs must be a mapping, not str
+        riko.exceptions.InvalidPipelineError: ...inputs must be a mapping, not str
 
     """
 
@@ -534,7 +534,7 @@ def normalize_mapping(
         >>> normalize_mapping([("a", 1)], "inputs", strict=True)
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...inputs must be a mapping, not list
+        riko.exceptions.InvalidPipelineError: ...inputs must be a mapping, not list
 
     """
     if item is None:

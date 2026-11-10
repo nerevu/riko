@@ -17,8 +17,8 @@ import pytest
 
 import riko
 import riko.bado
-import riko.base.exceptions
 import riko.definitions._workflow_definition
+import riko.exceptions
 import riko.ext
 import riko.ext.codegen
 import riko.ext.modules
@@ -169,14 +169,14 @@ SURFACE_MODULES = (
     riko.definitions._workflow_definition,
     riko.ext,
     riko.modules,
-    riko.base.exceptions,
+    riko.exceptions,
     riko,
     riko.types,
 )
 
 PARTIAL_SURFACES = (
     (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
+    (riko.exceptions.__all__, ROOT_EXCEPTIONS),
 )
 
 CONF_TYPES = riko.types.modules.__all__
@@ -755,12 +755,12 @@ class TestImportSurface:
         mismatches = sorted(
             name
             for name in ROOT_EXCEPTIONS
-            if getattr(riko, name) is not getattr(riko.base.exceptions, name)
+            if getattr(riko, name) is not getattr(riko.exceptions, name)
         )
         assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
 
     def test_exceptions_naming_the_public_module_are_importable_from_it(self):
-        public = riko.base.exceptions
+        public = riko.exceptions
         roots = (public.RikoError, public.RikoWarning)
         unexported = sorted(
             cls.__name__

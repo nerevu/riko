@@ -14,6 +14,7 @@ internals stay in `_docs/INTERNALS.md`.
 |---|---|
 | `riko/__init__.py` | stable application facade; re-exports the supported `riko` surface rather than owning implementations |
 | `riko/_package.py` | package/version metadata classified with the base layer |
+| `riko/exceptions.py` | public facade that re-exports every exception and warning from `riko/base/_exceptions.py`; the documented `riko.exceptions` import path, classified into the `base` layer by `EXACT_LAYERS` |
 | `riko/base/` | bottom-layer primitives shared across the package: constants, path/location helpers, logging, strings/iterators/date/graph utilities, generic guards/narrowing and record helpers, sentinels, exceptions, and the private API-surface declaration |
 | `riko/types/` | static contracts: streams/items, module configs, options, compiler/pipeline/resource/I/O types, enums, wrappers, immutable contract records (`FrozenDict`) |
 | `riko/coercion/` | conversion and normalization: casts, `DynamicConf`, generated objconf types, objectification, date/dataclass coercion, canonical-identity helpers |
@@ -35,8 +36,7 @@ internals stay in `_docs/INTERNALS.md`.
 |---|---|
 | `riko/base/_api_surface.py` | **private** declaration of `STABLE`, `EXTENSION`, `TYPES`, and private surface name sets; source for generated blocks in `_docs/API_SURFACE.md` |
 | `riko/base/_verbs.py` | **private** declaration of the general-purpose function-name verbs (`VERBS`) and their mistaken pairs (`VERB_PAIRS`); source for the generated verb tables and the `lint --docstrings` summary-verb check |
-| `riko/base/exceptions.py` | public facade that re-exports every exception and warning from `_exceptions.py`; the documented `riko.base.exceptions` import path |
-| `riko/base/_exceptions.py` | the exception hierarchy rooted at `RikoError` and the warnings rooted at `RikoWarning`; each class's `__module__` names the public `riko.base.exceptions`, so tracebacks and pickles show the public path; internal code imports from here (private `base` modules may not import the public facade); stable root exceptions are re-exported from `riko` |
+| `riko/base/_exceptions.py` | the exception hierarchy rooted at `RikoError` and the warnings rooted at `RikoWarning`; each class's `__module__` names the public `riko.exceptions`, so tracebacks and pickles show the public path; internal code imports from here (private `base` modules may not import the public facade); stable root exceptions are re-exported from `riko` |
 | `riko/base/_config.py` | static project policy (layer DAG, port/output tokens, `SINK_NAMES`, `SUBPIPE_TYPE`, `LINE_LENGTH`), `get_worker_cnt` worker-pool sizing, and the frozen `Settings` with `RIKO_*` overrides (`node_threads` from `RIKO_NODE_THREADS`, the `shipped_call_cache_size`/`parsed_date_cache_size` cache bounds among them); also the settings-derived runtime constants (`DEF_CONCURRENCY_LIMIT`, `STREAMING_THRESHOLD`, `ENCODING`) and `FOREVER_ITEM` |
 | `riko/base/_paths.py` | package/repository path constants (`ROOT_DIR`, `PACKAGE_DIR`, `TESTS_DIR`, `DOCS_DIR`, `PYPROJECT`, and the generated-file paths `CONFIG_PATH`/`MODULE_NAMES_PATH`/`MODULE_IDS_PATH`/`API_SURFACE_PATH`/`USER_AGENTS_PATH`) and filesystem helpers used by runtime and CLI code |
 | `riko/base/_user_agents.py` | **generated** `DESKTOP_USER_AGENTS`/`MOBILE_USER_AGENTS` tuples that `resolve_user_agent` (`riko/types/_io.py`) draws from for `UserAgent.DESKTOP`/`MOBILE`, and from both for `RANDOM`; regenerate with `manage codegen --user-agents` |

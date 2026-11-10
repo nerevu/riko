@@ -72,6 +72,7 @@ ROOT_EXCEPTIONS = frozenset(
         "InvalidPipelineError",
         "PipelineError",
         "PipelineStateError",
+        "RemovedOptionError",
         "RikoError",
         "UnsupportedModuleError",
         "UnsupportedTargetError",

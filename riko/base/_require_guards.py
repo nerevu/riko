@@ -236,11 +236,11 @@ def require_from_keys(
         >>> require_point({"y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...missing point key(s): ['x']
+        riko.exceptions.InvalidPipelineError: ...missing point key(s): ['x']
         >>> require_point({"x": 1, "z": 3})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown point key(s): ['z']
+        riko.exceptions.InvalidPipelineError: ...unknown point key(s): ['z']
 
     """
     _required = frozenset(required)
@@ -311,7 +311,7 @@ def require_from_typed_dict[T](
         >>> require_from_typed_dict(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
 
     """
     cls = _require_typed_dict_class(item)
@@ -373,11 +373,11 @@ def require_from_attrs[T: AttrsInstance](
         >>> require_from_attrs(Point, not_required={"y"})({"y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...missing Point key(s): ['x']
+        riko.exceptions.InvalidPipelineError: ...missing Point key(s): ['x']
         >>> require_from_attrs(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
 
     """
     excluded = frozenset(exclude)
@@ -684,7 +684,7 @@ def validator_from_typed_dict[T](
         >>> Shape({"y": 1})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
+        riko.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
 
     """
     require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
@@ -731,7 +731,7 @@ def require_instance[T](
         >>> require_instance(str, 1)
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...value must be of type str, not int
+        riko.exceptions.InvalidPipelineError: ...value must be of type str, not int
 
     """
     if not isinstance(value, cls):
@@ -851,7 +851,7 @@ def require_nonblank_str(
         >>> require_nonblank_str(" ", "node 'id'")
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...node 'id' must not be blank
+        riko.exceptions.InvalidPipelineError: ...node 'id' must not be blank
 
     """
     text = require_str(value, what, error=error)
@@ -915,7 +915,7 @@ def require_from_form[T](
         >>> require_from_form(Point)({"y": 1})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
         >>> require_coord = require_from_form(Coord, error=TypeError)
         >>> require_coord({"y": 1})
         {'y': 1}
@@ -926,7 +926,7 @@ def require_from_form[T](
         >>> require_from_form(Literal["a", "b"], "mode")("c")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
+        riko.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
 
     """
     default_what = resolve_default(what, getattr(form, "__name__", "value"))
@@ -1022,7 +1022,7 @@ def require_strlike(
         >>> require_strlike(["a", 1], "keys")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...keys must be a str or iterable...
+        riko.exceptions.InvalidPipelineError: ...keys must be a str or iterable...
 
     """
     if isinstance(value, str):
@@ -1086,7 +1086,7 @@ def normalize_strs(
         >>> normalize_strs(None, "names", strict=True)
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...names must be a string or...
+        riko.exceptions.InvalidPipelineError: ...names must be a string or...
 
     """
     if value is None and not strict:
@@ -1140,7 +1140,7 @@ def require_finite(
         >>> require_finite(float("inf"), "rate")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...rate must be a finite float...
+        riko.exceptions.InvalidPipelineError: ...rate must be a finite float...
 
     """
     if isnan(value) or isinf(value):
