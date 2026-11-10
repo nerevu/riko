@@ -1,7 +1,7 @@
 """
-Smoke-tests rehearse_plan.py's full checks on a throwaway tree.
+Smoke-tests rehearse_plan.py's checks and split_hunks.py's listing on throwaway trees.
 
-Run after editing rehearse_plan.py:
+Run after editing rehearse_plan.py or split_hunks.py:
 
     uv run --active pytest .claude/skills/land/test_rehearse_plan.py
 """
@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 import rehearse_plan
+import split_hunks
 
 
 @pytest.fixture
@@ -81,3 +82,14 @@ def test_autosquash_moves_older_pending_fixups(repo):
     step = rehearse_plan.Step("fixup", second, commit=planned, tree=tree)
 
     assert rehearse_plan.rehearse_autosquash([step]) == "ok"
+
+
+def test_hunk_list_shows_bodies(repo, capsys, monkeypatch):
+    Path("f").write_text("1\ntwo\n3\n")
+    monkeypatch.setattr(sys, "argv", ["split_hunks.py", "list", "--body", "1"])
+    split_hunks.main()
+    assert capsys.readouterr().out.splitlines() == [
+        "f:2\t+1/-1\ttwo",
+        "    -2",
+        "    ...",
+    ]
