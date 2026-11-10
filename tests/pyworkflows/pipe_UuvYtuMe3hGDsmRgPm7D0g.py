@@ -6,15 +6,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.definitions._inputs import resolve_inputs
+from riko.ext import resolve_inputs, workflow
 from riko.modules.csv import pipe as csv
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
 from riko.modules.loop import pipe as loop
 from riko.modules.rename import pipe as rename
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     CsvRawConf,
     FilterRawConf,
@@ -31,168 +29,159 @@ if TYPE_CHECKING:
 INPUT_SCHEMAS = {
     "name": {"default": "Lancaster", "description": "Name", "type": "string"}
 }
-DEPENDENCIES = ["csv", "filter", "input", "loop", "rename"]
 
 
-@workflow(subtype="transformer")
+@workflow(
+    subtype="transformer",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["csv", "filter", "input", "loop", "rename", "strconcat"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        inputs = resolve_inputs(
-            INPUT_SCHEMAS, None if context is None else context.inputs
-        )
-        sw_371 = _input(
-            item,
-            conf=InputRawConf({"input_key": {"type": "text", "value": "name"}}),
-            inputs=inputs,
-            context=context,
-        )
-        sw_340 = csv(
-            None,
-            conf=CsvRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/spreadsheets.google.com_pub_key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv",
+    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    sw_371 = _input(
+        item,
+        conf=InputRawConf({"input_key": {"type": "text", "value": "name"}}),
+        inputs=inputs,
+        context=context,
+    )
+    sw_340 = csv(
+        None,
+        conf=CsvRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/spreadsheets.google.com_pub_key=p1rHUqg4g420UMaN1sPvaRg&output=csv&range=a1_AB646.csv",
+                },
+                "other_sep": {"type": "text", "value": ""},
+                "col_names": [
+                    {"type": "text", "value": "Member"},
+                    {"type": "text", "value": "firstName"},
+                    {"type": "text", "value": "TotalAllowancesClaimedIncTravel"},
+                    {"type": "text", "value": "TotalBasicAllowancesExcTravel"},
+                    {"type": "text", "value": "TotalTravelClaimed"},
+                    {"type": "text", "value": "CostofStayingAwayFromMainHome"},
+                    {"type": "text", "value": "LondonSupplement"},
+                    {"type": "text", "value": "OfficeRunningCosts"},
+                    {"type": "text", "value": "StaffingCosts"},
+                    {"type": "text", "value": "CentrallyPurchasedStationery"},
+                    {"type": "text", "value": "StationeryAssocdPostageCosts"},
+                    {"type": "text", "value": "CentralITProvision"},
+                    {"type": "text", "value": "StaffCoverAndOtherCosts"},
+                    {"type": "text", "value": "CommsAllowance"},
+                    {"type": "text", "value": "Mileage"},
+                    {"type": "text", "value": "MPRail"},
+                    {"type": "text", "value": "MPAir"},
+                    {"type": "text", "value": "MPMisc"},
+                    {"type": "text", "value": "MPOtherMileage"},
+                    {"type": "text", "value": "MPOtherRail"},
+                    {"type": "text", "value": "MPOtherAir"},
+                    {"type": "text", "value": "MPOtherEuropean"},
+                    {"type": "text", "value": "SpouseTotal"},
+                    {"type": "text", "value": "SpouseNumOfJourneys"},
+                    {"type": "text", "value": "FamilyTotal"},
+                    {"type": "text", "value": "FamilyNumOfJourneys"},
+                    {"type": "text", "value": "EmployeeTotal"},
+                    {"type": "text", "value": "EmployeeNumOfJourneys"},
+                ],
+                "delimiter": {"type": "text", "value": ","},
+                "skip_rows": {"type": "int", "value": "0"},
+            }
+        ),
+        context=context,
+    )
+    sw_375 = _filter(
+        sw_340,
+        conf=FilterRawConf(
+            {
+                "combine": {"type": "text", "value": "and"},
+                "permit": {"type": "bool", "value": True},
+                "rule": [
+                    {
+                        "field": {"type": "text", "value": "Member"},
+                        "op": {"type": "text", "value": "contains"},
+                        "value": {"terminal": "RULE_1_value", "type": "text"},
+                    }
+                ],
+            }
+        ),
+        context=context,
+        RULE_1_value=sw_371,
+    )
+    sw_385 = rename(
+        sw_375,
+        conf=RenameRawConf(
+            {
+                "rule": [
+                    {
+                        "field": {"type": "text", "value": "Member"},
+                        "copy": {"type": "bool", "value": True},
+                        "newval": {"type": "text", "value": "title"},
+                    }
+                ]
+            }
+        ),
+        emit=True,
+        count="all",
+        context=context,
+    )
+    sw_400 = loop(
+        sw_385,
+        conf=StrconcatRawConf(
+            {
+                "part": [
+                    {"type": "text", "value": "Total allowances claimed, inc travel: "},
+                    {"type": "text", "subkey": "TotalAllowancesClaimedIncTravel"},
+                    {
+                        "type": "text",
+                        "value": "<br>Total basic allowances claimed, ex travel: ",
                     },
-                    "other_sep": {"type": "text", "value": ""},
-                    "col_names": [
-                        {"type": "text", "value": "Member"},
-                        {"type": "text", "value": "firstName"},
-                        {"type": "text", "value": "TotalAllowancesClaimedIncTravel"},
-                        {"type": "text", "value": "TotalBasicAllowancesExcTravel"},
-                        {"type": "text", "value": "TotalTravelClaimed"},
-                        {"type": "text", "value": "CostofStayingAwayFromMainHome"},
-                        {"type": "text", "value": "LondonSupplement"},
-                        {"type": "text", "value": "OfficeRunningCosts"},
-                        {"type": "text", "value": "StaffingCosts"},
-                        {"type": "text", "value": "CentrallyPurchasedStationery"},
-                        {"type": "text", "value": "StationeryAssocdPostageCosts"},
-                        {"type": "text", "value": "CentralITProvision"},
-                        {"type": "text", "value": "StaffCoverAndOtherCosts"},
-                        {"type": "text", "value": "CommsAllowance"},
-                        {"type": "text", "value": "Mileage"},
-                        {"type": "text", "value": "MPRail"},
-                        {"type": "text", "value": "MPAir"},
-                        {"type": "text", "value": "MPMisc"},
-                        {"type": "text", "value": "MPOtherMileage"},
-                        {"type": "text", "value": "MPOtherRail"},
-                        {"type": "text", "value": "MPOtherAir"},
-                        {"type": "text", "value": "MPOtherEuropean"},
-                        {"type": "text", "value": "SpouseTotal"},
-                        {"type": "text", "value": "SpouseNumOfJourneys"},
-                        {"type": "text", "value": "FamilyTotal"},
-                        {"type": "text", "value": "FamilyNumOfJourneys"},
-                        {"type": "text", "value": "EmployeeTotal"},
-                        {"type": "text", "value": "EmployeeNumOfJourneys"},
-                    ],
-                    "delimiter": {"type": "text", "value": ","},
-                    "skip_rows": {"type": "int", "value": "0"},
-                }
-            ),
-            context=context,
-        )
-        sw_375 = _filter(
-            sw_340,
-            conf=FilterRawConf(
-                {
-                    "combine": {"type": "text", "value": "and"},
-                    "permit": {"type": "bool", "value": True},
-                    "rule": [
-                        {
-                            "field": {"type": "text", "value": "Member"},
-                            "op": {"type": "text", "value": "contains"},
-                            "value": {"terminal": "RULE_1_value", "type": "text"},
-                        }
-                    ],
-                }
-            ),
-            context=context,
-            RULE_1_value=sw_371,
-        )
-        sw_385 = rename(
-            sw_375,
-            conf=RenameRawConf(
-                {
-                    "rule": [
-                        {
-                            "field": {"type": "text", "value": "Member"},
-                            "copy": {"type": "bool", "value": True},
-                            "newval": {"type": "text", "value": "title"},
-                        }
-                    ]
-                }
-            ),
-            emit=True,
-            count="all",
-            context=context,
-        )
-        sw_400 = loop(
-            sw_385,
-            conf=StrconcatRawConf(
-                {
-                    "part": [
-                        {
-                            "type": "text",
-                            "value": "Total allowances claimed, inc travel: ",
-                        },
-                        {"type": "text", "subkey": "TotalAllowancesClaimedIncTravel"},
-                        {
-                            "type": "text",
-                            "value": "<br>Total basic allowances claimed, ex travel: ",
-                        },
-                        {"type": "text", "subkey": "TotalBasicAllowancesExcTravel"},
-                        {"type": "text", "value": "<br>Total Travel claimed: "},
-                        {"type": "text", "subkey": "TotalTravelClaimed"},
-                        {"type": "text", "value": "<br>MP Mileage: "},
-                        {"type": "text", "subkey": "Mileage"},
-                        {"type": "text", "value": "<br>MP Rail Travel: "},
-                        {"type": "text", "subkey": "MPRail"},
-                        {"type": "text", "value": "<br>MP Air Travel: "},
-                        {"type": "text", "subkey": "MPAir"},
-                        {
-                            "type": "text",
-                            "value": "<br>Cost of staying away from main home: ",
-                        },
-                        {"type": "text", "subkey": "CostofStayingAwayFromMainHome"},
-                        {"type": "text", "value": "<br>London Supplement: "},
-                        {"type": "text", "subkey": "LondonSupplement"},
-                        {"type": "text", "value": "<br>Office Running Costs: "},
-                        {"type": "text", "subkey": "OfficeRunningCosts"},
-                        {"type": "text", "value": "<br>Staffing Costs: "},
-                        {"type": "text", "subkey": "StaffingCosts"},
-                    ]
-                }
-            ),
-            emit=False,
-            assign="description",
-            count="all",
-            context=context,
-            embed=strconcat,
-        )
-        sw_573 = loop(
-            sw_400,
-            conf=StrconcatRawConf(
-                {
-                    "part": [
-                        {"type": "text", "subkey": "firstName"},
-                        {"type": "text", "value": " "},
-                        {"type": "text", "subkey": "Member"},
-                    ]
-                }
-            ),
-            emit=False,
-            assign="title",
-            count="all",
-            context=context,
-            embed=strconcat,
-        )
-        _OUTPUT = sw_573
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        _OUTPUT = iter([INPUT_SCHEMAS])
-    else:
-        _OUTPUT = iter(DEPENDENCIES)
+                    {"type": "text", "subkey": "TotalBasicAllowancesExcTravel"},
+                    {"type": "text", "value": "<br>Total Travel claimed: "},
+                    {"type": "text", "subkey": "TotalTravelClaimed"},
+                    {"type": "text", "value": "<br>MP Mileage: "},
+                    {"type": "text", "subkey": "Mileage"},
+                    {"type": "text", "value": "<br>MP Rail Travel: "},
+                    {"type": "text", "subkey": "MPRail"},
+                    {"type": "text", "value": "<br>MP Air Travel: "},
+                    {"type": "text", "subkey": "MPAir"},
+                    {
+                        "type": "text",
+                        "value": "<br>Cost of staying away from main home: ",
+                    },
+                    {"type": "text", "subkey": "CostofStayingAwayFromMainHome"},
+                    {"type": "text", "value": "<br>London Supplement: "},
+                    {"type": "text", "subkey": "LondonSupplement"},
+                    {"type": "text", "value": "<br>Office Running Costs: "},
+                    {"type": "text", "subkey": "OfficeRunningCosts"},
+                    {"type": "text", "value": "<br>Staffing Costs: "},
+                    {"type": "text", "subkey": "StaffingCosts"},
+                ]
+            }
+        ),
+        emit=False,
+        assign="description",
+        count="all",
+        context=context,
+        embed=strconcat,
+    )
+    sw_573 = loop(
+        sw_400,
+        conf=StrconcatRawConf(
+            {
+                "part": [
+                    {"type": "text", "subkey": "firstName"},
+                    {"type": "text", "value": " "},
+                    {"type": "text", "subkey": "Member"},
+                ]
+            }
+        ),
+        emit=False,
+        assign="title",
+        count="all",
+        context=context,
+        embed=strconcat,
+    )
+    _OUTPUT = sw_573
 
     return _OUTPUT
 

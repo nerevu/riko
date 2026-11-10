@@ -77,8 +77,12 @@ The `tests/pyworkflows/pipe_*.py` and `examples/pyworkflows/pipe_*.py` modules a
 reduced covering set of hand-maintained typed probes. Their job is to put the
 `<Name>RawConf`/`<Name>Conf`/`<Name>ConfRule` shapes in real call position so pyright
 surfaces a config-contract error; the same test asserts each probe yields the items
-its JSON sibling does. There is no generator behind them — edit them by hand, and add
-one only for a config shape the surviving probes do not already reach.
+its JSON sibling does. Each probe also demonstrates the `@workflow` contract: its pipe
+declares `input_schemas=`/`dependencies=`, and
+`TestWorkflowProbes.test_probe_declares_what_its_document_declares` asserts the stamped
+metadata `describe_module` reads equals its sibling `Workflow`'s. There is no generator
+behind them — edit them by hand, and add one only for a config shape the surviving
+probes do not already reach.
 
 The compiler implementation lives under `riko/runtime/`; workflow loading lives under
 `riko/definitions/`:

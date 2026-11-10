@@ -434,6 +434,17 @@ schema. A migrated `PipeDef` `input` module's v1 cast type maps
 into its schema (`int` → integer, `float`/`decimal` → number, `bool` → boolean, `url` →
 URI string; free-form types such as `date` stay strings the node casts).
 
+A hand-written workflow module declares the same facts on its pipe (shipped 2026-11-09).
+`riko.ext.workflow` tags the pipe; its keyword-only `input_schemas=None` and
+`dependencies=None` (beside `subtype="transformer"`, `loopable=True`, and
+`isasync=None`) stamp its inputs' schemas (shorthand such as `{"q": "string"}` or full
+JSON Schema, normalized as a `Workflow` normalizes them) and its dependencies (sorted,
+duplicate-free). `describe_module()` reports what the decorator received, and `None` for
+either when omitted; a generated or document-backed workflow's pipe carries its
+`Workflow`'s own. `riko.ext.resolve_inputs` gives the pipe the run's input values, each
+schema's default filled and the values validated, so a hand-written pipe resolves inputs
+exactly as a `Workflow` run does.
+
 ### E3.7 Targets and Formats
 
 A `Target` is a destination identified by its `backend`. The base `Target` protocol and

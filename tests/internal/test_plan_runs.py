@@ -27,10 +27,8 @@ from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union_pipe
 from riko.runtime._module_registry import module_registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
-from riko.runtime._run import build_description
 from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
 from riko.runtime._workflow_stores import MappingStore
-from riko.types._enums import ExecutionMode
 from riko.types._workflow import Endpoint
 from tests import async_test, skipif_issync
 from tests._execution import (
@@ -1085,10 +1083,6 @@ class TestPlanRun:
             pytest.raises(InvalidPipelineError, match="requires a seed"),
         ):
             execution.run(plan)
-
-    def test_describing_a_run_mode_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unexpected describe"):
-            build_description(Workflow(), ExecutionMode.RUN)
 
     def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
         schemas = '{"q": {"type": "string", "default": "x"}}'

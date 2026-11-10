@@ -29,7 +29,7 @@ from riko.base._exceptions import (
     PipelineStateError,
 )
 from riko.base._paths import get_path
-from riko.definitions._context import Context, ExecutionMode
+from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
@@ -150,13 +150,6 @@ PREDICATE_PENDING = pytest.mark.xfail(
 )
 
 BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")
-
-MODES = [
-    (ExecutionMode.RUN, False, False),
-    (ExecutionMode.DESCRIBE_INPUTS, True, False),
-    (ExecutionMode.DESCRIBE_DEPENDENCIES, False, True),
-    (ExecutionMode.DESCRIBE, True, True),
-]
 
 READER = "settings_resource_reader"
 
@@ -389,7 +382,7 @@ class TestPipelineChaining:
             pytest.param(
                 lambda p: p | p.with_context(Context(inputs={"a": 1})),
                 InvalidPipelineError,
-                "not a mode, inputs, or test flag",
+                "not inputs or a test flag",
                 id="context",
             ),
         ],
@@ -1406,46 +1399,6 @@ class TestAsyncFanInParallel:
         assert peak == 2
 
 
-class TestContextMode:
-    """A ``Context`` carries one ``ExecutionMode`` the describe flags derive from."""
-
-    def test_default_mode_is_run(self):
-        assert Context().mode is ExecutionMode.RUN
-
-    @pytest.mark.parametrize(("mode", "wants_input", "wants_deps"), MODES)
-    def test_mode_drives_describe_properties(self, mode, wants_input, wants_deps):
-        context = Context(mode=mode)
-        assert context.describe_input is wants_input
-        assert context.describe_dependencies is wants_deps
-
-    def test_orthogonal_flags_preserved(self):
-        context = Context(mode=ExecutionMode.DESCRIBE, test=True)
-        assert context.test is True
-        assert context.mode is ExecutionMode.DESCRIBE
-
-    def test_describe_properties_are_read_only(self):
-        context = Context()
-
-        with pytest.raises(AttributeError):
-            context.describe_input = True  # pyright: ignore[reportAttributeAccessIssue]
-
-    @pytest.mark.parametrize(
-        "mode", [ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE_DEPENDENCIES]
-    )
-    def test_describing_pipeline_does_not_run_it(self, mode):
-        pulled: list[dict[str, int]] = []
-
-        def source() -> Iterator[dict[str, int]]:
-            for item in [{"x": 1}, {"x": 2}]:
-                pulled.append(item)
-                yield item
-
-        pipeline = Pipeline().hash()
-        described = pipeline.with_context(Context(mode=mode))
-        list(described(source()))
-        assert pulled == []
-
-
 FREEZING_CONTEXTS = [
     pytest.param(lambda inputs: Context(inputs=inputs), id="constructor"),
     pytest.param(lambda inputs: Context().replace(inputs=inputs), id="replace"),
@@ -1490,17 +1443,16 @@ class TestContext:
             meta["ids"] = ()
 
     def test_roundtrips_through_pickle(self):
-        base = Context(mode=ExecutionMode.DESCRIBE, inputs={"count": 2}, test=True)
+        base = Context(inputs={"count": 2}, test=True)
         context = base.with_resource("client", Resource.from_external(Connection()))
         restored = cast("Context", loads(dumps(context)))  # noqa: S301
 
-        assert restored.mode is ExecutionMode.DESCRIBE
         assert restored.test is True
         assert restored.inputs == {"count": 2}
         assert list(restored.resources) == ["client"]
 
         with pytest.raises(AttributeError):
-            restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]
+            restored.test = False  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_resources_mapping_is_read_only(self):
         context = Context()
@@ -1517,17 +1469,6 @@ class TestContext:
         with pytest.raises(InvalidPipelineError, match="set is not JSON-native"):
             Context(inputs={"tags": {"a"}})  # pyright: ignore[reportArgumentType]
 
-    @pytest.mark.parametrize(
-        ("mode", "match"),
-        [
-            pytest.param(5, "Invalid ExecutionMode: 5", id="non-string"),
-            pytest.param("bogus", "Invalid ExecutionMode: 'bogus'", id="unknown"),
-        ],
-    )
-    def test_invalid_mode_is_rejected(self, mode: Any, match: str):
-        with pytest.raises(ValueError, match=match):
-            Context(mode=mode)
-
     def test_resources_must_be_reusable(self):
         with pytest.raises(
             TypeError, match="Context resource 'r' must be of type ReusableResource"
@@ -1539,7 +1480,7 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    @pytest.mark.parametrize("name", ["_mode", "_inputs", "_resources", "extra"])
+    @pytest.mark.parametrize("name", ["_inputs", "_resources", "extra"])
     def test_private_fields_cannot_be_set(self, name: str):
         context = Context()
 
@@ -1553,7 +1494,7 @@ class TestContext:
         context = Context()
 
         with pytest.raises(AttributeError):
-            context.mode = ExecutionMode.DESCRIBE  # pyright: ignore[reportAttributeAccessIssue]
+            context.test = True  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_rejects_the_removed_submodule_flag(self):
         with pytest.raises(TypeError):

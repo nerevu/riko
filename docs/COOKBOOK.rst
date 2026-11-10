@@ -979,8 +979,8 @@ after the default output, and ``flow.with_workflow(other)`` appends a whole work
     >>> list(Pipeline(counted))
     [{'count': 1}]
     >>> hashed = flow.with_workflow(Pipeline.from_module('hash').workflow)
-    >>> sorted(node.name for node in hashed.nodes.values())
-    ['hash', 'itembuilder']
+    >>> hashed.dependencies
+    ('hash', 'itembuilder')
 
 ``compile_workflow`` turns the same ``Workflow`` into a workflow module
 (``WorkflowModule``): the Python source of a module that rebuilds it. The module
@@ -1007,10 +1007,8 @@ as ``pipe_<id>.py`` in a package. Register the package with
     ... }
     >>> flow = Workflow.parse(dag)
     >>> source = compile_workflow(flow, 'pipe_demo')
-    >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
-    DEPENDENCIES: list[str] = ["itembuilder", "rename"]
     >>> print(next(l for l in source.splitlines() if l.startswith('pipe')))
-    pipe = build_workflow_pipes(flow, dispatcher).sync_pipe
+    pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").sync_pipe
 
 The ``build-workflow``, ``compile-workflow``, and ``run-pipe`` commands work on the same
 forms stored as files: ``build-workflow`` expands a serialized ``PipeDag`` into a
@@ -1077,13 +1075,14 @@ Notes:
 Inspecting a pipeline
 ^^^^^^^^^^^^^^^^^^^^^
 
-You can introspect a workflow *without running it*. Its nodes name the modules
-the ``pipeline`` uses — handy for validating that every required ``module`` is
-installed before execution.
+The FAQ's `How do I see a workflow's inputs and dependencies without running it`_
+covers inspecting a ``Pipeline`` or a stored workflow. A compiled workflow module (see
+`Compiling workflow documents`_) reports the same without running: its ``pipe`` carries
+the ``dependencies`` and ``input_schemas`` of the ``Workflow`` it was compiled from.
 
 .. code-block:: python
 
-    >>> from riko import Workflow
+    >>> from riko import Workflow, compile_workflow
     >>>
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
@@ -1094,38 +1093,15 @@ installed before execution.
     ...     ]
     ... }
     >>> flow = Workflow.parse(dag)
-    >>> sorted(node.name for node in flow.nodes.values())
-    ['itembuilder', 'rename']
-
-A *compiled* workflow module's ``pipe`` function (see `Compiling workflow documents`_)
-can additionally report its inputs' schemas or dependencies (the modules and stored
-workflows it uses) at run time.
-
-Pass a ``Context`` whose ``mode`` is ``ExecutionMode.DESCRIBE_INPUTS`` or
-``DESCRIBE_DEPENDENCIES`` and the generated ``pipe()`` will return the inputs'
-schemas or list of module and stored-workflow names instead of running.
-``DESCRIBE`` returns both as a mapping with ``input_schemas`` and ``dependencies`` keys.
-
-.. code-block:: python
-
-    >>> from riko import Context, ExecutionMode, Workflow, compile_workflow
-    >>>
-    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
-    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
-    >>> dag = {
-    ...     'modules': [
-    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
-    ...         {'name': 'rename', 'conf': rename_conf},
-    ...     ]
-    ... }
-    >>> flow = Workflow.parse(dag)
+    >>> flow.dependencies
+    ('itembuilder', 'rename')
     >>> namespace = {}
     >>> exec(compile_workflow(flow, 'pipe_demo'), namespace)
     >>> pipe = namespace['pipe']
-    >>> list(pipe(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)))
-    ['itembuilder', 'rename']
-    >>> next(pipe(context=Context(mode=ExecutionMode.DESCRIBE)))
-    {'input_schemas': {}, 'dependencies': ['itembuilder', 'rename']}
+    >>> pipe.dependencies
+    ('itembuilder', 'rename')
+    >>> pipe.input_schemas
+    FrozenDict({})
 
 Performance and memory
 ----------------------
@@ -1165,3 +1141,4 @@ the scheduler.
 .. _Design Principles: ../README.rst#design-principles
 .. _Pipeline chaining: ../README.rst#synchronous-processing
 .. _DAG format doc: DAG_FORMAT.rst
+.. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

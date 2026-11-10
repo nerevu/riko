@@ -21,7 +21,7 @@ from riko.bado._backend import HTTPStatusError, create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
 from riko.base._config import DEF_CONCURRENCY_LIMIT
-from riko.base._exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError, RemovedOptionError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
 from riko.coercion._dynamic_conf import DynamicConf
@@ -42,6 +42,7 @@ from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
 from riko.modules.fetchtext import pipe as fetchtext_pipe
 from riko.modules.filter import pipe as filter_pipe
+from riko.modules.hash import pipe as hash_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
 from riko.modules.receive import async_pipe as async_receive_pipe
@@ -1278,6 +1279,10 @@ class TestProcessor:
         item = {"title": "a b"}
         result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
         assert list(result) == [{"content": "a"}, {"content": "b"}]
+
+    def test_mode_keyword_raises_pointing_at_describe_module(self):
+        with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):
+            list(hash_pipe([{"x": 1}], mode="describe"))
 
     @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
     def test_async_named_pipe_raises(self, iscoro, isasync, reason):

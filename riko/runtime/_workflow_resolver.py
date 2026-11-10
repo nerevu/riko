@@ -83,6 +83,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
 from riko.base._graph import get_cycle
 from riko.base._strutils import pythonise
+from riko.definitions._module_definition import ModuleDefinition
 from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe, is_wrapper_meta
@@ -115,8 +116,15 @@ def _get_stored_names(names: Iterable[str]) -> frozenset[str]:
 
 
 def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[str]:
-    """Gets the ``pipe_<id>`` names among a stored workflow's ``DEPENDENCIES``."""
-    return _get_stored_names(getattr(module, "DEPENDENCIES", ()))
+    """
+    Gets the names of a stored workflow's declared dependencies.
+
+    These are what the module's pipe reports to ``describe_module``. Only
+    ``@workflow``-tagged pipes are able to declare dependencies.
+    """
+    definition = None if module is None else ModuleDefinition.from_module(module)
+    declared = None if definition is None else definition.dependencies
+    return _get_stored_names(() if declared is None else declared)
 
 
 def _build_resolved_workflow(
@@ -153,22 +161,17 @@ def _build_resolved_workflow(
         >>>
         >>> flow = Workflow.parse('{"nodes": [{"name": "forever"}]}')
         >>> resolved = _build_resolved_workflow("pipe_demo", flow, dispatcher)
-        >>> resolved.DEPENDENCIES
+        >>> resolved.pipe.dependencies
         ('forever',)
         >>> next(iter(resolved.pipe()))
         {'forever': True}
 
     """
-    pipes = build_workflow_pipes(flow, dispatcher)
+    pipes = build_workflow_pipes(flow, dispatcher, name=name)
     module = ModuleType(name, f"Pipe {name} built from its workflow document.")
     resolved = ResolvedWorkflow(module)
 
-    vars(resolved).update(
-        DEPENDENCIES=flow.dependencies,
-        flow=flow,
-        pipe=pipes.sync_pipe,
-        async_pipe=pipes.async_pipe,
-    )
+    vars(resolved).update(flow=flow, pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe)
     return resolved
 
 
@@ -357,10 +360,11 @@ class WorkflowResolver:
 
     def _load_dependencies(self, pipe_id: str) -> frozenset[str]:
         """
-        Loads the ``pipe_<id>`` names a stored workflow's nodes run, building nothing.
+        Loads the ``pipe_<id>`` names a stored workflow's nodes run.
 
-        A ``ModuleStore`` entry reports its ``DEPENDENCIES``. A ``WorkflowDocument`` is
-        parsed but not planned, so a cycle is found before planning would recurse.
+        A ``ModuleStore`` entry reports the dependencies its pipe declares. Otherwise
+        the ``WorkflowDocument`` is parsed (but not planned) in order to identify
+        cycles. A document the ``ModuleStore`` shadows is never read.
         """
         module_store, document_store = self._module_store, self._document_store
         module = None if module_store is None else module_store.load(pipe_id)
@@ -381,7 +385,8 @@ class WorkflowResolver:
         Requires that ``pipe_id``'s stored-workflow dependencies never lead back to it.
 
         A stored workflow embeds the workflows its nodes name. One that reaches itself
-        through that chain would run forever, so it is rejected before it runs.
+        through that chain would run forever, so it is rejected before it runs. A
+        stored workflow whose pipe declares no dependencies ends the chain.
 
         Args:
 
@@ -492,7 +497,8 @@ class WorkflowResolver:
         Returns:
 
             The pipe, tagged as a stored workflow's pipe, which lets ``loop`` run it
-            without the ``conf`` and ``emit`` it passes other embeds.
+            without the ``conf`` and ``emit`` it passes other embeds. An untagged
+            pipe is tagged ``"transformer"``, like ``@workflow``'s default.
 
         Raises:
 
@@ -526,9 +532,15 @@ class WorkflowResolver:
             tagged = pipe
         else:
             meta = is_wrapper_meta(pipe)
-            subtype: ModuleSubtype = pipe.subtype if meta else "source"
+            subtype: ModuleSubtype = pipe.subtype if meta else "transformer"
             loopable = pipe.loopable if meta else True
-            tag = workflow(subtype=subtype, loopable=loopable, isasync=is_async)
+            tag = workflow(
+                subtype=subtype,
+                loopable=loopable,
+                isasync=is_async,
+                input_schemas=getattr(pipe, "input_schemas", None),
+                dependencies=getattr(pipe, "dependencies", None),
+            )
             tagged = tag(pipe)
 
         return tagged
@@ -609,8 +621,8 @@ class WorkflowResolver:
             ...     directory = Path(tmp)
             ...     _ = (directory / "pipe_demo.json").write_text(document)
             ...     flow = resolver.load_workflow("pipe:demo", directory=directory)
-            >>> [node.name for node in flow.nodes.values()]
-            ['forever']
+            >>> flow.dependencies
+            ('forever',)
 
         """
         pipe_id = pythonise(name)
@@ -641,13 +653,15 @@ def register_workflow_store(
 
         package: A package, or its import path, whose ``pipe_<id>.py`` files are each
             imported as a ``ResolvedWorkflow`` (a module exposing ``pipe`` and/or
-            ``async_pipe``).
+            ``async_pipe``). When the functions are ``@riko.ext.workflow`` tagged,
+            ``describe_module`` reports the information provided by the
+            ``input_schemas=``/``dependencies=`` options. An untagged function reports
+            neither, and is categorized ``"transformer"`` on lookup.
 
-        directory: A directory of ``WorkflowDocument`` (serialized ``Workflow``) files,
-            each stored as ``pipe_<id>.json``.
+        directory: A directory of ``WorkflowDocument`` (serialized ``Workflow``) files
+            stored as ``pipe_<id>.json``.
 
-        replace: Whether to replace a store of the same kind that is already
-            registered.
+        replace: Whether to replace a store of the same kind that is already registered.
 
     Raises:
 

@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko import ExecutionMode
+from riko.ext import workflow
 from riko.modules.dateformat import pipe as dateformat
 from riko.modules.itembuilder import pipe as itembuilder
-from riko.runtime._workflow_pipes import workflow
 from riko.types.modules import DateFormatRawConf, ItemBuilderRawConf
 
 if TYPE_CHECKING:
@@ -22,44 +21,40 @@ if TYPE_CHECKING:
 
 
 INPUT_SCHEMAS = {}
-DEPENDENCIES = ["dateformat", "itembuilder"]
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["dateformat", "itembuilder"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_1 = itembuilder(
-            item,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "date"},
-                            "value": {"type": "text", "value": "5/4/1982"},
-                        }
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_2 = dateformat(
-            sw_1,
-            conf=DateFormatRawConf(
-                {
-                    "format": {"type": "text", "value": "%B %d, %Y %Z"},
-                    "timezone": {"type": "text", "value": "EST"},
-                }
-            ),
-            field="date",
-            context=context,
-        )
-        _OUTPUT = sw_2
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        _OUTPUT = iter([INPUT_SCHEMAS])
-    else:
-        _OUTPUT = iter(DEPENDENCIES)
+    sw_1 = itembuilder(
+        item,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "date"},
+                        "value": {"type": "text", "value": "5/4/1982"},
+                    }
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_2 = dateformat(
+        sw_1,
+        conf=DateFormatRawConf(
+            {
+                "format": {"type": "text", "value": "%B %d, %Y %Z"},
+                "timezone": {"type": "text", "value": "EST"},
+            }
+        ),
+        field="date",
+        context=context,
+    )
+    _OUTPUT = sw_2
 
     return _OUTPUT
 

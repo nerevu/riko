@@ -112,6 +112,14 @@ stubbing upstream write/action nodes during a preview — depends on R5C's
 [extensibility.md](extensibility.md) E1, so do not build an interim preview mode before
 those land. Unscheduled; previews are ordinary executions with no implicit caching.
 
+Dry run (ruled 2026-11-09, when the describe modes were retired): a future dry run, one
+that plans and walks a workflow without performing its writes or actions, waits for the
+same R5C `WriteNode`/`ActionNode` and E1 side-effect classification. It will be an
+`ExecutionSettings` knob (`with_execution(...)`), never a `Context` mode: a `Context`
+carries a run's inputs, test flag, and resources, and a pipe only runs. Static
+introspection is `describe_module()` and the `Workflow.input_schemas`/`.dependencies`
+attributes. Unscheduled.
+
 **Seeds are run arguments, not definition state (direction adopted 2026-10-10, shipped
 2026-10-24; replaces the earlier "immutability does not imply source replayability"
 ruling).** A definition stores no items. Before it shipped, a seeded `Pipeline` kept its

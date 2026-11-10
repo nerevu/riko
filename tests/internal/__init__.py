@@ -13,11 +13,11 @@ Index (file, then the subjects it owns, in file order):
                               CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
                               ReadDocument, SubprocessImports, LogLevel
-    test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
-                              Pythonise, ModuleCategory, GeneratedNamesDrift,
-                              GenerateModuleIds, ConfigCodegen, UserAgentCodegen,
-                              WorkflowFixtures, WorkflowProbes, ImportSurface,
-                              VerbTables, GenerateApiSurface
+    test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
+                              ModuleCategory, GeneratedNamesDrift, GenerateModuleIds,
+                              ConfigCodegen, UserAgentCodegen, WorkflowFixtures,
+                              WorkflowProbes, ImportSurface, VerbTables,
+                              GenerateApiSurface
     test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,

@@ -193,8 +193,8 @@ serialize it to a ``WorkflowDocument`` with ``flow.serialize()``, or hand it to
     ['sw-1', 'sw-2']
     >>> flow.outputs['default']
     Endpoint(node='sw-2', port='out')
-    >>> sorted({node.name for node in flow.nodes.values()})
-    ['forever', 'truncate']
+    >>> flow.dependencies
+    ('forever', 'truncate')
     >>> list(Pipeline(flow))
     [{'forever': True}, {'forever': True}, {'forever': True}]
 

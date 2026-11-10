@@ -44,7 +44,6 @@ OTHER = frozenset(
         "DocumentShape",
         "PortEdge",
         "Endpoint",
-        "ExecutionMode",
         "ExecutionSettings",
         "Executor",
         "IdentityMode",

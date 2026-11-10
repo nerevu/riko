@@ -21,7 +21,6 @@ from riko.base._exceptions import (
 )
 from riko.base._guards import is_mapping
 from riko.base._paths import TESTS_DIR
-from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
@@ -58,11 +57,11 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
-from riko.types._enums import Backends, ExecutionMode
+from riko.types._enums import Backends
 from riko.types._wrappers import SubPipe, is_subpipe
 from tests import pyworkflows
 from tests._execution import module_workflow, registered_modules
-from tests._workflows import register_documents
+from tests._workflows import EXAMPLES_DIR, register_documents
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -126,6 +125,17 @@ class TestWorkflowDecorator:
         assert_type(narrowed, list[SubPipe])
         assert narrowed == values[:1]
 
+    def test_declares_input_schemas_and_dependencies(self):
+        tag = workflow(input_schemas={"q": "string"}, dependencies="fetch")
+        tagged = tag(truncate)
+
+        assert tagged.input_schemas == {"q": {"type": "string"}}
+        assert tagged.dependencies == ("fetch",)
+
+    def test_undeclared_metadata_is_none(self):
+        tagged = workflow(subtype="transformer")(truncate)
+        assert (tagged.input_schemas, tagged.dependencies) == (None, None)
+
     def test_rejects_positional_arguments(self):
         with pytest.raises(TypeError, match="Pipeline"):
             workflow(object())  # pyright: ignore[reportCallIssue]
@@ -138,6 +148,13 @@ class TestBuildWorkflowPipes:
 
         with pytest.raises(InvalidPipelineError, match="requires a seed"):
             list(pipes.sync_pipe())
+
+    def test_stored_workflow_pipe_rejects_mode(self):
+        flow = module_workflow("reverse")
+        pipes = build_workflow_pipes(flow, dispatcher, name="pipe_reverse")
+
+        with pytest.raises(TypeError, match=r"'pipe_reverse' .*describe_module"):
+            pipes.sync_pipe(mode="describe")
 
 
 class _FalsyPipe:
@@ -299,6 +316,27 @@ class TestModuleRegistry:
 
 
 class TestDescribeModule:
+    def test_describes_a_pipe_from_its_stamped_metadata(self):
+        definition = describe_module(truncate)
+        described = (definition.name, definition.input_schemas, definition.dependencies)
+        assert described == ("truncate", {}, ())
+
+    def test_undeclared_stored_workflow_reports_none(self):
+        definition = describe_module("pipe_shout")
+        assert definition is not None
+        assert (definition.input_schemas, definition.dependencies) == (None, None)
+
+    def test_stored_workflow_reports_what_its_document_declares(self):
+        register_workflow_store(package="examples.pyworkflows", replace=True)
+        flow = Workflow.load(EXAMPLES_DIR / "workflows" / "pipe_timezone.json")
+        definition = describe_module("pipe:timezone")
+        assert definition is not None
+        declared = (definition.input_schemas, definition.dependencies)
+        assert declared == (flow.input_schemas, flow.dependencies)
+
+    def test_unknown_stored_workflow_is_none(self):
+        assert describe_module("pipe_missing") is None
+
     @pytest.mark.parametrize(
         ("error", "match"),
         [
@@ -326,6 +364,13 @@ class TestDescribeModule:
 
         with pytest.raises(ModuleNotFoundError, match=match):
             describe_module("hash")
+
+    def test_malformed_stored_document_raises(self, tmp_path):
+        (tmp_path / "pipe_bad.json").write_text("{bad")
+        register_workflow_store(directory=tmp_path, replace=True)
+
+        with pytest.raises(InvalidPipelineError, match="malformed"):
+            describe_module("pipe_bad")
 
 
 class TestPublicRegister:
@@ -668,6 +713,19 @@ def _stored_resolver(
     return resolver
 
 
+def _declared_resolver(**dependencies: list[str] | None) -> WorkflowResolver:
+    """Builds a resolver over stored workflows whose pipes declare ``dependencies``."""
+    modules = {}
+
+    for name, declared in dependencies.items():
+        module = ModuleType(name)
+        tag = workflow(dependencies=declared)
+        setattr(module, "pipe", tag(lambda item=None, **_: iter([])))  # noqa: B010
+        modules[name] = module
+
+    return WorkflowResolver(module_store=MappingStore(modules))
+
+
 def _demo_resolver(**interfaces: object) -> WorkflowResolver:
     module = ModuleType("pipe_demo")
 
@@ -786,6 +844,16 @@ class TestWorkflowResolver:
 
             with pytest.raises(InvalidPipelineError, match=match):
                 resolver.require("pipe_a")
+
+    def test_require_treats_undeclared_dependencies_as_none(self):
+        resolver = _declared_resolver(pipe_a=["pipe_b"], pipe_b=None)
+        assert resolver.require("pipe_a").type == "pipe"
+
+    def test_require_rejects_a_pipe_that_declares_itself(self):
+        resolver = _declared_resolver(pipe_a=["pipe_a"])
+
+        with pytest.raises(InvalidPipelineError, match=r"embeds itself \(pipe_a"):
+            resolver.require("pipe_a")
 
     def test_missing_stored_workflow_interfaces_raise(self):
         with pytest.raises(UnsupportedWorkflowError, match="no store supplies"):
@@ -916,9 +984,9 @@ class TestResolvedDocuments:
 
     def test_document_describes_dependencies(self, tmp_path):
         register_documents(tmp_path)
-        context = Context(ExecutionMode.DESCRIBE_DEPENDENCIES)
-        pipe = dispatcher.require("pipe_exclaim")
-        assert list(pipe(context=context)) == ["strconcat"]
+        definition = describe_module("pipe_exclaim")
+        assert definition is not None
+        assert definition.dependencies == ("strconcat",)
 
     def test_registering_a_dispatcher_rebuilds_documents(self):
         resolver = _document_resolver(self.workflows)
@@ -942,20 +1010,6 @@ class TestResolvedDocuments:
 
         with pytest.raises(UnsupportedWorkflowError, match="no dispatcher"):
             resolver.load("pipe_gigs")
-
-    def test_document_description_is_fresh_per_call(self, tmp_path):
-        register_documents(tmp_path)
-        context = Context(ExecutionMode.DESCRIBE)
-        pipe = dispatcher.require("pipe_exclaim")
-        first = cast("dict[str, object]", next(pipe(context=context)))
-        dependencies, schemas = first["dependencies"], first["input_schemas"]
-        assert isinstance(dependencies, list)
-        assert isinstance(schemas, dict)
-        dependencies.append("mutated")
-        schemas["mutated"] = {}
-
-        stream = pipe(context=context)
-        assert next(stream) == {"input_schemas": {}, "dependencies": ["strconcat"]}
 
 
 class TestTargetRegistry:

@@ -6,13 +6,13 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import Context, ExecutionMode
+        >>> from riko import Context
         >>>
-        >>> base = Context(ExecutionMode.DESCRIBE, inputs={"count": 2})
+        >>> base = Context({"count": 2}, test=True)
         >>> derived = base.replace(inputs={"limit": 5})
         >>> base.inputs["count"]
         2
-        >>> derived.describe_input
+        >>> derived.test
         True
         >>> dict(derived.inputs)
         {'limit': 5}
@@ -21,13 +21,10 @@ Examples:
 
 from __future__ import annotations
 
-from functools import partial
 from typing import TYPE_CHECKING, Literal, Self, overload
 
 from attrs import define, evolve, field
 
-from riko.base._typing import resolve_enum
-from riko.types._enums import ExecutionMode
 from riko.types._frozendict import FrozenDict, instances_freezer, mapping_converter
 from riko.types._resource import is_lifecycle_factory
 
@@ -45,13 +42,8 @@ if TYPE_CHECKING:
 
 type ResourcesInput = Mapping[str, ReusableResource[object]]
 
-INPUT_MODES = {ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE}
-DEPENDENCY_MODES = {ExecutionMode.DESCRIBE_DEPENDENCIES, ExecutionMode.DESCRIBE}
 EMPTY_RESOURCES: ReusableResources = FrozenDict()
 
-_normalize_mode = partial(
-    resolve_enum, ExecutionMode, default=ExecutionMode.RUN, error=ValueError
-)
 _freezer = instances_freezer(ReusableResource, "Context resource", error=TypeError)
 _resources_converter = mapping_converter(
     _freezer, ResourcesInput, what="Context 'resources'", error=TypeError
@@ -65,10 +57,6 @@ class Context:
 
     Attributes:
 
-        mode: Whether a workflow module's pipe or a ``Pipeline`` runs its workflow or
-            only describes it. Under a describe mode, a ``Pipeline`` run yields the
-            description and runs nothing.
-
         inputs: Read-only JSON input values keyed by input name. They fill the
             workflow's inputs and are what an ``input`` module reads in place of its
             default. When not given, an ``input`` module whose input has no schema
@@ -81,7 +69,6 @@ class Context:
 
     """
 
-    mode: ExecutionMode = field(default=ExecutionMode.RUN, converter=_normalize_mode)
     inputs: FrozenInputs | None = field(default=None, converter=freeze_inputs)
     test: bool = field(default=False, converter=bool)
     resources: ReusableResources = field(
@@ -92,10 +79,8 @@ class Context:
     )
 
     def __repr__(self) -> str:
-        content = f"mode={self.mode}, test={self.test}, "
         inputs = None if self.inputs is None else dict(self.inputs)
-        content += f"inputs={inputs}"
-        return f"Context({content})"
+        return f"Context(inputs={inputs}, test={self.test})"
 
     def _normalize_definition[T](
         self,
@@ -126,11 +111,7 @@ class Context:
         return resource
 
     def replace(
-        self,
-        *,
-        mode: ExecutionMode | None = None,
-        inputs: Inputs | None = None,
-        test: bool | None = None,
+        self, *, inputs: Inputs | None = None, test: bool | None = None
     ) -> Self:
         """
         Derives a fresh Context snapshot with the given fields overridden.
@@ -141,7 +122,6 @@ class Context:
 
         Kwargs:
 
-            mode: Replacement execution mode, or ``None`` to keep the current one.
             inputs: Replacement input overrides, or ``None`` to keep the current ones.
             test: Replacement test flag, or ``None`` to keep the current one.
 
@@ -152,7 +132,6 @@ class Context:
         """
         return evolve(
             self,
-            mode=self.mode if mode is None else mode,
             inputs=self.inputs if inputs is None else inputs,
             test=self.test if test is None else test,
         )
@@ -225,15 +204,5 @@ class Context:
         )
         return evolve(self, _resources={**self.resources, name: resource})
 
-    @property
-    def describe_input(self) -> bool:
-        """Whether a workflow module's pipe reports its inputs' schemas instead."""
-        return self.mode in INPUT_MODES
 
-    @property
-    def describe_dependencies(self) -> bool:
-        """Whether a workflow module's pipe reports what its workflow uses instead."""
-        return self.mode in DEPENDENCY_MODES
-
-
-__all__ = ["Context", "ExecutionMode"]
+__all__ = ["Context"]

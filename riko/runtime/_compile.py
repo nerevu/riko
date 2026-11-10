@@ -21,9 +21,7 @@ Examples:
         >>> pipeline = itembuilder.rename(conf={"rule": [{"field": "title"}]})
         >>> source = compile_workflow(pipeline.workflow, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
-        pipe = build_workflow_pipes(flow, dispatcher).sync_pipe
-        >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
-        DEPENDENCIES: list[str] = ["itembuilder", "rename"]
+        pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").sync_pipe
 
 """
 
@@ -186,13 +184,10 @@ def compile_workflow(
     """
     Generates the ``WorkflowModule`` that rebuilds and runs ``flow``.
 
-    A ``RawWorkflow`` is normalized into a ``Workflow`` first. This way module always
-    reflects the normalized graph rather than the shorthand it was written in. The
-    module declares the workflow with typed configuration classes and exposes a
-    single ``pipe`` (or ``async_pipe``) callable over it. That callable takes one
-    item, a stream, or nothing; reports the workflow's input schemas and the
-    modules and stored workflows it uses in the describe modes; and otherwise yields
-    the items produced at the workflow's default output.
+    A ``RawWorkflow`` is first normalized into a ``Workflow`` graph. The returned module
+    declares the workflow with typed configuration classes and exposes a single ``pipe``
+    (or ``async_pipe``) callable. That callable takes one item, a stream, or nothing,
+    and yields the workflow's items.
 
     Args:
 
@@ -205,7 +200,8 @@ def compile_workflow(
 
     Returns:
 
-        The formatted ``WorkflowModule``.
+        The formatted ``WorkflowModule``. It carries the workflow's input schemas,
+        modules, and stored workflows. Use ``describe_module`` to list them.
 
     Raises:
 
@@ -217,11 +213,11 @@ def compile_workflow(
 
         >>> raw = {"nodes": [{"name": "forever"}]}
         >>> source = compile_workflow(raw, "pipe_demo")
-        >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
-        DEPENDENCIES: list[str] = ["forever"]
+        >>> print(next(l for l in source.splitlines() if l.startswith("flow")))
+        flow = Workflow(
         >>> source = compile_workflow(raw, "pipe_demo", is_async=True)
         >>> print(next(l for l in source.splitlines() if l.startswith("async")))
-        async_pipe = build_workflow_pipes(flow, dispatcher).async_pipe
+        async_pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").async_pipe
 
     """
     flow = Workflow.from_raw(flow)
@@ -245,7 +241,6 @@ def compile_workflow(
         input_schemas=render_value(flow.input_schemas),
         resources=render_value(flow.resources),
         has_resources=len(flow.resources) > 0,
-        dependencies=render_value(flow.dependencies),
     )
 
     return WorkflowModule(ruff_format(rendered))

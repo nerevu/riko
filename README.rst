@@ -214,7 +214,7 @@ Here's the ``riko`` vocabulary at a glance:
 |                     | can be an ``item``, ``stream``, or    | ``pipeline.open(items)``                           |
 |                     | ``items``                             |                                                    |
 +---------------------+---------------------------------------+----------------------------------------------------+
-| ``Context``         | input values + ``ExecutionMode``      | ``Context(inputs=...)``                            |
+| ``Context``         | input values + resources              | ``Context(inputs=...)``                            |
 +---------------------+---------------------------------------+----------------------------------------------------+
 
 Core concepts

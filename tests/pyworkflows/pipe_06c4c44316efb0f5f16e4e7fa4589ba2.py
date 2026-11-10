@@ -6,13 +6,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.definitions._inputs import resolve_inputs
+from riko.ext import resolve_inputs, workflow
 from riko.modules.fetch import pipe as fetch
 from riko.modules.input import pipe as _input
 from riko.modules.sort import pipe as sort
 from riko.modules.tail import pipe as tail
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf, InputRawConf, SortRawConf, TailRawConf
 
 if TYPE_CHECKING:
@@ -27,60 +25,54 @@ INPUT_SCHEMAS = {
         "type": "string",
     }
 }
-DEPENDENCIES = ["fetch", "input", "sort", "tail"]
 
 
-@workflow(subtype="transformer")
+@workflow(
+    subtype="transformer",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["fetch", "input", "sort", "tail"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        inputs = resolve_inputs(
-            INPUT_SCHEMAS, None if context is None else context.inputs
-        )
-        sw_123 = fetch(
-            item,
-            conf=FetchRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/news.yahoo.com_rss_topstories.xml",
+    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    sw_123 = fetch(
+        item,
+        conf=FetchRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/news.yahoo.com_rss_topstories.xml",
+                }
+            }
+        ),
+        context=context,
+    )
+    sw_135 = sort(
+        sw_123,
+        conf=SortRawConf(
+            {
+                "rule": [
+                    {
+                        "dir": {"type": "text", "value": "DESC"},
+                        "field": {"type": "text", "value": "title"},
                     }
-                }
-            ),
-            context=context,
-        )
-        sw_135 = sort(
-            sw_123,
-            conf=SortRawConf(
-                {
-                    "rule": [
-                        {
-                            "dir": {"type": "text", "value": "DESC"},
-                            "field": {"type": "text", "value": "title"},
-                        }
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_131 = _input(
-            None,
-            conf=InputRawConf({"input_key": {"type": "text", "value": "numberinput1"}}),
-            inputs=inputs,
-            context=context,
-        )
-        sw_106 = tail(
-            sw_135,
-            conf=TailRawConf({"count": {"terminal": "count", "type": "float"}}),
-            context=context,
-            count=sw_131,
-        )
-        _OUTPUT = sw_106
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        _OUTPUT = iter([INPUT_SCHEMAS])
-    else:
-        _OUTPUT = iter(DEPENDENCIES)
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_131 = _input(
+        None,
+        conf=InputRawConf({"input_key": {"type": "text", "value": "numberinput1"}}),
+        inputs=inputs,
+        context=context,
+    )
+    sw_106 = tail(
+        sw_135,
+        conf=TailRawConf({"count": {"terminal": "count", "type": "float"}}),
+        context=context,
+        count=sw_131,
+    )
+    _OUTPUT = sw_106
 
     return _OUTPUT
 

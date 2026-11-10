@@ -29,7 +29,7 @@ New
 
 - ``Workflow.parse`` creates JSON Schema input schemas (``InputSchema``).
   ``Workflow.validate_input_schemas`` validates them, and ``flow.input_schemas``
-  lists them.
+  lists them. ``flow.dependencies`` lists the modules and stored workflows it uses.
 
 - Added type aliases for workflows, pipelines, and call options to ``riko`` and
   ``riko.types`` (e.g., ``WorkflowLike``, ``WorkflowModule``, ``RawWorkflow``,
@@ -55,6 +55,10 @@ New
 
 - Module pipe callables gained ``prepare``. It applies a call's configuration and call
   options for reuse over items. ``riko.ext.PreparedCall`` annotates its return value.
+
+- ``describe_module`` reports a module's ``input_schemas`` and ``dependencies``. The
+  ``riko.ext.workflow`` decorator annotates a hand-written workflow module's pipe.
+  ``riko.ext.resolve_inputs`` resolves a run's input values from the inputs' schemas.
 
 - Added ``ModuleMetadata.provider`` and ``list_modules(provider=…)``. The provider is
   the first dotted segment of a module's name (``"riko"`` for the built-ins). Each
@@ -117,13 +121,9 @@ Changes
   ``compile-workflow``, ``run-pipe``, and workflow stores take a ``WorkflowDocument``;
   convert a ``PipeDef`` with ``build-workflow`` first.
 
-- Under ``ExecutionMode.DESCRIBE`` a workflow module's ``pipe`` and ``async_pipe`` yield
-  ``{"input_schemas": …, "dependencies": […]}`` as one item. ``DESCRIBE_INPUTS`` yields
-  each input's schema as ``{name: schema}``, and ``DESCRIBE_DEPENDENCIES`` yields each
-  dependency name.
-
 - A stored workflow's pipe is tagged ``"source"`` when it can run without a seed, and
-  ``"transformer"`` when it needs one. Its declared ``inputs`` don't affect the tag.
+  ``"transformer"`` when it needs one. Its declared ``inputs`` don't affect the tag. An
+  undecorated hand-written pipe is tagged ``"transformer"``.
 
 - Moved ``examples/pipelines`` to ``examples/workflows`` and ``examples/pypipelines`` to
   ``examples/pyworkflows``.
@@ -181,10 +181,6 @@ Changes
 - ``riko.types.Feed`` is now ``Items | AsyncItems``, ``PipeTuples`` is
   ``SyncPipeTuples | AsyncPipeTuples``, and ``Item`` accepts nested list/mapping values.
 
-- An invalid ``ExecutionMode`` now raises an error listing the accepted values.
-
-- ``ExecutionMode.DESCRIBE_DEPENDENCIES`` now lists modules embedded in ``loop`` nodes.
-
 - The ``write`` module's ``url``/``target`` options are now ``dest``/``fmt``. ``url``
   alone writes nothing and warns.
 
@@ -225,6 +221,11 @@ Removed
   Moved the rule's ``default`` to the module conf for when no field rules match; a rule
   that still has a ``default`` key raises ``TypeError``. Removed the ``multi`` conf key
   since it had no effect.
+
+- Removed ``ExecutionMode``; ``mode``, ``describe_input``, and ``describe_dependencies``
+  from ``Context``; and ``DEPENDENCIES`` from workflow modules. A pipe only runs:
+  passing ``mode=`` to a pipe raises ``riko.RemovedOptionError`` (a ``TypeError``). Use
+  ``describe_module`` or ``flow.input_schemas``/``flow.dependencies`` instead.
 
 - Removed the ``submodule`` and ``verbose`` attributes and keyword arguments from
   ``Context``. Set the level on the ``"riko"`` logger instead.

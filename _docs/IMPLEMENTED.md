@@ -451,61 +451,63 @@ The runtime→compiler resolution coupling is inverted behind three **compiler-f
 layers sharing one overloaded `require(name, is_async)` contract
 (`riko/types/_wrappers.py::Resolver`): `ModuleRegistry`
 (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/modules.py` and
-`riko.ext`; built-ins lazy per name, runtime `register_module`/`reset_module_registry`,
-entry points under `[project.entry-points."riko.modules"]`; precedence runtime →
-entry-point → built-in; `get_module_metadata` consults the registry before the built-in
-package, so a registered module's metadata shadows a built-in of the same name as
-`list_modules` does), `WorkflowResolver` (`riko/runtime/_workflow_resolver.py`) +
-injectable workflow stores (`riko/runtime/_workflow_stores.py`): every store is a
-`WorkflowStore[T]` protocol (`load(name) -> T | None`);
-`ModuleStore = WorkflowStore[ResolvedWorkflow]` (`PackageStore`, `MappingStore`,
-`CompositeStore`) and `DirectoryStore` is a `DocumentStore` (`WorkflowStore[Workflow]`)
-that parses each workflow document (`WorkflowDocument`) with
-`Workflow.parse(text, shape="v2")`, which `load_workflow` returns (a miss raises
-`UnsupportedWorkflowError` naming the reason; `DirectoryStore.load` treats only
-`FileNotFoundError` as a miss). Stores take only `pipe_<id>` names: every resolver entry
-point (`load`, `load_workflow`, `require`, `require_interfaces`) translates the
-`pipe:<id>` alias with `pythonise`, and both `is_compatible` checks use `is_pipe_id`
-(`riko/types/_pipedef.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A
-stored-workflow miss raises `UnsupportedWorkflowError`, a built-in miss
-`UnsupportedModuleError`; both carry `reason`. `ResolvedWorkflow` and `WorkflowModule`
-(`riko/types/_workflow.py`) are `NewType`s so type checkers show their names.
-`WorkflowModule` is defined by shape (source defining `pipe`/`async_pipe` over an item,
-a stream, or nothing, plus `context`), so hand-written `pyworkflows` modules qualify,
-but only `compile_workflow` wraps the type. The pipes `build_workflow_pipes` returns
-branch on `Context.mode` with `RUN` (or no context) first, so each mode matches one
-branch: `DESCRIBE` returns `{"input_schemas": …, "dependencies": […]}` (the async pipe
-yields it once), `DESCRIBE_INPUTS` the inputs' schemas, `DESCRIBE_DEPENDENCIES` the
-dependency names (`Workflow.dependencies`: node and loop-embed module names, emitted by
-both `compile_workflow` and the document-module builder); the hand-written probes mirror
-this with module-level `INPUT_SCHEMAS`/`DEPENDENCIES`. Producers wrap
-(`compile_workflow`, `PackageStore.load`, `MappingStore`, the document-module builder)
-while inputs stay wide (`MappingStore` takes plain `types.ModuleType`s). `PackageStore`
-accepts a package or its import path and imports it at construction
-(`ModuleNotFoundError` for a bad path, `ValueError` for a plain module); its lookups use
-`import_or_else(..., strict=True)`, so only the `pipe_<id>` module itself may be missing
-(`import_or_else` also re-raises a `ModuleNotFoundError` that names no module). Core
-ships no locations; a `register(*, module_store, document_store, replace=False)` /
-`reset()` lifecycle mirrors the registry idiom — the process-global is shared by
-reference, so in-place mutation reaches the façade and test imports at once), and the
-`ResolverDispatcher` façade (`riko/runtime/_resolver.py`) doing one symmetric dispatch.
-Stored-workflow lookup resolves through the façade (`dispatcher.require`); the v1
-compiler's `resolve_module` delegate was deleted with it at cutover step 5 (2026-10-03).
-Workflow modules expose a stable `pipe`/`async_pipe` entry, so a stored workflow
-resolves exactly like a built-in. `WorkflowResolver.load` walks a stored workflow's node
-names, loop embeds, and `DEPENDENCIES` before returning it and raises
-`InvalidPipelineError` (naming the cycle and pointing to `loop`) when one reaches
-itself; acyclic names are memoized until `register`/`reset`. The check is static, so
-self-recursion that would end on its own is refused too (user ruling 2026-10-29).
-External packages add modules with **no core edit** (`examples/riko-example-ext/`). The
-module registry and a private target registry (`riko/runtime/_target_registry.py`,
-built-in `FileTarget`, entry points under `riko.targets`) share a generic `Registry[T]`
-base (`riko/runtime/_registry.py`) — one three-tier runtime → entry-point → built-in
-lifetime, each keyed by a per-domain `_key` hook (module `name`, target `backend`).
-`ModuleDefinition` (`riko/definitions/_module_definition.py`) is a keyword-only frozen
-attrs class holding plain data: `declared_name` holds the name as given (constructor
-keyword `name=`), `name` is the derived registry key (declared name, else a non-generic
-pipe `__name__`), and `sync_pipe`/`async_pipe`/`description` are stored as passed.
+`riko.ext`; built-ins lazy per name, runtime `register_module` (scoped by
+`temporary_registrations`), entry points under `[project.entry-points."riko.modules"]`;
+precedence runtime → entry-point → built-in; `get_module_metadata` consults the registry
+before the built-in package, so a registered module's metadata shadows a built-in of the
+same name as `list_modules` does), `WorkflowResolver`
+(`riko/runtime/_workflow_resolver.py`) + injectable workflow stores
+(`riko/runtime/_workflow_stores.py`): every store is a `WorkflowStore[T]` protocol
+(`load(name) -> T | None`); `ModuleStore = WorkflowStore[ResolvedWorkflow]`
+(`PackageStore`, `MappingStore`, `CompositeStore`) and `DirectoryStore` is a
+`DocumentStore` (`WorkflowStore[Workflow]`) that parses each workflow document
+(`WorkflowDocument`) with `Workflow.parse(text, shape="v2")`, which `load_workflow`
+returns (a miss raises `UnsupportedWorkflowError` naming the reason;
+`DirectoryStore.load` treats only `FileNotFoundError` as a miss). Stores take only
+`pipe_<id>` names: every resolver entry point (`load`, `load_workflow`, `require`,
+`require_interfaces`) translates the `pipe:<id>` alias with `pythonise`, and both
+`is_compatible` checks use `is_pipe_id` (`riko/types/_pipedef.py`, prefixes
+`PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow miss raises
+`UnsupportedWorkflowError`, a built-in miss `UnsupportedModuleError`; both carry
+`reason`. `ResolvedWorkflow` and `WorkflowModule` (`riko/types/_workflow.py`) are
+`NewType`s so type checkers show their names. `WorkflowModule` is defined by shape
+(source defining `pipe`/`async_pipe` over an item, a stream, or nothing, plus
+`context`), so hand-written `pyworkflows` modules qualify, but only `compile_workflow`
+wraps the type. The pipes `build_workflow_pipes` returns only run (a `mode=` keyword
+raises `RemovedOptionError`, a `TypeError` naming the stored workflow's `pipe_<id>`);
+`@workflow` stamps them with the workflow's input schemas and dependency names
+(`Workflow.dependencies`: node and loop-embed module names), which `describe_module`
+reads through `ModuleDefinition.input_schemas`/`.dependencies`; the hand-written probes
+declare the same through `@workflow(input_schemas=, dependencies=)`. An undecorated pipe
+a package store supplies is tagged `"transformer"` on lookup, `@workflow`'s default.
+Producers wrap (`compile_workflow`, `PackageStore.load`, `MappingStore`, the
+document-module builder) while inputs stay wide (`MappingStore` takes plain
+`types.ModuleType`s). `PackageStore` accepts a package or its import path and imports it
+at construction (`ModuleNotFoundError` for a bad path, `ValueError` for a plain module);
+its lookups use `import_or_else(..., strict=True)`, so only the `pipe_<id>` module
+itself may be missing (`import_or_else` also re-raises a `ModuleNotFoundError` that
+names no module). Core ships no locations; a
+`register(*, module_store, document_store, replace=False)` / `reset()` lifecycle mirrors
+the registry idiom — the process-global is shared by reference, so in-place mutation
+reaches the façade and test imports at once), and the `ResolverDispatcher` façade
+(`riko/runtime/_resolver.py`) doing one symmetric dispatch. Stored-workflow lookup
+resolves through the façade (`dispatcher.require`); the v1 compiler's `resolve_module`
+delegate was deleted with it at cutover step 5 (2026-10-03). Workflow modules expose a
+stable `pipe`/`async_pipe` entry, so a stored workflow resolves exactly like a built-in.
+`WorkflowResolver.load` walks a stored workflow's node names, loop embeds, and declared
+`dependencies` before returning it and raises `InvalidPipelineError` (naming the cycle
+and pointing to `loop`) when one reaches itself; acyclic names are memoized until
+`register`/`reset`. The check is static, so self-recursion that would end on its own is
+refused too (user ruling 2026-10-29). External packages add modules with
+**no core edit** (`examples/riko-example-ext/`). The module registry and a private
+target registry (`riko/runtime/_target_registry.py`, built-in `FileTarget`, entry points
+under `riko.targets`) share a generic `Registry[T]` base (`riko/runtime/_registry.py`) —
+one three-tier runtime → entry-point → built-in lifetime, each keyed by a per-domain
+`_key` hook (module `name`, target `backend`). `ModuleDefinition`
+(`riko/definitions/_module_definition.py`) is a keyword-only frozen attrs class holding
+plain data: `declared_name` holds the name as given (constructor keyword `name=`),
+`name` is the derived registry key (declared name, else a non-generic pipe `__name__`),
+and `sync_pipe`/`async_pipe`/`description` are stored as passed.
 `ModuleDefinition.from_module(module, *, name="", description=None)` reads a module's
 `pipe`/`async_pipe`, the last part of its `__name__` (the declared name unless `name` is
 given), and its docstring summary once, so the record never references the module and
@@ -521,15 +523,15 @@ resolvable. A registered `WorkflowDocument` directory resolves by name:
 `WorkflowResolver` (given the dispatcher via `register_dispatcher` in `_resolver.py`)
 builds the document's `pipe`/`async_pipe` with `build_workflow_pipes`, after the module
 store. `WorkflowResolver.load` then refuses a stored workflow that reaches itself:
-starting from the loaded module, it walks the `pipe_<id>` names in each reachable
-module's `DEPENDENCIES` into a local graph (re-derived per load; only built document
-modules are cached) and raises `InvalidPipelineError` naming the cycle from `get_cycle`
-(`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target classes
-keyed by `backend` and resolves a `Backends` to its target class. The target vocabulary
-(base `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`, `WriteCapabilities`,
-`FileTarget`, `TargetRegistry`, `register_target`) is on the extension surface
-(`riko.ext`); the `Backends` enum is on the stable `riko` surface alongside `Formats`.
-Workflow-store registration is on `riko.ext` too:
+starting from the loaded module, it walks the `pipe_<id>` names in each reachable module
+pipe's declared `dependencies` into a local graph (re-derived per load; only built
+document modules are cached) and raises `InvalidPipelineError` naming the cycle from
+`get_cycle` (`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target
+classes keyed by `backend` and resolves a `Backends` to its target class. The target
+vocabulary (base `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`,
+`WriteCapabilities`, `FileTarget`, `TargetRegistry`, `register_target`) is on the
+extension surface (`riko.ext`); the `Backends` enum is on the stable `riko` surface
+alongside `Formats`. Workflow-store registration is on `riko.ext` too:
 `register_workflow_store(*, package, directory, replace=False)` (`package` is a package
 or its import path; primitives only — the store classes and `WorkflowResolver` stay
 private per `PRIVATE_RESOLUTION`), with `temporary_registrations` (one scope that
@@ -539,7 +541,8 @@ each group, all on `riko.ext` (grouped in
 `riko/ext/modules.py`, `riko/ext/targets.py`, and `riko/ext/workflows.py`). P9A
 discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped —
 see §24 above. Remaining P9 (non-P9A): the installed-env aggregate
-`riko.generated.Modules` + `.pyi` stubs → [module-enums.md](gameplans/module-enums.md).
+`riko.generated.Modules` + `.pyi` stubs →
+[module-enums.md](gameplans/module-enums.md).
 
 **Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
 (`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the
@@ -1384,7 +1387,7 @@ run:
   `<name>-<occurrence>` (so `|` is associative), `a`'s default output feeds `b`'s single
   node with an open default `in` port, and every node field carries over through
   `evolve`. `b`'s context may only add resources (combined by name, a different
-  definition under one name raises); its mode/inputs/test flag or non-default execution
+  definition under one name raises); its inputs/test flag or non-default execution
   settings raise `InvalidPipelineError`. A function or `(name, conf)` tuple on the right
   raises `TypeError` (the function hint names `.map`), and `stream | "name"` raises a
   compose-first `TypeError` (`_PipelineStream.__or__` returns `NotImplemented`
@@ -1499,7 +1502,7 @@ from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`caster
 Dynamic-conf detection sees the node's extras, which `PreparedNode.extras` derives from
 its incoming edges (named ports, `others`, `resources`, `embed`). Call options are
 typed: `RawCallOptions` (emit/assign/field/count, the `**options` keyword form) and
-`ContextOverrides` (mode/inputs/test, mirroring `Context.replace`; `_resolve_context` is
+`ContextOverrides` (inputs/test, mirroring `Context.replace`; `_resolve_context` is
 `base.replace(**overrides)`) live in `riko/types/_options.py`, and the decorators derive
 their option-name sets from them with `typed_dict_keys`. `RawCallOptions`,
 `CallOptions`, and `CallOptionsLike` are on the supported `riko.types` surface.

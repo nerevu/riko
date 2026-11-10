@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko import ExecutionMode
+from riko.ext import workflow
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.strreplace import pipe as strreplace
-from riko.runtime._workflow_pipes import workflow
 from riko.types.modules import ItemBuilderRawConf, StrReplaceRawConf
 
 if TYPE_CHECKING:
@@ -22,58 +21,54 @@ if TYPE_CHECKING:
 
 
 INPUT_SCHEMAS = {}
-DEPENDENCIES = ["itembuilder", "strreplace"]
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["itembuilder", "strreplace"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_1 = itembuilder(
-            item,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "link"},
-                            "value": {"type": "text", "value": "www.google.com"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"type": "text", "value": "google"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "author"},
-                            "value": {"type": "text", "value": "$"},
-                        },
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_2 = strreplace(
-            sw_1,
-            conf=StrReplaceRawConf(
-                {
-                    "rule": [
-                        {
-                            "find": {"type": "text", "value": "$"},
-                            "replace": {"type": "text", "value": "USD"},
-                            "param": {"type": "text", "value": "first"},
-                        }
-                    ]
-                }
-            ),
-            assign="author",
-            field="author",
-            context=context,
-        )
-        _OUTPUT = sw_2
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        _OUTPUT = iter([INPUT_SCHEMAS])
-    else:
-        _OUTPUT = iter(DEPENDENCIES)
+    sw_1 = itembuilder(
+        item,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "link"},
+                        "value": {"type": "text", "value": "www.google.com"},
+                    },
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"type": "text", "value": "google"},
+                    },
+                    {
+                        "key": {"type": "text", "value": "author"},
+                        "value": {"type": "text", "value": "$"},
+                    },
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_2 = strreplace(
+        sw_1,
+        conf=StrReplaceRawConf(
+            {
+                "rule": [
+                    {
+                        "find": {"type": "text", "value": "$"},
+                        "replace": {"type": "text", "value": "USD"},
+                        "param": {"type": "text", "value": "first"},
+                    }
+                ]
+            }
+        ),
+        assign="author",
+        field="author",
+        context=context,
+    )
+    _OUTPUT = sw_2
 
     return _OUTPUT
 

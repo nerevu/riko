@@ -285,7 +285,7 @@ values reach it declaratively: `{"input": name}` references apply to a callable 
 keyword arguments as they do to module configuration, so
 `pipeline.with_input_schemas(q={"type": "string"}).map(search, q={"input": "q"})` calls
 `search(item, q=<value>)`. Revisit only for a concrete need references cannot express
-(e.g. reading `Context.mode`). See
+(e.g. reading a run-time value no reference can name). See
 [implementation-sequence.md](implementation-sequence.md) R4D.
 
 Do not turn `Context` into mutable per-item execution state. Position, item key,

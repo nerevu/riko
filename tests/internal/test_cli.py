@@ -958,6 +958,17 @@ TERM_PATTERNS = [
         [(1, "its upstream"), (2, "a suspended upstream")],
         id="upstream-nouns",
     ),
+    pytest.param(
+        "# pass ExecutionMode.DESCRIBE; ExecutionModes stays\n# a Describe-Mode run\n",
+        [(1, "ExecutionMode"), (2, "Describe-Mode")],
+        id="retired-describe",
+    ),
+]
+
+
+RETIRED_NAMES = [
+    pytest.param("Import riko.ext.registry.\n", id="removed-ext-path"),
+    pytest.param("Pass ExecutionMode.\n", id="retired-describe"),
 ]
 
 
@@ -1017,6 +1028,16 @@ class TestTermLint:
         )
         found = [issue.path.name for issue in gen_term_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+    @pytest.mark.parametrize("text", RETIRED_NAMES)
+    def test_the_changelog_may_name_retired_names(
+        self, tmp_path: Path, text: str
+    ) -> None:
+        for name in ("GUIDE.rst", "CHANGES.rst"):
+            (tmp_path / name).write_text(text, encoding="utf-8")
+
+        found = [issue.path.name for issue in gen_term_issues(tmp_path)]
+        assert found == ["GUIDE.rst"]
 
     def test_internal_docs_are_held_to_phrases_but_not_phase_codes(
         self, tmp_path: Path

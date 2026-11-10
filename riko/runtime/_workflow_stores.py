@@ -70,8 +70,11 @@ class PackageStore:
     Imports a package's ``pipe_<id>.py`` file as a ``ResolvedWorkflow`` on lookup.
 
     Each file must define ``pipe`` and/or ``async_pipe`` functions that take an item or
-    a stream plus a ``context``. The package is imported when the store is built, so a
-    mistyped import path fails then rather than when loading a package's file.
+    a stream plus a ``context``. When the functions are ``@riko.ext.workflow`` tagged,
+    ``describe_module`` reports the information provided by the
+    ``input_schemas=``/``dependencies=`` options. An untagged function reports neither,
+    and is categorized ``"transformer"`` on lookup. The store imports the package at
+    build time, so a mistyped import path fails then rather than at runtime.
 
     Args:
 
@@ -236,8 +239,9 @@ class DirectoryStore:
         ...     store = DirectoryStore(Path(tmp))
         ...     flow = store.load("pipe_demo")
         ...     missing = store.load("pipe_missing")
-        >>> [node.name for node in flow.nodes.values()], missing
-        (['forever'], None)
+        >>> flow.dependencies
+        ('forever',)
+        >>> missing
 
     """
 

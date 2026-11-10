@@ -10,7 +10,7 @@ from riko import Pipeline
 from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
 from riko.definitions._context import Context
-from riko.types._enums import ExecutionMode
+from riko.ext import workflow
 from riko.types.modules import (
     CurrencyFormatConf,
     CurrencyFormatRawConf,
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 DEF_CUR_CODE = "USD"
 INPUT_SCHEMAS: dict = {}
-DEPENDENCIES = ["rename", "regex"]
 
 
 def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
@@ -373,16 +372,26 @@ def print_content(output):
     print("count", len(pipe))
 
 
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=[
+        "currencyformat",
+        "exchangerate",
+        "fetchdata",
+        "hash",
+        "regex",
+        "rename",
+        "simplemath",
+        "strconcat",
+        "strreplace",
+        "substr",
+        "tokenizer",
+    ],
+)
 def pipe(context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        context = Context() if context is None else context
-        output: Iterable[object] = list(build().with_context(context))
-    elif context.mode is ExecutionMode.DESCRIBE:
-        output = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        output = iter([INPUT_SCHEMAS])
-    else:
-        output = iter(DEPENDENCIES)
+    context = Context() if context is None else context
+    output: Iterable[object] = list(build().with_context(context))
 
     return output
 

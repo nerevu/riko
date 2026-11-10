@@ -77,6 +77,14 @@ Compatibility during refactors
 After 1.0 release, names that move will keep a re-export at their old import path for at
 least one minor release; behavior-changing removals will be listed in `CHANGES`_.
 
+Running and describing
+----------------------
+
+A pipe only runs. A ``Context`` carries a run's input values, test flag, and resources
+only. A pipe called with ``mode=`` raises ``RemovedOptionError`` (a ``TypeError``). See
+the FAQ's `How do I see a workflow's inputs and dependencies without running it`_ for
+additional details.
+
 Version upgrades
 ----------------
 
@@ -90,3 +98,4 @@ boundaries. It should change only when those policies or surfaces change, not fo
 release.
 
 .. _CHANGES: CHANGES.rst
+.. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

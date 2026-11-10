@@ -26,8 +26,6 @@ from riko.types.modules import (
 )
 {%- endif %}
 
-DEPENDENCIES: list[str] = {{ dependencies }}
-
 flow = Workflow(
     nodes=[
 {%- for node in nodes %}
@@ -42,7 +40,7 @@ flow = Workflow(
 {%- endif %}
 )
 
-{{ "async_pipe" if is_async else "pipe" }} = build_workflow_pipes(flow, dispatcher).{{ "async_pipe" if is_async else "sync_pipe" }}
+{{ "async_pipe" if is_async else "pipe" }} = build_workflow_pipes(flow, dispatcher, name="{{ pipe_name }}").{{ "async_pipe" if is_async else "sync_pipe" }}
 
 {% if is_async %}
 async def _main():

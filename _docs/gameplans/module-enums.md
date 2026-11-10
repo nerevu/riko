@@ -91,6 +91,9 @@ next touched.
 - expose `Backends` and `Formats` through their dedicated target/format discovery
   contracts rather than module taxonomy;
 - `.pyi` fluent stubs;
+- `list_modules` listing stored workflows (the `pipe_<id>` names the registered workflow
+  stores supply) beside modules, now that `describe_module` resolves them; deferred
+  2026-11-10 when the describe modes were retired. Additive, low priority;
 - Optional taxonomy enums (`ModuleType`, per-provider subtype enums) if `list_modules`
   filtering benefits — low priority, additive; string/`StrEnum` filters suffice today.
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from itertools import chain
 from typing import TYPE_CHECKING, NamedTuple
 
 from ._shipped_text import gen_blocks, gen_files
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
+_HISTORY_NAMES = frozenset({*_EXCLUDED_NAMES, "CHANGES.rst"})
 
 
 class BannedTerm(NamedTuple):
@@ -114,6 +116,10 @@ REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
 )
 
+RETIRED_DESCRIBE = BannedTerm(
+    "retired describe mode", "`describe_module`, or `input_schemas`/`dependencies`"
+)
+
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
@@ -126,10 +132,6 @@ _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
         ),
     ),
     (
-        REMOVED_EXT_PATH,
-        re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
-    ),
-    (
         UPSTREAM_NOUN,
         re.compile(
             r"\b(?:its|their|the whole|a suspended)\s+(?:up|down)streams?\b"
@@ -137,6 +139,15 @@ _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+)
+
+
+_RETIRED_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
+    (
+        REMOVED_EXT_PATH,
+        re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
+    ),
+    (RETIRED_DESCRIBE, re.compile(r"\bExecutionMode\b|\b(?i:describe[\s-]+modes?)\b")),
 )
 
 
@@ -174,11 +185,13 @@ def _gen_pairs(
 
 
 def _gen_issues(
-    patterns: tuple[tuple[BannedTerm, re.Pattern[str]], ...], *roots: Path
+    patterns: tuple[tuple[BannedTerm, re.Pattern[str]], ...],
+    *roots: Path,
+    excluded: frozenset[str] = _EXCLUDED_NAMES,
 ) -> Iterator[TermIssue]:
     """Walks ``roots`` for every ``patterns`` match in their scannable files."""
     for root in roots:
-        for path in gen_files(root, _EXCLUDED_NAMES):
+        for path in gen_files(root, excluded):
             for start, block in gen_blocks(path):
                 pairs = _gen_pairs(block, *patterns)
 
@@ -195,14 +208,18 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
 
         roots: Files or directories to scan. Skips the migration guide because it quotes
             released wording. Skips the banned list and its tests because they spell out
-            every phrase.
+            every phrase. The changelog may still name the removed ``riko.ext``
+            submodules and the retired describe modes, since released entries keep
+            the names they shipped with.
 
     Yields:
 
         One :class:`TermIssue` per match, in path then line order.
 
     """
-    yield from _gen_issues(_PATTERNS, *roots)
+    shipped = _gen_issues(_PATTERNS, *roots)
+    retired = _gen_issues(_RETIRED_PATTERNS, *roots, excluded=_HISTORY_NAMES)
+    yield from sorted(chain(shipped, retired), key=lambda issue: issue[:2])
 
 
 def gen_phrase_issues(*roots: Path) -> Iterator[TermIssue]:
@@ -228,6 +245,7 @@ __all__ = [
     "BANNED_TERMS",
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
+    "RETIRED_DESCRIBE",
     "RUN_SCOPING",
     "UPSTREAM_NOUN",
     "BannedTerm",

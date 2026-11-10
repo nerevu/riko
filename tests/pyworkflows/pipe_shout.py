@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.strconcat import pipe as strconcat
-from riko.runtime._workflow_pipes import workflow
 from riko.types.modules import StrconcatRawConf
 
 if TYPE_CHECKING:

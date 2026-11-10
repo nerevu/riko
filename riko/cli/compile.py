@@ -20,7 +20,7 @@ Examples:
         ... }
         >>> source = compile_workflow(raw, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
-        pipe = build_workflow_pipes(flow, dispatcher).sync_pipe
+        pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").sync_pipe
 
     CLI composition::
 

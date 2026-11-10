@@ -1223,11 +1223,12 @@ Deliver:
   downstream; a tenant or reporting-period input must give two executions of one
   definition different cache keys and `StateKey`s (gameplan audit triage 2026-11-05).
 
-Audit note (2026-10-31 sibling audit): stored-workflow describe (`build_workflow_pipes`
-in `riko/runtime/_workflow_pipes.py`) returns its `description`/`inputs` dicts by
-reference in the DESCRIBE and `describe_input` modes, so a caller's mutation leaks into
-later calls. Return fresh or frozen data when input schemas land (tripwire
-`tests/internal/test_resolution.py::TestResolvedDocuments::test_document_description_is_fresh_per_call`).
+Audit note (2026-10-31 sibling audit, retired 2026-11-09): stored-workflow describe
+(`build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`) returned its
+`description`/`inputs` dicts by reference in the describe modes, so a caller's mutation
+leaked into later calls. The describe modes are gone: `describe_module` reads the frozen
+`input_schemas` and the `dependencies` tuple stamped on the pipe, so the tripwire
+`test_document_description_is_fresh_per_call` was deleted with them.
 
 **Exit:**
 
@@ -1235,15 +1236,12 @@ later calls. Return fresh or frozen data when input schemas land (tripwire
   v2 IR and are validated against `Context.inputs` during preparation.
 - **MIGRATE:** the `input` module's default/prompt/`test` behavior and the generated
   module's describe-inputs mode read the declared inputs instead of scanning node
-  configuration. `Pipeline` iteration ignores the `Context.mode` describe modes today
-  (only generated workflow modules honor them); a strict xfail in
-  `tests/public/test_pipeline.py` marks it for this phase. The hand-maintained probes in
-  `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their describe-inputs
-  branches still return `[]` or the scanned `input`-node tuples while the generated pipe
-  returns the declared `Workflow.input_schemas` mapping (strict xfail
-  `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`),
-  and `migrate_v1_to_v2` declares nothing from a `PipeDef`'s `input` modules (strict
-  xfail
+  configuration. (Superseded 2026-11-09: the describe modes, including the `Pipeline`
+  xfail in `tests/public/test_pipeline.py` and the probes' describe-inputs branches,
+  were retired; the probes declare `@workflow(input_schemas=, dependencies=)` and
+  `TestWorkflowProbes.test_probe_declares_what_its_document_declares` compares them with
+  each sibling `Workflow`.) Also, `migrate_v1_to_v2` declares nothing from a `PipeDef`'s
+  `input` modules (strict xfail
   `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_workflow_input`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists
   beside the IR.
@@ -1339,11 +1337,24 @@ Deliver:
   needed;
 - the same check for built-in and entry-point modules;
 - the describe modes retired (ruled 2026-11-09, [release-readiness.md
-  § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)):
-  a stored workflow's `describe_module()` entry carries its inputs' schemas and
-  dependencies; `ExecutionMode.DESCRIBE*`, `Context.describe_input`/
-  `describe_dependencies`, and the describe branches in generated pipes and the
-  `pyworkflows` probes are removed (a CHANGES "Removed" line), so a pipe only runs;
+  § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work);
+  brought forward from R4E and **done 2026-11-09** on phase-13): `describe_module()`
+  takes a name, a stored workflow's `pipe_<id>`/`pipe:<id>` name, or a pipe, and its
+  `ModuleDefinition.input_schemas`/`.dependencies` read the metadata `@workflow` stamps
+  (`riko.ext` exports `workflow` and `resolve_inputs`); `ExecutionMode`, `Context.mode`/
+  `describe_input`/`describe_dependencies`, the generated `DEPENDENCIES` constant, and
+  the describe branches in generated pipes and the `pyworkflows` probes are removed, and
+  a pipe call passing `mode=` raises `TypeError`, so a pipe only runs. Deferred (not
+  built): `list_modules` listing stored workflows, a `riko describe` CLI command, and a
+  dry run (an `ExecutionSettings` knob, never a `Context` mode;
+  [execution-semantics.md](execution-semantics.md));
+- `resolve_conf`'s `item` (`riko/parsing/config.py`) is typed `Item | None` while the
+  `SyncConfParseFunc` protocol passes `ItemOrValue`; `_prepare.py`'s
+  `conf_parser: Func[AnyModuleConf | None]` masks the mismatch (triaged 2026-11-10,
+  assigned here with the conf contract). Retype it here, narrowing with `is_mapping`
+  inside (widening alone gives 15 pyright errors in `config.py`), and settle whether a
+  scalar item can reach it: `resolve_conf` tests `if item` for truthiness before
+  `DotDict.dictize`.
 - interface classification by `isasync` rather than by attribute name, so a single async
   implementation named `pipe` (`@processor async def pipe`) wraps as the async interface
   instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
@@ -2552,16 +2563,14 @@ R7 adds the execution's async task group, not a parallel one.
 
 ## 6. Next implementation slice
 
-R0–R4C have landed (status: the R-track table in
-[PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4C closed 2026-11-03 with
-`Pipeline.map`, the bare decorator form, and `Pipeline.open()`). The branch is working
-toward the **M1 v1-parity merge** (§ 4): R4D → R5A → R7 → merge. The next coding PR is
-therefore **R4D — workflow input schemas**: top-level typed `Workflow` inputs with
-execution values arriving through `Context.inputs`, per that section and
-[extensibility.md § E3.6](extensibility.md#e36-inputs); not an Operations as Code,
-state-store, cache, or pub/sub PR.
+R0–R4D have landed (status: the R-track table in
+[PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4D closed 2026-11-10 with each
+`Workflow` input's schema, `{"input": name}` references, and `Context.inputs`
+validation). The branch is working toward the **M1 v1-parity merge** (§ 4): R5A → R7 →
+merge. The next coding PR is therefore **R5A**, per that section; not an Operations as
+Code, state-store, cache, or pub/sub PR.
 
-After R4D, R5A and R7 follow (they may overlap per § 5), then the merge. R2B (`version=`
+R5A and R7 may overlap per § 5, then the merge. R2B (`version=`
 plumbing) remains open beside them. R11A is **not** permission to jump around those
 prerequisites; it is the first Operations as Code slice once the owning lower-level
 seams exist.

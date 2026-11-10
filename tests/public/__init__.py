@@ -16,8 +16,8 @@ Index (file, then the subjects it owns, in file order):
                                   ModuleNameEnum, PipelineIteration, OutputParity,
                                   Reiteration, Close, AsyncSourceAdapter, Alist,
                                   AsyncMap, FanIn, WithExecution, ExecutionSettings,
-                                  AsyncBoundedParallel, AsyncFanInParallel, ContextMode,
-                                  Context, Resource, EnvironmentBinding, WorkflowInputs,
+                                  AsyncBoundedParallel, AsyncFanInParallel, Context,
+                                  Resource, EnvironmentBinding, WorkflowInputs,
                                   Subscriptions, Split, ConditionalNodes,
                                   PipelineSeeding, PipelineStream
     test_workflow.py              Workflow, NodeFamily, Nodes, ResourceBinding,

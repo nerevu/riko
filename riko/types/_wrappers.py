@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.definitions._context import Context
 
+    from ._frozendict import FrozenInputSchemas
     from ._options import RawCallOptions
     from ._scalars import PrimitiveValue
     from ._streams import Cascade, Feed, Item, Items
@@ -286,6 +287,8 @@ class WrapperMeta(Protocol):
     loopable: bool
     isasync: bool
     sequential_inputs: bool
+    input_schemas: FrozenInputSchemas | None
+    dependencies: tuple[str, ...] | None
 
 
 class ModuleWrapper(WrapperMeta, Protocol):
@@ -536,7 +539,7 @@ def is_subpipe(value: _SubPipeT | object) -> TypeIs[_SubPipeT]:
     Examples:
 
         >>> from riko.modules.hash import pipe
-        >>> from riko.runtime._workflow_pipes import workflow
+        >>> from riko.ext import workflow
         >>>
         >>> def flow_pipe(item=None, **kwargs):
         ...     return iter(())

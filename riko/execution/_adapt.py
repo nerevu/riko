@@ -216,6 +216,8 @@ def _copy_wrapper_meta(
         loopable=source.loopable,
         isasync=isasync,
         sequential_inputs=source.sequential_inputs,
+        input_schemas=getattr(source, "input_schemas", None),
+        dependencies=getattr(source, "dependencies", None),
     )
 
     for attr in _FUNC_META:

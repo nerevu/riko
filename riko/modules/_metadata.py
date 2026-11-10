@@ -26,7 +26,8 @@ from riko.base._guards import is_callable
 from riko.base._typing import import_or_else
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
-from riko.types._wrappers import WRAPPER_META, require_wrapper_meta
+from riko.runtime._workflow_resolver import workflow_resolver
+from riko.types._wrappers import WRAPPER_META, is_wrapper_meta, require_wrapper_meta
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
@@ -344,46 +345,83 @@ def list_modules(
     return modules if show_metadata else [module.name for module in modules]
 
 
-def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
+@overload
+def describe_module(name: WrapperMeta) -> ModuleDefinition: ...
+@overload
+def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None: ...
+def describe_module(
+    name: WrapperMeta | ModuleNameLike | None,
+) -> ModuleDefinition | None:
     """
-    Describes a module, or reports None when the name is unknown.
+    Describes a module, stored workflow, or pipe; or reports None when unknown.
 
-    A built-in is described from its module rather than the registry, so its
-    ``description`` comes from the docstring summary and its pipe callables are
-    read off the module. A registry definition instead reports whatever its
-    registrant supplied, which may leave the callables unset; ``get_pipe``
-    resolves either.
+    A built-in module name is described from its module. A stored workflow's
+    ``pipe_<id>`` name (or ``pipe:<id>`` alias) is looked up in the  workflow stores. A
+    pipe callable is described from its metadata.
 
     Args:
 
-        name: The module name, either a str or a discovery-tree member.
+        name: The module name, stored workflow's ``pipe_<id>`` name, or a pipe callable.
 
     Returns:
 
-        The definition, or None when no module answers to ``name``.
+        The module definition, or None when no module or stored workflow for ``name``
+        exists. Its ``input_schemas`` and ``dependencies`` report what the workflow
+        reads and runs.
+
+    Raises:
+
+        InvalidPipelineError: If a workflow store holds a malformed
+            ``WorkflowDocument`` named ``name``, or the stored workflow embeds itself
+            through the workflows its nodes name.
+
+        UnsupportedWorkflowError: If a document store supplies ``name`` but no
+            dispatcher is registered to run it.
 
     Examples:
 
         >>> from riko import Sources
+        >>> from riko.ext import register_workflow_store, temporary_registrations
+        >>> from riko.modules.fetch import pipe as fetch
         >>>
-        >>> fetch = describe_module(Sources.FETCH)
-        >>> fetch.name
+        >>> # module name
+        >>> module_def = describe_module(Sources.FETCH)
+        >>> module_def.name
         'fetch'
-        >>> fetch.description
+        >>> module_def.description
         'Fetches an RSS feed and yields feed entries.'
-        >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
-        ('pipe', 'async_pipe')
-        >>> fetch.get_pipe() is fetch.sync_pipe
-        True
+        >>> module_def.sync_pipe.__module__
+        'riko.modules.fetch'
+        >>> module_def.dependencies
+        ()
         >>> describe_module("does-not-exist")
+        >>>
+        >>> # stored workflow
+        >>> with temporary_registrations():
+        ...     register_workflow_store(package="examples.pyworkflows", replace=True)
+        ...     describe_module("pipe:timezone").dependencies
+        ...     describe_module("pipe:timezone").input_schemas
+        ('dateformat', 'itembuilder')
+        FrozenDict({})
+        >>>
+        >>> # pipe callable
+        >>> describe_module(fetch).name
+        'fetch'
 
     """
-    if canonical := normalize_module_name(name):
-        definition: ModuleDefinition | None = module_registry.load_definition(canonical)
+    if is_wrapper_meta(name):  # pipe
+        definition: ModuleDefinition | None = ModuleDefinition.from_pipe(name)
+    elif canonical := normalize_module_name(name):  # module name
+        definition = module_registry.load_definition(canonical)
+        module = import_or_else(f"{_PACKAGE}.{canonical}")
 
-        if definition is None:  # noqa: SIM102
-            if module := import_or_else(f"{_PACKAGE}.{canonical}"):
-                definition = ModuleDefinition.from_module(module, name=canonical)
+        if definition is None and module is not None:
+            definition = ModuleDefinition.from_module(module, name=canonical)
+
+        is_stored = definition is None and workflow_resolver.is_compatible(canonical)
+
+        if is_stored and (stored := workflow_resolver.load(canonical)) is not None:
+            definition = ModuleDefinition.from_module(stored)  # stored workflow
     else:
         definition = None
 

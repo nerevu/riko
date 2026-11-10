@@ -25,7 +25,7 @@ Index
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
 - `Can I store a workflow as JSON`_
-- `What execution modes are available`_
+- `How do I see a workflow's inputs and dependencies without running it`_
 - `Can I create custom modules`_
 - `How should I handle errors and resource cleanup`_
 - `Where should I report problems or contribute`_
@@ -76,7 +76,7 @@ Which imports are public?
 ``riko`` organizes its public interface into three import tiers:
 
 - **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
-  ``Pipeline`` and ``Workflow`` classes, ``Context``, ``ExecutionMode``, ``backend``,
+  ``Pipeline`` and ``Workflow`` classes, ``Context``, ``backend``,
   ``compile_workflow``, ``export``, ``get_module_metadata``,
   ``get_path``, ``isasync``, ``issync``, ``list_modules``, ``describe_module``,
   ``list_formats``, ``run``, the typed discovery surface
@@ -96,7 +96,6 @@ Application code should import from ``riko``.
 
     >>> from riko import (
     ...     Context,
-    ...     ExecutionMode,
     ...     Formats,
     ...     Modules,
     ...     Pipeline,
@@ -806,24 +805,36 @@ The `Cookbook`_ shows the same commands run one step at a time.
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
 examples.
 
-What execution modes are available?
------------------------------------
+How do I see a workflow's inputs and dependencies without running it?
+---------------------------------------------------------------------
 
-``Context`` accepts these ``ExecutionMode`` values:
+Read them from the workflow definition or via ``describe_module``. ``describe_module``
+takes a module name or a pipe and returns its ``ModuleDefinition``. ``input_schemas``
+holds the inputs' schemas, and ``dependencies`` lists the modules and stored workflows.
+A built-in module reports no inputs and no dependencies.
 
-=======================  =========================================================
-Mode                     Behavior
-=======================  =========================================================
-RUN                      Run normally (the default)
-DESCRIBE_INPUTS          Return the inputs' schemas instead of running
-DESCRIBE_DEPENDENCIES    Return the module and stored-workflow names it uses
-DESCRIBE                 Return the inputs' schemas and the dependencies,
-                         keyed ``"input_schemas"`` and ``"dependencies"``
-=======================  =========================================================
+.. code-block:: python
 
-Only a workflow module's ``pipe`` honors the describe modes today; a ``Pipeline``
-always runs. A workflow's node names also list the modules it uses without executing
-it. See `Inspecting a pipeline`_ in the cookbook for additional details.
+    >>> from riko import Pipeline, Sources, describe_module
+    >>> from riko.ext import register_workflow_store, temporary_registrations
+    >>> fetch = Pipeline.from_module(Sources.FETCH)
+    >>> fetch.workflow.dependencies
+    ('fetch',)
+    >>> fetch.workflow.input_schemas
+    FrozenDict({})
+    >>>
+    >>> with temporary_registrations():
+    ...     register_workflow_store(package="examples.pyworkflows", replace=True)
+    ...     describe_module("pipe:timezone").dependencies
+    ...     describe_module("pipe:timezone").input_schemas
+    ('dateformat', 'itembuilder')
+    FrozenDict({})
+    >>> describe_module(Sources.FETCH).dependencies
+    ()
+
+A ``Pipeline`` reports its own through ``pipeline.workflow``. A stored workflow's
+``pipe:<id>`` reports its workflow's. A compiled workflow module's pipe reports the
+same. See `Inspecting a pipeline`_ in the cookbook.
 
 Can I create custom modules?
 ----------------------------
@@ -921,7 +932,7 @@ documentation workflow.
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
 .. _How do I send one stream to multiple consumers: #how-do-i-send-one-stream-to-multiple-consumers
 .. _Can I store a workflow as JSON: #can-i-store-a-workflow-as-json
-.. _What execution modes are available: #what-execution-modes-are-available
+.. _How do I see a workflow's inputs and dependencies without running it: #how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it
 .. _Can I create custom modules: #can-i-create-custom-modules
 .. _How should I handle errors and resource cleanup: #how-should-i-handle-errors-and-resource-cleanup
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute

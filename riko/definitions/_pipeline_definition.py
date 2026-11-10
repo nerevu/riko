@@ -34,7 +34,6 @@ from riko.base._require_guards import (
     validator_from_require,
 )
 from riko.base._sentinels import MISSING, MissingType
-from riko.types._enums import ExecutionMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._streams import Item
 
@@ -162,11 +161,6 @@ class PipelineDefinition(Generic[T_co]):
     settings: ExecutionSettings = field(
         default=DEF_EXECUTION_SETTINGS, kw_only=True, repr=False, validator=_is_settings
     )
-
-    @property
-    def mode(self) -> ExecutionMode:
-        """The pipeline's run mode (``ExecutionMode.RUN`` with no context)."""
-        return resolve_default(self.context, Context()).mode
 
     def __repr__(self) -> str:
         context = resolve_default(self.context, "", "; context")
@@ -458,7 +452,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Derives a pipeline whose runs use ``context``.
 
-        The context supplies the run's input values, mode, and resources, and
+        The context supplies the run's input values and resources, and
         replaces any context this pipeline already carries.
 
         Args:
@@ -716,11 +710,9 @@ class PipelineDefinition(Generic[T_co]):
         base = resolve_default(self.context, Context())
         resources = {} if other is None else other.resources
         clashes = [k for k, v in resources.items() if base.resources.get(k, v) is not v]
-        _run = (ExecutionMode.RUN, None, False)
-
-        if other is not None and (other.mode, other.inputs, other.test) != _run:
-            msg = "a pipeline on the right of '|' may provide resources, but not a "
-            msg += "mode, inputs, or test flag; give them to the composed pipeline"
+        if other is not None and (other.inputs, other.test) != (None, False):
+            msg = "a pipeline on the right of '|' may provide resources, but not "
+            msg += "inputs or a test flag; give them to the composed pipeline"
             raise InvalidPipelineError(msg)
         elif clashes:
             msg = f"both pipelines provide different resources named {sorted(clashes)}"

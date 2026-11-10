@@ -373,13 +373,14 @@ definition and uses normal iteration/private execution semantics.
   `riko/cli/runpipe.py`;
 * a **workflow module** (`WorkflowModule`, `compile_workflow`/`compile-workflow` output
   and the hand-maintained `examples/pyworkflows/*.py`):
-  `pipe(item=None, context=None, **_)` plus `DEPENDENCIES`, which is also what the
-  pipeline resolver loads as a sub-pipe.
+  `pipe(item=None, context=None, **_)` tagged by `@workflow` (its declared
+  `input_schemas`/`dependencies` are what `describe_module()` reports), which is also
+  what the pipeline resolver loads as a sub-pipe.
 
 The workflow module runs only because `**_` swallows `test=`. C4 must decide whether
 Python files remain `pipeline run` inputs and, if so, which entry-point signature is the
-contract (R4D's input schemas replace the `test` behavior; R4E retires the describe
-modes in favor of `describe_module()` and `Workflow` attributes). No
+contract (R4D's input schemas replace the `test` behavior; the describe modes were
+retired 2026-11-09 in favor of `describe_module()` and `Workflow` attributes). No
 tripwire: current behavior is correct, so there is nothing for a strict xfail to probe.
 
 Where a run service is used, canonical Python constructs:

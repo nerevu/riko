@@ -392,9 +392,9 @@ class Pipeline(PipelineDefinition[T_co]):
 
             TypeError: If ``other`` is a function.
 
-            InvalidPipelineError: If ``other`` carries execution settings; a context
-                with a mode, inputs, or test flag; duplicates a resource name; or its
-                workflow cannot be appended (see ``Workflow.with_workflow``).
+            InvalidPipelineError: If ``other`` carries execution settings, a context
+                with inputs, or a test flag; duplicates a resource name; or its workflow
+                cannot be appended (see ``Workflow.with_workflow``).
 
         Examples:
 

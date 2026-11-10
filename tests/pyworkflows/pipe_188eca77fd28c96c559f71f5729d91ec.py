@@ -6,11 +6,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.fetchpage import pipe as fetchpage
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchPageRawConf, ItemBuilderRawConf, TruncateRawConf
 
 if TYPE_CHECKING:
@@ -19,57 +18,50 @@ if TYPE_CHECKING:
 
 
 INPUT_SCHEMAS = {}
-DEPENDENCIES = ["fetchpage", "itembuilder", "truncate"]
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["fetchpage", "itembuilder", "truncate"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_163 = itembuilder(
-            item,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": {
-                        "key": {"type": "text", "value": "url"},
-                        "value": {
-                            "type": "text",
-                            "value": "file://riko/data/www.caltrain.com_Fares_farechart.html",
-                        },
-                    }
-                }
-            ),
-            context=context,
-        )
-        sw_111 = fetchpage(
-            sw_163,
-            conf=FetchPageRawConf(
-                {
-                    "url": {"subkey": "url", "type": "url"},
-                    "start": {"type": "text", "value": "One Way</span>"},
-                    "end": {"type": "text", "value": "</tr>"},
-                    "token": {
+    sw_163 = itembuilder(
+        item,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": {
+                    "key": {"type": "text", "value": "url"},
+                    "value": {
                         "type": "text",
-                        "value": '<td style="text-align: center;">',
+                        "value": "file://riko/data/www.caltrain.com_Fares_farechart.html",
                     },
                 }
-            ),
-            emit=True,
-            assign="loop:fetchpage",
-            count="all",
-            context=context,
-        )
-        sw_287 = truncate(
-            sw_111,
-            conf=TruncateRawConf({"count": {"type": "float", "value": "100"}}),
-            context=context,
-        )
-        _OUTPUT = sw_287
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = iter([{"input_schemas": INPUT_SCHEMAS, "dependencies": DEPENDENCIES}])
-    elif context.describe_input:
-        _OUTPUT = iter([INPUT_SCHEMAS])
-    else:
-        _OUTPUT = iter(DEPENDENCIES)
+            }
+        ),
+        context=context,
+    )
+    sw_111 = fetchpage(
+        sw_163,
+        conf=FetchPageRawConf(
+            {
+                "url": {"subkey": "url", "type": "url"},
+                "start": {"type": "text", "value": "One Way</span>"},
+                "end": {"type": "text", "value": "</tr>"},
+                "token": {"type": "text", "value": '<td style="text-align: center;">'},
+            }
+        ),
+        emit=True,
+        assign="loop:fetchpage",
+        count="all",
+        context=context,
+    )
+    sw_287 = truncate(
+        sw_111,
+        conf=TruncateRawConf({"count": {"type": "float", "value": "100"}}),
+        context=context,
+    )
+    _OUTPUT = sw_287
 
     return _OUTPUT
 

@@ -3,10 +3,10 @@ String enums shared by Riko's stable, extension, and implementation APIs.
 
 Examples:
 
-    >>> from riko import ExecutionMode, Formats
+    >>> from riko import Formats
     >>>
-    >>> Formats.JSON.value, ExecutionMode.RUN.value
-    ('json', 'run')
+    >>> Formats.JSON.value
+    'json'
 
 """
 
@@ -160,27 +160,6 @@ class CastType(StrEnum):
     PASS = "pass"  # noqa: S105
     TEXT = "text"
     URL = "url"
-
-
-class ExecutionMode(StrEnum):
-    """
-    Whether a workflow module's pipe runs its workflow or only describes it.
-
-    A ``Pipeline`` run under a describe mode yields the description and runs nothing.
-
-    Examples:
-
-        >>> from riko import ExecutionMode
-        >>>
-        >>> ExecutionMode.DESCRIBE_INPUTS.value
-        'describe_inputs'
-
-    """
-
-    RUN = "run"
-    DESCRIBE_INPUTS = "describe_inputs"
-    DESCRIBE_DEPENDENCIES = "describe_dependencies"
-    DESCRIBE = "describe"
 
 
 class Executor(StrEnum):

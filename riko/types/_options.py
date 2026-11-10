@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.definitions._workflow_definition import Inputs
 
-    from ._enums import BasicCastType, ExecutionMode, FmtLike
+    from ._enums import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
     from ._streams import Item, ItemOrValue
     from ._values import BasicArg, RikoList
@@ -254,6 +254,5 @@ class CallOptions:
 class ContextOverrides(TypedDict, total=False):
     """The per-call overrides a pipe call applies to its ``Context``."""
 
-    mode: ExecutionMode
     inputs: Inputs
     test: bool

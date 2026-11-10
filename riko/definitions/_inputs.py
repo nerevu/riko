@@ -10,6 +10,16 @@ A run fills values from its context's ``inputs`` or ``InputSchema``'s ``default`
 also checks the given values against their ``InputSchema``. It rejects missing inputs
 and invalid values, and substitutes values for their references.
 
+Examples:
+
+    Basic usage::
+
+        >>> from riko.ext import resolve_inputs
+        >>>
+        >>> schemas = {"q": {"type": "string", "default": "riko"}}
+        >>> dict(resolve_inputs(schemas, {}))
+        {'q': 'riko'}
+
 """
 
 from __future__ import annotations
