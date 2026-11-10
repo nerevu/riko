@@ -40,10 +40,10 @@ Index (file, then the subjects it owns, in file order):
                               AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
-                              DescribeModule, PublicRegister, ResolverDispatcher,
-                              RequireInterface, EntryPointModules, WorkflowResolver,
-                              PackageStore, DirectoryStore, CompositeStore, Catalog,
-                              ResolvedDocuments, TargetRegistry
+                              DescribeModule, PublicRegister, TemporaryRegistrations,
+                              ResolverDispatcher, RequireInterface, EntryPointModules,
+                              WorkflowResolver, PackageStore, DirectoryStore,
+                              CompositeStore, Catalog, ResolvedDocuments, TargetRegistry
     test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,

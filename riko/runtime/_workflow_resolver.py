@@ -60,21 +60,22 @@ Examples:
 
         >>> from pathlib import Path
         >>> from tempfile import TemporaryDirectory
+        >>> from riko.ext import temporary_registrations
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
-        >>> reset_workflow_resolver()
-        >>> with TemporaryDirectory() as tmp:
+        >>>
+        >>> with TemporaryDirectory() as tmp, temporary_registrations():
         ...     _ = (Path(tmp) / "pipe_demo.json").write_text(document)
-        ...     register_workflow_store(directory=Path(tmp))
+        ...     register_workflow_store(directory=Path(tmp), replace=True)
         ...     pipe = workflow_resolver.require("pipe:demo")
         ...     next(iter(pipe()))
         {'forever': True}
-        >>> reset_workflow_resolver()
 
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Literal, overload
@@ -91,7 +92,7 @@ from ._workflow_pipes import build_workflow_pipes, workflow
 from ._workflow_stores import DirectoryStore, PackageStore
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Generator, Iterable
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
@@ -299,6 +300,17 @@ class WorkflowResolver:
             resolve_store(*dargs, "document store"),
         )
         self._resolved_documents.clear()
+
+    @contextmanager
+    def restoring(self) -> Generator[None]:
+        """Restores the stores registered on entry when the block exits."""
+        saved = self._module_store, self._document_store
+
+        try:
+            yield
+        finally:
+            self._module_store, self._document_store = saved
+            self._resolved_documents.clear()
 
     def reset(self) -> None:
         """
@@ -646,11 +658,11 @@ def register_workflow_store(
     Examples:
 
         >>> import riko.modules
+        >>> from riko.ext import temporary_registrations
         >>>
-        >>> reset_workflow_resolver()
-        >>> register_workflow_store(package="riko.modules")
-        >>> register_workflow_store(package=riko.modules, replace=True)
-        >>> reset_workflow_resolver()
+        >>> with temporary_registrations():
+        ...     register_workflow_store(package="riko.modules", replace=True)
+        ...     register_workflow_store(package=riko.modules, replace=True)
 
     """
     module_store = None if package is None else PackageStore(package)
@@ -660,24 +672,4 @@ def register_workflow_store(
     )
 
 
-def reset_workflow_resolver() -> None:
-    """
-    Resets the process-global resolver, chiefly for test isolation.
-
-    Examples:
-
-        >>> reset_workflow_resolver()
-        >>> register_workflow_store(package="riko.modules")
-        >>> reset_workflow_resolver()
-        >>> workflow_resolver.load("pipe_demo")
-
-    """
-    workflow_resolver.reset()
-
-
-__all__ = [
-    "WorkflowResolver",
-    "register_workflow_store",
-    "reset_workflow_resolver",
-    "workflow_resolver",
-]
+__all__ = ["WorkflowResolver", "register_workflow_store", "workflow_resolver"]

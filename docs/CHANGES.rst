@@ -50,8 +50,8 @@ New
   (e.g., ``FileTarget``) to ``riko.ext``.
 
 - Extension authors can register workflow stores (``register_workflow_store``) and write
-  targets (``register_target``); ``reset_workflow_resolver``/``reset_target_registry``
-  undo them. A stored workflow that embeds itself raises ``InvalidPipelineError``.
+  targets (``register_target``). Use ``with temporary_registrations()`` as a registration
+  context manager. A stored workflow that embeds itself raises ``InvalidPipelineError``.
 
 - Module pipe callables gained ``prepare``. It applies a call's configuration and call
   options for reuse over items. ``riko.ext.PreparedCall`` annotates its return value.
@@ -236,9 +236,9 @@ Removed
   ``WriteMode`` are now on ``riko``.
 
 - Removed the ``riko.ext`` submodules ``config``, ``decorators``, ``protocols``, and
-  ``registry``. Import from ``riko.ext`` (``reset_module_registry`` for
-  ``reset_registry``), or ``riko.types`` for ``Feed``, ``Stream``, ``AsyncStream``, and
-  ``AsyncItems``.
+  ``registry``. Import from ``riko.ext`` (``temporary_registrations()`` replaces
+  ``reset_registry``). For ``Feed``, ``Stream``, ``AsyncStream``, and ``AsyncItems``,
+  import from ``riko.types``.
 
 - Secondary namespaces no longer re-export names another package owns: import
   ``processor``, ``operator``, ``splitter``, and ``DynamicConf`` from ``riko.ext`` (not

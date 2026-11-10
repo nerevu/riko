@@ -139,29 +139,19 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
     Examples:
 
         >>> from riko import Backends
-        >>> from riko.ext import register_target, reset_target_registry
+        >>> from riko.ext import register_target, temporary_registrations
         >>>
-        >>> @register_target
-        ... class S3Target:
-        ...     backend = Backends.S3
-        >>>
-        >>> target_registry.resolve(Backends.S3) is S3Target
+        >>> with temporary_registrations():
+        ...     @register_target
+        ...     class S3Target:
+        ...         backend = Backends.S3
+        ...
+        ...     target_registry.resolve(Backends.S3) is S3Target
         True
-        >>> reset_target_registry()
 
     """
     target_registry.register(target, replace=replace)
     return target
 
 
-def reset_target_registry() -> None:
-    """Resets the process-global target registry, chiefly for test isolation."""
-    target_registry.reset()
-
-
-__all__ = [
-    "TargetRegistry",
-    "register_target",
-    "reset_target_registry",
-    "target_registry",
-]
+__all__ = ["TargetRegistry", "register_target", "target_registry"]

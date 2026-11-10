@@ -1,8 +1,16 @@
 """Generic registry for runtime, entry-point, and built-in named entries."""
 
+from __future__ import annotations
+
+from contextlib import contextmanager
 from functools import cached_property
 from importlib.metadata import EntryPoint, entry_points
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
+
+from riko.base._iterutils import sort_stably
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 def _get_dist_name(ep: EntryPoint) -> str:
@@ -143,7 +151,7 @@ class Registry[T]:
     @property
     def registered_names(self) -> tuple[str, ...]:
         """The sorted runtime-registered names."""
-        return tuple(sorted(self._runtime))
+        return sort_stably(self._runtime)
 
     @property
     def discovered_names(self) -> tuple[str, ...]:
@@ -153,7 +161,18 @@ class Registry[T]:
         Excludes built-ins since they are enumerated separately.
 
         """
-        return tuple(sorted({*self._runtime, *self._entry_points}))
+        return sort_stably({*self._runtime, *self._entry_points})
+
+    @contextmanager
+    def restoring(self) -> Generator[None]:
+        """Restores the runtime registrations held on entry when the block exits."""
+        saved = dict(self._runtime)
+
+        try:
+            yield
+        finally:
+            self._runtime.clear()
+            self._runtime.update(saved)
 
     def reset(self) -> None:
         """Drops runtime registrations and the entry-point discovery cache."""

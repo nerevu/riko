@@ -122,7 +122,7 @@ EXT_MODULES = frozenset(
         "operator",
         "processor",
         "register_module",
-        "reset_module_registry",
+        "temporary_registrations",
         "splitter",
     }
 )
@@ -137,7 +137,7 @@ EXT_TARGETS = frozenset(
         "TargetRegistry",
         "WriteCapabilities",
         "register_target",
-        "reset_target_registry",
+        "temporary_registrations",
     }
 )
 
@@ -154,7 +154,9 @@ EXT_WORKFLOWS = frozenset(
         "SubscribeNode",
         "WriteNode",
         "register_workflow_store",
-        "reset_workflow_resolver",
+        "resolve_inputs",
+        "temporary_registrations",
+        "workflow",
     }
 )
 

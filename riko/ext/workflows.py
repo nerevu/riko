@@ -2,9 +2,10 @@
 """
 Provides workflow authoring for extension authors.
 
-This namespace contains the workflow node and edge classes, stored-workflow
-registration, and the dispatcher protocol. It is part of the SemVer-guaranteed
-``riko.ext`` surface. Every name here is also re-exported from ``riko.ext``.
+Contains the workflow node and edge classes, stored-workflow registration, dispatcher
+protocol, ``workflow`` decorator, and ``resolve_inputs`` helper a hand-written workflow
+module's pipe uses. It is part of the SemVer-guaranteed ``riko.ext`` surface. Every name
+here is also re-exported from ``riko.ext``.
 
 Examples:
 
@@ -24,6 +25,7 @@ Examples:
 
 """
 
+from riko.definitions._inputs import resolve_inputs
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
@@ -35,10 +37,9 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.runtime._workflow_resolver import (
-    register_workflow_store,
-    reset_workflow_resolver,
-)
+from riko.runtime._registrations import temporary_registrations
+from riko.runtime._workflow_pipes import workflow
+from riko.runtime._workflow_resolver import register_workflow_store
 from riko.types._wrappers import Dispatcher
 
 __all__ = [
@@ -53,5 +54,7 @@ __all__ = [
     "SubscribeNode",
     "WriteNode",
     "register_workflow_store",
-    "reset_workflow_resolver",
+    "resolve_inputs",
+    "temporary_registrations",
+    "workflow",
 ]

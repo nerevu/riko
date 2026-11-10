@@ -45,16 +45,18 @@ OUTPUT_A = {"default": Endpoint("a", "out")}
 def registered_modules(
     *definitions: ModuleDefinition, replace: bool = False
 ) -> Generator[ModuleRegistry]:
-    """Registers *definitions* in a fresh module registry, reset again on exit."""
-    module_registry.reset()
-
-    try:
-        for definition in definitions:
-            module_registry.register(definition, replace=replace)
-
-        yield module_registry
-    finally:
+    """Registers *definitions* in an emptied module registry, restored on exit."""
+    with module_registry.restoring():
         module_registry.reset()
+
+        try:
+            for definition in definitions:
+                module_registry.register(definition, replace=replace)
+
+            yield module_registry
+        finally:
+            # drops any entry-point cache a test filled from patched entry points
+            module_registry.reset()
 
 
 def tag_source[F: Func[object]](fn: F) -> F:

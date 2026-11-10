@@ -10,28 +10,31 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import Backends
-        >>> from riko.ext import FileTarget, TargetRegistry
+        >>> from riko import Backends, WriteMode
+        >>> from riko.ext import WriteCapabilities, register_target
+        >>> from riko.ext import temporary_registrations
         >>>
-        >>> registry = TargetRegistry()
-        >>> registry.resolve(Backends.FILE) is FileTarget
-        True
-        >>> class S3Target:
-        ...     backend = Backends.S3
+        >>> with temporary_registrations():
+        ...     @register_target
+        ...     class S3Target:
+        ...         backend = Backends.S3
+        ...
+        ...         def get_capabilities(self, fmt=None):
+        ...             return WriteCapabilities(modes=[WriteMode.REPLACE])
+        ...
+        ...     capabilities = S3Target().get_capabilities()
         >>>
-        >>> registry.register(S3Target)
-        >>> registry.resolve(Backends.S3) is S3Target
-        True
+        >>> capabilities.modes
+        frozenset({<WriteMode.REPLACE: 'replace'>})
+        >>> capabilities.appendable
+        False
 
 """
 
 from riko.definitions._targets import FileTarget
 from riko.definitions._write import WriteCapabilities
-from riko.runtime._target_registry import (
-    TargetRegistry,
-    register_target,
-    reset_target_registry,
-)
+from riko.runtime._registrations import temporary_registrations
+from riko.runtime._target_registry import TargetRegistry, register_target
 from riko.types._target_protocols import (
     SupportsActions,
     SupportsRead,
@@ -48,5 +51,5 @@ __all__ = [
     "TargetRegistry",
     "WriteCapabilities",
     "register_target",
-    "reset_target_registry",
+    "temporary_registrations",
 ]

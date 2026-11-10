@@ -1049,12 +1049,12 @@ You can also use ``pipe:<id>`` as an alias for ``pipe_<id>``.
     >>> from pathlib import Path
     >>> from tempfile import TemporaryDirectory
     >>> from riko import Pipeline
-    >>> from riko.ext import register_workflow_store
+    >>> from riko.ext import register_workflow_store, temporary_registrations
     >>>
     >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> greet = Pipeline.from_module('itembuilder', conf=conf)
     >>>
-    >>> with TemporaryDirectory() as tmp:
+    >>> with TemporaryDirectory() as tmp, temporary_registrations():
     ...     document = Path(tmp) / 'pipe_greet.json'
     ...     _ = document.write_bytes(greet.workflow.serialize())
     ...     register_workflow_store(directory=Path(tmp), replace=True)
@@ -1069,8 +1069,8 @@ Notes:
 - Registering a second package or directory raises ``ValueError`` unless you pass
   ``replace=True``.
 
-- ``riko.ext.reset_workflow_resolver()`` unregisters the package and the
-  directory. No stored workflow will be found until you register one again.
+- ``riko.ext.temporary_registrations()`` scopes registrations to a ``with`` block. On
+  exit it restores any previously registered modules, targets, and workflow stores.
 
 - Running a ``pipe_<id>`` that neither has raises ``UnsupportedWorkflowError``.
 

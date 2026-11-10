@@ -532,8 +532,10 @@ keyed by `backend` and resolves a `Backends` to its target class. The target voc
 Workflow-store registration is on `riko.ext` too:
 `register_workflow_store(*, package, directory, replace=False)` (`package` is a package
 or its import path; primitives only — the store classes and `WorkflowResolver` stay
-private per `PRIVATE_RESOLUTION`), with `reset_workflow_resolver` alongside
-`reset_module_registry`/`reset_target_registry`, all on `riko.ext` (grouped in
+private per `PRIVATE_RESOLUTION`), with `temporary_registrations` (one scope that
+restores the module, target, and workflow-store registrations on exit; it replaced the
+three `reset_*` functions and, like `warnings.catch_warnings`, is not thread-safe) in
+each group, all on `riko.ext` (grouped in
 `riko/ext/modules.py`, `riko/ext/targets.py`, and `riko/ext/workflows.py`). P9A
 discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped —
 see §24 above. Remaining P9 (non-P9A): the installed-env aggregate

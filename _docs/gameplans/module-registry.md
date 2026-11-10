@@ -24,8 +24,8 @@
   suite registers its own sources via an autouse `conftest.py` fixture calling
   `register_workflow_store(package=…, directory=…)`. The store classes and
   `WorkflowResolver` stay private; only `register_workflow_store` (primitives) is on
-  `riko.ext`, with `reset_workflow_resolver` on `riko.ext.workflows` (re-exported from
-  `riko.ext`).
+  `riko.ext`; `temporary_registrations` on `riko.ext.workflows` (re-exported from
+  `riko.ext`) scopes registrations to a block.
 - **`PipeResolver`** (`riko/runtime/_resolver.py`) — the single façade. Precedence
   **runtime registration → entry-point → built-in → stored workflow** (`register` needs
   `replace=True` to shadow).

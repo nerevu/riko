@@ -13,10 +13,8 @@ from riko.base._logging import LOGGER_NAME
 from riko.base._paths import ROOT_DIR, TESTS_DIR
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
-from riko.runtime._workflow_resolver import (
-    register_workflow_store,
-    reset_workflow_resolver,
-)
+from riko.runtime._registrations import temporary_registrations
+from riko.runtime._workflow_resolver import register_workflow_store
 
 pytest_plugins = [
     "pytester",
@@ -42,10 +40,9 @@ def pytest_configure(config: pytest.Config) -> None:
 def workflow_store():
     # Core ships no workflow stores; the suite registers its own package of stored
     # workflows plus the directory of workflow documents.
-    reset_workflow_resolver()
-    register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
-    yield
-    reset_workflow_resolver()
+    with temporary_registrations():
+        register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
+        yield
 
 
 def _extra_missing(*modules: str) -> list[str]:

@@ -12,6 +12,7 @@ discovery names for a plugin.
 """
 
 from riko.coercion._dynamic_conf import DynamicConf
+from riko.definitions._inputs import resolve_inputs
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.definitions._nodes import (
     ActionNode,
@@ -28,20 +29,11 @@ from riko.definitions._targets import FileTarget
 from riko.definitions._write import WriteCapabilities
 from riko.modules._decorators import operator, processor, splitter
 from riko.modules._metadata import get_module_category
-from riko.runtime._module_registry import (
-    ModuleRegistry,
-    register_module,
-    reset_module_registry,
-)
-from riko.runtime._target_registry import (
-    TargetRegistry,
-    register_target,
-    reset_target_registry,
-)
-from riko.runtime._workflow_resolver import (
-    register_workflow_store,
-    reset_workflow_resolver,
-)
+from riko.runtime._module_registry import ModuleRegistry, register_module
+from riko.runtime._registrations import temporary_registrations
+from riko.runtime._target_registry import TargetRegistry, register_target
+from riko.runtime._workflow_pipes import workflow
+from riko.runtime._workflow_resolver import register_workflow_store
 from riko.types._enums import ModuleName, ModuleNameLike
 from riko.types._target_protocols import (
     SupportsActions,
@@ -106,8 +98,8 @@ __all__ = [
     "register_module",
     "register_target",
     "register_workflow_store",
-    "reset_module_registry",
-    "reset_target_registry",
-    "reset_workflow_resolver",
+    "resolve_inputs",
     "splitter",
+    "temporary_registrations",
+    "workflow",
 ]

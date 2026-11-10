@@ -9,7 +9,7 @@ from functools import partial
 from importlib.metadata import EntryPoint
 from threading import Barrier, Thread
 from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING, assert_type, cast
+from typing import TYPE_CHECKING, ClassVar, assert_type, cast
 
 import attrs
 import pytest
@@ -35,14 +35,23 @@ from riko.runtime._module_registry import (
     ModuleRegistry,
     module_registry,
     register_module,
-    reset_module_registry,
 )
 from riko.runtime._pipeline import Pipeline
+from riko.runtime._registrations import temporary_registrations
 from riko.runtime._registry import Registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
-from riko.runtime._target_registry import TargetRegistry
+from riko.runtime._target_registry import (
+    TargetRegistry,
+    register_target,
+    target_registry,
+)
 from riko.runtime._workflow_pipes import build_workflow_pipes, workflow
-from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
+from riko.runtime._workflow_resolver import (
+    WorkflowResolver,
+    _build_resolved_workflow,
+    register_workflow_store,
+    workflow_resolver,
+)
 from riko.runtime._workflow_stores import (
     CompositeStore,
     DirectoryStore,
@@ -77,7 +86,7 @@ _MARKER = _pipe_wrapper()
 
 
 class _FileBackendTarget:
-    backend = Backends.FILE
+    backend: ClassVar[Backends] = Backends.FILE
 
 
 _DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
@@ -343,12 +352,43 @@ class TestPublicRegister:
         assert metadata.name == _NAME
         assert metadata == catalog[_NAME]
 
-    def test_reset_registry_clears_registration(self, fixed_registry):
-        register_module(MOD_DEFN)
-        reset_module_registry()
+
+class TestTemporaryRegistrations:
+    def test_module_registration_is_undone(self, fixed_registry):
+        with temporary_registrations():
+            register_module(MOD_DEFN)
 
         with pytest.raises(UnsupportedModuleError):
             dispatcher.require(_NAME)
+
+    def test_replaced_module_comes_back(self, fixed_registry):
+        register_module(MOD_DEFN)
+
+        with temporary_registrations():
+            replacement = ModuleDefinition(name=_NAME, sync_pipe=_pipe_wrapper())
+            register_module(replacement, replace=True)
+
+        assert module_registry.load_definition(_NAME) is MOD_DEFN
+
+    def test_replaced_target_comes_back(self):
+        with temporary_registrations():
+            register_target(_FileBackendTarget, replace=True)
+            assert target_registry.resolve(Backends.FILE) is _FileBackendTarget
+
+        assert target_registry.resolve(Backends.FILE) is FileTarget
+
+    def test_replaced_workflow_store_comes_back(self, tmp_path: Path):
+        source = TESTS_DIR / "workflows" / "pipe_2de0e4517ed76082dcddf66f7b218057.json"
+        (tmp_path / "pipe_gigs.json").write_bytes(source.read_bytes())
+        before = workflow_resolver.load_workflow("pipe_gigs")
+
+        with temporary_registrations():
+            register_workflow_store(directory=tmp_path, replace=True)
+            inside = workflow_resolver.load_workflow("pipe_gigs")
+
+        after = workflow_resolver.load_workflow("pipe_gigs")
+        assert inside != before
+        assert after == before
 
 
 class TestResolverDispatcher:
