@@ -214,18 +214,20 @@ neighborhood it affects:
    wrong tier), move candidates left behind in the source file, and helpers whose users
    changed (now used by one file → beside its class; by several → `tests/_*.py`). Start
    from `python .claude/skills/tidy/overlap_scan.py --files <each touched file>`
-   (static, about 2s). It lists candidates (unused or single-user helpers, copied
-   definitions and constants, helper bodies inlined in tests, same-shape tests and
-   standalone tests that fit a table, `pytest.param` rows a few columns too long for one
-   line, shared literals, doctest calls repeated as `pytest.param` rows, doctest errors
-   repeated as `pytest.raises`, test messages a doctest also pins, doctests of six or
-   more examples whose callee has a table, tests with no assertion or asserts only
-   inside a loop, same-named tests, unsupported names in public and supported-only
-   internal classes, out-of-order or misplaced classes and helpers, classes that never
-   name their riko-named subject, functional classes with no end-to-end marker, tests
-   that start a process without saying why). Read its full output once; never pipe it
-   through `head`/`grep` and rerun (`--limit` already caps it). Read and verify only
-   those, never whole files. Make the moves with
+   (static, about 2s); when the change touched docstring or user-doc examples, also run
+   `python .claude/skills/tidy/example_scan.py dups` (≥0.8 near-duplicate example pairs,
+   about 0.3s; leads only). The overlap scan lists candidates (unused or single-user
+   helpers, copied definitions and constants, helper bodies inlined in tests, same-shape
+   tests and standalone tests that fit a table, `pytest.param` rows a few columns too
+   long for one line, shared literals, doctest calls repeated as `pytest.param` rows,
+   doctest errors repeated as `pytest.raises`, test messages a doctest also pins,
+   doctests of six or more examples whose callee has a table, tests with no assertion or
+   asserts only inside a loop, same-named tests, unsupported names in public and
+   supported-only internal classes, out-of-order or misplaced classes and helpers,
+   classes that never name their riko-named subject, functional classes with no
+   end-to-end marker, tests that start a process without saying why). Read its full
+   output once; never pipe it through `head`/`grep` and rerun (`--limit` already caps
+   it). Read and verify only those, never whole files. Make the moves with
    `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
    `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
