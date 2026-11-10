@@ -458,6 +458,8 @@ New
 - Added ``riko.ext.derive_category`` to get a module's discovery category (``source``,
   ``transform``, or ``sink``).
 
+- Added ``processor.parse(…)`` and ``operator.aparse(…)``.
+
 - Added the ``gen-names`` script (and ``manage codegen --mode names``) to regenerate
   ``riko/modules/_names.py`` from the built-in catalog.
 
@@ -666,11 +668,18 @@ New
     ``pipe | SyncPipe("sort", conf=…)``, and ``items | SyncPipe(…)``
   - ``pipe.pipe(name, conf=…)`` / ``pipe.async_pipe(name, …)``
 
-- Added a **module registry and entry-point extension seam**. Extension authors can
-  register modules with ``riko.ext.register`` or
-  ``[project.entry-points."riko.modules"]``. Registered modules resolve like built-ins
-  and appear in ``list_modules()``. Registering an existing name raises ``ValueError``
-  unless you pass ``replace=True``.
+- Added a **module registry and entry-point extension seam**. Extension authors can now
+  register modules with ``riko.ext.register`` or via entry-points. Registered modules
+  resolve like built-ins and appear in ``list_modules(…)``.
+
+- Added ``reset_registry()`` to ``riko.ext.registry``. Added the ``registered_names``
+  and ``catalog_names`` methods to ``riko.ext.ModuleRegistry`` for listing registered
+  and entry-point names. ``resolve(…)`` returns a module's pipe and ``definition(…)``
+  its ``ModuleDefinition``.
+
+- Added to ``riko.ext.names`` the ``riko.ext.ModuleName`` ``StrEnum`` for module-name
+  discovery, plus ``normalize_module_name`` and the ``ModuleNameLike`` alias. A user-
+  defined ``ModuleName`` subclass is now accepted anywhere a module name is.
 
 - The ``processor``, ``operator``, and ``splitter`` decorators now infer ``isasync``.
   An async function won't silently become a sync pipe callable if the author forgets
@@ -726,11 +735,6 @@ Fixes
 
 - ``manage test`` now correctly reads the ``cov`` flag (not ``cover``), so
   ``--cov=riko`` coverage works.
-
-- Added ``riko.ext.ModuleName``, a deliberately empty ``StrEnum`` base for typed
-  module-name discovery, plus ``normalize_module_name`` and the ``ModuleNameLike``
-  alias. A user-defined ``ModuleName`` subclass (e.g.,``class MyModules(ModuleName)``)
-  is now accepted anywhere a module name is (e.g., ``SyncPipe(MyModules.FETCH)``).
 
 Documentation
 ~~~~~~~~~~~~~
@@ -944,8 +948,8 @@ Changes
 ~~~~~~~
 
 - **Replaced ``Objconf`` with ``DynamicConf``.** ``Objconf(…)`` becomes a compatibility
-  factory (emits ``DeprecationWarning``); it is removed outright in a later release.
-  Extension authors should import ``DynamicConf`` from ``riko.ext``.
+  factory (emits ``DeprecationWarning``). Import ``DynamicConf`` from ``riko.ext``
+  instead (or ``riko.ext.config``, beside ``get_conf_type``).
 
 - Completed the async lifecycle and source parity; achieved sync/async chaining parity.
 
@@ -977,7 +981,9 @@ Changes
 ~~~~~~~
 
 - **Established a three-tier public API boundary** (stable ``riko``/``riko.api``,
-  extension ``riko.ext``, private ``_*``).
+  extension ``riko.ext``, private ``_*``). ``riko.ext.decorators`` re-exports the
+  ``processor``, ``operator``, and ``splitter`` decorators, and ``riko.ext.protocols``
+  re-exports the wrapper protocols (e.g., ``SyncOperatorWrapper``).
 
 - **Added pipe/collection lifecycle** — ``SyncPipe``/``AsyncPipe``/collections are now
   single-execution. Re-iterating an exhausted, closed, or failed pipe yields an empty
@@ -1036,6 +1042,9 @@ Changes
 - Refactored pipe compilation; centralized caching; intelligently generated assignments.
 
 - Replaced ``ItemArg`` with ``Item``.
+
+- The ``operator`` and ``splitter`` decorators gained ``parse(…)`` to wrap each input
+  item in a ``DotDict`` (a non-mapping value becomes ``{"content": value}``).
 
 - Added async timeout parsing.
 
