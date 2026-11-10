@@ -520,8 +520,9 @@ public surface has no entry point to advertise, and demonstrating one would
 contradict the "public examples exercise the public object" rule under Doctest
 rules. This bounds only the *module* docstring — a private function may still
 carry a local doctest where a compact executable example clarifies non-obvious
-behavior. `manage lint --docstrings` enforces both directions of this rule and the
-public-path rule for example imports.
+behavior. `manage lint --docstrings` enforces all three cases of this rule (no
+public API, a runtime public API, a type-only public API) and the public-path rule
+for example imports.
 
 ## General docstring rules
 

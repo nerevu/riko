@@ -92,7 +92,11 @@ _CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
 _MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
 _PRIVATE_MODULE = ["private module without a public API carries a module example"]
 _NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY_EXAMPLE = (
+    "private module with a type-only public API carries a module example"
+)
 _TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
+_TYPED_DOC = f"{_MODULE_EXAMPLE}{_TYPE_ONLY}"
 
 
 _SHARED = "basename is shared; rename one or allowlist the pair"
@@ -714,6 +718,7 @@ EXAMPLE_RULES = [
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
     pytest.param("_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="missing"),
     pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
+    pytest.param("_mod.py", _TYPED_DOC, [_TYPE_ONLY_EXAMPLE], id="type-only-example"),
     pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
     pytest.param("mod.py", "def export(): ...\n", [], id="public-missing"),
     pytest.param(

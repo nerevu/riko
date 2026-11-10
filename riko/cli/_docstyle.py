@@ -519,8 +519,9 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     """
     Flags a private module whose module example does not match its public API.
 
-    A private module that defines no public name carries no module example, and one
-    whose public names include a runtime function or class must carry one.
+    A private module that defines no public name carries no module example, one whose
+    public names include a runtime function or class must carry one, and one whose
+    public names are all type-only carries none.
 
     """
     doc = get_docstring(tree) or ""
@@ -536,6 +537,10 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     elif private and runtime and not has_example:
         problem = "private module with a public runtime API has no module example"
         yield DocstringIssue(path, 1, "<module>", problem, ", ".join(runtime))
+    elif private and exported and not runtime and has_example:
+        problem = "private module with a type-only public API carries a module example"
+        first = next(line.strip() for line in doc.splitlines() if ">>>" in line)
+        yield DocstringIssue(path, 1, "<module>", problem, first)
 
 
 def _iter_python_files(root: Path) -> Iterator[Path]:
@@ -553,8 +558,8 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     check a result with ``is None``, or import a public name through a private module.
 
     A parameter with a default is documented under ``Kwargs:``, one without under
-    ``Args:``. A private module without a public API carries no module example, and one
-    with a public runtime API carries one.
+    ``Args:``. A private module without a public API or with only a type-only public API
+    carries no module example, and one with a public runtime API carries one.
 
     Args:
 

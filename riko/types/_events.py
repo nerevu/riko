@@ -5,22 +5,6 @@ The event-sink contract a running execution reports to.
 An event sink receives opaque event values while a pipeline runs; it decides what to
 record, forward, or discard.
 
-Examples:
-
-    >>> from riko.types import EventSink
-    >>>
-    >>> class Recorder:
-    ...     def __init__(self) -> None:
-    ...         self.events: list[object] = []
-    ...
-    ...     def emit(self, event: object) -> None:
-    ...         self.events.append(event)
-    >>>
-    >>> sink: EventSink = Recorder()
-    >>> sink.emit("started")
-    >>> sink.events
-    ['started']
-
 """
 
 from __future__ import annotations
