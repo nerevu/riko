@@ -44,6 +44,7 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import is_mapping
+from riko.base._iterutils import sort_stably
 from riko.base._require_guards import (
     require_instance,
     require_nonblank_str,
@@ -400,7 +401,7 @@ class WorkflowIndex:
 
     @cached_property
     def cyclic(self) -> tuple[str, ...]:
-        return tuple(sorted(cyclic_nodes(self.downstream, list(self._groups))))
+        return sort_stably(cyclic_nodes(self.downstream, list(self._groups)))
 
     @cached_property
     def roots(self) -> tuple[str, ...]:

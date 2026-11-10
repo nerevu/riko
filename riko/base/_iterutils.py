@@ -11,6 +11,7 @@ from ._guards import is_known_sequence, is_mapping, require_sequence
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
+    from riko.types._frozendict import SortKey
     from riko.types._wrappers import Func
 
 
@@ -418,7 +419,7 @@ def partition[T](
     return matching, non_matching
 
 
-def sort_stably[T](items: Iterable[T]) -> list[T]:
+def sort_stably[T](items: Iterable[T], key: SortKey[T] | None = None) -> tuple[T, ...]:
     """
     Sorts items in an order that does not depend on hash randomization.
 
@@ -429,6 +430,11 @@ def sort_stably[T](items: Iterable[T]) -> list[T]:
 
         items: The items to sort, such as a set.
 
+    Kwargs:
+
+        key: Optional function that produces each item's sort key. When given, items are
+            sorted by it with no ``repr`` fallback.
+
     Returns:
 
         The items in a stable order.
@@ -436,19 +442,22 @@ def sort_stably[T](items: Iterable[T]) -> list[T]:
     Examples:
 
         >>> sort_stably({"b", "a"})
-        ['a', 'b']
+        ('a', 'b')
         >>> sort_stably({1, "a"})
-        ['a', 1]
+        ('a', 1)
 
     """
-    listed = list(items)
+    if key is None:
+        listed = list(items)
 
-    try:
-        result = sorted(listed)  # pyright: ignore[reportArgumentType]
-    except TypeError:
-        result = sorted(listed, key=repr)
+        try:
+            result = sorted(listed)  # pyright: ignore[reportArgumentType]
+        except TypeError:
+            result = sorted(listed, key=repr)
+    else:
+        result = sorted(items, key=key)
 
-    return result
+    return tuple(result)
 
 
 def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:

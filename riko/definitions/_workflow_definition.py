@@ -39,7 +39,7 @@ from attrs import define, evolve, field
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_mapping, require_listlike, require_mapping
-from riko.base._iterutils import unique_everseen
+from riko.base._iterutils import sort_stably, unique_everseen
 from riko.base._require_guards import normalize_strs, require_instances, require_str
 from riko.base._typing import resolve_enum
 from riko.types._enums import DocumentShape
@@ -556,7 +556,7 @@ class Workflow:
         """The module and stored-workflow names the nodes and their loop embeds run."""
         names = (node.name for node in self.module_nodes.values())
         embeds = (embed["name"] for embed in self.embeds.values())
-        return tuple(sorted({*names, *embeds}))
+        return sort_stably({*names, *embeds})
 
     @cached_property
     def index(self) -> WorkflowIndex:

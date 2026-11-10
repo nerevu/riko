@@ -80,8 +80,8 @@ def scc_sort[T: Hashable](graph: Graph[T], reverse: bool | None = False) -> SCC[
 
     """
     components = nx.strongly_connected_components(_build_digraph(graph))
-    scc = [tuple(sort_stably(component)) for component in components]
-    return scc if reverse else scc[::-1]
+    scc = map(sort_stably, components)
+    return list(scc if reverse else reversed(list(scc)))
 
 
 def native_topological_sort[T: Hashable](

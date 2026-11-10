@@ -19,7 +19,7 @@ from riko.base._graph import (
     descendants,
     gen_redundant_edges,
 )
-from riko.base._iterutils import gen_non_null
+from riko.base._iterutils import gen_non_null, sort_stably
 from riko.types._frozendict import freeze
 
 from ._import_graph import (
@@ -205,7 +205,7 @@ def _gen_layers(name: str, graph: AnyGraph[str], verbose: bool = True) -> Iterat
         chained_groups = map(frozenset, layers.values())
         starts = set(layers).difference(chained_groups)
 
-        for start in sorted(starts, key=lambda group: tuple(sorted(group))):
+        for start in sorted(starts, key=sort_stably):
             parts = _render_from(start, layers)
             yield " < ".join(parts)
     else:
@@ -284,8 +284,8 @@ def load_architecture_report(
         observed=freeze(observed, key=_graph_sort_key),
         type_only=freeze(type_only, key=_graph_sort_key),
         local_only=freeze(local_only, key=_graph_sort_key),
-        unclassified=tuple(sorted(unclassified, key=_module_sort_key)),
-        violations=tuple(sorted(issues, key=_issue_sort_key)),
+        unclassified=sort_stably(unclassified, key=_module_sort_key),
+        violations=sort_stably(issues, key=_issue_sort_key),
     )
 
 

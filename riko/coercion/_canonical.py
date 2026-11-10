@@ -22,6 +22,7 @@ from uuid import UUID
 import attrs
 
 from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.base._iterutils import sort_stably
 
 from ._dates import resolve_aware_datetime, tt_to_datetime
 
@@ -303,7 +304,7 @@ def _is_native_val(value: object) -> bool:
 def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
     if all(map(_is_native_val, chain(args, kwargs.values()))):
         tagged = tuple((type(a), a) for a in args)
-        key = (tagged, tuple(sorted((k, type(v), v) for k, v in kwargs.items())))
+        key = (tagged, sort_stably((k, type(v), v) for k, v in kwargs.items()))
     else:
         key = None
 
@@ -313,7 +314,7 @@ def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
 def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
     if (key := _native_key(*args, **kwargs)) is None:
         try:
-            key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
+            key = canonical_bytes((args, sort_stably(kwargs.items())))
         except (IdentityEncodingError, CyclicIdentityError):
             key = None
 
