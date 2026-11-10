@@ -10,23 +10,17 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import Workflow
+        >>> from riko import Endpoint, Workflow
+        >>> from riko.ext import ModuleNode, StreamEdge
         >>>
-        >>> flow = Workflow.from_raw(
-        ...     {
-        ...         "nodes": [
-        ...             {"id": "fetch-1", "name": "fetch"},
-        ...             {"name": "write", "family": "write", "backend": "file"},
-        ...         ],
-        ...         "edges": [
-        ...             {"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}
-        ...         ],
-        ...     }
-        ... )
-        >>> flow.nodes["write-1"].backend.value
-        'file'
-        >>> flow.outputs["default"]
-        Endpoint(node='write-1', port='out')
+        >>> fetch = ModuleNode(id="fetch-1", name="fetch")
+        >>> count = ModuleNode(id="count-1", name="count")
+        >>> edge = StreamEdge(Endpoint("fetch-1", "out"), Endpoint("count-1", "in"))
+        >>> flow = Workflow(nodes=[fetch, count], edges=[edge])
+        >>> flow
+        Workflow(fetch-1 -> count-1)
+        >>> flow.dependencies
+        ('count', 'fetch')
 
 """
 

@@ -269,16 +269,10 @@ def gen_dict(
 
     Examples:
 
-        >>> r = DotDict({'a': {'value': 'bar'}})
-        >>> r
-        {'a': {'value': 'bar'}}
-        >>> dict(gen_dict(r))
-        {'a': {'value': 'bar'}}
-        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-        >>> r
-        {'a': 'baz'}
-        >>> dict(gen_dict(r))
-        {'a': 'baz'}
+        >>> dict(gen_dict('bar'))
+        {'self': 'bar'}
+        >>> dict(gen_dict('bar', default_key='value'))
+        {'value': 'bar'}
 
     """
     if key:
@@ -653,8 +647,6 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'bar'
             >>> r.get('KEY')
             'bar'
-            >>> r.get('KEY')
-            'bar'
             >>> r.get('baz')
             >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
             >>> r.get()
@@ -815,15 +807,15 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         Examples:
 
-            >>> r = DotDict({'a': {'value': 'bar'}})
-            >>> r
+            >>> plain = DotDict({'a': {'value': 'bar'}})
+            >>> plain
             {'a': {'value': 'bar'}}
-            >>> r.asdict()
+            >>> plain.asdict()
             {'a': {'value': 'bar'}}
-            >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-            >>> r
+            >>> typed = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+            >>> typed
             {'a': 'baz'}
-            >>> r.asdict()
+            >>> typed.asdict()
             {'a': 'baz'}
 
         """

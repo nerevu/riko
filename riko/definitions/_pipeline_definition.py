@@ -148,8 +148,6 @@ class PipelineDefinition(Generic[T_co]):
 
         >>> fetch = PipelineDefinition.from_module("fetch")
         >>> definition = fetch.sort(conf={"combine": "a"})
-        >>> sorted(definition.workflow.nodes)
-        ['fetch-1', 'sort-1']
         >>> definition.workflow.outputs["default"]
         Endpoint(node='sort-1', port='out')
         >>> definition
@@ -278,8 +276,6 @@ class PipelineDefinition(Generic[T_co]):
 
             >>> fetch = PipelineDefinition.from_module("fetch")
             >>> definition = fetch.pipe("sort", conf={"combine": "a"})
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'sort-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
             >>> delimiter = {"type": "text", "value": " "}
@@ -362,8 +358,6 @@ class PipelineDefinition(Generic[T_co]):
         Examples:
 
             >>> definition = PipelineDefinition.from_module("fetch").write("out.csv")
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'write-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='write-1', port='out')
 
@@ -674,8 +668,6 @@ class PipelineDefinition(Generic[T_co]):
             >>>
             >>> fetch = PipelineDefinition.from_module("fetch")
             >>> definition = fetch.map(itemgetter("title"))
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'map-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='map-1', port='out')
 

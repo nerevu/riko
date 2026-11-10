@@ -173,6 +173,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> items = [{"x": x} for x in range(5)]
         >>> next(pipe(items, conf={"count": 2}))
         {'x': 3}
+        >>> next(pipe(items, conf={"count": 2}, emit=False))
+        {'tail': {'x': 3}}
 
     """
     return parser(*args, **kwargs)

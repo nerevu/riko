@@ -244,6 +244,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         >>>
         >>> next(pipe(conf={"url": get_path("bbc.html")}))["title"]
         "EU sets out 'phased' Brexit strategy"
+        >>> entry = next(pipe(conf={"url": get_path("bbc.html")}, emit=False))
+        >>> entry["content"]["title"]
+        "EU sets out 'phased' Brexit strategy"
 
     """
     return parser(*args, **kwargs)

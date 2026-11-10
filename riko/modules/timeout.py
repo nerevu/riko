@@ -325,6 +325,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>>
         >>> len(list(pipe(gen_stream(), conf={"milliseconds": "290"})))
         2
+        >>> next(pipe(gen_stream(), conf={"milliseconds": "290"}, emit=False))
+        {'timeout': {'x': 0}}
 
     """
     return parser(*args, **kwargs)

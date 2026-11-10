@@ -257,17 +257,6 @@ class _SyncFileWriteSession(_FileWriteSession):
         file's content and trailing newline once and tracks that state in memory rather
         than re-reading the destination.
 
-        Examples:
-
-            >>> from riko import get_temp_file
-            >>> from riko.definitions._targets import build_write
-            >>>
-            >>> with get_temp_file() as fp:
-            ...     prepare = build_write(fp.name, fmt="csv")
-            ...     session = _SyncFileWriteSession(prepare)
-            ...     session.acquire()
-            ...     session.close()
-
         """
         if self._incremental:
             self._handle = self.path.open(self.file_mode)
@@ -410,9 +399,10 @@ class _SyncFileWriteSession(_FileWriteSession):
             >>> from riko.definitions._targets import build_write
             >>>
             >>> with get_temp_file() as fp:
-            ...     prepare = build_write(fp.name, fmt="csv")
-            ...     session = _SyncFileWriteSession(prepare)
+            ...     prepared = build_write(fp.name, fmt="csv")
+            ...     session = _SyncFileWriteSession(prepared)
             ...     session.acquire()
+            ...     session.close()
             ...     session.close()
 
         """

@@ -242,6 +242,9 @@ def pipe(*args: Any, **kwargs: object) -> Item:
         >>> func = lambda item: {"y": item["x"] + 3}
         >>> next(pipe({"x": 0}, func=func))
         {'y': 3}
+        >>> add_three = lambda x: x + 3
+        >>> next(pipe({"x": 0}, func=add_three, field="x", assign="y", emit=False))
+        {'x': 0, 'y': 3}
 
     """
     return parser(*args, **kwargs)

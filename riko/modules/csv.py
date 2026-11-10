@@ -13,7 +13,7 @@ Examples:
         >>> from riko.modules.csv import pipe
         >>>
         >>> url = get_path("spreadsheet.csv")
-        >>> next(pipe(conf={"url": url}))["mileage"]
+        >>> next(pipe(conf={"url": url}))["Mileage"]
         '7213'
 
 Attributes:
@@ -304,8 +304,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> from riko import get_path
         >>>
         >>> url = get_path("spreadsheet.csv")
-        >>> next(pipe(conf={"url": url}))["mileage"]
+        >>> item = next(pipe(conf={"url": url}))
+        >>> item["Mileage"]
         '7213'
+        >>> item["MP Air"]
+        '21459'
+        >>> sorted(next(pipe(conf={"url": url, "sanitize": True})))[8:10]
+        ['mileage', 'mp_air']
 
     """
     return parser(*args, **kwargs)

@@ -63,15 +63,15 @@ build_conf = ItemBuilderRawConf(
 
 dag: PipeDag = {
     "modules": [
-        {"id": "format", "type": "input", "conf": format_conf},
-        {"id": "date", "type": "input", "conf": date_conf},
+        {"id": "format", "name": "input", "conf": format_conf},
+        {"id": "date", "name": "input", "conf": date_conf},
         {
             "id": "formatted",
-            "type": "dateformat",
+            "name": "dateformat",
             "conf": date_fmt_conf,
             "options": {"field": "content", "emit": True},
         },
-        {"id": "build", "type": "itembuilder", "conf": build_conf},
+        {"id": "build", "name": "itembuilder", "conf": build_conf},
     ],
     "wires": [
         ["format", "formatted", "in:format"],

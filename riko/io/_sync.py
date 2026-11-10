@@ -338,8 +338,10 @@ def seekable(
         >>> from io import StringIO
         >>>
         >>> f = StringIO("abc")
-        >>> seekable(f) is f
-        True
+        >>> f.read()
+        'abc'
+        >>> seekable(f).read()
+        'abc'
 
     """
     seek = getattr(f, "seek", None)

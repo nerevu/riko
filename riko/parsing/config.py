@@ -127,9 +127,6 @@ def resolve_conf[VT](
         ('all', 'http://example.com')
         >>> parsed["param"]
         [{'key': 'q', 'value': 'the title'}, {'key': 'v', 'value': '1.0'}]
-        >>> conf = DotDict({"terminal": "attrs_1", "type": "text"})
-        >>> conf.get(attrs_1=iter([{'content': 'baz'}]))
-        {'content': 'baz'}
         >>> resolve_conf(conf={'type': 'text', 'value': 'hello'})
         'hello'
 

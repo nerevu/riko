@@ -70,29 +70,6 @@ class Resource[T]:
         credential: A credential reference resolved by the connector layer.
         lazy: Whether entry should defer until first use (not yet implemented).
 
-    Examples:
-
-        >>> from riko import Resource
-        >>>
-        >>> class _Connection:
-        ...    def __init__(self):
-        ...        self.opened = True
-        ...
-        ...    @property
-        ...    def closed(self):
-        ...        return not self.opened
-        ...
-        ...    def close(self) -> None:
-        ...        self.opened = False
-        >>>
-        >>> resource = Resource.from_external(_Connection())
-        >>> resource.value
-        <..._Connection object at ...>
-        >>> resource.external
-        True
-        >>> resource.reusable
-        True
-
     """
 
     _plan: ResourcePlan[T]

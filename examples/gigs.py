@@ -1,5 +1,5 @@
 """
-Fetch freelance jobs, drop duplicate links and PHP gigs, then reverse-sort the rest.
+Fetch freelance jobs, then drop duplicate links and PHP gigs.
 
 Examples:
 
@@ -15,14 +15,7 @@ from pprint import pprint
 from typing import TYPE_CHECKING
 
 from riko import Pipeline, get_path
-from riko.types.modules import (
-    FetchDataConf,
-    FilterConf,
-    FilterConfRule,
-    SortConf,
-    SortConfRule,
-    UniqConf,
-)
+from riko.types.modules import FetchDataConf, FilterConf, FilterConfRule, UniqConf
 
 if TYPE_CHECKING:
     from riko.types import Item, Items
@@ -37,15 +30,12 @@ p3_conf = FilterConf(
     }
 )
 
-p4_conf = SortConf({"rule": SortConfRule(field="", dir="desc")})
-
 
 def pipe(test: bool = False) -> list[Item]:
     pipeline = (
         Pipeline.from_module("fetchdata", conf=p1_conf)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
-        .sort(conf=p4_conf)
     )
 
     return list(pipeline)
@@ -56,7 +46,6 @@ def async_pipe(test: bool = False) -> Pipeline:
         Pipeline.from_module("fetchdata", conf=p1_conf)
         .uniq(conf=p2_conf)
         .filter(conf=p3_conf)
-        .sort(conf=p4_conf)
     )
 
 

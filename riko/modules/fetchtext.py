@@ -261,6 +261,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>> conf = {"url": get_path("lorem.txt")}
         >>> next(pipe(conf=conf))
         'What is Lorem Ipsum?'
+        >>> next(pipe(conf=conf, assign="line", emit=False))
+        {'line': 'What is Lorem Ipsum?'}
 
     """
     return parser(*args, **kwargs)

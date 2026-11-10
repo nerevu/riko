@@ -7,17 +7,17 @@ Examples:
     Basic usage::
 
         >>> from riko import Backends
-        >>> from riko.ext import FileTarget, TargetRegistry
+        >>> from riko.ext import TargetRegistry
         >>>
         >>> registry = TargetRegistry()
-        >>> registry.resolve(Backends.FILE) is FileTarget
-        True
+        >>> registry.resolve(Backends.FILE).__name__
+        'FileTarget'
         >>> class S3Target:
         ...     backend = Backends.S3
         >>>
         >>> registry.register(S3Target)
-        >>> registry.resolve(Backends.S3) is S3Target
-        True
+        >>> registry.resolve(Backends.S3).__name__
+        'S3Target'
 
 Attributes:
 

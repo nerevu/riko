@@ -253,11 +253,11 @@ Args
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> Pipeline.from_module('reverse').first(items)
-    {'title': 'riko pt. 2'}
+    >>> Pipeline.from_module('count').first(items)
+    {'count': 2}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
-``hash``, ``itembuilder``, and ``regex``. Call options such as ``field`` are passed
+``itembuilder``, ``regex``, and ``slugify``. Call options such as ``field`` are passed
 as the ``options`` mapping.
 
 .. code-block:: python
@@ -265,12 +265,9 @@ as the ``options`` mapping.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline.from_module('hash', options={'field': 'title'})
-    >>> result = pipeline.first(items)
-    >>> sorted(result)
-    ['hash', 'title']
-    >>> result['hash']
-    2894317996
+    >>> pipeline = Pipeline.from_module('slugify', options={'field': 'title'})
+    >>> pipeline.first(items)
+    {'title': 'riko pt. 1', 'slugify': 'riko-pt-1'}
 
 A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
 example is ``split``.
@@ -374,8 +371,6 @@ Both accept a plain ``str`` or a ``StrEnum`` member.
     >>> write.name, write.description
     ('write', 'Writes a stream to a file and passes its items through unchanged.')
     >>> fetch = describe_module(Sources.FETCH)
-    >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
-    ('pipe', 'async_pipe')
     >>> describe_module('does-not-exist')
 
 Notes:
@@ -443,39 +438,13 @@ How does a processor map over items?
 ------------------------------------
 
 A ``processor``'s first argument is normally one ``item``, but it may also be a
-``stream`` of items. ``riko`` normalizes at the stream boundary the same way
-``listize`` does: a ``list``, ``tuple``, ``range``, generator, or iterator maps
-over each element, while a mapping, primitive, string, or ``None``
-is a single ``item``. So the following all behave predictably:
+``stream`` of items. ``riko`` normalizes at the stream boundary the same way ``listize``
+does. It maps over each element of a ``list``, ``tuple``, ``range``, generator, or
+iterator. A mapping, primitive, string, or ``None`` is a single ``item``.
 
-.. code-block:: python
-
-    >>> from riko.modules.udf import pipe
-    >>>
-    >>> func = lambda item: {"y": item["x"] + 3}
-    >>> items = [{"x": 0}, {"x": 1}]
-    >>> next(pipe(items[0], func=func))
-    {'y': 3}
-    >>> next(pipe(iter(items), func=func))
-    {'y': 3}
-    >>> next(pipe(items, func=func))
-    {'y': 3}
-    >>> next(pipe(tuple(items), func=func))
-    {'y': 3}
-
-Only the outermost argument is interpreted as one-or-many, so a list-valued
-*field* inside a record stays a single value:
-
-.. code-block:: python
-
-    >>> from riko.modules.udf import pipe
-    >>>
-    >>> item = {"x": 0, "tags": ["a", "b"]}
-    >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
-    {'tags': ['a', 'b']}
-
-A ``Pipeline`` seed behaves identically: one ``item``, a list, or an iterator all
-seed the same ``stream``.
+Only the outermost argument is interpreted as one-or-many. A list-valued *field* inside
+a record stays a single value. A ``Pipeline`` seed follows the same rule: one ``item``,
+a list, or an iterator all seed the same ``stream``.
 
 .. code-block:: python
 
@@ -492,8 +461,8 @@ seed the same ``stream``.
     {'x': 0, 'hash': 1711317344}
 
 ``udf`` is not reachable this way, because a ``Pipeline``'s ``options`` must be
-JSON-native and a callable is not. ``map`` chains a callable as its own node instead.
-The callable receives each ``item`` as is, and sets its output as the next ``item``.
+JSON-native. A callable is not. ``map`` chains a callable as its own node instead. The
+callable receives each ``item`` as is, and sets its output as the next ``item``.
 
 .. code-block:: python
 
@@ -583,26 +552,7 @@ never yields. Keep side effects out of such ``modules`` when consuming partially
 bound the work per ``item``.
 
 Fetching several configured sources at once is a fan-in graph rather than a separate
-class. ``Workflow.parse`` turns a bare-bones DAG (``PipeDag``) that wires each source
-into a ``union`` into a ``Workflow``, and ``Pipeline(flow)`` runs it under either style:
-
-.. code-block:: python
-
-    >>> from riko import Pipeline, Workflow
-    >>>
-    >>> flow = Workflow.parse({
-    ...     'modules': [
-    ...         {'id': 'f1', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
-    ...         {'id': 'f2', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
-    ...         {'id': 'u', 'name': 'union', 'conf': {}},
-    ...     ],
-    ...     'wires': [['f1', 'u'], ['f2', 'u', 'in:1']],
-    ... })
-    >>> list(Pipeline(flow))
-    [{'x': '1'}, {'x': '2'}]
-
-Swap ``itembuilder`` for ``fetch`` (with a ``url``) to merge feeds. See `Can I store a
-workflow as JSON`_ for the wire grammar.
+class, and it runs under either style. See `Fetch several sources`_ in the cookbook.
 
 The ways to consume one ``Pipeline``:
 
@@ -656,15 +606,15 @@ keeps the default concurrency limit in flight. The process executor raises there
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources, get_path
+    >>> from riko import Pipeline
     >>>
-    >>> url = get_path('feed.xml')
+    >>> items = [{'title': f'riko pt. {n}'} for n in (2, 1, 3)]
     >>> pipeline = (
-    ...     Pipeline.from_module(Sources.FETCH, conf={'url': url})
+    ...     Pipeline.from_module('slugify', options={'field': 'title'})
     ...     .with_execution(executor='thread', concurrency=4, ordered=False)
     ... )
-    >>> sorted(item['title'] for item in pipeline)[:2]
-    ['Comments By Section', 'Comments By User']
+    >>> sorted(item['slugify'] for item in pipeline(items))
+    ['riko-pt-1', 'riko-pt-2', 'riko-pt-3']
 
 Parallel execution is not automatically faster. Pool startup, serialization,
 network behavior, ordering, and workload size can outweigh concurrency gains.
@@ -976,6 +926,7 @@ documentation workflow.
 .. _How should I handle errors and resource cleanup: #how-should-i-handle-errors-and-resource-cleanup
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
 .. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
+.. _Fetch several sources: COOKBOOK.rst#fetch-several-sources
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst

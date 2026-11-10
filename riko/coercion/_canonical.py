@@ -262,8 +262,12 @@ def canonical_bytes(value: object) -> bytes:
 
     Examples:
 
-        >>> canonical_bytes('a') == canonical_bytes('a')
-        True
+        >>> canonical_bytes('a')
+        b'["str","a"]'
+        >>> canonical_bytes(1)
+        b'["int","1"]'
+        >>> canonical_bytes(True)
+        b'["bool",true]'
 
     """
     return canonical_json(canonicalize(value))

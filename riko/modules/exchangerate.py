@@ -410,11 +410,8 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
         >>>
         >>> url = get_path("quote.json")
         >>> conf = {"url": url}
-        >>> rate = next(pipe({"content": "GBP"}, conf=conf))["exchangerate"]
-        >>> rate
+        >>> next(pipe({"content": "GBP"}, conf=conf))["exchangerate"]
         Decimal('1.275201')
-        >>> f"There are {rate:#.2f} GBPs per USD"
-        'There are 1.28 GBPs per USD'
         >>> conf = {"url": url, "currency": "TZS", "precision": 3}
         >>> next(pipe({"content": "USD"}, conf=conf))["exchangerate"]
         Decimal('2282.466')

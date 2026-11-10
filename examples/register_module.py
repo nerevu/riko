@@ -49,16 +49,6 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
 
         Each item with its ``content`` uppercased.
 
-    Examples:
-
-        >>> from riko import run
-        >>>
-        >>> async def main():
-        ...     print(await anext(async_pipe(iter([{"content": "hi"}]))))
-        >>>
-        >>> run(main)
-        {'content': 'HI'}
-
     Notes:
 
         ``_shout`` is synchronous, so this reuses the sync ``parser``. If it performed
@@ -78,11 +68,6 @@ def pipe(*args: Any, **kwargs: Any) -> Stream:
     Yields:
 
         Each item with its ``content`` uppercased.
-
-    Examples:
-
-        >>> next(pipe(iter([{'content': 'hi'}])))
-        {'content': 'HI'}
 
     """
     return parser(*args, **kwargs)

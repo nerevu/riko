@@ -243,6 +243,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> conf = {"url": get_path("bbc.html")}
         >>> next(pipe(conf=conf))["link"]
         'file://riko/data/bbci.co.uk.xml'
+        >>> # Include links that declare no feed type:
+        >>> next(pipe(conf={"url": get_path("bbc.html"), "strict": False}))["link"]
+        'greenhughes.xml'
 
     """
     return parser(*args, **kwargs)
