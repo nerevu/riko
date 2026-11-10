@@ -198,12 +198,9 @@ class PipelineDefinition(Generic[T_co]):
 
         Examples:
 
-            >>> fetch = PipelineDefinition.from_module("fetch")
-            >>> definition = fetch.sort(conf={"combine": "a"})
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'sort-1']
+            >>> definition = PipelineDefinition.from_module("fetch")
             >>> definition.workflow.outputs["default"]
-            Endpoint(node='sort-1', port='out')
+            Endpoint(node='fetch-1', port='out')
 
         """
         flow = cls()._build_module_workflow(
@@ -247,7 +244,7 @@ class PipelineDefinition(Generic[T_co]):
         embed: Embed | None = None,
     ) -> PipelineDefinition[Item]:
         """
-        Chains the next module by name by re-pointing the default output to it.
+        Chains the named module onto the end of the pipeline.
 
         Module existence is not checked here, so a typo surfaces as a
         module-resolution failure when the pipeline runs rather than now.
@@ -264,7 +261,7 @@ class PipelineDefinition(Generic[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the appended module.
+            A new pipeline that yields the appended module's items.
 
         Examples:
 
@@ -297,7 +294,7 @@ class PipelineDefinition(Generic[T_co]):
         options: CallOptionsLike | None = None,
         embed: Embed | None = None,
     ) -> Workflow:
-        """Appends module ``name`` to the workflow as its new default output."""
+        """Appends module ``name`` to the end of the workflow."""
         module, flow = str(name), self.workflow
         node_id = flow.get_node_id(module)
         node = ModuleNode(
@@ -339,7 +336,7 @@ class PipelineDefinition(Generic[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the appended node.
+            A new pipeline that yields the appended node's items.
 
         Raises:
 
@@ -680,7 +677,7 @@ class PipelineDefinition(Generic[T_co]):
         identity: IdentityModeLike | None = None,
         **kwargs: object,
     ) -> Workflow:
-        """Appends a callable node for ``fn`` to the workflow as its default output."""
+        """Appends a callable node for ``fn`` to the end of the workflow."""
         flow, name = self.workflow, get_callable_name(fn, "map")
         _kwargs = {"version": version, "identity": identity, "kwargs": kwargs}
         _id = flow.get_node_id(name)

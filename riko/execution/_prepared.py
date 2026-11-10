@@ -21,6 +21,7 @@ from typing_extensions import TypeIs
 
 from riko.bado._util import async_partial, require_value
 from riko.bado.itertools import as_async
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values, resolve_default
 from riko.base._guards import is_async_callable
@@ -760,11 +761,11 @@ def _is_reserved_input(port: str, module: ResolvedModule | None) -> bool:
 
 def require_default_output_port(port: str, ref: str) -> None:
     """
-    Rejects a non-default output port until multi-output delivery is executable.
+    Rejects a port other than ``out`` until multi-output delivery is executable.
 
     Only the bare ``out`` port is executable today. A positional ``out:N`` or
     semantic ``out:<name>`` source or selected workflow output is refused rather than
-    silently read as the node's default ``out`` stream.
+    silently read as the node's ``out`` stream.
 
     Args:
 
@@ -773,11 +774,11 @@ def require_default_output_port(port: str, ref: str) -> None:
 
     Raises:
 
-        InvalidPipelineError: If ``port`` is not the default ``out`` port.
+        InvalidPipelineError: If ``port`` is not the bare ``out`` port.
 
     """
     if not parse_port(port).is_default:
-        msg = f"{ref} uses the non-default output port {port!r}, which cannot run yet."
+        msg = f"{ref} uses the port {port!r} instead of 'out', which cannot run yet."
         raise InvalidPipelineError(msg)
 
 
@@ -813,14 +814,11 @@ class ExecutionPlan:
 
     Examples:
 
-        >>> from riko import Endpoint, Workflow
+        >>> from riko import Workflow
         >>> from riko.ext import ModuleNode
         >>> from riko.modules.hash import pipe
         >>>
-        >>> flow = Workflow(
-        ...     nodes=[ModuleNode(id="a", name="hash")],
-        ...     outputs={"default": Endpoint("a", "out")},
-        ... )
+        >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
         >>> modules = {"a": ResolvedModule("hash", sync_pipe=pipe)}
         >>> plan = ExecutionPlan(workflow=flow, modules=modules)
         >>> plan.nodes["a"].node
@@ -871,14 +869,11 @@ class ExecutionPlan:
 
         Examples:
 
-            >>> from riko import Endpoint, Workflow
+            >>> from riko import Workflow
             >>> from riko.ext import ModuleNode
             >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="count-1", name="count")],
-            ...     outputs={"default": Endpoint("count-1", "out")},
-            ... )
+            >>> flow = Workflow().with_node(ModuleNode(id="count-1", name="count"))
             >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.nodes)
             ['count-1']
@@ -909,7 +904,7 @@ class ExecutionPlan:
 
     def require_output(self, output: str) -> Endpoint:
         """
-        Requires a default-port workflow output.
+        Requires a workflow output on the bare ``out`` port.
 
         Args:
 
@@ -922,7 +917,7 @@ class ExecutionPlan:
         Raises:
 
             InvalidPipelineError: If the plan exposes no such workflow output, or it
-                reads a non-default output port.
+                reads a port other than ``out``.
 
         """
         if (endpoint := self.index.outputs.get(output)) is None:
@@ -955,17 +950,13 @@ class ExecutionPlan:
 
         Examples:
 
-            >>> from riko import Endpoint, Workflow
-            >>> from riko.ext import ModuleNode, StreamEdge
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
             >>> from riko.modules.hash import pipe
             >>>
             >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
             >>>
-            >>> flow = Workflow(
-            ...     nodes=[a, b],
-            ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))],
-            ...     outputs={"default": Endpoint("b", "out")},
-            ... )
+            >>> flow = Workflow().with_node(a).with_node(b)
             >>> module = ResolvedModule("hash", sync_pipe=pipe)
             >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
             >>> plan.get_thread_demand("default", mapped=False)
@@ -1038,7 +1029,7 @@ class ExecutionPlan:
         defaulted = (_id for _id in required if nodes[_id].takes_default_seed)
         return filterfalse(self.is_self_starting, defaulted)
 
-    def is_self_starting_output(self, output: str = "default") -> bool:
+    def is_self_starting_output(self, output: str = DEFAULT_OUTPUT) -> bool:
         """
         Whether ``output`` runs without a seed.
 
@@ -1135,7 +1126,7 @@ class ExecutionPlan:
 
     def require_seed[S](self, seed: S | None, output: str) -> S:
         """
-        Requires the seed that an empty workflow streams as its default output.
+        Requires the seed that an empty workflow streams back unchanged.
 
         A workflow with no nodes is an identity plan: it outputs its seed. It can't run
         without a seed, and exposes only the default workflow output.
@@ -1155,7 +1146,7 @@ class ExecutionPlan:
                 ``seed`` is not given.
 
         """
-        if output != "default":
+        if output != DEFAULT_OUTPUT:
             raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
         elif seed is None:
             msg = "workflow has no nodes; an empty workflow requires a seed"

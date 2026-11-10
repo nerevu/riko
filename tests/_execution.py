@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import reduce
 from inspect import isasyncgenfunction, iscoroutinefunction
-from itertools import pairwise
 from typing import TYPE_CHECKING, Self, cast
 
 from riko.definitions._nodes import ModuleNode, StreamEdge
@@ -101,9 +101,7 @@ def build_workflow(
 
 
 def build_chain(*nodes: ModuleNode) -> Workflow:
-    pairs = pairwise(nodes)
-    edges = [StreamEdge(Endpoint(a.id, "out"), Endpoint(b.id, "in")) for a, b in pairs]
-    return build_workflow(list(nodes), edges=tuple(edges))
+    return reduce(Workflow.with_node, nodes, Workflow())
 
 
 def module_workflow(name: str = "m") -> Workflow:

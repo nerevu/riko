@@ -72,7 +72,7 @@ _PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
 _SRC_NODE = [ModuleNode(id="n", name="src")]
 _PORT_1_OUTPUT = {"default": Endpoint("n", "out:1")}
 _NEEDS_SEED = r"'b'.*requires a seed"
-_NON_DEFAULT = "non-default output port"
+_NON_DEFAULT = "instead of 'out'"
 _SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
 _NOPE = "no workflow output 'nope'"
 _RESERVED = "use a reserved name"
@@ -109,7 +109,7 @@ READERS = [
 ]
 
 
-# Execution fails closed on non-default output ports: only the bare 'out' port is
+# Execution fails closed on ports other than 'out': only the bare 'out' port is
 # executable, so a distinct 'out:1' source port or selected output is rejected
 # rather than silently aliased to the node's 'out' stream. A named input port that
 # shares a name with an argument every module call takes is rejected rather than
@@ -218,9 +218,7 @@ def _resource_reader_plan(reader=_decorated_reader):
     sync_pipe = cast("SyncModuleWrapper", reader)
     dispatcher = build_dispatcher(ModuleDefinition(name="reader", sync_pipe=sync_pipe))
     nodes = [ModuleNode(id="n", name="reader", resources={"slot": "primary"})]
-    flow = build_workflow(
-        nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
-    )
+    flow = build_workflow(nodes, resources=("primary",))
     return ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
 
@@ -1148,9 +1146,7 @@ class TestPlanRun:
             ModuleDefinition(name="ignore", sync_pipe=sync_pipe)
         )
         nodes = [ModuleNode(id="n", name="ignore", resources={"slot": "primary"})]
-        flow = build_workflow(
-            nodes, resources=("primary",), outputs={"default": Endpoint("n", "out")}
-        )
+        flow = build_workflow(nodes, resources=("primary",))
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         events: list[str] = []
         context = Context().with_resource("primary", _lifecycle(events), lazy=True)
@@ -1575,9 +1571,7 @@ class TestAsyncPlanRun:
             StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
         )
-        flow = build_workflow(
-            nodes, edges=edges, outputs={"default": Endpoint("m", "out")}
-        )
+        flow = build_workflow(nodes, edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         upstream_closed = []
 
@@ -1611,9 +1605,7 @@ class TestAsyncPlanRun:
         )
         nodes = [ModuleNode(id="a", name="asrc"), ModuleNode(id="p", name="apass")]
         edges = (StreamEdge(Endpoint("a", "out"), Endpoint("p", "in")),)
-        flow = build_workflow(
-            nodes, edges=edges, outputs={"default": Endpoint("p", "out")}
-        )
+        flow = build_workflow(nodes, edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
         upstream_closed = []
 

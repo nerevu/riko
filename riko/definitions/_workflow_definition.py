@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Self
 
 from attrs import define, evolve, field
 
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_mapping, require_listlike, require_mapping
@@ -611,7 +612,7 @@ class Workflow:
 
     def _require_default_output(self, what: str) -> Endpoint | None:
         """Requires a default output to chain through, unless the workflow is empty."""
-        if (default := self.outputs.get("default")) is None and self.nodes:
+        if (default := self.outputs.get(DEFAULT_OUTPUT)) is None and self.nodes:
             msg = f"{what} has nodes but no default output. Build it with "
             msg += "Workflow().with_node(node), or declare "
             msg += "outputs={'default': Endpoint(id, 'out')}"
@@ -621,7 +622,7 @@ class Workflow:
 
     def with_node(self, node: RikoNode) -> Self:
         """
-        Builds a workflow with ``node`` appended as its default output.
+        Builds a workflow with ``node`` appended to its end.
 
         The previous default output streams into ``node``, and the workflow appends any
         new resources the ``node`` binds at the end.
@@ -660,7 +661,7 @@ class Workflow:
         return evolve(
             self,
             nodes=[*self.nodes.values(), node],
-            outputs={**self.outputs, "default": Endpoint(node.id, "out")},
+            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, "out")},
             edges=edges,
             resources=unique_everseen(chain(self.resources, node.resources.values())),
         )
@@ -685,7 +686,7 @@ class Workflow:
 
     def with_workflow(self, other: Workflow) -> Self:
         """
-        Builds a workflow with ``other`` appended after its default output.
+        Builds a workflow with ``other`` appended to its end.
 
         The previous default output streams into ``other``'s open default input port.
         ``other``'s workflow outputs replace existing ones of the same name. In case of
@@ -734,7 +735,7 @@ class Workflow:
             msg = "an appended workflow needs exactly one node with an open input, "
             msg += f"not {len(heads)}: {heads}"
             raise InvalidPipelineError(msg)
-        elif named := (set(self.outputs).intersection(outputs)) - {"default"}:
+        elif named := (set(self.outputs).intersection(outputs)) - {DEFAULT_OUTPUT}:
             msg = f"both workflows define workflow output(s): {sorted(named)}"
             raise InvalidPipelineError(msg)
         elif clashing := [
@@ -891,10 +892,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="a", name="hash")],
-            ...     outputs={"default": Endpoint("a", "out")},
-            ... )
+            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
             >>> flow.require_runnable_only("execution")
 
         """

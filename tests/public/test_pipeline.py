@@ -180,10 +180,7 @@ def _by_content(items):
 
 
 def _workflow() -> Workflow:
-    node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
-    return Workflow(
-        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, input_schemas={}
-    )
+    return Pipeline.from_module("fetch").workflow
 
 
 _NON_WORKFLOWS = [

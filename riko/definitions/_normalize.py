@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, cast, get_args
 
 from attrs import AttrsInstance
 
-from riko.base._config import INPUT_PORT, OTHER_PORT, OUTPUT_PORT
+from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._graph import edges_to_graph, leaves
@@ -408,7 +408,7 @@ def normalize_outputs(
     if raw is None:
         pairs = ((e.source.node, e.target.node) for e in get_family_edges(edges))
         ends = leaves(edges_to_graph(pairs, *node_ids))
-        result = {"default": Endpoint(ends[0], "out")} if len(ends) == 1 else {}
+        result = {DEFAULT_OUTPUT: Endpoint(ends[0], "out")} if len(ends) == 1 else {}
     else:
         outputs = require_mapping(raw, "outputs")
         normalize = partial(_normalize_endpoint, default_port="out")

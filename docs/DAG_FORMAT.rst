@@ -172,11 +172,11 @@ When calling ``Workflow.parse`` on a ``PipeDag``, the following occurs:
 4. Empty ``modules``, a wire referencing an unknown module, a cycle, or a wire with the
    wrong number of entries raise ``InvalidPipelineError``.
 
-Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow's default output is
-its single leaf: the one module that never appears as a wire source. The result is a
-validated ``Workflow``. List its modules with ``nodes``, run it with ``Pipeline``,
-serialize it to a ``WorkflowDocument`` with ``flow.serialize()``, or hand it to
-``compile_workflow``.
+Unlike a ``PipeDef``, there is **no** ``output`` node. The workflow yields items from
+the one module that is never a wire's source. ``parse`` returns a validated
+``Workflow``. List its node ids with ``nodes``, and its module names with
+``dependencies``. Run it with ``Pipeline``, serialize it to a ``WorkflowDocument`` with
+``flow.serialize()``, or hand it to ``compile_workflow``.
 
 .. code-block:: python
 

@@ -701,9 +701,8 @@ module       retains           why
 ===========  ================  =======================================================
 
 ``export()`` and serialized exports materialize by the same reasoning as ``write``.
-Iterating a ``Pipeline`` otherwise yields ``items`` from its default output as they
-are produced, under both ``for`` and ``async for``, subject only to what the ``modules``
-above retain.
+Conversely, iterating a ``Pipeline`` yields ``items`` as they are produced, under both
+``for`` and ``async for``.
 
 Execution-wide settings (``with_execution``) keep in-flight work bounded by
 ``concurrency``, or to one item at a time when ``concurrency`` is unset (see `What does

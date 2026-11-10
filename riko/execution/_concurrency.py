@@ -161,16 +161,13 @@ def require_process_safe(
 
     Examples:
 
-        >>> from riko import Endpoint, Workflow
+        >>> from riko import Workflow
         >>> from riko.execution._concurrency import require_process_safe
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow(
-        ...     nodes=[ModuleNode(id="h", name="hash")],
-        ...     outputs={"default": Endpoint("h", "out")},
-        ... )
+        >>> flow = Workflow().with_node(ModuleNode(id="h", name="hash"))
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> require_process_safe(plan, "default", None)
 

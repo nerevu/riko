@@ -79,13 +79,7 @@ NODE_FAMILIES = (
 
 
 def _fetch_workflow() -> Workflow:
-    node = ModuleNode(id="fetch-1", name="fetch")
-    return Workflow(
-        nodes=[node],
-        edges=(),
-        outputs={"default": Endpoint(node.id, "out")},
-        input_schemas={},
-    )
+    return Workflow().with_node(ModuleNode(id="fetch-1", name="fetch"))
 
 
 APPENDS = [
@@ -496,14 +490,14 @@ class TestCallableNode:
 class TestRequireRunnableOnly:
     def test_callable_nodes_pass(self):
         node = CallableNode(id="c", name="len", fn=len)
-        flow = Workflow(nodes=[_A, node], outputs={"default": Endpoint("c", "out")})
+        flow = Workflow(nodes=[_A, node])
         assert flow.require_runnable_only("execution") is None
 
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
         nodes = [_A, write, cache]
-        flow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
+        flow = Workflow(nodes=nodes)
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
             flow.require_runnable_only("execution")

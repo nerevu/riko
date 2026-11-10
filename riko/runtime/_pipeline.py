@@ -129,7 +129,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            A single-use stream of the items at the pipeline's default output.
+            A single-use stream of the pipeline's items.
 
         Raises:
 
@@ -154,7 +154,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            An iterator over the items at the pipeline's default output.
+            An iterator over the pipeline's items.
 
         Raises:
 
@@ -171,7 +171,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            An async iterator over the items at the pipeline's default output.
+            An async iterator over the pipeline's items.
 
         Raises:
 
@@ -190,7 +190,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            A single-use stream of the items at the pipeline's default output.
+            A single-use stream of the pipeline's items.
 
         Raises:
 
@@ -290,7 +290,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the callable node.
+            A new pipeline that yields the callable node's items.
 
         Raises:
 
@@ -327,7 +327,7 @@ class Pipeline(PipelineDefinition[T_co]):
         embed: Embed | None = None,
     ) -> Pipeline[Item]:
         """
-        Chains the next module by name by re-pointing the default output to it.
+        Chains the named module onto the end of the pipeline.
 
         Args:
 
@@ -341,7 +341,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the appended module.
+            A new pipeline that yields the appended module's items.
 
         Examples:
 
@@ -386,7 +386,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is ``other``'s.
+            A new pipeline that yields what ``other`` yields.
 
         Raises:
 
@@ -427,7 +427,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            The first item at the pipeline's default output, or ``default``.
+            The pipeline's first item, or ``default``.
 
         Raises:
 
@@ -475,7 +475,7 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Returns:
 
-            The first item at the pipeline's default output, or ``default``.
+            The pipeline's first item, or ``default``.
 
         Raises:
 

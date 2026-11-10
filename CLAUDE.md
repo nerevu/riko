@@ -368,7 +368,8 @@ a `normalize`; substituting a default the caller supplies or chooses
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the
   import linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
   `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_normalize`/
-  `_migrate`; `LINE_LENGTH`, the 88-column width the generators and tidy scans share)
+  `_migrate`; `DEFAULT_OUTPUT`, the default workflow output's name; `LINE_LENGTH`,
+  the 88-column width the generators and tidy scans share)
   plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed
   value logs a warning and falls back to the default). Existing names
   (`DEF_CONCURRENCY_LIMIT`, `TIMEOUT`, `EXCHANGE_API`, …) re-source from `settings`; add

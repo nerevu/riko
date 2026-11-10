@@ -410,6 +410,14 @@ class TestCompileWorkflow:
             flow, "pipe_twice"
         )
 
+    def test_empty_fields_are_left_out(self, tmp_path: Path):
+        """A workflow without edges or input schemas generates neither keyword."""
+        flow = Pipeline.from_module("hash").workflow
+        source = compile_workflow(flow, "pipe_bare")
+        assert "edges=" not in source
+        assert "input_schemas=" not in source
+        assert _load(source, "pipe_bare", tmp_path).flow == flow
+
     def test_generated_source_parses(self, tmp_path: Path):
         """The generated source is valid Python and imports without running."""
         flow = (

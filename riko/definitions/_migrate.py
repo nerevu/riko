@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 from fastjsonschema import JsonSchemaValueException
 from fastjsonschema import compile as fjs_compile
 
-from riko.base._config import INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
+from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._guards import is_mapping, require_listlike, require_mapping
@@ -414,7 +414,8 @@ def _migrate_wires(wires: Wires, *output_ids: str) -> tuple[RawPortEdges, RawOut
         tgt_node = require_str(tgt.get("moduleid"), "wire 'tgt' moduleid")
 
         if tgt_node in ids:
-            name = "default" if not endpoints else f"default-{len(endpoints) + 1}"
+            suffix = f"-{len(endpoints) + 1}" if endpoints else ""
+            name = f"{DEFAULT_OUTPUT}{suffix}"
             endpoints[name] = endpoint
         else:
             port = _migrate_target_port(resolve_port(tgt.get("id"), INPUT_PORT))

@@ -52,9 +52,7 @@ def run_pipeline[T](
 
     Yields:
 
-        - When ExecutionMode.RUN: The items produced at the definition's default output.
-        - When ExecutionMode.DESCRIBE_DEPENDENCIES: each dependency.
-        - Else: the one description (see ``build_description``).
+        The items the definition produces.
 
     Raises:
 
@@ -107,9 +105,7 @@ async def arun_pipeline[T](
 
     Yields:
 
-        - When ExecutionMode.RUN: The items produced at the definition's default output.
-        - When ExecutionMode.DESCRIBE_DEPENDENCIES: each dependency.
-        - Else: the one description (see ``build_description``).
+        The items the definition produces.
 
     Raises:
 
@@ -262,7 +258,7 @@ class _PipelineStream[T]:
 
         Returns:
 
-            The next item at the pipeline's default output.
+            The pipeline's next item.
 
         Raises:
 
@@ -327,7 +323,7 @@ class _PipelineStream[T]:
 
         Returns:
 
-            The next item at the pipeline's default output.
+            The pipeline's next item.
 
         Raises:
 
@@ -434,7 +430,7 @@ class _PipelineRun[T]:
 
         Returns:
 
-            An iterator over the items at the pipeline's default output.
+            An iterator over the pipeline's items.
 
         """
         return iter(self.stream)
@@ -449,7 +445,7 @@ class _PipelineRun[T]:
 
         Returns:
 
-            An async iterator over the items at the pipeline's default output.
+            An async iterator over the pipeline's items.
 
         """
         return aiter(self.stream)

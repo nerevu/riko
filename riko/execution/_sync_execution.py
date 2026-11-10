@@ -19,6 +19,7 @@ from attrs import define, field
 
 from riko.bado._backend import fail_after, start_blocking_portal
 from riko.bado._util import run_bridged
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_async_callable, is_awaitable
@@ -500,7 +501,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     def run(
         self,
         plan: ExecutionPlan,
-        output: str = "default",
+        output: str = DEFAULT_OUTPUT,
         *,
         seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> Iterator[T]:

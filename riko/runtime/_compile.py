@@ -150,9 +150,8 @@ def _render_node(node: ModuleNode) -> str:
 
 
 def _render_edges(edges: FrozenPortEdges) -> str:
-    """Renders the edge tuple, keeping a one-edge graph a tuple."""
-    rendered = ", ".join(map(str, edges))
-    return "()" if not rendered else f"({rendered},)"
+    """Renders a non-empty edge tuple."""
+    return f"({', '.join(map(str, edges))},)"
 
 
 def _render_outputs(outputs: Outputs) -> str:
@@ -237,8 +236,10 @@ def compile_workflow(
         has_embed=any(node.embed is not None for node in nodes),
         nodes=[_render_node(node) for node in nodes],
         edges=_render_edges(flow.edges),
+        has_edges=len(flow.edges) > 0,
         outputs=_render_outputs(flow.outputs),
         input_schemas=render_value(flow.input_schemas),
+        has_input_schemas=len(flow.input_schemas) > 0,
         resources=render_value(flow.resources),
         has_resources=len(flow.resources) > 0,
     )

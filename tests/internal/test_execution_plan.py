@@ -775,7 +775,7 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
         id="r", name="strreplace", conf=conf, options={"field": "content"}
     )
     nodes = [*extra_nodes, node]
-    return build_workflow(nodes, edges=edges, outputs={"default": Endpoint("r", "out")})
+    return build_workflow(nodes, edges=edges)
 
 
 FALLBACKS = [

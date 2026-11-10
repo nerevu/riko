@@ -34,6 +34,7 @@ from riko.bado.itertools import (
     async_map_ordered_stream,
     async_map_stream,
 )
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
@@ -851,7 +852,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
     async def arun(
         self,
         plan: ExecutionPlan,
-        output: str = "default",
+        output: str = DEFAULT_OUTPUT,
         *,
         seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> AsyncIterator[T]:

@@ -32,9 +32,13 @@ flow = Workflow(
         {{ node }},
 {%- endfor %}
     ],
+{%- if has_edges %}
     edges={{ edges }},
+{%- endif %}
     outputs={{ outputs }},
+{%- if has_input_schemas %}
     input_schemas={{ input_schemas }},
+{%- endif %}
 {%- if has_resources %}
     resources={{ resources }},
 {%- endif %}
