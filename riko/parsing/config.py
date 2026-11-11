@@ -172,7 +172,9 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
 
     Kwargs:
 
-        skip_if: The skipping criteria.
+        skip_if: The skipping criteria. A rule with only a ``field`` skips an item
+            whose field is missing or ``None``; or, with ``include``, one whose field
+            is present. ``0``, ``False``, and ``""`` count as present.
 
     Returns:
 
@@ -202,7 +204,8 @@ def get_skip(item: ItemOrValue, skip_if: SkipIf | None = None, **_: object) -> b
                 value = item.get(field)
 
                 if (text := _skip.get("text")) is None:
-                    skip = bool(value) if _skip.get("include") else not value
+                    present = value is not None
+                    skip = present if _skip.get("include") else not present
                 elif value is None:
                     skip = not _skip.get("include")
                 else:
