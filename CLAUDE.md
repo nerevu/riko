@@ -355,6 +355,10 @@ a `normalize`; substituting a default the caller supplies or chooses
   with `/land`'s exact command, so the pass is recorded against the tree and `/land`
   skips it instead of rerunning. A bare run records nothing. Targeted runs (one file,
   `-k`) stay bare.
+- **The index is the user's** — the user stages hunks mid-session to approve them, so
+  files appearing staged are approvals, never a tool side effect. Agents never stage,
+  unstage, or reset the index (`git add`, `git restore --staged`, `git reset`); only a
+  handed-over `/land` commit chain does, and the user runs it.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
   `_docs/` model; transient scratch material does not belong in authoritative root
   docs.
