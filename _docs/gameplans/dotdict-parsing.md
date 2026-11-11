@@ -285,7 +285,13 @@ runs past a scalar reads as the scalar. Streamed JSON in `any2dict` reports the 
 path as missing; both branches yield no records, so only the warning differs. The
 literal-access boundary above owns it; until it lands, the strict-xfail tripwire
 `TestDotDict::test_get_does_not_read_through_a_scalar` in
-`tests/internal/test_values.py` pins it.
+`tests/internal/test_values.py` pins it. The 2026-11-11 deep audit found the sibling
+reads do the same one level past the scalar: `DotDict({"a": 1})["a.b"]` returns `1`
+(it should raise `KeyError`) and `"a.b" in DotDict({"a": 1})` is `True`, so `in`
+disagrees with the `KeyError` that `[]` owes. The same boundary owns both; the
+strict-xfail tripwires `TestDotDict::test_getitem_does_not_read_through_a_scalar` and
+`TestDotDict::test_contains_does_not_read_through_a_scalar` in
+`tests/internal/test_values.py` pin them.
 
 ### Known instance: keys that differ only in case resolve to different duplicates
 

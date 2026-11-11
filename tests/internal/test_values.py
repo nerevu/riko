@@ -908,6 +908,23 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
+        reason="literal DotDict paths that stop at a scalar are not yet implemented",
+    )
+    def test_getitem_does_not_read_through_a_scalar(self):
+        with pytest.raises(KeyError):
+            DotDict({"a": 1})["a.b"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal DotDict paths that stop at a scalar are not yet implemented",
+    )
+    def test_contains_does_not_read_through_a_scalar(self):
+        assert "a.b" not in DotDict({"a": 1})
+
+    @pytest.mark.xfail(
+        strict=True,
         raises=AssertionError,
         reason="literal DotDict reads of a numeric-string key are not yet "
         "implemented: the key is taken as a sequence index",
