@@ -170,8 +170,10 @@ Enforcement:
   It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
   multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without
   `id=` (`rows-without-id`), printing the sites only when a count rises. Its
-  `Bound`/`gen_bounds` also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved
-  `--durations=0` runs and labels each bound LOOSE, TIGHT, or ok against the ladder.
+  `Bound`/`gen_bounds`, its scope walk (`gen_scopes`), and its literal readers also feed
+  `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels
+  each bound LOOSE, TIGHT, or ok against the ladder, so both tools read a marker the
+  same way.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows`
   excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a

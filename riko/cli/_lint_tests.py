@@ -185,8 +185,19 @@ def _get_assignment(node: ast.stmt) -> tuple[ast.expr, ast.expr] | None:
     return assignment
 
 
-def _gen_module_constants(tree: ast.Module) -> Iterator[tuple[str, Seconds]]:
-    """Gets the module-level names bound to a number literal."""
+def gen_module_constants(tree: ast.Module) -> Iterator[tuple[str, Seconds]]:
+    """
+    Generates the module-level names bound to a number literal.
+
+    Args:
+
+        tree: The parsed test module.
+
+    Yields:
+
+        Each constant's name and the number it holds, in source order.
+
+    """
     for assignment in map(_get_assignment, tree.body):
         target, value = (None, None) if assignment is None else assignment
         is_literal = isinstance(value, ast.Constant)
@@ -196,8 +207,20 @@ def _gen_module_constants(tree: ast.Module) -> Iterator[tuple[str, Seconds]]:
             yield target.id, number
 
 
-def _get_seconds(node: ast.expr, constants: dict[str, Seconds]) -> Seconds | None:
-    """Gets the seconds a bound expression holds, or ``None`` when it is not known."""
+def get_seconds(node: ast.expr, constants: dict[str, Seconds]) -> Seconds | None:
+    """
+    Gets the seconds a bound expression holds, or ``None`` when it is not known.
+
+    Args:
+
+        node: A number literal or the name of a module-level constant.
+        constants: The module's number constants by name.
+
+    Returns:
+
+        The seconds the expression holds, never a ``bool``, or ``None``.
+
+    """
     if isinstance(node, ast.Constant):
         seconds = _get_number(node.value)
     elif isinstance(node, ast.Name):
@@ -208,8 +231,19 @@ def _get_seconds(node: ast.expr, constants: dict[str, Seconds]) -> Seconds | Non
     return seconds
 
 
-def _get_leaf(func: ast.expr) -> str | None:
-    """Gets the final name of a called expression (``sleep`` in ``time.sleep``)."""
+def get_leaf(func: ast.expr) -> str | None:
+    """
+    Gets the final name of a called expression (``sleep`` in ``time.sleep``).
+
+    Args:
+
+        func: The expression a call invokes.
+
+    Returns:
+
+        The attribute or name the expression ends in, or ``None`` for any other shape.
+
+    """
     if isinstance(func, ast.Attribute):
         leaf = func.attr
     elif isinstance(func, ast.Name):
@@ -247,9 +281,9 @@ class Bound(NamedTuple):
         """Builds the bound ``arg`` sets on ``node``, or ``None`` when it is unknown."""
         bound = None
 
-        if arg is not None and (seconds := _get_seconds(arg, constants)) is not None:
+        if arg is not None and (seconds := get_seconds(arg, constants)) is not None:
             prefix = "" if keyword is None else f"{keyword}="
-            text = f"{_get_leaf(node.func)}({prefix}{ast.unparse(arg)})"
+            text = f"{get_leaf(node.func)}({prefix}{ast.unparse(arg)})"
             bound = cls(node.lineno, text, seconds)
 
         return bound
@@ -261,7 +295,7 @@ def _gen_timeouts(
     """Generates each ``timeout`` marker with whether it is a plain decorator."""
     for decorator in decorators:
         for node in ast.walk(decorator):
-            is_marker = isinstance(node, ast.Call) and _get_leaf(node.func) == "timeout"
+            is_marker = isinstance(node, ast.Call) and get_leaf(node.func) == "timeout"
 
             if is_marker and isinstance(node, ast.Call):
                 bound = Bound.from_arg(node, next(iter(node.args), None), constants)
@@ -280,7 +314,7 @@ def _gen_own_path(node: ast.AST) -> Iterator[ast.AST]:
 
 def _get_inner_bound(node: ast.AST, constants: dict[str, Seconds]) -> Bound | None:
     """Gets the bound a call sets, or ``None`` when it sets no known one."""
-    leaf = _get_leaf(node.func) if isinstance(node, ast.Call) else None
+    leaf = get_leaf(node.func) if isinstance(node, ast.Call) else None
     bound = None
 
     if isinstance(node, ast.Call) and leaf in BOUND_CALLS | TIMEOUT_CALLS:
@@ -299,7 +333,7 @@ def _get_blocking_call(node: ast.AST, constants: dict[str, Seconds]) -> Bound | 
     """Gets the blocking ``sleep`` a call makes, or ``None`` when it makes none."""
     bound = None
 
-    if isinstance(node, ast.Call) and _get_leaf(node.func) in BLOCKING_CALLS:
+    if isinstance(node, ast.Call) and get_leaf(node.func) in BLOCKING_CALLS:
         bound = Bound.from_arg(node, next(iter(node.args), None), constants)
 
     return bound
@@ -310,8 +344,18 @@ def _get_plain_seconds(markers: list[tuple[Bound, bool]]) -> Seconds | None:
     return min((bound.seconds for bound, is_plain in markers if is_plain), default=None)
 
 
-class _Scope(NamedTuple):
-    """A class or function whose bounds are checked together."""
+class Scope(NamedTuple):
+    """
+    A class or function whose bounds are checked together.
+
+    Attributes:
+
+        owner: ``Class::method``, ``Class``, or the function's name.
+        function: The function node, or ``None`` for a class scope.
+        markers: The scope's own ``timeout`` markers, each with whether it is plain.
+        enclosing: The enclosing class's ``timeout`` markers for a method.
+
+    """
 
     owner: str
     function: FunctionNode | None
@@ -347,20 +391,32 @@ class _Scope(NamedTuple):
                 yield bound
 
 
-def _gen_scopes(tree: ast.Module, constants: dict[str, Seconds]) -> Iterator[_Scope]:
-    """Generates each top-level function, class, and method of a module."""
+def gen_scopes(tree: ast.Module, constants: dict[str, Seconds]) -> Iterator[Scope]:
+    """
+    Generates each top-level function, class, and method of a module.
+
+    Args:
+
+        tree: The parsed test module.
+        constants: The module's number constants by name.
+
+    Yields:
+
+        One scope per function, class, and method, with its ``timeout`` markers read.
+
+    """
     for node in tree.body:
         if isinstance(node, FUNCTION_NODES):
             markers = list(_gen_timeouts(node.decorator_list, constants))
-            yield _Scope(node.name, node, markers, [])
+            yield Scope(node.name, node, markers, [])
         elif isinstance(node, ast.ClassDef):
             enclosing = list(_gen_timeouts(node.decorator_list, constants))
-            yield _Scope(node.name, None, enclosing, [])
+            yield Scope(node.name, None, enclosing, [])
 
             for method in gen_instances(node.body, FUNCTION_NODES):
                 markers = list(_gen_timeouts(method.decorator_list, constants))
                 owner = f"{node.name}::{method.name}"
-                yield _Scope(owner, method, markers, enclosing)
+                yield Scope(owner, method, markers, enclosing)
 
 
 def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
@@ -386,9 +442,9 @@ def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
         [('TestA::test_one', 'join(1)')]
 
     """
-    constants = dict(_gen_module_constants(tree))
+    constants = dict(gen_module_constants(tree))
 
-    for scope in _gen_scopes(tree, constants):
+    for scope in gen_scopes(tree, constants):
         for bound, _ in scope.markers:
             yield scope.owner, bound, True
 
@@ -406,9 +462,9 @@ def _gen_bound_issues(
     path: Path, tree: ast.Module, backstop: Seconds
 ) -> Iterator[LayoutIssue]:
     """Finds the bounds in one file that leave the ladder or misnest."""
-    constants = dict(_gen_module_constants(tree))
+    constants = dict(gen_module_constants(tree))
 
-    for scope in _gen_scopes(tree, constants):
+    for scope in gen_scopes(tree, constants):
         seconds, label = scope.get_outer(backstop)
         limit = f"its {label} ({seconds} s)"
 
@@ -472,7 +528,7 @@ def _is_bare_strict_xfail(node: ast.Call) -> bool:
     keywords = {keyword.arg: keyword.value for keyword in node.keywords}
     strict = keywords.get("strict")
     is_strict = isinstance(strict, ast.Constant) and strict.value is True
-    return _get_leaf(node.func) == "xfail" and is_strict and "raises" not in keywords
+    return get_leaf(node.func) == "xfail" and is_strict and "raises" not in keywords
 
 
 def _gen_xfail_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
@@ -535,7 +591,7 @@ def _is_doc_open(node: ast.Call) -> bool:
     first = node.args[0] if node.args else None
     value = first.value if isinstance(first, ast.Constant) else None
     names_doc = isinstance(value, str) and value.endswith(DOC_SUFFIXES)
-    return _get_leaf(node.func) in DOC_OPENERS and names_doc
+    return get_leaf(node.func) in DOC_OPENERS and names_doc
 
 
 def _gen_doc_read_issues(path: Path, tree: ast.Module) -> Iterator[LayoutIssue]:
@@ -688,7 +744,7 @@ def _gen_tier_trees(tests_dir: Path) -> Iterator[tuple[Path, ast.Module]]:
 
 def _get_inline_table(node: ast.Call) -> ast.List | ast.Tuple | None:
     """Gets the multi-line table a ``parametrize`` call holds inline, if any."""
-    is_parametrize = _get_leaf(node.func) == "parametrize"
+    is_parametrize = get_leaf(node.func) == "parametrize"
     table = node.args[1] if is_parametrize and len(node.args) > 1 else None
     found = None
 

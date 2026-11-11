@@ -202,7 +202,10 @@ sync when source is moved between package groups.
   `[tool.pytest.ini_options] timeout` (`get_backstop`) as the outer bound of a test with
   no `timeout` marker. One scope walk (top-level function, class, method) feeds both the
   bound checks and the public `gen_bounds(tree)`, which yields
-  `(owner, Bound, is_marker)` for `.claude/skills/tidy/fit_bounds.py`. The table counts
+  `(owner, Bound, is_marker)` for `.claude/skills/tidy/fit_bounds.py`; the fitter also
+  imports the walk itself (`gen_scopes`, `Scope.get_outer`) and the literal readers
+  (`gen_module_constants`, `get_seconds`, `get_leaf`), so the two tools read a marker,
+  a constant, and a number literal (never a `bool`) the same way. The table counts
   (`inline-tables`, `rows-without-id`) go through the shared `_ratchet.ratchet_ceiling`
   against `[tool.riko.tests]`, and `_lint._lint_tests` prints the sites only when a
   count is over its ceiling. What these checks and the tracked-doc-read check cannot see
