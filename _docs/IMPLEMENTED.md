@@ -450,7 +450,7 @@ once `Pipeline.write()` / `WriteNode` lands. `riko.ext.codegen` generates the
 byte-stable `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing
 bucket members so `Modules.FILTER is Transforms.FILTER`) +
 `Sources`/`Transforms`/`Sinks` bucket enums (member `.value` = canonical id; collisions
-raise). Regenerate with `gen-names`/`manage codegen` (drift guard
+raise). Regenerate with `manage codegen --names` (drift guard
 `test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`. A
 module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider`
 / `get_module_provider` in `riko/types/modules.py`: the first dotted segment,

@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3355 passed / 104 xfailed**. The user commits.
+Suite: **3354 passed / 106 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -140,7 +140,7 @@ parsers receive a plain `Objectify` at runtime, never `DynamicConf` or the annot
 - The planned frozen `@dataclass ReceiveConf(ParsedConf)` was **incompatible** with
   Mapping-access parsers → **`ParsedConf` was collapsed away**; `DynamicConf` is the
   base and `get_conf_type` tests it.
-- `riko/coercion/_configs.py` is **generated** by `gen-config`
+- `riko/coercion/_configs.py` is **generated** by `manage codegen --config`
   (`riko/cli/_gen_config.py`) from the nonraw `<Name>Conf` TypedDict contracts in
   `types/modules.py`; drift-guarded by `tests/internal/test_codegen.py`. Edit the
   contracts, never `_configs.py`.

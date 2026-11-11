@@ -302,8 +302,9 @@ Fixes
 Dev
 ~~~
 
-- Added and changed ``manage`` commands and ``lint`` selectors, and added the
-  ``gen-api-surface`` script. See ``manage --help`` for details.
+- Added and changed ``manage`` commands and ``lint`` selectors. See ``manage --help``
+  for details. ``manage codegen`` replaces the removed ``gen-config``, ``gen-names``,
+  and ``gen-pipelines`` scripts.
 
 v0.77.3 (2026-08-31)
 --------------------
