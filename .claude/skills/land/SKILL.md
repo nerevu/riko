@@ -245,13 +245,13 @@ End with:
 - **Gate results**: which gates ran and their outcomes, failures verbatim,
   and the suite count (`python $G summary test`, recorded even when this
   session skipped the suite).
-- **Commit plan**: the rehearsed step table (each `fixup!` target's sha and
-  subject, each new commit's subject from the house tags seen in `git log`,
-  `[NEW]`, `[DEV]`, `[DOCS]`, …, and the files each step touches with their line
-  counts and partial-hunk lines), the check and
-  autosquash results, which chain is on the clipboard, any hunk dropped from a
-  fixup and why, and that the autosquash waits for `/wrapup`. These are
-  commands for the user to run, never executed on their branch.
+- **Commit plan**: the rehearsed step table (each `fixup!` target's sha and subject,
+  each new commit's subject from the house tags seen in `git log`, `[NEW]`, `[DEV]`,
+  `[DOCS]`, …, where `[DOCS]` means user-facing docs only and `_docs/`, CLAUDE.md, and
+  skills take `[DEV]`, and the files each step touches with their line counts and
+  partial-hunk lines), the check and autosquash results, which chain is on the
+  clipboard, any hunk dropped from a fixup and why, and that the autosquash waits for
+  `/wrapup`. These are commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents:
   any helper script written this session into the scratchpad or `/tmp` (inline heredoc
   scripts included), any scan, count, or cross-check run by hand three or more times,

@@ -155,6 +155,11 @@ rejects negative and NaN values; `_env_encoding` rejects an encoding `codecs.loo
 does not know. A malformed or out-of-range value logs a warning and keeps the default,
 so a bad environment never fails a later run.
 
+Temporary paths: `get_temp_path` (`riko/io/_sync.py`) is a context manager yielding a
+`Path` that does not exist yet inside a fresh temporary directory, removed on exit
+unless `delete=False`; `async_get_temp_path` (`riko/io/_async.py`) is its async twin.
+`get_temp_file` keeps returning an open named temporary file.
+
 Sync text decoding goes through `riko/io/_reencode.py`: callers build a
 `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract
 `Reencoder` base, whose `join_char` is the empty value of its output type. An empty
@@ -457,6 +462,18 @@ keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`). Provider classe
 from the plugin's own codegen run, never riko's `_names.py`; `list_modules(provider=)`
 filters by provider.
 
+## Feed link discovery (shipped)
+
+`riko/rss/discovery.py` finds the feeds a page advertises in its `LINK` tags.
+`RSSLinkParser` accepts a link whose `type` equals a link type or ends with `/` plus one
+(so `xml` matches `application/xml` but not `…+xml` types such as OpenSearch
+descriptions); its default types are `FEED_LINK_TYPES`, every `FeedType` member in
+declaration order (RSS, Atom, RDF, JSON Feed, `text/xml`, `xml`). A given `link_type`
+(a `FeedType`, any string, or several in order) replaces the default, and with
+`auto_sort` the results follow its order. The loaders pass the page URL as the base, so
+relative hrefs resolve against it. `feedautodiscovery` exposes this as its `link_type`
+conf key.
+
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free**
@@ -729,8 +746,12 @@ and repeated aliases. `Workflow.edges` requires `PortEdge` instances,
 init and `nodes` (the `PreparedNode` views) as a `cached_property`;
 `ExecutionPlan.validate()`, run from `__attrs_post_init__`, raises
 `InvalidPipelineError` at construction for a non-module node or when either key set does
-not match the workflow. `Context.inputs` and `ModuleNode.embed` still use converter
-lists until R4D and R9 settle their value types. Field introspection uses
+not match the workflow. `ModuleNode.embed` still uses a converter list until R9 settles
+its value type. `ExecutionPlan.inputs` is set only by
+`plan.with_inputs(values)`, which substitutes each `{"input": name}` reference in the
+module and embed confs and records the values it used; the execution resolves and
+validates those values from its `Context` first, and a plan already built from values
+keeps them over the `Context`'s. Field introspection uses
 `riko.base._recordutils.field_names` (attrs-or-dataclass field names *including*
 `ClassVar` discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both
 drop), never `dataclasses.*`; derive variants with `attrs.evolve`. `PipelineDefinition`
