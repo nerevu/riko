@@ -1722,6 +1722,8 @@ class TestAsyncPlanRun:
         with suppress(TimeoutError):
             async with AsyncExecution(shutdown_timeout=0.05) as execution:
                 run = await execution.arun(_doubler_plan("double"), seed=BlockingSeed())
-                assert await anext(cast("AsyncItemGenerator", run)) == {"x": 2}
+
+                async with aclosing(cast("AsyncItemGenerator", run)) as items:
+                    assert await anext(items) == {"x": 2}
 
         assert perf_counter() - start < 0.25
