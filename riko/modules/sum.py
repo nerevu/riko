@@ -95,7 +95,8 @@ def parser(
         {'two': Decimal('2')}
 
     """
-    _sum = lambda group: sum(Decimal(g[objconf.sum_key]) for g in group) or Decimal(0)
+    sum_key = objconf.sum_key
+    _sum = lambda group: sum(Decimal(g[sum_key]) for g in group) or Decimal(0)
 
     if objconf.group_key:
         grouped = group_by(stream, objconf.group_key)

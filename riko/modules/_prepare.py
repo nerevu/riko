@@ -400,11 +400,11 @@ def resolve_and_cast[T, E](
 
         item: The input item or value.
         opts: The resolved decoration and call options.
-        parsers: The field and conf parsers.
-        casters: The field, extract, and conf casters.
 
     Kwargs:
 
+        parsers: The field and conf parsers.
+        casters: The field, extract, and conf casters.
         defaults: The module's default conf.
         field: Optional field whose value replaces the item.
         module: The module name, used in error messages.

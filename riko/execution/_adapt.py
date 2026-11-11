@@ -179,6 +179,9 @@ def pull_stream[T](stream: Iterator[T], *, func: WorkerCall) -> AsyncIterator[T]
     Args:
 
         stream: The synchronous item stream to read.
+
+    Kwargs:
+
         func: Runs a blocking callable off the event loop.
 
     Returns:
@@ -203,6 +206,9 @@ def _copy_wrapper_meta(
 
         target: The adapter function to annotate.
         source: The pipe callable whose metadata is copied.
+
+    Kwargs:
+
         isasync: Whether the adapter is an ``async_pipe``.
 
     """
@@ -299,6 +305,9 @@ def select_embed[T](
     Args:
 
         embed: The embed module resolved alongside the loop node.
+
+    Kwargs:
+
         host_isasync: Whether the loop pipe runs asynchronously.
         run_sync: Runs a sync-only embed off the event loop under an async host.
         drain: Pulls an async-only embed's output stream under a sync host.

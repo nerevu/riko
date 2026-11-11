@@ -521,8 +521,9 @@ async def _pool_stream[T, S](
         drain: ``async (item, out) -> None`` — does the per-item work
             and ``await out.send(...)`` for each result to emit.
 
-        limit: Number of concurrent workers (must be >= 1).
+    Kwargs:
 
+        limit: Number of concurrent workers (must be >= 1).
         buffer: Size of the completed-results queue (must be >= 0).
 
     Yields:

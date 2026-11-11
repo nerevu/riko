@@ -770,7 +770,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function("Args:\n\n    a: A.\n    b: B.\n\nKwargs:\n\n    c: C.").replace(
+        _function("Args:\n\n    a: A.\n    b: B.\n    c: C.").replace(
             "f()", "f(a, b=1, *, c)"
         ),
         ["documents a parameter in the wrong section"] * 2,
@@ -778,7 +778,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function("Args:\n\n    a: A.\n    c: C.\n\nKwargs:\n\n    b: B.").replace(
+        _function("Args:\n\n    a: A.\n\nKwargs:\n\n    b: B.\n    c: C.").replace(
             "f()", "f(a, b=1, *, c)"
         ),
         [],

@@ -545,11 +545,11 @@ for example imports.
   never first among the sections — a docstring that jumps from the summary
   straight to `Examples:`, skipping `Args:`/`Returns:`, is the single most
   common miss. Never leave an empty section.
-- `Args:` documents the parameters a caller must supply, those without a default;
-  `Kwargs:` documents every parameter with a default, whether or not it follows `*`
-  or `*args`, and the entries of a `**kwargs` bag. The split mirrors required versus
-  optional, so a positional parameter with a default (`default=None`) goes under
-  `Kwargs:` too. A `Kwargs:` parameter with its own annotation carries no type
+- `Args:` documents the positional parameters without a default; `Kwargs:`
+  documents every keyword-only parameter (anything after `*` or `*args`, required or
+  not), every positional parameter with a default (`default=None`), and the entries
+  of a `**kwargs` bag. A caller passes everything under `Kwargs:` by name or may
+  omit it. A `Kwargs:` parameter with its own annotation carries no type
   label. Every entry of a `**kwargs` bag does, because the signature gives
   it no explicit hint: that includes an `Unpack[SomeTypedDict]` bag, so readers
   never have to look up the `TypedDict` to learn an entry's type (see the

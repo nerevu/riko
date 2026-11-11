@@ -175,6 +175,9 @@ def stamp_wrapper_meta(
     Args:
 
         target: The callable to annotate in place.
+
+    Kwargs:
+
         name: The module name.
         module_type: The module kind, e.g., "processor" (stored as ``type``).
         subtype: The primary module subtype.
@@ -182,8 +185,6 @@ def stamp_wrapper_meta(
         pollable: Whether the module can be polled.
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is an ``async_pipe``.
-
-    Kwargs:
 
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).

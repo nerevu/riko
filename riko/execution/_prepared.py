@@ -673,7 +673,7 @@ class PreparedNode:
         workers, a loopable node with no secondary input stream instead runs each item
         after it has been read.
 
-        Args:
+        Kwargs:
 
             mapped: Whether the execution maps loopable nodes' items across workers.
 
@@ -941,6 +941,9 @@ class ExecutionPlan:
         Args:
 
             output: The name of the workflow output being run.
+
+        Kwargs:
+
             mapped: Whether the execution maps loopable nodes' items across workers.
 
         Returns:

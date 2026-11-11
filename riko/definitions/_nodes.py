@@ -353,6 +353,8 @@ class WriteNode(RikoNode):
 
             prepared: The validated write to record.
 
+        Kwargs:
+
             id: The node's id.
 
         Returns:

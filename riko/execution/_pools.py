@@ -145,6 +145,9 @@ class _PoolLifetime:
 
             func: Collects one item's results.
             source: The items to map.
+
+        Kwargs:
+
             ordered: Whether results keep source order.
 
         Yields:

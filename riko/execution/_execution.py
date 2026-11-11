@@ -253,6 +253,9 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             incoming: The stream edges that target the node.
             steps: The output stream of each upstream node, keyed by node id.
             seed: The items fed to the node's open input, if any.
+
+        Kwargs:
+
             as_stream: Turns the seed into the execution's stream kind.
 
         Returns:

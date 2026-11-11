@@ -743,6 +743,8 @@ def write_through(
         prepared: A validated write that has been checked against its target's
             capabilities.
 
+    Kwargs:
+
         terminating: Reports whether the enclosing pipe is terminating (vs. closing).
 
     Yields:
