@@ -42,7 +42,7 @@ from ._module_definition import get_callable_name
 from ._nodes import CallableNode, ModuleNode, WriteNode
 from ._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from ._targets import build_write
-from ._workflow_definition import InputSchema, InputSchemas, Workflow
+from ._workflow_definition import Workflow
 from ._write import WriteMode
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
         StrLike,
     )
     from riko.types._events import EventSink
-    from riko.types._frozendict import FrozenConf
+    from riko.types._frozendict import FrozenConf, InputSchema, InputSchemas
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory

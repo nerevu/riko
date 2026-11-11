@@ -58,12 +58,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from riko.definitions._resource_definition import ResourcesLike
-    from riko.definitions._workflow_definition import (
-        RawInputSchemas,
-        RawNodes,
-        RawOutputs,
-        RawPortEdges,
-    )
+    from riko.definitions._workflow_definition import RawNodes, RawOutputs, RawPortEdges
 
     from ._enums import BackendLike, FmtLike, StrLike
     from ._frozendict import (
@@ -71,6 +66,7 @@ if TYPE_CHECKING:
         FrozenSetMapping,
         FrozenWorkflowEdgeCollection,
         FrozenWorkflowEdges,
+        RawInputSchemas,
     )
     from ._io import PathLike
     from ._options import RawCallOptions

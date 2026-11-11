@@ -62,11 +62,11 @@ from ._nodes import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
+    from riko.types._frozendict import InputSchemas, InputSchemasLike
+
     from ._workflow_definition import (
         EdgeLike,
         EndpointLike,
-        InputSchemas,
-        InputSchemasLike,
         NodeLike,
         NodesLike,
         Outputs,

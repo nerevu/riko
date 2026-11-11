@@ -47,8 +47,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Iterator
 
     from riko.definitions._context import Context
-    from riko.definitions._workflow_definition import InputSchemasLike, Workflow
-    from riko.types._frozendict import FrozenInputSchemas
+    from riko.definitions._workflow_definition import Workflow
+    from riko.types._frozendict import FrozenInputSchemas, InputSchemasLike
     from riko.types._streams import InputLike
     from riko.types._wrappers import (
         AsyncFunc,

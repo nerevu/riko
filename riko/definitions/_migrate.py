@@ -61,16 +61,11 @@ from ._write import WriteMode
 if TYPE_CHECKING:
     from logging import Logger
 
-    from riko.types._frozendict import JSONValue
+    from riko.types._frozendict import InputSchema, InputSchemas, JSONValue
     from riko.types._pipedef import PipeDefLike, Wires
     from riko.types.modules import Conf, InputRawConf
 
-    from ._workflow_definition import (
-        InputSchema,
-        InputSchemas,
-        RawOutputs,
-        RawPortEdges,
-    )
+    from ._workflow_definition import RawOutputs, RawPortEdges
 
 logger: Logger = get_logger(__name__)
 

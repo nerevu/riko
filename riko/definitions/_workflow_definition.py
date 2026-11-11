@@ -57,6 +57,7 @@ from riko.types._frozendict import (
     FrozenOutputs,
     FrozenResources,
     FrozenWorkflowEdges,
+    InputSchemasLike,
     freeze,
     instances_freezer,
     json_freeze,
@@ -124,12 +125,6 @@ type Inputs = Mapping[str, JSONValue]
 type RawOutputs = Mapping[str, RawEndpoint]
 type Outputs = Mapping[str, Endpoint]
 type OutputsLike = Mapping[str, EndpointLike]
-type InputSchema = Mapping[str, JSONValue]
-type RawInputSchema = str | Mapping[str, object]
-type InputSchemaLike = InputSchema | RawInputSchema
-type InputSchemas = Mapping[str, InputSchema]
-type RawInputSchemas = Mapping[str, RawInputSchema]
-type InputSchemasLike = InputSchemas | RawInputSchemas
 
 _EMPTY_OUTPUTS: FrozenOutputs = FrozenDict()
 _EMPTY_NODES: FrozenNodes = FrozenDict()

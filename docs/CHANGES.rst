@@ -24,7 +24,9 @@ New
   input schemas (``InputSchema``) and a ``dependencies`` list.
 
 - Added the ``WorkflowLike``, ``WorkflowModule``, ``RawWorkflow``, ``PipelineStream``,
-  and ``CallOptions`` type aliases to ``riko`` and ``riko.types``.
+  and ``CallOptions`` type aliases to ``riko`` and ``riko.types``; and the
+  ``InputSchema``, ``RawInputSchema``, and ``InputSchemaLike`` type aliases to
+  ``riko.types``.
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` or a ``WorkflowModule`` file.
 

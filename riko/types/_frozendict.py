@@ -2,8 +2,9 @@
 Immutable mappings and the helpers that build them.
 
 Holds ``FrozenDict``, the recursive ``freeze``/``json_freeze``/``thaw`` helpers,
-``normalize_mapping``, ``instances_freezer``, and the attrs converters that check
-mappings and freeze them into ``FrozenDict``s.
+``normalize_mapping``, ``instances_freezer``, the attrs converters that check
+mappings and freeze them into ``FrozenDict``s, and the ``JSONValue``-based
+``InputSchema`` aliases that ``riko.types`` exports.
 """
 
 from __future__ import annotations
@@ -48,6 +49,13 @@ type FrozenJSON = (
 type JSONValue = (
     bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
 )
+
+type InputSchema = Mapping[str, JSONValue]
+type RawInputSchema = str | Mapping[str, object]
+type InputSchemaLike = InputSchema | RawInputSchema
+type InputSchemas = Mapping[str, InputSchema]
+type RawInputSchemas = Mapping[str, RawInputSchema]
+type InputSchemasLike = InputSchemas | RawInputSchemas
 
 type FrozenConf = FrozenDict[str, FrozenJSON]
 type FrozenInputs = FrozenDict[str, FrozenJSON]

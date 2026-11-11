@@ -48,16 +48,11 @@ from riko.types._workflow import is_input_ref
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from riko.types._frozendict import InputSchema, InputSchemaLike, InputSchemas
     from riko.types._wrappers import Func
     from riko.types.modules import MaybeFrozenConf
 
-    from ._workflow_definition import (
-        Inputs,
-        InputSchema,
-        InputSchemaLike,
-        InputSchemas,
-        RawInputs,
-    )
+    from ._workflow_definition import Inputs, RawInputs
 
 _JSON_TYPE_NAMES: frozenset[str] = frozenset(
     {"array", "boolean", "integer", "null", "number", "object", "string"}
