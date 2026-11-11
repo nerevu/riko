@@ -317,6 +317,16 @@ sync when source is moved between package groups.
   keep their own bullets. The general bullet names
   classes of fixes (async runs, dates, …) but no release and no individual fix; a new
   2026-origin fix whose class is missing extends the list.
+- **Summary-first bullets.** Bullets that share a shape fold into one leading bullet
+  whose items are nested sub-bullets: "Added to ``riko``: …", "Added to
+  ``riko.ext``: …", and "Added module options: …" under **New**; "Invalid input now
+  raises instead of being ignored or yielding nothing: …" (no exception types) under
+  **Changes**; "Removed (old → replacement): …" under **Removed**, nested like the
+  rename list; and "Fixed <subject>: …" for several fixes to one subject. Each item
+  keeps only its name and a few words; what a name does belongs to its docstring, and
+  API walkthroughs go to the Cookbook or FAQ. A list a reader needs in full (the
+  ``RIKO_*`` variables, an old-to-new call map) gets a doc home and the bullet points
+  at it. **Dev** is one line pointing at ``manage --help``.
 - **Unreleased features get one entry, not a history.** The changelog describes the
   delta against the *last release*, so a feature that has never shipped (today:
   `Pipeline` and the workflow model) is one "Added …" bullet under **New** that
@@ -352,8 +362,8 @@ sync when source is moved between package groups.
   only in a run of methods on a receiver the same sentence just named. The verb names
   what the method acts on: attribute chaining "chains a module", never "a workflow".
 - **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
-  maps old to new names, as one "Renamed (old → new):" paragraph of `old` → `new`
-  pairs separated by semicolons. Other bullets, **New** included, use the new name
+  maps old to new names, as one "Renamed (old → new):" bullet with one nested
+  `old` → `new` sub-bullet per pair. Other bullets, **New** included, use the new name
   bare, with no "(formerly …)", so **New** preceding **Changes** needs no forward
   reference.
 - **No cross-section pointers.** Never write "see above/below". A bullet that only makes

@@ -19,10 +19,17 @@ Stable application API: ``riko``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The top-level application-facing facade is everything listed in ``riko.__all__``.
-It includes the ``Pipeline``/collection API, compiler API, module-discovery API, public
-exceptions and context types, path/temp-file helpers, and the promoted async
-runtime helpers. Breaking changes to these names require the corresponding SemVer
-treatment. The current export list is intentionally not duplicated here.
+It includes:
+
+- the ``Pipeline`` API
+- the compiler API
+- the module-discovery API
+- public exceptions and context types
+- path/temp-file helpers
+- the promoted async runtime helpers
+
+Breaking changes to these names require the corresponding SemVer treatment. The current
+export list is intentionally not duplicated here.
 
 Stable typing API: ``riko.types``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,7 +102,26 @@ changes, renamed or removed APIs, and the replacement forms needed to migrate.
 
 This guide intentionally contains only the durable compatibility model and supported API
 boundaries. It should change only when those policies or surfaces change, not for each
-release.
+release. The one exception is a redesign that replaces a whole API, which gets a mapping
+from each old call to its replacement below.
+
+Upgrading from the ``SyncPipe`` API
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+v0.78.0 replaced ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``,
+and ``PipeState`` with ``Pipeline``, one class for sync and async runs:
+
+- ``SyncPipe('fetch', conf=…)`` or ``AsyncPipe('fetch', conf=…)`` →
+  ``Pipeline.from_module('fetch', conf=…)``.
+- ``pipe | ('sort', conf)`` → ``pipeline.sort(conf=…)`` or
+  ``pipeline.pipe('sort', conf=…)``.
+- A ``Transforms.UDF`` step → ``pipeline.map(func)``.
+- ``pipe.export(…)`` → ``export(pipeline, …)``.
+- ``SyncCollection``/``AsyncCollection`` multi-source fetching → a ``union`` of
+  ``fetch`` pipelines (the Cookbook's "Fetch several sources" recipe).
+- ``parallel``/``workers``/``threads``/``pool`` arguments →
+  ``pipeline.with_execution(concurrency=…)``.
+- ``PipeState`` and ``subscribe``/``publish``/``split`` have no replacement.
 
 .. _CHANGES: CHANGES.rst
 .. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

@@ -535,11 +535,13 @@ Asynchronous pipelines
 
 The ``async`` extra (``python -m pip install "riko[async]"``) lets the same ``Pipeline``
 run asynchronously. Build a ``pipeline`` as normal, then consume it with ``async for``,
-or run it as a context manager with ``async with pipeline.open()``.
+or run it as a context manager with ``async with pipeline.open()``. A ``dag`` needs no
+changes either: the ``union`` fan-in from `Fetch several sources`_ runs unchanged under
+``async for``.
 
-Each async ``source`` fetch reads its body fully into memory before parsing (a
-single ``await``). So ``stream`` here means ``Iterator[item]``, not an incremental
-network read.
+Each async ``source`` fetch reads its body fully into memory before parsing (a single
+``await``). So ``stream`` here means ``Iterator[item]``, not an incremental network
+read.
 
 Lazy async iteration
 ^^^^^^^^^^^^^^^^^^^^
@@ -563,8 +565,9 @@ Lazy async iteration
     >>> run(main)
     Donations / 5
 
-To stop early, use the context manager ``async with pipeline.open(items) as stream:``.
-Leaving the block closes the run.
+To read one item without a loop, ``await pipeline.afirst(items)``. To stop early, use
+the context manager ``async with pipeline.open(items) as stream:``. Leaving the block
+closes the run.
 
 .. code-block:: python
 
@@ -581,12 +584,6 @@ Leaving the block closes the run.
     >>>
     >>> run(first)
     riko
-
-Fetching feeds asynchronously
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The ``union`` fan-in ``dag`` from `Fetch several sources`_ runs unchanged under
-``async for``.
 
 Bounded parallelism
 ^^^^^^^^^^^^^^^^^^^
@@ -964,6 +961,17 @@ operators such as ``union``/``join`` expressible too.
     >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]
+
+Other ways in and out of a ``Workflow``:
+
+- ``Workflow.parse`` also reads a workflow document (``WorkflowDocument``) or a pipe
+  definition (``PipeDef``)
+- ``Workflow.load(path)`` reads any of them from a file
+- ``Workflow.from_raw`` builds one from a ``WorkflowLike`` mapping
+- ``flow.serialize()`` writes a ``WorkflowDocument``
+- ``flow.input_schemas`` lists the JSON Schema input schemas ``Workflow.parse``
+  creates, ``flow.validate_input_schemas()`` checks them, and
+  ``pipeline.with_input_schemas(…)`` overrides them for a run
 
 A ``Workflow`` composes like a ``Pipeline``: ``flow.with_node(node)`` appends a node
 after the default output, and ``flow.with_workflow(other)`` appends a whole workflow.

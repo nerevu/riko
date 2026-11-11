@@ -99,14 +99,14 @@ abstraction.
 
 In particular, riko provides:
 
-- a pure-Python, embedded execution model with no required external services
-- a library of configuration-driven modules for filtering, sorting, parsing, transforming, aggregating, and composing streams
-- first-class RSS/Atom and web-content processing
-- synchronous and asynchronous APIs
-- local thread and process-pool execution
-- lazy iterator-oriented processing
-- workflows written in Python or stored as JSON
-- tools to inspect, execute, and compile pipelines
+- a pure-Python, embedded execution model with lazy iterator-oriented processing and no
+  required external services
+- a library of configuration-driven modules for filtering, sorting, parsing,
+  transforming, aggregating, and composing streams, with first-class RSS/Atom and
+  web-content processing
+- synchronous and asynchronous APIs, plus local thread and process-pool execution
+- workflows written in Python or stored as JSON, and tools to inspect, execute, and
+  compile pipelines
 
 Why you shouldn't use riko
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

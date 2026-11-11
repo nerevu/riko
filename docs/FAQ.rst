@@ -21,6 +21,7 @@ Index
 - `How do synchronous and asynchronous pipelines differ`_
 - `What does parallel=True do`_
 - `Is riko distributed`_
+- `Which environment variables tune riko`_
 - `Why does a pipeline see no items the second time`_
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
@@ -75,17 +76,25 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
-  ``Pipeline`` and ``Workflow`` classes, ``Context``, ``backend``,
-  ``compile_workflow``, ``export``, ``get_module_metadata``,
-  ``get_path``, ``isasync``, ``issync``, ``list_modules``, ``describe_module``,
-  ``list_formats``, ``run``, the typed discovery surface
-  (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats`` bucket enums), and the
-  pipeline exceptions.
+- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API:
+
+  - the ``Pipeline`` and ``Workflow`` classes and ``Context``
+  - ``compile_workflow`` and ``export``
+  - module discovery: ``list_modules``, ``list_module_metadata``, ``describe_module``,
+    ``get_module_metadata``, and ``list_formats``
+  - the typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/
+    ``Formats`` bucket enums)
+  - the async backend: ``backend``, ``isasync``, ``issync``, and ``run``
+  - ``get_path``
+  - the pipeline exceptions
+
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
-  the ``processor``/``operator``/``splitter`` decorators; the module-metadata types;
-  the registration functions for modules, workflow stores, and write targets; and the
-  ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name.
+
+  - the ``processor``/``operator``/``splitter`` decorators
+  - the module-metadata types
+  - the registration functions for modules, workflow stores, and write targets
+  - the ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name
+
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
@@ -412,10 +421,16 @@ group by data-flow role. Every bucket member is interchangeable with a module na
 
 Notes:
 
-- ``Sinks`` classifies *sink modules*. The one built-in is ``write``, which serializes
-  the stream to a file and passes items through the remaining pipeline.
+- ``Sinks`` classifies *sink modules*. The one built-in is ``write``. It serializes the
+  stream to a file and passes items through the remaining pipeline.
+
 - ``write`` takes a ``fmt`` option which can be a string or ``Formats`` enum and
   defaults to the ``dest`` extension. See `exporting a stream`_ for examples.
+
+- A module's provider (``ModuleMetadata.provider``) is the first dotted segment of its
+  name (``"riko"`` for the built-ins). Each plugin provider gets its own discovery
+  class, e.g., ``Example.LOOKUP`` for ``example.lookup``. ``Modules`` keeps the prefix,
+  e.g., ``Modules.EXAMPLE_LOOKUP``.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
@@ -628,6 +643,31 @@ checkpoints, durable retries, event-time windows, a scheduler, or a workflow UI.
 
 Use an orchestrator around ``riko`` when you need durable task execution, and
 use a distributed data engine when one machine is insufficient.
+
+Which environment variables tune riko?
+--------------------------------------
+
+``RIKO_*`` environment variables override riko's runtime defaults. A malformed value
+logs a warning and keeps the default. Defaults are shown in parentheses.
+
+- ``RIKO_CONCURRENCY_LIMIT``: ``riko.async_map``'s default concurrent call ``limit``;
+  pass ``limit=0`` to ``async_map`` for unlimited (``16``).
+- ``RIKO_NODE_THREADS``: the threads that sync-only modules share in async runs on
+  one event loop (``40``).
+- ``RIKO_STREAMING_THRESHOLD``: the response size, in bytes, above which fetched
+  content is streamed instead of buffered (``1048576``).
+- ``RIKO_ENCODING``: the default text encoding (``utf-8``).
+- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; pass ``inf`` or ``0`` for no
+  limit (``30``).
+- ``RIKO_DISCOVERY_TIMEOUT``: seconds to wait for a feed discovery fetch (``10``).
+- ``RIKO_SHUTDOWN_TIMEOUT``: seconds a run's cleanup, and its stopped worker processes,
+  get before being killed (``30``).
+- ``RIKO_EXCHANGE_API``: the ``exchangerate`` module's rates API URL.
+- ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
+  processes (``32``).
+- ``RIKO_PARSED_DATE_CACHE_SIZE``: how many parsed date strings are cached (``1024``).
+- ``RIKO_BENCHMARK_DELAY`` and ``RIKO_BENCHMARK_WORKERS``: the ``benchmark`` script's
+  per-item delay (``0.1``) and worker count (``0``, one per item).
 
 Why does a pipeline see no items the second time?
 -------------------------------------------------
