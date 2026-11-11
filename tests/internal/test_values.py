@@ -13,10 +13,10 @@ from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO, StringIO
-from json import dumps
+from json import dumps, loads
 from logging import ERROR, WARNING
 from math import inf
-from operator import itemgetter, methodcaller
+from operator import add, itemgetter, methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
 from types import SimpleNamespace
@@ -79,10 +79,10 @@ from riko.coercion._canonical import (
 from riko.coercion._dataclass import fromdict
 from riko.coercion._dates import (
     _parse_date_cached,
-    date_to_tt,
+    datetime_to_datedict,
+    get_relative_date,
     parse_date_string,
     resolve_aware_datetime,
-    tt_to_datedict,
 )
 from riko.coercion._sequences import listize
 from riko.coercion.cast import cast_datetime, cast_value, resolve_cast_type
@@ -445,6 +445,10 @@ class TestCastDatetime:
 
         assert offset == timedelta(hours=9)
 
+    def test_rejects_non_date_values(self):
+        with pytest.raises(TypeError, match="not date-like"):
+            cast_datetime({"year": 2020})  # pyright: ignore[reportArgumentType]
+
     def test_rejects_positional_flags(self):
         with pytest.raises(TypeError):
             cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]
@@ -463,6 +467,19 @@ class TestCastDatetime:
         assert named is not None
         assert offset is not None
         assert offset.utcoffset() == named.utcoffset()
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="exact-time arithmetic for sub-day offsets in a named zone is not yet "
+        "implemented: hours are added to the wall clock, so an offset across a "
+        "daylight-saving change is an hour short",
+    )
+    def test_sub_day_offsets_count_exact_time_across_dst(self):
+        paris = ZoneInfo("Europe/Paris")
+        before_change = datetime(2023, 3, 25, 22, tzinfo=paris)
+        result = get_relative_date("hours", 8, add, before_change)
+        assert result == datetime(2023, 3, 26, 7, tzinfo=paris)
 
 
 # Each row: content whose cast overflows, and the cast type's default.
@@ -690,19 +707,52 @@ class TestResolveAwareDatetime:
         assert result.utcoffset() == naive.replace(tzinfo=zone).utcoffset()
 
 
-class TestTtToDatedict:
-    def test_utime_honors_aware_offset(self):
-        """
-        Convert aware ``+03:00`` times to the represented instant.
+# Each row: an aware datetime and the zone label its date dict carries.
+DATEDICT_MOMENTS = [
+    pytest.param(
+        datetime(2014, 12, 3, 9, tzinfo=ZoneInfo("Asia/Shanghai")),
+        "Asia/Shanghai",
+        id="ambiguous-abbreviation",
+    ),
+    pytest.param(
+        datetime(2014, 11, 2, 1, 30, tzinfo=ZoneInfo("America/Chicago"), fold=1),
+        "America/Chicago",
+        id="repeated-dst-hour",
+    ),
+    pytest.param(datetime(2014, 12, 3, 9, tzinfo=UTC), "UTC", id="utc"),
+    pytest.param(
+        datetime(2014, 12, 3, 9, tzinfo=ZoneInfo("EST")),
+        "UTC-05:00",
+        id="legacy-abbreviation-zone",
+    ),
+    pytest.param(
+        datetime(1890, 1, 1, tzinfo=ZoneInfo("Singapore")),
+        "UTC+06:55:25",
+        id="sub-minute-offset",
+    ),
+]
 
-        Do not reinterpret the same wall-clock time as UTC.
-        """
-        tz = timezone(timedelta(hours=3))
-        aware = datetime(2020, 6, 15, 9, 0, 0, tzinfo=tz)
-        tt = date_to_tt(aware)
 
-        result = tt_to_datedict(tt, aware.date())
-        assert result["utime"] == int(aware.timestamp())
+class TestDatetimeToDatedict:
+    @pytest.mark.parametrize(("moment", "label"), DATEDICT_MOMENTS)
+    def test_keeps_the_moment_offset_and_zone(self, moment, label):
+        result = datetime_to_datedict(moment)
+        expected = (int(moment.timestamp()), moment.utcoffset(), label, moment.hour)
+        offset = timedelta(seconds=result["utc_offset"])
+        assert (result["utime"], offset, result["timezone"], result["hour"]) == expected
+
+    @pytest.mark.parametrize(("moment", "label"), DATEDICT_MOMENTS)
+    def test_cast_datetime_reads_it_back(self, moment, label):
+        result = cast_datetime(loads(dumps(datetime_to_datedict(moment))))
+        assert result is not None
+        assert (result.timestamp(), result.utcoffset()) == (
+            moment.timestamp(),
+            moment.utcoffset(),
+        )
+
+    def test_date_parts_never_change_the_moment(self):
+        built = datetime_to_datedict(datetime(2014, 12, 3, 9, tzinfo=UTC))
+        assert cast_value(built | {"year": 1999}, CastType.DATE) == date(2014, 12, 3)
 
 
 DOTDICT_DELETES = [

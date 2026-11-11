@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from riko.parsing._dotdict import DotDict
 
     from ._rss import RSSEntry
+    from ._scalars import DateDict
     from ._values import RikoDict, RikoValue, StringyDict
 
 type Item = (
@@ -36,6 +37,7 @@ type Item = (
     | DotDict[ItemValue]
     | AnyLocation
     | StringyDict
+    | DateDict
 )
 
 type ItemOrValue = Item | RikoValue

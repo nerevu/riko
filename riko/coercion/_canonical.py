@@ -90,13 +90,12 @@ def _canon_decimal(value: Decimal) -> str:
 
 
 def _canon_datetime(value: datetime) -> str:
-    aware = value if value.tzinfo else resolve_aware_datetime(value, try_local_tz=False)
+    aware = resolve_aware_datetime(value, try_local_tz=False)
     return aware.astimezone(UTC).isoformat()
 
 
 def _canon_struct_time(value: struct_time) -> str:
-    moment = tt_to_datetime(resolve_aware_datetime(value, try_local_tz=False))
-    return moment.astimezone(UTC).isoformat()
+    return _canon_datetime(tt_to_datetime(value, def_tzinfo=UTC))
 
 
 def canonical_json(canon: CanonicalValue) -> bytes:

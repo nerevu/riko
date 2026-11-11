@@ -27,7 +27,7 @@ from riko.base._logging import get_logger
 from riko.coercion._dates import date_to_datetime, resolve_aware_datetime
 from riko.coercion.cast import CAST_SWITCH, cast_value, resolve_cast_type
 from riko.types._enums import CastType
-from riko.types._scalars import PrimitiveValue, SortableValue
+from riko.types._scalars import PrimitiveValue, SortableValue, is_datedict
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -174,6 +174,8 @@ def def_itemgetter(
             casted = _resolve_uncastable(value, msg, sort_default)
         elif cast_type is not None:
             casted = cast_value(value, cast_type)
+        elif is_datedict(value):
+            casted = value["utime"]
         elif isinstance(value, SORTABLE_TYPES):
             casted = value
         elif value is not None:

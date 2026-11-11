@@ -1,10 +1,11 @@
 # vim: sw=4:ts=4:expandtab
 """
-Converts a text string into a date.
+Converts a text string into a date dict.
 
 Accepts commonly formatted date, shorthands (``"today"``/``"tomorrow"``/``"yesterday"``/
 ``"now"``), offsets (``"3 days"``, ``"-1 month"``, etc.), and word forms
-(``"next week"``, ``"last year"``, etc.).
+(``"next week"``, ``"last year"``, etc.). The date dict is JSON-friendly: all fields are
+either int, str, bool, or None.
 
 Examples:
 
@@ -12,7 +13,7 @@ Examples:
 
         >>> from riko.modules.datebuilder import pipe
         >>>
-        >>> next(pipe({"content": "12/2/2014"}))["datebuilder"].tm_year
+        >>> next(pipe({"content": "12/2/2014"}))["datebuilder"]["year"]
         2014
 
 Attributes:
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 from riko.base._logging import get_logger
 from riko.base._typing import DateLikeType
+from riko.coercion._dates import datetime_to_datedict
 from riko.coercion.cast import cast_datetime
 from riko.types._enums import BasicCastType
 
@@ -35,22 +37,26 @@ from ._decorators import processor
 
 if TYPE_CHECKING:
     from logging import Logger
-    from time import struct_time
 
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._options import DecorationOptions, Defaults
+    from riko.types._scalars import DateDict
 
 logger: Logger = get_logger(__name__)
 
-OPTS: DecorationOptions = {"ptype": BasicCastType.NONE, "field": "content"}
+OPTS: DecorationOptions = {
+    "ptype": BasicCastType.NONE,
+    "field": "content",
+    "emit": False,
+}
 DEFAULTS: Defaults = {}
 
 
 def parser(
     text: str, extraction: object, objconf: DynamicConf, **kwargs: object
-) -> struct_time:
+) -> DateDict:
     """
-    Converts ``text`` into a date.
+    Converts ``text`` into a date dict.
 
     Args:
 
@@ -60,7 +66,7 @@ def parser(
 
     Returns:
 
-        The date, as a time tuple.
+        The date dict.
 
     Raises:
 
@@ -69,7 +75,7 @@ def parser(
     Examples:
 
         >>> item = {"content": "12/2/2014"}
-        >>> parser(item["content"], None, None, stream=item).tm_year
+        >>> parser(item["content"], None, None, stream=item)["year"]
         2014
 
     """
@@ -81,13 +87,13 @@ def parser(
     if new_date is None:
         raise ValueError(f"the 'datebuilder' module got an unrecognized date {text!r}")
 
-    return new_date.timetuple()
+    return datetime_to_datedict(new_date)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
-def async_pipe(*args: Any, **kwargs: object) -> struct_time:
+def async_pipe(*args: Any, **kwargs: object) -> DateDict:
     """
-    Asynchronously converts a text string into a date.
+    Asynchronously converts a text string into a date dict.
 
     Both iterator and iterable sources are mapped over. See the FAQ's "How does a
     processor map over items?".
@@ -134,7 +140,7 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
         >>>
         >>> async def main():
         ...     result = async_pipe({"content": "12/2/2014"})
-        ...     print((await anext(result))["datebuilder"].tm_year)
+        ...     print((await anext(result))["datebuilder"]["year"])
         >>>
         >>> run(main)
         2014
@@ -144,9 +150,9 @@ def async_pipe(*args: Any, **kwargs: object) -> struct_time:
 
 
 @processor(DEFAULTS, **OPTS)
-def pipe(*args: Any, **kwargs: object) -> struct_time:
+def pipe(*args: Any, **kwargs: object) -> DateDict:
     """
-    Converts a text string into a date.
+    Converts a text string into a date dict.
 
     Both iterator and iterable sources are mapped over. See the FAQ's "How does a
     processor map over items?".
@@ -189,11 +195,12 @@ def pipe(*args: Any, **kwargs: object) -> struct_time:
 
     Examples:
 
-        >>> next(pipe({"content": "12/2/2014"}))["datebuilder"].tm_year
+        >>> next(pipe({"content": "12/2/2014"}))["datebuilder"]["year"]
         2014
-        >>> next(pipe({"content": "5/4/82"}, emit=True))[:3]
-        (1982, 5, 4)
-        >>> next(pipe({"content": "tomorrow"}, emit=True)).tm_hour
+        >>> built = next(pipe({"content": "5/4/82"}, emit=True))
+        >>> built["year"], built["month"], built["day"], built["timezone"]
+        (1982, 5, 4, 'UTC')
+        >>> next(pipe({"content": "tomorrow"}, emit=True))["hour"]
         0
         >>> yesterday = next(pipe({"content": "-1 day"}, emit=True))
         >>> yesterday == next(pipe({"content": "yesterday"}, emit=True))

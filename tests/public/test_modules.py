@@ -8,7 +8,7 @@ import re
 import sqlite3
 from collections.abc import AsyncIterator, Generator, Iterator, Mapping
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from functools import partial
 from inspect import isawaitable
 from itertools import count
@@ -24,6 +24,7 @@ from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import InvalidPipelineError, RemovedOptionError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
+from riko.coercion._dates import datetime_to_datedict
 from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
 from riko.ext.codegen import (
@@ -99,6 +100,10 @@ if TYPE_CHECKING:
 _OMITTED = object()
 _NUMBERS = ["1", "2", "3"]
 _DATES = ["2019-01-01", "2020-05-01", "2024-11-12"]
+_EARLIER_OFFSET_DATEDICT = datetime_to_datedict(
+    datetime(2014, 12, 3, 9, tzinfo=timezone(timedelta(hours=8)))
+)
+_LATER_UTC_DATEDICT = datetime_to_datedict(datetime(2014, 12, 3, 2, tzinfo=UTC))
 _FEED_URL = "FEED_URL"
 _CSV = "a,b\n1,2\n"
 _HTML = "<html><head><title>T</title></head><body><p>A</p></body></html>"
@@ -793,6 +798,12 @@ UNTYPED_SORTS = [
     pytest.param(["10", "apple", "9"], None, ["10", "9", "apple"], id="mixed-is-text"),
     pytest.param(["inf", "5"], None, ["5", "inf"], id="non-finite-is-text"),
     pytest.param(["10", "9"], SortableCastType.TEXT, ["10", "9"], id="explicit-text"),
+    pytest.param(
+        [_LATER_UTC_DATEDICT, _EARLIER_OFFSET_DATEDICT],
+        None,
+        [_EARLIER_OFFSET_DATEDICT, _LATER_UTC_DATEDICT],
+        id="date-dicts-by-moment",
+    ),
 ]
 
 

@@ -329,6 +329,18 @@ A rule without a `type` sorts as `decimal` only when every present value (and th
 `default`) casts to a finite number; one text or non-finite value makes the whole rule
 sort as text, so mixed values never interleave numeric and lexical order.
 
+`datebuilder` emits a `DateDict` (`riko/types/_scalars.py`, a member of the `Item`
+union) built by `datetime_to_datedict` (`riko/coercion/_dates.py`) straight from the
+aware datetime, never through a `struct_time` (which loses unnamed offsets, DST folds,
+and maps ambiguous abbreviations to the wrong zone). `timezone` is a slashed IANA name,
+`"UTC"`, or `"UTC±HH:MM[:SS]"`; a slashless legacy zone (`EST`) falls back to its
+offset. Only `utime` and `utc_offset` are read back (`datedict_to_datetime`), so the
+part fields cannot move the moment. `is_datedict` accepts exactly the `DateDict` keys,
+integer `utime`/`utc_offset`, and a valid `timezone` label; `cast_datetime` branches on
+it, and an untyped `sort` rule keys a date dict by `utime`. `datebuilder`'s `OPTS` set
+`"emit": False` because processors default `emit` to `is_mapping`, which would replace
+the item with the dict.
+
 Feed entries resolve dates through `resolve_date` (`riko/rss/feeds.py`): the first
 usable value among the parser's `*_parsed` key and the raw string, parsed by
 `resolve_aware_datetime` when it is a string. A key is read only when the entry carries
