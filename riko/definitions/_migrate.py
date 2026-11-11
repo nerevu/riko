@@ -15,9 +15,6 @@ from itertools import chain, pairwise
 from math import isfinite
 from typing import TYPE_CHECKING, cast
 
-from fastjsonschema import JsonSchemaValueException
-from fastjsonschema import compile as fjs_compile
-
 from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_keys_and_values, map_values
@@ -93,7 +90,6 @@ _V1_INPUT_SCHEMAS: dict[str, InputSchema] = {
     "float": _NUMBER_SCHEMA,
     "decimal": _NUMBER_SCHEMA,
     "bool": {"type": "boolean"},
-    "url": {"type": "string", "format": "uri"},
 }
 
 _optional_mapping = def_from_require(require_mapping)
@@ -233,18 +229,6 @@ def _parse_v1_default(json_type: JSONValue, text: str) -> JSONValue:
     return parsed
 
 
-def _is_accepted(schema: InputSchema, value: JSONValue) -> bool:
-    """Whether ``schema`` accepts ``value``."""
-    try:
-        fjs_compile(schema)(value)
-    except JsonSchemaValueException:
-        accepted = False
-    else:
-        accepted = True
-
-    return accepted
-
-
 def _build_v1_input_schema(v1_type: object, default: object) -> InputSchema:
     """
     Builds an input's schema from a ``PipeDef`` input type and default.
@@ -258,10 +242,8 @@ def _build_v1_input_schema(v1_type: object, default: object) -> InputSchema:
         schema = typed
     elif (parsed := _parse_v1_default(typed["type"], str(default))) is None:
         schema = {**_STRING_SCHEMA, "default": str(default)}
-    elif _is_accepted(typed, parsed):
-        schema = {**typed, "default": parsed}
     else:
-        schema = {**_STRING_SCHEMA, "default": str(default)}
+        schema = {**typed, "default": parsed}
 
     return schema
 
@@ -271,9 +253,9 @@ def migrate_input_conf(conf: Conf) -> tuple[str, InputSchema, InputRawConf]:
     Migrates a ``PipeDef`` ``input`` module's configuration into a workflow input.
 
     Converts the module's ``type`` as follows: ``int`` to integer, ``float`` and
-    ``decimal`` to number, ``bool`` to boolean, and ``url`` to URI string. Converts the
-    default to match. Any other type, or a default that does not convert, produces a
-    string schema. The node keeps its ``type``.
+    ``decimal`` to number, and ``bool`` to boolean. Converts the default to match. Any
+    other type (``url`` included, since the node casts it), or a default that does not
+    convert, produces a string schema. The node keeps its ``type``.
 
     Args:
 

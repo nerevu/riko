@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ModuleNode,
     PublishEdge,
@@ -1062,7 +1063,6 @@ MALFORMED_DOCUMENTS = [
 _TYPED = {"type": "text", "value": "int"}
 _INT = {"type": "integer"}
 _STR = {"type": "string"}
-_URI = {"type": "string", "format": "uri"}
 
 MIGRATED_INPUTS = [
     pytest.param(
@@ -1098,8 +1098,7 @@ V1_TYPED_DEFAULTS = [
     pytest.param("decimal", "2", {"type": "number", "default": 2.0}, id="decimal"),
     pytest.param("bool", "Yes", {"type": "boolean", "default": True}, id="bool"),
     pytest.param("bool", "maybe", {**_STR, "default": "maybe"}, id="unparseable-bool"),
-    pytest.param("url", "file://a.xml", {**_URI, "default": "file://a.xml"}, id="url"),
-    pytest.param("url", "a b", {**_STR, "default": "a b"}, id="non-uri-url"),
+    pytest.param("url", "file://a.xml", {**_STR, "default": "file://a.xml"}, id="url"),
     pytest.param("date", "10/14/2010", {**_STR, "default": "10/14/2010"}, id="date"),
     pytest.param("text", "", {**_STR, "default": ""}, id="text"),
 ]
@@ -1396,6 +1395,12 @@ class TestMigrate:
         assert isinstance(node, ModuleNode)
         assert flow.input_schemas == {"q": schema}
         assert node.conf["type"] == {"type": "text", "value": v1_type}
+
+    def test_migrated_url_input_accepts_a_schemeless_host(self):
+        conf = {"name": "u", "type": "url"}
+        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        pipeline = Pipeline(flow).with_context(Context(inputs={"u": "example.com"}))
+        assert list(pipeline) == ["http://example.com"]
 
 
 class TestSerialize:

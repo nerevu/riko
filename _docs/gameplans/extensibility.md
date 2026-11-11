@@ -431,8 +431,9 @@ writes the merged schema, so a stored document stays self-describing.
 whether the input is required, and every field that uses it: one view, never a
 module-side and a workflow-side copy. Until R4E, every referenced input needs a written
 schema. A migrated `PipeDef` `input` module's v1 cast type maps
-into its schema (`int` → integer, `float`/`decimal` → number, `bool` → boolean, `url` →
-URI string; free-form types such as `date` stay strings the node casts).
+into its schema (`int` → integer, `float`/`decimal` → number, `bool` → boolean;
+free-form types such as `url` and `date` stay strings the node casts, so a schemeless
+host passes the schema and the node turns it into an `http://` URL).
 
 A hand-written workflow module declares the same facts on its pipe (shipped 2026-11-09).
 `riko.ext.workflow` tags the pipe; its keyword-only `input_schemas=None` and
