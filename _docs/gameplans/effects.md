@@ -81,6 +81,9 @@ ReadNode / WriteNode
 Target does not own live clients. Resource bindings do not become durable Target data.
 Write mode, keys, reconciliation policy, or per-operation idempotency options belong to
 the write operation, not to reusable Target identity unless genuinely target-wide.
+`ActionNode.params` holds its raw mapping with no key contract yet; once this phase
+declares its TypedDict, the field's validator is `validator_from_typed_dict`
+(`riko/base/_require_guards.py`), kept for that slot (see cache.md § 3).
 
 Concrete Target granularity follows actual backends/providers:
 

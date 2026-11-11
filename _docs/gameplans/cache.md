@@ -50,6 +50,11 @@ Consequences:
 - Pipeline immutability does not imply cached contents are immutable;
 - cache contents are never serialized into Workflow v2;
 - the cache backend/resource is infrastructure, not the dataflow value itself;
+- `CacheNode.policy` (`riko/definitions/_nodes.py`) holds a raw mapping with no key
+  contract yet; when this phase declares the policy TypedDict, the field's validator is
+  `validator_from_typed_dict` (`riko/base/_require_guards.py`), kept uncalled for that
+  slot (2026-11-11 ruling; `SubscribeNode.policy` and `ActionNode.params` are the
+  sibling slots under their own owners);
 - seekability/replayability of a source is distinct from caching;
 - temporary buffering used by an operator is not cross-execution caching;
 - provider/HTTP transport caches do not satisfy `Pipeline.cache()` semantics;

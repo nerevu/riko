@@ -164,6 +164,9 @@ pipeline = pipeline.publish(events)
 
 Canonical Workflow v2 represents this with a `SubscribeNode` and one or more incoming
 `PublishEdge`s. The subscription node owns `buffer_size`, `overflow`, and error policy.
+`SubscribeNode.policy` holds that mapping with no key contract yet; once this phase
+declares its TypedDict, the field's validator is `validator_from_typed_dict`
+(`riko/base/_require_guards.py`), kept for that slot (see cache.md § 3).
 Multiple incoming publish edges structurally define the publisher set and therefore
 completion semantics.
 
