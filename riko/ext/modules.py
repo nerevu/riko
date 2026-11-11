@@ -31,7 +31,6 @@ from riko.coercion import _configs
 from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.modules._decorators import operator, processor, splitter
-from riko.modules._metadata import get_module_category
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._registrations import temporary_registrations
 from riko.types._enums import ModuleName, ModuleNameLike
@@ -130,7 +129,6 @@ __all__ = [
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
     "get_conf_type",
-    "get_module_category",
     "normalize_module_name",
     "operator",
     "processor",

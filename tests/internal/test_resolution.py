@@ -27,7 +27,11 @@ from riko.definitions._workflow_definition import Workflow
 from riko.modules import describe_module
 from riko.modules import regex as regex_module
 from riko.modules import tokenizer as tokenizer_module
-from riko.modules._metadata import get_module_metadata, list_modules
+from riko.modules._metadata import (
+    get_module_metadata,
+    list_module_metadata,
+    list_modules,
+)
 from riko.modules.truncate import pipe as truncate
 from riko.runtime._importutils import require_interface
 from riko.runtime._module_registry import (
@@ -116,7 +120,9 @@ class TestWorkflowDecorator:
         assert truncate.type == "operator"
         assert truncate.name == "truncate"
         assert tagged.type == "pipe"
-        assert get_module_metadata("truncate", strict=True).type == "operator"
+        metadata = get_module_metadata("truncate")
+        assert metadata is not None
+        assert metadata.type == "operator"
 
     def test_is_subpipe_narrows_an_untyped_value(self):
         values: list[object] = [workflow(subtype="transformer")(truncate), truncate]
@@ -392,7 +398,7 @@ class TestPublicRegister:
     def test_registered_module_metadata_matches_the_catalog(self, fixed_registry):
         register_module(ModuleDefinition.from_module(tokenizer_module, name=_NAME))
         metadata = get_module_metadata(_NAME)
-        catalog = {entry.name: entry for entry in list_modules(show_metadata=True)}
+        catalog = {entry.name: entry for entry in list_module_metadata()}
         assert metadata is not None
         assert metadata.name == _NAME
         assert metadata == catalog[_NAME]
@@ -922,7 +928,7 @@ class TestCatalog:
     def test_list_modules_filters_by_provider(self, fixed_registry):
         pipe = _pipe_wrapper(name=_NAME, **_META)
         fixed_registry.register(ModuleDefinition(name=_NAME, sync_pipe=pipe))
-        metadata = list_modules(provider="acme", show_metadata=True)
+        metadata = list_module_metadata(provider="acme")
 
         assert list_modules(provider="acme") == [_NAME]
         assert metadata[0].provider == "acme"

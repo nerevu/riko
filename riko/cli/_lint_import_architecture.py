@@ -250,7 +250,7 @@ def load_architecture_report(
                     ArchitectureViolation,
                     path=ref.path,
                     line=ref.line,
-                    source_name=module.name,
+                    source_name=ref.importer,
                     source_label=source_layer,
                     target_name=ref.imported,
                     target_label=target_layer,

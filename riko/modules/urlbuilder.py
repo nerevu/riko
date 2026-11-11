@@ -29,10 +29,10 @@ Attributes:
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urljoin
 
+from riko.base._guards import is_mapping
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.types._enums import BasicCastType
@@ -41,6 +41,7 @@ from ._decorators import processor
 from ._textops import INVALID_FILECHAR_PATTERN
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from logging import Logger
 
     from riko.coercion._configs import UrlBuilderObjconf
@@ -95,7 +96,7 @@ def parser(
     """
     if isinstance(objconf.path, str):
         paths = [objconf.path]
-    elif isinstance(objconf.path, Mapping):
+    elif is_mapping(objconf.path):
         logger.error(f"Path should be a string or list of strings, not {objconf.path}")
         paths = []
     elif objconf.path:

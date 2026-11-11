@@ -155,7 +155,7 @@ rejects negative and NaN values; `_env_encoding` rejects an encoding `codecs.loo
 does not know. A malformed or out-of-range value logs a warning and keeps the default,
 so a bad environment never fails a later run.
 
-Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a
+Sync text decoding goes through `riko/io/_reencode.py`: callers build a
 `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract
 `Reencoder` base, whose `join_char` is the empty value of its output type. An empty
 source reads as empty. A decoded source whose raw first line does not end in the encoded
@@ -405,9 +405,9 @@ ROADMAP §23.
 
 ## 24. Module discovery (shipped)
 
-Module discovery is the derived catalog. `list_modules()` /
-`list_modules(show_metadata=True)` (defined in `riko/modules/_metadata.py`, re-exported
-from the stable `riko` surface) discover built-in pipes via `pkgutil` and read
+Module discovery is the derived catalog. `list_modules()` / `list_module_metadata()`
+(defined in `riko/modules/_metadata.py`, re-exported from the stable `riko` surface;
+both take the same filters) discover built-in pipes via `pkgutil` and read
 `ModuleMetadata` off the decorator-set wrapper attributes (`type`, `subtype`, `subtypes`
 as a `frozenset`, `pollable`); subtype is derived (see `get_module_subtypes` in
 `riko/modules/_derive.py`). The catalog is derived, not declared. Since P8 it
@@ -420,8 +420,8 @@ reserved for built-ins; dotted namespaces for extensions.
 both on the stable `riko` surface) give filtered runtime truth.
 **The three filter axes are all lowercase `Literal` strings, not enums** —
 `ModuleType = Literal["operator","processor","splitter"]`, `ModuleSubtype`, and
-`ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
-return value) — so `list_modules(category="sink")` → `["write"]`. These are a
+`ModuleCategory = Literal["source","transform","sink"]` (the `ModuleMetadata.category`
+value) — so `list_modules(category="sink")` → `["write"]`. These are a
 **separate axis** from the discovery-tree identifier enums
 (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value` is the module id, for
 `Pipeline.from_module(...)`/`|` chaining): don't confuse them. In particular
@@ -429,7 +429,7 @@ return value) — so `list_modules(category="sink")` → `["write"]`. These are 
 lowercase singular. (The codegen maps the three category strings to the plural bucket
 **class** names via `_CANONICAL` =
 `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`get_module_category` (`riko/modules/_metadata.py`, on `riko.ext`) buckets each module
+The `ModuleMetadata.category` property (`riko/types/modules.py`) buckets each module
 by **data-flow capability only**. `SINK_NAMES` (`{"output","write"}`) is the
 *criterion*, not the membership: a module is a `Sink` iff its name is in that set. The
 one built-in match is the `write` module (`riko/modules/write.py`) — a pass-through
@@ -670,7 +670,7 @@ The node/edge model, `Endpoint`, and `Workflow` are all `attrs @define(frozen, s
 classes. The six node families share a public **`RikoNode`** base
 (`id`/`name`/`resources`/`label` + a `family` `ClassVar` discriminant) and
 **self-normalize through `field(converter=…)`**: each field resolves its enum
-(`Backends`/`Formats`/`WriteMode` via `resolve_enum`), normalizes resource bindings, or
+(`Backends`/`Formats`/`WriteMode` via `require_enum`), normalizes resource bindings, or
 freezes its `conf`/`policy`/`params` mapping — so constructing a node *is*
 canonicalizing it, and no separate builder is required.
 `ReadNode`/`WriteNode`/`ActionNode` carry declarative
@@ -683,9 +683,9 @@ own structural checks (see R4A.3). Omitted `Workflow` fields take module-level
 `_EMPTY_*` defaults; an explicit `None` raises for every field (attrs applies the
 default before the converter, so a `None` reaching a converter was passed explicitly;
 `nodes_converter` passes its own `_EMPTY_NODES` default through by identity, and
-`resources` uses `normalize_strs(..., strict=True)`). Converter helpers advertise their
-input type statically: `narrow_from_require`/`narrow_def_from_require` take a
-keyword-only `accepted` type form, and a bound class (`InstanceRequire[T, R]`,
+`resources` checks `require_strlike` before `normalize_strs`). Converter helpers
+advertise their input type statically: `narrow_from_require`/`narrow_def_from_require`
+take a keyword-only `accepted` type form, and a bound class (`InstanceRequire[T, R]`,
 `cls: type[R]`) infers the result for `require_instance`; `def_from_require`'s overloads
 carry the `TypeRequire`/`InstanceRequire` narrowing while its body calls
 `require(*args, value, ...)` (protocols that differ only in `__call__` cannot be told
@@ -699,7 +699,7 @@ type form: it flattens aliases, unions, and `Annotated` with `gen_union_members`
 `require_instance` and a lone TypedDict to `require_from_typed_dict`, accepts a union
 member by `isinstance` (any mapping matches a TypedDict member, keys unchecked), accepts
 a `Literal` arm's values by type and equality (so `True` never passes for `1`; a pure
-`Literal` raises `resolve_enum`-style "Expected one of"), and raises `TypeError` for any
+`Literal` raises `require_enum`-style "Expected one of"), and raises `TypeError` for any
 other form when the guard is built. `CallOptions.count` and `fromdict`'s `Literal`
 fields both validate through it. `require_from_typed_dict` and `require_from_attrs` both
 reduce to `require_from_keys(required, allowed)`; in both, `exclude=` forbids a key.

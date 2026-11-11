@@ -43,18 +43,15 @@ def temporary_registrations() -> Generator[None]:
 
     Examples:
 
-        >>> from pathlib import Path
-        >>> from tempfile import TemporaryDirectory
-        >>> from riko import Pipeline
+        >>> from riko import Pipeline, get_temp_path
         >>> from riko.ext import register_workflow_store
         >>>
         >>> conf = {"attrs": {"key": "greeting", "value": "hello"}}
         >>> greet = Pipeline.from_module("itembuilder", conf=conf)
         >>>
-        >>> with TemporaryDirectory() as tmp, temporary_registrations():
-        ...     path = Path(tmp) / "pipe_greet.json"
+        >>> with get_temp_path("pipe_greet.json") as path, temporary_registrations():
         ...     _ = path.write_bytes(greet.workflow.serialize())
-        ...     register_workflow_store(directory=Path(tmp), replace=True)
+        ...     register_workflow_store(directory=path.parent, replace=True)
         ...     list(Pipeline.from_module("pipe:greet"))
         [{'greeting': 'hello'}]
 

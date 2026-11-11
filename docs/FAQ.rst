@@ -312,12 +312,12 @@ Notes
 How do I discover installed modules?
 ------------------------------------
 
-Use ``list_modules()``. The catalog is derived from the modules installed in
-``riko.modules`` and its metadata is read off each implementation.
+Use ``list_modules()`` for names, or ``list_module_metadata()`` (same filters) for
+metadata. The catalog is derived from the modules installed in ``riko.modules``.
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_formats, Modules
+    >>> from riko import list_formats, list_module_metadata, list_modules, Modules
     >>>
     >>> list_modules()[0]
     'aggregate'
@@ -349,7 +349,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> len(list_modules(category='source'))
     14
     >>> # Full module metadata
-    >>> metadata = list_modules(show_metadata=True)[0]
+    >>> metadata = list_module_metadata()[0]
     >>> metadata.name, metadata.type, metadata.subtype
     ('aggregate', 'operator', 'composer')
     >>> # Available export formats ('ofx'/'qif' only available once installing the

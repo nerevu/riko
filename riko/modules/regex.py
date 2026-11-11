@@ -29,7 +29,6 @@ Attributes:
 from __future__ import annotations
 
 from functools import reduce
-from itertools import repeat
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, cast
 
@@ -66,7 +65,7 @@ def _resolve_text(result: Substitution, default: str | None) -> str:
 
 
 def _process_rules(rules: Sequence[RegexConfRule]) -> Iterator[Sequence[RegexRule]]:
-    regex_rules = map(build_regex_rule, rules, repeat(True))
+    regex_rules = map(build_regex_rule, rules)
     grouped = group_by(regex_rules, "field", ignore_case=True)
     return map(itemgetter(1), grouped)
 
@@ -205,20 +204,21 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
                 match (str): Regex to search for.
 
-                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
-                    capture groups.
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to capture
+                    groups.
+
+                nativereplace (bool): Whether ``replace`` uses Python's ``re`` syntax
+                    rather  than ``$N`` group references. (default: False).
 
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
-                singlelinematch (bool): Whether to replace only the first match
-                    and confine ``^``, ``$`` and ``.`` to one line
-                    (default: False).
+                singlelinematch (bool): Whether to replace only the first match and
+                    confine ``^``, ``$``, and ``.`` to one line (default: False).
 
-                seriesmatch (bool): Whether this rule rewrites the previous
-                    rule's output. Consecutive rules with ``seriesmatch`` False
-                    all match the original text in one pass, leftmost match
-                    first (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous rule's
+                    output. Consecutive rules with ``seriesmatch`` False all match the
+                    original text in one pass, leftmost match first (default: True).
 
             default (dict): Value per field to use when none of the field's
                 rules matches (default: {}, i.e. keep the original).
@@ -288,20 +288,21 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
                 match (str): Regex to search for.
 
-                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
-                    capture groups.
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to capture
+                    groups.
+
+                nativereplace (bool): Whether ``replace`` uses Python's ``re`` syntax
+                    rather  than ``$N`` group references. (default: False).
 
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
-                singlelinematch (bool): Whether to replace only the first match
-                    and confine ``^``, ``$`` and ``.`` to one line
-                    (default: False).
+                singlelinematch (bool): Whether to replace only the first match and
+                    confine ``^``, ``$``, and ``.`` to one line (default: False).
 
-                seriesmatch (bool): Whether this rule rewrites the previous
-                    rule's output. Consecutive rules with ``seriesmatch`` False
-                    all match the original text in one pass, leftmost match
-                    first (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous rule's
+                    output. Consecutive rules with ``seriesmatch`` False all match the
+                    original text in one pass, leftmost match first (default: True).
 
             default (dict): Value per field to use when none of the field's
                 rules matches (default: {}, i.e. keep the original).

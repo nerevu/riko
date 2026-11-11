@@ -58,15 +58,14 @@ Examples:
 
     Basic usage::
 
-        >>> from pathlib import Path
-        >>> from tempfile import TemporaryDirectory
+        >>> from riko import get_temp_path
         >>> from riko.ext import temporary_registrations
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
         >>>
-        >>> with TemporaryDirectory() as tmp, temporary_registrations():
-        ...     _ = (Path(tmp) / "pipe_demo.json").write_text(document)
-        ...     register_workflow_store(directory=Path(tmp), replace=True)
+        >>> with get_temp_path("pipe_demo.json") as path, temporary_registrations():
+        ...     _ = path.write_text(document)
+        ...     register_workflow_store(directory=path.parent, replace=True)
         ...     pipe = workflow_resolver.require("pipe:demo")
         ...     next(iter(pipe()))
         {'forever': True}
@@ -612,15 +611,13 @@ class WorkflowResolver:
 
         Examples:
 
-            >>> from pathlib import Path
-            >>> from tempfile import TemporaryDirectory
+            >>> from riko import get_temp_path
             >>>
             >>> document = '{"nodes": [{"name": "forever"}]}'
             >>> resolver = WorkflowResolver()
-            >>> with TemporaryDirectory() as tmp:
-            ...     directory = Path(tmp)
-            ...     _ = (directory / "pipe_demo.json").write_text(document)
-            ...     flow = resolver.load_workflow("pipe:demo", directory=directory)
+            >>> with get_temp_path("pipe_demo.json") as path:
+            ...     _ = path.write_text(document)
+            ...     flow = resolver.load_workflow("pipe:demo", directory=path.parent)
             >>> flow.dependencies
             ('forever',)
 

@@ -19,7 +19,16 @@ BADO = frozenset(
     }
 )
 
-IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
+IO_ = frozenset(
+    {
+        "async_get_temp_file",
+        "async_get_temp_path",
+        "async_url_open",
+        "async_write",
+        "get_temp_file",
+        "get_temp_path",
+    }
+)
 
 EXPORT = frozenset({"Formats", "export", "list_formats"})
 
@@ -46,6 +55,7 @@ OTHER = frozenset(
         "Endpoint",
         "ExecutionSettings",
         "Executor",
+        "FeedType",
         "IdentityMode",
         "RikoNode",
         "OneShotResource",
@@ -60,7 +70,7 @@ OTHER = frozenset(
         "WorkflowModule",
         "WriteMode",
         "get_path",
-        "get_temp_file",
+        "list_module_metadata",
         "list_modules",
     }
 )
@@ -116,7 +126,6 @@ EXT_MODULES = frozenset(
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
         "get_conf_type",
-        "get_module_category",
         "normalize_module_name",
         "operator",
         "processor",
@@ -201,6 +210,7 @@ TYPES = frozenset(
         "RawCallOptions",
         "Stream",
         "SyncPipeTuples",
+        "FeedTypeLike",
         "UserAgentLike",
     }
 )

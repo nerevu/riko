@@ -660,7 +660,7 @@ then see the following output in your terminal:
 .. code-block:: bash
 
     Deadline to clear up health law eligibility near
-    682
+    692
 
 The ``examples`` directory bundles more runnable pipe scripts. E.g., try ``run-pipe
 usage``, ``run-pipe simple1``, or ``run-pipe wired``. The `Cookbook`_ covers the

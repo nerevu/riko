@@ -20,14 +20,18 @@ Examples:
 from __future__ import annotations
 
 from codecs import getincrementaldecoder
+from contextlib import asynccontextmanager
 from io import BufferedIOBase, BytesIO, StringIO, TextIOBase, TextIOWrapper
+from pathlib import Path
+from shutil import rmtree
+from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Literal, overload
 
 from meza.fntools import chunk as _chunk
 from typing_extensions import TypeIs
 
 from riko.bado._backend import NamedTemporaryFile, async_open
-from riko.bado._util import async_get, async_read
+from riko.bado._util import async_get, async_read, asyncify
 from riko.base._config import ENCODING, settings
 from riko.base._logging import get_logger
 from riko.base._paths import is_http_url, normalize_url
@@ -35,7 +39,15 @@ from riko.base._paths import is_http_url, normalize_url
 from ._sync import ext_from_content_type
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Generator, Iterable, Iterator
+    from collections.abc import (
+        AsyncGenerator,
+        Awaitable,
+        Callable,
+        Generator,
+        Iterable,
+        Iterator,
+    )
+    from contextlib import AbstractAsyncContextManager
     from logging import Logger
 
     from _typeshed import OpenBinaryMode, OpenTextMode
@@ -533,3 +545,54 @@ def async_get_temp_file() -> NamedTemporaryFile[bytes]:
 
     """
     return NamedTemporaryFile(delete=True, delete_on_close=False)
+
+
+@asynccontextmanager
+async def _gen_temp_path(filename: str, delete: bool) -> AsyncGenerator[Path]:
+    """Generates an unoccupied path in a fresh directory that is removed on exit."""
+    tmpdir = Path(await asyncify(mkdtemp))
+
+    try:
+        yield tmpdir / filename
+    finally:
+        if delete:
+            await asyncify(rmtree, tmpdir, ignore_errors=True)
+
+
+def async_get_temp_path(
+    filename: str = "tmp", *, delete: bool = True
+) -> AbstractAsyncContextManager[Path]:
+    """
+    Gets a temporary path in a fresh directory.
+
+    The path and its directory are removed when exiting the async context manager.
+
+    Kwargs:
+
+        filename: The path's file name, e.g. ``"items.csv"`` (default: "tmp").
+        delete: Whether the context's exit removes the path (default: True).
+
+    Returns:
+
+        An async context manager for the unoccupied temporary path.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>> from riko import run
+        >>>
+        >>> async def main():
+        ...     async with async_get_temp_path("greeting.txt") as temp_path:
+        ...         print(temp_path.exists())
+        ...         await async_write(temp_path, StringIO("hi"), mode="w")
+        ...         print(temp_path.read_text())
+        ...
+        ...     print(temp_path.exists())
+        >>>
+        >>> run(main)
+        False
+        hi
+        False
+
+    """
+    return _gen_temp_path(filename, delete)

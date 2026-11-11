@@ -1303,11 +1303,34 @@ class TestExchangeRate:
     @pytest.mark.parametrize("rate", [None, MISSING], ids=["null", "absent"])
     def test_a_missing_rate_warns_and_is_nan(self, rate, caplog):
         """A currency with no rate in the response yields ``NaN`` and logs a warning."""
-        raw = {"USD": 1} if rate is MISSING else {"USD": 1, "XYZ": rate}
-        rates = exchangerate_module.build_rates(**raw)
+        build_rates = exchangerate_module.build_rates
+        rates = build_rates(USD=1) if rate is MISSING else build_rates(USD=1, XYZ=rate)
         rate = exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
         assert rate.is_nan()
         assert "USD/XYZ rate not found in rates" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("extra", "warns"),
+        [({"verbose": True}, True), ({"verbose": False}, False), ({}, False)],
+        ids=["verbose", "quiet", "default"],
+    )
+    @pytest.mark.parametrize("isasync", [False, True], ids=["sync", "async"])
+    @async_test
+    async def test_an_unparseable_rate_warns_only_when_verbose(
+        self, extra, warns, isasync, tmp_path, caplog
+    ):
+        """A bad rate elsewhere in the response warns only with ``verbose`` set."""
+        rates_path = tmp_path / "rates.json"
+        rates_path.write_text('{"rates": {"USD": 1, "GBP": 2, "XYZ": "bad"}}')
+        conf = {"url": str(rates_path), "currency": "USD", "precision": 1}
+        objconf = ExchangeRateObjconf({**conf, **extra})
+        if isasync:
+            rate = await exchangerate_module.async_parser("GBP", None, objconf)
+        else:
+            rate = exchangerate_module.parser("GBP", None, objconf)
+
+        assert str(rate) == "0.5"
+        assert ("invalid rate: 'bad'" in caplog.text) is warns
 
     @pytest.mark.parametrize(("document", "match"), MISSING_RATES)
     def test_a_response_without_rates_raises(self, document, match):

@@ -48,7 +48,12 @@ from riko.base._exceptions import (
     IdentityEncodingError,
     InvalidPipelineError,
 )
-from riko.base._graph import cyclic_nodes, descendants, topological_sort
+from riko.base._graph import (
+    cyclic_nodes,
+    descendants,
+    native_topological_sort,
+    topological_sort,
+)
 from riko.base._guards import require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
@@ -66,7 +71,7 @@ from riko.base._require_guards import (
     typed_dict_keys,
 )
 from riko.base._sentinels import MISSING
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
@@ -1225,9 +1230,9 @@ class TestGraph:
         with pytest.raises(KeyError):
             descendants("c", {"a": {"b"}})
 
-    def test_topological_sort_strict_raises_on_a_cycle(self):
+    def test_native_topological_sort_raises_on_a_cycle(self):
         with pytest.raises(CycleError):
-            topological_sort({"a": {"b"}, "b": {"a"}}, strict=True)
+            native_topological_sort({"a": {"b"}, "b": {"a"}})
 
 
 class TestGraphIndex:
@@ -1336,15 +1341,15 @@ class TestRequireFromForm:
             require_from_form(list[str] | dict[str, int])
 
 
-class TestResolveEnum:
+class TestRequireEnum:
     @pytest.mark.parametrize("value", [None, "bogus"])
-    def test_resolve_enum_defaults_to_the_document_error(self, value):
+    def test_require_enum_defaults_to_the_document_error(self, value):
         with pytest.raises(InvalidPipelineError, match="WriteMode"):
-            resolve_enum(WriteMode, value)
+            require_enum(WriteMode, value)
 
-    def test_resolve_enum_lists_the_accepted_values(self):
+    def test_require_enum_lists_the_accepted_values(self):
         with pytest.raises(ValueError, match="'bogus'") as excinfo:
-            resolve_enum(Executor, "bogus", error=ValueError)
+            require_enum(Executor, "bogus", error=ValueError)
 
         assert all(name in str(excinfo.value) for name in Executor)
 

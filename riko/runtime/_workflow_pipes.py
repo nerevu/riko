@@ -102,7 +102,7 @@ def _normalize_dependencies(value: Iterable[str] | None) -> tuple[str, ...] | No
         is_many = isinstance(value, Iterable) and not isinstance(value, str)
         unique = dict.fromkeys(value) if is_many else value
         what = "workflow 'dependencies'"
-        names = sort_stably(normalize_strs(unique, what=what, strict=True))
+        names = sort_stably(normalize_strs(unique, what=what))
 
     return names
 

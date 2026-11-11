@@ -28,7 +28,6 @@ from riko.definitions._nodes import (
 from riko.definitions._targets import FileTarget
 from riko.definitions._write import WriteCapabilities
 from riko.modules._decorators import operator, processor, splitter
-from riko.modules._metadata import get_module_category
 from riko.runtime._module_registry import ModuleRegistry, register_module
 from riko.runtime._registrations import temporary_registrations
 from riko.runtime._target_registry import TargetRegistry, register_target
@@ -91,7 +90,6 @@ __all__ = [
     "WriteCapabilities",
     "WriteNode",
     "get_conf_type",
-    "get_module_category",
     "normalize_module_name",
     "operator",
     "processor",

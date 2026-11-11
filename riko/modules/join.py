@@ -30,7 +30,6 @@ Attributes:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from meza.process import merge
@@ -121,7 +120,7 @@ def parser(
     other = require_arg(other, "other", "join", strict=True)
 
     def compare(x: Item, y: Item, x_key: str, y_key: str) -> bool:
-        if isinstance(x, Mapping) and isinstance(y, Mapping):
+        if is_mapping(x) and is_mapping(y):
             x_value, y_value = x.get(x_key, MISSING), y.get(y_key, MISSING)
 
             if x_value is MISSING or y_value is MISSING:

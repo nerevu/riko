@@ -216,7 +216,7 @@ AUTO
 
 in the generated CSV. Recording AUTO as FALSE would continue the current ambiguity.
 
-## 3. Build the generator around list_modules
+## 3. Build the generator around list_module_metadata
 
 The generator should consume the same catalog used by the public discovery API rather
 than scanning modules independently.
@@ -233,7 +233,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from riko.modules import list_modules
+from riko import list_module_metadata
 from riko.types.modules import ModuleMetadata
 ```
 
@@ -272,7 +272,7 @@ def load_manifest(path: Path) -> tuple[ManifestRow, ...]: ...
 
 
 def load_runtime_modules() -> dict[str, ModuleMetadata]:
-    modules = list_modules(show_metadata=True)
+    modules = list_module_metadata()
     return {module.name: module for module in modules}
 
 

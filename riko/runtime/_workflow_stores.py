@@ -229,14 +229,13 @@ class DirectoryStore:
 
     Examples:
 
-        >>> from pathlib import Path
-        >>> from tempfile import TemporaryDirectory
+        >>> from riko import get_temp_path
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
         >>>
-        >>> with TemporaryDirectory() as tmp:
-        ...     _ = (Path(tmp) / "pipe_demo.json").write_text(document)
-        ...     store = DirectoryStore(Path(tmp))
+        >>> with get_temp_path("pipe_demo.json") as path:
+        ...     _ = path.write_text(document)
+        ...     store = DirectoryStore(path.parent)
         ...     flow = store.load("pipe_demo")
         ...     missing = store.load("pipe_missing")
         >>> flow.dependencies

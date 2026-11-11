@@ -1044,7 +1044,6 @@ def normalize_strs(
     value: StrLike | None,
     what: str = "keys",
     *,
-    strict: bool = False,
     type_error: type[Exception] = InvalidPipelineError,
     value_error: type[Exception] = InvalidPipelineError,
 ) -> tuple[str, ...]:
@@ -1060,20 +1059,18 @@ def normalize_strs(
     Kwargs:
 
         what: How to name the keys in an error.
-        strict: Whether ``None`` is rejected rather than read as no keys.
         type_error: The error raised when ``value`` is not a string or iterable.
         value_error: The error raised for an empty, non-string, or duplicate key.
 
     Returns:
 
-        The keys as a tuple, empty when ``value`` is ``None`` and not ``strict``.
+        The keys as a tuple, empty when ``value`` is ``None``.
 
     Raises:
 
-        InvalidPipelineError: When ``value`` is not a string or iterable of
-            strings (including ``None`` when ``strict``), or a key is empty, not a
-            string, or a duplicate, unless ``type_error``/``value_error`` name other
-            errors.
+        InvalidPipelineError: When ``value`` is not a string or iterable of strings; or
+            a key is empty, not a string, or a duplicate (unless ``type_error``/
+            ``value_error`` name other errors).
 
     Examples:
 
@@ -1083,15 +1080,11 @@ def normalize_strs(
         ('a', 'b')
         >>> normalize_strs(None)
         ()
-        >>> normalize_strs(None, "names", strict=True)
-        Traceback (most recent call last):
-        ...
-        riko.exceptions.InvalidPipelineError: ...names must be a string or...
 
     """
-    if value is None and not strict:
+    if value is None:
         keys: tuple[str, ...] = ()
-    elif value is None or not isinstance(value, Iterable):
+    elif not isinstance(value, Iterable):
         raise type_error(f"{what} must be a string or iterable of strings")
     else:
         keys = (value,) if isinstance(value, str) else tuple(value)

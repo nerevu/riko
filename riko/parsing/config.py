@@ -17,14 +17,14 @@ Attributes:
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict
+from collections.abc import Callable, Sequence
 from functools import partial
 from time import struct_time
 from typing import TYPE_CHECKING, cast
 
 from riko.base._funcutils import map_values
 from riko.base._guards import is_dataclass_inst, is_mapping
+from riko.base._recordutils import serialize_dataclass
 from riko.base._sentinels import is_sentinel
 from riko.coercion._sequences import listize
 from riko.types._values import RikoValue
@@ -71,7 +71,7 @@ def conf_is_dynamic(conf: object, **kwargs: object) -> bool:
     """
     is_dynamic = False
 
-    if isinstance(conf, Mapping):
+    if is_mapping(conf):
         if "subkey" in conf or is_sentinel(conf, **kwargs):
             is_dynamic = True
         else:
@@ -135,7 +135,7 @@ def resolve_conf[VT](
     dd_conf = DotDict.dictize([])
 
     if is_dataclass_inst(conf):
-        d_conf: dict[str, VT] | VT | None = asdict(conf)
+        d_conf: dict[str, VT] | VT | None = serialize_dataclass(conf, compact=False)
     else:
         d_conf = conf
 

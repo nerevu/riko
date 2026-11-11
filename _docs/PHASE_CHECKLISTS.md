@@ -36,7 +36,7 @@ separate from the forward architecture dependency graph in
 | **P6** `ExecutionMode` | ✅ done | § P6 |
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `riko/ext/modules.py` facade over `riko/runtime/{_module_registry,_workflows,_resolver}.py`, `Resolver` protocol, symmetric dispatch |
-| **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `get_module_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
+| **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `ModuleMetadata.category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. Execution-wide wiring shipped with R4B: async nodes share one `Semaphore` budget per run; the sync pool honors `ordered`. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll`; reshaped by fanout/execution owners and sequenced as R7 after Pipeline execution foundations |
 | **P12** stable errors + events | ⏳ in progress | `RikoError` tree (`riko/base/_exceptions.py`) and the `EventSink` transport (`riko/types/_events.py`, exported) shipped; remaining: the feature-owned event payloads (cache, write/action results, pub/sub lifecycle, state) and optional consumers such as OpenTelemetry → [gameplans/events.md](gameplans/events.md) |
@@ -45,7 +45,7 @@ separate from the forward architecture dependency graph in
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's
 request). **P8 landed** (the M2 seam). **P9A is complete**, targeted for release
-v0.76.0: the generated `Modules` tree + `get_module_category` taxonomy +
+v0.76.0: the generated `Modules` tree + `ModuleMetadata.category` taxonomy +
 `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module` (on top of the v0.75.0
 prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync` inference). The
 remaining non-P9A P9 work is the installed-environment aggregate
@@ -392,7 +392,7 @@ to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_modules.py`.
 the canonical string ids — strings stay canonical everywhere (JSON, entry points,
 resolver); every enum member's `.value` **is** the id.
 
-- **Taxonomy (`get_module_category`, `riko/modules/_metadata.py`).** Pure/total
+- **Taxonomy (`ModuleMetadata.category`, `riko/types/modules.py`).** Pure/total
   `category` derivation from **data-flow capability only** (never the runtime
   `type`/`subtype` axis) into `ModuleCategory = Literal["source", "transform", "sink"]`
   (lowercase singular — this is the `list_modules(category=…)` filter vocabulary):

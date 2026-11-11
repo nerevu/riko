@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from riko.types._enums import CastType, FmtLike, LocationType, UserAgentLike
     from riko.types._io import PathLike
     from riko.types.modules import (
+        FeedTypeLike,
         FilterConfRule,
         FindConfRule,
         Func,
@@ -113,12 +114,14 @@ class ExchangeRateObjconf(DynamicConf):
     memoize: bool
     precision: int
     user_agent: UserAgentLike
+    verbose: bool
 
 
 class FeedAutoDiscoveryObjconf(DynamicConf):
     url: str
     strict: bool
     sort: bool
+    link_type: FeedTypeLike | list[FeedTypeLike]
     user_agent: UserAgentLike
 
 

@@ -99,6 +99,7 @@ class Defaults(TypedDict, total=False):
     type: str
     uniq_key: str
     url: str
+    verbose: bool
     wait: int
 
 
@@ -112,7 +113,6 @@ class DecorationOptions(TypedDict, total=False):
     field: str
     listize: bool
     objectify: bool
-    parse: bool
     pollable: bool
     skip_if: SkipIf
 
@@ -129,7 +129,6 @@ class SharedDecorationOptions(TypedDict, total=False):
     field: str
     listize: bool
     objectify: bool
-    parse: bool
 
 
 class OperatorDecorationOptions(SharedDecorationOptions, total=False):

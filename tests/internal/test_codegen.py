@@ -74,12 +74,7 @@ from riko.ext.codegen import (
     generate_module_ids,
     generate_module_names,
 )
-from riko.modules._metadata import (
-    describe_module,
-    gen_module_catalog,
-    get_module_category,
-    list_modules,
-)
+from riko.modules._metadata import describe_module, gen_module_catalog, list_modules
 from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
@@ -454,7 +449,7 @@ class TestPythonise:
 
 @pytest.fixture
 def categories() -> dict[str, ModuleCategory]:
-    return {md.name: get_module_category(md) for md in gen_module_catalog()}
+    return {md.name: md.category for md in gen_module_catalog()}
 
 
 class TestModuleCategory:
@@ -474,7 +469,7 @@ class TestModuleCategory:
     def test_sink_name_is_classified_as_sink(self):
         md = next(md for md in gen_module_catalog() if md.name == "fetch")
         renamed = dataclasses.replace(md, name="write")
-        assert get_module_category(renamed) == "sink"
+        assert renamed.category == "sink"
 
     @pytest.mark.xfail(
         strict=True,

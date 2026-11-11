@@ -149,17 +149,13 @@ def native_topological_sort[T: Hashable](
 
 
 def topological_sort[T: Hashable](
-    graph: Graph[T],
-    *,
-    reverse: bool | None = False,
-    strict: bool | None = False,
-    key: SortKey[T] = None,
+    graph: Graph[T], *, reverse: bool = False, key: SortKey[T] = None
 ) -> SCC[T]:
     """
     Orders a graph's nodes as groups, whether or not it has a cycle.
 
     An acyclic graph sorts into one-node groups, and a cyclic one falls back to its
-    strongly connected components unless ``strict`` is set.
+    strongly connected components.
 
     Args:
 
@@ -168,16 +164,11 @@ def topological_sort[T: Hashable](
     Kwargs:
 
         reverse: Whether to return the groups last first.
-        strict: Whether a cycle raises instead of falling back to components.
         key: Orders the nodes that become ready together in an acyclic graph.
 
     Returns:
 
         The nodes in topological order, grouped by strongly connected component.
-
-    Raises:
-
-        CycleError: If ``strict`` is set and the graph has a cycle.
 
     Examples:
 
@@ -208,9 +199,6 @@ def topological_sort[T: Hashable](
     try:
         nodes = native_topological_sort(graph, reverse=reverse, key=key)
     except CycleError:
-        if strict:
-            raise
-
         result = scc_sort(graph, reverse=reverse)
     else:
         result = [(node,) for node in nodes]

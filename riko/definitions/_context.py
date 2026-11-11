@@ -185,7 +185,9 @@ class Context:
 
         Kwargs:
 
-            credential: A credential reference for a factory.
+            credential: A credential reference for a factory. Not yet honored: a run
+                never resolves it, so the factory receives no credential.
+
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.
 

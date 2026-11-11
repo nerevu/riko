@@ -27,11 +27,11 @@ Index (file, then the subjects it owns, in file order):
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, RequireStream,
                               PreparedCall, PreparedNode
-    test_io.py                ReplayReader, LoadRssLinks, ParseRss, Fetch, AsyncUrlOpen,
-                              Reencode, ConversionFuncs, ChunkContent, AsyncMap,
-                              AsyncMapStream, AsyncMerge, GatherResults,
-                              CapabilityFlags, ConverterPath, Csv, Jsonl, Framed,
-                              SessionLifecycle, WriteExecution, Sink
+    test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
+                              AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
+                              TempPath, AsyncMap, AsyncMapStream, AsyncMerge,
+                              GatherResults, CapabilityFlags, ConverterPath, Csv, Jsonl,
+                              Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, SyncPipeAsyncInput,
                               ReturnInference, ModuleMetadata, WrapperMeta, Loop,
@@ -52,7 +52,7 @@ Index (file, then the subjects it owns, in file order):
                               ResolveAwareDatetime, DatetimeToDatedict, DotDict,
                               GetSkip, Any2dict, XmlParser, AugmentEntries, ResolveDate,
                               GenNonNull, Graph, GraphIndex, LoadSettings,
-                              RequireGuards, RequireFromForm, ResolveEnum,
+                              RequireGuards, RequireFromForm, RequireEnum,
                               NormalizeStrs, FieldNames, TypedDictKeys, Logging,
                               RikoError
 """

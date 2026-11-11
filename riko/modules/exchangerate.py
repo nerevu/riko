@@ -69,6 +69,7 @@ DEFAULTS: Defaults = {
     "url": EXCHANGE_API,
     "param": PARAMS,
     "encoding": ENCODING,
+    "verbose": False,
 }
 
 
@@ -86,12 +87,13 @@ def _parse_rate(value: object, verbose: bool = False) -> _ParsedRate:
     return rate, value
 
 
-def build_rates(**rates: object) -> dict[str, _ParsedRate]:
+def build_rates(*, verbose: bool = False, **rates: object) -> dict[str, _ParsedRate]:
     """
     Builds the parsed rates of a rates response.
 
     Kwargs:
 
+        verbose: Whether to log a warning for each unparseable rate.
         rates (object): The raw rate of each currency, keyed by currency code.
 
     Returns:
@@ -100,7 +102,7 @@ def build_rates(**rates: object) -> dict[str, _ParsedRate]:
         its raw value. Excludes ``None`` rates. They read as absent.
 
     """
-    return map_values(_parse_rate, rates, non_null=True)
+    return map_values(_parse_rate, rates, non_null=True, verbose=verbose)
 
 
 def require_rates(document: object) -> Mapping[str, object]:
@@ -179,8 +181,8 @@ async def async_parser(
 
         extraction: The extracted conf value. Unused.
 
-        objconf: The module configuration: `url`, `param`, `currency`, `precision`, and
-            `user_agent`.
+        objconf: The module configuration: `url`, `param`, `currency`, `precision`,
+            `user_agent`, and `verbose`.
 
     Returns:
 
@@ -223,7 +225,7 @@ async def async_parser(
 
     if _rates is not None:
         places = Decimal(10) ** -objconf.precision
-        rates = build_rates(**_rates)
+        rates = build_rates(verbose=objconf.verbose, **_rates)
         rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
@@ -241,8 +243,8 @@ def parser(
 
         extraction: The extracted conf value. Unused.
 
-        objconf: The module configuration: `url`, `param`, `currency`, `precision`, and
-            `user_agent`.
+        objconf: The module configuration: `url`, `param`, `currency`, `precision`,
+            `user_agent`, and `verbose`.
 
     Returns:
 
@@ -276,7 +278,7 @@ def parser(
         ) as f:
             _rates = require_rates(load(f))
             places = Decimal(10) ** -objconf.precision
-            rates = build_rates(**_rates)
+            rates = build_rates(verbose=objconf.verbose, **_rates)
             rate = get_cross_rate(base, objconf.currency, places=places, **rates)
 
     return rate
@@ -305,6 +307,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+
+            verbose (bool): Whether to log a warning for each rate in the response
+                that isn't a number. Any currency's bad rate warns, not just the
+                pair's (default: False).
 
             user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
                 ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
@@ -374,6 +380,10 @@ def pipe(*args: Any, **kwargs: object) -> Decimal:
             precision (int): Decimal places to round the rate to (default: 6).
             memoize (bool): Whether to cache the API response (default: True).
             encoding (str): Response encoding (default: "utf-8").
+
+            verbose (bool): Whether to log a warning for each rate in the response
+                that isn't a number. Any currency's bad rate warns, not just the
+                pair's (default: False).
 
             user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
                 ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per

@@ -170,8 +170,7 @@ class ExecutionExtras[V]:
     @property
     def kwargs(self) -> dict[str, Sequence[V] | ResourceView | ModuleWrapper]:
         """The fields that are set, keyed by name."""
-        values = asdict(self, recurse=False)
-        return dict(gen_non_null(values.items(), cmp_pos=1))
+        return asdict(self, recurse=False, filter=lambda _, value: value is not None)
 
     def map_others[R](self, func: Callable[[V], R]) -> ExecutionExtras[R]:
         """

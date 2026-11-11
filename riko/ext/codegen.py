@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 
 from riko.base._config import BUILTIN_PROVIDER
 from riko.base._strutils import get_codegen_note, ruff_format
-from riko.modules._metadata import gen_module_catalog, get_module_category
+from riko.modules._metadata import gen_module_catalog
 from riko.types.modules import get_module_provider
 
 if TYPE_CHECKING:
@@ -130,7 +130,7 @@ class NameEntry:
 def gen_catalog_entries() -> Iterator[NameEntry]:
     """Emits name entries from the runtime module catalog."""
     for md in sorted(gen_module_catalog(), key=lambda md: md.name):
-        yield NameEntry(name=md.name, category=get_module_category(md))
+        yield NameEntry(name=md.name, category=md.category)
 
 
 def _group(entries: Iterable[NameEntry]) -> dict[str, list[NameEntry]]:

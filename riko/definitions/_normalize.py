@@ -12,7 +12,6 @@ raises ``InvalidPipelineError``.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping
 from functools import partial
 from itertools import count, starmap
 from typing import TYPE_CHECKING, Any, cast, get_args
@@ -23,7 +22,7 @@ from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OTHER_PORT, OUTPUT_POR
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._graph import edges_to_graph, leaves
-from riko.base._guards import require_listlike, require_mapping
+from riko.base._guards import is_mapping, require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null, unzip
 from riko.base._recordutils import serialize_attrs
 from riko.base._require_guards import (
@@ -31,7 +30,6 @@ from riko.base._require_guards import (
     require_from_typed_dict,
     require_str,
 )
-from riko.types._frozendict import normalize_mapping
 from riko.types._workflow import (
     PORT_DIRECTIONS,
     EdgeFamily,
@@ -62,6 +60,8 @@ from ._nodes import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Mapping
+
     from ._workflow_definition import (
         EdgeLike,
         EndpointLike,
@@ -274,7 +274,7 @@ def build_nodes(raw_nodes: NodesLike) -> RikoNodeCollection:
     """
     _nodes: Iterable[NodeLike]
 
-    if isinstance(raw_nodes, Mapping):
+    if is_mapping(raw_nodes):
         _nodes = starmap(_keyed_node, raw_nodes.items())
     else:
         _nodes = (
@@ -442,7 +442,7 @@ def normalize_input_schemas(raw: InputSchemasLike | None) -> InputSchemas:
         {'limit': {'type': 'integer'}}
 
     """
-    schemas = normalize_mapping(raw, "input_schemas", strict=True)
+    schemas = {} if raw is None else dict(require_mapping(raw, "input_schemas"))
     return map_values(normalize_input_schema, schemas)
 
 

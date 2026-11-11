@@ -100,7 +100,7 @@ def fromdict(
 
 
 def build_regex_conf_rule(
-    f: str, m: str, r: str, seriesmatch: bool = True
+    f: str, m: str, r: str, seriesmatch: bool = True, nativereplace: bool = False
 ) -> RegexConfRule:
     """
     Builds a parsed regex configuration rule from compact arguments.
@@ -115,6 +115,9 @@ def build_regex_conf_rule(
 
         seriesmatch: Whether later rules operate on the previous rule's result.
 
+        nativereplace: Whether ``r`` uses Python's ``re`` syntax rather than ``$N``
+            group references.
+
     Returns:
 
         A ``RegexConfRule`` containing the supplied values and standard defaults.
@@ -126,23 +129,26 @@ def build_regex_conf_rule(
         ('title', 'foo', 'bar', True)
 
     """
-    return RegexConfRule(field=f, match=m, replace=r, seriesmatch=seriesmatch)
+    return RegexConfRule(
+        field=f,
+        match=m,
+        replace=r,
+        seriesmatch=seriesmatch,
+        nativereplace=nativereplace,
+    )
 
 
-def build_regex_rule(
-    rule: DynamicConf | RegexConfRule, recompile: bool = False
-) -> RegexRule:
-    """
+def build_regex_rule(rule: DynamicConf | RegexConfRule) -> RegexRule:
+    r"""
     Builds an executable rule mapping from a parsed regex configuration.
+
+    Compiles the match expression and translates ``$N`` replacement references to
+    Python's ``\N``. A rule with ``nativereplace`` set keeps its replacement as written,
+    in Python's ``re`` syntax.
 
     Args:
 
         rule: Parsed dynamic or dataclass regex rule.
-
-    Kwargs:
-
-        recompile: Whether to compile the match expression and translate ``$N``
-            replacement references for Python's regex engine.
 
     Returns:
 
@@ -150,18 +156,28 @@ def build_regex_rule(
 
     Raises:
 
-        TypeError: If a mapping ``rule`` has a ``default``, which belongs on the
-            module configuration, keyed by field.
+        TypeError: If a mapping ``rule`` has a ``default``, which belongs on the module
+            configuration, keyed by field.
 
     Examples:
 
-        >>> rule = build_regex_rule(build_regex_conf_rule("title", "foo", "bar"))
-        >>> rule["field"], rule["match"], rule["replace"], rule["series"]
-        ('title', 'foo', 'bar', True)
-        >>> conf_rule = build_regex_conf_rule("title", "foo", "bar")
-        >>> compiled = build_regex_rule(conf_rule, True)
-        >>> compiled["match"].pattern
-        'foo'
+        >>> args = ("title", r"(\w+) shipping")
+        >>> item = {"title": "Express shipping"}
+        >>>
+        >>> dollar_rule = build_regex_conf_rule(*args, "$1 delivery")
+        >>> rule = build_regex_rule(dollar_rule)
+        >>> rule["replace"]
+        '\\1 delivery'
+        >>> rule["match"].sub(rule["replace"], item[rule["field"]])
+        'Express delivery'
+        >>>
+        >>> # A literal "$5" needs nativereplace. Otherwise it reads as group 5
+        >>> native_rule = build_regex_conf_rule(*args, r"\1: $5", nativereplace=True)
+        >>> rule = build_regex_rule(native_rule)
+        >>> rule["replace"]
+        '\\1: $5'
+        >>> rule["match"].sub(rule["replace"], item[rule["field"]])
+        'Express: $5'
 
     """
     if not is_dataclass(rule):
@@ -181,17 +197,15 @@ def build_regex_rule(
 
     count: int = 1 if rule.singlelinematch else 0
 
-    if recompile and "$" in rule.replace:
-        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace, count=0)
-    else:
+    if rule.nativereplace:
         replace = rule.replace
-
-    match = re.compile(rule.match, flags) if recompile else rule.match
+    else:
+        replace = re.sub(r"\$(\d+)", r"\\\1", rule.replace)
 
     nrule = {
         "count": count,
         "flags": flags,
-        "match": match,
+        "match": re.compile(rule.match, flags),
         "replace": replace,
         "field": rule.field,
         "series": rule.seriesmatch,

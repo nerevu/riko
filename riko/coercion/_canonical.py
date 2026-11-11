@@ -22,6 +22,7 @@ from uuid import UUID
 import attrs
 
 from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.base._guards import is_mapping
 from riko.base._iterutils import sort_stably
 
 from ._dates import resolve_aware_datetime, tt_to_datetime
@@ -142,7 +143,7 @@ def _canon_set(tag: str, value: AbstractSet[object], seen: set[int]) -> Canonica
     return [tag, canon]
 
 
-def _canon_map(value: Mapping[object, object], seen: set[int]) -> CanonicalValue:
+def _canon_map[K](value: Mapping[K, object], seen: set[int]) -> CanonicalValue:
     pairs = [(_canon(k, seen), _canon(v, seen)) for k, v in value.items()]
     ordered = sorted(pairs, key=lambda pair: _sort_key([pair[0], pair[1]]))
     return ["map", [[k, v] for k, v in ordered]]
@@ -206,7 +207,7 @@ def _canon(value: object, seen: set[int]) -> CanonicalValue:
         result = ["path", flavor, str(value)]
     elif isinstance(value, UUID):
         result = ["uuid", value.hex]
-    elif isinstance(value, Mapping):
+    elif is_mapping(value):
         result = _guard(value, seen, _canon_map)
     elif isinstance(value, frozenset):
         result = _guard(value, seen, partial(_canon_set, "fset"))

@@ -35,7 +35,7 @@ from attrs import define, field
 from attrs.validators import is_callable
 
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import require_mapping
+from riko.base._guards import is_mapping, require_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._require_guards import (
     def_from_require,
@@ -47,7 +47,7 @@ from riko.base._require_guards import (
     validator_from_require,
 )
 from riko.base._sentinels import MISSING, MissingType
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum, resolve_enum
 from riko.types._enums import Backends, Formats, IdentityMode
 from riko.types._frozendict import (
     FrozenConf,
@@ -88,11 +88,11 @@ NO_OPTIONS = CallOptions()
 EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
 
-_normalize_backend = partial(resolve_enum, Backends)
-_normalize_format = partial(resolve_enum, Formats, strict=False)
+_normalize_backend = partial(require_enum, Backends)
+_normalize_format = def_from_require(require_enum, Formats)
 _normalize_mode = partial(resolve_enum, WriteMode, default=WriteMode.REPLACE)
-_normalize_identity = partial(
-    resolve_enum, IdentityMode, what="CallableNode 'identity'", strict=False
+_normalize_identity = def_from_require(
+    require_enum, IdentityMode, what="CallableNode 'identity'"
 )
 
 
@@ -142,7 +142,7 @@ def require_binding(
     """
     if isinstance(value, str):
         pairs = [(value, value)]
-    elif isinstance(value, Mapping):
+    elif is_mapping(value):
         pairs = value.items()
     elif isinstance(value, Iterable):
         pairs = [(name, name) for name in value]

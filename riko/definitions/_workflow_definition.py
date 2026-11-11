@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from functools import cached_property, partial
+from functools import cached_property
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
@@ -41,8 +41,13 @@ from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_mapping, require_listlike, require_mapping
 from riko.base._iterutils import sort_stably, unique_everseen
-from riko.base._require_guards import normalize_strs, require_instances, require_str
-from riko.base._typing import resolve_enum
+from riko.base._require_guards import (
+    normalize_strs,
+    require_instances,
+    require_str,
+    require_strlike,
+)
+from riko.base._typing import require_enum
 from riko.types._enums import DocumentShape
 from riko.types._frozendict import (
     EMPTY_INPUT_SCHEMAS,
@@ -130,15 +135,17 @@ _EMPTY_OUTPUTS: FrozenOutputs = FrozenDict()
 _EMPTY_NODES: FrozenNodes = FrozenDict()
 _EMPTY_EDGES: FrozenPortEdges = ()
 _EMPTY_RESOURCES: FrozenResources = ()
+_RESOURCES_WHAT = "Workflow 'resources'"
 
 endpoint_freezer = instances_freezer(Endpoint, "Workflow output")
 outputs_converter = mapping_converter(
     endpoint_freezer, Outputs, what="Workflow 'outputs'"
 )
 
-resource_names_converter = partial(
-    normalize_strs, what="Workflow 'resources'", strict=True
-)
+
+def _normalize_resource_names(value: object) -> FrozenResources:
+    """Normalizes resource names to a tuple, rejecting ``None`` and non-strings."""
+    return normalize_strs(require_strlike(value, _RESOURCES_WHAT), _RESOURCES_WHAT)
 
 
 def _input_schemas_freezer(value: InputSchemasLike) -> FrozenInputSchemas:
@@ -237,7 +244,7 @@ class Workflow:
     )
     edges: FrozenPortEdges = field(default=_EMPTY_EDGES, converter=_edges_converter)
     resources: FrozenResources = field(
-        default=_EMPTY_RESOURCES, converter=resource_names_converter
+        default=_EMPTY_RESOURCES, converter=_normalize_resource_names
     )
     version: str = WORKFLOW_VERSION
 
@@ -360,7 +367,9 @@ class Workflow:
             riko.exceptions.InvalidPipelineError: ...document must be a mapping...
 
         """
-        resolved = resolve_enum(DocumentShape, shape, "shape", strict=False)
+        resolved = (
+            None if shape is None else require_enum(DocumentShape, shape, "shape")
+        )
 
         if not isinstance(document, Workflow):
             raw = parse_document(document, shape=resolved)
@@ -398,14 +407,11 @@ class Workflow:
 
         Examples:
 
-            >>> from pathlib import Path
-            >>> from tempfile import TemporaryDirectory
-            >>> from riko import Workflow
+            >>> from riko import Workflow, get_temp_path
             >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>>
-            >>> with TemporaryDirectory() as tmp:
-            ...     path = Path(tmp) / "flow.json"
+            >>> with get_temp_path("flow.json") as path:
             ...     _ = path.write_bytes(flow.serialize())
             ...     Workflow.load(path) == flow
             True

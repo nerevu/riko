@@ -14,9 +14,10 @@ from __future__ import annotations
 import xml.etree.ElementTree as native_etree  # noqa: N813, S405
 from html.parser import HTMLParser
 from io import StringIO
-from itertools import chain
+from itertools import chain, repeat
 from json import JSONDecodeError, dumps, load, loads
 from typing import TYPE_CHECKING
+from urllib.parse import urljoin
 from xml.etree.ElementTree import Element, ElementTree  # noqa: S405
 
 import feedparser
@@ -98,40 +99,53 @@ type AnyElement = nativeElement | lxmlElement
 type JsonEvent = tuple[str, str, object]
 
 
+def _is_type_match(type_: str, token: str) -> bool:
+    """
+    Checks whether a link's MIME type is ``token`` or has ``token`` as its subtype.
+
+    Examples:
+
+        >>> _is_type_match("application/rss+xml", "rss+xml")
+        True
+        >>> _is_type_match("application/opensearchdescription+xml", "xml")
+        False
+
+    """
+    return type_ == token or type_.endswith(f"/{token}")
+
+
 class LinkParser(HTMLParser):
     strict: bool
-    external_only: bool
     link_type: tuple[str, ...]
+    base_url: str | None
     entry: Iterator[Mapping[str, str | None]]
     data: StringIO
 
     def __init__(
         self,
         *args: object,
-        external_only: bool = True,
         strict: bool = True,
-        rss_only: bool = False,
         link_type: str | Iterable[str] | None = None,
+        base_url: str | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.strict = strict
-        self.external_only = external_only
+        self.base_url = base_url
 
-        if rss_only:
-            self.link_type = ("rss+xml", "atom+xml", "rdf+xml", "text/xml", "xml")
-        elif isinstance(link_type, str):
+        if isinstance(link_type, str):
             self.link_type = (link_type,)
-        elif link_type:
-            self.link_type = tuple(link_type)
-        else:
+        elif link_type is None:
             self.link_type = ()
+        else:
+            self.link_type = tuple(link_type)
 
     def keyfunc(self, entry: Item) -> int:
         # sort according to the order of self.link_type
         count = len(self.link_type)
         enumerated = enumerate(self.link_type)
-        pos = (i for i, t in enumerated if str(entry.get("type", "")).endswith(t))
+        type_ = str(entry.get("type", ""))
+        pos = (i for i, t in enumerated if _is_type_match(type_, t))
         return next(pos, count)
 
     def reset(self) -> None:
@@ -145,14 +159,15 @@ class LinkParser(HTMLParser):
         entry = dict(attrs)
         link = entry.get("href")
         type_ = entry.get("type") or ""
-        type_match = any(map(type_.endswith, self.link_type))
+        type_match = any(map(_is_type_match, repeat(type_), self.link_type))
 
         if link and not self.strict:
             type_match = type_match or any(map(link.endswith, self.link_type))
 
-        source_match = link and not (self.external_only and link.startswith("/"))
+        if link and self.base_url is not None:
+            link = urljoin(self.base_url, link)
 
-        if source_match and (type_match or not self.link_type):
+        if link and (type_match or not self.link_type):
             entry["link"] = link
             entry["tag"] = tag
             self.entry = chain(self.entry, [entry])
@@ -192,14 +207,19 @@ def parse_feed(source: AnyStr | FileLike) -> ParsedFeed:
     return parsed
 
 
-def get_text(html: str, convert_charrefs: bool = False) -> str:
-    """Extracts the concatenated text of ``html`` via ``LinkParser``."""
-    try:
-        parser = LinkParser(convert_charrefs=convert_charrefs)
-    except TypeError:
-        parser = LinkParser()
+def get_text(html: str) -> str:
+    """
+    Gets the text of ``html``, one line per node, with character references decoded.
 
+    Examples:
+
+        >>> get_text("<p>Hello</p><p>world</p>")
+        'Hello\\nworld\\n'
+
+    """
+    parser = LinkParser()
     parser.feed(html)
+    parser.close()
     return parser.data.getvalue()
 
 

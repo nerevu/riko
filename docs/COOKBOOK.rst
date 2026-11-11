@@ -1044,18 +1044,15 @@ You can also use ``pipe:<id>`` as an alias for ``pipe_<id>``.
 
 .. code-block:: python
 
-    >>> from pathlib import Path
-    >>> from tempfile import TemporaryDirectory
-    >>> from riko import Pipeline
+    >>> from riko import Pipeline, get_temp_path
     >>> from riko.ext import register_workflow_store, temporary_registrations
     >>>
     >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> greet = Pipeline.from_module('itembuilder', conf=conf)
     >>>
-    >>> with TemporaryDirectory() as tmp, temporary_registrations():
-    ...     document = Path(tmp) / 'pipe_greet.json'
+    >>> with get_temp_path('pipe_greet.json') as document, temporary_registrations():
     ...     _ = document.write_bytes(greet.workflow.serialize())
-    ...     register_workflow_store(directory=Path(tmp), replace=True)
+    ...     register_workflow_store(directory=document.parent, replace=True)
     ...     list(Pipeline.from_module('pipe:greet'))
     [{'greeting': 'hello'}]
 
@@ -1071,6 +1068,10 @@ Notes:
   exit it restores any previously registered modules, targets, and workflow stores.
 
 - Running a ``pipe_<id>`` that neither has raises ``UnsupportedWorkflowError``.
+
+- ``get_temp_path(name)`` (``async_get_temp_path`` in an async run) gives a temporary
+  path named ``name`` (default ``"tmp"``) in a fresh temporary directory. The
+  directory is removed on exit unless you pass ``delete=False``.
 
 Inspecting a pipeline
 ^^^^^^^^^^^^^^^^^^^^^

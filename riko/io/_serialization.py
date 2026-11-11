@@ -14,7 +14,7 @@ from meza import fntools as ft
 
 from riko.base._guards import require_mapping
 from riko.base._iterutils import sort_stably
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum
 from riko.types._enums import Formats
 from riko.types._frozendict import thaw
 
@@ -172,7 +172,7 @@ def require_conversion_format(fmt: str, what: str = "conversion format") -> Form
         ValueError: Invalid conversion format: 'xml'. Expected one of ...
 
     """
-    member = resolve_enum(Formats, fmt, what, error=ValueError)
+    member = require_enum(Formats, fmt, what, error=ValueError)
     _require_converter(member)
     return member
 

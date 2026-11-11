@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 logger: Logger = get_logger(__name__)
 
-OPTS: DecorationOptions = {"listize": False, "parse": False}
+OPTS: DecorationOptions = {"listize": False}
 DEFAULTS: Defaults = Defaults({})
 
 

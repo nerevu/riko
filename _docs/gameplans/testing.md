@@ -222,7 +222,7 @@ Publishing them is deferred (user ruling) to one surface pass:
 `SyncPolicy`/`AsyncPolicy` (`ExecutionSettings` fields),
 `GraphIndex`/`GraphEdge`/`RunnableNode`
 (`Workflow.index`/`graph_edges`/`runnable_nodes`), `ModuleCategory`
-(`get_module_category`, `list_modules(category=)`), `FrozenDict`/`FrozenConf`
+(`ModuleMetadata.category`, `list_modules(category=)`), `FrozenDict`/`FrozenConf`
 (`Workflow`/`ModuleNode` fields), `PreparedModule` (`prepare`/`setup`), the underscore
 names `_AsyncURLStream`/`NamedTextIOWrapper` (returned by `async_url_open`) and
 `_Destination` (`export`'s `f`), `DotDict` (an `Item` member), and the `*RawConf` family

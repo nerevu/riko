@@ -105,7 +105,7 @@ async def async_parser(
         CNN.com International - Breaking
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage", strict=True)
     content = await async_url_read(
         url, encoding=objconf.encoding, user_agent=objconf.user_agent
     )
@@ -151,7 +151,7 @@ def parser(
         'CNN.com International'
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchpage")
+    url: str = require_conf_key(objconf, "url", "fetchpage", strict=True)
     with Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent) as f:
         sliced = betwix(f, objconf.start, objconf.end, True)
         content = "\n".join(sliced)

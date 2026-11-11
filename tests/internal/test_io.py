@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import socket
+import tempfile
 import threading
 from contextlib import contextmanager, suppress
 from functools import partial
@@ -44,16 +45,22 @@ from riko.definitions._write import WriteResult
 from riko.io._async import (
     _AsyncURLStream,
     _chunk_content,
+    async_get_temp_path,
     async_url_open,
     async_url_read,
 )
-from riko.io._reencode import Reencoder, reencode
+from riko.io._reencode import BytesReencoder, Reencoder, TextReencoder
 from riko.io._serialization import CONVERSION_FUNCS
-from riko.io._sync import Fetch, ReplayReader, opener
+from riko.io._sync import Fetch, ReplayReader, get_temp_path, opener
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
-from riko.parsing.documents import HAS_NATIVE_IJSON, IS_FASTFEEDPARSER, IS_LXML
-from riko.rss.discovery import aload_rss_links, load_rss_links
+from riko.parsing.documents import (
+    HAS_NATIVE_IJSON,
+    IS_FASTFEEDPARSER,
+    IS_LXML,
+    get_text,
+)
+from riko.rss.discovery import RSSLinkParser, aload_rss_links, load_rss_links
 from riko.rss.feeds import parse_rss
 from riko.runtime import _write_session
 from riko.runtime._export import export
@@ -91,6 +98,14 @@ _MERGE = partial(async_merge, [])
 _X0, _X1 = [{"x": 0}], [{"x": 1}]
 _CSV0, _CSV012 = b"x\r\n0\r\n", b"x\r\n0\r\n1\r\n2\r\n"
 _JSON0, _JSON01 = b'{"x": 0}\n', b'{"x": 0}\n{"x": 1}\n'
+_RSS_LINK = '<link type="application/rss+xml" href="http://x/rss">'
+_ATOM_LINK = '<link type="application/atom+xml" href="http://x/atom">'
+_JSON_LINK = '<link type="application/feed+json" href="http://x/json">'
+_CSS_LINK = '<link type="text/css" href="http://x/css">'
+_SEARCH_LINK = (
+    '<link type="application/opensearchdescription+xml" href="http://x/search">'
+)
+_FEED_PAGE = f"{_SEARCH_LINK}{_RSS_LINK}{_ATOM_LINK}{_JSON_LINK}{_CSS_LINK}"
 URL = "https://example.test/data"
 
 # A replace write leaves the old content until it publishes the new one whole.
@@ -211,7 +226,90 @@ class TestReplayReader:
             assert reader.read() == b"abcdef"
 
 
+FEED_LINKS = [
+    pytest.param(
+        {}, ["http://x/rss", "http://x/atom", "http://x/json"], id="default-types"
+    ),
+    pytest.param({"link_type": "xml"}, [], id="xml-subtype-only"),
+    pytest.param({"link_type": "atom+xml"}, ["http://x/atom"], id="narrowed"),
+    pytest.param(
+        {"link_type": ["atom+xml", "rss+xml"], "auto_sort": True},
+        ["http://x/atom", "http://x/rss"],
+        id="reordered-sort",
+    ),
+    pytest.param({"link_type": "feed+json"}, ["http://x/json"], id="json-feed"),
+]
+
+EMPTY_LINK_TYPES = [pytest.param([], id="no-types"), pytest.param("", id="blank")]
+
+ENTITY_TEXTS = [
+    pytest.param("<p>Fish &amp; chips</p>", "Fish & chips\n", id="named"),
+    pytest.param("<p>&#169; 2026</p>", "© 2026\n", id="numeric"),
+    pytest.param("AT&T", "AT&T\n", id="trailing-ampersand"),
+]
+
+
+class TestGetText:
+    @pytest.mark.parametrize(("html", "expected"), ENTITY_TEXTS)
+    def test_character_references_are_decoded(self, html, expected):
+        assert get_text(html) == expected
+
+
 class TestLoadRssLinks:
+    @pytest.mark.parametrize(("kwargs", "expected"), FEED_LINKS)
+    @async_test
+    async def test_link_type_selects_and_orders_feeds(self, tmp_path, kwargs, expected):
+        path = tmp_path / "page.html"
+        path.write_text(_FEED_PAGE)
+        url = path.as_uri()
+        links = [entry.get("link") for entry in load_rss_links(url, **kwargs)]
+        alinks = [entry.get("link") for entry in await aload_rss_links(url, **kwargs)]
+        assert links == alinks == expected
+
+    @pytest.mark.parametrize("link_type", EMPTY_LINK_TYPES)
+    @async_test
+    async def test_empty_link_type_is_rejected(self, tmp_path, link_type, monkeypatch):
+        path = tmp_path / "page.html"
+        path.write_text(_FEED_PAGE)
+        is_closed = []
+
+        def fetch(*args, **kwargs):
+            f = Fetch(*args, **kwargs)
+            is_closed.append(lambda: f.file is None)
+            return f
+
+        async def aopen(*args, **kwargs):
+            f = await async_url_open(*args, **kwargs)
+            is_closed.append(lambda: f.closed)
+            return f
+
+        monkeypatch.setattr("riko.rss.discovery.Fetch", fetch)
+        monkeypatch.setattr("riko.rss.discovery.async_url_open", aopen)
+
+        with pytest.raises(ValueError, match="link_type"):
+            RSSLinkParser(link_type=link_type)
+
+        with pytest.raises(ValueError, match="link_type"):
+            load_rss_links(path.as_uri(), link_type=link_type)
+
+        with pytest.raises(ValueError, match="link_type"):
+            await aload_rss_links(path.as_uri(), link_type=link_type)
+
+        assert all(closed() for closed in is_closed)
+
+    @async_test
+    async def test_relative_links_resolve_against_the_page(self, tmp_path):
+        path = tmp_path / "page.html"
+        path.write_text(
+            '<link type="application/rss+xml" href="feed.xml">'
+            '<link type="application/atom+xml" href="/atom.xml">'
+        )
+        url = path.as_uri()
+        expected = [(tmp_path / "feed.xml").as_uri(), "file:///atom.xml"]
+        links = [entry.get("link") for entry in load_rss_links(url)]
+        alinks = [entry.get("link") for entry in await aload_rss_links(url)]
+        assert links == alinks == expected
+
     @pytest.mark.xfail(
         strict=True,
         raises=pytest.fail.Exception,
@@ -704,7 +802,7 @@ class TestAsyncUrlOpen:
     async def test_sync_and_async_decode_line_endings_alike(self):
         """Decode carriage returns the same way in sync and async reads."""
         body = b"abc\rdef\n"
-        sync_result = reencode(BytesIO(body), decode=True).read()
+        sync_result = TextReencoder(BytesIO(body)).read()
 
         with loopback_url(body, content_type="text/plain", path="p.txt") as url:
             async with async_url_open(url) as f:
@@ -712,9 +810,11 @@ class TestAsyncUrlOpen:
 
 
 PARTIAL_READS = [
-    pytest.param(b"abc\nde\n", False, list, [b"c\n", b"de\n"], id="bytes-iter"),
-    pytest.param(b"abc\nde\n", False, bytes, b"c\nde\n", id="bytes-buffer"),
-    pytest.param("abc\nde\n", True, list, ["c\n", "de\n"], id="text-iter"),
+    pytest.param(
+        b"abc\nde\n", BytesReencoder, list, [b"c\n", b"de\n"], id="bytes-iter"
+    ),
+    pytest.param(b"abc\nde\n", BytesReencoder, bytes, b"c\nde\n", id="bytes-buffer"),
+    pytest.param("abc\nde\n", TextReencoder, list, ["c\n", "de\n"], id="text-iter"),
 ]
 
 
@@ -723,7 +823,7 @@ class TestReencode:
     def test_line_without_trailing_newline_round_trips(self, method):
         """A single unterminated line decodes to the same text however it is read."""
         text = "<r><t>café</t></r>"
-        reader = reencode(BytesIO(text.encode()), decode=True)
+        reader = TextReencoder(BytesIO(text.encode()))
 
         if method == "read":
             result = reader.read()
@@ -738,8 +838,8 @@ class TestReencode:
     def test_foreign_newlines_read_in_chunks_match_full_read(self, size):
         """Sized reads of carriage-return lines keep every separator within ``n``."""
         data = b"abc\rdef\rghi"
-        full = reencode(BytesIO(data), decode=True).read()
-        reader = reencode(BytesIO(data), decode=True)
+        full = TextReencoder(BytesIO(data)).read()
+        reader = TextReencoder(BytesIO(data))
         chunks = list(iter(lambda: reader.read(size), ""))
 
         assert full == linesep.join(["abc", "def", "ghi"])
@@ -749,8 +849,8 @@ class TestReencode:
     def test_foreign_newlines_readline_keeps_ends(self):
         """Carriage-return lines come back with a line ending unless asked not to."""
         data = b"abc\rdef\rghi"
-        reader = reencode(BytesIO(data), decode=True)
-        bare = reencode(BytesIO(data), decode=True).readlines(keepends=False)
+        reader = TextReencoder(BytesIO(data))
+        bare = TextReencoder(BytesIO(data)).readlines(keepends=False)
 
         assert reader.readlines() == [f"abc{linesep}", f"def{linesep}", "ghi"]
         assert bare == ["abc", "def", "ghi"]
@@ -765,18 +865,18 @@ class TestReencode:
     )
     def test_foreign_newlines_keep_blank_lines(self, data, expected):
         """Each carriage return ends exactly one line, so blank lines survive."""
-        full = reencode(BytesIO(data), decode=True).read()
-        lines = reencode(BytesIO(data), decode=True).readlines()
+        full = TextReencoder(BytesIO(data)).read()
+        lines = TextReencoder(BytesIO(data)).readlines()
 
         assert full == linesep.join(expected)
         assert "".join(lines) == full
-        assert list(reencode(BytesIO(data), decode=True)) == lines
+        assert list(TextReencoder(BytesIO(data))) == lines
 
-    @pytest.mark.parametrize(("source", "decode", "consume", "expected"), PARTIAL_READS)
-    def test_partial_read_keeps_the_rest(self, source, decode, consume, expected):
+    @pytest.mark.parametrize(("source", "cls", "consume", "expected"), PARTIAL_READS)
+    def test_partial_read_keeps_the_rest(self, source, cls, consume, expected):
         """Iterating or buffering after a sized read resumes where the read stopped."""
         f = BytesIO(source) if isinstance(source, bytes) else StringIO(source)
-        reader = reencode(f, decode=decode)
+        reader = cls(f)
         reader.read(2)
         assert consume(reader) == expected
 
@@ -784,48 +884,48 @@ class TestReencode:
     def test_wide_encoding_keeps_every_line(self, encoding):
         """A source whose newline spans several bytes decodes in full, line by line."""
         data = "a\nb\r\nc\n".encode(encoding)
-        assert reencode(BytesIO(data), encoding, decode=True).read() == "a\nb\nc\n"
-        reader = reencode(BytesIO(data), encoding, decode=True)
+        assert TextReencoder(BytesIO(data), encoding).read() == "a\nb\nc\n"
+        reader = TextReencoder(BytesIO(data), encoding)
         assert list(iter(reader.readline, "")) == ["a\n", "b\n", "c\n"]
 
     def test_wide_encoding_reencodes_in_full(self):
         """Re-encoding a multi-line wide-encoded source keeps every byte."""
         data = "a\nb\nc\n".encode("utf-16")
-        assert reencode(BytesIO(data), "utf-16").read() == b"a\nb\nc\n"
+        assert BytesReencoder(BytesIO(data), "utf-16").read() == b"a\nb\nc\n"
 
     @pytest.mark.parametrize(
-        ("data", "kwargs", "expected"),
+        ("data", "cls", "kwargs", "expected"),
         [
-            (b"", {"decode": True}, ""),
-            (b"", {}, b""),
-            (b"\xff\xfe", {"fromenc": "utf-16", "decode": True}, ""),
+            (b"", TextReencoder, {}, ""),
+            (b"", BytesReencoder, {}, b""),
+            (b"\xff\xfe", TextReencoder, {"fromenc": "utf-16"}, ""),
         ],
     )
-    def test_empty_source_reads_empty(self, data, kwargs, expected):
+    def test_empty_source_reads_empty(self, data, cls, kwargs, expected):
         """A source with no content reads as empty instead of raising."""
-        reader = reencode(BytesIO(data), **kwargs)
+        reader = cls(BytesIO(data), **kwargs)
         assert reader.read() == expected
         assert reader.readline() == expected
 
     @pytest.mark.parametrize(
-        ("kwargs", "expected"),
+        ("cls", "kwargs", "expected"),
         [
-            ({"decode": True}, "﻿<r/>\n"),
-            ({"decode": True, "remove_BOM": True}, "<r/>\n"),
-            ({"remove_BOM": True}, b"<r/>\n"),
+            (TextReencoder, {}, "﻿<r/>\n"),
+            (TextReencoder, {"remove_BOM": True}, "<r/>\n"),
+            (BytesReencoder, {"remove_BOM": True}, b"<r/>\n"),
         ],
     )
-    def test_remove_bom_strips_the_byte_order_mark(self, kwargs, expected):
+    def test_remove_bom_strips_the_byte_order_mark(self, cls, kwargs, expected):
         """``remove_BOM`` drops a leading byte order mark; it is kept by default."""
         data = b"\xef\xbb\xbf<r/>\n"
-        assert reencode(BytesIO(data), **kwargs).read() == expected
+        assert cls(BytesIO(data), **kwargs).read() == expected
 
     @pytest.mark.parametrize("method", ["read", "readline"])
     def test_char_count_preserves_remainder(self, method):
         """A one-character read consumes only that character."""
         data = b"line one\nline two\nline three\n"
-        full = reencode(BytesIO(data), decode=True).read()
-        reader = reencode(BytesIO(data), decode=True)
+        full = TextReencoder(BytesIO(data)).read()
+        reader = TextReencoder(BytesIO(data))
         head = getattr(reader, method)(1)
         rest = reader.read()
 
@@ -837,15 +937,15 @@ class TestReencode:
     def test_zero_size_reads_nothing(self, method):
         """A zero-size read returns empty and leaves the whole stream unread."""
         data = b"line one\nline two\n"
-        reader = reencode(BytesIO(data), decode=True)
+        reader = TextReencoder(BytesIO(data))
 
         assert getattr(reader, method)(0) == ""
         assert reader.read() == data.decode()
 
     def test_readline_without_ends_resumes_at_the_next_line(self):
         data = b"line one\nline two\nline three\n"
-        full = reencode(BytesIO(data), decode=True).readlines(keepends=False)
-        reader = reencode(BytesIO(data), decode=True)
+        full = TextReencoder(BytesIO(data)).readlines(keepends=False)
+        reader = TextReencoder(BytesIO(data))
         head, rest = reader.readline(keepends=False), reader.readlines(keepends=False)
 
         assert head == "line one"
@@ -853,7 +953,7 @@ class TestReencode:
         assert [head] + rest == full
 
     def test_readline_resumes_after_a_partial_read(self):
-        reader = reencode(BytesIO(b"line one\nline two\nline three\n"), decode=True)
+        reader = TextReencoder(BytesIO(b"line one\nline two\nline three\n"))
         reader.read(1)
 
         assert reader.readline() == "ine one\n"
@@ -869,9 +969,16 @@ class TestReencode:
         source = BrokenSource(b"<r/>")
 
         with pytest.raises(OSError, match="unreadable"):
-            reencode(source, decode=True)
+            TextReencoder(source)
 
         assert source.closed
+
+
+COLLECTION_EXPORT_OPTIONS = [
+    pytest.param("list", ("out.csv",), {}, "f", id="list-destination"),
+    pytest.param("tuple", (), {"mode": "w"}, "mode", id="tuple-writer-option"),
+    pytest.param("list", (), {"indent": 2}, "indent", id="list-converter"),
+]
 
 
 class TestConversionFuncs:
@@ -894,6 +1001,13 @@ class TestConversionFuncs:
         with pytest.raises(ValueError, match="requires the finance extra"):
             export([{"x": 1}], "ofx")
 
+    @pytest.mark.parametrize(
+        ("type_", "args", "kwargs", "given"), COLLECTION_EXPORT_OPTIONS
+    )
+    def test_collection_type_rejects_writer_options(self, type_, args, kwargs, given):
+        with pytest.raises(TypeError, match=f"export type {type_}: {given}$"):
+            export([{"x": 1}], type_, *args, **kwargs)
+
 
 FILE_CHUNKS = [
     pytest.param("w+", "abcdef\nxy\n", ["abc", "def", "\nxy", "\n"], id="text"),
@@ -910,6 +1024,33 @@ class TestChunkContent:
             f.write(data)
             f.seek(0)
             assert list(_chunk_content(f, 3)) == expected
+
+
+class TestTempPath:
+    """A temporary path starts unoccupied and is removed on exit unless kept."""
+
+    @pytest.fixture(autouse=True)
+    def isolated_tempdir(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    @pytest.mark.parametrize("delete", [True, False])
+    def test_sync_path_lifetime(self, delete):
+        with get_temp_path("items.csv", delete=delete) as temp_path:
+            assert not temp_path.exists()
+            assert temp_path.name == "items.csv"
+            temp_path.write_text("x")
+
+        assert temp_path.exists() is not delete
+
+    @pytest.mark.parametrize("delete", [True, False])
+    @async_test
+    async def test_async_path_lifetime(self, delete):
+        async with async_get_temp_path("items.csv", delete=delete) as temp_path:
+            assert not temp_path.exists()
+            assert temp_path.name == "items.csv"
+            temp_path.write_text("x")
+
+        assert temp_path.exists() is not delete
 
 
 class TestAsyncMap:

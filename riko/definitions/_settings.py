@@ -16,7 +16,7 @@ Examples:
 
 from __future__ import annotations
 
-from functools import cached_property, partial
+from functools import cached_property
 from math import isnan
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -30,7 +30,7 @@ from riko.base._require_guards import (
     require_instance,
     validator_from_require,
 )
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum
 from riko.types._enums import Executor
 
 if TYPE_CHECKING:
@@ -96,11 +96,13 @@ def _require_timeout(value: object, what: str | None = "value", **_) -> float:
     return value
 
 
+def _executor(value: Executor | str) -> Executor:
+    what = "ExecutionSettings 'executor'"
+    return require_enum(Executor, value, what=what, error=ValueError)
+
+
 _concurrency = def_from_require(
     _require_concurrency, what="ExecutionSettings 'concurrency'"
-)
-_executor = partial(
-    resolve_enum, Executor, what="ExecutionSettings 'executor'", error=ValueError
 )
 _is_bool = validator_from_require(require_instance, bool, error=TypeError)
 _is_timeout = validator_from_require(_require_timeout)

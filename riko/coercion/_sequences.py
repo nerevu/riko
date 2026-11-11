@@ -101,7 +101,7 @@ def gen_items(
 def gen_items(
     content: RikoValue | BasicDict | StringyDict,
     key: str | None = None,
-    yield_if_none=False,
+    yield_if_none: bool = False,
 ) -> StreamOrValueStream:
     """
     Flattens nested Riko values into a stream of values or keyed items.

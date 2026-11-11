@@ -411,8 +411,8 @@ def gen_operator_return_kinds(pipe: Func[object]) -> Iterator[OperatorReturnKind
         >>> def counted(items) -> int:
         ...     return sum(items)
         >>>
-        >>> [kind.value for kind in gen_operator_return_kinds(counted)]
-        ['nonstream']
+        >>> next(map(str, gen_operator_return_kinds(counted)))
+        'nonstream'
 
     """
     for inference in gen_return_inferences(pipe):

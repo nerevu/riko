@@ -1334,7 +1334,11 @@ Deliver:
   source is read; a node whose module declares no contract is not rejected. The check
   lands inside `ModuleWrapper.prepare`, which the plan already calls once per node
   (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is
-  needed;
+  needed. The contract also decides whether an empty string in a required key is
+  missing: the fetch-family modules already reject an empty `url` at call time
+  (`require_conf_key(strict=True)`), while `urlbuilder.base`, `subelement.path`, and
+  `currencyformat.currency` still accept `""` (2026-11-10 triage); make the three
+  consistent with the ruling;
 - the same check for built-in and entry-point modules;
 - the describe modes retired (ruled 2026-11-09, [release-readiness.md
   § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work);
@@ -1370,6 +1374,30 @@ Deliver:
   callable raise "neither a sync nor an async callable" although `udf` itself never
   runs. The E1 plain-callable slot decision removes the borrowing. Strict xfail
   `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
+
+Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong value):
+
+- the interface flag on resolution: `Resolver.require`/`Dispatcher.resolve`
+  (`riko/types/_wrappers.py`), `ResolverDispatcher.require`/`resolve`/`is_capable`
+  (`riko/runtime/_resolver.py`), `ModuleRegistry.require`, `WorkflowResolver.require`,
+  and `require_interface` (`riko/runtime/_importutils.py`) take `is_async=` and switch
+  the returned wrapper's type, yet every caller passes a constant, and
+  `ResolvedModule.from_dispatcher` (`riko/execution/_prepared.py`) calls `resolve()`
+  once per color. When the interface slots change here, one dispatcher call returns both
+  interfaces (a pair of optional wrappers), which removes `is_capable` (a restated
+  `require_interfaces`) and the double lookup. Decide
+  `ModuleDefinition.get_pipe(is_async)` in the same change, so the flag goes from both
+  or neither;
+- `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
+  `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
+  favor of `interfaces` when classification moves to `isasync`, updating the
+  [module-documentation.md](module-documentation.md) generator inputs;
+- legacy conf keys declared in the raw conf types but read by no module:
+  `FetchRawConf.offline`, `CsvRawConf.other_sep`, and `InputRawConf.debug`/`param`/
+  `position` (`tests/workflows/pipe_e519dd393f943315f7e4128d19db2eac.json` and
+  `tests/workflows/pipe_UuvYtuMe3hGDsmRgPm7D0g.json` set `offline`/`other_sep`).
+  Since the contract derives from these types, decide whether these legacy keys are
+  accepted and ignored or rejected as unknown before the strict check lands.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a
 parser's `objconf` annotation and returns the generated `<Name>Objconf`, but no runtime

@@ -55,11 +55,9 @@ def read_document(path: PathLike) -> tuple[object | None, str]:
 
     Examples:
 
-        >>> from pathlib import Path
-        >>> from tempfile import TemporaryDirectory
+        >>> from riko import get_temp_path
         >>>
-        >>> with TemporaryDirectory() as tmp:
-        ...     path = Path(tmp) / "flow.json"
+        >>> with get_temp_path("flow.json") as path:
         ...     _ = path.write_text('{"modules": [{"name": "forever"}]}')
         ...     read_document(path)
         ({'modules': [{'name': 'forever'}]}, 'flow')

@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import json
 import tomllib
+from contextlib import nullcontext
 from datetime import date, timedelta
 from importlib import import_module
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
@@ -593,7 +594,9 @@ class TestCoverageRatchet:
         self, monkeypatch: pytest.MonkeyPatch, args: list[str]
     ) -> None:
         folders: list[str] = []
-        monkeypatch.setattr(_test, "mkdtemp", lambda: folders.append("made") or "")
+        monkeypatch.setattr(
+            _test, "get_temp_path", lambda *_: folders.append("made") or nullcontext()
+        )
 
         result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", *args])
         assert result.exit_code == 2

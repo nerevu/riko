@@ -87,9 +87,7 @@ equivalent ``Workflow``. ``Workflow.load(path)`` reads and parses a file:
 
 .. code-block:: python
 
-    >>> from pathlib import Path
-    >>> from tempfile import TemporaryDirectory
-    >>> from riko import Workflow
+    >>> from riko import Workflow, get_temp_path
     >>>
     >>> dag = {'modules': [{'name': 'forever'}, {'name': 'truncate'}]}
     >>> flow = Workflow.parse(dag)
@@ -101,8 +99,7 @@ equivalent ``Workflow``. ``Workflow.load(path)`` reads and parses a file:
     >>> document = flow.serialize()
     >>> Workflow.parse(document) == flow
     True
-    >>> with TemporaryDirectory() as tmp:
-    ...     path = Path(tmp) / 'flow.json'
+    >>> with get_temp_path('flow.json') as path:
     ...     _ = path.write_bytes(document)
     ...     Workflow.load(path) == flow
     True

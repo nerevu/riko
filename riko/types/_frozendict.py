@@ -9,9 +9,8 @@ mappings and freeze them into ``FrozenDict``s.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import asdict
 from itertools import repeat
-from typing import TYPE_CHECKING, Any, Literal, cast, final, overload
+from typing import TYPE_CHECKING, Literal, final, overload
 
 import attrs
 from typing_extensions import TypeForm, TypeIs
@@ -24,6 +23,7 @@ from riko.base._guards import (
     is_mapping,
     require_mapping,
 )
+from riko.base._recordutils import serialize_dataclass
 from riko.base._require_guards import require_finite, require_instances, require_str
 
 if TYPE_CHECKING:
@@ -141,7 +141,7 @@ def _freeze_value(
         ordered = value if key is None else sorted(value, key=key)
         result = tuple(map(_freeze_value, ordered, repeat(json_native)))
     elif json_native and is_conf_rule(value):
-        _value = asdict(value)
+        _value = serialize_dataclass(value, compact=False)
         result = FrozenDict.from_frozen(
             _freeze_items(_value, json_native, mapping_value_func=mapping_value_func)
         )
@@ -215,16 +215,12 @@ class FrozenDict[K, V](Mapping[K, V]):
     def __hash__(self) -> int:
         return hash(frozenset(self._data.items()))
 
-    def __or__(self, other: object) -> FrozenDict[K, V]:
-        merged = (
-            FrozenDict({**self._data, **other}) if isinstance(other, Mapping) else None
-        )
+    def __or__(self, other: Mapping[K, V] | object) -> FrozenDict[K, V]:
+        merged = FrozenDict({**self._data, **other}) if is_mapping(other) else None
         return NotImplemented if merged is None else merged
 
-    def __ror__(self, other: object) -> FrozenDict[K, V]:
-        merged = (
-            FrozenDict({**other, **self._data}) if isinstance(other, Mapping) else None
-        )
+    def __ror__(self, other: Mapping[K, V] | object) -> FrozenDict[K, V]:
+        merged = FrozenDict({**other, **self._data}) if is_mapping(other) else None
         return NotImplemented if merged is None else merged
 
     @classmethod
@@ -496,17 +492,7 @@ def mapping_converter[FV](
     return converter
 
 
-@overload
-def normalize_mapping[T](
-    item: Mapping[str, T] | None, what: str = ..., *, strict: bool = ...
-) -> dict[str, T]: ...
-@overload
-def normalize_mapping(
-    item: object, what: str = ..., *, strict: Literal[True]
-) -> dict[str, object]: ...
-def normalize_mapping(
-    item: object, what: str = "value", *, strict: bool = False
-) -> dict[str, Any]:
+def normalize_mapping[T](item: Mapping[str, T] | None) -> dict[str, T]:
     """
     Normalizes an optional mapping to a new ``dict`` (empty for ``None``).
 
@@ -514,37 +500,17 @@ def normalize_mapping(
 
         item: The mapping to copy, or ``None``.
 
-    Kwargs:
-
-        what: The name used in the error message when ``strict``.
-        strict: Whether anything other than a mapping or ``None`` raises.
-
     Returns:
 
         A new ``dict`` with ``item``'s entries.
-
-    Raises:
-
-        InvalidPipelineError: If ``strict`` and ``item`` is not a mapping.
 
     Examples:
 
         >>> normalize_mapping({"a": 1}), normalize_mapping(None)
         ({'a': 1}, {})
-        >>> normalize_mapping([("a", 1)], "inputs", strict=True)
-        Traceback (most recent call last):
-        ...
-        riko.exceptions.InvalidPipelineError: ...inputs must be a mapping, not list
 
     """
-    if item is None:
-        result: dict[str, Any] = {}
-    elif strict:
-        result = dict(require_mapping(item, what))
-    else:
-        result = dict(cast("Mapping[str, object]", item))
-
-    return result
+    return {} if item is None else dict(item)
 
 
 @overload

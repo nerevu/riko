@@ -31,7 +31,7 @@ from riko.io._serialization import (
 from riko.types._enums import Formats
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from io import StringIO
 
     from riko.definitions._write import ExportType
@@ -39,6 +39,8 @@ if TYPE_CHECKING:
     from riko.types._wrappers import ConversionOutput
 
 type _Destination = str | TextIO
+
+_COLLECTION_TYPES = frozenset({"list", "tuple"})
 
 __all__ = ["Formats", "export", "list_formats"]
 
@@ -66,9 +68,19 @@ def _resolve_option[T](value: T | MissingType, default: T) -> T:
     return default if isinstance(value, MissingType) else value
 
 
-def _validate_writer_options(f: _Destination | None, **options: object) -> None:
-    """Validates that writer options are only given with a destination."""
+def _validate_writer_options(
+    type_: ExportType,
+    f: _Destination | None,
+    converter_options: Mapping[str, object],
+    **options: object,
+) -> None:
+    """Validates that writer options are only given with a serialized destination."""
     given = [name for name, value in options.items() if value is not MISSING]
+    passed = [*([] if f is None else ["f"]), *given, *converter_options]
+
+    if type_ in _COLLECTION_TYPES and passed:
+        msg = f"Writer option(s) given with export type {type_}: {', '.join(passed)}"
+        raise TypeError(msg)
 
     if f is None and given:
         msg = f"Writer option(s) given without a destination: {', '.join(given)}"
@@ -97,7 +109,7 @@ def export(
     chunksize: Never = ...,
     length: Never = ...,
     bar_len: Never = ...,
-    **options: object,
+    **options: Never,
 ) -> list[Item]: ...
 @overload
 def export(
@@ -110,7 +122,7 @@ def export(
     chunksize: Never = ...,
     length: Never = ...,
     bar_len: Never = ...,
-    **options: object,
+    **options: Never,
 ) -> tuple[Item]: ...
 @overload
 def export(
@@ -245,7 +257,8 @@ def export(
 
         ValueError: If ``type_`` is neither ``list``/``tuple`` nor a known format.
 
-        TypeError: If a writer option is given without ``f``.
+        TypeError: If a writer option is given without ``f``, or ``f`` (or any writer or
+            converter option) is given with ``list``/``tuple``.
 
     Examples:
 
@@ -260,11 +273,14 @@ def export(
         >>> export(items, "csv", mode="w")
         Traceback (most recent call last):
         TypeError: Writer option(s) given without a destination: mode
+        >>> export(items, "list", "out.csv")
+        Traceback (most recent call last):
+        TypeError: Writer option(s) given with export type list: f
 
     """
     result: int | ConversionOutput | Items
     kwargs = {"mode": mode, "encoding": encoding, "length": length, "bar_len": bar_len}
-    _validate_writer_options(f, chunksize=chunksize, **kwargs)
+    _validate_writer_options(type_, f, options, chunksize=chunksize, **kwargs)
 
     if type_ == "list":
         result = list(items)

@@ -134,8 +134,9 @@ falls back to its empty/sync-only behavior. There is no Twisted backend and no
 `RIKO_ASYNC_BACKEND` environment switch.
 
 Async transport/file operations are separate: `async_url_open`, `async_write`, and
-`async_get_temp_file` live under `riko/io/` and are promoted to the stable `riko`
-surface.
+`async_get_temp_file`/`async_get_temp_path` live in `riko/io/_async.py`, beside their
+sync twins `get_temp_file`/`get_temp_path` in `riko/io/_sync.py`; all are promoted to
+the stable `riko` surface.
 
 ## Cross-cutting invariants
 

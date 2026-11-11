@@ -103,7 +103,7 @@ async def async_parser(
         Help Page -- ScienceDaily
 
     """
-    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage", strict=True)
     ext = splitext(url)[1].lstrip(".")
 
     if is_http_url(url) and not ext:
@@ -154,7 +154,7 @@ def parser(
         'Help Page -- ScienceDaily'
 
     """
-    url: str = require_conf_key(objconf, "url", "xpathfetchpage")
+    url: str = require_conf_key(objconf, "url", "xpathfetchpage", strict=True)
     ext = splitext(url)[1].lstrip(".")
 
     if is_http_url(url) and not ext:

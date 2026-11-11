@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
+from riko.base._sentinels import MISSING
 from riko.coercion._sequences import gen_items
 
 from ._decorators import processor
@@ -70,7 +71,8 @@ def parser(
 
     Returns:
 
-        The extracted flattened tokens. Or nothing when the path is absent.
+        The extracted flattened tokens. A path holding ``None`` gives one ``None``
+        token. A path the item lacks gives nothing.
 
     Raises:
 
@@ -92,12 +94,18 @@ def parser(
         >>> sonnet = DotDict({"stanzas": {"verses": "verse1"}})
         >>> next(parser(sonnet, None, objconf))
         {'content': 'verse1'}
+        >>> list(parser(DotDict({"stanzas": {"verses": None}}), None, objconf))
+        [{'content': None}]
+        >>> list(parser(DotDict({"stanzas": {}}), None, objconf))
+        []
 
     """
     raw: str | Sequence[str] = require_conf_key(objconf, "path", "subelement")
     path = raw if isinstance(raw, str) else ".".join(raw)
-    element = cast("RikoValue", item.get(path, **kwargs))
-    return gen_items(element, objconf.token_key or "")
+    element = item.get(path, MISSING, **kwargs)
+    content = None if element is MISSING else cast("RikoValue", element)
+    key = objconf.token_key or ""
+    return gen_items(content, key, yield_if_none=element is not MISSING)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -143,8 +151,9 @@ def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
     Notes:
 
-        Nested lists are flattened and ``None`` values are dropped. So tokens
-        arrive as one flat stream. A path the item lacks yields nothing.
+        Nested lists are flattened and ``None`` values inside them are dropped. So
+        tokens arrive as one flat stream. A path holding ``None`` yields one ``None``
+        token, but a path the item lacks yields nothing.
 
     Examples:
 
@@ -205,8 +214,9 @@ def pipe(*args: Any, **kwargs: RikoValue) -> Stream:
 
     Notes:
 
-        Nested lists are flattened and ``None`` values are dropped. So tokens
-        arrive as one flat stream. A path the item lacks yields nothing.
+        Nested lists are flattened and ``None`` values inside them are dropped. So
+        tokens arrive as one flat stream. A path holding ``None`` yields one ``None``
+        token, but a path the item lacks yields nothing.
 
     Examples:
 

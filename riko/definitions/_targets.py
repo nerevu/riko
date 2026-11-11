@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from riko.base._require_guards import normalize_strs
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum, resolve_enum
 from riko.types._enums import Backends, FmtLike, Formats, StrLike
 from riko.types._io import PathLike, PathLikeType
 from riko.types._target_protocols import SupportsWrite
@@ -67,7 +67,7 @@ def validate_target_mode(
     name = target.__class__.__name__
 
     if mode not in capabilities.modes:
-        supported = ", ".join(sorted(m.value for m in capabilities.modes))
+        supported = ", ".join(sorted(capabilities.modes))
         msg = f"{name} does not support the {mode.value!r} mode; {supported=}"
     elif keys and mode not in capabilities.keyed_modes:
         msg = f"{name} forbids 'keys' for the {mode.value!r} mode"
@@ -115,7 +115,7 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
     else:
         resolved = fmt
 
-    return resolve_enum(Formats, resolved, default=Formats.JSON, error=ValueError)
+    return resolve_enum(Formats, resolved, Formats.JSON, error=ValueError)
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,7 +280,7 @@ def build_write(
 
     """
     target = normalize_target(dest)
-    resolved_mode = resolve_enum(WriteMode, mode, error=ValueError)
+    resolved_mode = require_enum(WriteMode, mode, error=ValueError)
     capabilities = target.get_capabilities(fmt)
     normalized_keys = normalize_strs(keys, type_error=TypeError, value_error=ValueError)
 

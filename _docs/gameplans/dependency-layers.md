@@ -202,8 +202,8 @@ behavior shared across higher layers lives in the lowest layer its importers sha
   family plus `require_arg`/ `require_conf_key`), `_recordutils.py` (`field_names`,
   `required_attrs_keys`, the compact serializers), `_sentinels.py` (moved whole:
   `MISSING`, `StreamState`, the `Sentinel` shape and its guards), and in `_typing.py`
-  `resolve_enum` plus the runtime `isinstance` tuples (their type aliases stay in
-  `types/_scalars.py`).
+  `require_enum`/`resolve_enum` plus the runtime `isinstance` tuples (their type
+  aliases stay in `types/_scalars.py`).
 - **`_sentinels.py` is a deliberate exception.** `_guards.py` needs `MISSING` at
   runtime, so the file moved whole rather than splitting it or giving `_guards.py` its
   own placeholder object. The `StreamState` enum and the `Sentinel` TypedDict came

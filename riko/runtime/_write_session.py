@@ -25,7 +25,7 @@ from riko.definitions._write import (
     WriteMode,
     WriteResult,
 )
-from riko.io._reencode import IterStringIO, Reencoder, reencode
+from riko.io._reencode import BytesReencoder, IterStringIO, Reencoder
 from riko.io._serialization import serialize_items
 from riko.types._enums import FmtLike, Formats, StrLike
 
@@ -79,7 +79,7 @@ def _cast_bytes(
     content: str | ConversionOutput,
 ) -> IterStringIO | Reencoder[bytes] | bytes:
     if isinstance(content, StringIO):
-        text = reencode(content, toenc=ENCODING)
+        text = BytesReencoder(content, toenc=ENCODING)
     elif isinstance(content, str):
         text = content.encode(ENCODING)
     else:
@@ -184,19 +184,17 @@ class _SyncFileWriteSession(_FileWriteSession):
 
     Examples:
 
-        >>> from riko import get_temp_file
+        >>> from riko import get_temp_path
         >>> from riko.definitions._targets import build_write
         >>>
-        >>> with get_temp_file() as fp:
-        ...     prepared = build_write(fp.name, fmt="jsonl")
+        >>> with get_temp_path("items.jsonl") as path:
+        ...     prepared = build_write(path, fmt="jsonl")
         ...     session = _SyncFileWriteSession(prepared)
         ...     session.acquire()
         ...     session.write([{"x": 0}, {"x": 1}])
         ...     _ = session.finalize()
         ...     session.close()
-        ...
-        ...     with open(fp.name, mode="rb") as f:
-        ...         f.read()
+        ...     path.read_bytes()
         b'{"x": 0}\n{"x": 1}\n'
 
     """
@@ -313,19 +311,17 @@ class _SyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_temp_file
+            >>> from riko import get_temp_path
             >>> from riko.definitions._targets import build_write
             >>>
-            >>> with get_temp_file() as fp:
-            ...     prepare = build_write(fp.name, fmt="jsonl")
+            >>> with get_temp_path("items.jsonl") as path:
+            ...     prepare = build_write(path, fmt="jsonl")
             ...     session = _SyncFileWriteSession(prepare)
             ...     session.acquire()
             ...     session.write({"x": 0})
             ...     _ = session.finalize()
             ...     session.close()
-            ...
-            ...     with open(fp.name, mode="rb") as f:
-            ...         f.read()
+            ...     path.read_bytes()
             b'{"x": 0}\n'
 
         """
@@ -365,11 +361,11 @@ class _SyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_temp_file
+            >>> from riko import get_temp_path
             >>> from riko.definitions._targets import build_write
             >>>
-            >>> with get_temp_file() as fp:
-            ...     session = _SyncFileWriteSession(build_write(fp.name))
+            >>> with get_temp_path("items.json") as path:
+            ...     session = _SyncFileWriteSession(build_write(path))
             ...     session.acquire()
             ...     session.write([{"x": 1}])
             ...     result = session.finalize()
@@ -395,11 +391,11 @@ class _SyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import get_temp_file
+            >>> from riko import get_temp_path
             >>> from riko.definitions._targets import build_write
             >>>
-            >>> with get_temp_file() as fp:
-            ...     prepared = build_write(fp.name, fmt="csv")
+            >>> with get_temp_path("items.csv") as path:
+            ...     prepared = build_write(path, fmt="csv")
             ...     session = _SyncFileWriteSession(prepared)
             ...     session.acquire()
             ...     session.close()
@@ -529,20 +525,18 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import async_get_temp_file, issync, run
+            >>> from riko import async_get_temp_path, issync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with async_get_temp_file() as fp:
-            ...         prepare = build_write(fp.name, fmt="jsonl")
+            ...     async with async_get_temp_path("items.jsonl") as path:
+            ...         prepare = build_write(path, fmt="jsonl")
             ...         session = _AsyncFileWriteSession(prepare)
             ...         await session.aacquire()
             ...         await session.awrite({"x": 0})
             ...         _ = await session.afinalize()
             ...         await session.aclose()
-            ...
-            ...         with open(fp.name, mode="rb") as f:
-            ...             print(f.read())
+            ...         print(path.read_bytes())
             >>>
             >>> run(main)
             b'{"x": 0}\n'
@@ -588,12 +582,12 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import async_get_temp_file, issync, run
+            >>> from riko import async_get_temp_path, issync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
-            ...     async with async_get_temp_file() as fp:
-            ...         session = _AsyncFileWriteSession(build_write(fp.name))
+            ...     async with async_get_temp_path("items.json") as path:
+            ...         session = _AsyncFileWriteSession(build_write(path))
             ...         await session.aacquire()
             ...         await session.awrite([{"x": 1}])
             ...         result = await session.afinalize()
@@ -643,11 +637,11 @@ def file_write_session(prepared: PreparedWrite) -> Generator[SyncWriteSession]:
 
     Examples:
 
-        >>> from riko import get_temp_file
+        >>> from riko import get_temp_path
         >>> from riko.definitions._targets import build_write
         >>>
-        >>> with get_temp_file() as fp:
-        ...     prepared = build_write(fp.name)
+        >>> with get_temp_path("items.json") as path:
+        ...     prepared = build_write(path)
         ...
         ...     with file_write_session(prepared) as session:
         ...         session.write([{"x": 0}])
