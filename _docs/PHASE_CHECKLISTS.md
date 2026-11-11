@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3352 passed / 103 xfailed**. The user commits.
+Suite: **3355 passed / 104 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
