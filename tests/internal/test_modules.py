@@ -82,6 +82,7 @@ from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
 
 if TYPE_CHECKING:
+    from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
     from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
 
@@ -1147,6 +1148,27 @@ class TestPrepare:
 
         with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
             strconcat.prepare(extra, conf={}, **kwargs)
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason=(
+            "a frozen per-module config object is not yet implemented: a static "
+            "configuration is cast once and the one mutable objconf is handed to "
+            "every item, so a parser's write to it reaches the next item"
+        ),
+    )
+    def test_prepared_static_objconf_is_isolated_per_item(self):
+        seen: list[int] = []
+
+        @processor()
+        def pipe(item: Item, objconf: DynamicConf, tuples: object, **_: object) -> Item:
+            seen.append(objconf["count"])
+            objconf["count"] += 1
+            return item
+
+        list(pipe([{"a": 1}, {"a": 2}], conf={"count": 0}))
+        assert seen == [0, 0]
 
 
 class _FalsyCaster:

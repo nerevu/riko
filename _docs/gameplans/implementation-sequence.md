@@ -1436,7 +1436,13 @@ conf contract:
   copies at each hand-off (convention only).
 
 Do not freeze `PreparedModule.conf` or flip the conf keys to `ReadOnly` ahead of this
-decision.
+decision. The same contract covers the cast objconf one layer down (repository audit
+triage 2026-11-11): `PreparedModule.static_casted` caches one mutable `Objectify` for a
+static configuration and the processor wrapper hands that same object to every item (and
+to every worker under threaded mapping), so a parser's write to it reaches the next
+item. No built-in parser writes to its objconf; the frozen config object closes the
+hazard for extension parsers. Strict xfail
+`tests/internal/test_modules.py::TestPrepare::test_prepared_static_objconf_is_isolated_per_item`.
 
 Measured 2026-10-20 (triage of the conf-parse memoization removal): a direct `pipe()`
 call once per item costs 198 µs against 116 µs on v0.77.3, because every call prepares
