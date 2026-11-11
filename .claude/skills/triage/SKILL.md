@@ -18,7 +18,10 @@ on. Do not write a fix until the disposition is decided.
 
 Confirm the finding is real and understand its mechanism — reproduce it or
 read the code path. If the cause is not yet diagnosed, that's a /diagnose job
-first; triage consumes diagnosed findings.
+first; triage consumes diagnosed findings. A CI failure that passes locally usually
+belongs to one matrix leg (no extras, or another Python): reproduce it with
+`python .claude/skills/triage/ci_legs.py [--legs 3.12-bare,3.13-extras] <targets>`,
+which runs pytest in cached scratch venvs synced the way CI syncs each leg.
 
 ## 2. Find the owner
 
