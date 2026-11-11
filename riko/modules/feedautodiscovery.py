@@ -53,8 +53,11 @@ async def async_parser(
     Args:
 
         _: The item. Unused.
+
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration: `url`, `strict`, `sort`, and `user_agent`.
+
+        objconf: The module configuration: `url`, `strict`, `sort`, `link_type`, and
+            `user_agent`.
 
     Returns:
 
@@ -62,7 +65,8 @@ async def async_parser(
 
     Raises:
 
-        TypeError: If ``conf`` has no ``url`` key.
+        TypeError: If ``conf`` has no ``url`` key or it is empty.
+        ValueError: If ``link_type`` is empty or repeats a type.
 
     Examples:
 
@@ -78,10 +82,10 @@ async def async_parser(
         file://riko/data/bbci.co.uk.xml
 
     """
-    url: str = require_conf_key(objconf, "url", "feedautodiscovery")
+    url: str = require_conf_key(objconf, "url", "feedautodiscovery", strict=True)
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
     stream = await aload_rss_links(
-        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+        url, link_type=objconf.link_type, user_agent=objconf.user_agent, **rkwargs
     )
     return stream
 
@@ -95,8 +99,11 @@ def parser(
     Args:
 
         _: The item. Unused.
+
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration: `url`, `strict`, `sort`, and `user_agent`.
+
+        objconf: The module configuration: `url`, `strict`, `sort`, `link_type`, and
+            `user_agent`.
 
     Returns:
 
@@ -104,7 +111,8 @@ def parser(
 
     Raises:
 
-        TypeError: If ``conf`` has no ``url`` key.
+        TypeError: If ``conf`` has no ``url`` key or it is empty.
+        ValueError: If ``link_type`` is empty or repeats a type.
 
     Examples:
 
@@ -117,16 +125,16 @@ def parser(
         'file://riko/data/bbci.co.uk.xml'
         >>> objconf = Objectify({"url": url, "strict": False})
         >>> next(parser(None, None, objconf))["link"]
-        'greenhughes.xml'
+        'file:///.../riko/data/greenhughes.xml'
         >>> objconf = Objectify({"url": url, "strict": False, "sort": True})
         >>> next(parser(None, None, objconf))["link"]
         'file://riko/data/bbci.co.uk.xml'
 
     """
-    url: str = require_conf_key(objconf, "url", "feedautodiscovery")
+    url: str = require_conf_key(objconf, "url", "feedautodiscovery", strict=True)
     rkwargs = {"auto_sort": objconf.sort, "strict": objconf.strict}
     stream = load_rss_links(
-        url, link_type=None, user_agent=objconf.user_agent, **rkwargs
+        url, link_type=objconf.link_type, user_agent=objconf.user_agent, **rkwargs
     )
     return stream
 
@@ -151,6 +159,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
 
+            link_type (str | list[str]): The link type (a ``FeedType`` or any other
+                string), or types in order of preference, to accept as feeds (default:
+                every ``FeedType``, in declaration order).
+
             user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
                 ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
                 request (default: "riko/<version>").
@@ -174,7 +186,8 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Raises:
 
-        TypeError: If ``conf`` has no ``url`` key.
+        TypeError: If ``conf`` has no ``url`` key or it is empty.
+        ValueError: If ``link_type`` is empty or repeats a type.
 
     Examples:
 
@@ -211,6 +224,10 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
             sort (bool): Whether to order links by how likely each is to be a
                 feed, rather than document order (default: False).
 
+            link_type (str | list[str]): The link type (a ``FeedType`` or any other
+                string), or types in order of preference, to accept as feeds (default:
+                every ``FeedType``, in declaration order).
+
             user_agent (str): HTTP ``User-Agent`` to send. ``UserAgent.DESKTOP``,
                 ``MOBILE``, or ``RANDOM`` pick a common browser agent of that kind per
                 request (default: "riko/<version>").
@@ -234,7 +251,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Raises:
 
-        TypeError: If ``conf`` has no ``url`` key.
+        TypeError: If ``conf`` has no ``url`` key or it is empty.
+        ValueError: If ``link_type`` is empty or repeats a type.
 
     Examples:
 
@@ -243,6 +261,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> conf = {"url": get_path("bbc.html")}
         >>> next(pipe(conf=conf))["link"]
         'file://riko/data/bbci.co.uk.xml'
+        >>> # Include links that declare no feed type:
+        >>> next(pipe(conf={"url": get_path("bbc.html"), "strict": False}))["link"]
+        'file:///.../riko/data/greenhughes.xml'
+        >>> # Accept only Atom links:
+        >>> list(pipe(conf={"url": get_path("bbc.html"), "link_type": "atom+xml"}))
+        []
 
     """
     return parser(*args, **kwargs)

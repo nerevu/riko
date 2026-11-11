@@ -11,11 +11,14 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Unpack
 
+from riko.base._exceptions import RemovedOptionError
+from riko.types._frozendict import EMPTY_INPUT_SCHEMAS
 from riko.types._wrappers import is_wrapper_meta
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from riko.types._frozendict import FrozenInputSchemas
     from riko.types._options import RawCallOptions
     from riko.types._wrappers import (
         ExtraName,
@@ -28,6 +31,12 @@ if TYPE_CHECKING:
         WrapperOutput,
     )
     from riko.types.modules import ModuleSubtype, ModuleType
+
+_RETIRED_CALL_OPTION = "mode"
+_RETIRED_MODE_HINT = (
+    "a pipe only runs. Use describe_module() to read a workflow's input schemas and "
+    "dependencies"
+)
 
 
 def prepare_call(
@@ -154,6 +163,8 @@ def stamp_wrapper_meta(
     isasync: bool,
     sequential_inputs: bool = False,
     prepare: Preparer | None = None,
+    input_schemas: FrozenInputSchemas | None = EMPTY_INPUT_SCHEMAS,
+    dependencies: tuple[str, ...] | None = (),
 ) -> None:
     """
     Stamps the discovery metadata every pipe callable carries onto ``target``.
@@ -164,6 +175,9 @@ def stamp_wrapper_meta(
     Args:
 
         target: The callable to annotate in place.
+
+    Kwargs:
+
         name: The module name.
         module_type: The module kind, e.g., "processor" (stored as ``type``).
         subtype: The primary module subtype.
@@ -172,12 +186,16 @@ def stamp_wrapper_meta(
         loopable: Whether ``loop`` can embed the module.
         isasync: Whether ``target`` is an ``async_pipe``.
 
-    Kwargs:
-
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
+
         prepare: Prepares a call for reuse over many items. Defaults to preparing
             ``target`` with its configuration and call options (default: None).
+
+        input_schemas: The frozen schemas of the inputs the pipe reads (default: none).
+
+        dependencies: The sorted module and stored-workflow names the pipe runs
+            (default: none).
 
     Examples:
 
@@ -196,6 +214,8 @@ def stamp_wrapper_meta(
         ... )
         >>> pipe.type, pipe.isasync
         ('processor', False)
+        >>> pipe.dependencies
+        ()
         >>> list(pipe.prepare(conf={"x": 1})({"y": 2}))
         []
 
@@ -208,9 +228,40 @@ def stamp_wrapper_meta(
     setattr(target, "loopable", loopable)  # noqa: B010
     setattr(target, "isasync", isasync)  # noqa: B010
     setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
+    setattr(target, "input_schemas", input_schemas)  # noqa: B010
+    setattr(target, "dependencies", dependencies)  # noqa: B010
     preparer = prepare
 
     if preparer is None and is_wrapper_meta(target):
         preparer = partial(prepare_call, target)
 
     setattr(target, "prepare", preparer)  # noqa: B010
+
+
+def validate_call_keywords(name: str, names: Iterable[str]) -> None:
+    """
+    Validates that a pipe call's keyword ``names`` leave out the retired ``mode``.
+
+    A pipe only runs. What a workflow reads and runs comes from ``describe_module``.
+
+    Args:
+
+        name: The pipe's module name, used in the error.
+        names: The keyword argument names the call supplied.
+
+    Raises:
+
+        RemovedOptionError: When ``names`` includes ``mode`` (a ``TypeError``).
+
+    Examples:
+
+        >>> validate_call_keywords("hash", ["conf"])
+        >>> validate_call_keywords("hash", ["mode"])
+        Traceback (most recent call last):
+        ...
+        riko.exceptions.RemovedOptionError: the 'hash' module no longer takes...
+
+    """
+    if _RETIRED_CALL_OPTION in names:
+        hint = _RETIRED_MODE_HINT
+        raise RemovedOptionError(_RETIRED_CALL_OPTION, name=name, hint=hint)

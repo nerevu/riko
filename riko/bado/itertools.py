@@ -26,7 +26,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterable
 from contextlib import aclosing
-from functools import partial
 from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._config import DEF_CONCURRENCY_LIMIT
@@ -400,8 +399,11 @@ def async_reduce[T, S](
 
         >>> from riko import run
         >>>
+        >>> async def add(x, y):
+        ...     return x + y
+        >>>
         >>> async def main():
-        ...     print(await async_reduce(lambda x, y: x + y, range(5)))
+        ...     print(await async_reduce(add, range(5)))
         >>>
         >>> run(main)
         10
@@ -458,20 +460,23 @@ async def async_map[T, S](
 
         >>> from riko import run
         >>>
-        >>> async def double(x):
-        ...     return x * 2
+        >>> async def scale(x, factor=1):
+        ...     return x * factor
         >>>
         >>> async def main():
-        ...     print(await async_map(double, range(3)))
+        ...     print(await async_map(scale, range(5), limit=2, factor=3))
         >>>
         >>> run(main)
-        [0, 2, 4]
+        [0, 3, 6, 9, 12]
 
     """
     if limit < 0:
         raise ValueError("limit cannot be negative")
 
-    _func = _cap(partial(func, **kwargs) if kwargs else func, budget)
+    async def call(item: T) -> S:
+        return await func(item, **kwargs)
+
+    _func = _cap(call if kwargs else func, budget)
     items = list(content)
     results: dict[int, S] = {}
     limiter = CapacityLimiter(limit) if limit else None
@@ -516,8 +521,9 @@ async def _pool_stream[T, S](
         drain: ``async (item, out) -> None`` — does the per-item work
             and ``await out.send(...)`` for each result to emit.
 
-        limit: Number of concurrent workers (must be >= 1).
+    Kwargs:
 
+        limit: Number of concurrent workers (must be >= 1).
         buffer: Size of the completed-results queue (must be >= 0).
 
     Yields:

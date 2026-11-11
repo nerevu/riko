@@ -97,8 +97,13 @@ def build_snapshot(parent: str, swaps: Iterable[str]) -> str:
     return _git("commit-tree", tree, "-p", parent, "-m", "fail-first snapshot")
 
 
-def build_old_tree(ref: str) -> Path:
-    """Builds ``ref``'s tree with the working tree's changed test files on top."""
+def build_old_tree(ref: str, swapped: Iterable[str] = ()) -> Path:
+    """
+    Builds ``ref``'s tree with the working tree's changed test files on top.
+
+    A test file ``--old`` swapped keeps the snapshot's version, so a swap under
+    ``tests/`` is not undone by the overlay.
+    """
     folder = Path(tempfile.mkdtemp(prefix="fail-first-"))
     archive = subprocess.run(
         [GIT, "archive", ref], cwd=ROOT_DIR, check=True, capture_output=True
@@ -107,8 +112,10 @@ def build_old_tree(ref: str) -> Path:
     with tarfile.open(fileobj=BytesIO(archive.stdout)) as tar:
         tar.extractall(folder, filter="data")
 
+    kept = set(swapped)
+
     for name in get_changed_tests(ref):
-        if (ROOT_DIR / name).exists():
+        if name not in kept and (ROOT_DIR / name).exists():
             (folder / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT_DIR / name, folder / name)
 
@@ -125,7 +132,7 @@ def main() -> int:
     args = parser.parse_args()
     selectors = [arg for arg in args.pytest_args if arg != "--"]
     ref = build_snapshot(args.ref, args.old) if args.old else args.ref
-    folder = build_old_tree(ref)
+    folder = build_old_tree(ref, [swap.split("=", 1)[0] for swap in args.old])
     command = [sys.executable, "-m", "pytest", *PYTEST_FLAGS, "-o", "addopts=", "-rf"]
     env = {**os.environ, "PYTHONPATH": str(folder)}
     run = subprocess.run(

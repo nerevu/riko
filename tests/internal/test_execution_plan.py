@@ -8,6 +8,7 @@ from threading import get_ident
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from attrs import evolve
 
 from riko.bado._util import maybe_async
 from riko.bado.itertools import as_async
@@ -39,7 +40,7 @@ from riko.runtime._workflow_pipes import workflow
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._enums import BasicCastType
 from riko.types._options import CallOptions
-from riko.types._workflow import Endpoint, GraphIndex
+from riko.types._workflow import Endpoint, WorkflowIndex
 from tests import async_test, skipif_issync
 from tests._execution import (
     EMPTY,
@@ -179,6 +180,15 @@ class TestExecutionPlan:
         assert selected is interface.pipe is expected
         assert interface.native is (f"{mode}_pipe" in pipes)
 
+    def test_an_empty_plan_is_not_self_starting(self) -> None:
+        plan = ExecutionPlan.from_workflow(Workflow(), dispatcher)
+        assert plan.is_self_starting_output() is False
+
+        with pytest.raises(
+            InvalidPipelineError, match="empty workflow requires a seed"
+        ):
+            plan.require_self_starting_output("default")
+
     def test_build_does_not_invoke_the_pipe(self) -> None:
         calls: list[int] = []
 
@@ -198,11 +208,11 @@ class TestExecutionPlan:
         # re-interpreting its topology.
         calls: list[tuple[object, ...]] = []
 
-        def counting(*args: object) -> GraphIndex:
+        def counting(*args: object) -> WorkflowIndex:
             calls.append(args)
-            return GraphIndex(*args)  # pyright: ignore[reportArgumentType]
+            return WorkflowIndex(*args)  # pyright: ignore[reportArgumentType]
 
-        monkeypatch.setattr(workflow_definitions, "GraphIndex", counting)
+        monkeypatch.setattr(workflow_definitions, "WorkflowIndex", counting)
         ExecutionPlan.from_workflow(module_workflow("count"), dispatcher)
         assert len(calls) == 1
 
@@ -298,6 +308,22 @@ class TestExecutionPlan:
 
         with pytest.raises(InvalidPipelineError, match="splitter"):
             ExecutionPlan.from_workflow(module_workflow("listy"), dispatcher=dispatcher)
+
+    def test_inputs_are_only_set_with_the_confs_built_from_them(self):
+        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
+        node = ModuleNode(id="b", name="itembuilder", conf=conf)
+        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+        resolved = plan.with_inputs({"q": 5})
+
+        assert resolved.inputs == {"q": 5}
+        assert resolved.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
+
+        with pytest.raises(TypeError, match="inputs"):
+            evolve(plan, inputs={"q": 5})
+
+        with pytest.raises(InvalidPipelineError, match="already built"):
+            resolved.with_inputs({"q": 6})
 
     @pytest.mark.parametrize(
         ("flow", "modules", "embeds", "match"), CONSTRUCTION_REJECTIONS
@@ -749,7 +775,7 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
         id="r", name="strreplace", conf=conf, options={"field": "content"}
     )
     nodes = [*extra_nodes, node]
-    return build_workflow(nodes, edges=edges, outputs={"default": Endpoint("r", "out")})
+    return build_workflow(nodes, edges=edges)
 
 
 FALLBACKS = [

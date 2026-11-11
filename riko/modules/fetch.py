@@ -89,7 +89,7 @@ async def async_parser(
         Donations
 
     """
-    url: str = require_conf_key(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch", strict=True)
     content: str = await async_url_read(
         url, encoding=objconf.encoding, user_agent=objconf.user_agent
     )
@@ -129,7 +129,7 @@ def parser(
         'Donations'
 
     """
-    url: str = require_conf_key(objconf, "url", "fetch")
+    url: str = require_conf_key(objconf, "url", "fetch", strict=True)
     entries = parse_rss(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     return augment_entries(entries)
 

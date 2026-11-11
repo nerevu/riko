@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.fetch import pipe as fetch
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import FetchRawConf
 
 if TYPE_CHECKING:
@@ -16,32 +15,24 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
-DEPENDENCIES = ["fetch"]
+INPUT_SCHEMAS = {}
 
 
-@workflow(subtype="source")
+@workflow(subtype="source", input_schemas=INPUT_SCHEMAS, dependencies=["fetch"])
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_478 = fetch(
-            item,
-            conf=FetchRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/feeds.feedburner.com_ouseful.xml",
-                    }
+    sw_478 = fetch(
+        item,
+        conf=FetchRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.feedburner.com_ouseful.xml",
                 }
-            ),
-            context=context,
-        )
-        _OUTPUT = sw_478
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
-    elif context.describe_input:
-        _OUTPUT = INPUTS
-    else:
-        _OUTPUT = DEPENDENCIES
+            }
+        ),
+        context=context,
+    )
+    _OUTPUT = sw_478
 
     return _OUTPUT
 

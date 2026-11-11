@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item, ItemOrValue
     from riko.types._values import BasicReturn, RikoDict, RikoList, RikoValue
-    from riko.types._wrappers import ExtraNames
+    from riko.types._wrappers import ExtraNames, Func
 
 
 def build_conf(
@@ -282,7 +282,9 @@ class PreparedModule[T, E]:
         if self.opts.get("ftype") == BasicCastType.NONE:
             field_parser = cast_none
         else:
-            field_parser = partial(get_field)
+            field_parser = get_field
+
+        conf_parser: Func[AnyModuleConf | None]
 
         if not self.is_conf_parsed:
             conf_parser = cast_none
@@ -398,11 +400,11 @@ def resolve_and_cast[T, E](
 
         item: The input item or value.
         opts: The resolved decoration and call options.
-        parsers: The field and conf parsers.
-        casters: The field, extract, and conf casters.
 
     Kwargs:
 
+        parsers: The field and conf parsers.
+        casters: The field, extract, and conf casters.
         defaults: The module's default conf.
         field: Optional field whose value replaces the item.
         module: The module name, used in error messages.

@@ -268,6 +268,9 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> func = lambda stream: ({"y": item["x"] + 3} for item in stream)
         >>> next(pipe(items, func=func))
         {'y': 3}
+        >>> total = lambda stream: sum(item["x"] for item in stream)
+        >>> next(pipe(items, func=total, emit=False))
+        {'aggregate': 10}
 
     """
     return parser(*args, **kwargs)

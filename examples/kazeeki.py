@@ -565,19 +565,8 @@ def build_pipelines() -> list[Pipeline]:
     ]
 
 
-def pipe(
-    test: bool = False, parallel: bool = False, threads: bool = False
-) -> list[Item]:
-    pipelines = build_pipelines()
-
-    if parallel:
-        executor = "thread" if threads else "process"
-        pipelines = [
-            pipeline.with_execution(executor=executor, concurrency="auto")
-            for pipeline in pipelines
-        ]
-
-    return list(chain.from_iterable(pipelines))
+def pipe(test: bool = False) -> list[Item]:
+    return list(chain.from_iterable(build_pipelines()))
 
 
 def async_pipe(test: bool | None = None) -> AsyncStream:

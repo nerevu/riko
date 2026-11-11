@@ -29,7 +29,7 @@ from riko.base._exceptions import (
     PipelineStateError,
 )
 from riko.base._paths import get_path
-from riko.definitions._context import Context, ExecutionMode
+from riko.definitions._context import Context
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
@@ -44,6 +44,8 @@ from riko.types._workflow import Endpoint
 from riko.types.modules import (
     ConfArg,
     FetchRawConf,
+    ItemBuilderRawConf,
+    Param,
     SortConf,
     SortConfRule,
     StrconcatConf,
@@ -110,6 +112,13 @@ _STOP_BOUND = 8
 _BOOM = pytest.raises(ValueError, match="boom")
 _A, _BB, _CCC = {"content": "a"}, {"content": "bb"}, {"content": "ccc"}
 _ASSIGNED = [_A, _BB, {"content": "CCC"}]
+_Q_REF = Param(
+    key=ConfArg(type="text", value="q"), value=ConfArg(type="int", value={"input": "q"})
+)
+_Q_CONF = ItemBuilderRawConf(attrs=_Q_REF)
+_SEP_CONF = TokenizerRawConf(delimiter=ConfArg(type="text", value={"input": "sep"}))
+_Q_DEFAULT = {"type": "integer", "default": 5}
+_INTEGER = {"type": "integer"}
 LIFECYCLE_SRC = [{"content": "x"}, {"content": "y"}]
 SRC = [{"content": "a"}, {"content": "b"}, {"content": "c"}]
 
@@ -142,13 +151,6 @@ PREDICATE_PENDING = pytest.mark.xfail(
 
 BRANCHES = ("fanin_branch_a", "fanin_branch_b", "fanin_branch_c")
 
-MODES = [
-    (ExecutionMode.RUN, False, False),
-    (ExecutionMode.DESCRIBE_INPUTS, True, False),
-    (ExecutionMode.DESCRIBE_DEPENDENCIES, False, True),
-    (ExecutionMode.DESCRIBE, True, True),
-]
-
 READER = "settings_resource_reader"
 
 
@@ -178,10 +180,7 @@ def _by_content(items):
 
 
 def _workflow() -> Workflow:
-    node = Pipeline.from_module("fetch").workflow.nodes["fetch-1"]
-    return Workflow(
-        nodes=[node], outputs={"default": Endpoint(node.id, "out")}, inputs={}
-    )
+    return Pipeline.from_module("fetch").workflow
 
 
 _NON_WORKFLOWS = [
@@ -200,7 +199,7 @@ class TestPipelineConstruction:
         assert sorted(pipeline.workflow.nodes) == ["fetch-1"]
         assert pipeline.workflow.outputs["default"] == Endpoint("fetch-1", "out")
         assert pipeline.workflow.edges == ()
-        assert pipeline.workflow.isvalid
+        assert pipeline.workflow.is_valid
 
     def test_equal_pipelines_hash_alike(self):
         conf = SortConf(rule=SortConfRule(field="x"))
@@ -223,7 +222,7 @@ class TestPipelineConstruction:
     def test_empty_constructor_builds_an_empty_workflow(self):
         pipeline = Pipeline()
         assert dict(pipeline.workflow.nodes) == {}
-        assert not pipeline.workflow.isvalid
+        assert not pipeline.workflow.is_valid
 
     def test_pipeline_is_generic_over_item_type(self):
         alias = Pipeline[int]
@@ -380,7 +379,7 @@ class TestPipelineChaining:
             pytest.param(
                 lambda p: p | p.with_context(Context(inputs={"a": 1})),
                 InvalidPipelineError,
-                "not a mode, inputs, or test flag",
+                "not inputs or a test flag",
                 id="context",
             ),
         ],
@@ -1334,7 +1333,7 @@ def _fanned_in(names: tuple[str, ...]) -> Pipeline[dict[str, str]]:
         nodes=[*branches, union],
         edges=edges,
         outputs={"default": Endpoint(union.id, "out")},
-        inputs={},
+        input_schemas={},
     )
     return Pipeline[dict[str, str]](flow)
 
@@ -1397,52 +1396,6 @@ class TestAsyncFanInParallel:
         assert peak == 2
 
 
-class TestContextMode:
-    """A ``Context`` carries one ``ExecutionMode`` the describe flags derive from."""
-
-    def test_default_mode_is_run(self):
-        assert Context().mode is ExecutionMode.RUN
-
-    @pytest.mark.parametrize(("mode", "wants_input", "wants_deps"), MODES)
-    def test_mode_drives_describe_properties(self, mode, wants_input, wants_deps):
-        context = Context(mode=mode)
-        assert context.describe_input is wants_input
-        assert context.describe_dependencies is wants_deps
-
-    def test_orthogonal_flags_preserved(self):
-        context = Context(mode=ExecutionMode.DESCRIBE, test=True)
-        assert context.test is True
-        assert context.mode is ExecutionMode.DESCRIBE
-
-    def test_describe_properties_are_read_only(self):
-        context = Context()
-
-        with pytest.raises(AttributeError):
-            context.describe_input = True  # pyright: ignore[reportAttributeAccessIssue]
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="a Pipeline runs its modules even when its context only asks to "
-        "describe it, until pipelines can declare their inputs and dependencies",
-    )
-    @pytest.mark.parametrize(
-        "mode", [ExecutionMode.DESCRIBE_INPUTS, ExecutionMode.DESCRIBE_DEPENDENCIES]
-    )
-    def test_describing_pipeline_does_not_run_it(self, mode):
-        pulled: list[dict[str, int]] = []
-
-        def source() -> Iterator[dict[str, int]]:
-            for item in [{"x": 1}, {"x": 2}]:
-                pulled.append(item)
-                yield item
-
-        pipeline = Pipeline().hash()
-        described = pipeline.with_context(Context(mode=mode))
-        list(described(source()))
-        assert pulled == []
-
-
 FREEZING_CONTEXTS = [
     pytest.param(lambda inputs: Context(inputs=inputs), id="constructor"),
     pytest.param(lambda inputs: Context().replace(inputs=inputs), id="replace"),
@@ -1487,17 +1440,16 @@ class TestContext:
             meta["ids"] = ()
 
     def test_roundtrips_through_pickle(self):
-        base = Context(mode=ExecutionMode.DESCRIBE, inputs={"count": 2}, test=True)
+        base = Context(inputs={"count": 2}, test=True)
         context = base.with_resource("client", Resource.from_external(Connection()))
         restored = cast("Context", loads(dumps(context)))  # noqa: S301
 
-        assert restored.mode is ExecutionMode.DESCRIBE
         assert restored.test is True
         assert restored.inputs == {"count": 2}
         assert list(restored.resources) == ["client"]
 
         with pytest.raises(AttributeError):
-            restored.mode = ExecutionMode.RUN  # pyright: ignore[reportAttributeAccessIssue]
+            restored.test = False  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_resources_mapping_is_read_only(self):
         context = Context()
@@ -1510,16 +1462,9 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'inputs' must be a mapping"):
             Context(inputs=inputs)
 
-    @pytest.mark.parametrize(
-        ("mode", "match"),
-        [
-            pytest.param(5, "Invalid ExecutionMode: 5", id="non-string"),
-            pytest.param("bogus", "Invalid ExecutionMode: 'bogus'", id="unknown"),
-        ],
-    )
-    def test_invalid_mode_is_rejected(self, mode: Any, match: str):
-        with pytest.raises(ValueError, match=match):
-            Context(mode=mode)
+    def test_non_json_input_values_are_rejected(self):
+        with pytest.raises(InvalidPipelineError, match="set is not JSON-native"):
+            Context(inputs={"tags": {"a"}})  # pyright: ignore[reportArgumentType]
 
     def test_resources_must_be_reusable(self):
         with pytest.raises(
@@ -1532,7 +1477,7 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    @pytest.mark.parametrize("name", ["_mode", "_inputs", "_resources", "extra"])
+    @pytest.mark.parametrize("name", ["_inputs", "_resources", "extra"])
     def test_private_fields_cannot_be_set(self, name: str):
         context = Context()
 
@@ -1546,7 +1491,7 @@ class TestContext:
         context = Context()
 
         with pytest.raises(AttributeError):
-            context.mode = ExecutionMode.DESCRIBE  # pyright: ignore[reportAttributeAccessIssue]
+            context.test = True  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_rejects_the_removed_submodule_flag(self):
         with pytest.raises(TypeError):
@@ -1622,7 +1567,7 @@ def _reader_workflow() -> Workflow:
         nodes=[node],
         edges=(),
         outputs={"default": Endpoint(node.id, "out")},
-        inputs={},
+        input_schemas={},
         resources=("primary",),
     )
 
@@ -1647,6 +1592,13 @@ class TestEnvironmentBinding:
         assert pipeline.context is context
         assert base.context is None
         assert pipeline.sort().context is context
+
+    def test_with_input_schemas_merges_schemas(self):
+        base = Pipeline.from_module("fetch").with_input_schemas(feed={"type": "string"})
+        pipeline = base.with_input_schemas(limit={"type": "integer"})
+        expected = {"feed": {"type": "string"}, "limit": {"type": "integer"}}
+        assert pipeline.workflow.input_schemas == expected
+        assert base.workflow.input_schemas == {"feed": {"type": "string"}}
 
     def test_with_resource_extends_the_bound_context(self):
         def open_db():
@@ -1681,6 +1633,62 @@ class TestEnvironmentBinding:
                 resource,
                 lazy=True,  # pyright: ignore[reportArgumentType]
             )
+
+
+_RESOLVED_INPUTS = [
+    pytest.param(Context(inputs={"q": 2, "other": "x"}), [{"q": 2}], id="given"),
+    pytest.param(Context(test=True), [{"q": 5}], id="default-under-test"),
+    pytest.param(Context(), [{"q": 5}], id="default"),
+    pytest.param(None, [{"q": 5}], id="no-context"),
+]
+
+_INPUT_ERRORS = [
+    pytest.param(_INTEGER, None, r"workflow input\(s\): \['q'\]", id="missing"),
+    pytest.param(_INTEGER, {"q": "x"}, "workflow input 'q' is invalid", id="invalid"),
+    pytest.param({"type": "nope"}, {"q": 1}, "schema: data.type", id="bad-type"),
+    pytest.param(
+        {"type": "string", "pattern": "["}, {"q": "x"}, "invalid schema", id="bad-regex"
+    ),
+]
+
+
+class TestWorkflowInputs:
+    @pytest.mark.parametrize(("context", "expected"), _RESOLVED_INPUTS)
+    def test_a_module_conf_reference_reads_the_resolved_input(self, context, expected):
+        builder = Pipeline.from_module("itembuilder", conf=_Q_CONF)
+        pipeline = builder.with_input_schemas(q=_Q_DEFAULT).with_context(context)
+        assert list(pipeline) == expected
+
+    @async_test
+    async def test_a_module_conf_reference_reads_the_input_async(self):
+        builder = Pipeline.from_module("itembuilder", conf=_Q_CONF)
+        pipeline = builder.with_input_schemas(q=_Q_DEFAULT)
+        assert [item async for item in pipeline] == [{"q": 5}]
+
+    def test_a_loop_embed_reference_reads_the_input(self):
+        embed = Embed(name="tokenizer", conf=_SEP_CONF)
+        looped = Pipeline.from_module("loop", embed=embed, options={"emit": True})
+        typed = looped.with_input_schemas(sep={"type": "string"})
+        pipeline = typed.with_context(Context(inputs={"sep": ","}))
+        assert list(pipeline([{"content": "a,b"}])) == [_A, {"content": "b"}]
+
+    @pytest.mark.parametrize(("schema", "inputs", "match"), _INPUT_ERRORS)
+    def test_a_bad_input_raises_before_a_resource_is_acquired(
+        self, reader, schema, inputs, match
+    ):
+        entered: list[bool] = []
+
+        def open_db():
+            entered.append(True)
+            yield "conn"
+
+        typed = Pipeline(_reader_workflow()).with_input_schemas(q=schema)
+        context = Context(inputs=inputs).with_resource("primary", open_db)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            list(typed.with_context(context))
+
+        assert entered == []
 
 
 class TestAsyncEnvironmentBinding:

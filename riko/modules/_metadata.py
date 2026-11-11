@@ -1,6 +1,6 @@
 # vim: sw=4:ts=4:expandtab
 """
-Derives, categorizes, and lists metadata for built-in and registered modules.
+Derives and lists metadata for built-in and registered modules.
 
 Examples:
     Basic usage::
@@ -19,14 +19,14 @@ import builtins
 from functools import partial
 from importlib import import_module
 from pkgutil import iter_modules as iter_package_modules
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, overload
 
-from riko.base._config import SINK_NAMES
 from riko.base._guards import is_callable
 from riko.base._typing import import_or_else
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.runtime._module_registry import module_registry
-from riko.types._wrappers import WRAPPER_META, require_wrapper_meta
+from riko.runtime._workflow_resolver import workflow_resolver
+from riko.types._wrappers import WRAPPER_META, is_wrapper_meta, require_wrapper_meta
 from riko.types.modules import ModuleMetadata, ModuleSubtype, ModuleType
 
 if TYPE_CHECKING:
@@ -45,43 +45,6 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
     "composer": "operator",
     "aggregator": "operator",
 }
-
-
-def get_module_category(metadata: ModuleMetadata) -> ModuleCategory:
-    """
-    Derives the user-facing discovery category for a module.
-
-    Categories are based on data-flow role, not the runtime module type.
-
-    Args:
-
-        metadata: The module's metadata.
-
-    Returns:
-
-        ``"source"``, ``"sink"``, or ``"transform"``.
-
-    Examples:
-
-        >>> from riko import get_module_metadata
-        >>> from riko.ext import get_module_category
-        >>>
-        >>> get_module_category(get_module_metadata("fetch"))
-        'source'
-        >>> get_module_category(get_module_metadata("write"))
-        'sink'
-        >>> get_module_category(get_module_metadata("sort"))
-        'transform'
-
-    """
-    if metadata.name in SINK_NAMES:
-        result = "sink"
-    elif metadata.subtype == "source":
-        result = "source"
-    else:
-        result = "transform"
-
-    return result
 
 
 def _metadata_from_targets(
@@ -147,17 +110,7 @@ def _load_registry_metadata(name: str) -> ModuleMetadata | None:
     return metadata
 
 
-@overload
-def get_module_metadata(
-    name: ModuleNameLike, strict: Literal[False] = ...
-) -> ModuleMetadata | None: ...
-@overload
-def get_module_metadata(
-    name: ModuleNameLike, strict: Literal[True]
-) -> ModuleMetadata: ...
-def get_module_metadata(
-    name: ModuleNameLike, strict: bool = False
-) -> ModuleMetadata | None:
+def get_module_metadata(name: ModuleNameLike) -> ModuleMetadata | None:
     """
     Derives a module's metadata from its pipe callables.
 
@@ -167,19 +120,13 @@ def get_module_metadata(
 
         name: Module name.
 
-    Kwargs:
-
-        strict: Whether to raise instead of returning ``None`` when the name is not
-            a module or the module declares no metadata.
-
     Returns:
 
-        The module's metadata, or ``None`` when ``strict`` is false and the name has
-        none.
+        The module's metadata, or ``None`` when the name is not a module or the module
+        declares no metadata.
 
     Raises:
 
-        ValueError: When ``strict`` is true and the name has no metadata.
         TypeError: When the module's pipe lacks module metadata, or its sync and
             async pipes disagree about their metadata.
 
@@ -208,9 +155,6 @@ def get_module_metadata(
         require = partial(require_wrapper_meta, what=f"{label} pipe")
         args = (canonical, tuple(map(require, pipes)))
         metadata = _metadata_from_targets(*args, label=label, strict_naming=True)
-
-    if strict and metadata is None:
-        raise ValueError(f"Module {name!r} has no metadata")
 
     return metadata
 
@@ -246,34 +190,12 @@ def _matches_subtype(
     elif primary:
         matched = module.subtype == subtype
     else:
-        matched = subtype in module.subtypes
+        matched = subtype in SUBTYPES and module.supports(subtype)
 
     return matched
 
 
-@overload
-def list_modules(
-    *,
-    type: ModuleType | str | None = ...,
-    subtype: ModuleSubtype | str | None = ...,
-    category: ModuleCategory | str | None = ...,
-    provider: str | None = ...,
-    primary: bool = ...,
-    loopable: bool | None = ...,
-    show_metadata: Literal[False] = ...,
-) -> list[str]: ...
-@overload
-def list_modules(
-    *,
-    type: ModuleType | str | None = None,
-    subtype: ModuleSubtype | str | None = None,
-    category: ModuleCategory | str | None = ...,
-    provider: str | None = ...,
-    primary: bool = ...,
-    loopable: bool | None = ...,
-    show_metadata: Literal[True],
-) -> list[ModuleMetadata]: ...
-def list_modules(
+def list_module_metadata(
     *,
     type: ModuleType | str | None = None,
     subtype: ModuleSubtype | str | None = None,
@@ -281,10 +203,9 @@ def list_modules(
     provider: str | None = None,
     primary: bool = False,
     loopable: bool | None = None,
-    show_metadata: bool = False,
-) -> list[str] | list[ModuleMetadata]:
+) -> list[ModuleMetadata]:
     """
-    Lists the module names, or their metadata, that match the given filters.
+    Lists the metadata of the modules that match the given filters.
 
     Built-in modules are listed alongside registered and entry-point modules; a
     registered module shadows a built-in of the same name.
@@ -297,17 +218,81 @@ def list_modules(
         provider: Only list modules from this provider (e.g., ``"riko"`` for built-ins).
         primary: Whether ``subtype`` must be marked as primary (default: False).
         loopable: List modules with matching loopability (or all modules when ``None``).
-        show_metadata: Whether to list each module's metadata instead of its name.
 
     Returns:
 
-        The matching module names, or their metadata when ``show_metadata`` is true,
-        sorted by name.
+        The matching modules' metadata, sorted by name.
 
     Raises:
 
-        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is true
-            without a ``subtype``.
+        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is set
+            and ``subtype`` is not.
+
+    Examples:
+
+        >>> from riko import list_module_metadata
+        >>>
+        >>> aggregators = list_module_metadata(subtype="aggregator", primary=True)
+        >>> [(metadata.name, metadata.type) for metadata in aggregators]
+        [('count', 'operator'), ('sum', 'operator')]
+        >>> [metadata.name for metadata in list_module_metadata(category="sink")]
+        ['write']
+
+    """
+    if type and subtype:
+        raise ValueError("type and subtype cannot be combined")
+    elif primary and not subtype:
+        raise ValueError("primary=True requires subtype")
+
+    def match(module: ModuleMetadata) -> bool:
+        return (
+            (type is None or module.type == type)
+            and (loopable is None or module.loopable is loopable)
+            and (category is None or module.category == category)
+            and (provider is None or module.provider == provider)
+            and _matches_subtype(module, subtype=subtype, primary=primary)
+        )
+
+    # built-ins first, then registry (runtime + entry-point) modules shadow them
+    catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
+    catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
+
+    # dynamic filter module import shadows the builtin filter
+    filtered = builtins.filter(match, catalog.values())
+    return sorted(filtered, key=lambda module: module.name)
+
+
+def list_modules(
+    *,
+    type: ModuleType | str | None = None,
+    subtype: ModuleSubtype | str | None = None,
+    category: ModuleCategory | str | None = None,
+    provider: str | None = None,
+    primary: bool = False,
+    loopable: bool | None = None,
+) -> list[str]:
+    """
+    Lists the names of the modules that match the given filters.
+
+    Takes the same filters as :func:`list_module_metadata`.
+
+    Kwargs:
+
+        type: Only list modules of this module type (e.g., ``"operator"``).
+        subtype: Only list modules that support this subtype (e.g., ``"aggregator"``).
+        category: Only list modules in this discovery category (e.g., ``"source"``).
+        provider: Only list modules from this provider (e.g., ``"riko"`` for built-ins).
+        primary: Whether ``subtype`` must be marked as primary (default: False).
+        loopable: List modules with matching loopability (or all modules when ``None``).
+
+    Returns:
+
+        The matching module names, sorted.
+
+    Raises:
+
+        ValueError: When ``type`` and ``subtype`` are both given, or ``primary`` is set
+            and ``subtype`` is not.
 
     Examples:
 
@@ -319,71 +304,94 @@ def list_modules(
         True
 
     """
-    if type and subtype:
-        raise ValueError("type and subtype cannot be combined")
-    elif primary and not subtype:
-        raise ValueError("primary=True requires subtype")
-
-    subtype_match = partial(_matches_subtype, subtype=subtype, primary=primary)
-    type_match = lambda module: type is None or module.type == type
-    loop_match = lambda module: loopable is None or module.loopable is loopable
-    category_match = lambda module: (
-        category is None or get_module_category(module) == category
+    metadata = list_module_metadata(
+        type=type,
+        subtype=subtype,
+        category=category,
+        provider=provider,
+        primary=primary,
+        loopable=loopable,
     )
-    provider_match = lambda module: provider is None or module.provider == provider
-    matches = subtype_match, type_match, loop_match, category_match, provider_match
-    match = lambda module: all(is_match(module) for is_match in matches)
-
-    # built-ins first, then registry (runtime + entry-point) modules shadow them
-    catalog = {metadata.name: metadata for metadata in gen_module_catalog()}
-    catalog.update((metadata.name, metadata) for metadata in gen_registry_catalog())
-
-    # dynamic filter module import shadows the builtin filter
-    filtered = builtins.filter(match, catalog.values())
-    modules = sorted(filtered, key=lambda module: module.name)
-    return modules if show_metadata else [module.name for module in modules]
+    return [module.name for module in metadata]
 
 
-def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None:
+@overload
+def describe_module(name: WrapperMeta) -> ModuleDefinition: ...
+@overload
+def describe_module(name: ModuleNameLike | None) -> ModuleDefinition | None: ...
+def describe_module(
+    name: WrapperMeta | ModuleNameLike | None,
+) -> ModuleDefinition | None:
     """
-    Describes a module, or reports None when the name is unknown.
+    Describes a module, stored workflow, or pipe; or reports None when unknown.
 
-    A built-in is described from its module rather than the registry, so its
-    ``description`` comes from the docstring summary and its pipe callables are
-    read off the module. A registry definition instead reports whatever its
-    registrant supplied, which may leave the callables unset; ``get_pipe``
-    resolves either.
+    A built-in module name is described from its module. A stored workflow's
+    ``pipe_<id>`` name (or ``pipe:<id>`` alias) is looked up in the  workflow stores. A
+    pipe callable is described from its metadata.
 
     Args:
 
-        name: The module name, either a str or a discovery-tree member.
+        name: The module name, stored workflow's ``pipe_<id>`` name, or a pipe callable.
 
     Returns:
 
-        The definition, or None when no module answers to ``name``.
+        The module definition, or None when no module or stored workflow for ``name``
+        exists. Its ``input_schemas`` and ``dependencies`` report what the workflow
+        reads and runs.
+
+    Raises:
+
+        InvalidPipelineError: If a workflow store holds a malformed
+            ``WorkflowDocument`` named ``name``, or the stored workflow embeds itself
+            through the workflows its nodes name.
+
+        UnsupportedWorkflowError: If a document store supplies ``name`` but no
+            dispatcher is registered to run it.
 
     Examples:
 
         >>> from riko import Sources
+        >>> from riko.ext import register_workflow_store, temporary_registrations
+        >>> from riko.modules.fetch import pipe as fetch
         >>>
-        >>> fetch = describe_module(Sources.FETCH)
-        >>> fetch.name
+        >>> # module name
+        >>> module_def = describe_module(Sources.FETCH)
+        >>> module_def.name
         'fetch'
-        >>> fetch.description
+        >>> module_def.description
         'Fetches an RSS feed and yields feed entries.'
-        >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
-        ('pipe', 'async_pipe')
-        >>> fetch.get_pipe() is fetch.sync_pipe
-        True
+        >>> module_def.sync_pipe.__module__
+        'riko.modules.fetch'
+        >>> module_def.dependencies
+        ()
         >>> describe_module("does-not-exist")
+        >>>
+        >>> # stored workflow
+        >>> with temporary_registrations():
+        ...     register_workflow_store(package="examples.pyworkflows", replace=True)
+        ...     describe_module("pipe:timezone").dependencies
+        ...     describe_module("pipe:timezone").input_schemas
+        ('dateformat', 'itembuilder')
+        FrozenDict({})
+        >>>
+        >>> # pipe callable
+        >>> describe_module(fetch).name
+        'fetch'
 
     """
-    if canonical := normalize_module_name(name):
-        definition: ModuleDefinition | None = module_registry.load_definition(canonical)
+    if is_wrapper_meta(name):  # pipe
+        definition: ModuleDefinition | None = ModuleDefinition.from_pipe(name)
+    elif canonical := normalize_module_name(name):  # module name
+        definition = module_registry.load_definition(canonical)
+        module = import_or_else(f"{_PACKAGE}.{canonical}")
 
-        if definition is None:  # noqa: SIM102
-            if module := import_or_else(f"{_PACKAGE}.{canonical}"):
-                definition = ModuleDefinition.from_module(module, name=canonical)
+        if definition is None and module is not None:
+            definition = ModuleDefinition.from_module(module, name=canonical)
+
+        is_stored = definition is None and workflow_resolver.is_compatible(canonical)
+
+        if is_stored and (stored := workflow_resolver.load(canonical)) is not None:
+            definition = ModuleDefinition.from_module(stored)  # stored workflow
     else:
         definition = None
 

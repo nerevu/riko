@@ -20,14 +20,15 @@ from riko.base._exceptions import (
     InvalidPipelineError,
     PipelineError,
     PipelineStateError,
+    RemovedOptionError,
     RikoError,
     UnsupportedModuleError,
     UnsupportedTargetError,
     UnsupportedWorkflowError,
 )
-from riko.base._paths import get_path, get_temp_file
+from riko.base._paths import get_path
 from riko.definitions._context import Context
-from riko.definitions._nodes import Node
+from riko.definitions._nodes import RikoNode
 from riko.definitions._resource_definition import (
     OneShotResource,
     Resource,
@@ -36,8 +37,19 @@ from riko.definitions._resource_definition import (
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow, WorkflowLike
 from riko.definitions._write import WriteMode
-from riko.io._async import async_get_temp_file, async_url_open, async_write
-from riko.modules._metadata import describe_module, get_module_metadata, list_modules
+from riko.io._async import (
+    async_get_temp_file,
+    async_get_temp_path,
+    async_url_open,
+    async_write,
+)
+from riko.io._sync import get_temp_file, get_temp_path
+from riko.modules._metadata import (
+    describe_module,
+    get_module_metadata,
+    list_module_metadata,
+    list_modules,
+)
 from riko.modules._names import Modules, Sinks, Sources, Transforms
 from riko.runtime._compile import compile_workflow
 from riko.runtime._export import export, list_formats
@@ -46,14 +58,14 @@ from riko.types._enums import (
     Backends,
     CastType,
     DocumentShape,
-    ExecutionMode,
     Executor,
+    FeedType,
     Formats,
     IdentityMode,
     SortableCastType,
     UserAgent,
 )
-from riko.types._workflow import Edge, Endpoint, WorkflowDocument, WorkflowModule
+from riko.types._workflow import Endpoint, PortEdge, WorkflowDocument, WorkflowModule
 
 from ._package import PACKAGE_INFO
 
@@ -73,24 +85,25 @@ __all__ = [
     "CastType",
     "Context",
     "DocumentShape",
-    "Edge",
     "EmptyPipelineError",
     "Endpoint",
-    "ExecutionMode",
     "ExecutionSettings",
     "Executor",
+    "FeedType",
     "Formats",
     "IdentityMode",
     "InvalidPipelineError",
     "Modules",
-    "Node",
     "OneShotResource",
     "Pipeline",
     "PipelineError",
     "PipelineStateError",
+    "PortEdge",
+    "RemovedOptionError",
     "Resource",
     "ReusableResource",
     "RikoError",
+    "RikoNode",
     "Sinks",
     "SortableCastType",
     "Sources",
@@ -108,6 +121,7 @@ __all__ = [
     "as_async",
     "async_chain",
     "async_get_temp_file",
+    "async_get_temp_path",
     "async_map",
     "async_map_stream",
     "async_read",
@@ -122,9 +136,11 @@ __all__ = [
     "get_module_metadata",
     "get_path",
     "get_temp_file",
+    "get_temp_path",
     "isasync",
     "issync",
     "list_formats",
+    "list_module_metadata",
     "list_modules",
     "materialize",
     "run",

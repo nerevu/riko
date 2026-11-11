@@ -19,6 +19,7 @@ from attrs import define, field
 
 from riko.bado._backend import fail_after, start_blocking_portal
 from riko.bado._util import run_bridged
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values
 from riko.base._guards import is_async_callable, is_awaitable
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
 
     from anyio.from_thread import BlockingPortal
 
+    from riko.definitions._context import Context
     from riko.definitions._resource_definition import Resource
     from riko.types._resource import Cleanup, ResourcePlan
     from riko.types._streams import AnyIterable
@@ -390,6 +392,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         node_id: str,
         steps: SyncExecSteps[T],
         seed: Iterable[T] | None = None,
+        *,
+        context: Context | None,
     ) -> Iterator[T]:
         """
         Builds one node's lazy output stream from its already-built input streams.
@@ -408,6 +412,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Kwargs:
 
             seed: The items fed to the node's open input, if any.
+            context: The run's context with its resolved input values.
 
         Returns:
 
@@ -436,20 +441,20 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         extra = {**named, **extras.kwargs}
 
         if self.settings.sync_policy.workers is not None and node.is_sync_mappable:
-            call = interface.item_call
-            context = None if isinstance(node.node, CallableNode) else self.context
-            _mapped = partial(call, context=context, **extra)
+            callable_context = None if isinstance(node.node, CallableNode) else context
+            # a local mapped closure fails pickling
+            _mapped = partial(interface.item_call, context=callable_context, **extra)
             mapped = cast("Callable[[T], Iterable[T]]", _mapped)
             stream = self._map_stream(mapped, _stream)
         elif native:
-            _stream = interface.call(_stream, context=self.context, **extra)
+            _stream = interface.call(_stream, context=context, **extra)
             value = cast("Iterator[T] | Iterator[Iterator[T]]", _stream)
             stream = require_stream(value, interface.pipe)
 
             if value is not stream:
                 self.register_owned(value)
         else:
-            _stream = interface.call(_stream, context=self.context, **extra)
+            _stream = interface.call(_stream, context=context, **extra)
             avalue = cast("AsyncModuleWrapperOutput[T]", _stream)
             astream = require_async_stream(avalue, interface.pipe)
 
@@ -465,6 +470,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         plan: ExecutionPlan,
         output: str,
         seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
+        context: Context | None,
     ) -> Iterator[T]:
         """
         Builds the item stream for one of the plan's workflow outputs.
@@ -478,12 +484,13 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         steps: SyncExecSteps[T] = {}
 
         if self.settings.sync_policy.executor is Executor.PROCESS:
-            require_process_safe(plan, output, self.context)
+            require_process_safe(plan, output, context)
 
         stream = None if seed is None else self._open_seed(seed)
 
         for node_id, node_seed in plan.gen_build_order(output, seed=stream):
-            node_stream = self._build_stream(plan, node_id, steps, node_seed)
+            args = (plan, node_id, steps, node_seed)
+            node_stream = self._build_stream(*args, context=context)
             steps[node_id] = node_stream
 
             if node_id != endpoint.node:
@@ -494,7 +501,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     def run(
         self,
         plan: ExecutionPlan,
-        output: str = "default",
+        output: str = DEFAULT_OUTPUT,
         *,
         seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None = None,
     ) -> Iterator[T]:
@@ -515,10 +522,10 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
             seed: Items for the workflow output's open input. It can be one item, an
                 item stream, an async item stream, or an awaitable resolving to one of
-                those. When omitted, every node whose default input port gets no input
-                stream must be self-starting (a source module, or a node that only feeds
-                named input ports). A plan with no nodes, streams the seed unchanged as
-                its default output.
+                those.
+
+                When omitted, every node must either be self-starting or receive a seed.
+                A plan with no nodes streams the seed back unchanged.
 
         Returns:
 
@@ -529,16 +536,18 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
             InvalidPipelineError: If ``output`` is not exposed by ``plan``; if ``seed``
                 isn't given and a node requires one, or the plan has no nodes; if
                 ``seed`` is given but the ``plan``'s ``output`` doesn't have exactly one
-                node for it to feed; or if the process executor is chosen and a node
-                cannot be sent to a worker process.
+                node for it to feed; if a workflow input is missing or invalid;
+                or if the process executor is chosen and a node cannot be sent to a
+                worker process.
 
         """
         self._require_open("run")
+        resolved, context = self._resolve_plan(plan)
 
-        if plan.workflow.is_empty:
-            stream = self._open_seed(plan.require_seed(seed, output))
+        if resolved.workflow.is_empty:
+            stream = self._open_seed(resolved.require_seed(seed, output))
         else:
-            stream = self._run_plan(plan, output, seed)
+            stream = self._run_plan(resolved, output, seed, context)
 
         return stream
 

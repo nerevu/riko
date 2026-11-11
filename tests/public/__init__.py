@@ -6,20 +6,20 @@ Provides public API tests: tests that use only supported names.
 Index (file, then the subjects it owns, in file order):
 
     test_callable_nodes.py        CallableNodes
-    test_modules.py               Input, FetchModules, Fetchdata, Fetchtext, Fetchtable,
-                                  Xpathfetchpage, Filter, Rename, Regex, Hash, Slugify,
-                                  Join, Sort, Count, Receive, Send, AsyncAggregate, Udf,
-                                  RequiredOperands, ListModules, ModuleMetadata,
-                                  Processor, AsyncOperator, EnumMemberName,
-                                  GenerateModuleNames
+    test_modules.py               Input, FetchModules, Fetchdata, Feedautodiscovery,
+                                  Fetchtext, Fetchtable, Xpathfetchpage, Filter, Rename,
+                                  Regex, Subelement, Hash, Slugify, Join, Sort, Count,
+                                  Receive, Send, AsyncAggregate, Udf, RequiredOperands,
+                                  ListModules, ModuleMetadata, Processor, AsyncOperator,
+                                  EnumMemberName, GenerateModuleNames
     test_pipeline.py              PipelineConstruction, PipelineChaining,
                                   ModuleNameEnum, PipelineIteration, OutputParity,
                                   Reiteration, Close, AsyncSourceAdapter, Alist,
                                   AsyncMap, FanIn, WithExecution, ExecutionSettings,
-                                  AsyncBoundedParallel, AsyncFanInParallel, ContextMode,
-                                  Context, Resource, EnvironmentBinding, Subscriptions,
-                                  Split, ConditionalNodes, PipelineSeeding,
-                                  PipelineStream
+                                  AsyncBoundedParallel, AsyncFanInParallel, Context,
+                                  Resource, EnvironmentBinding, WorkflowInputs,
+                                  Subscriptions, Split, ConditionalNodes,
+                                  PipelineSeeding, PipelineStream
     test_workflow.py              Workflow, NodeFamily, Nodes, ResourceBinding,
                                   CallableNode, RequireRunnableOnly, Validate,
                                   CompileWorkflow

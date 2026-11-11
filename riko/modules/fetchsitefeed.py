@@ -81,7 +81,7 @@ async def async_parser(
         EU sets out 'phased' Brexit strategy
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = await aload_rss_links(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
@@ -127,7 +127,7 @@ def parser(
         "EU sets out 'phased' Brexit strategy"
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchsitefeed")
+    url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = load_rss_links(url, user_agent=objconf.user_agent)
 
     if (first := next(rss, None)) is None:
@@ -243,6 +243,9 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
         >>> from riko import get_path
         >>>
         >>> next(pipe(conf={"url": get_path("bbc.html")}))["title"]
+        "EU sets out 'phased' Brexit strategy"
+        >>> entry = next(pipe(conf={"url": get_path("bbc.html")}, emit=False))
+        >>> entry["content"]["title"]
         "EU sets out 'phased' Brexit strategy"
 
     """

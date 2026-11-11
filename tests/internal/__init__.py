@@ -8,16 +8,16 @@ Index (file, then the subjects it owns, in file order):
     test_cli.py               CodegenCommand, UpgradeCommand, ImportsCommand,
                               LintCommand, CoverageRatchet, CeilingRatchet,
                               ConsoleScripts, Docstyle, CitationLint, UserDocsLint,
-                              TermLint, LiteralLint, BindingLint, BasenameLint,
+                              TermLint, LiteralLint, RstLint, BindingLint, BasenameLint,
                               EscapeLint, DependencyLint, HookPinLint,
                               CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
                               ReadDocument, SubprocessImports, LogLevel
-    test_codegen.py           WorkflowModule, WorkflowModuleDescribe, CompileWorkflow,
-                              Pythonise, ModuleCategory, GeneratedNamesDrift,
-                              GenerateModuleIds, ConfigCodegen, UserAgentCodegen,
-                              WorkflowFixtures, WorkflowProbes, ImportSurface,
-                              VerbTables, GenerateApiSurface
+    test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
+                              ModuleCategory, GeneratedNamesDrift, GenerateModuleIds,
+                              ConfigCodegen, UserAgentCodegen, WorkflowFixtures,
+                              WorkflowProbes, ImportSurface, VerbTables,
+                              GenerateApiSurface
     test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
@@ -27,11 +27,11 @@ Index (file, then the subjects it owns, in file order):
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
     test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, RequireStream,
                               PreparedCall, PreparedNode
-    test_io.py                ReplayReader, LoadRssLinks, ParseRss, Fetch, AsyncUrlOpen,
-                              Reencode, ConversionFuncs, ChunkContent, AsyncMap,
-                              AsyncMapStream, AsyncMerge, GatherResults,
-                              CapabilityFlags, ConverterPath, Csv, Jsonl, Framed,
-                              SessionLifecycle, WriteExecution, Sink
+    test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
+                              AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
+                              TempPath, AsyncMap, AsyncMapStream, AsyncMerge,
+                              GatherResults, CapabilityFlags, ConverterPath, Csv, Jsonl,
+                              Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, SyncPipeAsyncInput,
                               ReturnInference, ModuleMetadata, WrapperMeta, Loop,
@@ -40,19 +40,19 @@ Index (file, then the subjects it owns, in file order):
                               AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
-                              DescribeModule, PublicRegister, ResolverDispatcher,
-                              RequireInterface, EntryPointModules, WorkflowResolver,
-                              PackageStore, DirectoryStore, CompositeStore, Catalog,
-                              ResolvedDocuments, TargetRegistry
+                              DescribeModule, PublicRegister, TemporaryRegistrations,
+                              ResolverDispatcher, RequireInterface, EntryPointModules,
+                              WorkflowResolver, PackageStore, DirectoryStore,
+                              CompositeStore, Catalog, ResolvedDocuments, TargetRegistry
     test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
                               CastDatetime, CastValue, OverloadTypes, ResolveCastType,
                               DefItemgetter, Fromdict, ParseDateString,
-                              ResolveAwareDatetime, TtToDatedict, DotDict, GetSkip,
-                              Any2dict, XmlParser, AugmentEntries, ResolveDate,
+                              ResolveAwareDatetime, DatetimeToDatedict, DotDict,
+                              GetSkip, Any2dict, XmlParser, AugmentEntries, ResolveDate,
                               GenNonNull, Graph, GraphIndex, LoadSettings,
-                              RequireGuards, RequireFromForm, ResolveEnum,
+                              RequireGuards, RequireFromForm, RequireEnum,
                               NormalizeStrs, FieldNames, TypedDictKeys, Logging,
                               RikoError
 """

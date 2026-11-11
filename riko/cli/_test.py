@@ -2,19 +2,25 @@
 
 """Test runner helpers for the manage CLI."""
 
+from __future__ import annotations
+
 import shutil
+from contextlib import ExitStack
 from os import environ
-from pathlib import Path
 from subprocess import CalledProcessError, check_call
 from sys import exit
-from tempfile import mkdtemp
+from typing import TYPE_CHECKING
 
 import click
 
 from riko.base._paths import PYPROJECT
+from riko.io._sync import get_temp_path
 
 from ._coverage import load_uncovered_lines
 from ._ratchet import ratchet_ceiling
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _tox: str | None = shutil.which("tox")
 _pytest: str | None = shutil.which("pytest")
@@ -78,7 +84,8 @@ def _test_command(
         msg = "--ratchet measures the whole suite under pytest; drop the paths, --tox, "
         raise click.UsageError(msg + "and --failed")
 
-    report = Path(mkdtemp()) / "coverage.json" if ratchet else None
+    stack = ExitStack()
+    report = stack.enter_context(get_temp_path("coverage.json")) if ratchet else None
 
     if kwargs.get("quiet"):
         verbosity = "q"
@@ -101,33 +108,35 @@ def _test_command(
 
     opts += f" {' '.join(_where)}" if _where else ""
 
-    try:
-        if _tox and kwargs.get("tox"):
-            runner = ["p"] if kwargs.get("parallel") else ["r"]
-            tox_env = kwargs.get("tox_env")
-            topts = ["-e", str(tox_env)] if tox_env else []
-            check_call([_tox] + topts + runner)
-        elif kwargs.get("tox"):
-            raise RuntimeError("tox not found")
-        elif _pytest:
-            cmd = opts
+    with stack:
+        try:
+            if _tox and kwargs.get("tox"):
+                runner = ["p"] if kwargs.get("parallel") else ["r"]
+                tox_env = kwargs.get("tox_env")
+                topts = ["-e", str(tox_env)] if tox_env else []
+                check_call([_tox] + topts + runner)
+            elif kwargs.get("tox"):
+                raise RuntimeError("tox not found")
+            elif _pytest:
+                cmd = opts
 
-            if kwargs.get("parallel"):
-                cmd += " -n auto"
+                if kwargs.get("parallel"):
+                    cmd += " -n auto"
 
-            if report is None:
-                env = None
+                if report is None:
+                    env = None
+                else:
+                    coverage = str(report.with_name(".coverage"))
+                    env = {**environ, "COVERAGE_FILE": coverage}
+
+                check_call([_pytest] + cmd.split(" "), env=env)
+
+                if report is not None:
+                    exit(_ratchet_coverage(report))
             else:
-                env = {**environ, "COVERAGE_FILE": str(report.with_name(".coverage"))}
-
-            check_call([_pytest] + cmd.split(" "), env=env)
-
-            if report is not None:
-                exit(_ratchet_coverage(report))
-        else:
-            raise RuntimeError("pytest not found")
-    except CalledProcessError as e:
-        exit(e.returncode)
+                raise RuntimeError("pytest not found")
+        except CalledProcessError as e:
+            exit(e.returncode)
 
 
 TEST_COMMAND = _test_command

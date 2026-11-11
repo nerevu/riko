@@ -67,7 +67,7 @@ def run() -> None:
         "-f",
         "--format",
         dest="fmt",
-        choices=[member.value for member in DocumentShape],
+        choices=DocumentShape,
         default=None,
         help="Read the input in this form (default: detect it).\n\n",
     )

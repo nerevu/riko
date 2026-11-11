@@ -104,7 +104,7 @@ async def async_parser(
         What is Lorem Ipsum?
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchtext")
+    url: str = require_conf_key(objconf, "url", "fetchtext", strict=True)
     f = await async_url_open(
         url, encoding=objconf.encoding, user_agent=objconf.user_agent
     )
@@ -147,7 +147,7 @@ def parser(
         'What is Lorem Ipsum?'
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchtext")
+    url: str = require_conf_key(objconf, "url", "fetchtext", strict=True)
     f = Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent)
     return auto_close(_gen_stripped_lines(f, objconf.strip_bom), f)
 
@@ -261,6 +261,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[str]:
         >>> conf = {"url": get_path("lorem.txt")}
         >>> next(pipe(conf=conf))
         'What is Lorem Ipsum?'
+        >>> next(pipe(conf=conf, assign="line", emit=False))
+        {'line': 'What is Lorem Ipsum?'}
 
     """
     return parser(*args, **kwargs)

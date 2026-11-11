@@ -340,7 +340,10 @@ def _check_command() -> None:
 @click.option("-s", "--strict", help="Check with pylint", is_flag=True)
 @click.option("-d", "--dist", help="Check built distributions with twine", is_flag=True)
 @click.option(
-    "-r", "--rst", help="Validate RST rendering and internal links", is_flag=True
+    "-r",
+    "--rst",
+    help="Validate RST rendering, internal links, and plain Python code-block markers",
+    is_flag=True,
 )
 @click.option("--docs", help="Validate internal documentation policy", is_flag=True)
 @click.option("-a", "--actions", help="Validate GitHub Actions workflows", is_flag=True)

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from functools import partial
 from itertools import cycle, dropwhile, islice, takewhile
 from typing import TYPE_CHECKING, Literal, overload
 
+from ._guards import is_known_sequence, is_mapping, require_sequence
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+
+    from riko.types._frozendict import SortKey
+    from riko.types._wrappers import Func
 
 
 def gen_instances[T](
@@ -33,6 +37,35 @@ def gen_instances[T](
 
     """
     return (item for item in items if isinstance(item, accepted))
+
+
+def gen_nested_mappings(value: object) -> Iterator[Mapping[str, object]]:
+    """
+    Walks a nested value and emits every mapping in it.
+
+    Args:
+
+        value: The value to walk, such as a module configuration.
+
+    Yields:
+
+        Each mapping found, outermost first.
+
+    Examples:
+
+        >>> conf = {"rule": [{"field": "a"}, {"value": {"input": "q"}}]}
+        >>> [sorted(found) for found in gen_nested_mappings(conf)]
+        [['rule'], ['field'], ['value'], ['input']]
+
+    """
+    if is_mapping(value):
+        yield value
+
+        for child in value.values():
+            yield from gen_nested_mappings(child)
+    elif is_known_sequence(value):
+        for child in value:
+            yield from gen_nested_mappings(child)
 
 
 @overload
@@ -80,6 +113,18 @@ def unique_everseen[T](
             yield element
 
 
+def _get_value(
+    item: object, pos: int | None, attr: str | None, msg: Func[str]
+) -> object:
+    if pos is not None:
+        item = require_sequence(item, msg, error=TypeError)[pos]
+
+    if item is not None and attr is not None:
+        item = getattr(item, attr)
+
+    return item
+
+
 @overload
 def gen_non_null[T, U](
     items: Iterable[tuple[T, U | None] | None],
@@ -87,6 +132,8 @@ def gen_non_null[T, U](
     *,
     cmp_pos: Literal[1],
     arg_pos: Literal[0],
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[T]: ...
 @overload
 def gen_non_null[T, U, R](
@@ -95,6 +142,8 @@ def gen_non_null[T, U, R](
     *,
     cmp_pos: Literal[1],
     arg_pos: Literal[0],
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[R]: ...
 @overload
 def gen_non_null[T](
@@ -103,6 +152,8 @@ def gen_non_null[T](
     *,
     cmp_pos: int | None = None,
     arg_pos: None = None,
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[T]: ...
 @overload
 def gen_non_null[T, R](
@@ -111,6 +162,8 @@ def gen_non_null[T, R](
     *,
     cmp_pos: int | None = None,
     arg_pos: None = None,
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[R]: ...
 @overload
 def gen_non_null[T](
@@ -119,6 +172,8 @@ def gen_non_null[T](
     *,
     cmp_pos: int | None = None,
     arg_pos: int = ...,
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[T]: ...
 @overload
 def gen_non_null[T, R](
@@ -127,18 +182,44 @@ def gen_non_null[T, R](
     *,
     cmp_pos: int | None = None,
     arg_pos: int = ...,
+    cmp_attr: str | None = None,
+    arg_attr: None = None,
 ) -> Iterator[R]: ...
-def gen_non_null(
-    items: Iterable[object],
-    func: Callable[..., object] | None = None,
+@overload
+def gen_non_null[T](
+    items: Iterable[T | None],
+    func: None = None,
     *,
     cmp_pos: int | None = None,
     arg_pos: int | None = None,
+    cmp_attr: str | None = None,
+    arg_attr: str,
+) -> Iterator[object]: ...
+@overload
+def gen_non_null[T, R](
+    items: Iterable[T | None],
+    func: Func[R],
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int | None = None,
+    cmp_attr: str | None = None,
+    arg_attr: str,
+) -> Iterator[R]: ...
+def gen_non_null(
+    items: Iterable[object],
+    func: Func[object] | None = None,
+    *,
+    cmp_pos: int | None = None,
+    arg_pos: int | None = None,
+    cmp_attr: str | None = None,
+    arg_attr: str | None = None,
 ) -> Iterator[object]:
     """
     Applies a function to each non-None item in an iterable.
 
-    Similar to filter(None, iterable), but it excludes ``None`` instead of falsy values.
+    Similar to filter(None, iterable), but excludes ``None`` instead of falsy values.
+    Positional selectors are applied before attribute selectors. A ``None`` intermediate
+    value remains ``None``.
 
     Args:
 
@@ -146,20 +227,26 @@ def gen_non_null(
 
     Kwargs:
 
-        func: Optional function applied to each non-None item.
-        cmp_pos: Item position to test for ``None`` instead of the whole item.
-        arg_pos: Item position to yield (or pass to ``func``) instead of the whole item.
+        func: Optional function applied to each selected value.
+        cmp_pos: Item position to test for ``None``.
+        arg_pos: Item position to yield (or pass to ``func``).
+        cmp_attr: Attribute to test for ``None``.
+        arg_attr: Attribute to yield (or pass to ``func``).
 
     Yields:
 
-        Each non-None item (or its ``arg_pos`` value), or ``func``'s result for it.
+        Each selected non-None item, or ``func``'s result for it.
+        Only the comparison value is checked for ``None``.
 
     Raises:
 
-        TypeError: If ``cmp_pos``/``arg_pos`` is set and an item is not a sequence.
+        TypeError: If a positional selector targets a non-sequence.
+        AttributeError: If a selected attribute does not exist.
 
     Examples:
 
+        >>> from types import SimpleNamespace
+        >>>
         >>> list(gen_non_null([1, None, 0, 2]))
         [1, 0, 2]
         >>> "".join(gen_non_null(["a", None, 1], str))
@@ -167,26 +254,66 @@ def gen_non_null(
         >>> pairs = [("a", 1), ("b", None), ("c", 0)]
         >>> list(gen_non_null(pairs, cmp_pos=1, arg_pos=0))
         ['a', 'c']
+        >>> rows = [
+        ...     SimpleNamespace(name="a", count=1),
+        ...     SimpleNamespace(name="b", count=None)
+        ... ]
+        >>> list(gen_non_null(rows, cmp_attr="count", arg_attr="name"))
+        ['a']
 
     """
+    same = cmp_pos == arg_pos and cmp_attr == arg_attr
+    has_cmp = cmp_pos is not None or cmp_attr is not None
+    has_arg = arg_pos is not None or arg_attr is not None
+    cmp_attr_only = cmp_pos is None and cmp_attr is not None
+    arg_attr_only = arg_pos is None and arg_attr is not None
 
-    def _get_value(
-        item: object | Sequence[object], pos: int | None, name: str
-    ) -> object:
-        if item is None or pos is None:
-            value = item
-        elif isinstance(item, Sequence):
-            value = item[pos]
-        else:
-            msg = f"Item {item!r} is not indexable. Remove {name}={pos}"
-            raise TypeError(msg)
+    pos_only = (
+        cmp_pos is not None
+        and arg_pos is not None
+        and cmp_attr is None
+        and arg_attr is None
+    )
 
-        return value
+    cmp_field = cmp_attr if cmp_attr is not None else ""
+    arg_field = arg_attr if arg_attr is not None else ""
+    cmp_idx = cmp_pos if cmp_pos is not None else 0
+    arg_idx = arg_pos if arg_pos is not None else 0
+    cmp_msg = lambda item: f"Item {item!r} (via cmp_pos={cmp_pos})"
+    arg_msg = lambda item: f"Item {item!r} (via arg_pos={arg_pos})"
 
     for item in items:
-        if _get_value(item, cmp_pos, "cmp_pos") is not None:
-            arg = _get_value(item, arg_pos, "arg_pos")
-            yield arg if func is None else func(arg)
+        if item is None:
+            continue
+
+        if pos_only:
+            item = require_sequence(item, cmp_msg)
+
+            if (cmp := item[cmp_idx]) is None:
+                continue
+
+            arg = cmp if same else item[arg_idx]
+        else:
+            if cmp_attr_only:
+                cmp = getattr(item, cmp_field)
+            elif has_cmp:
+                cmp = _get_value(item, cmp_pos, cmp_attr, cmp_msg)
+            else:
+                cmp = item
+
+            if cmp is None:
+                continue
+
+            if same:
+                arg = cmp
+            elif arg_attr_only:
+                arg = getattr(item, arg_field)
+            elif has_arg:
+                arg = _get_value(item, arg_pos, arg_attr, arg_msg)
+            else:
+                arg = item
+
+        yield arg if func is None else func(arg)
 
 
 def betwix[T](
@@ -292,7 +419,7 @@ def partition[T](
     return matching, non_matching
 
 
-def sort_stably[T](items: Iterable[T]) -> list[T]:
+def sort_stably[T](items: Iterable[T], key: SortKey[T] | None = None) -> tuple[T, ...]:
     """
     Sorts items in an order that does not depend on hash randomization.
 
@@ -303,6 +430,11 @@ def sort_stably[T](items: Iterable[T]) -> list[T]:
 
         items: The items to sort, such as a set.
 
+    Kwargs:
+
+        key: Optional function that produces each item's sort key. When given, items are
+            sorted by it with no ``repr`` fallback.
+
     Returns:
 
         The items in a stable order.
@@ -310,19 +442,22 @@ def sort_stably[T](items: Iterable[T]) -> list[T]:
     Examples:
 
         >>> sort_stably({"b", "a"})
-        ['a', 'b']
+        ('a', 'b')
         >>> sort_stably({1, "a"})
-        ['a', 1]
+        ('a', 1)
 
     """
-    listed = list(items)
+    if key is None:
+        listed = list(items)
 
-    try:
-        result = sorted(listed)  # pyright: ignore[reportArgumentType]
-    except TypeError:
-        result = sorted(listed, key=repr)
+        try:
+            result = sorted(listed)  # pyright: ignore[reportArgumentType]
+        except TypeError:
+            result = sorted(listed, key=repr)
+    else:
+        result = sorted(items, key=key)
 
-    return result
+    return tuple(result)
 
 
 def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:

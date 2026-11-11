@@ -19,10 +19,17 @@ from riko.definitions._nodes import (
     CacheNode,
     ModuleNode,
     ReadNode,
+    StreamEdge,
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._normalize import _NODE_BUILDERS, _build_nodes, _normalize_port
+from riko.definitions._normalize import (
+    _NODE_BUILDERS,
+    _normalize_port,
+    build_nodes,
+    normalize_edge,
+    normalize_outputs,
+)
 from riko.definitions._pipeline_definition import PipelineDefinition
 from riko.definitions._resource_definition import (
     OneShotResource,
@@ -62,7 +69,7 @@ from riko.types._workflow import (
     RawNode,
     parse_port,
 )
-from riko.types._workflow import Edge as EdgeBase
+from riko.types._workflow import PortEdge as EdgeBase
 from tests import ROUND_TRIPS
 from tests._resources import (
     CREDENTIAL,
@@ -477,7 +484,8 @@ class TestWorkflowFields:
             embed={"name": "tokenizer", "conf": {"delimiter": " "}},
             resources={"db": "primary_db"},
         )
-        flow = Workflow(nodes=[node], outputs={}, inputs={"q": {"type": "string"}})
+        schemas = {"q": {"type": "string"}}
+        flow = Workflow(nodes=[node], outputs={}, input_schemas=schemas)
 
         restored = round_trip(flow)
 
@@ -489,7 +497,7 @@ class TestWorkflowFields:
         assert isinstance(rules[0], FrozenDict)
         assert rules == ({"field": "x", "nested": {"ids": (1, 2)}},)
         assert restored_node.resources == {"db": "primary_db"}
-        assert isinstance(restored.inputs["q"], FrozenDict)
+        assert isinstance(restored.input_schemas["q"], FrozenDict)
 
     def test_encoder_rejects_a_value_a_workflow_cannot_hold(self):
         with pytest.raises(TypeError, match="not JSON serializable"):
@@ -505,11 +513,22 @@ _EXISTING_IDS = [
 
 
 class TestNormalizeInternals:
+    def test_built_parts_pass_through_normalization(self):
+        endpoint = Endpoint("a", "out")
+        edge = StreamEdge(endpoint, Endpoint("b", "in"))
+        node = ModuleNode(id="a", name="fetch", conf={"url": "x"})
+        flow = Workflow(nodes=[node], outputs={"default": endpoint})
+
+        assert normalize_edge(edge) is edge
+        assert normalize_outputs({"d": endpoint}, [edge], "a", "b") == {"d": endpoint}
+        assert build_nodes([node]) == {"a": node} == build_nodes({"a": node})
+        assert Workflow.from_raw(flow) == flow
+
     @pytest.mark.parametrize(("ids", "expected"), _EXISTING_IDS)
     def test_get_node_id_matches_a_normalized_id(self, ids, expected):
-        existing = [{"id": node_id, "name": "fetch"} for node_id in ids]
-        normalized = list(_build_nodes([*existing, {"name": "fetch"}]))[-1]
-        flow = Workflow(nodes=[ModuleNode(**node) for node in existing])
+        existing = [RawNode(id=node_id, name="fetch") for node_id in ids]
+        normalized = list(build_nodes([*existing, RawNode(name="fetch")]))[-1]
+        flow = Workflow(nodes=[ModuleNode(id=node_id, name="fetch") for node_id in ids])
         assert flow.get_node_id("fetch") == normalized == expected
 
     @pytest.mark.parametrize(

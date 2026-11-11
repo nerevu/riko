@@ -22,6 +22,8 @@ from uuid import UUID
 import attrs
 
 from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
+from riko.base._guards import is_mapping
+from riko.base._iterutils import sort_stably
 
 from ._dates import resolve_aware_datetime, tt_to_datetime
 
@@ -89,13 +91,12 @@ def _canon_decimal(value: Decimal) -> str:
 
 
 def _canon_datetime(value: datetime) -> str:
-    aware = value if value.tzinfo else resolve_aware_datetime(value, try_local_tz=False)
+    aware = resolve_aware_datetime(value, try_local_tz=False)
     return aware.astimezone(UTC).isoformat()
 
 
 def _canon_struct_time(value: struct_time) -> str:
-    moment = tt_to_datetime(resolve_aware_datetime(value, try_local_tz=False))
-    return moment.astimezone(UTC).isoformat()
+    return _canon_datetime(tt_to_datetime(value, def_tzinfo=UTC))
 
 
 def canonical_json(canon: CanonicalValue) -> bytes:
@@ -142,7 +143,7 @@ def _canon_set(tag: str, value: AbstractSet[object], seen: set[int]) -> Canonica
     return [tag, canon]
 
 
-def _canon_map(value: Mapping[object, object], seen: set[int]) -> CanonicalValue:
+def _canon_map[K](value: Mapping[K, object], seen: set[int]) -> CanonicalValue:
     pairs = [(_canon(k, seen), _canon(v, seen)) for k, v in value.items()]
     ordered = sorted(pairs, key=lambda pair: _sort_key([pair[0], pair[1]]))
     return ["map", [[k, v] for k, v in ordered]]
@@ -206,7 +207,7 @@ def _canon(value: object, seen: set[int]) -> CanonicalValue:
         result = ["path", flavor, str(value)]
     elif isinstance(value, UUID):
         result = ["uuid", value.hex]
-    elif isinstance(value, Mapping):
+    elif is_mapping(value):
         result = _guard(value, seen, _canon_map)
     elif isinstance(value, frozenset):
         result = _guard(value, seen, partial(_canon_set, "fset"))
@@ -261,8 +262,12 @@ def canonical_bytes(value: object) -> bytes:
 
     Examples:
 
-        >>> canonical_bytes('a') == canonical_bytes('a')
-        True
+        >>> canonical_bytes('a')
+        b'["str","a"]'
+        >>> canonical_bytes(1)
+        b'["int","1"]'
+        >>> canonical_bytes(True)
+        b'["bool",true]'
 
     """
     return canonical_json(canonicalize(value))
@@ -303,7 +308,7 @@ def _is_native_val(value: object) -> bool:
 def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
     if all(map(_is_native_val, chain(args, kwargs.values()))):
         tagged = tuple((type(a), a) for a in args)
-        key = (tagged, tuple(sorted((k, type(v), v) for k, v in kwargs.items())))
+        key = (tagged, sort_stably((k, type(v), v) for k, v in kwargs.items()))
     else:
         key = None
 
@@ -313,7 +318,7 @@ def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
 def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
     if (key := _native_key(*args, **kwargs)) is None:
         try:
-            key = canonical_bytes((args, tuple(sorted(kwargs.items()))))
+            key = canonical_bytes((args, sort_stably(kwargs.items())))
         except (IdentityEncodingError, CyclicIdentityError):
             key = None
 

@@ -1,7 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 
 """
-Builds two items with ``itembuilder`` and hashes each one.
+Builds one item with two fields using ``itembuilder`` and hashes it.
 
 Broader, doctested walkthroughs of riko's APIs live in ``README.rst``.
 

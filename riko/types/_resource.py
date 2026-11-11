@@ -20,7 +20,14 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator, Iterator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generator,
+    Iterator,
+)
 from contextlib import (
     AbstractAsyncContextManager,
     AbstractContextManager,
@@ -65,7 +72,7 @@ type ResourcePlan[T] = (
 # Every function the decorators build shares their helper's code object, so any
 # callable decorated once yields it.
 _SYNC_CM_CODE: CodeType = contextmanager(iter).__code__
-_ASYNC_CM_CODE: CodeType = asynccontextmanager(aiter).__code__  # pyright: ignore[reportArgumentType, reportCallIssue]
+_ASYNC_CM_CODE: CodeType = asynccontextmanager(AsyncIterator.__aiter__).__code__
 
 
 class ResourceStrategy(Enum):

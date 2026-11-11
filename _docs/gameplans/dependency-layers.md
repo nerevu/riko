@@ -202,8 +202,8 @@ behavior shared across higher layers lives in the lowest layer its importers sha
   family plus `require_arg`/ `require_conf_key`), `_recordutils.py` (`field_names`,
   `required_attrs_keys`, the compact serializers), `_sentinels.py` (moved whole:
   `MISSING`, `StreamState`, the `Sentinel` shape and its guards), and in `_typing.py`
-  `resolve_enum` plus the runtime `isinstance` tuples (their type aliases stay in
-  `types/_scalars.py`).
+  `require_enum`/`resolve_enum` plus the runtime `isinstance` tuples (their type
+  aliases stay in `types/_scalars.py`).
 - **`_sentinels.py` is a deliberate exception.** `_guards.py` needs `MISSING` at
   runtime, so the file moved whole rather than splitting it or giving `_guards.py` its
   own placeholder object. The `StreamState` enum and the `Sentinel` TypedDict came
@@ -211,9 +211,9 @@ behavior shared across higher layers lives in the lowest layer its importers sha
   helpers (`Sentinel`, `SentinelValue`, `is_sentinel`) leave when they move into
   configuration parsing (`dotdict-parsing.md`); `MISSING` and `StreamState` stay.
 - **Exceptions sit behind a facade.** The same-layer rule bars a private `base` module
-  from importing the public `exceptions.py`, so the classes live in
-  `base/_exceptions.py`, internal code imports them from there, and `exceptions.py`
-  re-exports them as the documented `riko.base.exceptions` path. Each class's
+  from importing the public `riko/exceptions.py`, so the classes live in
+  `base/_exceptions.py`, internal code imports them from there, and `riko/exceptions.py`
+  re-exports them as the documented `riko.exceptions` path. Each class's
   `__module__` names that public path, so tracebacks and pickles are unchanged.
 - **Contract-specific guards stay in `types`:** `is_conf_rule` in `_frozendict.py`,
   `is_type_value` in `modules.py` beside `ConfArg`. `is_conf_rule` narrows `AnyConfRule`

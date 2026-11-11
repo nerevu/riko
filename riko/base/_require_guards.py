@@ -84,15 +84,15 @@ def narrow_from_require[T, R](
 def narrow_from_require[T, R](
     require: Require[T, R], *args: object, **kwargs: object
 ) -> Callable[[R], R]: ...
-def narrow_from_require[T, R](
-    require: Require[T, R], *args: object, accepted: object = None, **kwargs: object
+def narrow_from_require[R](
+    require: Func[R], *args: object, accepted: object = None, **kwargs: object
 ) -> Func[R]:
     """
     Advertises a typed converter to callers but validates any object at runtime.
 
     The advertised input is the guard's output type, or ``accepted`` when given.
-    ``accepted`` only sets that static type. ``args`` and ``kwargs`` are applied as
-    ``functools.partial`` does. A class applied before the value (as
+    ``accepted`` only sets that static type. Each call runs
+    ``require(*args, value, **kwargs)``. A class applied before the value (as
     ``require_instance`` takes it) also sets the advertised type.
 
     Args:
@@ -120,7 +120,11 @@ def narrow_from_require[T, R](
         ('db',)
 
     """
-    return partial(require, *args, **kwargs)
+
+    def narrow(value: object) -> R:
+        return require(*args, value, **kwargs)
+
+    return narrow
 
 
 def _get_key_qualifier(annotation: object) -> str | None:
@@ -232,11 +236,11 @@ def require_from_keys(
         >>> require_point({"y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...missing point key(s): ['x']
+        riko.exceptions.InvalidPipelineError: ...missing point key(s): ['x']
         >>> require_point({"x": 1, "z": 3})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown point key(s): ['z']
+        riko.exceptions.InvalidPipelineError: ...unknown point key(s): ['z']
 
     """
     _required = frozenset(required)
@@ -307,7 +311,7 @@ def require_from_typed_dict[T](
         >>> require_from_typed_dict(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
 
     """
     cls = _require_typed_dict_class(item)
@@ -369,11 +373,11 @@ def require_from_attrs[T: AttrsInstance](
         >>> require_from_attrs(Point, not_required={"y"})({"y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...missing Point key(s): ['x']
+        riko.exceptions.InvalidPipelineError: ...missing Point key(s): ['x']
         >>> require_from_attrs(Point, exclude={"y"})({"x": 1, "y": 2})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
 
     """
     excluded = frozenset(exclude)
@@ -426,8 +430,7 @@ def def_from_require[D, R](
     Adapts a ``require_*`` guard into an attrs converter that ignores ``None``s.
 
     A ``None`` value becomes ``default``. Anything else is checked with
-    ``require(*args, value, **kwargs)``. ``args`` are applied before the value
-    (just like ``functools.partial``). ``what`` is forwarded only when given.
+    ``require(*args, value, **kwargs)``. ``what`` is forwarded only when given.
 
     Args:
 
@@ -453,17 +456,16 @@ def def_from_require[D, R](
         >>> optional_mapping("abc")
         Traceback (most recent call last):
         ...
-        TypeError: value must be a mapping
+        TypeError: value must be a mapping, not str
         >>> optional_count = def_from_require(require_instance, int, default=0)
         >>> optional_count(None), optional_count(3)
         (0, 3)
 
     """
     extra = resolve_default(what, kwargs, {**kwargs, "what": what})
-    fallback = partial(require, *args, **extra)
 
     def optional(value: object) -> R | D | None:
-        return default if value is None else fallback(value)
+        return default if value is None else require(*args, value, **extra)
 
     return optional
 
@@ -682,7 +684,7 @@ def validator_from_typed_dict[T](
         >>> Shape({"y": 1})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
+        riko.exceptions.InvalidPipelineError: ...unknown Shape 'origin' key(s)...
 
     """
     require = require_from_typed_dict(item, what, exclude=exclude, extra=extra)
@@ -729,7 +731,7 @@ def require_instance[T](
         >>> require_instance(str, 1)
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...value must be of type str, not int
+        riko.exceptions.InvalidPipelineError: ...value must be of type str, not int
 
     """
     if not isinstance(value, cls):
@@ -797,14 +799,17 @@ def require_instances[K, T](
         TypeError: count 'b' must be of type int, not str
 
     """
-    require = partial(require_instance, cls, error=error)
-
     if is_mapping(value):
         items = value.items()
-        result = {k: require(v, f"{what} {k!r}") for k, v in items}
+        result = {
+            k: require_instance(cls, v, f"{what} {k!r}", error=error) for k, v in items
+        }
     else:
         items = enumerate(value)
-        result = [require(v, f"{what} position {k!r}") for k, v in items]
+        result = [
+            require_instance(cls, v, f"{what} position {k!r}", error=error)
+            for k, v in items
+        ]
 
     return result
 
@@ -846,7 +851,7 @@ def require_nonblank_str(
         >>> require_nonblank_str(" ", "node 'id'")
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: ...node 'id' must not be blank
+        riko.exceptions.InvalidPipelineError: ...node 'id' must not be blank
 
     """
     text = require_str(value, what, error=error)
@@ -910,7 +915,7 @@ def require_from_form[T](
         >>> require_from_form(Point)({"y": 1})
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
+        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
         >>> require_coord = require_from_form(Coord, error=TypeError)
         >>> require_coord({"y": 1})
         {'y': 1}
@@ -921,7 +926,7 @@ def require_from_form[T](
         >>> require_from_form(Literal["a", "b"], "mode")("c")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
+        riko.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
 
     """
     default_what = resolve_default(what, getattr(form, "__name__", "value"))
@@ -957,7 +962,11 @@ def require_from_form[T](
             return typed(require_mapping(value, what, error=error), what)
 
     elif len(classes) == 1 and not literals:
-        check = partial(require_instance, classes[0], error=error)
+        cls = classes[0]
+
+        def check(value: object, what: str) -> object:
+            return require_instance(cls, value, what, error=error)
+
     else:
         is_mappable = len(shapes) < len(classes)
         names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])
@@ -1013,7 +1022,7 @@ def require_strlike(
         >>> require_strlike(["a", 1], "keys")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...keys must be a str or iterable...
+        riko.exceptions.InvalidPipelineError: ...keys must be a str or iterable...
 
     """
     if isinstance(value, str):
@@ -1035,7 +1044,6 @@ def normalize_strs(
     value: StrLike | None,
     what: str = "keys",
     *,
-    strict: bool = False,
     type_error: type[Exception] = InvalidPipelineError,
     value_error: type[Exception] = InvalidPipelineError,
 ) -> tuple[str, ...]:
@@ -1051,20 +1059,18 @@ def normalize_strs(
     Kwargs:
 
         what: How to name the keys in an error.
-        strict: Whether ``None`` is rejected rather than read as no keys.
         type_error: The error raised when ``value`` is not a string or iterable.
         value_error: The error raised for an empty, non-string, or duplicate key.
 
     Returns:
 
-        The keys as a tuple, empty when ``value`` is ``None`` and not ``strict``.
+        The keys as a tuple, empty when ``value`` is ``None``.
 
     Raises:
 
-        InvalidPipelineError: When ``value`` is not a string or iterable of
-            strings (including ``None`` when ``strict``), or a key is empty, not a
-            string, or a duplicate, unless ``type_error``/``value_error`` name other
-            errors.
+        InvalidPipelineError: When ``value`` is not a string or iterable of strings; or
+            a key is empty, not a string, or a duplicate (unless ``type_error``/
+            ``value_error`` name other errors).
 
     Examples:
 
@@ -1074,15 +1080,11 @@ def normalize_strs(
         ('a', 'b')
         >>> normalize_strs(None)
         ()
-        >>> normalize_strs(None, "names", strict=True)
-        Traceback (most recent call last):
-        ...
-        riko.base.exceptions.InvalidPipelineError: ...names must be a string or...
 
     """
-    if value is None and not strict:
+    if value is None:
         keys: tuple[str, ...] = ()
-    elif value is None or not isinstance(value, Iterable):
+    elif not isinstance(value, Iterable):
         raise type_error(f"{what} must be a string or iterable of strings")
     else:
         keys = (value,) if isinstance(value, str) else tuple(value)
@@ -1131,7 +1133,7 @@ def require_finite(
         >>> require_finite(float("inf"), "rate")
         Traceback (most recent call last):
             ...
-        riko.base.exceptions.InvalidPipelineError: ...rate must be a finite float...
+        riko.exceptions.InvalidPipelineError: ...rate must be a finite float...
 
     """
     if isnan(value) or isinf(value):

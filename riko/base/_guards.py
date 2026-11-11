@@ -3,7 +3,14 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Awaitable, Iterable, Mapping
+from collections.abc import (
+    AsyncIterable,
+    Awaitable,
+    Callable,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from dataclasses import is_dataclass
 from inspect import (
     Parameter,
@@ -123,13 +130,9 @@ _VT = TypeVar("_VT", default=object)
 
 
 def is_mapping(val: Mapping[_KT, _VT] | object) -> TypeIs[Mapping[_KT, _VT]]:
-    failure = False
-
-    # Delay calling isinstance(val, Mapping) as much as possible
-    if not (success := isinstance(val, (dict, CaseInsensitiveDict))):
-        failure = isinstance(val, (str, int, float))
-
-    return success or (False if failure else isinstance(val, Mapping))
+    return isinstance(val, (dict, CaseInsensitiveDict)) or (
+        not isinstance(val, (str, int, float)) and isinstance(val, Mapping)
+    )
 
 
 def is_dataclass_inst(value: object) -> TypeIs[DataclassInstance]:
@@ -165,7 +168,7 @@ def require_mapping[K, V](
 ) -> Mapping[K, V]:
     """Narrows a value to a mapping or raises ``error`` as malformed structure."""
     if not is_mapping(value):
-        raise error(f"{what} must be a mapping")
+        raise error(f"{what} must be a mapping, not {type(value).__name__}")
 
     return value
 
@@ -226,22 +229,49 @@ def is_listlike(value: object) -> bool:
         False
 
     """
-    if value is None or isinstance(
-        value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
-    ):
-        result = False
-    else:
-        result = isinstance(value, Iterable)
-
-    return result
+    return not (
+        value is None
+        or isinstance(
+            value, (PrimitiveValueType, bytes, dict, CaseInsensitiveDict, Mapping)
+        )
+    ) and isinstance(value, Iterable)
 
 
-def require_sequence(
+def is_sequence(val: object) -> TypeIs[Sequence[object]]:
+    return isinstance(val, (list, tuple)) or (
+        not isinstance(val, (int, float)) and isinstance(val, Sequence)
+    )
+
+
+@overload
+def require_listlike[T](
+    value: Iterable[T], what: str, *, error: type[Exception] = ..., **_: object
+) -> Iterable[T]: ...
+@overload
+def require_listlike(
+    value: object, what: str, *, error: type[Exception] = ..., **_: object
+) -> Iterable[object]: ...
+def require_listlike(
     value: object, what: str, *, error: type[Exception] = InvalidPipelineError, **_
 ) -> Iterable[object]:
     """Narrows a value to a non-string iterable or raises ``error``."""
     if not is_listlike(value):
         raise error(f"{what} must be a list")
+
+    return value
+
+
+def require_sequence(
+    value: _VT,
+    what: str | Callable[[_VT], str],
+    *,
+    error: type[Exception] = InvalidPipelineError,
+    **_,
+) -> Sequence[object]:
+    """Narrows a value to a Sequence or raises ``error``."""
+    if not is_sequence(value):
+        msg = what(value) if callable(what) else what
+        raise error(f"{msg} must be a Sequence")
 
     return value
 

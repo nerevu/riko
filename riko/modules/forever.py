@@ -161,6 +161,8 @@ def pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
 
         >>> next(pipe())
         {'forever': True}
+        >>> next(pipe(assign="placeholder", emit=False))
+        {'placeholder': {'forever': True}}
 
     """
     return parser(*args, **kwargs)

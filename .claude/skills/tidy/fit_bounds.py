@@ -55,8 +55,12 @@ from riko.cli._lint_tests import (
     TIMEOUT_LADDER,
     Bound,
     gen_bounds,
+    gen_module_constants,
     get_backstop,
+    get_leaf,
+    get_seconds,
 )
+from riko.cli._lint_tests import gen_scopes as gen_lint_scopes
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -159,81 +163,6 @@ def get_fit_text(worst: float | None, cap: float | None = None) -> str:
         text = str(fit)
 
     return text
-
-
-def get_leaf(func: ast.expr) -> str | None:
-    if isinstance(func, ast.Attribute):
-        leaf = func.attr
-    elif isinstance(func, ast.Name):
-        leaf = func.id
-    else:
-        leaf = None
-
-    return leaf
-
-
-def get_constants(tree: ast.Module) -> dict[str, float]:
-    constants: dict[str, float] = {}
-
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target, value = node.targets[0], node.value
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            target, value = node.target, node.value
-        else:
-            target, value = None, None
-
-        is_number = isinstance(value, ast.Constant) and isinstance(
-            value.value, (int, float)
-        )
-
-        if (
-            isinstance(target, ast.Name)
-            and is_number
-            and isinstance(value, ast.Constant)
-        ):
-            constants[target.id] = value.value
-
-    return constants
-
-
-def get_seconds(node: ast.expr, constants: Mapping[str, float]) -> float | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        seconds = node.value
-    elif isinstance(node, ast.Name):
-        seconds = constants.get(node.id)
-    else:
-        seconds = None
-
-    return seconds
-
-
-def gen_functions(tree: ast.Module) -> Iterator[tuple[str, ast.AST, str | None]]:
-    function_nodes = (ast.FunctionDef, ast.AsyncFunctionDef)
-
-    for node in tree.body:
-        if isinstance(node, function_nodes):
-            yield node.name, node, None
-        elif isinstance(node, ast.ClassDef):
-            for method in node.body:
-                if isinstance(method, function_nodes):
-                    yield f"{node.name}::{method.name}", method, node.name
-
-
-def get_marker(
-    decorators: Iterable[ast.expr], constants: Mapping[str, float]
-) -> float | None:
-    seconds = None
-
-    for decorator in decorators:
-        is_timeout = (
-            isinstance(decorator, ast.Call) and get_leaf(decorator.func) == "timeout"
-        )
-
-        if is_timeout and isinstance(decorator, ast.Call) and decorator.args:
-            seconds = get_seconds(decorator.args[0], constants)
-
-    return seconds
 
 
 def gen_blocks(
@@ -383,27 +312,21 @@ class Scope(NamedTuple):
 def gen_scopes(
     name: str, tree: ast.Module, durations: Mapping[str, float], backstop: float
 ) -> Iterator[Scope]:
-    constants = get_constants(tree)
-    classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
+    constants = dict(gen_module_constants(tree))
 
-    for owner, function, cls in gen_functions(tree):
-        own = get_marker(getattr(function, "decorator_list", []), constants)
-        decorators = [] if cls is None else classes[cls].decorator_list
-        marker = get_marker(decorators, constants) if own is None else own
-
-        if marker is None:
-            outer = Link(f"pyproject({backstop:g})", backstop)
-        else:
-            outer = Link(f"timeout({marker:g})", marker)
-
-        worst = get_worst(durations, f"{name}::{owner}")
-        yield Scope(owner, function, outer, worst)
+    for scope in gen_lint_scopes(tree, constants):
+        if scope.function is not None:
+            seconds, source = scope.get_outer(backstop)
+            label = "timeout" if source == "timeout marker" else "pyproject"
+            outer = Link(f"{label}({seconds:g})", seconds)
+            worst = get_worst(durations, f"{name}::{scope.owner}")
+            yield Scope(scope.owner, scope.function, outer, worst)
 
 
 def gen_chain_rows(
     name: str, tree: ast.Module, scope: Scope
 ) -> Iterator[tuple[int, str, int | None]]:
-    constants = get_constants(tree)
+    constants = dict(gen_module_constants(tree))
     function_nodes = (ast.FunctionDef, ast.AsyncFunctionDef)
     helpers = {n.name: n for n in tree.body if isinstance(n, function_nodes)}
     block = get_block(scope.function, helpers, constants)

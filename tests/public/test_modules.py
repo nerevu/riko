@@ -8,7 +8,7 @@ import re
 import sqlite3
 from collections.abc import AsyncIterator, Generator, Iterator, Mapping
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from functools import partial
 from inspect import isawaitable
 from itertools import count
@@ -21,9 +21,10 @@ from riko.bado._backend import HTTPStatusError, create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
 from riko.base._config import DEF_CONCURRENCY_LIMIT
-from riko.base._exceptions import InvalidPipelineError
+from riko.base._exceptions import InvalidPipelineError, RemovedOptionError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
+from riko.coercion._dates import datetime_to_datedict
 from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
 from riko.ext.codegen import (
@@ -33,7 +34,11 @@ from riko.ext.codegen import (
     generate_module_names,
 )
 from riko.modules._decorators import operator, processor, splitter
-from riko.modules._metadata import get_module_metadata, list_modules
+from riko.modules._metadata import (
+    get_module_metadata,
+    list_module_metadata,
+    list_modules,
+)
 from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.count import pipe as count_pipe
@@ -42,6 +47,7 @@ from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
 from riko.modules.fetchtext import pipe as fetchtext_pipe
 from riko.modules.filter import pipe as filter_pipe
+from riko.modules.hash import pipe as hash_pipe
 from riko.modules.input import pipe as input_pipe
 from riko.modules.join import pipe as join_pipe
 from riko.modules.receive import async_pipe as async_receive_pipe
@@ -53,6 +59,7 @@ from riko.modules.send import async_pipe as async_send_pipe
 from riko.modules.send import pipe as send_pipe
 from riko.modules.slugify import pipe as slugify_pipe
 from riko.modules.sort import pipe as sort_pipe
+from riko.modules.subelement import pipe as subelement_pipe
 from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.udf import pipe as udf_pipe
@@ -60,11 +67,13 @@ from riko.modules.xpathfetchpage import pipe as xpathfetchpage
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
+    ConfArg,
     CsvConf,
     ExchangeRateConf,
     FeedAutoDiscoveryConf,
     FetchConf,
     FetchDataConf,
+    FetchDataRawConf,
     FetchPageConf,
     FetchSiteFeedConf,
     FetchTableConf,
@@ -80,6 +89,7 @@ from riko.types.modules import (
     RenameConfRule,
     SortConf,
     SortConfRule,
+    SubelementConf,
     XpathFetchPageConf,
 )
 from tests import async_test
@@ -96,6 +106,10 @@ if TYPE_CHECKING:
 _OMITTED = object()
 _NUMBERS = ["1", "2", "3"]
 _DATES = ["2019-01-01", "2020-05-01", "2024-11-12"]
+_EARLIER_OFFSET_DATEDICT = datetime_to_datedict(
+    datetime(2014, 12, 3, 9, tzinfo=timezone(timedelta(hours=8)))
+)
+_LATER_UTC_DATEDICT = datetime_to_datedict(datetime(2014, 12, 3, 2, tzinfo=UTC))
 _FEED_URL = "FEED_URL"
 _CSV = "a,b\n1,2\n"
 _HTML = "<html><head><title>T</title></head><body><p>A</p></body></html>"
@@ -103,6 +117,10 @@ _FX = '{"rates": {"USD": 1, "GBP": 0.5}}'
 _RSS = "<rss version='2.0'><channel><item><title>A</title></item></channel></rss>"
 _LINK = f'<link rel="alternate" type="application/rss+xml" href="{_FEED_URL}">'
 _SITE = f"<html><head>{_LINK}</head></html>"
+_FEEDS_PAGE = (
+    '<link type="application/rss+xml" href="http://x/rss">'
+    '<link type="application/atom+xml" href="http://x/atom">'
+)
 
 FETCH_MODULES = [
     "fetch",
@@ -242,8 +260,29 @@ USER_AGENT_MODULES = [
     ),
 ]
 
+URL_GUARDED_MODULES = [
+    param for param in USER_AGENT_MODULES if param.id != "exchangerate"
+]
+
 
 class TestFetchModules:
+    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
+    def test_an_empty_url_names_the_conf_key(self, name, body, path, build):
+        pipeline = Pipeline.from_module(name, conf=build(""))
+
+        with pytest.raises(TypeError, match="requires the 'url' conf key"):
+            list(pipeline)
+
+    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
+    @async_test
+    async def test_an_empty_url_names_the_conf_key_asynchronously(
+        self, name, body, path, build
+    ):
+        pipeline = Pipeline.from_module(name, conf=build(""))
+
+        with pytest.raises(TypeError, match="requires the 'url' conf key"):
+            await alist(pipeline)
+
     @pytest.mark.simulated_network
     @pytest.mark.parametrize(("name", "body", "path", "build"), USER_AGENT_MODULES)
     def test_the_configured_user_agent_is_sent(self, name, body, path, build):
@@ -297,6 +336,12 @@ class TestFetchModules:
 
             with pytest.raises(HTTPStatusError):
                 await alist(pipeline)
+
+    def test_a_direct_call_rejects_an_unresolved_input_reference(self):
+        conf = FetchDataRawConf(url=ConfArg(type="url", value={"input": "u"}))
+
+        with pytest.raises(InvalidPipelineError, match="unresolved input reference"):
+            next(fetchdata_pipe(conf=conf))
 
     @pytest.mark.parametrize("name", FETCH_MODULES)
     def test_an_unopenable_url_raises(self, name):
@@ -393,6 +438,31 @@ def sqlite_path(tmp_path: Path) -> Path:
         connection.close()
 
     return path
+
+
+FEED_PREFERENCES = [
+    pytest.param({}, ["http://x/rss", "http://x/atom"], id="default"),
+    pytest.param({"link_type": "atom+xml"}, ["http://x/atom"], id="narrowed"),
+    pytest.param(
+        {"link_type": ["atom+xml", "rss+xml"], "sort": True},
+        ["http://x/atom", "http://x/rss"],
+        id="reordered-sort",
+    ),
+]
+
+
+class TestFeedautodiscovery:
+    @pytest.mark.parametrize(("options", "expected"), FEED_PREFERENCES)
+    @async_test
+    async def test_conf_link_type_selects_and_orders_feeds(
+        self, tmp_path, options, expected
+    ):
+        path = tmp_path / "page.html"
+        path.write_text(_FEEDS_PAGE)
+        conf = FeedAutoDiscoveryConf(url=path.as_uri(), **options)
+        pipeline = Pipeline.from_module("feedautodiscovery", conf=conf)
+        links = _values(pipeline, "link")
+        assert links == _values(await alist(pipeline), "link") == expected
 
 
 BOM_LINES = [
@@ -570,6 +640,20 @@ REGEX_CASES = [
         id="zero-width-group",
     ),
     pytest.param(
+        [_rule(match="(hello)", replace=r"[\g<1>]", nativereplace=True)],
+        {},
+        "say hello world",
+        "say [hello] world",
+        id="native-replace-group",
+    ),
+    pytest.param(
+        [_rule(match="(hello)", replace=r"\1 costs $5", nativereplace=True)],
+        {},
+        "say hello world",
+        "say hello costs $5 world",
+        id="native-replace-keeps-dollar",
+    ),
+    pytest.param(
         [_rule(match="$", replace="!")], {}, "say hi", "say hi!", id="end-anchor"
     ),
     pytest.param(
@@ -704,6 +788,17 @@ class TestRegex:
         stream = async_regex({"content": text}, conf=conf)
         assert await anext(stream) == {"content": expected}
 
+    def test_a_mapping_rule_keeps_native_replace(self):
+        """A plain-mapping rule carries ``nativereplace`` through to the rewrite."""
+        rule = {
+            "field": "content",
+            "match": "(hello)",
+            "replace": r"\g<1>$1",
+            "nativereplace": True,
+        }
+        item = next(regex({"content": "say hello"}, conf=DynamicConf({"rule": rule})))
+        assert item == {"content": "say hello$1"}
+
     def test_regex_skips_absent_field(self):
         """A regex rule naming an absent field leaves the item untouched."""
         conf = RegexConf(
@@ -729,6 +824,25 @@ SLUGIFY_CASES = [
     pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
     pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
 ]
+
+
+# Each row: the item, the conf's ``token_key``, and the tokens the path yields.
+SUBELEMENT_CASES = [
+    pytest.param({"a": {"b": None}}, "content", [{"content": None}], id="null-keyed"),
+    pytest.param({"a": {"b": None}}, None, [None], id="null-raw"),
+    pytest.param({"a": {"b": 0}}, "content", [{"content": 0}], id="falsy-kept"),
+    pytest.param({"a": {"c": 1}}, "content", [], id="missing-leaf"),
+    pytest.param({"a": None}, "content", [], id="missing-parent"),
+]
+
+
+class TestSubelement:
+    @pytest.mark.parametrize(("item", "token_key", "expected"), SUBELEMENT_CASES)
+    def test_a_present_null_yields_and_a_missing_path_does_not(
+        self, item, token_key, expected
+    ):
+        conf = SubelementConf(path="a.b", token_key=token_key)
+        assert list(subelement_pipe(item, conf=conf)) == expected
 
 
 class TestHash:
@@ -784,6 +898,12 @@ UNTYPED_SORTS = [
     pytest.param(["10", "apple", "9"], None, ["10", "9", "apple"], id="mixed-is-text"),
     pytest.param(["inf", "5"], None, ["5", "inf"], id="non-finite-is-text"),
     pytest.param(["10", "9"], SortableCastType.TEXT, ["10", "9"], id="explicit-text"),
+    pytest.param(
+        [_LATER_UTC_DATEDICT, _EARLIER_OFFSET_DATEDICT],
+        None,
+        [_EARLIER_OFFSET_DATEDICT, _LATER_UTC_DATEDICT],
+        id="date-dicts-by-moment",
+    ),
 ]
 
 
@@ -1020,7 +1140,7 @@ NON_LOOPABLE_FILTERS = [
 
 class TestListModules:
     def test_filter_non_loopable_modules(self):
-        modules = list_modules(loopable=False, show_metadata=True)
+        modules = list_module_metadata(loopable=False)
         assert modules
         assert all(not module.loopable for module in modules)
 
@@ -1044,18 +1164,32 @@ class TestListModules:
             list_modules(primary=True)
 
 
+# processors are loopable (they transform a single item) except input, which prompts
+# for interactive user input; operators and splitters cannot be embedded in a loop
+LOOPABLE_MODULES = [
+    pytest.param("dateformat", True, id="dateformat"),
+    pytest.param("itembuilder", True, id="itembuilder"),
+    pytest.param("input", False, id="input"),
+    pytest.param("count", False, id="count"),
+    pytest.param("split", False, id="split"),
+]
+
+
 class TestModuleMetadata:
     """Derived module metadata and its classification."""
 
     def test_operator_metadata(self):
-        metadata = get_module_metadata("count", strict=True)
+        metadata = get_module_metadata("count")
+        assert metadata is not None
         assert metadata.subtypes == {"aggregator", "composer"}
         assert metadata.has_sync
         assert metadata.has_async
 
     def test_processor_metadata(self):
-        source = get_module_metadata("fetch", strict=True)
-        transformer = get_module_metadata("dateformat", strict=True)
+        source = get_module_metadata("fetch")
+        transformer = get_module_metadata("dateformat")
+        assert source is not None
+        assert transformer is not None
 
         assert source.type == "processor"
         assert source.subtype == "source"
@@ -1066,22 +1200,17 @@ class TestModuleMetadata:
         assert transformer.subtypes == {"transformer"}
 
     def test_splitter_metadata(self):
-        metadata = get_module_metadata("split", strict=True)
+        metadata = get_module_metadata("split")
+        assert metadata is not None
         assert metadata.type == "splitter"
         assert metadata.subtype == "splitter"
         assert metadata.subtypes == {"splitter"}
 
-    def test_loopable_metadata(self):
-        # processors are loopable (they transform a single item) ...
-        assert get_module_metadata("dateformat", strict=True).loopable
-        assert get_module_metadata("itembuilder", strict=True).loopable
-
-        # ... except input, which prompts for interactive user input
-        assert not get_module_metadata("input", strict=True).loopable
-
-        # operators and splitters cannot be embedded in a loop
-        assert not get_module_metadata("count", strict=True).loopable
-        assert not get_module_metadata("split", strict=True).loopable
+    @pytest.mark.parametrize(("name", "loopable"), LOOPABLE_MODULES)
+    def test_loopable_metadata(self, name: str, loopable: bool):
+        metadata = get_module_metadata(name)
+        assert metadata is not None
+        assert metadata.loopable is loopable
 
     def test_operator_metadata_is_derived(self):
         @operator()
@@ -1115,17 +1244,16 @@ class TestModuleMetadata:
         assert composition_key_pipe.subtypes == {"aggregator", "composer"}
 
     def test_builtin_metadata_provider(self):
-        assert get_module_metadata("fetch", strict=True).provider == "riko"
+        metadata = get_module_metadata("fetch")
+        assert metadata is not None
+        assert metadata.provider == "riko"
 
     def test_metadata_subtypes_are_frozen(self):
-        metadata = get_module_metadata("fetch", strict=True)
+        metadata = get_module_metadata("fetch")
+        assert metadata is not None
 
         assert isinstance(metadata.subtypes, frozenset)
         assert metadata.subtypes == {"source"}
-
-    def test_unknown_module_metadata_raises_when_strict(self):
-        with pytest.raises(ValueError, match="has no metadata"):
-            get_module_metadata("not_a_builtin_module", strict=True)
 
 
 def _create_wrapper(name: str, *, iscoro: bool, isasync: bool):
@@ -1185,6 +1313,7 @@ FOREIGN_OPTIONS = [
     pytest.param(processor, "count", "first", id="processor+count"),
     pytest.param(processor, "conf", "first", id="processor+conf"),
     pytest.param(processor, "bogus", "first", id="processor+bogus"),
+    pytest.param(processor, "parse", True, id="processor+parse"),
     pytest.param(operator, "bogus", "first", id="operator+bogus"),
     pytest.param(operator, "resources", "first", id="operator+resources"),
     pytest.param(operator, "count", "first", id="operator+count"),
@@ -1270,6 +1399,10 @@ class TestProcessor:
         item = {"title": "a b"}
         result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
         assert list(result) == [{"content": "a"}, {"content": "b"}]
+
+    def test_mode_keyword_raises_pointing_at_describe_module(self):
+        with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):
+            list(hash_pipe([{"x": 1}], mode="describe"))
 
     @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
     def test_async_named_pipe_raises(self, iscoro, isasync, reason):

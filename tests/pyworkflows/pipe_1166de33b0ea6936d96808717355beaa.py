@@ -6,12 +6,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.itembuilder import pipe as itembuilder
 from riko.modules.loop import pipe as loop
 from riko.modules.rssitembuilder import pipe as rssitembuilder
 from riko.modules.union import pipe as union
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import ItemBuilderRawConf, RssItemBuilderRawConf
 
 if TYPE_CHECKING:
@@ -19,128 +18,121 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
-DEPENDENCIES = ["itembuilder", "loop", "rssitembuilder", "union"]
+INPUT_SCHEMAS = {}
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["itembuilder", "loop", "rssitembuilder", "union"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_569 = itembuilder(
-            item,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"type": "text", "value": "TITLE2"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "description"},
-                            "value": {"type": "text", "value": "DESC"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "lostattribute"},
-                            "value": {"type": "text", "value": "GONE"},
-                        },
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_554 = itembuilder(
-            None,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"type": "text", "value": "TITLE1"},
-                        }
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_637 = union(sw_554, conf={}, context=context, others=[sw_569])
-        sw_656 = itembuilder(
-            sw_637,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "newtitle"},
-                            "value": {"type": "text", "value": "NEWTITLE"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"subkey": "title", "type": "text"},
-                        },
-                    ]
-                }
-            ),
-            emit=True,
-            assign="loop:itembuilder",
-            count="all",
-            context=context,
-        )
-        sw_674 = rssitembuilder(
-            None,
-            conf=RssItemBuilderRawConf(
-                {
-                    "author": {"type": "text", "value": ""},
-                    "description": {"type": "text", "value": "b"},
-                    "guid": {"type": "text", "value": ""},
-                    "link": {
-                        "type": "text",
-                        "value": "http://example.com/test.php?this=that",
+    sw_569 = itembuilder(
+        item,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"type": "text", "value": "TITLE2"},
                     },
-                    "mediaContentHeight": {"type": "text", "value": ""},
-                    "mediaContentType": {"type": "text", "value": ""},
-                    "mediaContentURL": {"type": "text", "value": ""},
-                    "mediaContentWidth": {"type": "text", "value": ""},
-                    "mediaThumbHeight": {"type": "text", "value": ""},
-                    "mediaThumbURL": {
-                        "type": "text",
-                        "value": "http://example.com/a.jpg",
+                    {
+                        "key": {"type": "text", "value": "description"},
+                        "value": {"type": "text", "value": "DESC"},
                     },
-                    "mediaThumbWidth": {"type": "text", "value": ""},
-                    "pubdate": {"type": "text", "value": ""},
-                    "title": {"type": "text", "value": "a"},
-                }
-            ),
-            context=context,
-        )
-        sw_688 = loop(
-            sw_656,
-            conf=ItemBuilderRawConf(
-                {
-                    "attrs": [
-                        {
-                            "key": {"type": "text", "value": "title"},
-                            "value": {"subkey": "newtitle", "type": "text"},
-                        },
-                        {
-                            "key": {"type": "text", "value": "description.content"},
-                            "value": {"type": "text", "value": "DESCRIPTION"},
-                        },
-                    ]
-                }
-            ),
-            emit=False,
-            assign="loop:itembuilder",
-            count="all",
-            context=context,
-            embed=itembuilder,
-        )
-        sw_730 = union(sw_674, conf={}, context=context, others=[sw_688])
-        _OUTPUT = sw_730
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
-    elif context.describe_input:
-        _OUTPUT = INPUTS
-    else:
-        _OUTPUT = DEPENDENCIES
+                    {
+                        "key": {"type": "text", "value": "lostattribute"},
+                        "value": {"type": "text", "value": "GONE"},
+                    },
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_554 = itembuilder(
+        None,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"type": "text", "value": "TITLE1"},
+                    }
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_637 = union(sw_554, conf={}, context=context, others=[sw_569])
+    sw_656 = itembuilder(
+        sw_637,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "newtitle"},
+                        "value": {"type": "text", "value": "NEWTITLE"},
+                    },
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"subkey": "title", "type": "text"},
+                    },
+                ]
+            }
+        ),
+        emit=True,
+        assign="loop:itembuilder",
+        count="all",
+        context=context,
+    )
+    sw_674 = rssitembuilder(
+        None,
+        conf=RssItemBuilderRawConf(
+            {
+                "author": {"type": "text", "value": ""},
+                "description": {"type": "text", "value": "b"},
+                "guid": {"type": "text", "value": ""},
+                "link": {
+                    "type": "text",
+                    "value": "http://example.com/test.php?this=that",
+                },
+                "mediaContentHeight": {"type": "text", "value": ""},
+                "mediaContentType": {"type": "text", "value": ""},
+                "mediaContentURL": {"type": "text", "value": ""},
+                "mediaContentWidth": {"type": "text", "value": ""},
+                "mediaThumbHeight": {"type": "text", "value": ""},
+                "mediaThumbURL": {"type": "text", "value": "http://example.com/a.jpg"},
+                "mediaThumbWidth": {"type": "text", "value": ""},
+                "pubdate": {"type": "text", "value": ""},
+                "title": {"type": "text", "value": "a"},
+            }
+        ),
+        context=context,
+    )
+    sw_688 = loop(
+        sw_656,
+        conf=ItemBuilderRawConf(
+            {
+                "attrs": [
+                    {
+                        "key": {"type": "text", "value": "title"},
+                        "value": {"subkey": "newtitle", "type": "text"},
+                    },
+                    {
+                        "key": {"type": "text", "value": "description.content"},
+                        "value": {"type": "text", "value": "DESCRIPTION"},
+                    },
+                ]
+            }
+        ),
+        emit=False,
+        assign="loop:itembuilder",
+        count="all",
+        context=context,
+        embed=itembuilder,
+    )
+    sw_730 = union(sw_674, conf={}, context=context, others=[sw_688])
+    _OUTPUT = sw_730
 
     return _OUTPUT
 

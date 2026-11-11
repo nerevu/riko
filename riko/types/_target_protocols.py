@@ -1,17 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Target capability protocols for extension backends.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko.ext import FileTarget, SupportsWrite
-        >>>
-        >>> isinstance(FileTarget("out.csv"), SupportsWrite)
-        True
-
-"""
+"""Target capability protocols for extension backends."""
 
 from __future__ import annotations
 

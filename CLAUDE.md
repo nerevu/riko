@@ -39,7 +39,7 @@ is `_docs/gameplans/dependency-layers.md`; detailed file ownership is
 Important concrete locations:
 
 - `export`/`Formats`/`list_formats`: `riko/runtime/_export.py`
-- graph index for validation and execution planning: `GraphIndex` in
+- graph index for validation and execution planning: `WorkflowIndex` in
   `riko/types/_workflow.py`, built by `Workflow.index`
 - v2 code generator behind `compile_workflow`/`compile-workflow`:
   `riko/runtime/_compile.py`
@@ -66,7 +66,7 @@ Important concrete locations:
 - declarative write model: `riko/definitions/_write.py` + `_targets.py`
 - async I/O: `riko/io/_async.py`
 - exceptions/API declarations: `riko/base/_exceptions.py` (public facade
-  `riko/base/exceptions.py`) + `_api_surface.py`
+  `riko/exceptions.py`) + `_api_surface.py`
 - generated config objects: `riko/coercion/_configs.py`
 - generated discovery/id files: `riko/modules/_names.py` + `riko/types/_module_ids.py`
 
@@ -134,8 +134,9 @@ falls back to its empty/sync-only behavior. There is no Twisted backend and no
 `RIKO_ASYNC_BACKEND` environment switch.
 
 Async transport/file operations are separate: `async_url_open`, `async_write`, and
-`async_get_temp_file` live under `riko/io/` and are promoted to the stable `riko`
-surface.
+`async_get_temp_file`/`async_get_temp_path` live in `riko/io/_async.py`, beside their
+sync twins `get_temp_file`/`get_temp_path` in `riko/io/_sync.py`; all are promoted to
+the stable `riko` surface.
 
 ## Cross-cutting invariants
 
@@ -149,7 +150,7 @@ new permanent bullet here.
   idempotency, fingerprints) uses the shared canonical encoding layer in
   `riko/coercion/_canonical.py` (`canonicalize`/`canonical_bytes`/`digest`), never
   Python's randomized `hash()` or an ad-hoc encoder (`freeze*` names are reserved for
-  immutability, e.g. `freeze`/`freeze_json`). It distinguishes types Python conflates
+  immutability, e.g. `freeze`/`json_freeze`). It distinguishes types Python conflates
   and raises on unsupported/cyclic values; process-local caches may bypass instead of
   raising.
 - **Immutable prepare** — `Module.prepare()` returns a frozen `PreparedModule` with no
@@ -354,6 +355,10 @@ a `normalize`; substituting a default the caller supplies or chooses
   with `/land`'s exact command, so the pass is recorded against the tree and `/land`
   skips it instead of rerunning. A bare run records nothing. Targeted runs (one file,
   `-k`) stay bare.
+- **The index is the user's** — the user stages hunks mid-session to approve them, so
+  files appearing staged are approvals, never a tool side effect. Agents never stage,
+  unstage, or reset the index (`git add`, `git restore --staged`, `git reset`); only a
+  handed-over `/land` commit chain does, and the user runs it.
 - **Docs stay consistent by lint** — `manage lint --docs` guards the authoritative
   `_docs/` model; transient scratch material does not belong in authoritative root
   docs.
@@ -368,7 +373,8 @@ a `normalize`; substituting a default the caller supplies or chooses
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the
   import linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens
   `INPUT_PORT`/`OUTPUT_PORT`/`OTHER_PORT`/`OUTPUT_MODULE` shared by `_normalize`/
-  `_migrate`; `LINE_LENGTH`, the 88-column width the generators and tidy scans share)
+  `_migrate`; `DEFAULT_OUTPUT`, the default workflow output's name; `LINE_LENGTH`,
+  the 88-column width the generators and tidy scans share)
   plus a frozen `Settings` with `RIKO_*` env overrides (`load_settings`; a malformed
   value logs a warning and falls back to the default). Existing names
   (`DEF_CONCURRENCY_LIMIT`, `TIMEOUT`, `EXCHANGE_API`, …) re-source from `settings`; add

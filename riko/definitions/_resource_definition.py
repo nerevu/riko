@@ -67,31 +67,11 @@ class Resource[T]:
 
     Attributes:
 
-        credential: A credential reference resolved by the connector layer.
-        lazy: Whether entry should defer until first use (not yet implemented).
+        credential: A credential reference for a factory. Not yet honored: a run never
+            resolves it, so the factory receives no credential.
 
-    Examples:
-
-        >>> from riko import Resource
-        >>>
-        >>> class _Connection:
-        ...    def __init__(self):
-        ...        self.opened = True
-        ...
-        ...    @property
-        ...    def closed(self):
-        ...        return not self.opened
-        ...
-        ...    def close(self) -> None:
-        ...        self.opened = False
-        >>>
-        >>> resource = Resource.from_external(_Connection())
-        >>> resource.value
-        <..._Connection object at ...>
-        >>> resource.external
-        True
-        >>> resource.reusable
-        True
+        lazy: Whether entry should defer until first use. Not yet honored: a run
+            acquires every resource its nodes bind, whether or not it is used.
 
     """
 
@@ -388,7 +368,8 @@ class Resource[T]:
 
         Kwargs:
 
-            credential: A credential reference resolved by the connector layer.
+            credential: A credential reference for a factory. Not yet honored: a run
+                never resolves it, so the factory receives no credential.
 
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.

@@ -58,23 +58,23 @@ Examples:
 
     Basic usage::
 
-        >>> from pathlib import Path
-        >>> from tempfile import TemporaryDirectory
+        >>> from riko import get_temp_path
+        >>> from riko.ext import temporary_registrations
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
-        >>> reset_workflow_resolver()
-        >>> with TemporaryDirectory() as tmp:
-        ...     _ = (Path(tmp) / "pipe_demo.json").write_text(document)
-        ...     register_workflow_store(directory=Path(tmp))
+        >>>
+        >>> with get_temp_path("pipe_demo.json") as path, temporary_registrations():
+        ...     _ = path.write_text(document)
+        ...     register_workflow_store(directory=path.parent, replace=True)
         ...     pipe = workflow_resolver.require("pipe:demo")
         ...     next(iter(pipe()))
         {'forever': True}
-        >>> reset_workflow_resolver()
 
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Literal, overload
@@ -82,6 +82,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
 from riko.base._graph import get_cycle
 from riko.base._strutils import pythonise
+from riko.definitions._module_definition import ModuleDefinition
 from riko.types._pipedef import is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe, is_wrapper_meta
@@ -91,7 +92,7 @@ from ._workflow_pipes import build_workflow_pipes, workflow
 from ._workflow_stores import DirectoryStore, PackageStore
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Generator, Iterable
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
@@ -108,10 +109,21 @@ if TYPE_CHECKING:
     from ._workflow_stores import DocumentStore, ModuleStore
 
 
-def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[str]:
-    """Gets the ``pipe_<id>`` names among a stored workflow's ``DEPENDENCIES``."""
-    names: Iterable[str] = getattr(module, "DEPENDENCIES", ())
+def _get_stored_names(names: Iterable[str]) -> frozenset[str]:
+    """Gets the stored workflows' ``pipe_<id>`` names among ``names``."""
     return frozenset(map(pythonise, filter(is_pipe_id, names)))
+
+
+def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[str]:
+    """
+    Gets the names of a stored workflow's declared dependencies.
+
+    These are what the module's pipe reports to ``describe_module``. Only
+    ``@workflow``-tagged pipes are able to declare dependencies.
+    """
+    definition = None if module is None else ModuleDefinition.from_module(module)
+    declared = None if definition is None else definition.dependencies
+    return _get_stored_names(() if declared is None else declared)
 
 
 def _build_resolved_workflow(
@@ -121,8 +133,8 @@ def _build_resolved_workflow(
     Builds a ``ResolvedWorkflow`` whose ``pipe``/``async_pipe`` run ``flow``.
 
     ``flow`` is the ``Workflow`` a ``WorkflowDocument`` (serialized ``Workflow``)
-    describes. Building the module runs nothing. Its ``pipe`` runs ``flow`` when
-    called.
+    describes. Building the module plans ``flow`` but runs nothing. Its ``pipe`` runs
+    ``flow`` when called.
 
     Args:
 
@@ -137,6 +149,10 @@ def _build_resolved_workflow(
 
         The ``ResolvedWorkflow`` (a module exposing ``pipe`` and ``async_pipe``).
 
+    Raises:
+
+        InvalidPipelineError: If ``flow`` cannot be planned.
+
     Examples:
 
         >>> from riko import Workflow
@@ -144,26 +160,17 @@ def _build_resolved_workflow(
         >>>
         >>> flow = Workflow.parse('{"nodes": [{"name": "forever"}]}')
         >>> resolved = _build_resolved_workflow("pipe_demo", flow, dispatcher)
-        >>> resolved.DEPENDENCIES
+        >>> resolved.pipe.dependencies
         ('forever',)
         >>> next(iter(resolved.pipe()))
         {'forever': True}
 
     """
-    inputs: dict[str, object] = dict(flow.inputs)
-    dependencies = flow.dependencies
-    subtype: ModuleSubtype = "transformer" if inputs else "source"
-    args = (flow, dispatcher)
-    pipes = build_workflow_pipes(*args, *dependencies, inputs=inputs, subtype=subtype)
+    pipes = build_workflow_pipes(flow, dispatcher, name=name)
     module = ModuleType(name, f"Pipe {name} built from its workflow document.")
     resolved = ResolvedWorkflow(module)
-    vars(resolved).update(
-        INPUTS=inputs,
-        DEPENDENCIES=dependencies,
-        flow=flow,
-        pipe=pipes.sync_pipe,
-        async_pipe=pipes.async_pipe,
-    )
+
+    vars(resolved).update(flow=flow, pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe)
     return resolved
 
 
@@ -296,6 +303,17 @@ class WorkflowResolver:
         )
         self._resolved_documents.clear()
 
+    @contextmanager
+    def restoring(self) -> Generator[None]:
+        """Restores the stores registered on entry when the block exits."""
+        saved = self._module_store, self._document_store
+
+        try:
+            yield
+        finally:
+            self._module_store, self._document_store = saved
+            self._resolved_documents.clear()
+
     def reset(self) -> None:
         """
         Clears the registered ``ModuleStore`` and ``DocumentStore``.
@@ -339,29 +357,35 @@ class WorkflowResolver:
         """
         return is_pipe_id(name)
 
-    def _load_resolved(self, name: str) -> ResolvedWorkflow | None:
+    def _load_dependencies(self, pipe_id: str) -> frozenset[str]:
+        """
+        Loads the ``pipe_<id>`` names a stored workflow's nodes run.
+
+        A ``ModuleStore`` entry reports the dependencies its pipe declares. Otherwise
+        the ``WorkflowDocument`` is parsed (but not planned) in order to identify
+        cycles. A document the ``ModuleStore`` shadows is never read.
+        """
+        module_store, document_store = self._module_store, self._document_store
+        module = None if module_store is None else module_store.load(pipe_id)
+
         if (
-            (module := self._resolved_documents.get(name)) is None
-            and (document_store := self._document_store) is not None
-            and (flow := document_store.load(name)) is not None
+            module is None
+            and document_store is not None
+            and (flow := document_store.load(pipe_id)) is not None
         ):
-            dispatcher = self._require_dispatcher(name)
-            module = _build_resolved_workflow(name, flow, dispatcher)
-            self._resolved_documents[name] = module
+            names = _get_stored_names(flow.dependencies)
+        else:
+            names = _get_dependencies(module)
 
-        return module
-
-    def _load_stored(self, pipe_id: str) -> ResolvedWorkflow | None:
-        store = self._module_store
-        module = None if store is None else store.load(pipe_id)
-        return self._load_resolved(pipe_id) if module is None else module
+        return names
 
     def _require_acyclic(self, pipe_id: str, *dependencies: str) -> None:
         """
         Requires that ``pipe_id``'s stored-workflow dependencies never lead back to it.
 
         A stored workflow embeds the workflows its nodes name. One that reaches itself
-        through that chain would run forever, so it is rejected before it runs.
+        through that chain would run forever, so it is rejected before it runs. A
+        stored workflow whose pipe declares no dependencies ends the chain.
 
         Args:
 
@@ -379,7 +403,7 @@ class WorkflowResolver:
 
         while pending:
             if (name := pending.pop()) not in graph:
-                graph[name] = _get_dependencies(self._load_stored(name))
+                graph[name] = self._load_dependencies(name)
                 pending.extend(graph[name])
 
         if cycle := get_cycle(pipe_id, graph):
@@ -387,6 +411,24 @@ class WorkflowResolver:
             msg = f"stored workflow {cycle[0]!r} embeds itself ({path}). Move steps to"
             msg += " a separate stored workflow and run it from a 'loop' node instead"
             raise InvalidPipelineError(msg)
+
+    def _load_resolved(self, name: str) -> ResolvedWorkflow | None:
+        if (
+            (module := self._resolved_documents.get(name)) is None
+            and (document_store := self._document_store) is not None
+            and (flow := document_store.load(name)) is not None
+        ):
+            dispatcher = self._require_dispatcher(name)
+            self._require_acyclic(name, *_get_stored_names(flow.dependencies))
+            module = _build_resolved_workflow(name, flow, dispatcher)
+            self._resolved_documents[name] = module
+
+        return module
+
+    def _load_stored(self, pipe_id: str) -> ResolvedWorkflow | None:
+        store = self._module_store
+        module = None if store is None else store.load(pipe_id)
+        return self._load_resolved(pipe_id) if module is None else module
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """
@@ -454,7 +496,8 @@ class WorkflowResolver:
         Returns:
 
             The pipe, tagged as a stored workflow's pipe, which lets ``loop`` run it
-            without the ``conf`` and ``emit`` it passes other embeds.
+            without the ``conf`` and ``emit`` it passes other embeds. An untagged
+            pipe is tagged ``"transformer"``, like ``@workflow``'s default.
 
         Raises:
 
@@ -488,9 +531,15 @@ class WorkflowResolver:
             tagged = pipe
         else:
             meta = is_wrapper_meta(pipe)
-            subtype: ModuleSubtype = pipe.subtype if meta else "source"
+            subtype: ModuleSubtype = pipe.subtype if meta else "transformer"
             loopable = pipe.loopable if meta else True
-            tag = workflow(subtype=subtype, loopable=loopable, isasync=is_async)
+            tag = workflow(
+                subtype=subtype,
+                loopable=loopable,
+                isasync=is_async,
+                input_schemas=getattr(pipe, "input_schemas", None),
+                dependencies=getattr(pipe, "dependencies", None),
+            )
             tagged = tag(pipe)
 
         return tagged
@@ -562,17 +611,15 @@ class WorkflowResolver:
 
         Examples:
 
-            >>> from pathlib import Path
-            >>> from tempfile import TemporaryDirectory
+            >>> from riko import get_temp_path
             >>>
             >>> document = '{"nodes": [{"name": "forever"}]}'
             >>> resolver = WorkflowResolver()
-            >>> with TemporaryDirectory() as tmp:
-            ...     directory = Path(tmp)
-            ...     _ = (directory / "pipe_demo.json").write_text(document)
-            ...     flow = resolver.load_workflow("pipe:demo", directory=directory)
-            >>> [node.name for node in flow.nodes.values()]
-            ['forever']
+            >>> with get_temp_path("pipe_demo.json") as path:
+            ...     _ = path.write_text(document)
+            ...     flow = resolver.load_workflow("pipe:demo", directory=path.parent)
+            >>> flow.dependencies
+            ('forever',)
 
         """
         pipe_id = pythonise(name)
@@ -603,13 +650,15 @@ def register_workflow_store(
 
         package: A package, or its import path, whose ``pipe_<id>.py`` files are each
             imported as a ``ResolvedWorkflow`` (a module exposing ``pipe`` and/or
-            ``async_pipe``).
+            ``async_pipe``). When the functions are ``@riko.ext.workflow`` tagged,
+            ``describe_module`` reports the information provided by the
+            ``input_schemas=``/``dependencies=`` options. An untagged function reports
+            neither, and is categorized ``"transformer"`` on lookup.
 
-        directory: A directory of ``WorkflowDocument`` (serialized ``Workflow``) files,
-            each stored as ``pipe_<id>.json``.
+        directory: A directory of ``WorkflowDocument`` (serialized ``Workflow``) files
+            stored as ``pipe_<id>.json``.
 
-        replace: Whether to replace a store of the same kind that is already
-            registered.
+        replace: Whether to replace a store of the same kind that is already registered.
 
     Raises:
 
@@ -620,11 +669,11 @@ def register_workflow_store(
     Examples:
 
         >>> import riko.modules
+        >>> from riko.ext import temporary_registrations
         >>>
-        >>> reset_workflow_resolver()
-        >>> register_workflow_store(package="riko.modules")
-        >>> register_workflow_store(package=riko.modules, replace=True)
-        >>> reset_workflow_resolver()
+        >>> with temporary_registrations():
+        ...     register_workflow_store(package="riko.modules", replace=True)
+        ...     register_workflow_store(package=riko.modules, replace=True)
 
     """
     module_store = None if package is None else PackageStore(package)
@@ -634,24 +683,4 @@ def register_workflow_store(
     )
 
 
-def reset_workflow_resolver() -> None:
-    """
-    Resets the process-global resolver, chiefly for test isolation.
-
-    Examples:
-
-        >>> reset_workflow_resolver()
-        >>> register_workflow_store(package="riko.modules")
-        >>> reset_workflow_resolver()
-        >>> workflow_resolver.load("pipe_demo")
-
-    """
-    workflow_resolver.reset()
-
-
-__all__ = [
-    "WorkflowResolver",
-    "register_workflow_store",
-    "reset_workflow_resolver",
-    "workflow_resolver",
-]
+__all__ = ["WorkflowResolver", "register_workflow_store", "workflow_resolver"]

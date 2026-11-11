@@ -67,26 +67,43 @@
             }
         }
     ],
+    "input_schemas": {
+        "dateinput1": {
+            "default": "10/14/2010",
+            "description": "dateinput1",
+            "type": "string"
+        },
+        "locationinput1": {
+            "default": "isle of wight, uk",
+            "description": "locationinput1",
+            "type": "string"
+        },
+        "numberinput1": {
+            "default": 12121,
+            "description": "numberinput1",
+            "type": "integer"
+        },
+        "privateinput1": {
+            "default": "",
+            "description": "privateinput1",
+            "type": "string"
+        },
+        "textinput1": {
+            "default": "This is default text - is there debug text too?",
+            "description": "textinput1",
+            "type": "string"
+        },
+        "urlinput1": {
+            "default": "file://riko/data/example.html",
+            "description": "urlinput1",
+            "format": "uri",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-565": {
             "conf": {
-                "debug": {
-                    "type": "datetime",
-                    "value": "0001-01-01T00:02Z"
-                },
-                "default": {
-                    "type": "datetime",
-                    "value": "10/14/2010"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "dateinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "dateinput1"
                 },
@@ -101,23 +118,7 @@
         },
         "sw-572": {
             "conf": {
-                "debug": {
-                    "type": "location",
-                    "value": ""
-                },
-                "default": {
-                    "type": "location",
-                    "value": "isle of wight, uk"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "locationinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "locationinput1"
                 },
@@ -132,23 +133,7 @@
         },
         "sw-576": {
             "conf": {
-                "debug": {
-                    "type": "float",
-                    "value": ""
-                },
-                "default": {
-                    "type": "float",
-                    "value": "12121"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "numberinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "numberinput1"
                 },
@@ -163,27 +148,7 @@
         },
         "sw-580": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": "The debug is not private so can be left in?"
-                },
-                "default": {
-                    "type": "text",
-                    "value": ""
-                },
-                "name": {
-                    "type": "text",
-                    "value": "privateinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "private_default": {
-                    "type": "text",
-                    "value": "on"
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "privateinput1"
                 }
@@ -194,23 +159,7 @@
         },
         "sw-584": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": "does debeug text appear anywhere?"
-                },
-                "default": {
-                    "type": "text",
-                    "value": "This is default text - is there debug text too?"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "textinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "textinput1"
                 }
@@ -221,23 +170,7 @@
         },
         "sw-588": {
             "conf": {
-                "debug": {
-                    "type": "url",
-                    "value": ""
-                },
-                "default": {
-                    "type": "url",
-                    "value": "file://riko/data/example.html"
-                },
-                "name": {
-                    "type": "text",
-                    "value": "urlinput1"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
+                "input_key": {
                     "type": "text",
                     "value": "urlinput1"
                 },

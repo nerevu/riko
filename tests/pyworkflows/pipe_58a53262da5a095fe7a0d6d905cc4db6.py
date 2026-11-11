@@ -6,14 +6,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.fetch import pipe as fetch
 from riko.modules.reverse import pipe as reverse
 from riko.modules.sort import pipe as sort
 from riko.modules.truncate import pipe as truncate
 from riko.modules.union import pipe as union
 from riko.modules.urlbuilder import pipe as urlbuilder
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     FetchRawConf,
     SortRawConf,
@@ -26,91 +25,87 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
-DEPENDENCIES = ["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"]
+INPUT_SCHEMAS = {}
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["fetch", "reverse", "sort", "truncate", "union", "urlbuilder"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_606 = urlbuilder(
-            item,
-            conf=UrlBuilderRawConf(
-                {
-                    "base": {
-                        "type": "text",
-                        "value": "file://riko/data/www.greenhughes.com_rssfeed.xml",
-                    },
-                    "param": [
-                        {
-                            "key": {"type": "text", "value": ""},
-                            "value": {"type": "text", "value": ""},
-                        }
-                    ],
-                    "path": {"type": "text", "value": ""},
-                }
-            ),
-            context=context,
-        )
-        sw_572 = fetch(
-            None,
-            conf=FetchRawConf({"url": {"terminal": "1_URL", "type": "url"}}),
-            context=context,
-            _1_URL=sw_606,
-        )
-        sw_550_1 = fetch(
-            None,
-            conf=FetchRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/blog.ouseful.info_feed.xml",
+    sw_606 = urlbuilder(
+        item,
+        conf=UrlBuilderRawConf(
+            {
+                "base": {
+                    "type": "text",
+                    "value": "file://riko/data/www.greenhughes.com_rssfeed.xml",
+                },
+                "param": [
+                    {
+                        "key": {"type": "text", "value": ""},
+                        "value": {"type": "text", "value": ""},
                     }
+                ],
+                "path": {"type": "text", "value": ""},
+            }
+        ),
+        context=context,
+    )
+    sw_572 = fetch(
+        None,
+        conf=FetchRawConf({"url": {"terminal": "1_URL", "type": "url"}}),
+        context=context,
+        _1_URL=sw_606,
+    )
+    sw_550_1 = fetch(
+        None,
+        conf=FetchRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/blog.ouseful.info_feed.xml",
                 }
-            ),
-            context=context,
-        )
-        sw_550_2 = fetch(
-            None,
-            conf=FetchRawConf(
-                {
-                    "url": {
-                        "type": "url",
-                        "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml",
+            }
+        ),
+        context=context,
+    )
+    sw_550_2 = fetch(
+        None,
+        conf=FetchRawConf(
+            {
+                "url": {
+                    "type": "url",
+                    "value": "file://riko/data/feeds.feedburner.com_TheEdTechie.xml",
+                }
+            }
+        ),
+        context=context,
+    )
+    sw_550 = union(sw_550_1, conf={}, context=context, others=[sw_550_2])
+    sw_580 = union(sw_550, conf={}, context=context, others=[sw_572])
+    sw_565 = sort(
+        sw_580,
+        conf=SortRawConf(
+            {
+                "rule": [
+                    {
+                        "dir": {"type": "text", "value": "ASC"},
+                        "field": {"type": "text", "value": "title"},
                     }
-                }
-            ),
-            context=context,
-        )
-        sw_550 = union(sw_550_1, conf={}, context=context, others=[sw_550_2])
-        sw_580 = union(sw_550, conf={}, context=context, others=[sw_572])
-        sw_565 = sort(
-            sw_580,
-            conf=SortRawConf(
-                {
-                    "rule": [
-                        {
-                            "dir": {"type": "text", "value": "ASC"},
-                            "field": {"type": "text", "value": "title"},
-                        }
-                    ]
-                }
-            ),
-            context=context,
-        )
-        sw_596 = truncate(
-            sw_565,
-            conf=TruncateRawConf({"count": {"type": "float", "value": "3"}}),
-            context=context,
-        )
-        sw_625 = reverse(sw_596, conf={}, context=context)
-        _OUTPUT = sw_625
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
-    elif context.describe_input:
-        _OUTPUT = INPUTS
-    else:
-        _OUTPUT = DEPENDENCIES
+                ]
+            }
+        ),
+        context=context,
+    )
+    sw_596 = truncate(
+        sw_565,
+        conf=TruncateRawConf({"count": {"type": "float", "value": "3"}}),
+        context=context,
+    )
+    sw_625 = reverse(sw_596, conf={}, context=context)
+    _OUTPUT = sw_625
 
     return _OUTPUT
 

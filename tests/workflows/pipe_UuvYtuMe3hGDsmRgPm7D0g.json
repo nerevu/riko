@@ -56,6 +56,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "name": {
+            "default": "Lancaster",
+            "description": "Name",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-340": {
             "conf": {
@@ -196,25 +203,9 @@
         },
         "sw-371": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "Lancaster"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "name"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Name"
                 }
             },
             "family": "module",

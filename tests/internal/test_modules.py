@@ -82,6 +82,7 @@ from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
 
 if TYPE_CHECKING:
+    from riko.coercion._dynamic_conf import DynamicConf
     from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
     from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
 
@@ -1148,6 +1149,27 @@ class TestPrepare:
         with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
             strconcat.prepare(extra, conf={}, **kwargs)
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason=(
+            "a frozen per-module config object is not yet implemented: a static "
+            "configuration is cast once and the one mutable objconf is handed to "
+            "every item, so a parser's write to it reaches the next item"
+        ),
+    )
+    def test_prepared_static_objconf_is_isolated_per_item(self):
+        seen: list[int] = []
+
+        @processor()
+        def pipe(item: Item, objconf: DynamicConf, tuples: object, **_: object) -> Item:
+            seen.append(objconf["count"])
+            objconf["count"] += 1
+            return item
+
+        list(pipe([{"a": 1}, {"a": 2}], conf={"count": 0}))
+        assert seen == [0, 0]
+
 
 class _FalsyCaster:
     """A caster whose truth value is False."""
@@ -1303,11 +1325,34 @@ class TestExchangeRate:
     @pytest.mark.parametrize("rate", [None, MISSING], ids=["null", "absent"])
     def test_a_missing_rate_warns_and_is_nan(self, rate, caplog):
         """A currency with no rate in the response yields ``NaN`` and logs a warning."""
-        raw = {"USD": 1} if rate is MISSING else {"USD": 1, "XYZ": rate}
-        rates = exchangerate_module.build_rates(**raw)
+        build_rates = exchangerate_module.build_rates
+        rates = build_rates(USD=1) if rate is MISSING else build_rates(USD=1, XYZ=rate)
         rate = exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
         assert rate.is_nan()
         assert "USD/XYZ rate not found in rates" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("extra", "warns"),
+        [({"verbose": True}, True), ({"verbose": False}, False), ({}, False)],
+        ids=["verbose", "quiet", "default"],
+    )
+    @pytest.mark.parametrize("isasync", [False, True], ids=["sync", "async"])
+    @async_test
+    async def test_an_unparseable_rate_warns_only_when_verbose(
+        self, extra, warns, isasync, tmp_path, caplog
+    ):
+        """A bad rate elsewhere in the response warns only with ``verbose`` set."""
+        rates_path = tmp_path / "rates.json"
+        rates_path.write_text('{"rates": {"USD": 1, "GBP": 2, "XYZ": "bad"}}')
+        conf = {"url": str(rates_path), "currency": "USD", "precision": 1}
+        objconf = ExchangeRateObjconf({**conf, **extra})
+        if isasync:
+            rate = await exchangerate_module.async_parser("GBP", None, objconf)
+        else:
+            rate = exchangerate_module.parser("GBP", None, objconf)
+
+        assert str(rate) == "0.5"
+        assert ("invalid rate: 'bad'" in caplog.text) is warns
 
     @pytest.mark.parametrize(("document", "match"), MISSING_RATES)
     def test_a_response_without_rates_raises(self, document, match):

@@ -28,7 +28,6 @@ from ast import literal_eval
 from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
-from functools import partial
 from json import loads
 from operator import add, sub
 from time import gmtime, struct_time
@@ -40,13 +39,14 @@ from riko.base._logging import get_logger
 from riko.base.currencies import CURRENCY_CODES
 from riko.base.locations import LOCATIONS
 from riko.types._enums import BasicCastType, CastType, LocationType
+from riko.types._scalars import is_datedict
 
 from ._dates import (
-    date_to_tt,
+    date_to_datetime,
+    datedict_to_datetime,
     get_relative_date,
     parse_date_string,
     resolve_aware_datetime,
-    tt_to_datedict,
     tt_to_datetime,
 )
 
@@ -56,9 +56,9 @@ if TYPE_CHECKING:
 
     from riko.types._geo import AnyLocation, IPAddress, Location
     from riko.types._options import DecorationOptions
-    from riko.types._scalars import BasicValue, DateDict, DateLike, PrimitiveValue
+    from riko.types._scalars import BasicValue, DateLike, PrimitiveValue
     from riko.types._values import BasicArg
-    from riko.types._wrappers import Func, PreCaster
+    from riko.types._wrappers import PreCaster
 
 logger: Logger = get_logger(__name__)
 
@@ -320,42 +320,15 @@ def cast_location(
     return result
 
 
-@overload
-def cast_datetime(value: DateLike, *, try_local_tz: bool = ...) -> dt | None: ...
-@overload
-def cast_datetime(
-    value: DateLike, as_date: Literal[True], *, try_local_tz: bool = ...
-) -> date | None: ...
-@overload
-def cast_datetime(
-    value: DateLike, as_date: Literal[False] = ..., *, try_local_tz: bool = ...
-) -> dt | None: ...
-@overload
-def cast_datetime(
-    value: DateLike,
-    as_date: Literal[True],
-    as_datedict: Literal[True],
-    *,
-    try_local_tz: bool = ...,
-) -> DateDict | None: ...
-@overload
-def cast_datetime(
-    value: DateLike,
-    *,
-    as_date: Literal[False] = ...,
-    as_datedict: Literal[True],
-    try_local_tz: bool = ...,
-) -> DateDict | None: ...
-def cast_datetime(
-    value: DateLike, as_date=False, as_datedict=False, *, try_local_tz=False
-) -> date | dt | DateDict | None:
+def cast_datetime(value: DateLike, *, try_local_tz: bool = False) -> dt | None:
     """
-    Normalizes a date-like value to a ``datetime`` (or ``date``/``DateDict``).
+    Normalizes a date-like value to a timezone-aware ``datetime``.
 
-    Accepts real ``date``/``datetime``/``struct_time``/epoch-``int`` values and
-    string shorthands. Named days (``"now"``/``"today"``/``"yesterday"``), counted
-    offsets (``"3 days"``/``"-1 month"``), and ``next``/``last`` word forms resolve
-    against the current time.
+    Accepts ``date``/``datetime``/``struct_time``/epoch-``int`` values, a
+    ``datebuilder`` date dict, and string shorthands. Named days (``"now"``/``"today"``/
+    ``"yesterday"``), counted offsets (``"3 days"``/``"-1 month"``), and ``next``/
+    ``last`` word forms resolve against the current time. A value without a time of day
+    (a ``date``, ``"today"``, or a whole-day offset) resolves to midnight.
 
     Args:
 
@@ -363,20 +336,22 @@ def cast_datetime(
 
     Kwargs:
 
-        as_date: Whether to return a ``date`` rather than a ``datetime``.
-        as_datedict: Whether to return a ``DateDict`` of date components.
         try_local_tz: Whether to assume the local timezone for naive values.
 
     Returns:
 
         The normalized value, or ``None`` when it cannot be parsed.
 
+    Raises:
+
+        TypeError: If ``value`` is not date-like.
+
     Examples:
 
         >>> type(cast_datetime('now')).__name__
         'datetime'
-        >>> type(cast_datetime('today')).__name__
-        'date'
+        >>> cast_datetime('today').time()
+        datetime.time(0, 0)
         >>> cast_datetime('-1 day') == cast_datetime('yesterday')
         True
         >>> cast_datetime('1 week') == cast_datetime('+7 days')
@@ -385,21 +360,13 @@ def cast_datetime(
         True
 
     """
-    tt = None
-
-    if isinstance(value, dt) and as_date:
-        _date = value.date()
-    elif isinstance(value, dt) or isinstance(value, date) and as_date:
+    if isinstance(value, date):
         _date = value
-    elif isinstance(value, date):
-        tt = value.timetuple()
-        _date = tt_to_datetime(tt, as_date=as_date)
     elif isinstance(value, int):
-        tt = gmtime(value)
-        _date = tt_to_datetime(tt, as_date=as_date)
+        _date = tt_to_datetime(gmtime(value))
     elif isinstance(value, struct_time):
-        tt, _date = value, tt_to_datetime(value, as_date=as_date)
-    else:
+        _date = tt_to_datetime(value)
+    elif isinstance(value, str):
         words = value.split(" ")
         count = words[0].lstrip("+-")
         unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
@@ -427,24 +394,33 @@ def cast_datetime(
                     _date = today - timedelta(days=1)
         else:
             _date = parse_date_string(value)
-
-        if isinstance(_date, dt) and as_date:
-            _date = _date.date()
-
-    if isinstance(_date, dt):
-        _date = resolve_aware_datetime(_date, try_local_tz=try_local_tz)
-
-    if _date and as_datedict:
-        tt = tt or date_to_tt(_date)
-        result = tt_to_datedict(tt, _date)
+    elif is_datedict(value):
+        _date = datedict_to_datetime(value)
     else:
-        result = _date
+        raise TypeError(f"cast_datetime got a value that is not date-like: {value!r}")
+
+    if _date is None:
+        result = None
+    elif isinstance(_date, dt):
+        result = resolve_aware_datetime(_date, try_local_tz=try_local_tz)
+    else:
+        result = date_to_datetime(_date, try_local_tz=try_local_tz)
 
     return result
 
 
 def cast_date(value: DateLike) -> date | None:
-    return cast_datetime(value, as_date=True)
+    """
+    Normalizes a date-like value to a ``date``.
+
+    Examples:
+
+        >>> cast_date('Jan. 12, 2001')
+        datetime.date(2001, 1, 12)
+
+    """
+    moment = cast_datetime(value)
+    return None if moment is None else moment.date()
 
 
 def cast_decimal[T](value: object, default: T | None = None) -> Decimal | T:
@@ -652,14 +628,29 @@ def cast_value[T](
     return value
 
 
-cast_none: Func[None] = partial(cast_value, type_=CastType.NONE)
+def cast_none(content: object, **_: object) -> None:
+    """
+    Discards content, for use as a caster that yields ``None``.
+
+    Equivalent to ``cast_value`` with ``type_=NONE``.
+
+    Args:
+
+        content: The value to discard.
+
+    Examples:
+
+        >>> cast_none(5)
+        >>> cast_none("x", field="title")
+
+    """
 
 
 def cast_pass[T](content: T, **_: object) -> T:
     """
-    Passes content through unchanged.
+    Passes content through unchanged, for use as a caster.
 
-    A thin wrapper over ``cast_value`` with ``type_=PASS`` for use as a caster.
+    Equivalent to ``cast_value`` with ``type_=PASS``.
 
     Args:
 
@@ -675,6 +666,7 @@ def cast_pass[T](content: T, **_: object) -> T:
         5
         >>> cast_pass("x")
         'x'
+        >>> cast_pass(None)
 
     """
-    return cast_value(content, type_=CastType.PASS)
+    return content

@@ -5,8 +5,8 @@ Deterministic serialization of workflow graphs and shape-aware document parsing.
 A workflow document (``WorkflowDocument``) is a serialized ``Workflow``. Workflows
 serialize to byte-stable documents here. A JSON input in any of the three readable
 shapes (a workflow document, a serialized pipe definition, or a serialized
-``PipeDag``) is recognized and read into the field values a ``Workflow`` is built
-from.
+``PipeDag``) is recognized and read into the shorthand workflow mapping a
+``Workflow`` is built from.
 
 """
 
@@ -21,29 +21,36 @@ from riko.base._config import OUTPUT_MODULE
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import is_listlike, is_mapping, require_mapping
 from riko.base._recordutils import serialize_attrs
+from riko.base._require_guards import typed_dict_keys
 from riko.types._enums import DocumentShape
-from riko.types._workflow import Edge, RawWorkflow, WorkflowDocument
+from riko.types._pipedef import PipeDag, PipeDef, PipeModule, Wire
+from riko.types._workflow import PortEdge, RawWorkflow, WorkflowDocument
 
-from ._migrate import migrate_pipe_def, parse_dag_graph
-from ._nodes import Node
-from ._normalize import WorkflowFields, build_workflow_fields
+from ._migrate import parse_pipedag, parse_pipedef
+from ._nodes import RikoNode
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from riko.types._pipedef import PipeLike
 
-    from riko.types._pipedef import PipeDag, PipeDefLike
+    from ._workflow_definition import (
+        DocumentLike,
+        DocumentMapping,
+        Workflow,
+        WorkflowLike,
+    )
 
-    from ._workflow_definition import Workflow
-
-_SHAPE_ERROR = "the input needs 'nodes' or 'modules'"
-_WIRE_KEYS = frozenset({"src", "tgt"})
+_SHAPE_ERROR = "the document needs 'nodes' or 'modules'"
+_WIRE_KEYS = typed_dict_keys(Wire)[0]
+_PIPE_MODULE_KEYS = typed_dict_keys(PipeModule)[0]
+_UNIQ_PIPEDEF_MODULE_KEYS = frozenset({"emit", "assign", "field", "count"})
+_UNIQ_PIPEDAG_MODULE_KEYS = frozenset({"name", "options", "label", "resources"})
 
 
 class WorkflowEncoder(json.JSONEncoder):
     """Renders the structural and JSON-native value types a workflow carries."""
 
     def default(self, o: object) -> object:
-        if isinstance(o, (Node, Edge)):
+        if isinstance(o, (RikoNode, PortEdge)):
             result = {"family": o.family, **serialize_attrs(o)}
         elif is_mapping(o):
             result = dict(o)
@@ -55,7 +62,7 @@ class WorkflowEncoder(json.JSONEncoder):
         return result
 
 
-def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocument:
+def serialize_workflow(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocument:
     """
     Serializes a workflow into a byte-stable ``WorkflowDocument``.
 
@@ -101,25 +108,42 @@ def serialize_graph(flow: Workflow, *, indent: int | None = 4) -> WorkflowDocume
     return (dumped + suffix).encode("utf-8")
 
 
-def is_raw_workflow(value: object) -> TypeGuard[RawWorkflow | Mapping[str, object]]:
+def is_workflowlike(value: object) -> TypeGuard[Workflow | RawWorkflow]:
     """Reports whether ``value`` is a mapping listing ``nodes`` or a ``version``."""
     return is_mapping(value) and bool({"nodes", "version"}.intersection(value))
 
 
-def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
-    """Reports whether ``value`` is a ``PipeDef``."""
-    if is_mapping(value) and not is_raw_workflow(value) and "modules" in value:
-        wires = value.get("wires")
-        modules = value.get("modules")
+def _is_pipedag_module(module: object) -> bool:
+    """Reports whether ``module`` has a key only a ``PipeDag`` module uses."""
+    if is_mapping(module):
+        result = bool(_UNIQ_PIPEDAG_MODULE_KEYS.intersection(module))
+    else:
+        result = False
 
-        wired = is_listlike(wires) and any(
-            is_mapping(wire) and not _WIRE_KEYS.isdisjoint(wire) for wire in wires
-        )
-        terminal = is_listlike(modules) and any(
-            is_mapping(module) and module.get("type") == OUTPUT_MODULE
-            for module in modules
-        )
-        result = wired or terminal
+    return result
+
+
+def _is_pipedef_module(module: object) -> bool:
+    """Reports whether ``module`` has a ``PipeDef``-only key or ``output`` type."""
+    if is_mapping(module):
+        if not (result := bool(_UNIQ_PIPEDEF_MODULE_KEYS.intersection(module))):
+            result = module.get("type") == OUTPUT_MODULE
+    else:
+        result = False
+
+    return result
+
+
+def is_pipedef(value: object) -> TypeGuard[PipeDef]:
+    """Reports whether ``value`` is a ``PipeDef``."""
+    if is_mapping(value) and (modules := value.get("modules")):
+        if (wires := value.get("wires")) and is_listlike(wires):
+            result = any(is_mapping(w) and _WIRE_KEYS.intersection(w) for w in wires)
+        else:
+            result = False
+
+        if not result:
+            result = is_listlike(modules) and any(filter(_is_pipedef_module, modules))
     else:
         result = False
 
@@ -128,18 +152,48 @@ def is_pipedeflike(value: object) -> TypeGuard[PipeDefLike]:
 
 def is_pipedag(value: object) -> TypeGuard[PipeDag]:
     """Reports whether ``value`` is a ``PipeDag``."""
-    possible = is_mapping(value) and not is_raw_workflow(value) and "modules" in value
-    return possible and not is_pipedeflike(value)
+    if is_mapping(value) and (modules := value.get("modules")) and is_listlike(modules):
+        wires = value.get("wires")
+        listed = is_listlike(wires) and any(is_listlike(wire) for wire in wires)
+        result = listed or any(filter(_is_pipedag_module, modules))
+    else:
+        result = False
+
+    return result
 
 
-def get_document_shape(document: Mapping[str, object]) -> DocumentShape:
+def is_pipelike(value: object) -> TypeGuard[PipeLike]:
+    """Reports whether ``value`` is a mapping listing at least one module."""
+    return (
+        is_mapping(value)
+        and bool(modules := value.get("modules"))
+        and is_listlike(modules)
+    )
+
+
+def _has_pipe_modules(value: PipeLike) -> bool:
+    """Reports whether ``value`` lists modules that all have a ``PipeModule``'s keys."""
+    result = (is_mapping(m) and _PIPE_MODULE_KEYS <= m.keys() for m in value["modules"])
+    return all(result)
+
+
+def get_document_shape(document: DocumentMapping) -> DocumentShape:
     """
     Detects which of the readable shapes ``document`` is written in.
 
-    A mapping listing ``nodes`` or declaring the workflow format version it targets
-    is a workflow document. One listing ``modules`` is either a ``PipeDef``,
-    recognized by its ``src``/``tgt`` wire mappings or its ``output`` node, or a
-    ``PipeDag``.
+    Tries each shape in order and returns the first that matches:
+
+    - ``WorkflowDocument`` (``V2``): Mapping containing ``nodes`` or ``version``
+
+    - ``PipeDef`` (``V1``): Mapping containing ``modules`` and either ``src``/``tgt``
+      ``wires``, an ``output`` module, or a ``PipeDef``-only module key
+
+    - ``PipeDag`` (``DAG``): Mapping containing ``modules`` and either ``wires``
+      written as lists or a ``PipeDag``-only module key
+
+    A mapping of ``modules`` with none of these markers is categorized as a ``PipeDef``
+    when it lists at least one module and every module has a ``type``, ``id``, and
+    ``conf``. Otherwise it is categorized as a ``PipeDag``.
 
     Args:
 
@@ -154,12 +208,18 @@ def get_document_shape(document: Mapping[str, object]) -> DocumentShape:
         InvalidPipelineError: If the input lists neither ``nodes`` nor ``modules``.
 
     """
-    if is_raw_workflow(document):
+    if is_workflowlike(document):
         shape = DocumentShape.V2
-    elif is_pipedeflike(document):
+    elif is_pipedef(document):
         shape = DocumentShape.V1
     elif is_pipedag(document):
         shape = DocumentShape.DAG
+    elif is_pipelike(document):
+        # The modules only have keys both formats share, so test whether any module
+        # is missing a key ``PipeModule`` requires.
+        shape = DocumentShape.V1 if _has_pipe_modules(document) else DocumentShape.DAG
+    elif "modules" in document:
+        shape = DocumentShape.DAG  # An empty or non-list ``modules`` value
     else:
         raise InvalidPipelineError(_SHAPE_ERROR)
 
@@ -198,7 +258,7 @@ def require_unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def _parse_mapping(document: object) -> Mapping[str, object]:
+def _parse_document(document: DocumentLike) -> DocumentMapping:
     """Decodes a JSON document, or passes a parsed one through, as a mapping."""
     if isinstance(document, (bytes, str)):
         try:
@@ -208,16 +268,14 @@ def _parse_mapping(document: object) -> Mapping[str, object]:
     else:
         raw = document
 
-    return require_mapping(raw, "workflow")
+    return require_mapping(raw, "document")
 
 
-def parse_graph(
-    document: WorkflowDocument | str | Mapping[str, object],
-    *,
-    shape: DocumentShape | None = None,
-) -> WorkflowFields:
+def parse_document(
+    document: DocumentLike, *, shape: DocumentShape | None = None
+) -> WorkflowLike:
     """
-    Parses a JSON input of any readable shape into ``Workflow`` field values.
+    Parses a JSON input of any readable shape into the workflow mapping it describes.
 
     Args:
 
@@ -229,7 +287,8 @@ def parse_graph(
 
     Returns:
 
-        The keyword arguments that build the normalized ``Workflow``.
+        The shorthand workflow mapping ``Workflow.from_raw`` builds a ``Workflow``
+        from.
 
     Raises:
 
@@ -237,28 +296,26 @@ def parse_graph(
             shape cannot be detected, or it does not hold the shape it is read as.
 
     """
-    mapping = _parse_mapping(document)
+    mapping = _parse_document(document)
     resolved = get_document_shape(mapping) if shape is None else shape
 
     if resolved is DocumentShape.V2:
-        fields = build_workflow_fields(mapping)
+        raw = mapping
     elif resolved is DocumentShape.V1:
-        fields = build_workflow_fields(migrate_pipe_def(mapping))
-    elif is_pipedag(mapping):
-        fields = build_workflow_fields(parse_dag_graph(mapping))
+        raw = parse_pipedef(mapping)
     else:
-        raise InvalidPipelineError("the input is not a serialized bare-bones DAG")
+        raw = parse_pipedag(mapping)
 
-    return fields
+    return raw
 
 
 __all__ = [
     "WorkflowEncoder",
     "get_document_shape",
     "is_pipedag",
-    "is_pipedeflike",
-    "is_raw_workflow",
-    "parse_graph",
+    "is_pipedef",
+    "is_workflowlike",
+    "parse_document",
     "require_unique_keys",
-    "serialize_graph",
+    "serialize_workflow",
 ]

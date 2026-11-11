@@ -81,7 +81,10 @@ def noop[T](value: T) -> T:
 
 
 def map_values[K, V, R](
-    func: Callable[[V], R], item: Mapping[K, V], non_null: bool = False
+    func: Callable[[V], R],
+    item: Mapping[K, V],
+    non_null: bool = False,
+    **kwargs: object,
 ) -> dict[K, R]:
     """
     Applies a function to each value of a mapping.
@@ -110,9 +113,13 @@ def map_values[K, V, R](
 
     """
     if non_null:
-        result = {key: func(value) for key, value in item.items() if value is not None}
+        result = {
+            key: func(value, **kwargs)
+            for key, value in item.items()
+            if value is not None
+        }
     else:
-        result = {key: func(value) for key, value in item.items()}
+        result = {key: func(value, **kwargs) for key, value in item.items()}
 
     return result
 
@@ -366,8 +373,12 @@ def resolve_default(
 
     Examples:
 
-        >>> resolve_default(None), resolve_default(0, 5), resolve_default(None, 5)
-        ({}, 0, 5)
+        >>> resolve_default(None)
+        {}
+        >>> resolve_default(0, 5)
+        0
+        >>> resolve_default(None, 5)
+        5
         >>> resolve_default("ctx", "", "; context")
         '; context'
 

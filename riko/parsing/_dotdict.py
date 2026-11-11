@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Self, TypeGuard, TypeVar, cast, overload
 
 from requests.structures import CaseInsensitiveDict
 
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import (
     is_known_sequence,
     is_mapping,
@@ -170,7 +171,9 @@ def resolve_sentinel[D, VT](
         else:
             parsed = default
     elif is_type_value(value):
-        parsed = value["value"]
+        if is_mapping(parsed := value["value"]):
+            msg = f"unresolved input reference {dict(parsed)!r}: run it in a workflow "
+            raise InvalidPipelineError(msg + "that gives the input a schema")
 
         if (
             not (type_ := value.get("type"))
@@ -266,16 +269,10 @@ def gen_dict(
 
     Examples:
 
-        >>> r = DotDict({'a': {'value': 'bar'}})
-        >>> r
-        {'a': {'value': 'bar'}}
-        >>> dict(gen_dict(r))
-        {'a': {'value': 'bar'}}
-        >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-        >>> r
-        {'a': 'baz'}
-        >>> dict(gen_dict(r))
-        {'a': 'baz'}
+        >>> dict(gen_dict('bar'))
+        {'self': 'bar'}
+        >>> dict(gen_dict('bar', default_key='value'))
+        {'value': 'bar'}
 
     """
     if key:
@@ -650,8 +647,6 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
             'bar'
             >>> r.get('KEY')
             'bar'
-            >>> r.get('KEY')
-            'bar'
             >>> r.get('baz')
             >>> r = DotDict({"terminal": "attrs_1", "type": "text"})
             >>> r.get()
@@ -812,15 +807,15 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
         Examples:
 
-            >>> r = DotDict({'a': {'value': 'bar'}})
-            >>> r
+            >>> plain = DotDict({'a': {'value': 'bar'}})
+            >>> plain
             {'a': {'value': 'bar'}}
-            >>> r.asdict()
+            >>> plain.asdict()
             {'a': {'value': 'bar'}}
-            >>> r = DotDict({'a': {'value': 'baz', 'type': 'text'}})
-            >>> r
+            >>> typed = DotDict({'a': {'value': 'baz', 'type': 'text'}})
+            >>> typed
             {'a': 'baz'}
-            >>> r.asdict()
+            >>> typed.asdict()
             {'a': 'baz'}
 
         """

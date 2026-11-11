@@ -15,11 +15,16 @@ from typing_extensions import TypeIs
 from riko.base._config import PIPE_ID_PREFIXES
 
 if TYPE_CHECKING:
+    from riko.definitions._resource_definition import ResourcesLike
+
     from ._module_ids import ModuleId
     from ._options import RawCallOptions
     from .modules import AnyModuleRawConf, Conf
 
 type PipeDefLike = PipeDef | Mapping[str, object]
+type PipeDagLike = PipeDag | Mapping[str, object]
+type ModuleLike = Mapping[str, object]
+type PipeLike = PipeDef | PipeDag
 
 PipeId = NewType("PipeId", str)
 CountValues = Literal["first", "all"]
@@ -53,6 +58,9 @@ class Embed(TypedDict):
     name: str
 
 
+type EmbedLike = Embed | Mapping[str, object]
+
+
 class EmbedRef(TypedDict):
     type: ModuleId | PipeId | Literal["output"]
     id: str
@@ -68,7 +76,7 @@ class PipeModule(EmbedRef, total=False):
 
 
 class OutputModule(TypedDict):
-    """A bare ``PipeDef`` ``output`` node: ``type``/``id`` only, ``conf`` empty."""
+    """A bare ``PipeDef`` ``output`` node."""
 
     type: object
     id: object
@@ -94,11 +102,14 @@ class Wire(TypedDict):
     tgt: WireEndpoint
 
 
+type Wires = Sequence[Wire]
+
+
 class PipeDef(TypedDict):
     """
     A pipe definition: the older ``src``/``tgt``-wired module listing.
 
-    ``migrate_v1_to_v2`` converts one into a ``Workflow``.
+    ``Workflow.parse`` converts one into a ``Workflow``.
     """
 
     modules: list[PipeModule]
@@ -115,7 +126,7 @@ class DagModule(TypedDict, total=False):
     options: RawCallOptions
     label: str
     embed: Embed
-    resources: str | Sequence[str] | Mapping[str, str]
+    resources: ResourcesLike
 
 
 class PipeDag(TypedDict):
@@ -139,10 +150,12 @@ class PipeDag(TypedDict):
 
 __all__ = [
     "DagModule",
+    "EmbedLike",
     "PipeDag",
     "PipeDef",
     "PipeDefLike",
     "PipeModule",
     "Wire",
+    "Wires",
     "is_pipe_id",
 ]

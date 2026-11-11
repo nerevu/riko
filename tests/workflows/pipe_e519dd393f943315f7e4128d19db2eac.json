@@ -23,6 +23,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "q": {
+            "default": "enterprise mashup",
+            "description": "Search term:",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-481": {
             "conf": {
@@ -102,25 +109,9 @@
         },
         "sw-552": {
             "conf": {
-                "debug": {
-                    "type": "text",
-                    "value": ""
-                },
-                "default": {
-                    "type": "text",
-                    "value": "enterprise mashup"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "q"
-                },
-                "position": {
-                    "type": "float",
-                    "value": ""
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "Search term:"
                 }
             },
             "family": "module",

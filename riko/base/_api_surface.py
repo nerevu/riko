@@ -19,7 +19,16 @@ BADO = frozenset(
     }
 )
 
-IO_ = frozenset({"async_url_open", "async_write", "async_get_temp_file"})
+IO_ = frozenset(
+    {
+        "async_get_temp_file",
+        "async_get_temp_path",
+        "async_url_open",
+        "async_write",
+        "get_temp_file",
+        "get_temp_path",
+    }
+)
 
 EXPORT = frozenset({"Formats", "export", "list_formats"})
 
@@ -42,13 +51,13 @@ OTHER = frozenset(
         "CastType",
         "Context",
         "DocumentShape",
-        "Edge",
+        "PortEdge",
         "Endpoint",
-        "ExecutionMode",
         "ExecutionSettings",
         "Executor",
+        "FeedType",
         "IdentityMode",
-        "Node",
+        "RikoNode",
         "OneShotResource",
         "Pipeline",
         "Resource",
@@ -61,7 +70,7 @@ OTHER = frozenset(
         "WorkflowModule",
         "WriteMode",
         "get_path",
-        "get_temp_file",
+        "list_module_metadata",
         "list_modules",
     }
 )
@@ -72,6 +81,7 @@ ROOT_EXCEPTIONS = frozenset(
         "InvalidPipelineError",
         "PipelineError",
         "PipelineStateError",
+        "RemovedOptionError",
         "RikoError",
         "UnsupportedModuleError",
         "UnsupportedTargetError",
@@ -116,12 +126,11 @@ EXT_MODULES = frozenset(
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
         "get_conf_type",
-        "get_module_category",
         "normalize_module_name",
         "operator",
         "processor",
         "register_module",
-        "reset_module_registry",
+        "temporary_registrations",
         "splitter",
     }
 )
@@ -136,7 +145,7 @@ EXT_TARGETS = frozenset(
         "TargetRegistry",
         "WriteCapabilities",
         "register_target",
-        "reset_target_registry",
+        "temporary_registrations",
     }
 )
 
@@ -152,10 +161,10 @@ EXT_WORKFLOWS = frozenset(
         "StreamEdge",
         "SubscribeNode",
         "WriteNode",
-        "migrate_v1_to_v2",
-        "normalize_workflow",
         "register_workflow_store",
-        "reset_workflow_resolver",
+        "resolve_inputs",
+        "temporary_registrations",
+        "workflow",
     }
 )
 
@@ -186,12 +195,15 @@ TYPES = frozenset(
         "EventSink",
         "Feed",
         "InputLike",
+        "InputSchema",
+        "InputSchemaLike",
         "Item",
         "Items",
         "PipelineRun",
         "PipelineStream",
         "RawEdge",
         "RawEndpoint",
+        "RawInputSchema",
         "RawNode",
         "RawWorkflow",
         "PipeDag",
@@ -201,6 +213,7 @@ TYPES = frozenset(
         "RawCallOptions",
         "Stream",
         "SyncPipeTuples",
+        "FeedTypeLike",
         "UserAgentLike",
     }
 )

@@ -6,13 +6,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from riko.ext import workflow
 from riko.modules.count import pipe as count
 from riko.modules.fetch import pipe as fetch
 from riko.modules.simplemath import pipe as simplemath
 from riko.modules.split import pipe as split
 from riko.modules.truncate import pipe as truncate
-from riko.runtime._workflow_pipes import workflow
-from riko.types._enums import ExecutionMode
 from riko.types.modules import (
     CountRawConf,
     FetchRawConf,
@@ -26,63 +25,59 @@ if TYPE_CHECKING:
     from riko.types import Item
 
 
-INPUTS = []
-DEPENDENCIES = ["count", "fetch", "simplemath", "split", "truncate"]
+INPUT_SCHEMAS = {}
 
 
-@workflow(subtype="source")
+@workflow(
+    subtype="source",
+    input_schemas=INPUT_SCHEMAS,
+    dependencies=["count", "fetch", "simplemath", "split", "truncate"],
+)
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    if context is None or context.mode is ExecutionMode.RUN:
-        sw_224 = fetch(
-            item,
-            conf=FetchRawConf(
-                {"url": {"type": "url", "value": "file://riko/data/TheEdTechie.xml"}}
-            ),
-            context=context,
-        )
-        splits = split(sw_224, conf=SplitRawConf(), context=context)
-        sw_250_0 = next(splits)
-        sw_250_1 = next(splits)
-        sw_242 = count(sw_250_0, conf=CountRawConf(), assign="content", context=context)
-        splits = split(sw_242, conf=SplitRawConf(), context=context)
-        sw_243_0 = next(splits)
-        sw_243_1 = next(splits)
-        sw_94 = simplemath(
-            sw_243_0,
-            conf=SimpleMathRawConf(
-                {
-                    "op": {"type": "text", "value": "modulo"},
-                    "other": {"type": "float", "value": "6"},
-                }
-            ),
-            emit=True,
-            context=context,
-        )
-        sw_169 = simplemath(
-            sw_243_1,
-            conf=SimpleMathRawConf(
-                {
-                    "op": {"type": "text", "value": "subtract"},
-                    "other": {"terminal": "OTHER", "type": "float"},
-                }
-            ),
-            emit=True,
-            context=context,
-            OTHER=sw_94,
-        )
-        sw_232 = truncate(
-            sw_250_1,
-            conf=TruncateRawConf({"count": {"terminal": "count", "type": "float"}}),
-            context=context,
-            count=sw_169,
-        )
-        _OUTPUT = sw_232
-    elif context.mode is ExecutionMode.DESCRIBE:
-        _OUTPUT = {"inputs": INPUTS, "dependencies": DEPENDENCIES}
-    elif context.describe_input:
-        _OUTPUT = INPUTS
-    else:
-        _OUTPUT = DEPENDENCIES
+    sw_224 = fetch(
+        item,
+        conf=FetchRawConf(
+            {"url": {"type": "url", "value": "file://riko/data/TheEdTechie.xml"}}
+        ),
+        context=context,
+    )
+    splits = split(sw_224, conf=SplitRawConf(), context=context)
+    sw_250_0 = next(splits)
+    sw_250_1 = next(splits)
+    sw_242 = count(sw_250_0, conf=CountRawConf(), assign="content", context=context)
+    splits = split(sw_242, conf=SplitRawConf(), context=context)
+    sw_243_0 = next(splits)
+    sw_243_1 = next(splits)
+    sw_94 = simplemath(
+        sw_243_0,
+        conf=SimpleMathRawConf(
+            {
+                "op": {"type": "text", "value": "modulo"},
+                "other": {"type": "float", "value": "6"},
+            }
+        ),
+        emit=True,
+        context=context,
+    )
+    sw_169 = simplemath(
+        sw_243_1,
+        conf=SimpleMathRawConf(
+            {
+                "op": {"type": "text", "value": "subtract"},
+                "other": {"terminal": "OTHER", "type": "float"},
+            }
+        ),
+        emit=True,
+        context=context,
+        OTHER=sw_94,
+    )
+    sw_232 = truncate(
+        sw_250_1,
+        conf=TruncateRawConf({"count": {"terminal": "count", "type": "float"}}),
+        context=context,
+        count=sw_169,
+    )
+    _OUTPUT = sw_232
 
     return _OUTPUT
 

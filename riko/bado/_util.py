@@ -226,7 +226,7 @@ def require_value[T](result: T | Awaitable[T], msg: str) -> T:
         >>> require_value(async_return(3), "use `async for`")
         Traceback (most recent call last):
         ...
-        riko.base.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
+        riko.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
 
     """
     if is_awaitable(result):

@@ -2,11 +2,12 @@
 Lists a working-tree change as selectable hunks and builds trees from a selection.
 
 Usage:
-    python .claude/skills/land/split_hunks.py list [-U N]
+    python .claude/skills/land/split_hunks.py list [-U N] [--body N]
     python .claude/skills/land/split_hunks.py emit SELECTION [-U N]
 
 ``list`` prints one line per hunk of ``git diff -U<N> HEAD`` (default ``-U0``, the
-finest split) plus untracked files, each with a stable id:
+finest split) plus untracked files, each with a stable id; ``--body N`` also prints up
+to ``N`` of each hunk's removed and added lines under it, for sorting hunks by concept:
 
 - ``path:N`` is the hunk whose new-side start line is ``N``;
 - ``path`` alone (in a selection) takes every hunk of that file, and is the only way
@@ -47,7 +48,11 @@ class Hunk:
     old_count: int
     new_start: int
     added: list[str] = field(default_factory=list)
-    removed: int = 0
+    deleted: list[str] = field(default_factory=list)
+
+    @property
+    def removed(self) -> int:
+        return len(self.deleted)
 
     @property
     def id(self) -> str:
@@ -107,7 +112,7 @@ def parse_diff(text: str) -> list[FileChange]:
         elif hunk is not None and line.startswith("+"):
             hunk.added.append(line[1:] + "\n")
         elif hunk is not None and line.startswith("-"):
-            hunk.removed += 1
+            hunk.deleted.append(line[1:])
         elif line.startswith("new file"):
             current.status = "A"
         elif line.startswith("deleted file"):
@@ -254,6 +259,7 @@ def main() -> None:
     parser.add_argument("command", choices=("list", "emit"))
     parser.add_argument("selection", nargs="?", type=Path, help="file of ids for emit")
     parser.add_argument("-U", type=int, default=0, dest="context", help="diff context")
+    parser.add_argument("--body", type=int, default=0, help="hunk lines to show (list)")
     args = parser.parse_args()
     files = load_change(args.context)
 
@@ -264,6 +270,14 @@ def main() -> None:
             else:
                 for h in change.hunks:
                     print(f"{h.id}\t+{len(h.added)}/-{h.removed}\t{h.summary}")
+                    body = [f"-{t}" for t in h.deleted]
+                    body += [f"+{t.rstrip(chr(10))}" for t in h.added]
+
+                    for text in body[: args.body]:
+                        print(f"    {text}")
+
+                    if 0 < args.body < len(body):
+                        print("    ...")
     elif args.selection is None:
         sys.exit("emit needs a selection file")
     else:

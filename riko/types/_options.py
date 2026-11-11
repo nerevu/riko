@@ -34,11 +34,12 @@ from ._pipedef import CountValues
 if TYPE_CHECKING:
     from riko.base._require_guards import TypeRequire
     from riko.coercion._dynamic_conf import DynamicConf
+    from riko.definitions._workflow_definition import Inputs
 
-    from ._enums import BasicCastType, ExecutionMode, FmtLike
+    from ._enums import BasicCastType, FmtLike
     from ._scalars import PrimitiveValue
     from ._streams import Item, ItemOrValue
-    from ._values import BasicArg, Inputs, RikoList
+    from ._values import BasicArg, RikoList
     from ._wrappers import ParserOutput
     from .modules import AnyConfRule, OptionValues, Skip
 
@@ -98,6 +99,7 @@ class Defaults(TypedDict, total=False):
     type: str
     uniq_key: str
     url: str
+    verbose: bool
     wait: int
 
 
@@ -111,7 +113,6 @@ class DecorationOptions(TypedDict, total=False):
     field: str
     listize: bool
     objectify: bool
-    parse: bool
     pollable: bool
     skip_if: SkipIf
 
@@ -128,7 +129,6 @@ class SharedDecorationOptions(TypedDict, total=False):
     field: str
     listize: bool
     objectify: bool
-    parse: bool
 
 
 class OperatorDecorationOptions(SharedDecorationOptions, total=False):
@@ -253,6 +253,5 @@ class CallOptions:
 class ContextOverrides(TypedDict, total=False):
     """The per-call overrides a pipe call applies to its ``Context``."""
 
-    mode: ExecutionMode
     inputs: Inputs
     test: bool

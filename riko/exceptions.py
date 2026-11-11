@@ -1,7 +1,7 @@
 # vim: sw=4:ts=4:expandtab
 """Provides riko specific exceptions and warnings."""
 
-from ._exceptions import (
+from .base._exceptions import (
     CyclicIdentityError,
     DuplicateReceiverError,
     EmptyPipelineError,
@@ -13,6 +13,7 @@ from ._exceptions import (
     PipelineStateError,
     PubSubError,
     ReceiverUnavailableError,
+    RemovedOptionError,
     ResourceInterpretationWarning,
     RikoError,
     RikoWarning,
@@ -34,6 +35,7 @@ __all__ = [
     "PipelineStateError",
     "PubSubError",
     "ReceiverUnavailableError",
+    "RemovedOptionError",
     "ResourceInterpretationWarning",
     "RikoError",
     "RikoWarning",

@@ -1,19 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""
-Provides guarded access to the optional Riko async runtime.
-
-Examples:
-
-    Basic usage::
-
-        >>> from riko import backend, isasync, issync
-        >>>
-        >>> backend in {"anyio", "empty"}
-        True
-        >>> isasync is not issync
-        True
-
-"""
+"""Provides guarded access to the optional Riko async runtime."""
 
 from __future__ import annotations
 

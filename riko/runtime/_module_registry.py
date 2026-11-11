@@ -253,38 +253,16 @@ def register_module(definition: ModuleDefinition, *, replace: bool = False) -> N
     Examples:
 
         >>> from riko.ext import ModuleDefinition, register_module
+        >>> from riko.ext import temporary_registrations
         >>>
-        >>> reset_module_registry()
         >>> definition = ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
-        >>> register_module(definition)
-        >>> module_registry.load_definition("__doctest__") is definition
+        >>> with temporary_registrations():
+        ...     register_module(definition)
+        ...     module_registry.load_definition("__doctest__") is definition
         True
-        >>> reset_module_registry()
 
     """
     module_registry.register(definition, replace=replace)
 
 
-def reset_module_registry() -> None:
-    """
-    Resets the process-global registry, chiefly for test isolation.
-
-    Examples:
-
-        >>> module_registry.register(
-        ...     ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
-        ... )
-        >>> reset_module_registry()
-        >>> module_registry.registered_names
-        ()
-
-    """
-    module_registry.reset()
-
-
-__all__ = [
-    "ModuleRegistry",
-    "module_registry",
-    "register_module",
-    "reset_module_registry",
-]
+__all__ = ["ModuleRegistry", "module_registry", "register_module"]

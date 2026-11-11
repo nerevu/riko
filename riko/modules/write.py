@@ -9,15 +9,13 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_temp_file
+        >>> from riko import get_temp_path
         >>> from riko.modules.write import pipe
         >>>
-        >>> with get_temp_file() as fp:
-        ...     stream = pipe([{"x": 0}, {"x": 1}], conf={"dest": fp.name})
+        >>> with get_temp_path("items.json") as path:
+        ...     stream = pipe([{"x": 0}, {"x": 1}], conf={"dest": path})
         ...     next(stream)
-        ...
-        ...     with open(fp.name, mode="rb") as f:
-        ...         f.read()
+        ...     path.read_bytes()
         {'x': 0}
         b'[{"x": 0}, {"x": 1}]'
 
@@ -97,17 +95,17 @@ async def async_parser(
 
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
-        >>> from riko import async_get_temp_file, run
+        >>> from riko import async_get_temp_path, run
         >>>
         >>> async def main():
-        ...     async with async_get_temp_file() as fp:
-        ...         conf = {"dest": fp.name, "fmt": "json", "mode": "wb+"}
+        ...     async with async_get_temp_path("items.json") as path:
+        ...         conf = {"dest": path, "fmt": "json", "mode": "wb+"}
         ...         objconf = Objectify(conf)
         ...         items = [{"x": 0}, {"x": 1}]
         ...         tuples = zip(items, repeat(objconf))
         ...         result = await async_parser(items, objconf, tuples)
         ...         print(next(result))
-        ...         print(await fp.read())
+        ...         print(path.read_bytes())
         >>>
         >>> run(main)
         {'x': 0}
@@ -147,14 +145,14 @@ def parser(
 
         >>> from itertools import repeat
         >>> from meza.fntools import Objectify
-        >>> from riko import get_temp_file
+        >>> from riko import get_temp_path
         >>>
-        >>> with get_temp_file() as fp:
-        ...     objconf = Objectify({"dest": fp.name, "fmt": "json", "mode": "wb+"})
+        >>> with get_temp_path("items.json") as path:
+        ...     objconf = Objectify({"dest": path, "fmt": "json", "mode": "wb+"})
         ...     items = [{"x": 0}, {"x": 1}]
         ...     tuples = zip(items, repeat(objconf))
         ...     next(parser(items, objconf, tuples))
-        ...     fp.read()
+        ...     path.read_bytes()
         {'x': 0}
         b'[{"x": 0}, {"x": 1}]'
 
@@ -210,14 +208,14 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
 
-        >>> from riko import async_get_temp_file, run
+        >>> from riko import async_get_temp_path, run
         >>>
         >>> async def main():
-        ...     async with async_get_temp_file() as fp:
-        ...         conf = {"dest": fp.name, "fmt": "csv"}
+        ...     async with async_get_temp_path("items.csv") as path:
+        ...         conf = {"dest": path, "fmt": "csv"}
         ...         stream = async_pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...         print(await anext(stream))
-        ...         print((await fp.read()).split())
+        ...         print(path.read_bytes().split())
         >>>
         >>> run(main)
         {'x': 0}
@@ -270,13 +268,13 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
 
-        >>> from riko import get_temp_file
+        >>> from riko import get_temp_path
         >>>
-        >>> with get_temp_file() as fp:
-        ...     conf = {"dest": fp.name, "fmt": "csv"}
+        >>> with get_temp_path("items.csv") as path:
+        ...     conf = {"dest": path, "fmt": "csv"}
         ...     stream = pipe([{"x": 0}, {"x": 1}], conf=conf)
         ...     next(stream)
-        ...     fp.read().split()
+        ...     path.read_bytes().split()
         {'x': 0}
         [b'x', b'0', b'1']
 

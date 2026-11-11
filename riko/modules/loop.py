@@ -12,11 +12,7 @@ Examples:
         >>> from riko.modules.regex import pipe as regex
         >>>
         >>> items = [{"title": "hello"}, {"title": "yellow"}]
-        >>> rule = {
-        ...     "field": {"type": "text", "value": "title"},
-        ...     "match": {"type": "text", "value": "l"},
-        ...     "replace": {"type": "text", "value": "L"},
-        ... }
+        >>> rule = {"field": "title", "match": "l", "replace": "L"}
         >>> list(pipe(items, embed=regex, conf={"rule": [rule]}, emit=True))
         [{'title': 'heLLo'}, {'title': 'yeLLow'}]
 
@@ -25,7 +21,7 @@ Examples:
         >>> from riko.modules.tokenizer import pipe as tokenizer
         >>>
         >>> item = {"title": "a b c"}
-        >>> conf = {"delimiter": {"type": "text", "value": " "}}
+        >>> conf = {"delimiter": " "}
         >>> list(pipe(
         ...     [item], embed=tokenizer, conf=conf, field="title",
         ...     count="first", assign="first", emit=False,
@@ -57,7 +53,7 @@ if TYPE_CHECKING:
 
 logger: Logger = get_logger(__name__)
 
-OPTS: DecorationOptions = {"listize": False, "parse": False}
+OPTS: DecorationOptions = {"listize": False}
 DEFAULTS: Defaults = Defaults({})
 
 

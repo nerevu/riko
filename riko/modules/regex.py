@@ -28,7 +28,7 @@ Attributes:
 
 from __future__ import annotations
 
-from functools import partial, reduce
+from functools import reduce
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any, cast
 
@@ -44,7 +44,7 @@ from ._sortutils import group_by
 from ._textops import Substitution, gen_rule_passes, substitute_pass
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
     from logging import Logger
 
     from riko.coercion._configs import RegexObjconf
@@ -62,6 +62,12 @@ DEFAULTS: Defaults = {}
 def _resolve_text(result: Substitution, default: str | None) -> str:
     """Resolves a field's rewritten text, falling back when no rule matched."""
     return result.text if result.replacements or default is None else default
+
+
+def _process_rules(rules: Sequence[RegexConfRule]) -> Iterator[Sequence[RegexRule]]:
+    regex_rules = map(build_regex_rule, rules)
+    grouped = group_by(regex_rules, "field", ignore_case=True)
+    return map(itemgetter(1), grouped)
 
 
 async def async_parser(
@@ -122,10 +128,7 @@ async def async_parser(
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = map(partial(build_regex_rule, recompile=True), rules)
-    grouped = group_by(regex_rules, "field", ignore_case=True)
-    field_rules = map(itemgetter(1), grouped)
-    return await async_reduce(areducer, field_rules, item)
+    return await async_reduce(areducer, _process_rules(rules), item)
 
 
 def parser(
@@ -178,10 +181,7 @@ def parser(
         result = DotDict({**item, **rewritten})
         return cast("DotDict[RikoValue]", result)
 
-    regex_rules = [build_regex_rule(r, recompile=True) for r in rules]
-    grouped = group_by(regex_rules, "field", ignore_case=True)
-    field_rules = map(itemgetter(1), grouped)
-    return reduce(reducer, field_rules, item)
+    return reduce(reducer, _process_rules(rules), item)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)
@@ -204,20 +204,21 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
                 match (str): Regex to search for.
 
-                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
-                    capture groups.
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to capture
+                    groups.
+
+                nativereplace (bool): Whether ``replace`` uses Python's ``re`` syntax
+                    rather  than ``$N`` group references. (default: False).
 
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
-                singlelinematch (bool): Whether to replace only the first match
-                    and confine ``^``, ``$`` and ``.`` to one line
-                    (default: False).
+                singlelinematch (bool): Whether to replace only the first match and
+                    confine ``^``, ``$``, and ``.`` to one line (default: False).
 
-                seriesmatch (bool): Whether this rule rewrites the previous
-                    rule's output. Consecutive rules with ``seriesmatch`` False
-                    all match the original text in one pass, leftmost match
-                    first (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous rule's
+                    output. Consecutive rules with ``seriesmatch`` False all match the
+                    original text in one pass, leftmost match first (default: True).
 
             default (dict): Value per field to use when none of the field's
                 rules matches (default: {}, i.e. keep the original).
@@ -287,20 +288,21 @@ def pipe(*args: Any, **kwargs: object) -> Item:
 
                 match (str): Regex to search for.
 
-                replace (str): Replacement text. ``$1``, ``$2``, ... refer to
-                    capture groups.
+                replace (str): Replacement text. ``$1``, ``$2``, ... refer to capture
+                    groups.
+
+                nativereplace (bool): Whether ``replace`` uses Python's ``re`` syntax
+                    rather  than ``$N`` group references. (default: False).
 
                 casematch (bool): Whether to match case sensitively
                     (default: False).
 
-                singlelinematch (bool): Whether to replace only the first match
-                    and confine ``^``, ``$`` and ``.`` to one line
-                    (default: False).
+                singlelinematch (bool): Whether to replace only the first match and
+                    confine ``^``, ``$``, and ``.`` to one line (default: False).
 
-                seriesmatch (bool): Whether this rule rewrites the previous
-                    rule's output. Consecutive rules with ``seriesmatch`` False
-                    all match the original text in one pass, leftmost match
-                    first (default: True).
+                seriesmatch (bool): Whether this rule rewrites the previous rule's
+                    output. Consecutive rules with ``seriesmatch`` False all match the
+                    original text in one pass, leftmost match first (default: True).
 
             default (dict): Value per field to use when none of the field's
                 rules matches (default: {}, i.e. keep the original).

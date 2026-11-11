@@ -168,7 +168,7 @@ def substitute_pass(previous: Substitution, rules: Sequence[RegexRule]) -> Subst
         ...     build_regex_conf_rule("f", "a", "b", seriesmatch=False),
         ...     build_regex_conf_rule("f", "b", "a", seriesmatch=False),
         ... ]
-        >>> rules = [build_regex_rule(r, True) for r in conf_rules]
+        >>> rules = [build_regex_rule(r) for r in conf_rules]
         >>> substitute_pass(Substitution("ab"), rules)
         Substitution(text='ba', replacements=2)
 
@@ -210,7 +210,7 @@ def gen_rule_passes(rules: Iterable[RegexRule]) -> Iterator[Sequence[RegexRule]]
         ...     build_regex_conf_rule("f", "b", "c", seriesmatch=False),
         ...     build_regex_conf_rule("f", "c", "d", seriesmatch=False),
         ... ]
-        >>> rules = [build_regex_rule(r, True) for r in conf_rules]
+        >>> rules = [build_regex_rule(r) for r in conf_rules]
         >>> [len(group) for group in gen_rule_passes(rules)]
         [1, 2]
 

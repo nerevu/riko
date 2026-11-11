@@ -20,7 +20,13 @@ from urllib.request import urlopen
 
 import pytest
 
-from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
+from riko.bado._backend import (
+    CancelScope,
+    Event,
+    async_sleep,
+    create_task_group,
+    fail_after,
+)
 from riko.bado._util import asyncify, maybe_async
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.definitions._context import Context
@@ -1057,6 +1063,46 @@ class TestAsyncResourceAcquisition:
             await execution.aacquire(Resource(client))
 
         assert client.events == expected
+
+    @async_test
+    async def test_async_waiter_acquires_after_the_first_acquisition_is_cancelled(
+        self,
+    ) -> None:
+        """A waiter retries the acquisition it waited on once that one is cancelled."""
+        started, waiting, never = Event(), Event(), Event()
+        calls: list[int] = []
+        scopes: list[CancelScope] = []
+        outcomes: list[object] = []
+
+        async def connect() -> str:
+            calls.append(len(calls))
+
+            if len(calls) == 1:
+                started.set()
+                await never.wait()
+
+            return "value"
+
+        async def first() -> None:
+            with CancelScope() as scope:
+                scopes.append(scope)
+                await execution.aacquire(resource)
+
+        async def second() -> None:
+            waiting.set()
+            outcomes.append(await execution.aacquire(resource))
+
+        resource = Resource.from_factory(connect, cleanup=False)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution, create_task_group() as group:
+                group.start_soon(first)
+                await started.wait()
+                group.start_soon(second)
+                await waiting.wait()
+                scopes[0].cancel()
+
+        assert (outcomes, calls) == (["value"], [0, 1])
 
     @pytest.mark.parametrize(("build", "error"), AFAILED_ACQUISITIONS)
     @async_test

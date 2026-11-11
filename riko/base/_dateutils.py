@@ -8,7 +8,6 @@ Attributes:
     HALF_DAY: Twelve hours expressed in seconds.
     NOW: UTC datetime captured when the module is imported.
     TODAY: UTC calendar date captured when the module is imported.
-    TT_KEYS: Field names used when working with ``struct_time`` values.
     TZINFOS: Timezone-abbreviation lookup built from common IANA zones.
 
 """
@@ -50,18 +49,6 @@ TIMEOUT = 60 * 60 * 1
 HALF_DAY = 60 * 60 * 12
 NOW = dt.now(UTC)
 TODAY = NOW.date()
-
-TT_KEYS = (
-    "year",
-    "month",
-    "day",
-    "hour",
-    "minute",
-    "second",
-    "day_of_week",
-    "day_of_year",
-    "daylight_savings",
-)
 
 
 def _add_zones(*zones: str) -> Iterator[tuple[str, tzinfo]]:
@@ -192,6 +179,9 @@ def resolve_tt_tzinfo(
         >>> tt = struct_time((1970, 1, 1, 0, 0, 0, 3, 1, 0))
         >>> resolve_tt_tzinfo(tt, UTC) is UTC
         True
+        >>> offset = {"tm_zone": None, "tm_gmtoff": 19800}
+        >>> resolve_tt_tzinfo(struct_time((2020, 6, 15, 12, 0, 0, 0, 167, 0), offset))
+        datetime.timezone(datetime.timedelta(seconds=19800), '')
 
     """
     if tt.tm_zone and tt.tm_zone in TZINFOS:

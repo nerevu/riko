@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3177 passed / 111 xfailed**. The user commits.
+Suite: **3354 passed / 106 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -36,16 +36,16 @@ separate from the forward architecture dependency graph in
 | **P6** `ExecutionMode` | ✅ done | § P6 |
 | **P7** sync/async parity + true async streaming | ✅ done | § P7. **Carryover:** bounded-memory streaming *export* → design in [gameplans/feed-native-streaming.md](gameplans/feed-native-streaming.md). |
 | **P8** module registry + entry points | ✅ done | § P8; `riko/ext/modules.py` facade over `riko/runtime/{_module_registry,_workflows,_resolver}.py`, `Resolver` protocol, symmetric dispatch |
-| **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `get_module_category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
+| **P9** fluent discoverability | ⏳ in progress | **P9A done** (§ P9A): generated flat `Modules` namespace + `Sources`/`Transforms`/`Sinks` bucket tree (`riko/modules/_names.py`), `ModuleMetadata.category` taxonomy, `riko.ext.codegen` + `gen-names` CLI/drift guard, `list_modules`/`describe_module`, value-taking `.pipe`/`\|`. **Remaining (non-P9A):** installed-env aggregate `riko.generated.Modules` + `.pyi` stubs → [gameplans/module-enums.md](gameplans/module-enums.md) |
 | **P10** bounded parallelism + backpressure | ✅ done | § P10. Execution-wide wiring shipped with R4B: async nodes share one `Semaphore` budget per run; the sync pool honors `ordered`. |
 | **P11** pub/sub + poll protocols | ⬜ pending | `Publisher`/`Subscription`/`.poll`; reshaped by fanout/execution owners and sequenced as R7 after Pipeline execution foundations |
-| **P12** stable errors + events | ⏳ in progress | `RikoError` tree (`riko/base/exceptions.py`) and the `EventSink` transport (`riko/types/_events.py`, exported) shipped; remaining: the feature-owned event payloads (cache, write/action results, pub/sub lifecycle, state) and optional consumers such as OpenTelemetry → [gameplans/events.md](gameplans/events.md) |
+| **P12** stable errors + events | ⏳ in progress | `RikoError` tree (`riko/base/_exceptions.py`) and the `EventSink` transport (`riko/types/_events.py`, exported) shipped; remaining: the feature-owned event payloads (cache, write/action results, pub/sub lifecycle, state) and optional consumers such as OpenTelemetry → [gameplans/events.md](gameplans/events.md) |
 | **P13** public/typing/internal test split | ⏳ in progress | Layering shipped: indexed public/internal/functional layout, `manage lint --tests`, uncovered-line ratchet (`manage test --ratchet`); remaining: `tests/typing/` → [gameplans/testing.md](gameplans/testing.md) |
 | **P14** extensions outside core | ⬜ pending | `riko-microsoft`, `riko-ai` |
 
 **Milestone 1 (P1–P7): complete** (P10 landed early, out of sequence, at the user's
 request). **P8 landed** (the M2 seam). **P9A is complete**, targeted for release
-v0.76.0: the generated `Modules` tree + `get_module_category` taxonomy +
+v0.76.0: the generated `Modules` tree + `ModuleMetadata.category` taxonomy +
 `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module` (on top of the v0.75.0
 prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync` inference). The
 remaining non-P9A P9 work is the installed-environment aggregate
@@ -98,14 +98,14 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is st
 | R-phase | Status | Evidence / remaining |
 |---|---|---|
 | **R0** characterization + internal naming | ✅ done | `ModuleWrapper` is the wrapper type; characterization suites live in `tests/internal/` |
-| **R1** stable errors | ✅ done | `riko/base/exceptions.py` families (`PipelineError`, `IdentityError`, …); legacy call sites migrate when touched. Families without a consumer yet (state store, identity key, pub/sub publish/subscribe, module definition/registration, configuration, resource) are deferred to their consuming phases (implementation-sequence R1) |
+| **R1** stable errors | ✅ done | `riko/base/_exceptions.py` families (`PipelineError`, `IdentityError`, …); legacy call sites migrate when touched. Families without a consumer yet (state store, identity key, pub/sub publish/subscribe, module definition/registration, configuration, resource) are deferred to their consuming phases (implementation-sequence R1) |
 | **R2A** canonical value encoding | ✅ done | `84b1e363` (2026-09-22); [IMPLEMENTED § Canonical value encoder](IMPLEMENTED.md#canonical-value-encoder-r2a-shipped) |
 | **R2B** semantic identity + `version=` | ⏳ pending | no node/resource `version=` plumbing yet; owner `gameplans/execution-semantics.md` |
 | **R3** immutable Context/Resource (+ write-session seam) | ✅ done | `1c72a7a5` (2026-09-24); [IMPLEMENTED § Write sessions](IMPLEMENTED.md#write-sessions--private-seam-awaiting-writenode). Not built and re-homed (implementation-sequence R3): factory-signature and eager resource-graph validation → R11; `state_store` → R6; identity-encoder selection and resource identity metadata → R2B; Context-local module definitions/`with_module()` unscheduled |
 | **R4A** `Pipeline` + `Workflow` v2 IR | ✅ done | `19eea428`→`f54f1183` (2026-09-18→23), fluent chaining `2838e7aa`, clean-break cutover steps 2–5 (`1d021824`, `ccb2575e`, `54b53c29`, `59a51274`); only the `SINK_NAMES`/`Sinks` deletion rides R5C by design; checkpoint and loop `until`/`max_iterations` structural fields land with their runtimes (R6, R9) |
 | **R4B** private `SyncExecution`/`AsyncExecution` | ✅ done | scaffold, lifetime primitives, resource lifecycle, sync/async adaptation, the pipe/collection deletion, `Pipeline.with_execution(...)` (executor/concurrency/order, event sink, shutdown timeout), and `with_context`/`with_resource` ([IMPLEMENTED § Private execution runtime](IMPLEMENTED.md#private-execution-runtime--syncexecution--asyncexecution-r4b-shipped)); concurrent fan-in branch pulling and the async task group are deferred to R7, lazy acquire-on-first-use and resource dependency ordering to R11; the write-session MIGRATE bullet carries to R5C (`WriteNode` execution, tripwired by `TestPipelineWrite` in `tests/public/test_write.py`) |
 | **R4C** callable nodes (pure 1→1 `map`) + bare decorator form + `Pipeline.open()` | ✅ done | slot added 2026-10-03, extended 2026-10-04 to cover bare `@processor`/`@operator`/`@splitter` and `Pipeline.open()`; owner `gameplans/callable-pipes.md`; 2026-10-22: `Pipeline.map` (`CallableNode`, flips `TestCallableNodes`) and the bare decorator form shipped; 2026-10-24: `Pipeline.open()`, per-run seeds (`pipeline(items)`/`items \| pipeline`, unseeded open pipelines raise "requires a seed"), and the `source=` deletion shipped; stored-workflow subtype-from-inputs routed to R4D; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` waits on R5A; closed 2026-11-03 with decorated functions on `\|` re-homed as unscheduled (needs R2B's `version=`; strict xfail `TestPipelineChaining::test_or_composes_a_decorated_processor`) |
-| **R4D** workflow input declarations | ⏳ pending | slot added 2026-10-03; owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail `TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded` (explicit value sources); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs` (stored-workflow subtype from its roots) |
+| **R4D** workflow input schemas | ✅ done | slot added 2026-10-03; closed 2026-11-10 (fingerprint folding of resolved values stays R2B); owner `gameplans/extensibility.md` § E3.6; 2026-10-27: strict xfail for explicit value sources, flipped 2026-11-05 (only a source or a `strconcat` reading nothing from its default input starts unseeded; `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`); 2026-10-28: strict xfail `TestPlanRun::test_run_starts_a_stored_source_workflow_with_input_schemas` (stored-workflow subtype from its roots), flipped 2026-11-09 (a stored workflow's pipe is tagged `"source"` when it can run without a seed; declared inputs don't affect the tag) |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
 | **R4L** DotDict literal access | ⏳ pending | slot added 2026-11-05, after M1 and before R4E; owner `gameplans/dotdict-parsing.md`; flips the `TestDotDict` literal-access tripwires in `tests/internal/test_values.py` and `TestCount::test_count_key_values_containing_dots_stay_literal` in `tests/public/test_modules.py` (GitHub issue #60) |
 | **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
@@ -140,7 +140,7 @@ parsers receive a plain `Objectify` at runtime, never `DynamicConf` or the annot
 - The planned frozen `@dataclass ReceiveConf(ParsedConf)` was **incompatible** with
   Mapping-access parsers → **`ParsedConf` was collapsed away**; `DynamicConf` is the
   base and `get_conf_type` tests it.
-- `riko/coercion/_configs.py` is **generated** by `gen-config`
+- `riko/coercion/_configs.py` is **generated** by `manage codegen --config`
   (`riko/cli/_gen_config.py`) from the nonraw `<Name>Conf` TypedDict contracts in
   `types/modules.py`; drift-guarded by `tests/internal/test_codegen.py`. Edit the
   contracts, never `_configs.py`.
@@ -196,8 +196,8 @@ deleted at v1-cutover step 4; one-shot lifetime is now owned by
 surface. `describe_input`/`describe_dependencies` are read-only properties derived from
 `mode`; generated workflow modules dispatch on `mode` through `build_workflow_pipes`
 (`riko/runtime/_workflow_pipes.py`), where `DESCRIBE` returns
-`{"inputs", "dependencies"}`; `test`/`inputs` stay independent fields; verbosity is
-process-level (`set_log_level`), not a `Context` field.
+`{"input_schemas", "dependencies"}`; `test`/`inputs` stay independent fields;
+verbosity is process-level (`set_log_level`), not a `Context` field.
 
 **Decisions.**
 
@@ -210,7 +210,10 @@ process-level (`set_log_level`), not a `Context` field.
 - `Context` stays a hand-written class (the legacy-kwarg shim fought `@dataclass`
   sugar).
 
-**Carryover:** none.
+**Carryover (done 2026-11-09, brought forward from R4E):** the describe modes are
+retired in favor of `describe_module` and the `Workflow.input_schemas`/`.dependencies`
+attributes; `ExecutionMode`, `Context.mode`, and
+`describe_input`/`describe_dependencies` are removed.
 
 ## P7 — Sync/async parity + true async streaming
 
@@ -389,7 +392,7 @@ to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_modules.py`.
 the canonical string ids — strings stay canonical everywhere (JSON, entry points,
 resolver); every enum member's `.value` **is** the id.
 
-- **Taxonomy (`get_module_category`, `riko/modules/_metadata.py`).** Pure/total
+- **Taxonomy (`ModuleMetadata.category`, `riko/types/modules.py`).** Pure/total
   `category` derivation from **data-flow capability only** (never the runtime
   `type`/`subtype` axis) into `ModuleCategory = Literal["source", "transform", "sink"]`
   (lowercase singular — this is the `list_modules(category=…)` filter vocabulary):

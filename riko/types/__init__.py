@@ -6,8 +6,9 @@ Implementation typing machinery lives in underscore-prefixed modules and is
 not part of the SemVer-guaranteed API.
 """
 
-from ._enums import CustomUserAgent, UserAgentLike
+from ._enums import CustomUserAgent, FeedTypeLike, UserAgentLike
 from ._events import EventSink
+from ._frozendict import InputSchema, InputSchemaLike, RawInputSchema
 from ._options import CallOptions, CallOptionsLike, RawCallOptions
 from ._pipedef import DagModule, Embed, PipeDag, PipeDef, PipeDefLike
 from ._resource import ResourceStrategy
@@ -38,7 +39,10 @@ __all__ = [
     "Embed",
     "EventSink",
     "Feed",
+    "FeedTypeLike",
     "InputLike",
+    "InputSchema",
+    "InputSchemaLike",
     "Item",
     "Items",
     "PipeDag",
@@ -50,6 +54,7 @@ __all__ = [
     "RawCallOptions",
     "RawEdge",
     "RawEndpoint",
+    "RawInputSchema",
     "RawNode",
     "RawWorkflow",
     "ResourceStrategy",

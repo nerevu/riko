@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from codecs import iterdecode, iterencode
 from itertools import chain
 from os import linesep
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, cast
 
 from meza import BOM
 from meza.io import IterStringIO as _IterStringIO
@@ -18,7 +18,7 @@ from riko.base._config import ENCODING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
-    from typing import Literal, Self
+    from typing import Self
 
     from riko.types._io import SyncCloseable
 
@@ -231,36 +231,3 @@ class TextReencoder(Reencoder[str]):
         self, decoded: Iterator[str], toenc: str, proper_newline: bool
     ) -> Iterator[str]:
         return decoded if proper_newline else _gen_lines(decoded, linesep)
-
-
-@overload
-def reencode(
-    f: FileLike,
-    fromenc: str = ...,
-    toenc: str = ...,
-    *,
-    owner: SyncCloseable | None = ...,
-    decode: Literal[True],
-    remove_BOM: bool = ...,  # noqa: N803
-) -> Reencoder[str]: ...
-@overload
-def reencode(
-    f: FileLike,
-    fromenc: str = ...,
-    toenc: str = ...,
-    *,
-    owner: SyncCloseable | None = ...,
-    decode: Literal[False] = ...,
-    remove_BOM: bool = ...,  # noqa: N803
-) -> Reencoder[bytes]: ...
-def reencode(
-    f: FileLike,
-    fromenc: str = ENCODING,
-    toenc: str = ENCODING,
-    *,
-    owner: SyncCloseable | None = None,
-    decode: bool = False,
-    remove_BOM: bool = False,  # noqa: N803
-) -> Reencoder[str] | Reencoder[bytes]:
-    cls = TextReencoder if decode else BytesReencoder
-    return cls(f, fromenc, toenc, owner=owner, remove_BOM=remove_BOM)

@@ -176,6 +176,15 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   than global Pipeline execution config.
 - **Collapse the runtime-utility surface.** De-emphasize backend/bridge helpers from the
   stable API; users write normal Python iteration.
+- **Metadata by query or attribute, not by run mode (ruled 2026-11-09).** A pipe only
+  yields and only runs. A workflow's inputs' schemas and dependencies come from
+  `describe_module()` or the `Workflow.input_schemas`/`.dependencies` attributes, never
+  from a `Context.mode` describe mode. **Done 2026-11-09** (brought forward from R4E):
+  `ExecutionMode`, `Context.mode`/`describe_input`/`describe_dependencies`, the
+  generated `DEPENDENCIES` constant, and the describe branches in generated pipes and
+  the `pyworkflows` probes are removed; `describe_module()` takes a pipe or a stored
+  workflow's `pipe_<id>` name and reads the metadata `@workflow` stamps, and a pipe call
+  passing `mode=` raises `TypeError`.
 
 **Migration shape:**
 
@@ -220,6 +229,22 @@ Same principle for optional parser/frame/finance/connector dependencies.
   `py.typed`), `test_sync_async_parity.py` (one sync + async chain), and the two
   lifecycle files (bundled `feed.xml` fan-in, sync and async). `twine check` and
   `riko --help` (the CLI is `riko-cli`) remain.
+  *Dev tooling out of the wheel (2026-11-11 deep audit):* the wheel ships about 7.3k
+  lines of dev-only tooling (`riko/cli/_lint*.py`, `_docs.py`, `_docstyle.py`,
+  `_gen_*.py`, `_codegen.py`, …, the modules pyproject's coverage `omit` list already
+  calls "not shipped behavior") plus the lint data only they read (`base/_verbs.py`,
+  `base/_api_surface.py`, the layer maps in `base/_config.py`), and `[project.scripts]`
+  installs the dev-only `manage` beside the user commands. The three `gen-*` scripts
+  were dropped that day (`manage codegen` covers them; `gen-api-surface` read
+  `_docs/API_SURFACE.md` through `ROOT_DIR`, which does not exist in an install). The
+  rest is this gate's item: move the dev tooling to a root-level `tools/` package that
+  `uv_build`'s `module-name = "riko"` leaves out of the wheel automatically, keep
+  `[project.scripts]` to user-facing commands (`run-pipe`, `compile-workflow`,
+  `build-workflow`, `benchmark`), and retire the `manage` entry point in the same move,
+  which also closes the `mezmorize` collision quirk in `_docs/INTERNALS.md`. The move
+  rewrites every `manage …` invocation (CONTRIBUTING, CI, pre-commit, the skills), so it
+  is done once, there, not ahead of it. Until it lands, the wheel smoke step should list
+  the built wheel and fail on any `riko/cli/_lint` member.
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral
   `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides

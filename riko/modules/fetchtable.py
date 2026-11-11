@@ -99,7 +99,7 @@ async def async_parser(
         7213
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchtable")
+    url: str = require_conf_key(objconf, "url", "fetchtable", strict=True)
     r = await async_url_open(
         url, encoding=objconf.encoding, user_agent=objconf.user_agent
     )
@@ -147,7 +147,7 @@ def parser(
         '7213'
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchtable")
+    url: str = require_conf_key(objconf, "url", "fetchtable", strict=True)
     first_row, custom_header = objconf.skip_rows, objconf.col_names
     renamed = {"first_row": first_row, "custom_header": custom_header}
     f = Fetch(url, encoding=objconf.encoding, user_agent=objconf.user_agent)

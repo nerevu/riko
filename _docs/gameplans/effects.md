@@ -81,6 +81,9 @@ ReadNode / WriteNode
 Target does not own live clients. Resource bindings do not become durable Target data.
 Write mode, keys, reconciliation policy, or per-operation idempotency options belong to
 the write operation, not to reusable Target identity unless genuinely target-wide.
+`ActionNode.params` holds its raw mapping with no key contract yet; once this phase
+declares its TypedDict, the field's validator is `validator_from_typed_dict`
+(`riko/base/_require_guards.py`), kept for that slot (see cache.md § 3).
 
 Concrete Target granularity follows actual backends/providers:
 
@@ -404,6 +407,13 @@ Required contracts:
     leaves the previous complete output readable (the last-good rule);
 17. an incremental format encodes progressively into staging while the published
     replacement appears only at finalize.
+
+Until R5C lands, the Cookbook's write-node example (`docs/COOKBOOK.rst`, the
+`.write("report.csv", mode="replace")` block beside its "Pending." note) stays a plain
+code block, and the `WRITE_NODE_PENDING` strict xfail in `tests/public/test_write.py`
+("write nodes do not execute yet") is the tripwire that trips at landing. R5C promotes
+that block to a doctest with the written output as its observed value and drops the
+note; `manage lint --rst` flags a plain Python block that keeps neither marker.
 
 ## 14. Definition of done
 

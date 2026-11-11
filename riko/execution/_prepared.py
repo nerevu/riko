@@ -21,10 +21,11 @@ from typing_extensions import TypeIs
 
 from riko.bado._util import async_partial, require_value
 from riko.bado.itertools import as_async
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._funcutils import map_values
+from riko.base._funcutils import map_values, resolve_default
 from riko.base._guards import is_async_callable
-from riko.base._iterutils import gen_non_null
+from riko.base._iterutils import gen_nested_mappings, gen_non_null
 from riko.base._require_guards import (
     narrow_from_require,
     require_instance,
@@ -32,6 +33,9 @@ from riko.base._require_guards import (
     typed_dict_keys,
     validator_from_require,
 )
+from riko.base._sentinels import SentinelValue
+from riko.base._strutils import replacer
+from riko.definitions._inputs import freeze_inputs, resolve_input_references
 from riko.definitions._nodes import (
     FROZEN_CONF,
     NO_OPTIONS,
@@ -40,12 +44,15 @@ from riko.definitions._nodes import (
     conf_converter,
     require_runnable_node,
 )
-from riko.definitions._workflow_definition import Workflow
+from riko.definitions._workflow_definition import Inputs, Workflow
 from riko.definitions._wrapping import build_call
 from riko.types._frozendict import (
     FrozenConf,
     FrozenDict,
+    FrozenInputs,
+    JSONValue,
     instances_freezer,
+    json_freeze,
     mapping_converter,
     normalize_mapping,
     optional_mapping_converter,
@@ -67,10 +74,10 @@ if TYPE_CHECKING:
 
     from riko.definitions._context import Context
     from riko.definitions._nodes import ConfInput, RunnableNode
-    from riko.types._frozendict import FrozenJSON
+    from riko.types._frozendict import FrozenJSON, FrozenWorkflowEdges
     from riko.types._options import CallOptions
     from riko.types._streams import AnyIterable
-    from riko.types._workflow import Endpoint, GraphEdge, GraphIndex, NodeId, ParsedPort
+    from riko.types._workflow import Endpoint, NodeId, ParsedPort, WorkflowIndex
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -90,7 +97,10 @@ type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
 _MODULE_FLAGS = ("loopable", "sequential_inputs")
 _CALLABLE_MODULE = "udf"
+_REFERENCE_KEYS = ("subkey", SentinelValue)
+_VALUE_SOURCE_MODULES = frozenset({"strconcat"})
 _EMPTY_EMBEDS: ResolvedModules = FrozenDict()
+_NO_INPUTS: FrozenInputs = FrozenDict()
 
 
 class NodeCall(Protocol):
@@ -160,8 +170,7 @@ class ExecutionExtras[V]:
     @property
     def kwargs(self) -> dict[str, Sequence[V] | ResourceView | ModuleWrapper]:
         """The fields that are set, keyed by name."""
-        values = asdict(self, recurse=False)
-        return dict(gen_non_null(values.items(), cmp_pos=1))
+        return asdict(self, recurse=False, filter=lambda _, value: value is not None)
 
     def map_others[R](self, func: Callable[[V], R]) -> ExecutionExtras[R]:
         """
@@ -399,6 +408,13 @@ class ResolvedModule:
         return getattr(self.select_async(), "subtype", None) == "source"
 
 
+def _gen_references(value: FrozenJSON) -> Iterator[tuple[str, object]]:
+    """``subkey``/``terminal`` references."""
+    for mapping in gen_nested_mappings(value):
+        pairs = ((key, mapping.get(key)) for key in _REFERENCE_KEYS)
+        yield from ((key, ref) for key, ref in pairs if ref is not None and ref != "")
+
+
 def _gen_item_result(
     fn: Func[object],
     item: object = None,
@@ -440,9 +456,8 @@ def _gen_stream_results[T](
     **kwargs: FrozenJSON,
 ) -> Iterator[T]:
     """Applies a callable node's ``fn`` to each item of a stream, one result each."""
-    call = partial(fn, **kwargs, **normalize_mapping(resources))
-    require = partial(require_value, msg=_AWAITABLE_RESULT)
-    return (require(call(item)) for item in items)
+    options = dict(**kwargs, **normalize_mapping(resources))
+    return (require_value(fn(item, **options), _AWAITABLE_RESULT) for item in items)
 
 
 async def _agen_stream_results[T](
@@ -489,10 +504,11 @@ def _resolve_callable[T](
     """
     Resolves the module a callable node runs as.
 
-    An async ``fn`` has no synchronous implementation, so synchronous iteration
-    bridges it the way it bridges any async-only module.
+    An async ``fn`` has no synchronous implementation, so synchronous iteration bridges
+    it the way it bridges any async-only module. The node's keyword arguments are the
+    module's configuration, so their input references resolve like a module node's.
     """
-    module = ResolvedModule.from_dispatcher(dispatcher, _CALLABLE_MODULE)
+    module = ResolvedModule.from_dispatcher(dispatcher, _CALLABLE_MODULE, node.kwargs)
     return evolve(module, sync_pipe=None) if is_async_callable(node.fn) else module
 
 
@@ -529,11 +545,11 @@ class PreparedNode:
 
         >>> from riko.ext import ModuleNode
         >>> from riko.modules.strconcat import pipe
-        >>> from riko.types._workflow import GraphEdge
+        >>> from riko.types._workflow import WorkflowEdge
         >>>
         >>> node = ModuleNode(id="n", name="strconcat", resources="db")
-        >>> named = GraphEdge("a", "n", "out", "in:part")
-        >>> positional = GraphEdge("b", "n", "out", "in:1")
+        >>> named = WorkflowEdge("a", "n", "out", "in:part")
+        >>> positional = WorkflowEdge("b", "n", "out", "in:1")
         >>> module = ResolvedModule("strconcat", sync_pipe=pipe)
         >>> prepared = PreparedNode(node, module, incoming=(named, positional))
         >>> prepared.node.id
@@ -548,7 +564,7 @@ class PreparedNode:
     node: RunnableNode = field(converter=require_runnable_node)
     module: ResolvedModule = field(validator=_build_is_module())
     embed: ResolvedModule | None = field(default=None, validator=_is_optional_module)
-    incoming: tuple[GraphEdge, ...] = field(default=(), converter=tuple)
+    incoming: FrozenWorkflowEdges = field(default=(), converter=tuple)
 
     @property
     def resources(self) -> Mapping[str, str]:
@@ -575,10 +591,46 @@ class PreparedNode:
         """Whether the node's module creates items on its own; a callable never does."""
         return self.module.is_source
 
+    @property
+    def is_builtin(self) -> bool:
+        """Whether every pipe the node runs comes from riko's own module of its name."""
+        name = self.module.name
+        pipes = gen_non_null((self.module.sync_pipe, self.module.async_pipe))
+
+        return all(
+            getattr(pipe, "__module__", None) == f"riko.modules.{name}"
+            for pipe in pipes
+        )
+
     @cached_property
     def input_ports(self) -> tuple[ParsedPort, ...]:
         """The parsed target port of each incoming stream edge, in edge order."""
         return tuple(parse_port(edge.target_port) for edge in self.incoming)
+
+    @cached_property
+    def is_self_starting(self) -> bool:
+        """
+        Whether the node runs without a seed.
+
+        Only a source module or a built-in ``strconcat`` may, and only when their conf
+        reads nothing from the default input. That means it has no ``subkey`` reference,
+        and each ``terminal`` reference names a connected named input port. An empty
+        ``subkey`` or ``terminal`` counts as unset.
+        """
+        is_self_starting, is_builtin = False, self.is_builtin
+
+        if self.is_source or (is_builtin and self.module.name in _VALUE_SOURCE_MODULES):
+            items = self.input_ports
+            connected = set(gen_non_null(items, cmp_attr="name", arg_attr="name"))
+
+            is_self_starting = all(
+                key == SentinelValue
+                and isinstance(name, str)
+                and replacer(name, "") in connected
+                for key, name in _gen_references(self.module.conf)
+            )
+
+        return is_self_starting
 
     @cached_property
     def takes_default_seed(self) -> bool:
@@ -621,7 +673,7 @@ class PreparedNode:
         workers, a loopable node with no secondary input stream instead runs each item
         after it has been read.
 
-        Args:
+        Kwargs:
 
             mapped: Whether the execution maps loopable nodes' items across workers.
 
@@ -639,8 +691,8 @@ class PreparedNode:
             else:
                 stream, one = _gen_stream_results, _gen_item_result
 
-            call: NodeCall = partial(stream, node.fn, **node.kwargs)
-            item_call: NodeCall = partial(one, node.fn, **node.kwargs)
+            call: NodeCall = partial(stream, node.fn, **self.module.conf)
+            item_call: NodeCall = partial(one, node.fn, **self.module.conf)
         else:
             conf, options = self.embed_or_self_conf, self.options.kwargs
             call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
@@ -708,11 +760,11 @@ def _is_reserved_input(port: str, module: ResolvedModule | None) -> bool:
 
 def require_default_output_port(port: str, ref: str) -> None:
     """
-    Rejects a non-default output port until multi-output delivery is executable.
+    Rejects a port other than ``out`` until multi-output delivery is executable.
 
     Only the bare ``out`` port is executable today. A positional ``out:N`` or
     semantic ``out:<name>`` source or selected workflow output is refused rather than
-    silently read as the node's default ``out`` stream.
+    silently read as the node's ``out`` stream.
 
     Args:
 
@@ -721,11 +773,11 @@ def require_default_output_port(port: str, ref: str) -> None:
 
     Raises:
 
-        InvalidPipelineError: If ``port`` is not the default ``out`` port.
+        InvalidPipelineError: If ``port`` is not the bare ``out`` port.
 
     """
     if not parse_port(port).is_default:
-        msg = f"{ref} uses the non-default output port {port!r}, which cannot run yet."
+        msg = f"{ref} uses the port {port!r} instead of 'out', which cannot run yet."
         raise InvalidPipelineError(msg)
 
 
@@ -744,6 +796,10 @@ class ExecutionPlan:
         workflow: The graph the plan resolves.
         modules: The resolved implementation of each node, keyed by node id.
         embeds: The resolved module each loop node runs per item, keyed by node id.
+
+        inputs: The input values the nodes' configurations were built from, keyed by
+            input name.
+
         index: The workflow's graph index, including each workflow output's subgraph.
         nodes: Each workflow node paired with its resolved module and embed.
 
@@ -757,14 +813,11 @@ class ExecutionPlan:
 
     Examples:
 
-        >>> from riko import Endpoint, Workflow
+        >>> from riko import Workflow
         >>> from riko.ext import ModuleNode
         >>> from riko.modules.hash import pipe
         >>>
-        >>> flow = Workflow(
-        ...     nodes=[ModuleNode(id="a", name="hash")],
-        ...     outputs={"default": Endpoint("a", "out")},
-        ... )
+        >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
         >>> modules = {"a": ResolvedModule("hash", sync_pipe=pipe)}
         >>> plan = ExecutionPlan(workflow=flow, modules=modules)
         >>> plan.nodes["a"].node
@@ -777,6 +830,9 @@ class ExecutionPlan:
     workflow: Workflow = field(converter=_require_workflow)
     modules: ResolvedModules = field(converter=_modules_converter)
     embeds: ResolvedModules = field(default=_EMPTY_EMBEDS, converter=_embeds_converter)
+    inputs: FrozenInputs | None = field(
+        default=None, converter=freeze_inputs, alias="_inputs"
+    )
 
     def __attrs_post_init__(self) -> None:
         self.validate()
@@ -812,14 +868,11 @@ class ExecutionPlan:
 
         Examples:
 
-            >>> from riko import Endpoint, Workflow
+            >>> from riko import Workflow
             >>> from riko.ext import ModuleNode
             >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="count-1", name="count")],
-            ...     outputs={"default": Endpoint("count-1", "out")},
-            ... )
+            >>> flow = Workflow().with_node(ModuleNode(id="count-1", name="count"))
             >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.nodes)
             ['count-1']
@@ -833,7 +886,7 @@ class ExecutionPlan:
         return cls(flow, {**modules, **callables}, embeds)
 
     @property
-    def index(self) -> GraphIndex:
+    def index(self) -> WorkflowIndex:
         """The workflow's graph index, including each workflow output's subgraph."""
         return self.workflow.index
 
@@ -850,7 +903,7 @@ class ExecutionPlan:
 
     def require_output(self, output: str) -> Endpoint:
         """
-        Requires a default-port workflow output.
+        Requires a workflow output on the bare ``out`` port.
 
         Args:
 
@@ -863,7 +916,7 @@ class ExecutionPlan:
         Raises:
 
             InvalidPipelineError: If the plan exposes no such workflow output, or it
-                reads a non-default output port.
+                reads a port other than ``out``.
 
         """
         if (endpoint := self.index.outputs.get(output)) is None:
@@ -888,6 +941,9 @@ class ExecutionPlan:
         Args:
 
             output: The name of the workflow output being run.
+
+        Kwargs:
+
             mapped: Whether the execution maps loopable nodes' items across workers.
 
         Returns:
@@ -896,16 +952,13 @@ class ExecutionPlan:
 
         Examples:
 
-            >>> from riko import Endpoint, Workflow
-            >>> from riko.ext import ModuleNode, StreamEdge
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
             >>> from riko.modules.hash import pipe
             >>>
             >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
-            >>> flow = Workflow(
-            ...     nodes=[a, b],
-            ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))],
-            ...     outputs={"default": Endpoint("b", "out")},
-            ... )
+            >>>
+            >>> flow = Workflow().with_node(a).with_node(b)
             >>> module = ResolvedModule("hash", sync_pipe=pipe)
             >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
             >>> plan.get_thread_demand("default", mapped=False)
@@ -930,16 +983,13 @@ class ExecutionPlan:
 
         return max(demand.values(), default=0)
 
-    @cached_property
-    def _output_nodes(self) -> frozenset[str]:
-        return frozenset(endpoint.node for endpoint in self.index.outputs.values())
-
     def is_self_starting(self, node_id: str) -> bool:
         """
         Reports whether a node runs without a seed.
 
-        A source module is self-starting. So is a value feeder: a node that isn't
-        claimed by the workflow output and has at least one outgoing edge.
+        A source module or a built-in ``strconcat`` is self-starting when its conf reads
+        nothing from its default input. That means no ``subkey`` reference, and every
+        ``terminal`` reference names a connected named input port.
 
         Args:
 
@@ -953,31 +1003,76 @@ class ExecutionPlan:
 
             >>> from riko import Endpoint, Workflow
             >>> from riko.ext import ModuleNode, StreamEdge
-            >>> from riko.modules.hash import pipe
+            >>> from riko.modules import hash, strconcat
             >>>
-            >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>> conf = {"part": "hello"}
+            >>> a = ModuleNode(id="a", name="strconcat", conf=conf)
+            >>> b = ModuleNode(id="b", name="hash")
+            >>>
             >>> flow = Workflow(
             ...     nodes=[a, b],
             ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:part"))],
             ...     outputs={"default": Endpoint("b", "out")},
             ... )
-            >>> module = ResolvedModule("hash", sync_pipe=pipe)
-            >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
+            >>> modules = {
+            ...     "a": ResolvedModule("strconcat", conf, sync_pipe=strconcat.pipe),
+            ...     "b": ResolvedModule("hash", sync_pipe=hash.pipe),
+            ... }
+            >>> plan = ExecutionPlan(workflow=flow, modules=modules)
             >>> plan.is_self_starting("a"), plan.is_self_starting("b")
             (True, False)
 
         """
-        outgoing = self.index.outgoing.get(node_id, ())
-        named = all(parse_port(edge.target_port).name is not None for edge in outgoing)
-        feeds_values = bool(outgoing) and named and node_id not in self._output_nodes
-        return self.nodes[node_id].is_source or feeds_values
+        return self.nodes[node_id].is_self_starting
 
-    def require_self_starting(self, output: str) -> None:
+    def _gen_seed_takers(self, output: str) -> Iterator[str]:
+        """Ids of ``output``'s nodes that take a default seed and can't self start."""
+        nodes, required = self.nodes, self.index.required[output]
+        defaulted = (_id for _id in required if nodes[_id].takes_default_seed)
+        return filterfalse(self.is_self_starting, defaulted)
+
+    def is_self_starting_output(self, output: str = DEFAULT_OUTPUT) -> bool:
+        """
+        Whether ``output`` runs without a seed.
+
+        It does when every node it runs without a seed is self-starting (see
+        ``is_self_starting``). An empty workflow never does, since it streams its seed.
+
+        Kwargs:
+
+            output: The name of the workflow output to check.
+
+        Returns:
+
+            ``True`` when an unseeded run of ``output`` starts on its own.
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
+            >>> from riko.runtime._resolver import dispatcher
+            >>>
+            >>> def plan(name):
+            ...     flow = Workflow().with_node(ModuleNode(id="n", name=name))
+            ...     return ExecutionPlan.from_workflow(flow, dispatcher)
+            >>>
+            >>> plan("forever").is_self_starting_output()
+            True
+            >>> plan("hash").is_self_starting_output()
+            False
+
+        """
+        if not (needy := self.workflow.is_empty):
+            needy = next(self._gen_seed_takers(output), None) is not None
+
+        return not needy
+
+    def require_self_starting_output(self, output: str) -> None:
         """
         Requires every default-seeded node that ``output`` runs to be self-starting.
 
         A node whose default input port gets neither an input stream nor a seed must be
-        a source module or a value feeder (see ``is_self_starting``).
+        self-starting (see ``is_self_starting``).
 
         Args:
 
@@ -989,10 +1084,10 @@ class ExecutionPlan:
                 self-starting.
 
         """
-        nodes, required = self.nodes, self.index.required[output]
-        defaulted = (_id for _id in required if nodes[_id].takes_default_seed)
-
-        if needy := list(filterfalse(self.is_self_starting, defaulted)):
+        if self.workflow.is_empty:
+            msg = f"{self.workflow} has no nodes; an empty workflow requires a seed"
+            raise InvalidPipelineError(msg)
+        elif needy := list(self._gen_seed_takers(output)):
             names = ", ".join(map(repr, needy))
             msg = f"node(s) {names} take an input stream; this pipeline requires a seed"
             raise InvalidPipelineError(msg)
@@ -1033,7 +1128,7 @@ class ExecutionPlan:
 
     def require_seed[S](self, seed: S | None, output: str) -> S:
         """
-        Requires the seed that an empty workflow streams as its default output.
+        Requires the seed that an empty workflow streams back unchanged.
 
         A workflow with no nodes is an identity plan: it outputs its seed. It can't run
         without a seed, and exposes only the default workflow output.
@@ -1053,7 +1148,7 @@ class ExecutionPlan:
                 ``seed`` is not given.
 
         """
-        if output != "default":
+        if output != DEFAULT_OUTPUT:
             raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
         elif seed is None:
             msg = "workflow has no nodes; an empty workflow requires a seed"
@@ -1087,13 +1182,69 @@ class ExecutionPlan:
 
         """
         if seed is None:
-            self.require_self_starting(output)
+            self.require_self_starting_output(output)
             seed_target = None
         else:
             seed_target = self.require_seed_target(output)
 
         for node_id in self.index.required[output]:
             yield node_id, seed if node_id == seed_target else None
+
+    def with_inputs(self, values: Inputs | None) -> Self:
+        """
+        Builds the plan whose nodes run with the given ``Inputs``.
+
+        Each ``{"input": name}`` mapping in a module node's conf, a loop's embed conf,
+        or a callable node's keyword arguments is replaced by ``values[name]``.
+
+        Args:
+
+            values: The input values keyed by input name.
+
+        Returns:
+
+            A new plan whose ``inputs`` hold the input values its nodes' configurations
+            were built from.
+
+        Raises:
+
+            InvalidPipelineError: If the plan's configurations were already built from
+                input values.
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
+            >>> from riko.runtime._resolver import dispatcher
+            >>>
+            >>> conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
+            >>> node = ModuleNode(id="b", name="itembuilder", conf=conf)
+            >>> schemas = {"q": {"type": "integer"}}
+            >>> flow = Workflow(input_schemas=schemas).with_node(node)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> resolved = plan.with_inputs({"q": 2})
+            >>> dict(resolved.inputs)
+            {'q': 2}
+            >>> dict(resolved.modules["b"].conf["attrs"])
+            {'key': 'q', 'value': 2}
+
+        """
+        if self.inputs is not None:
+            msg = "The plan's configurations were already built from input values."
+            raise InvalidPipelineError(msg)
+
+        inputs: Inputs = resolve_default(values, _NO_INPUTS)
+
+        def substitute(value: JSONValue) -> FrozenJSON:
+            resolved = resolve_input_references(value, inputs)
+            return json_freeze(resolved)
+
+        def resolve(module: ResolvedModule) -> ResolvedModule:
+            return evolve(module, conf=substitute(module.conf))
+
+        modules = map_values(resolve, self.modules)
+        embeds = map_values(resolve, self.embeds)
+        return evolve(self, modules=modules, embeds=embeds, _inputs=values)
 
     def validate(self) -> None:
         """

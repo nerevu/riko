@@ -21,11 +21,12 @@ Index
 - `How do synchronous and asynchronous pipelines differ`_
 - `What does parallel=True do`_
 - `Is riko distributed`_
+- `Which environment variables tune riko`_
 - `Why does a pipeline see no items the second time`_
 - `Which operations materialize or retain input`_
 - `How do I send one stream to multiple consumers`_
 - `Can I store a workflow as JSON`_
-- `What execution modes are available`_
+- `How do I see a workflow's inputs and dependencies without running it`_
 - `Can I create custom modules`_
 - `How should I handle errors and resource cleanup`_
 - `Where should I report problems or contribute`_
@@ -75,17 +76,25 @@ Which imports are public?
 
 ``riko`` organizes its public interface into three import tiers:
 
-- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API: the
-  ``Pipeline`` and ``Workflow`` classes, ``Context``, ``ExecutionMode``, ``backend``,
-  ``compile_workflow``, ``export``, ``get_module_metadata``,
-  ``get_path``, ``isasync``, ``issync``, ``list_modules``, ``describe_module``,
-  ``list_formats``, ``run``, the typed discovery surface
-  (``Modules``/``Sources``/``Transforms``/``Sinks``/``Formats`` bucket enums), and the
-  pipeline exceptions.
+- **Stable**: the top-level ``riko`` package holds the SemVer-guaranteed API:
+
+  - the ``Pipeline`` and ``Workflow`` classes and ``Context``
+  - ``compile_workflow`` and ``export``
+  - module discovery: ``list_modules``, ``list_module_metadata``, ``describe_module``,
+    ``get_module_metadata``, and ``list_formats``
+  - the typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/
+    ``Formats`` bucket enums)
+  - the async backend: ``backend``, ``isasync``, ``issync``, and ``run``
+  - ``get_path``
+  - the pipeline exceptions
+
 - **Extension**: ``riko.ext`` holds the symbols for authoring custom ``modules``:
-  the ``processor``/``operator``/``splitter`` decorators; the module-metadata types;
-  the registration functions for modules, workflow stores, and write targets; and the
-  ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name.
+
+  - the ``processor``/``operator``/``splitter`` decorators
+  - the module-metadata types
+  - the registration functions for modules, workflow stores, and write targets
+  - the ``Dispatcher`` protocol that finds a module's or stored workflow's pipe by name
+
 - **Private**: all import paths outside ``riko``, ``riko.bado``, and ``riko.ext``,
   including individual ``riko.modules.*`` implementations and other implementation
   modules.
@@ -96,7 +105,6 @@ Application code should import from ``riko``.
 
     >>> from riko import (
     ...     Context,
-    ...     ExecutionMode,
     ...     Formats,
     ...     Modules,
     ...     Pipeline,
@@ -144,7 +152,7 @@ availability, and loopability.
 +----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
 | `currencyformat`_    | processor   | transformer      | formats a number to a given currency string                                                  |
 +----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
-| `datebuilder`_       | processor   | transformer      | converts a text string into a datetime                                                       |
+| `datebuilder`_       | processor   | transformer      | converts a text string into a date dict                                                      |
 +----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
 | `dateformat`_        | processor   | transformer      | formats a date                                                                               |
 +----------------------+-------------+------------------+----------------------------------------------------------------------------------------------+
@@ -253,11 +261,11 @@ Args
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}, {'title': 'riko pt. 2'}]
-    >>> Pipeline.from_module('reverse').first(items)
-    {'title': 'riko pt. 2'}
+    >>> Pipeline.from_module('count').first(items)
+    {'count': 2}
 
 A ``processor`` processes individual ``items``. Examples include ``fetchsitefeed``,
-``hash``, ``itembuilder``, and ``regex``. Call options such as ``field`` are passed
+``itembuilder``, ``regex``, and ``slugify``. Call options such as ``field`` are passed
 as the ``options`` mapping.
 
 .. code-block:: python
@@ -265,12 +273,9 @@ as the ``options`` mapping.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'title': 'riko pt. 1'}]
-    >>> pipeline = Pipeline.from_module('hash', options={'field': 'title'})
-    >>> result = pipeline.first(items)
-    >>> sorted(result)
-    ['hash', 'title']
-    >>> result['hash']
-    2894317996
+    >>> pipeline = Pipeline.from_module('slugify', options={'field': 'title'})
+    >>> pipeline.first(items)
+    {'title': 'riko pt. 1', 'slugify': 'riko-pt-1'}
 
 A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
 example is ``split``.
@@ -316,12 +321,12 @@ Notes
 How do I discover installed modules?
 ------------------------------------
 
-Use ``list_modules()``. The catalog is derived from the modules installed in
-``riko.modules`` and its metadata is read off each implementation.
+Use ``list_modules()`` for names, or ``list_module_metadata()`` (same filters) for
+metadata. The catalog is derived from the modules installed in ``riko.modules``.
 
 .. code-block:: python
 
-    >>> from riko import list_modules, list_formats, Modules
+    >>> from riko import list_formats, list_module_metadata, list_modules, Modules
     >>>
     >>> list_modules()[0]
     'aggregate'
@@ -353,7 +358,7 @@ Use ``list_modules()``. The catalog is derived from the modules installed in
     >>> len(list_modules(category='source'))
     14
     >>> # Full module metadata
-    >>> metadata = list_modules(show_metadata=True)[0]
+    >>> metadata = list_module_metadata()[0]
     >>> metadata.name, metadata.type, metadata.subtype
     ('aggregate', 'operator', 'composer')
     >>> # Available export formats ('ofx'/'qif' only available once installing the
@@ -374,8 +379,6 @@ Both accept a plain ``str`` or a ``StrEnum`` member.
     >>> write.name, write.description
     ('write', 'Writes a stream to a file and passes its items through unchanged.')
     >>> fetch = describe_module(Sources.FETCH)
-    >>> fetch.sync_pipe.__name__, fetch.async_pipe.__name__
-    ('pipe', 'async_pipe')
     >>> describe_module('does-not-exist')
 
 Notes:
@@ -418,10 +421,16 @@ group by data-flow role. Every bucket member is interchangeable with a module na
 
 Notes:
 
-- ``Sinks`` classifies *sink modules*. The one built-in is ``write``, which serializes
-  the stream to a file and passes items through the remaining pipeline.
+- ``Sinks`` classifies *sink modules*. The one built-in is ``write``. It serializes the
+  stream to a file and passes items through the remaining pipeline.
+
 - ``write`` takes a ``fmt`` option which can be a string or ``Formats`` enum and
   defaults to the ``dest`` extension. See `exporting a stream`_ for examples.
+
+- A module's provider (``ModuleMetadata.provider``) is the first dotted segment of its
+  name (``"riko"`` for the built-ins). Each plugin provider gets its own discovery
+  class, e.g., ``Example.LOOKUP`` for ``example.lookup``. ``Modules`` keeps the prefix,
+  e.g., ``Modules.EXAMPLE_LOOKUP``.
 
 What do processor, operator, and splitter mean?
 -----------------------------------------------
@@ -443,39 +452,13 @@ How does a processor map over items?
 ------------------------------------
 
 A ``processor``'s first argument is normally one ``item``, but it may also be a
-``stream`` of items. ``riko`` normalizes at the stream boundary the same way
-``listize`` does: a ``list``, ``tuple``, ``range``, generator, or iterator maps
-over each element, while a mapping, primitive, string, or ``None``
-is a single ``item``. So the following all behave predictably:
+``stream`` of items. ``riko`` normalizes at the stream boundary the same way ``listize``
+does. It maps over each element of a ``list``, ``tuple``, ``range``, generator, or
+iterator. A mapping, primitive, string, or ``None`` is a single ``item``.
 
-.. code-block:: python
-
-    >>> from riko.modules.udf import pipe
-    >>>
-    >>> func = lambda item: {"y": item["x"] + 3}
-    >>> items = [{"x": 0}, {"x": 1}]
-    >>> next(pipe(items[0], func=func))
-    {'y': 3}
-    >>> next(pipe(iter(items), func=func))
-    {'y': 3}
-    >>> next(pipe(items, func=func))
-    {'y': 3}
-    >>> next(pipe(tuple(items), func=func))
-    {'y': 3}
-
-Only the outermost argument is interpreted as one-or-many, so a list-valued
-*field* inside a record stays a single value:
-
-.. code-block:: python
-
-    >>> from riko.modules.udf import pipe
-    >>>
-    >>> item = {"x": 0, "tags": ["a", "b"]}
-    >>> next(pipe(item, func=lambda i: {"tags": i["tags"]}))
-    {'tags': ['a', 'b']}
-
-A ``Pipeline`` seed behaves identically: one ``item``, a list, or an iterator all
-seed the same ``stream``.
+Only the outermost argument is interpreted as one-or-many. A list-valued *field* inside
+a record stays a single value. A ``Pipeline`` seed follows the same rule: one ``item``,
+a list, or an iterator all seed the same ``stream``.
 
 .. code-block:: python
 
@@ -492,8 +475,8 @@ seed the same ``stream``.
     {'x': 0, 'hash': 1711317344}
 
 ``udf`` is not reachable this way, because a ``Pipeline``'s ``options`` must be
-JSON-native and a callable is not. ``map`` chains a callable as its own node instead.
-The callable receives each ``item`` as is, and sets its output as the next ``item``.
+JSON-native. A callable is not. ``map`` chains a callable as its own node instead. The
+callable receives each ``item`` as is, and sets its output as the next ``item``.
 
 .. code-block:: python
 
@@ -583,26 +566,7 @@ never yields. Keep side effects out of such ``modules`` when consuming partially
 bound the work per ``item``.
 
 Fetching several configured sources at once is a fan-in graph rather than a separate
-class. ``Workflow.parse`` turns a bare-bones DAG (``PipeDag``) that wires each source
-into a ``union`` into a ``Workflow``, and ``Pipeline(flow)`` runs it under either style:
-
-.. code-block:: python
-
-    >>> from riko import Pipeline, Workflow
-    >>>
-    >>> flow = Workflow.parse({
-    ...     'modules': [
-    ...         {'id': 'f1', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '1'}}},
-    ...         {'id': 'f2', 'name': 'itembuilder', 'conf': {'attrs': {'key': 'x', 'value': '2'}}},
-    ...         {'id': 'u', 'name': 'union', 'conf': {}},
-    ...     ],
-    ...     'wires': [['f1', 'u'], ['f2', 'u', 'in:1']],
-    ... })
-    >>> list(Pipeline(flow))
-    [{'x': '1'}, {'x': '2'}]
-
-Swap ``itembuilder`` for ``fetch`` (with a ``url``) to merge feeds. See `Can I store a
-workflow as JSON`_ for the wire grammar.
+class, and it runs under either style. See `Fetch several sources`_ in the cookbook.
 
 The ways to consume one ``Pipeline``:
 
@@ -656,13 +620,15 @@ keeps the default concurrency limit in flight. The process executor raises there
 
 .. code-block:: python
 
-    from riko import Pipeline, Sources, get_path
-
-    url = get_path('feed.xml')
-    pipeline = (
-        Pipeline.from_module(Sources.FETCH, conf={'url': url})
-        .with_execution(executor='thread', concurrency=4, ordered=False)
-    )
+    >>> from riko import Pipeline
+    >>>
+    >>> items = [{'title': f'riko pt. {n}'} for n in (2, 1, 3)]
+    >>> pipeline = (
+    ...     Pipeline.from_module('slugify', options={'field': 'title'})
+    ...     .with_execution(executor='thread', concurrency=4, ordered=False)
+    ... )
+    >>> sorted(item['slugify'] for item in pipeline(items))
+    ['riko-pt-1', 'riko-pt-2', 'riko-pt-3']
 
 Parallel execution is not automatically faster. Pool startup, serialization,
 network behavior, ordering, and workload size can outweigh concurrency gains.
@@ -677,6 +643,31 @@ checkpoints, durable retries, event-time windows, a scheduler, or a workflow UI.
 
 Use an orchestrator around ``riko`` when you need durable task execution, and
 use a distributed data engine when one machine is insufficient.
+
+Which environment variables tune riko?
+--------------------------------------
+
+``RIKO_*`` environment variables override riko's runtime defaults. A malformed value
+logs a warning and keeps the default. Defaults are shown in parentheses.
+
+- ``RIKO_CONCURRENCY_LIMIT``: ``riko.async_map``'s default concurrent call ``limit``;
+  pass ``limit=0`` to ``async_map`` for unlimited (``16``).
+- ``RIKO_NODE_THREADS``: the threads that sync-only modules share in async runs on
+  one event loop (``40``).
+- ``RIKO_STREAMING_THRESHOLD``: the response size, in bytes, above which fetched
+  content is streamed instead of buffered (``1048576``).
+- ``RIKO_ENCODING``: the default text encoding (``utf-8``).
+- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; pass ``inf`` or ``0`` for no
+  limit (``30``).
+- ``RIKO_DISCOVERY_TIMEOUT``: seconds to wait for a feed discovery fetch (``10``).
+- ``RIKO_SHUTDOWN_TIMEOUT``: seconds a run's cleanup, and its stopped worker processes,
+  get before being killed (``30``).
+- ``RIKO_EXCHANGE_API``: the ``exchangerate`` module's rates API URL.
+- ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
+  processes (``32``).
+- ``RIKO_PARSED_DATE_CACHE_SIZE``: how many parsed date strings are cached (``1024``).
+- ``RIKO_BENCHMARK_DELAY`` and ``RIKO_BENCHMARK_WORKERS``: the ``benchmark`` script's
+  per-item delay (``0.1``) and worker count (``0``, one per item).
 
 Why does a pipeline see no items the second time?
 -------------------------------------------------
@@ -750,9 +741,8 @@ module       retains           why
 ===========  ================  =======================================================
 
 ``export()`` and serialized exports materialize by the same reasoning as ``write``.
-Iterating a ``Pipeline`` otherwise yields ``items`` from its default output as they
-are produced, under both ``for`` and ``async for``, subject only to what the ``modules``
-above retain.
+Conversely, iterating a ``Pipeline`` yields ``items`` as they are produced, under both
+``for`` and ``async for``.
 
 Execution-wide settings (``with_execution``) keep in-flight work bounded by
 ``concurrency``, or to one item at a time when ``concurrency`` is unset (see `What does
@@ -854,24 +844,36 @@ The `Cookbook`_ shows the same commands run one step at a time.
 See the `DAG format`_ doc and the `Cookbook`_ for the full format/expansion rules and
 examples.
 
-What execution modes are available?
------------------------------------
+How do I see a workflow's inputs and dependencies without running it?
+---------------------------------------------------------------------
 
-``Context`` accepts these ``ExecutionMode`` values:
+Read them from the workflow definition or via ``describe_module``. ``describe_module``
+takes a module name or a pipe and returns its ``ModuleDefinition``. ``input_schemas``
+holds the inputs' schemas, and ``dependencies`` lists the modules and stored workflows.
+A built-in module reports no inputs and no dependencies.
 
-=======================  =========================================================
-Mode                     Behavior
-=======================  =========================================================
-RUN                      Run normally (the default)
-DESCRIBE_INPUTS          Return the input declarations instead of running
-DESCRIBE_DEPENDENCIES    Return the module and stored-workflow names it uses
-DESCRIBE                 Return the input declarations, the same as
-                         DESCRIBE_INPUTS
-=======================  =========================================================
+.. code-block:: python
 
-Only a workflow module's ``pipe`` honors the describe modes today; a ``Pipeline``
-always runs. A workflow's node names also list the modules it uses without executing
-it. See `Inspecting a pipeline`_ in the cookbook for additional details.
+    >>> from riko import Pipeline, Sources, describe_module
+    >>> from riko.ext import register_workflow_store, temporary_registrations
+    >>> fetch = Pipeline.from_module(Sources.FETCH)
+    >>> fetch.workflow.dependencies
+    ('fetch',)
+    >>> fetch.workflow.input_schemas
+    FrozenDict({})
+    >>>
+    >>> with temporary_registrations():
+    ...     register_workflow_store(package="examples.pyworkflows", replace=True)
+    ...     describe_module("pipe:timezone").dependencies
+    ...     describe_module("pipe:timezone").input_schemas
+    ('dateformat', 'itembuilder')
+    FrozenDict({})
+    >>> describe_module(Sources.FETCH).dependencies
+    ()
+
+A ``Pipeline`` reports its own through ``pipeline.workflow``. A stored workflow's
+``pipe:<id>`` reports its workflow's. A compiled workflow module's pipe reports the
+same. See `Inspecting a pipeline`_ in the cookbook.
 
 Can I create custom modules?
 ----------------------------
@@ -917,6 +919,7 @@ For runtime registration, call ``register_module`` instead:
 
 .. code-block:: python
 
+    # your_ext/__init__.py
     from riko.ext import ModuleDefinition, register_module
     from your_ext import shout
 
@@ -968,11 +971,12 @@ documentation workflow.
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
 .. _How do I send one stream to multiple consumers: #how-do-i-send-one-stream-to-multiple-consumers
 .. _Can I store a workflow as JSON: #can-i-store-a-workflow-as-json
-.. _What execution modes are available: #what-execution-modes-are-available
+.. _How do I see a workflow's inputs and dependencies without running it: #how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it
 .. _Can I create custom modules: #can-i-create-custom-modules
 .. _How should I handle errors and resource cleanup: #how-should-i-handle-errors-and-resource-cleanup
 .. _Where should I report problems or contribute: #where-should-i-report-problems-or-contribute
 .. _Inspecting a pipeline: COOKBOOK.rst#inspecting-a-pipeline
+.. _Fetch several sources: COOKBOOK.rst#fetch-several-sources
 
 .. _README: ../README.rst
 .. _Cookbook: COOKBOOK.rst

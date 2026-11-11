@@ -101,7 +101,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
 | `fetchdata` detects the format of `…/export.json?token=x` | internal | R10 |
-| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestTtToDatedict::test_utime_honors_aware_offset`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
+| ~~a tz-aware `struct_time` (`+03:00`) produces the matching epoch~~ — **landed** as `tests/internal/test_values.py::TestDatetimeToDatedict::test_keeps_the_moment_offset_and_zone`; `utime` now builds an aware datetime + `.timestamp()` (correctness-audit R11, utime half) | internal | R11 |
 | ~~`get_skip({"content": "none available"}, {"field": "content"})` follows field-presence semantics~~ — **landed** in `tests/internal/test_values.py::TestGetSkip`; absent `text` no longer coerced to `"None"` (correctness-audit R12) | internal | R12 |
 | ~~`listize=True` turns `0`/`False`/`""` into one-element lists~~ — **landed** as `tests/internal/test_modules.py::TestPrepare`; `build_conf` branches on the option, not truthiness (correctness-audit R13) | internal | R13 |
 | a stalled async iterator is actually interrupted by `timeout` | internal | R14 |
@@ -170,8 +170,10 @@ Enforcement:
   It ratchets two counts down from `[tool.riko.tests]` in `pyproject.toml`: inline
   multi-line `parametrize` tables (`inline-tables`) and `pytest.param` rows without
   `id=` (`rows-without-id`), printing the sites only when a count rises. Its
-  `Bound`/`gen_bounds` also feed `.claude/skills/tidy/fit_bounds.py`, which reads saved
-  `--durations=0` runs and labels each bound LOOSE, TIGHT, or ok against the ladder.
+  `Bound`/`gen_bounds`, its scope walk (`gen_scopes`), and its literal readers also feed
+  `.claude/skills/tidy/fit_bounds.py`, which reads saved `--durations=0` runs and labels
+  each bound LOOSE, TIGHT, or ok against the ladder, so both tools read a marker the
+  same way.
 - Ruff `ERA` (commented-out code) is enforced for `tests/` (generated `pyworkflows`
   excepted).
 - `manage lint --docs` fails on a backticked `tests/<tier>/test_*.py` citation in a
@@ -222,7 +224,7 @@ Publishing them is deferred (user ruling) to one surface pass:
 `SyncPolicy`/`AsyncPolicy` (`ExecutionSettings` fields),
 `GraphIndex`/`GraphEdge`/`RunnableNode`
 (`Workflow.index`/`graph_edges`/`runnable_nodes`), `ModuleCategory`
-(`get_module_category`, `list_modules(category=)`), `FrozenDict`/`FrozenConf`
+(`ModuleMetadata.category`, `list_modules(category=)`), `FrozenDict`/`FrozenConf`
 (`Workflow`/`ModuleNode` fields), `PreparedModule` (`prepare`/`setup`), the underscore
 names `_AsyncURLStream`/`NamedTextIOWrapper` (returned by `async_url_open`) and
 `_Destination` (`export`'s `f`), `DotDict` (an `Item` member), and the `*RawConf` family

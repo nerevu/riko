@@ -24,6 +24,7 @@ from riko.bado._backend import async_sleep, create_task_group, fail_after, lowle
 from riko.base._config import get_worker_cnt
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
+from riko.base._iterutils import sort_stably
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
@@ -74,7 +75,7 @@ THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
 
 
 def _key(item):
-    return tuple(sorted(item.items()))
+    return sort_stably(item.items())
 
 
 def _pair(item: str) -> list[str]:
@@ -696,9 +697,7 @@ def _nested_plan() -> ExecutionPlan:
     pipe = cast("SyncModuleWrapper", _passthru)
     passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
     inner = build_chain(ModuleNode(id="i", name="passthru"))
-    pipes = build_workflow_pipes(
-        inner, build_dispatcher(passthru), subtype="transformer"
-    )
+    pipes = build_workflow_pipes(inner, build_dispatcher(passthru))
     stored = ModuleDefinition(
         name="stored", sync_pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
     )

@@ -34,7 +34,11 @@ LAYER_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "cli": ("api",),
 }
 
-EXACT_LAYERS: dict[str, str] = {"riko": "api", "riko._package": "base"}
+EXACT_LAYERS: dict[str, str] = {
+    "riko": "api",
+    "riko._package": "base",
+    "riko.exceptions": "base",
+}
 
 PREFIX_LAYERS: dict[str, str] = {
     "riko.bado": "bado",
@@ -54,6 +58,7 @@ PREFIX_LAYERS: dict[str, str] = {
 
 INPUT_PORT = "_INPUT"
 OUTPUT_PORT = "_OUTPUT"
+DEFAULT_OUTPUT = "default"
 OTHER_PORT = "_OTHER"
 OUTPUT_MODULE = "output"
 SUBPIPE_TYPE = "pipe"

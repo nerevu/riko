@@ -34,7 +34,6 @@ from riko.base._require_guards import (
     validator_from_require,
 )
 from riko.base._sentinels import MISSING, MissingType
-from riko.types._enums import ExecutionMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._streams import Item
 
@@ -58,7 +57,7 @@ if TYPE_CHECKING:
         StrLike,
     )
     from riko.types._events import EventSink
-    from riko.types._frozendict import FrozenConf
+    from riko.types._frozendict import FrozenConf, InputSchema, InputSchemas
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
@@ -73,7 +72,7 @@ if TYPE_CHECKING:
     )
     from ._write import Destination
 
-_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, inputs={})
+_EMPTY_WORKFLOW = Workflow(nodes=[], outputs={}, input_schemas={})
 
 T_co = TypeVar("T_co", covariant=True, default=Item)
 
@@ -148,8 +147,6 @@ class PipelineDefinition(Generic[T_co]):
 
         >>> fetch = PipelineDefinition.from_module("fetch")
         >>> definition = fetch.sort(conf={"combine": "a"})
-        >>> sorted(definition.workflow.nodes)
-        ['fetch-1', 'sort-1']
         >>> definition.workflow.outputs["default"]
         Endpoint(node='sort-1', port='out')
         >>> definition
@@ -201,12 +198,9 @@ class PipelineDefinition(Generic[T_co]):
 
         Examples:
 
-            >>> fetch = PipelineDefinition.from_module("fetch")
-            >>> definition = fetch.sort(conf={"combine": "a"})
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'sort-1']
+            >>> definition = PipelineDefinition.from_module("fetch")
             >>> definition.workflow.outputs["default"]
-            Endpoint(node='sort-1', port='out')
+            Endpoint(node='fetch-1', port='out')
 
         """
         flow = cls()._build_module_workflow(
@@ -250,7 +244,7 @@ class PipelineDefinition(Generic[T_co]):
         embed: Embed | None = None,
     ) -> PipelineDefinition[Item]:
         """
-        Chains the next module by name by re-pointing the default output to it.
+        Chains the named module onto the end of the pipeline.
 
         Module existence is not checked here, so a typo surfaces as a
         module-resolution failure when the pipeline runs rather than now.
@@ -267,14 +261,12 @@ class PipelineDefinition(Generic[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the appended module.
+            A new pipeline that yields the appended module's items.
 
         Examples:
 
             >>> fetch = PipelineDefinition.from_module("fetch")
             >>> definition = fetch.pipe("sort", conf={"combine": "a"})
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'sort-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='sort-1', port='out')
             >>> delimiter = {"type": "text", "value": " "}
@@ -302,7 +294,7 @@ class PipelineDefinition(Generic[T_co]):
         options: CallOptionsLike | None = None,
         embed: Embed | None = None,
     ) -> Workflow:
-        """Appends module ``name`` to the workflow as its new default output."""
+        """Appends module ``name`` to the end of the workflow."""
         module, flow = str(name), self.workflow
         node_id = flow.get_node_id(module)
         node = ModuleNode(
@@ -334,6 +326,7 @@ class PipelineDefinition(Generic[T_co]):
 
             dest: The destination path or write target, or ``None`` to chain the
                 ``write`` module.
+
             mode: How the items reconcile with the destination's contents.
             fmt: The serialization format, or ``None`` to derive one.
             keys: The match keys a keyed destination needs.
@@ -343,7 +336,7 @@ class PipelineDefinition(Generic[T_co]):
 
         Returns:
 
-            A new pipeline whose default output is the appended node.
+            A new pipeline that yields the appended node's items.
 
         Raises:
 
@@ -356,8 +349,6 @@ class PipelineDefinition(Generic[T_co]):
         Examples:
 
             >>> definition = PipelineDefinition.from_module("fetch").write("out.csv")
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'write-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='write-1', port='out')
 
@@ -458,7 +449,7 @@ class PipelineDefinition(Generic[T_co]):
         """
         Derives a pipeline whose runs use ``context``.
 
-        The context supplies the run's input values, mode, and resources, and
+        The context supplies the run's input values and resources, and
         replaces any context this pipeline already carries.
 
         Args:
@@ -481,6 +472,45 @@ class PipelineDefinition(Generic[T_co]):
 
         """
         return evolve(self, context=context)
+
+    def with_input_schemas(self, **schemas: InputSchema) -> Self:
+        """
+        Derives a pipeline that gives its workflow inputs the given schemas.
+
+        ``schemas`` are JSON Schemas (``InputSchema``). A node configuration refers to
+        an input as ``{"input": name}``. An input whose schema has no ``default`` is
+        required.
+
+        A run fills values from its context's ``inputs`` or an ``InputSchema``
+        ``default``. It rejects missing inputs and invalid values (a value that doesn't
+        match the ``InputSchema``).
+
+        Kwargs:
+
+            schemas: Each input's schema, keyed by input name. They replace existing
+                input schemas.
+
+        Returns:
+
+            A new pipeline whose workflow gives its inputs the schemas.
+
+        Raises:
+
+            InvalidPipelineError: If an input's schema is neither a mapping nor
+                JSON-native.
+
+        Examples:
+
+            >>> conf = {"url": {"input": "feed"}}
+            >>> fetch = PipelineDefinition.from_module("fetch", conf=conf)
+            >>> definition = fetch.with_input_schemas(feed={"type": "string"})
+            >>> dict(definition.workflow.input_schemas["feed"])
+            {'type': 'string'}
+
+        """
+        flow = self.workflow
+        merged: InputSchemas = {**flow.input_schemas, **schemas}
+        return evolve(self, workflow=evolve(flow, input_schemas=merged))
 
     @overload
     def with_resource[R](
@@ -523,7 +553,9 @@ class PipelineDefinition(Generic[T_co]):
 
         Kwargs:
 
-            credential: A credential reference for a factory.
+            credential: A credential reference for a factory. Not yet honored: a run
+                never resolves it, so the factory receives no credential.
+
             lazy: Whether entry should defer until first use. Not yet honored: a run
                 acquires every resource its nodes bind, whether or not it is used.
 
@@ -629,8 +661,6 @@ class PipelineDefinition(Generic[T_co]):
             >>>
             >>> fetch = PipelineDefinition.from_module("fetch")
             >>> definition = fetch.map(itemgetter("title"))
-            >>> sorted(definition.workflow.nodes)
-            ['fetch-1', 'map-1']
             >>> definition.workflow.outputs["default"]
             Endpoint(node='map-1', port='out')
 
@@ -649,7 +679,7 @@ class PipelineDefinition(Generic[T_co]):
         identity: IdentityModeLike | None = None,
         **kwargs: object,
     ) -> Workflow:
-        """Appends a callable node for ``fn`` to the workflow as its default output."""
+        """Appends a callable node for ``fn`` to the end of the workflow."""
         flow, name = self.workflow, get_callable_name(fn, "map")
         _kwargs = {"version": version, "identity": identity, "kwargs": kwargs}
         _id = flow.get_node_id(name)
@@ -679,11 +709,9 @@ class PipelineDefinition(Generic[T_co]):
         base = resolve_default(self.context, Context())
         resources = {} if other is None else other.resources
         clashes = [k for k, v in resources.items() if base.resources.get(k, v) is not v]
-        _run = (ExecutionMode.RUN, None, False)
-
-        if other is not None and (other.mode, other.inputs, other.test) != _run:
-            msg = "a pipeline on the right of '|' may provide resources, but not a "
-            msg += "mode, inputs, or test flag; give them to the composed pipeline"
+        if other is not None and (other.inputs, other.test) != (None, False):
+            msg = "a pipeline on the right of '|' may provide resources, but not "
+            msg += "inputs or a test flag; give them to the composed pipeline"
             raise InvalidPipelineError(msg)
         elif clashes:
             msg = f"both pipelines provide different resources named {sorted(clashes)}"

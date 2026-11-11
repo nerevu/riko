@@ -150,6 +150,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> items = ({"x": x} for x in range(5))
         >>> next(pipe(items))
         {'x': 4}
+        >>> next(pipe([{"x": x} for x in range(5)], emit=False))
+        {'reverse': {'x': 4}}
 
     """
     return parser(*args, **kwargs)

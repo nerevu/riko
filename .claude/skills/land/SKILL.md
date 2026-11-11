@@ -182,28 +182,27 @@ to an agent, which repeats their work by hand for many minutes.
    python .claude/skills/land/split_hunks.py list
    ```
 
-   (`-U0` by default, so mixed-concept regions split finely; `path:N` is the
-   hunk starting on new-side line `N`; new, deleted, untracked, and binary
-   files are whole-file ids). Write a plan file in the scratchpad: a `fixup
-   <sha>` or `commit <msg-file>` header per step, oldest fixup target first
-   and then the new commits in dependency order, each followed by its ids
-   (`path` takes every hunk of a file, `path:N-M` a range, `*` the rest,
-   `skip` a step of ids left uncommitted such as untracked scratch docs).
-   Group by file first and split a file only when its hunks are different
-   concepts. A file that one branch commit wholly rewrote is fixed up whole
-   to that commit, its pre-branch-blame hunks included. A hunk that names
-   something another hunk introduces goes in or after that hunk's step.
-   Generated files (tier indexes, API-surface blocks,
-   verb tables) go with the step whose source change regenerates them. The
-   coverage-ratchet line in `pyproject.toml` goes with the step whose tests or
-   code moved it: `diff_uncovered.py --baseline-ref HEAD` names each file whose
-   missing count changed. Put it elsewhere only for a stated reason, such as a
-   later branch commit that also changes the ceiling, and say why. Message
-   files: subject at most 50 characters, house tag included, and true to the
-   step's diff; no body when the subject says it all (never a bullet that
-   restates it), else at most five `-` bullets, one concept each, under 72
-   characters, never prose. A bullet for something the subject does not
-   imply starts with "Also".
+   (`-U0` by default, so mixed-concept regions split finely; `path:N` is the hunk
+   starting on new-side line `N`; new, deleted, untracked, and binary files are
+   whole-file ids; `--body N` prints up to `N` of each hunk's lines under it, for
+   sorting many hunks without a `git diff` per file). Write a plan file in the
+   scratchpad: a `fixup <sha>` or `commit <msg-file>` header per step, oldest fixup
+   target first and then the new commits in dependency order, each followed by its ids
+   (`path` takes every hunk of a file, `path:N-M` a range, `*` the rest, `skip` a step
+   of ids left uncommitted such as untracked scratch docs). Group by file first and
+   split a file only when its hunks are different concepts. A file that one branch
+   commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame hunks
+   included. A hunk that names something another hunk introduces goes in or after that
+   hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go with
+   the step whose source change regenerates them. The coverage-ratchet line in
+   `pyproject.toml` goes with the step whose tests or code moved it:
+   `diff_uncovered.py --baseline-ref HEAD` names each file whose missing count changed.
+   Put it elsewhere only for a stated reason, such as a later branch commit that also
+   changes the ceiling, and say why. Message files: subject at most 50 characters, house
+   tag included, and true to the step's diff; no body when the subject says it all
+   (never a bullet that restates it), else at most five `-` bullets, one concept each,
+   under 72 characters, never prose. A bullet for something the subject does not imply
+   starts with "Also".
 4. **Rehearse it**:
 
    ```bash
@@ -246,13 +245,13 @@ End with:
 - **Gate results**: which gates ran and their outcomes, failures verbatim,
   and the suite count (`python $G summary test`, recorded even when this
   session skipped the suite).
-- **Commit plan**: the rehearsed step table (each `fixup!` target's sha and
-  subject, each new commit's subject from the house tags seen in `git log`,
-  `[NEW]`, `[DEV]`, `[DOCS]`, …, and the files each step touches with their line
-  counts and partial-hunk lines), the check and
-  autosquash results, which chain is on the clipboard, any hunk dropped from a
-  fixup and why, and that the autosquash waits for `/wrapup`. These are
-  commands for the user to run, never executed on their branch.
+- **Commit plan**: the rehearsed step table (each `fixup!` target's sha and subject,
+  each new commit's subject from the house tags seen in `git log`, `[NEW]`, `[DEV]`,
+  `[DOCS]`, …, where `[DOCS]` means user-facing docs only and `_docs/`, CLAUDE.md, and
+  skills take `[DEV]`, and the files each step touches with their line counts and
+  partial-hunk lines), the check and autosquash results, which chain is on the
+  clipboard, any hunk dropped from a fixup and why, and that the autosquash waits for
+  `/wrapup`. These are commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents:
   any helper script written this session into the scratchpad or `/tmp` (inline heredoc
   scripts included), any scan, count, or cross-check run by hand three or more times,

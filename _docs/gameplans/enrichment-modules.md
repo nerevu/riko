@@ -183,6 +183,25 @@ non-UTC host `"now"` and `"+1 seconds"` disagree by the host offset (the default
 `now` computations with one. Tripwire (2026-10-10 naming triage):
 `tests/internal/test_values.py::TestCastDatetime::test_relative_offsets_share_the_named_day_zone`.
 
+Library choice (2026-11-10): stdlib aware `datetime` + `zoneinfo` is enough for
+conversion (`datetime_to_datedict` is exact across DST folds and unnamed offsets), so no
+date library was added for `datebuilder`. The arithmetic the settable zone exposes is in
+`get_relative_date`'s sub-day units: `seconds`/`minutes`/`hours` add a `timedelta` to
+the aware `now`, which stdlib does on the wall clock, so `+8 hours` from Paris
+2023-03-25 22:00 lands on 06:00 instead of 07:00 once `now` carries a `ZoneInfo`. Day
+units and larger offset `now.date()` and return a `date`, so DST cannot touch them.
+Recommendation: convert to UTC, add, convert back (exact-instant arithmetic in stdlib);
+adopt Whenever only if type-enforced naive/aware separation (distinct `Instant` vs
+`ZonedDateTime` types, explicit `disambiguate=`) becomes a goal in itself. Whenever
+facts as of 2026-11-10: 0.11.0 (2026-10-02) is pre-1.0 but "establishes the 1.0 API";
+Rust wheels by default with a pure-Python backend (automatic on PyPy); Python ≥3.10;
+`tzdata` only on Windows and `tzlocal` only off macOS/Linux; parsing is ISO 8601 / RFC
+3339 / RFC 2822 plus custom patterns only, so it would sit beside `dateutil` (free-form
+parsing, `relativedelta` month/year steps), not replace it. Pendulum and Arrow are
+weaker on strictness. Abbreviation parsing (`CST`) stays riko's `TZINFOS` policy either
+way, since no library can disambiguate it. Tripwire (2026-11-10 audit triage):
+`tests/internal/test_values.py::TestCastDatetime::test_sub_day_offsets_count_exact_time_across_dst`.
+
 The host zone is also applied as a fixed offset: `ensure_tzinfo(try_local_tz=True)`
 takes `dt.now(UTC).astimezone().tzinfo`, so a date in the other daylight-saving season
 gets today's offset (a July date resolved in January is an hour off). The settable zone

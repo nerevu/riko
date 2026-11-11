@@ -128,8 +128,9 @@ Findings from `/audit` go through `/triage` before anyone fixes them.
 - Internal modules import from a symbol's defining module, never `from riko import …`;
   only user-facing docs show the facade.
 - Commit subjects carry a tag: `[NEW]`, `[ENH]`, `[FIX]`, `[CHANGE]`, `[REFACTOR]`,
-  `[TEST]`, `[DOCS]`, `[DEV]`. Use `fixup!` commits freely on `next`; they get squashed
-  before work moves to `features`.
+  `[TEST]`, `[DOCS]`, `[DEV]`. `[DOCS]` is for user-facing docs only. `_docs/`,
+  `CLAUDE.md`, and skills take `[DEV]`. Use `fixup!` commits freely on `next` since they
+  get squashed before work moves to `features`.
 - `_docs/` holds internal Markdown (plans, status, this guide). The repo root and
   `docs/` hold the external RST that ships to users. Do not mix the two.
 

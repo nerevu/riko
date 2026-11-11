@@ -24,7 +24,6 @@ from riko.execution._sync_execution import SyncExecution
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_resolver import register_workflow_store
-from riko.types._workflow import Endpoint
 from riko.types.modules import StrconcatRawConf
 from tests import TESTS_DIR
 
@@ -69,10 +68,7 @@ PIPE_DEF = {
 
 RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}
 CALLABLE_MATCH = r"callable node\(s\) \['len-1'\]"
-CALLABLE_FLOW = Workflow(
-    nodes=[CallableNode(id="len-1", name="len", fn=len)],
-    outputs={"default": Endpoint("len-1", "out")},
-)
+CALLABLE_FLOW = Workflow().with_node(CallableNode(id="len-1", name="len", fn=len))
 
 
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:

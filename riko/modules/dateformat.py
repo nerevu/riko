@@ -116,9 +116,9 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
     Notes:
 
-        The field is cast before formatting, so a ``date``, ``datetime``,
-        ``struct_time``, epoch ``int``, or date string all work, and any time of
-        day they carry is kept.
+        ``field`` may hold a ``date``, ``datetime``, ``struct_time``, epoch ``int``,
+        ``datebuilder`` date dict, or date text such as ``"5/4/2015"`` or ``"today"``.
+        It is converted to a ``datetime`` before formatting.
 
         A field that is missing or names no date yields ``""``.
 
@@ -176,9 +176,9 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
     Notes:
 
-        The field is cast before formatting, so a ``date``, ``datetime``,
-        ``struct_time``, epoch ``int``, or date string all work, and any time of
-        day they carry is kept.
+        ``field`` may hold a ``date``, ``datetime``, ``struct_time``, epoch ``int``,
+        ``datebuilder`` date dict, or date text such as ``"5/4/2015"`` or ``"today"``.
+        It is converted to a ``datetime`` before formatting.
 
         A field that is missing or names no date yields ``""``.
 

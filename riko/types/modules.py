@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict, TypeGuard
 
-from riko.base._config import BUILTIN_PROVIDER
+from riko.base._config import BUILTIN_PROVIDER, SINK_NAMES
 from riko.base._require_guards import require_from_form
 
 from ._pipedef import CountValues
@@ -17,10 +17,18 @@ if TYPE_CHECKING:
 
     from riko.base._require_guards import TypeRequire
 
-    from ._enums import CastType, FmtLike, LocationType, SortableCastType, UserAgentLike
+    from ._enums import (
+        CastType,
+        FeedTypeLike,
+        FmtLike,
+        LocationType,
+        SortableCastType,
+        UserAgentLike,
+    )
     from ._frozendict import FrozenConf
     from ._io import PathLike
     from ._scalars import BasicValue
+    from ._workflow import InputRef
     from ._wrappers import Func
 
 # Shared
@@ -87,6 +95,7 @@ type OptionValues = bool | str | CountValues
 
 type ConfValues = (
     BasicValue
+    | InputRef
     | ParsedParam
     | bool
     | float
@@ -228,13 +237,30 @@ class ModuleMetadata:
         """
         return get_module_provider(self.name)
 
+    @property
+    def category(self) -> ModuleCategory:
+        """
+        The module's user-facing discovery category.
+
+        Based on data-flow role, not the runtime module type: ``"sink"`` for a sink,
+        ``"source"`` for a source subtype, ``"transform"`` otherwise.
+        """
+        if self.name in SINK_NAMES:
+            result: ModuleCategory = "sink"
+        elif self.subtype == "source":
+            result = "source"
+        else:
+            result = "transform"
+
+        return result
+
     def supports(self, subtype: ModuleSubtype) -> bool:
         return subtype in self.subtypes
 
 
 class ConfArg(TypedDict):
     type: str
-    value: int | str | bool
+    value: int | str | bool | InputRef
 
 
 class Terminal(TypedDict):
@@ -290,8 +316,8 @@ class FetchRawConf(TypedDict):
 
 
 class InputRawConf(TypedDict, total=False):
-    name: Required[ConfArg]
-    prompt: Required[ConfArg]
+    name: ConfArg
+    prompt: ConfArg
     type: ConfArg
     debug: ConfArg
     default: ConfArg
@@ -372,12 +398,14 @@ class ExchangeRateRawConf(TypedDict, total=False):
     memoize: Value
     precision: Value
     user_agent: Value
+    verbose: Value
 
 
 class FeedAutoDiscoveryRawConf(TypedDict):
     url: Value | list[Value]
     strict: NotRequired[Value]
     sort: NotRequired[Value]
+    link_type: NotRequired[Value | list[Value]]
     user_agent: NotRequired[Value]
 
 
@@ -636,6 +664,7 @@ class RegexConfRule:
     singlelinematch: bool | None = None
     seriesmatch: bool = True
     replace: str = ""
+    nativereplace: bool = False
 
 
 @dataclass
@@ -760,12 +789,14 @@ class ExchangeRateConf(TypedDict, total=False):
     memoize: bool
     precision: int
     user_agent: UserAgentLike
+    verbose: bool
 
 
 class FeedAutoDiscoveryConf(TypedDict, total=False):
     url: Required[str]
     strict: bool
     sort: bool
+    link_type: FeedTypeLike | list[FeedTypeLike]
     user_agent: UserAgentLike
 
 

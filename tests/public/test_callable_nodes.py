@@ -181,6 +181,13 @@ class TestCallableNodes:
         contextual = pipeline.with_context(Context(inputs={"q": 1}))
         assert list(contextual.with_execution(**settings)([{"x": 1}])) == [["factor"]]
 
+    @pytest.mark.parametrize("settings", _EXECUTIONS)
+    def test_map_resolves_an_input_reference(self, settings):
+        pipeline = Pipeline().with_input_schemas(f={"type": "integer"})
+        scaled = pipeline.map(_scaled, factor={"input": "f"})
+        contextual = scaled.with_context(Context(inputs={"f": 3}))
+        assert list(contextual.with_execution(**settings)([{"x": 1}])) == [3]
+
     def test_maps_declare_each_resource_once_in_order(self):
         pipeline = (
             Pipeline()
@@ -194,7 +201,7 @@ class TestCallableNodes:
         assert pipeline.workflow.resources == ("db",)
         assert list(pipeline([{"x": 1}])) == [{"x": 1, "owner": 7}]
         assert ordered.workflow.resources == ("db", "cache")
-        assert ordered.workflow.isvalid
+        assert ordered.workflow.is_valid
 
     def test_map_carries_version_and_identity(self):
         flow = Pipeline().map(len, version="len-v1", identity="derive").workflow
@@ -333,6 +340,13 @@ class TestAsyncCallableNodes:
     async def test_async_map_passes_only_bound_keywords(self):
         pipeline = Pipeline().map(_keywords, factor=2)
         assert [item async for item in pipeline([{"x": 1}])] == [["factor"]]
+
+    @async_test
+    async def test_async_map_resolves_an_input_reference(self):
+        pipeline = Pipeline().with_input_schemas(f={"type": "integer"})
+        scaled = pipeline.map(_ascaled, factor={"input": "f"})
+        contextual = scaled.with_context(Context(inputs={"f": 3}))
+        assert [item async for item in contextual([{"x": 1}])] == [3]
 
     @async_test
     async def test_async_iteration_awaits_an_async_callable(self):

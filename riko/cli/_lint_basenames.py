@@ -14,6 +14,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._config import DUPLICATE_BASENAMES
+from riko.base._iterutils import sort_stably
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -65,8 +66,8 @@ def gen_basename_issues(
     for name, paths in sorted(duplicated.items()):
         if name not in allowed:
             message = "basename is shared; rename one or allowlist the pair"
-            yield BasenameIssue(name, tuple(sorted(paths)), message)
+            yield BasenameIssue(name, sort_stably(paths), message)
 
     for name in sorted(allowed - duplicated.keys()):
         message = "allowlisted basename is no longer duplicated; remove it"
-        yield BasenameIssue(name, tuple(sorted(groups.get(name, []))), message)
+        yield BasenameIssue(name, sort_stably(groups.get(name, [])), message)

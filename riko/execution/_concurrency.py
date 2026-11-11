@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from riko.definitions._context import Context
+    from riko.types._wrappers import Func
 
     from ._prepared import ExecutionPlan, PreparedNode
 
@@ -27,7 +28,7 @@ __all__ = ["build_item_call", "require_process_safe", "run_item", "run_shipped_i
 
 
 @lru_cache(maxsize=config.shipped_call_cache_size)
-def _load_call(payload: bytes) -> Callable[[object], Iterable[object]]:
+def _load_call(payload: bytes) -> Func[Iterable[object]]:
     return pickle.loads(payload)  # noqa: S301
 
 
@@ -160,16 +161,13 @@ def require_process_safe(
 
     Examples:
 
-        >>> from riko import Endpoint, Workflow
+        >>> from riko import Workflow
         >>> from riko.execution._concurrency import require_process_safe
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow(
-        ...     nodes=[ModuleNode(id="h", name="hash")],
-        ...     outputs={"default": Endpoint("h", "out")},
-        ... )
+        >>> flow = Workflow().with_node(ModuleNode(id="h", name="hash"))
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> require_process_safe(plan, "default", None)
 

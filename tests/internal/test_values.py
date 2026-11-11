@@ -13,13 +13,13 @@ from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
 from io import BytesIO, StringIO
-from json import dumps
+from json import dumps, loads
 from logging import ERROR, WARNING
 from math import inf
-from operator import itemgetter, methodcaller
+from operator import add, itemgetter, methodcaller
 from pathlib import PurePosixPath, PureWindowsPath
 from time import struct_time
-from types import MappingProxyType
+from types import SimpleNamespace
 from typing import (
     TYPE_CHECKING,
     ClassVar,
@@ -48,8 +48,13 @@ from riko.base._exceptions import (
     IdentityEncodingError,
     InvalidPipelineError,
 )
-from riko.base._graph import cyclic_nodes, descendants, freeze_graph, topological_sort
-from riko.base._guards import require_mapping, require_sequence
+from riko.base._graph import (
+    cyclic_nodes,
+    descendants,
+    native_topological_sort,
+    topological_sort,
+)
+from riko.base._guards import require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import get_path
@@ -66,7 +71,7 @@ from riko.base._require_guards import (
     typed_dict_keys,
 )
 from riko.base._sentinels import MISSING
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
@@ -79,10 +84,10 @@ from riko.coercion._canonical import (
 from riko.coercion._dataclass import fromdict
 from riko.coercion._dates import (
     _parse_date_cached,
-    date_to_tt,
+    datetime_to_datedict,
+    get_relative_date,
     parse_date_string,
     resolve_aware_datetime,
-    tt_to_datedict,
 )
 from riko.coercion._sequences import listize
 from riko.coercion.cast import cast_datetime, cast_value, resolve_cast_type
@@ -100,8 +105,8 @@ from riko.types._enums import CastType, Executor
 from riko.types._frozendict import FrozenDict, freeze
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
-from riko.types._workflow import Edge as EdgeBase
-from riko.types._workflow import Endpoint, GraphEdge, GraphIndex
+from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
+from riko.types._workflow import PortEdge as EdgeBase
 from tests import ROUND_TRIPS
 from tests._execution import build_workflow
 from tests._loopback import ForwardOnly
@@ -118,7 +123,7 @@ _INVALID: list[tuple[Func[object], object]] = [
     (require_strlike, 1),
     (require_finite, float("nan")),
     (require_mapping, "abc"),
-    (require_sequence, "abc"),
+    (require_listlike, "abc"),
 ]
 
 _UNSORTABLE = object()
@@ -445,6 +450,10 @@ class TestCastDatetime:
 
         assert offset == timedelta(hours=9)
 
+    def test_rejects_non_date_values(self):
+        with pytest.raises(TypeError, match="not date-like"):
+            cast_datetime({"year": 2020})  # pyright: ignore[reportArgumentType]
+
     def test_rejects_positional_flags(self):
         with pytest.raises(TypeError):
             cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]
@@ -464,6 +473,19 @@ class TestCastDatetime:
         assert offset is not None
         assert offset.utcoffset() == named.utcoffset()
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="exact-time arithmetic for sub-day offsets in a named zone is not yet "
+        "implemented: hours are added to the wall clock, so an offset across a "
+        "daylight-saving change is an hour short",
+    )
+    def test_sub_day_offsets_count_exact_time_across_dst(self):
+        paris = ZoneInfo("Europe/Paris")
+        before_change = datetime(2023, 3, 25, 22, tzinfo=paris)
+        result = get_relative_date("hours", 8, add, before_change)
+        assert result == datetime(2023, 3, 26, 7, tzinfo=paris)
+
 
 # Each row: content whose cast overflows, and the cast type's default.
 CAST_OVERFLOWS = [
@@ -476,6 +498,18 @@ class TestCastValue:
     @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
     def test_overflow_degrades_to_the_default(self, content, type_, expected):
         assert cast_value(content, type_) == expected
+
+    def test_a_datetime_casts_to_its_date(self):
+        moment = datetime(2010, 10, 14, 5, tzinfo=UTC)
+        assert cast_value(moment, CastType.DATE) == date(2010, 10, 14)
+
+    def test_a_location_value_is_left_uncast(self):
+        conf = {"type": "location", "value": "isle of wight, uk"}
+        assert resolve_conf(None, conf=conf) == "isle of wight, uk"
+
+    def test_permissive_freeze_keeps_a_frozen_mapping(self):
+        frozen = FrozenDict({"a": 1})
+        assert freeze(frozen) is frozen
 
 
 class TestOverloadTypes:
@@ -678,19 +712,52 @@ class TestResolveAwareDatetime:
         assert result.utcoffset() == naive.replace(tzinfo=zone).utcoffset()
 
 
-class TestTtToDatedict:
-    def test_utime_honors_aware_offset(self):
-        """
-        Convert aware ``+03:00`` times to the represented instant.
+# Each row: an aware datetime and the zone label its date dict carries.
+DATEDICT_MOMENTS = [
+    pytest.param(
+        datetime(2014, 12, 3, 9, tzinfo=ZoneInfo("Asia/Shanghai")),
+        "Asia/Shanghai",
+        id="ambiguous-abbreviation",
+    ),
+    pytest.param(
+        datetime(2014, 11, 2, 1, 30, tzinfo=ZoneInfo("America/Chicago"), fold=1),
+        "America/Chicago",
+        id="repeated-dst-hour",
+    ),
+    pytest.param(datetime(2014, 12, 3, 9, tzinfo=UTC), "UTC", id="utc"),
+    pytest.param(
+        datetime(2014, 12, 3, 9, tzinfo=ZoneInfo("EST")),
+        "UTC-05:00",
+        id="legacy-abbreviation-zone",
+    ),
+    pytest.param(
+        datetime(1890, 1, 1, tzinfo=ZoneInfo("Singapore")),
+        "UTC+06:55:25",
+        id="sub-minute-offset",
+    ),
+]
 
-        Do not reinterpret the same wall-clock time as UTC.
-        """
-        tz = timezone(timedelta(hours=3))
-        aware = datetime(2020, 6, 15, 9, 0, 0, tzinfo=tz)
-        tt = date_to_tt(aware)
 
-        result = tt_to_datedict(tt, aware.date())
-        assert result["utime"] == int(aware.timestamp())
+class TestDatetimeToDatedict:
+    @pytest.mark.parametrize(("moment", "label"), DATEDICT_MOMENTS)
+    def test_keeps_the_moment_offset_and_zone(self, moment, label):
+        result = datetime_to_datedict(moment)
+        expected = (int(moment.timestamp()), moment.utcoffset(), label, moment.hour)
+        offset = timedelta(seconds=result["utc_offset"])
+        assert (result["utime"], offset, result["timezone"], result["hour"]) == expected
+
+    @pytest.mark.parametrize(("moment", "label"), DATEDICT_MOMENTS)
+    def test_cast_datetime_reads_it_back(self, moment, label):
+        result = cast_datetime(loads(dumps(datetime_to_datedict(moment))))
+        assert result is not None
+        assert (result.timestamp(), result.utcoffset()) == (
+            moment.timestamp(),
+            moment.utcoffset(),
+        )
+
+    def test_date_parts_never_change_the_moment(self):
+        built = datetime_to_datedict(datetime(2014, 12, 3, 9, tzinfo=UTC))
+        assert cast_value(built | {"year": 1999}, CastType.DATE) == date(2014, 12, 3)
 
 
 DOTDICT_DELETES = [
@@ -841,6 +908,23 @@ class TestDotDict:
 
     @pytest.mark.xfail(
         strict=True,
+        raises=pytest.fail.Exception,
+        reason="literal DotDict paths that stop at a scalar are not yet implemented",
+    )
+    def test_getitem_does_not_read_through_a_scalar(self):
+        with pytest.raises(KeyError):
+            DotDict({"a": 1})["a.b"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="literal DotDict paths that stop at a scalar are not yet implemented",
+    )
+    def test_contains_does_not_read_through_a_scalar(self):
+        assert "a.b" not in DotDict({"a": 1})
+
+    @pytest.mark.xfail(
+        strict=True,
         raises=AssertionError,
         reason="literal DotDict reads of a numeric-string key are not yet "
         "implemented: the key is taken as a sequence index",
@@ -858,7 +942,14 @@ GET_SKIPS = [
         False,
         id="field-follows-presence-not-text",
     ),
+    pytest.param({"field": "content"}, {"content": 0}, False, id="field-falsy-value"),
     pytest.param({"field": "content", "include": True}, SKIP_ITEM, True, id="include"),
+    pytest.param(
+        {"field": "content", "include": True},
+        {"content": ""},
+        True,
+        id="include-falsy-value",
+    ),
     pytest.param({"field": "content", "text": None}, SKIP_ITEM, False, id="null-text"),
     pytest.param({"field": "content", "text": 0}, SKIP_ITEM, False, id="zero-text"),
     pytest.param({"field": "content", "text": ""}, SKIP_ITEM, True, id="empty-text"),
@@ -1123,6 +1214,11 @@ class TestGenNonNull:
         with pytest.raises(TypeError, match=match):
             list(gen_non_null(items, **positions))
 
+    def test_a_position_then_an_attribute_selects_a_field(self):
+        items = [(SimpleNamespace(n=1),), (SimpleNamespace(n=None),)]
+        selected = gen_non_null(items, cmp_pos=0, cmp_attr="n", arg_pos=0, arg_attr="n")
+        assert list(selected) == [1]
+
 
 DESCENDANT_CASES = [
     pytest.param("a", {"a": {"b"}, "b": {"c"}}, frozenset({"b", "c"}), id="transitive"),
@@ -1137,8 +1233,8 @@ class TestGraph:
         assert descendants(node, graph) == expected
 
     def test_cyclic_nodes_accepts_a_frozen_graph(self):
-        graph = freeze_graph({"a": {"b"}, "b": {"a"}, "c": set()})
-        assert isinstance(graph, MappingProxyType)
+        graph = freeze({"a": {"b"}, "b": {"a"}, "c": set()})
+        assert isinstance(graph, FrozenDict)
         assert sorted(cyclic_nodes(graph)) == ["a", "b"]
 
     def test_topological_sort_key_orders_ready_nodes(self):
@@ -1158,9 +1254,9 @@ class TestGraph:
         with pytest.raises(KeyError):
             descendants("c", {"a": {"b"}})
 
-    def test_topological_sort_strict_raises_on_a_cycle(self):
+    def test_native_topological_sort_raises_on_a_cycle(self):
         with pytest.raises(CycleError):
-            topological_sort({"a": {"b"}, "b": {"a"}}, strict=True)
+            native_topological_sort({"a": {"b"}, "b": {"a"}})
 
 
 class TestGraphIndex:
@@ -1172,16 +1268,16 @@ class TestGraphIndex:
             return descendants(source, graph)
 
         monkeypatch.setattr(workflow_types, "descendants", counting)
-        edge = GraphEdge("a", "b", "out", "in")
+        edge = WorkflowEdge("a", "b", "out", "in")
         outputs = {"default": Endpoint("b", "out")}
-        index = GraphIndex(["a", "b"], [edge], outputs)
+        index = WorkflowIndex(["a", "b"], [edge], outputs)
 
         assert index.cyclic == ()
         assert index.order == ("a", "b")
         assert calls == []
         assert index.required["default"] == ("a", "b")
         assert len(calls) == 1
-        assert index == GraphIndex(["a", "b"], [edge], outputs)
+        assert index == WorkflowIndex(["a", "b"], [edge], outputs)
 
     def test_only_a_default_port_edge_closes_a_node_to_a_seed(self) -> None:
         edges = (
@@ -1269,15 +1365,15 @@ class TestRequireFromForm:
             require_from_form(list[str] | dict[str, int])
 
 
-class TestResolveEnum:
+class TestRequireEnum:
     @pytest.mark.parametrize("value", [None, "bogus"])
-    def test_resolve_enum_defaults_to_the_document_error(self, value):
+    def test_require_enum_defaults_to_the_document_error(self, value):
         with pytest.raises(InvalidPipelineError, match="WriteMode"):
-            resolve_enum(WriteMode, value)
+            require_enum(WriteMode, value)
 
-    def test_resolve_enum_lists_the_accepted_values(self):
+    def test_require_enum_lists_the_accepted_values(self):
         with pytest.raises(ValueError, match="'bogus'") as excinfo:
-            resolve_enum(Executor, "bogus", error=ValueError)
+            require_enum(Executor, "bogus", error=ValueError)
 
         assert all(name in str(excinfo.value) for name in Executor)
 

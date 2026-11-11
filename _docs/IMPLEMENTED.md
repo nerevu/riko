@@ -155,7 +155,12 @@ rejects negative and NaN values; `_env_encoding` rejects an encoding `codecs.loo
 does not know. A malformed or out-of-range value logs a warning and keeps the default,
 so a bad environment never fails a later run.
 
-Sync text decoding goes through `riko/io/_reencode.py`: `reencode()` builds a
+Temporary paths: `get_temp_path` (`riko/io/_sync.py`) is a context manager yielding a
+`Path` that does not exist yet inside a fresh temporary directory, removed on exit
+unless `delete=False`; `async_get_temp_path` (`riko/io/_async.py`) is its async twin.
+`get_temp_file` keeps returning an open named temporary file.
+
+Sync text decoding goes through `riko/io/_reencode.py`: callers build a
 `TextReencoder` (decoding) or a `BytesReencoder` (re-encoding) over the abstract
 `Reencoder` base, whose `join_char` is the empty value of its output type. An empty
 source reads as empty. A decoded source whose raw first line does not end in the encoded
@@ -329,6 +334,18 @@ A rule without a `type` sorts as `decimal` only when every present value (and th
 `default`) casts to a finite number; one text or non-finite value makes the whole rule
 sort as text, so mixed values never interleave numeric and lexical order.
 
+`datebuilder` emits a `DateDict` (`riko/types/_scalars.py`, a member of the `Item`
+union) built by `datetime_to_datedict` (`riko/coercion/_dates.py`) straight from the
+aware datetime, never through a `struct_time` (which loses unnamed offsets, DST folds,
+and maps ambiguous abbreviations to the wrong zone). `timezone` is a slashed IANA name,
+`"UTC"`, or `"UTC±HH:MM[:SS]"`; a slashless legacy zone (`EST`) falls back to its
+offset. Only `utime` and `utc_offset` are read back (`datedict_to_datetime`), so the
+part fields cannot move the moment. `is_datedict` accepts exactly the `DateDict` keys,
+integer `utime`/`utc_offset`, and a valid `timezone` label; `cast_datetime` branches on
+it, and an untyped `sort` rule keys a date dict by `utime`. `datebuilder`'s `OPTS` set
+`"emit": False` because processors default `emit` to `is_mapping`, which would replace
+the item with the dict.
+
 Feed entries resolve dates through `resolve_date` (`riko/rss/feeds.py`): the first
 usable value among the parser's `*_parsed` key and the raw string, parsed by
 `resolve_aware_datetime` when it is a string. A key is read only when the entry carries
@@ -393,9 +410,9 @@ ROADMAP §23.
 
 ## 24. Module discovery (shipped)
 
-Module discovery is the derived catalog. `list_modules()` /
-`list_modules(show_metadata=True)` (defined in `riko/modules/_metadata.py`, re-exported
-from the stable `riko` surface) discover built-in pipes via `pkgutil` and read
+Module discovery is the derived catalog. `list_modules()` / `list_module_metadata()`
+(defined in `riko/modules/_metadata.py`, re-exported from the stable `riko` surface;
+both take the same filters) discover built-in pipes via `pkgutil` and read
 `ModuleMetadata` off the decorator-set wrapper attributes (`type`, `subtype`, `subtypes`
 as a `frozenset`, `pollable`); subtype is derived (see `get_module_subtypes` in
 `riko/modules/_derive.py`). The catalog is derived, not declared. Since P8 it
@@ -408,8 +425,8 @@ reserved for built-ins; dotted namespaces for extensions.
 both on the stable `riko` surface) give filtered runtime truth.
 **The three filter axes are all lowercase `Literal` strings, not enums** —
 `ModuleType = Literal["operator","processor","splitter"]`, `ModuleSubtype`, and
-`ModuleCategory = Literal["source","transform","sink"]` (the `get_module_category`
-return value) — so `list_modules(category="sink")` → `["write"]`. These are a
+`ModuleCategory = Literal["source","transform","sink"]` (the `ModuleMetadata.category`
+value) — so `list_modules(category="sink")` → `["write"]`. These are a
 **separate axis** from the discovery-tree identifier enums
 (`Modules`/`Sources`/`Transforms`/`Sinks`, whose member `.value` is the module id, for
 `Pipeline.from_module(...)`/`|` chaining): don't confuse them. In particular
@@ -417,7 +434,7 @@ return value) — so `list_modules(category="sink")` → `["write"]`. These are 
 lowercase singular. (The codegen maps the three category strings to the plural bucket
 **class** names via `_CANONICAL` =
 `{"source": "Sources", "transform": "Transforms", "sink": "Sinks"}`.)
-`get_module_category` (`riko/modules/_metadata.py`, on `riko.ext`) buckets each module
+The `ModuleMetadata.category` property (`riko/types/modules.py`) buckets each module
 by **data-flow capability only**. `SINK_NAMES` (`{"output","write"}`) is the
 *criterion*, not the membership: a module is a `Sink` iff its name is in that set. The
 one built-in match is the `write` module (`riko/modules/write.py`) — a pass-through
@@ -433,7 +450,7 @@ once `Pipeline.write()` / `WriteNode` lands. `riko.ext.codegen` generates the
 byte-stable `riko/modules/_names.py`: the flat `Modules` namespace (every pipe, aliasing
 bucket members so `Modules.FILTER is Transforms.FILTER`) +
 `Sources`/`Transforms`/`Sinks` bucket enums (member `.value` = canonical id; collisions
-raise). Regenerate with `gen-names`/`manage codegen` (drift guard
+raise). Regenerate with `manage codegen --names` (drift guard
 `test_generated_names_match`). Re-exported from `riko`, **not** `riko.modules`. A
 module's **provider** is its namespace, derived from the name (`ModuleMetadata.provider`
 / `get_module_provider` in `riko/types/modules.py`: the first dotted segment,
@@ -445,46 +462,60 @@ keeps the full name (`Modules.EXAMPLE_LOOKUP = Example.LOOKUP`). Provider classe
 from the plugin's own codegen run, never riko's `_names.py`; `list_modules(provider=)`
 filters by provider.
 
+## Feed link discovery (shipped)
+
+`riko/rss/discovery.py` finds the feeds a page advertises in its `LINK` tags.
+`RSSLinkParser` accepts a link whose `type` equals a link type or ends with `/` plus one
+(so `xml` matches `application/xml` but not `…+xml` types such as OpenSearch
+descriptions); its default types are `FEED_LINK_TYPES`, every `FeedType` member in
+declaration order (RSS, Atom, RDF, JSON Feed, `text/xml`, `xml`). A given `link_type`
+(a `FeedType`, any string, or several in order) replaces the default, and with
+`auto_sort` the results follow its order. The loaders pass the page URL as the base, so
+relative hrefs resolve against it. `feedautodiscovery` exposes this as its `link_type`
+conf key.
+
 ## Module registry & pipe resolution (P8, shipped)
 
 The runtime→compiler resolution coupling is inverted behind three **compiler-free**
 layers sharing one overloaded `require(name, is_async)` contract
 (`riko/types/_wrappers.py::Resolver`): `ModuleRegistry`
 (`riko/runtime/_module_registry.py`, re-exported via `riko/ext/modules.py` and
-`riko.ext`; built-ins lazy per name, runtime `register_module`/`reset_module_registry`,
-entry points under `[project.entry-points."riko.modules"]`; precedence runtime →
-entry-point → built-in; `get_module_metadata` consults the registry before the built-in
-package, so a registered module's metadata shadows a built-in of the same name as
-`list_modules` does), `WorkflowResolver` (`riko/runtime/_workflow_resolver.py`) +
-injectable workflow stores (`riko/runtime/_workflow_stores.py`): every store is a
-`WorkflowStore[T]` protocol (`load(name) -> T | None`);
-`ModuleStore = WorkflowStore[ResolvedWorkflow]` (`PackageStore`, `MappingStore`,
-`CompositeStore`) and `DirectoryStore` is a `DocumentStore` (`WorkflowStore[Workflow]`)
-that parses each workflow document (`WorkflowDocument`) with
-`Workflow.parse(text, shape="v2")`, which `load_workflow` returns (a miss raises
-`UnsupportedWorkflowError` naming the reason; `DirectoryStore.load` treats only
-`FileNotFoundError` as a miss). Stores take only `pipe_<id>` names: every resolver entry
-point (`load`, `load_workflow`, `require`, `require_interfaces`) translates the
-`pipe:<id>` alias with `pythonise`, and both `is_compatible` checks use `is_pipe_id`
-(`riko/types/_pipedef.py`, prefixes `PIPE_ID_PREFIXES` in `riko/base/_config.py`). A
-stored-workflow miss raises `UnsupportedWorkflowError`, a built-in miss
-`UnsupportedModuleError`; both carry `reason`. `ResolvedWorkflow` and `WorkflowModule`
-(`riko/types/_workflow.py`) are `NewType`s so type checkers show their names.
-`WorkflowModule` is defined by shape (source defining `pipe`/`async_pipe` over an item,
-a stream, or nothing, plus `context`), so hand-written `pyworkflows` modules qualify,
-but only `compile_workflow` wraps the type. The pipes `build_workflow_pipes` returns
-branch on `Context.mode` with `RUN` (or no context) first, so each mode matches one
-branch: `DESCRIBE` returns `{"inputs": …, "dependencies": […]}` (the async pipe yields
-it once), `DESCRIBE_INPUTS` the declared inputs, `DESCRIBE_DEPENDENCIES` the dependency
-names (`Workflow.dependencies`: node and loop-embed module names, emitted by both
-`compile_workflow` and the document-module builder); the hand-written probes mirror this
-with module-level `INPUTS`/`DEPENDENCIES`. Producers wrap (`compile_workflow`,
-`PackageStore.load`, `MappingStore`, the document-module builder) while inputs stay wide
-(`MappingStore` takes plain `types.ModuleType`s). `PackageStore` accepts a package or
-its import path and imports it at construction (`ModuleNotFoundError` for a bad path,
-`ValueError` for a plain module); its lookups use `import_or_else(..., strict=True)`, so
-only the `pipe_<id>` module itself may be missing (`import_or_else` also re-raises a
-`ModuleNotFoundError` that names no module). Core ships no locations; a
+`riko.ext`; built-ins lazy per name, runtime `register_module` (scoped by
+`temporary_registrations`), entry points under `[project.entry-points."riko.modules"]`;
+precedence runtime → entry-point → built-in; `get_module_metadata` consults the registry
+before the built-in package, so a registered module's metadata shadows a built-in of the
+same name as `list_modules` does), `WorkflowResolver`
+(`riko/runtime/_workflow_resolver.py`) + injectable workflow stores
+(`riko/runtime/_workflow_stores.py`): every store is a `WorkflowStore[T]` protocol
+(`load(name) -> T | None`); `ModuleStore = WorkflowStore[ResolvedWorkflow]`
+(`PackageStore`, `MappingStore`, `CompositeStore`) and `DirectoryStore` is a
+`DocumentStore` (`WorkflowStore[Workflow]`) that parses each workflow document
+(`WorkflowDocument`) with `Workflow.parse(text, shape="v2")`, which `load_workflow`
+returns (a miss raises `UnsupportedWorkflowError` naming the reason;
+`DirectoryStore.load` treats only `FileNotFoundError` as a miss). Stores take only
+`pipe_<id>` names: every resolver entry point (`load`, `load_workflow`, `require`,
+`require_interfaces`) translates the `pipe:<id>` alias with `pythonise`, and both
+`is_compatible` checks use `is_pipe_id` (`riko/types/_pipedef.py`, prefixes
+`PIPE_ID_PREFIXES` in `riko/base/_config.py`). A stored-workflow miss raises
+`UnsupportedWorkflowError`, a built-in miss `UnsupportedModuleError`; both carry
+`reason`. `ResolvedWorkflow` and `WorkflowModule` (`riko/types/_workflow.py`) are
+`NewType`s so type checkers show their names. `WorkflowModule` is defined by shape
+(source defining `pipe`/`async_pipe` over an item, a stream, or nothing, plus
+`context`), so hand-written `pyworkflows` modules qualify, but only `compile_workflow`
+wraps the type. The pipes `build_workflow_pipes` returns only run (a `mode=` keyword
+raises `RemovedOptionError`, a `TypeError` naming the stored workflow's `pipe_<id>`);
+`@workflow` stamps them with the workflow's input schemas and dependency names
+(`Workflow.dependencies`: node and loop-embed module names), which `describe_module`
+reads through `ModuleDefinition.input_schemas`/`.dependencies`; the hand-written probes
+declare the same through `@workflow(input_schemas=, dependencies=)`. An undecorated pipe
+a package store supplies is tagged `"transformer"` on lookup, `@workflow`'s default.
+Producers wrap (`compile_workflow`, `PackageStore.load`, `MappingStore`, the
+document-module builder) while inputs stay wide (`MappingStore` takes plain
+`types.ModuleType`s). `PackageStore` accepts a package or its import path and imports it
+at construction (`ModuleNotFoundError` for a bad path, `ValueError` for a plain module);
+its lookups use `import_or_else(..., strict=True)`, so only the `pipe_<id>` module
+itself may be missing (`import_or_else` also re-raises a `ModuleNotFoundError` that
+names no module). Core ships no locations; a
 `register(*, module_store, document_store, replace=False)` / `reset()` lifecycle mirrors
 the registry idiom — the process-global is shared by reference, so in-place mutation
 reaches the façade and test imports at once), and the `ResolverDispatcher` façade
@@ -492,8 +523,8 @@ reaches the façade and test imports at once), and the `ResolverDispatcher` faç
 resolves through the façade (`dispatcher.require`); the v1 compiler's `resolve_module`
 delegate was deleted with it at cutover step 5 (2026-10-03). Workflow modules expose a
 stable `pipe`/`async_pipe` entry, so a stored workflow resolves exactly like a built-in.
-`WorkflowResolver.load` walks a stored workflow's node names, loop embeds, and
-`DEPENDENCIES` before returning it and raises `InvalidPipelineError` (naming the cycle
+`WorkflowResolver.load` walks a stored workflow's node names, loop embeds, and declared
+`dependencies` before returning it and raises `InvalidPipelineError` (naming the cycle
 and pointing to `loop`) when one reaches itself; acyclic names are memoized until
 `register`/`reset`. The check is static, so self-recursion that would end on its own is
 refused too (user ruling 2026-10-29). External packages add modules with
@@ -521,23 +552,26 @@ resolvable. A registered `WorkflowDocument` directory resolves by name:
 `WorkflowResolver` (given the dispatcher via `register_dispatcher` in `_resolver.py`)
 builds the document's `pipe`/`async_pipe` with `build_workflow_pipes`, after the module
 store. `WorkflowResolver.load` then refuses a stored workflow that reaches itself:
-starting from the loaded module, it walks the `pipe_<id>` names in each reachable
-module's `DEPENDENCIES` into a local graph (re-derived per load; only built document
-modules are cached) and raises `InvalidPipelineError` naming the cycle from `get_cycle`
-(`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target classes
-keyed by `backend` and resolves a `Backends` to its target class. The target vocabulary
-(base `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`, `WriteCapabilities`,
-`FileTarget`, `TargetRegistry`, `register_target`) is on the extension surface
-(`riko.ext`); the `Backends` enum is on the stable `riko` surface alongside `Formats`.
-Workflow-store registration is on `riko.ext` too:
+starting from the loaded module, it walks the `pipe_<id>` names in each reachable module
+pipe's declared `dependencies` into a local graph (re-derived per load; only built
+document modules are cached) and raises `InvalidPipelineError` naming the cycle from
+`get_cycle` (`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target
+classes keyed by `backend` and resolves a `Backends` to its target class. The target
+vocabulary (base `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`,
+`WriteCapabilities`, `FileTarget`, `TargetRegistry`, `register_target`) is on the
+extension surface (`riko.ext`); the `Backends` enum is on the stable `riko` surface
+alongside `Formats`. Workflow-store registration is on `riko.ext` too:
 `register_workflow_store(*, package, directory, replace=False)` (`package` is a package
 or its import path; primitives only — the store classes and `WorkflowResolver` stay
-private per `PRIVATE_RESOLUTION`), with `reset_workflow_resolver` alongside
-`reset_module_registry`/`reset_target_registry`, all on `riko.ext` (grouped in
+private per `PRIVATE_RESOLUTION`), with `temporary_registrations` (one scope that
+restores the module, target, and workflow-store registrations on exit; it replaced the
+three `reset_*` functions and, like `warnings.catch_warnings`, is not thread-safe) in
+each group, all on `riko.ext` (grouped in
 `riko/ext/modules.py`, `riko/ext/targets.py`, and `riko/ext/workflows.py`). P9A
 discoverability (generated `Modules` tree, `list_modules`/`describe_module`) shipped —
 see §24 above. Remaining P9 (non-P9A): the installed-env aggregate
-`riko.generated.Modules` + `.pyi` stubs → [module-enums.md](gameplans/module-enums.md).
+`riko.generated.Modules` + `.pyi` stubs →
+[module-enums.md](gameplans/module-enums.md).
 
 **Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
 (`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the
@@ -564,14 +598,14 @@ resolves identically to `pipeline.filter()`; see §24.
 
 ## Workflow graph index (shipped)
 
-`Workflow.index` interprets a `Workflow`'s edges into one immutable `GraphIndex`
+`Workflow.index` interprets a `Workflow`'s edges into one immutable `WorkflowIndex`
 (`riko/types/_workflow.py`). Edge-level `edges`/`incoming`/`outgoing` keep full port
 identity in the v2 grammar (`out`; `in`/`in:N`/named value ports); node-level
 `order`/`upstream`/`downstream`/`roots`/`leaves`/`outputs`/`required` carry scheduling
 facts (`leaves` is derived from `downstream`; `outputs` are the workflow's named
 outputs; `required` maps each output to its node plus everything upstream, in `order`;
 `cyclic` names the nodes a cycle passes through). The index derives and freezes itself:
-`GraphIndex` takes only node ids, `GraphEdge`s (`Workflow.graph_edges`), and the
+`WorkflowIndex` takes only node ids, `WorkflowEdge`s (`Workflow.graph_edges`), and the
 named-output `Endpoint`s (converted with `tuple`/`FrozenDict`, the `Workflow` converter
 pattern); every other attribute is a `functools.cached_property` derived on first use,
 so even a hand-built index is internally consistent. `OutputRef` is gone — outputs are
@@ -589,7 +623,7 @@ executions read the same index instead of rescanning edges. Structure pinned by
 > The index's v1 indexer (`parse_pipe_def`/`_index_pipe_def`, with `_OUTPUT` as a node,
 > verbatim legacy ports, and dropped orphans) was deleted at cutover step 5
 > (2026-10-03); those deltas are resolved at the Workflow v2 boundary
-> (`migrate_v1_to_v2` → `normalize_workflow` → `validate`), not in the index. Execution
+> (`parse_pipedef` → `normalize_workflow` → `validate`), not in the index. Execution
 > concepts never move onto it. See
 > [extensibility § E3.11](gameplans/extensibility.md#e311-reuse-of-the-shipped-graph-index).
 
@@ -634,8 +668,8 @@ bytes + golden digests + rule matrix) plus module doctests.
 ## `Workflow` v2 model (R4A.1, shipped)
 
 The structural v2 vocabulary (no execution runtime yet — R4B executes it). Pure
-contracts live in `riko/types/_workflow.py` (`Endpoint`, the frozen `Edge` base with its
-`(node, port)` `port` property, the `NodeFamily`/`EdgeFamily`/`PortDirection`
+contracts live in `riko/types/_workflow.py` (`Endpoint`, the frozen `PortEdge` base with
+its `(node, port)` `port` property, the `NodeFamily`/`EdgeFamily`/`PortDirection`
 discriminant literals, `InputRef`, the `parse_port` grammar helper, and the `Raw*`
 TypedDicts); the immutable model lives in `riko/definitions/` — the closed node union
 `ModuleNode`/`ReadNode`/`WriteNode`/`CacheNode`/`ActionNode`/`SubscribeNode` and the
@@ -650,27 +684,27 @@ methods to return `Pipeline[...]`, so no definition imports upward (the architec
 lint fails function-local upward imports too).
 
 The node/edge model, `Endpoint`, and `Workflow` are all `attrs @define(frozen, slots)`
-classes. The six node families share a public **`Node`** base
+classes. The six node families share a public **`RikoNode`** base
 (`id`/`name`/`resources`/`label` + a `family` `ClassVar` discriminant) and
 **self-normalize through `field(converter=…)`**: each field resolves its enum
-(`Backends`/`Formats`/`WriteMode` via `resolve_enum`), normalizes resource bindings, or
+(`Backends`/`Formats`/`WriteMode` via `require_enum`), normalizes resource bindings, or
 freezes its `conf`/`policy`/`params` mapping — so constructing a node *is*
 canonicalizing it, and no separate builder is required.
 `ReadNode`/`WriteNode`/`ActionNode` carry declarative
 `backend`/`fmt`/`mode`/`keys`/`dest`/`params` intent only (no live resource or write
-session). `Workflow`'s converters take `nodes` as an iterable of `Node`s and key them by
-id (rejecting a mapping or a repeated id, so a node can never sit under the wrong key),
-require and freeze the `outputs`/`inputs` mappings (`FrozenDict`, `freeze_json` for
-`inputs`), and normalize `edges`/`resources`; it also owns its own structural checks
-(see R4A.3). Omitted `Workflow` fields take module-level `_EMPTY_*` defaults; an
-explicit `None` raises for every field (attrs applies the default before the converter,
-so a `None` reaching a converter was passed explicitly; `nodes_converter` passes its own
-`_EMPTY_NODES` default through by identity, and `resources` uses
-`normalize_strs(..., strict=True)`). Converter helpers advertise their input type
-statically: `narrow_from_require`/`narrow_def_from_require` take a keyword-only
-`accepted` type form, and a bound class (`InstanceRequire[T, R]`, `cls: type[R]`) infers
-the result for `require_instance`; `def_from_require`'s overloads carry the
-`TypeRequire`/`InstanceRequire` narrowing while its body calls
+session). `Workflow`'s converters take `nodes` as an iterable of `RikoNode`s and key
+them by id (rejecting a mapping or a repeated id, so a node can never sit under the
+wrong key), require and freeze the `outputs`/`input_schemas` mappings (`FrozenDict`,
+`json_freeze` for `input_schemas`), and normalize `edges`/`resources`; it also owns its
+own structural checks (see R4A.3). Omitted `Workflow` fields take module-level
+`_EMPTY_*` defaults; an explicit `None` raises for every field (attrs applies the
+default before the converter, so a `None` reaching a converter was passed explicitly;
+`nodes_converter` passes its own `_EMPTY_NODES` default through by identity, and
+`resources` checks `require_strlike` before `normalize_strs`). Converter helpers
+advertise their input type statically: `narrow_from_require`/`narrow_def_from_require`
+take a keyword-only `accepted` type form, and a bound class (`InstanceRequire[T, R]`,
+`cls: type[R]`) infers the result for `require_instance`; `def_from_require`'s overloads
+carry the `TypeRequire`/`InstanceRequire` narrowing while its body calls
 `require(*args, value, ...)` (protocols that differ only in `__call__` cannot be told
 apart at runtime). `isinstance_strict` returns `TypeIs[P]`; a callable method whose
 signature `inspect` cannot read (a generator's built-in `close`/`aclose`) counts as
@@ -682,7 +716,7 @@ type form: it flattens aliases, unions, and `Annotated` with `gen_union_members`
 `require_instance` and a lone TypedDict to `require_from_typed_dict`, accepts a union
 member by `isinstance` (any mapping matches a TypedDict member, keys unchecked), accepts
 a `Literal` arm's values by type and equality (so `True` never passes for `1`; a pure
-`Literal` raises `resolve_enum`-style "Expected one of"), and raises `TypeError` for any
+`Literal` raises `require_enum`-style "Expected one of"), and raises `TypeError` for any
 other form when the guard is built. `CallOptions.count` and `fromdict`'s `Literal`
 fields both validate through it. `require_from_typed_dict` and `require_from_attrs` both
 reduce to `require_from_keys(required, allowed)`; in both, `exclude=` forbids a key.
@@ -695,25 +729,29 @@ a converter list: pyright types the generated `__init__` parameter from a single
 converter's argument but falls back to the field annotation for a list. The helpers live
 in `riko/types/_frozendict.py`: `mapping_converter` (required — `None` or a non-mapping
 raises, `error=` selectable) and `optional_mapping_converter` (`None` → empty) wrap a
-freezer, `freeze_json` for JSON fields or `instances_freezer(cls, what)` for
+freezer, `json_freeze` for JSON fields or `instances_freezer(cls, what)` for
 `nodes`/`outputs`, `ExecutionPlan.modules`/`embeds`, and `Context.resources`
 (`error=TypeError`). Their optional positional `accepted` type form only sets the static
 input type (e.g. `ConfInput` keeps the conf vocabulary visible while the stored
 `FrozenConf` is `FrozenDict[str, FrozenJSON]`); the runtime check is the freezer's.
 `ModuleNode.options` is the exception: it stores the typed `CallOptions` record (below).
-`Node.resources` takes `ResourcesLike` through the single `binding_converter`, which
+`RikoNode.resources` takes `ResourcesLike` through the single `binding_converter`, which
 runs `require_binding` (beside it in `riko/definitions/_nodes.py`): it returns the
 normalized `FrozenDict` alias→Context-name binding and rejects non-string/empty names
-and repeated aliases. `Workflow.edges` requires `Edge` instances,
-`Endpoint`/`Edge`/`Node.id` validate their fields,
+and repeated aliases. `Workflow.edges` requires `PortEdge` instances,
+`Endpoint`/`PortEdge`/`RikoNode.id` validate their fields,
 `PipelineDefinition.context`/`settings` raise `TypeError` on a wrong type, and
 `ExecutionPlan` takes only what the `Workflow` cannot supply — `modules` (one
 `ResolvedModule` per node id) and `embeds` (one per loop embed) — derives `index` at
 init and `nodes` (the `PreparedNode` views) as a `cached_property`;
 `ExecutionPlan.validate()`, run from `__attrs_post_init__`, raises
 `InvalidPipelineError` at construction for a non-module node or when either key set does
-not match the workflow. `Context.inputs` and `ModuleNode.embed` still use converter
-lists until R4D and R9 settle their value types. Field introspection uses
+not match the workflow. `ModuleNode.embed` still uses a converter list until R9 settles
+its value type. `ExecutionPlan.inputs` is set only by
+`plan.with_inputs(values)`, which substitutes each `{"input": name}` reference in the
+module and embed confs and records the values it used; the execution resolves and
+validates those values from its `Context` first, and a plan already built from values
+keeps them over the `Context`'s. Field introspection uses
 `riko.base._recordutils.field_names` (attrs-or-dataclass field names *including*
 `ClassVar` discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both
 drop), never `dataclasses.*`; derive variants with `attrs.evolve`. `PipelineDefinition`
@@ -740,17 +778,17 @@ emits the byte-stable `WorkflowDocument`, so `Workflow.parse(flow.serialize()) =
 
 The single authoring-sugar normalization boundary: `RawWorkflow` in, one `Workflow` out,
 so no other subsystem reinterprets shorthand. Lives in `riko/definitions/_normalize.py`
-(`build_workflow_fields`, which returns the field values; the clean-break placement note
-superseded the original `riko/workflow/normalize.py` sketch); the `normalize_workflow`
-delegate in `riko/definitions/_workflow_definition.py` is exported EXTENSION as
-`riko.ext.normalize_workflow`.
+(the data-returning helpers that `Workflow.from_raw` builds the `Workflow` from; the
+clean-break placement note superseded the original `riko/workflow/normalize.py` sketch).
+The `normalize_workflow` delegate and its `riko.ext.normalize_workflow` export were
+removed before release; `Workflow.from_raw` is the entry point.
 
 It is the **structural, contract-free** pass — no `ModuleRegistry`/`TargetRegistry`
 lookup. It assigns node ids, dispatches each `RawNode` to its node family, maps legacy
 ports to the canonical grammar, rejects the `src`/`tgt` and `from`/`to` edge shorthands,
-materializes a `default` output from a lone leaf, and normalizes shorthand inputs to
-JSON Schema; malformed structure raises `InvalidPipelineError`. Dispatch is
-**model-driven**: `_NODE_BUILDERS: Mapping[str, type[Node]]` maps each family to its
+materializes a `default` output from a lone leaf, and normalizes each input's shorthand
+schema to JSON Schema; malformed structure raises `InvalidPipelineError`. Dispatch is
+**model-driven**: `_NODE_BUILDERS: Mapping[str, type[RikoNode]]` maps each family to its
 node class, `_build_node` splats the authoring fields into that constructor
 (`builder(**fields)`), and `require_from_attrs(builder)` validates the keys against the
 class's `field_names` — so the attrs node class is the single source of truth for
@@ -778,7 +816,7 @@ doctests.
 
 Strict structural validation is a **method on the model**, not a standalone function:
 `Workflow` owns `validate()` (raises `InvalidPipelineError` on the first violation) and
-an `isvalid` property (the boolean wrapper), backed by the
+an `is_valid` property (the boolean wrapper), backed by the
 `ports()`/`endpoints`/`referenced_resources` helpers on the same class. The earlier
 standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` was removed in the
 refactor that moved validation onto the model — there is no separate validation module
@@ -799,14 +837,15 @@ those nodes listed); node resource references resolving to declared top-level
 undeclared ports, fan-in arity, registered module/action/target schema validation — are
 **deferred** because the module and target contracts declare no ports or configuration
 schemas yet; they land with that metadata. Tests: `tests/public/test_workflow.py`
-(builds `Workflow` graphs directly and asserts `workflow.validate()`/`isvalid`) plus
+(builds `Workflow` graphs directly and asserts `flow.validate()`/`is_valid`) plus
 module doctests.
 
 ## Workflow v2 serialization — `Workflow.serialize` / `Workflow.parse` (R4A.5, shipped)
 
 Deterministic byte-stable canonical serialization of a `Workflow` and its round-tripping
-parser. Lives in `riko/definitions/_serialize.py` (`serialize_graph`/`parse_graph`); the
-STABLE entry points are the `Workflow.serialize`/`Workflow.parse` methods in
+parser. Lives in `riko/definitions/_serialize.py`
+(`serialize_workflow`/`parse_document`); the STABLE entry points are the
+`Workflow.serialize`/`Workflow.parse` methods in
 `riko/definitions/_workflow_definition.py` (no separate `riko.ext` function forms).
 
 `flow.serialize(*, indent=4)` is a thin
@@ -816,7 +855,7 @@ STABLE entry points are the `Workflow.serialize`/`Workflow.parse` methods in
 identical bytes for golden-fixture comparison; edge order follows the `Workflow` while
 the semantic wiring lives in the endpoints, not the array order. `WorkflowEncoder` (a
 `json.JSONEncoder`) renders **every** structural and value type: it emits the `Workflow`
-envelope and each `Node`/`Edge` via **reflection** — `serialize_attrs`
+envelope and each `RikoNode`/`PortEdge` via **reflection** — `serialize_attrs`
 (`riko/base/_recordutils.py`) uses `attrs.asdict(recurse=False)` for the attrs
 `Workflow`, nodes, and edges, dropping empties (`_has_value`) while keeping required
 keys — and it coerces the remaining structural leaf, `Mapping`/`FrozenDict`→dict (`json`
@@ -825,8 +864,8 @@ serialization is field-reflection rather than a per-family branch, a new node fi
 (e.g. `WriteNode.dest`) serializes automatically with no serializer edit. A node's or
 edge's kind serializes as `family`; `RawNode`/`RawEdge` have no `type` key, and a node
 that gives one is rejected with a hint naming `name` (the module) and `family` (the
-kind). Canonical `conf`/`options`/`policy`/`params`/`embed`/`inputs` values are
-JSON-native by construction: their field converters freeze them through `freeze_json`
+kind). Canonical `conf`/`options`/`policy`/`params`/`embed`/`input_schemas` values are
+JSON-native by construction: their field converters freeze them through `json_freeze`
 (`riko/types/_frozendict.py`), which rejects `Decimal`, `date`, `set`, `bytes`,
 non-finite floats, non-string keys, and any other object, turns lists into tuples, and
 builds every mapping as a `FrozenDict` (re-walking a `FrozenDict` so permissively frozen
@@ -870,26 +909,26 @@ wheel ships no `examples`). `riko/runtime/_compile.py` is the v2 generator behin
 entry point (its interim STABLE alias `parse_dag` was removed 2026-10-12 as a clean
 break). A `PipeDag` module names its module in `name` or the older `type`
 (`_require_dag_name` in `riko/definitions/_migrate.py` rejects a missing or disagreeing
-pair). `migrate_v1_to_v2` remains the one-shot offline conversion path, now reachable
-from the command line through `build-workflow`. The v1 `PipeDef`/`wires` compiler itself
-(`compile_pipe_def`, `parse_pipe_def`, `build_pipeline`, `pypipe*.txt`,
+pair). `Workflow.parse` of a `PipeDef` remains the one-shot offline conversion path, now
+reachable from the command line through `build-workflow`. The v1 `PipeDef`/`wires`
+compiler itself (`compile_pipe_def`, `parse_pipe_def`, `build_pipeline`, `pypipe*.txt`,
 `_compile_repr.py`, `riko/types/_pipeline.py`, `tests/internal/test_compile.py`) was
 deleted at cutover step 5 (2026-10-03); STABLE `COMPILE` is now `compile_workflow`
 alone, and `extract_dependencies` (released name) has no replacement beyond reading
 `Workflow` node names.
 
-## Workflow v1→v2 migration — `migrate_v1_to_v2` (R4A.4, shipped)
+## Workflow v1→v2 migration — `parse_pipedef` (R4A.4, shipped)
 
 A one-shot offline conversion of a `PipeDef` (`modules` plus `src`/`tgt` `wires`) into
-`Workflow`. Lives in `riko/definitions/_migrate.py` (`migrate_pipe_def`, which returns a
+`Workflow`. Lives in `riko/definitions/_migrate.py` (`parse_pipedef`, which returns a
 `RawWorkflow`; the clean-break placement note superseded the original
-`riko/workflow/migrate.py` sketch); the `migrate_v1_to_v2` delegate in
-`riko/definitions/_workflow_definition.py` is exported EXTENSION as
-`riko.ext.migrate_v1_to_v2`. It is **not** a live loader — v1 is not a maintained
+`riko/workflow/migrate.py` sketch); `Workflow.parse` reaches it for a `PipeDef` (the
+`migrate_v1_to_v2` delegate and its `riko.ext` export were removed before release). It
+is **not** a live loader — v1 is not a maintained
 runtime ingress, so it `logger.warning`s that a `PipeDef` was migrated, then emits v2
 only.
 
-It reuses `build_workflow_fields` for the shared structural pass (port grammar, node
+It reuses `Workflow.from_raw` for the shared structural pass (port grammar, node
 families, id handling, lone-leaf outputs) so only the v1-specific translation lives
 here: each module's `type` becomes the node `name`; a v1 `write` module becomes a
 `WriteNode` (`backend=file`, `fmt` from `conf.fmt`, mode defaulting to `replace`) rather
@@ -1177,7 +1216,7 @@ they carry (e.g. R5C `WriteResult` / `ActionResult`).
 **Preparation and the sync runner.** A `Workflow` is built into an `ExecutionPlan`, then
 run:
 
-- `Workflow.index` builds the shared `GraphIndex`, its only builder since the v1
+- `Workflow.index` builds the shared `WorkflowIndex`, its only builder since the v1
   compiler's `_index_pipe_def` was deleted at cutover step 5 (2026-10-03) and
   `Workflow.validate()`'s separate cycle walk folded into it (2026-10-05). Every
   declared node is kept (disconnected nodes retained) and all named outputs preserved.
@@ -1196,7 +1235,10 @@ run:
 - One run loop: `run_pipeline`/`arun_pipeline` (`riko/runtime/_run.py`) back `Pipeline`
   iteration, and `build_workflow_pipes` (`riko/runtime/_workflow_pipes.py`) builds on
   them for both generated workflow modules and named `WorkflowDocument`s, which the
-  resolver binds to the dispatcher that loaded them.
+  resolver binds to the dispatcher that loaded them. `build_workflow_pipes` tags its
+  sync and async pipes `"source"` when the plan's default output starts unseeded
+  (`ExecutionPlan.is_self_starting_output`) and `"transformer"` otherwise; declared
+  inputs don't affect the tag.
 - `ExecutionPlan.from_workflow(flow, dispatcher)` (`riko/execution/_prepared.py`; the
   dispatcher is required — any `Dispatcher`, which runtime's `ResolverDispatcher`
   satisfies) resolves each node's synchronous and asynchronous callables once, then the
@@ -1206,11 +1248,11 @@ run:
   `None` when that interface is absent) and, for a loop node, a second `ResolvedModule`
   for its embed (the embed is an implementation, not a graph node, so it carries no
   id/options/resources) — and reads each output's required subgraph from the index
-  (`GraphIndex.required`, the output node plus its `descendants` over `upstream`,
-  derived inside `GraphIndex`). The returned `ExecutionPlan` is a resolution snapshot:
-  it holds no dispatcher, so a later registry change cannot alter what a built plan
-  runs. No node runs and no resource is acquired at build; an unresolved module raises
-  `UnsupportedModuleError` and a node family with no runtime raises
+  (`WorkflowIndex.required`, the output node plus its `descendants` over `upstream`,
+  derived inside `WorkflowIndex`). The returned `ExecutionPlan` is a resolution
+  snapshot: it holds no dispatcher, so a later registry change cannot alter what a built
+  plan runs. No node runs and no resource is acquired at build; an unresolved module
+  raises `UnsupportedModuleError` and a node family with no runtime raises
   `InvalidPipelineError`.
 - Native-wins reads capabilities at build: `ResolverDispatcher.require_interfaces(name)`
   reports the available `pipe` / `async_pipe` interfaces (`ModuleDefinition.interfaces`
@@ -1236,19 +1278,22 @@ run:
   (`in:N`) edge, in which case its default input is empty (so `union` with only
   secondary inputs wired never sees the default seed as data); named value ports alone
   do not suppress it (`PreparedNode.takes_default_seed`). Unseeded, every node that
-  takes the default seed must be self-starting (`ExecutionPlan.require_self_starting`,
-  2026-10-24) — a source module (`ResolvedModule.is_source`: declared
-  `subtype == "source"`; missing metadata is not a source, a `CallableNode` never is) or
-  a value feeder (no output's node, at least one outgoing edge, all entering named
-  `in:<name>` ports) — so the default seed never reaches output; any other node that
-  takes it raises `InvalidPipelineError` ("requires a seed"). Every module node's
-  `options` are applied as call options when the node is prepared, and a loop node's
-  pipe receives its embed's `conf` (`PreparedNode.embed_or_self_conf`). An adapted node
-  (async-only pipe under sync execution) runs through the execution's blocking portal:
-  `_async_drain` pulls the async stream one `__anext__` at a time on the portal loop and
-  re-exposes it as a lazy sync `Stream`. A reachable non-`out` source port or a selected
-  non-`out` output fails closed with `InvalidPipelineError` (executable port-keyed
-  delivery is R7).
+  takes the default seed must be self-starting
+  (`ExecutionPlan.require_self_starting_output`, 2026-10-24) — a source module
+  (`ResolvedModule.is_source`: declared `subtype == "source"`; missing metadata is not a
+  source, a `CallableNode` never is) or a built-in `strconcat`, either one only when its
+  configuration has no `subkey` reference and every `terminal` reference, normalized
+  like `replacer(name, "")`, names a connected named port
+  (`PreparedNode.is_self_starting`, 2026-11-05, tightened for sources 2026-11-06; it
+  replaced R4C's graph-position value-feeder rule) — so the default seed never reaches
+  output; any other node that takes it raises `InvalidPipelineError` ("requires a
+  seed"). Every module node's `options` are applied as call options when the node is
+  prepared, and a loop node's pipe receives its embed's `conf`
+  (`PreparedNode.embed_or_self_conf`). An adapted node (async-only pipe under sync
+  execution) runs through the execution's blocking portal: `_async_drain` pulls the
+  async stream one `__anext__` at a time on the portal loop and re-exposes it as a lazy
+  sync `Stream`. A reachable non-`out` source port or a selected non-`out` output fails
+  closed with `InvalidPipelineError` (executable port-keyed delivery is R7).
 - `AsyncExecution.arun(plan, output="default")` is the async counterpart, returning an
   `AsyncStream`. Native async nodes chain natively; an adapted node (sync-only pipe
   under async execution) runs off the event loop through the bridge and nothing is
@@ -1350,7 +1395,7 @@ run:
   edges is not empty and still fails validation.
 - **One index per workflow** (2026-10-05). `Workflow.index` is a `cached_property`, so
   `ExecutionPlan.validate()` (which runs `Workflow.validate()`) and the plan's `index`
-  share one `GraphIndex` (`test_execution_plan_indexes_the_workflow_once`); `evolve`
+  share one `WorkflowIndex` (`test_execution_plan_indexes_the_workflow_once`); `evolve`
   yields a fresh workflow with its own cache.
 - **`first(seed=None, /, *, default=MISSING)` / `afirst(...)`** read one item and close
   the run before returning (`with self.open(seed)` / `async with self.open(seed)`); with
@@ -1375,7 +1420,7 @@ run:
   `<name>-<occurrence>` (so `|` is associative), `a`'s default output feeds `b`'s single
   node with an open default `in` port, and every node field carries over through
   `evolve`. `b`'s context may only add resources (combined by name, a different
-  definition under one name raises); its mode/inputs/test flag or non-default execution
+  definition under one name raises); its inputs/test flag or non-default execution
   settings raise `InvalidPipelineError`. A function or `(name, conf)` tuple on the right
   raises `TypeError` (the function hint names `.map`), and `stream | "name"` raises a
   compose-first `TypeError` (`_PipelineStream.__or__` returns `NotImplemented`
@@ -1383,8 +1428,8 @@ run:
   `items | pipeline`) never touches the definition, so serializing a pipeline never
   captures items; `run(plan, seed=…)` delivers it to one node
   (`ExecutionPlan.require_seed_target`: an open node is one with no edge into its bare
-  default `in` port — `GraphIndex.is_open`, 2026-10-23; the seed feeds the single open
-  node that is not self-starting, else the single open node; otherwise
+  default `in` port — `WorkflowIndex.is_open`, 2026-10-23; the seed feeds the single
+  open node that is not self-starting, else the single open node; otherwise
   `InvalidPipelineError`) while other open nodes take the default seed and must be
   self-starting. The seed is an `InputLike`
   (`Item | ValueFeed | Awaitable[Item | ValueFeed]`, a `ValueFeed` being any sync/async
@@ -1442,9 +1487,10 @@ at exit whether or not they are generators. Each run owns every node stream it b
 runner's `yield from` closes the output), so a downstream operator that reads with a
 plain `for` loop never strands its input, and a node that fails to build still closes
 the streams built before it. A sync node stream or raw return whose only close is async
-raises `InvalidPipelineError` when built. `AsyncExecution`'s `_RunStream` owns every
-stream one run builds: it closes each once, last built first, on `_RunStream.aclose`, a
-failed build, or execution exit, closing through `asyncify` so a sync node's stream and
+raises `InvalidPipelineError` when built. `AsyncExecution`'s `_RunStream` also carries
+the run's resolved context and thread limiter for its nodes, and owns every stream one
+run builds: it closes each once, last built first, on `_RunStream.aclose`, a failed
+build, or execution exit, closing through `asyncify` so a sync node's stream and
 the raw return it was drawn from (registered as soon as the node is called, so an output
 nobody reads still closes them) keep their worker; a sync node on a worker closes its
 async inputs through it as soon as it finishes, so an upstream source is released before
@@ -1489,7 +1535,7 @@ from the options), `is_conf_parsed`/`is_dynamic`/`static_conf`/`parsers`/`caster
 Dynamic-conf detection sees the node's extras, which `PreparedNode.extras` derives from
 its incoming edges (named ports, `others`, `resources`, `embed`). Call options are
 typed: `RawCallOptions` (emit/assign/field/count, the `**options` keyword form) and
-`ContextOverrides` (mode/inputs/test, mirroring `Context.replace`; `_resolve_context` is
+`ContextOverrides` (inputs/test, mirroring `Context.replace`; `_resolve_context` is
 `base.replace(**overrides)`) live in `riko/types/_options.py`, and the decorators derive
 their option-name sets from them with `typed_dict_keys`. `RawCallOptions`,
 `CallOptions`, and `CallOptionsLike` are on the supported `riko.types` surface.
@@ -1566,7 +1612,7 @@ arrives as a tuple and a dict as a `FrozenDict`.
   on `Workflow.resources` (order-stable, de-duplicated), so `Workflow.validate` accepts
   them; a missing binding still fails in `_require_bindings` before acquisition.
 - **No document form.** `validate_document_nodes` refuses a callable node in
-  `serialize_graph` and `build_raw_graph` (so `Workflow.serialize`,
+  `serialize_workflow` and `build_raw_workflow` (so `Workflow.serialize`,
   `normalize_workflow`/`Workflow.parse` of a `Workflow`, and `compile_workflow` all
   raise); a raw node with family `"callable"` raises in `_build_node`.
 - **Typing.** `map[R]` takes `Callable[[T_co], R] | Callable[Concatenate[T_co, ...], R]`

@@ -21,12 +21,12 @@ from riko.definitions._nodes import (
     SubscribeNode,
     WriteNode,
 )
-from riko.definitions._workflow_definition import Workflow, normalize_workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
 from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, IdentityMode
-from riko.types._workflow import Endpoint
+from riko.types._workflow import Endpoint, InputRef
 from tests import TESTS_DIR
 from tests._execution import OUTPUT_A
 from tests._workflows import (
@@ -47,6 +47,8 @@ _HAS_DB = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
 _UNKNOWN_KEY_RULE = {"fieldd": "title", "op": "contains", "value": "1"}
 _B = ModuleNode(id="b", name="sort")
 _INVALID = InvalidPipelineError
+_URL_REF: dict[str, InputRef] = {"url": {"input": "u"}}
+_ASKS_Q = ModuleNode(id="a", name="fetch", conf={"url": {"input": "q"}})
 _A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")
 _B_IN, _B_OUT = Endpoint("b", "in"), Endpoint("b", "out")
 
@@ -77,10 +79,7 @@ NODE_FAMILIES = (
 
 
 def _fetch_workflow() -> Workflow:
-    node = ModuleNode(id="fetch-1", name="fetch")
-    return Workflow(
-        nodes=[node], edges=(), outputs={"default": Endpoint(node.id, "out")}, inputs={}
-    )
+    return Workflow().with_node(ModuleNode(id="fetch-1", name="fetch"))
 
 
 APPENDS = [
@@ -102,8 +101,8 @@ APPEND_REJECTIONS = [
         id="named-output-clash",
     ),
     pytest.param(
-        Workflow(inputs={"limit": {"type": "string"}}),
-        "declare input",
+        Workflow(input_schemas={"limit": {"type": "string"}}),
+        "give input",
         id="input-clash",
     ),
 ]
@@ -114,7 +113,7 @@ class TestWorkflow:
         "build",
         [
             pytest.param(_fetch_workflow, id="constructed"),
-            pytest.param(partial(normalize_workflow, RAW_WORKFLOW), id="normalized"),
+            pytest.param(partial(Workflow.from_raw, RAW_WORKFLOW), id="normalized"),
         ],
     )
     def test_workflow_version_defaults_to_2(self, build):
@@ -136,11 +135,11 @@ class TestWorkflow:
         assert repr(Workflow()) == "Workflow(empty)"
 
     def test_repr_counts_disconnected_nodes(self):
-        flow = normalize_workflow({"nodes": [{"name": "fetch"}, {"name": "sort"}]})
+        flow = Workflow.from_raw({"nodes": [{"name": "fetch"}, {"name": "sort"}]})
         assert repr(flow) == "Workflow(nodes: 2, edges: 0)"
 
     def test_repr_survives_a_cycle(self):
-        flow = normalize_workflow(
+        flow = Workflow.from_raw(
             {
                 "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "sort"}],
                 "edges": [
@@ -168,7 +167,11 @@ class TestWorkflow:
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
         outputs = {"default": Endpoint("b", "out"), "extra": Endpoint("c", "out")}
         flow = Workflow(
-            nodes=[a, b, c], outputs=outputs, inputs={}, edges=(edge,), resources=()
+            nodes=[a, b, c],
+            outputs=outputs,
+            input_schemas={},
+            edges=(edge,),
+            resources=(),
         )
         index = flow.index
 
@@ -202,7 +205,7 @@ class TestWorkflow:
             nodes=[src, a, b, after],
             edges=edges,
             outputs={"default": Endpoint("after", "out")},
-            inputs={},
+            input_schemas={},
             resources=(),
             version="2",
         )
@@ -216,7 +219,7 @@ class TestWorkflow:
     def test_omitted_fields_are_empty(self):
         """Every omitted field defaults to its empty form."""
         flow = Workflow()
-        mappings = (flow.nodes, flow.outputs, flow.inputs)
+        mappings = (flow.nodes, flow.outputs, flow.input_schemas)
         assert mappings == ({}, {}, {})
         assert (flow.edges, flow.resources) == ((), ())
 
@@ -236,7 +239,7 @@ class TestWorkflow:
             append(flow)
 
     @pytest.mark.parametrize(
-        "field", ["nodes", "outputs", "inputs", "edges", "resources"]
+        "field", ["nodes", "outputs", "input_schemas", "edges", "resources"]
     )
     def test_none_is_not_an_omitted_field(self, field: str):
         """An explicit None is rejected rather than read as the empty default."""
@@ -250,7 +253,7 @@ class TestWorkflow:
         flow = Workflow(
             nodes=[ModuleNode(id="a", name="fetch")],
             outputs={"default": Endpoint("a", "out"), "side": Endpoint("a", "out")},
-            inputs={"limit": {"type": "integer"}},
+            input_schemas={"limit": {"type": "integer"}},
         )
         with pytest.raises(InvalidPipelineError, match=match):
             flow.with_workflow(other)
@@ -290,7 +293,7 @@ class TestWorkflow:
         [
             pytest.param(
                 {"nodes": [1], "outputs": {}},
-                "Workflow node position 0 must be of type Node",
+                "Workflow node position 0 must be of type RikoNode",
                 id="nodes",
             ),
             pytest.param(
@@ -306,23 +309,17 @@ class TestWorkflow:
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow(**fields)
 
-    @pytest.mark.parametrize("field", ["outputs", "inputs"])
+    @pytest.mark.parametrize("field", ["outputs", "input_schemas"])
     def test_non_mapping_fields_are_rejected(self, field: str):
         fields: dict[str, Any] = {"nodes": [], "outputs": {}, field: "abc"}
 
         with pytest.raises(InvalidPipelineError, match=f"Workflow '{field}'"):
             Workflow(**fields)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=pytest.fail.Exception,
-        reason="workflow input declarations are not yet implemented: a strict Workflow "
-        "accepts an input declaration that is not a JSON Schema mapping",
-    )
-    @pytest.mark.parametrize("declaration", [5, "string"])
-    def test_non_schema_inputs_are_rejected(self, declaration: object):
-        with pytest.raises(InvalidPipelineError, match="Workflow 'inputs'"):
-            Workflow(nodes=[], outputs={}, inputs={"q": declaration})
+    @pytest.mark.parametrize("schema", [5, "string"])
+    def test_non_schema_inputs_are_rejected(self, schema: object):
+        with pytest.raises(InvalidPipelineError, match="Workflow 'input_schemas'"):
+            Workflow(nodes=[], outputs={}, input_schemas={"q": schema})  # pyright: ignore[reportArgumentType]
 
 
 class TestNodeFamily:
@@ -364,8 +361,34 @@ _BLANK_IDENTIFIERS = [
     ),
 ]
 
+REFERENCED_INPUTS = [
+    pytest.param(ModuleNode(id="a", name="fetch", conf=_URL_REF), {"u"}, id="conf"),
+    pytest.param(
+        ModuleNode(
+            id="a",
+            name="loop",
+            conf={"assign_to": {"input": "q"}},
+            embed={
+                "name": "fetch",
+                "conf": {"url": {"type": "url", "value": {"input": "u"}}},
+            },
+        ),
+        {"q", "u"},
+        id="loop-embed-conf",
+    ),
+    pytest.param(
+        CallableNode(id="a", name="len", fn=len, kwargs={"n": {"input": "n"}}),
+        {"n"},
+        id="callable-kwargs",
+    ),
+]
+
 
 class TestNodes:
+    @pytest.mark.parametrize(("node", "expected"), REFERENCED_INPUTS)
+    def test_referenced_inputs_collect_input_references(self, node, expected):
+        assert Workflow(nodes=[node]).referenced_inputs == expected
+
     def test_module_conf_accepts_floats_and_none(self):
         node = ModuleNode(id="a", name="sleep", conf={"wait": 1.5, "join_key": None})
         assert node.conf == {"wait": 1.5, "join_key": None}
@@ -467,14 +490,14 @@ class TestCallableNode:
 class TestRequireRunnableOnly:
     def test_callable_nodes_pass(self):
         node = CallableNode(id="c", name="len", fn=len)
-        flow = Workflow(nodes=[_A, node], outputs={"default": Endpoint("c", "out")})
+        flow = Workflow(nodes=[_A, node])
         assert flow.require_runnable_only("execution") is None
 
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
         nodes = [_A, write, cache]
-        flow = Workflow(nodes=nodes, outputs={"default": Endpoint("a", "out")})
+        flow = Workflow(nodes=nodes)
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
             flow.require_runnable_only("execution")
@@ -494,6 +517,11 @@ INVALID_WORKFLOWS = [
         id="unresolved-resource",
     ),
     pytest.param({"nodes": [_A]}, "exposes no workflow output", id="no-output"),
+    pytest.param(
+        {"nodes": [_ASKS_Q], "outputs": {"default": _A_OUT}},
+        r"unresolved input reference\(s\): \['q'\]",
+        id="unresolved-input",
+    ),
     pytest.param(
         _SPLIT_PAST_COUNT,
         "out:2",
@@ -580,13 +608,13 @@ INVALID_CONFS = [
 
 
 def _workflow(
-    nodes, edges=(), outputs=None, inputs=None, resources=(), version="2"
+    nodes, edges=(), outputs=None, input_schemas=None, resources=(), version="2"
 ) -> Workflow:
     return Workflow(
         nodes=nodes,
         edges=tuple(edges),
         outputs=outputs or {},
-        inputs=inputs or {},
+        input_schemas=input_schemas or {},
         resources=resources,
         version=version,
     )

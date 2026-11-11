@@ -11,8 +11,6 @@ if TYPE_CHECKING:
 
     from ._scalars import BasicValue, PrimitiveValue
 
-type Inputs = Mapping[str, str | int | bool]
-
 # Args
 type BasicMapping = Mapping[str, BasicValue]
 type BasicArg = BasicValue | BasicMapping | Sequence[BasicValue]

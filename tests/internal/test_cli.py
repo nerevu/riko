@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import json
 import tomllib
+from contextlib import nullcontext
 from datetime import date, timedelta
 from importlib import import_module
 from logging import DEBUG, ERROR, INFO, WARNING, getLogger
@@ -56,6 +57,7 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
+from riko.cli._lint_rst import gen_plain_block_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -91,7 +93,11 @@ _CI_DISCARDS = f"::warning::{_RECORDED}{_DISCARDED}"
 _MODULE_EXAMPLE = '"""\nDoes.\n\n>>> 1\n1\n"""\n'
 _PRIVATE_MODULE = ["private module without a public API carries a module example"]
 _NO_MODULE_EXAMPLE = "private module with a public runtime API has no module example"
+_TYPE_ONLY_EXAMPLE = (
+    "private module with a type-only public API carries a module example"
+)
 _TYPE_ONLY = "class Item(Protocol): ...\nclass Stream(Item): ...\n"
+_TYPED_DOC = f"{_MODULE_EXAMPLE}{_TYPE_ONLY}"
 
 
 _SHARED = "basename is shared; rename one or allowlist the pair"
@@ -588,7 +594,9 @@ class TestCoverageRatchet:
         self, monkeypatch: pytest.MonkeyPatch, args: list[str]
     ) -> None:
         folders: list[str] = []
-        monkeypatch.setattr(_test, "mkdtemp", lambda: folders.append("made") or "")
+        monkeypatch.setattr(
+            _test, "get_temp_path", lambda *_: folders.append("made") or nullcontext()
+        )
 
         result = CliRunner().invoke(_test.TEST_COMMAND, ["--ratchet", *args])
         assert result.exit_code == 2
@@ -713,6 +721,7 @@ EXAMPLE_RULES = [
     pytest.param("mod.py", _MODULE_EXAMPLE, [], id="public-module"),
     pytest.param("_mod.py", "def export(): ...\n", [_NO_MODULE_EXAMPLE], id="missing"),
     pytest.param("_mod.py", _TYPE_ONLY, [], id="type-only"),
+    pytest.param("_mod.py", _TYPED_DOC, [_TYPE_ONLY_EXAMPLE], id="type-only-example"),
     pytest.param("_mod.py", "class RikoError(Exception): ...\n", [], id="exception"),
     pytest.param("mod.py", "def export(): ...\n", [], id="public-missing"),
     pytest.param(
@@ -761,7 +770,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function("Args:\n\n    a: A.\n    b: B.\n\nKwargs:\n\n    c: C.").replace(
+        _function("Args:\n\n    a: A.\n    b: B.\n    c: C.").replace(
             "f()", "f(a, b=1, *, c)"
         ),
         ["documents a parameter in the wrong section"] * 2,
@@ -769,7 +778,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function("Args:\n\n    a: A.\n    c: C.\n\nKwargs:\n\n    b: B.").replace(
+        _function("Args:\n\n    a: A.\n\nKwargs:\n\n    b: B.\n    c: C.").replace(
             "f()", "f(a, b=1, *, c)"
         ),
         [],
@@ -952,6 +961,17 @@ TERM_PATTERNS = [
         [(1, "its upstream"), (2, "a suspended upstream")],
         id="upstream-nouns",
     ),
+    pytest.param(
+        "# pass ExecutionMode.DESCRIBE; ExecutionModes stays\n# a Describe-Mode run\n",
+        [(1, "ExecutionMode"), (2, "Describe-Mode")],
+        id="retired-describe",
+    ),
+]
+
+
+RETIRED_NAMES = [
+    pytest.param("Import riko.ext.registry.\n", id="removed-ext-path"),
+    pytest.param("Pass ExecutionMode.\n", id="retired-describe"),
 ]
 
 
@@ -1011,6 +1031,16 @@ class TestTermLint:
         )
         found = [issue.path.name for issue in gen_term_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+    @pytest.mark.parametrize("text", RETIRED_NAMES)
+    def test_the_changelog_may_name_retired_names(
+        self, tmp_path: Path, text: str
+    ) -> None:
+        for name in ("GUIDE.rst", "CHANGES.rst"):
+            (tmp_path / name).write_text(text, encoding="utf-8")
+
+        found = [issue.path.name for issue in gen_term_issues(tmp_path)]
+        assert found == ["GUIDE.rst"]
 
     def test_internal_docs_are_held_to_phrases_but_not_phase_codes(
         self, tmp_path: Path
@@ -1081,6 +1111,45 @@ class TestLiteralLint:
         (tmp_path / "CHANGES.rst").write_text("Set ``'auto'``.\n", encoding="utf-8")
         found = [issue.path.name for issue in gen_literal_issues(tmp_path)]
         assert found == ["CHANGES.rst", "GUIDE.rst"]
+
+
+PLAIN_BLOCK_CASES = [
+    pytest.param(
+        ".. code-block:: python\n\n    # pipe.py\n    x = 1\n", [], id="file-comment"
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    x = 1\n\n.. note::\n\n   Pending. Soon.\n",
+        [],
+        id="pending-note-after",
+    ),
+    pytest.param(
+        ".. note::\n\n   Pending. Soon.\n\n.. code-block:: python\n\n    x = 1\n",
+        [],
+        id="pending-note-before",
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    x = 1\n\n.. note::\n\n   Use ``x``.\n",
+        [1],
+        id="other-note-after",
+    ),
+    pytest.param(
+        "Intro.\n\n.. code-block:: python\n\n    x = 1\n\nOutro.\n\n"
+        ".. code-block:: python\n\n    >>> x\n    1\n\n"
+        ".. code-block:: python\n\n    y = 2\n",
+        [3, 14],
+        id="only-unmarked-blocks-with-their-lines",
+    ),
+]
+
+
+class TestRstLint:
+    """The plain Python code-block marker check."""
+
+    @pytest.mark.parametrize(("text", "expected"), PLAIN_BLOCK_CASES)
+    def test_plain_python_blocks_need_a_marker(
+        self, text: str, expected: list[int]
+    ) -> None:
+        assert list(gen_plain_block_lines(text)) == expected
 
 
 BINDING_CASES = [

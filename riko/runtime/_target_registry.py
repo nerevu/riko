@@ -7,17 +7,17 @@ Examples:
     Basic usage::
 
         >>> from riko import Backends
-        >>> from riko.ext import FileTarget, TargetRegistry
+        >>> from riko.ext import TargetRegistry
         >>>
         >>> registry = TargetRegistry()
-        >>> registry.resolve(Backends.FILE) is FileTarget
-        True
+        >>> registry.resolve(Backends.FILE).__name__
+        'FileTarget'
         >>> class S3Target:
         ...     backend = Backends.S3
         >>>
         >>> registry.register(S3Target)
-        >>> registry.resolve(Backends.S3) is S3Target
-        True
+        >>> registry.resolve(Backends.S3).__name__
+        'S3Target'
 
 Attributes:
 
@@ -139,29 +139,19 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
     Examples:
 
         >>> from riko import Backends
-        >>> from riko.ext import register_target, reset_target_registry
+        >>> from riko.ext import register_target, temporary_registrations
         >>>
-        >>> @register_target
-        ... class S3Target:
-        ...     backend = Backends.S3
-        >>>
-        >>> target_registry.resolve(Backends.S3) is S3Target
+        >>> with temporary_registrations():
+        ...     @register_target
+        ...     class S3Target:
+        ...         backend = Backends.S3
+        ...
+        ...     target_registry.resolve(Backends.S3) is S3Target
         True
-        >>> reset_target_registry()
 
     """
     target_registry.register(target, replace=replace)
     return target
 
 
-def reset_target_registry() -> None:
-    """Resets the process-global target registry, chiefly for test isolation."""
-    target_registry.reset()
-
-
-__all__ = [
-    "TargetRegistry",
-    "register_target",
-    "reset_target_registry",
-    "target_registry",
-]
+__all__ = ["TargetRegistry", "register_target", "target_registry"]

@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
 from contextlib import aclosing
 from functools import partial, wraps
-from itertools import chain
+from itertools import chain, repeat
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -56,7 +56,7 @@ from riko.base._guards import (
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_from_typed_dict, typed_dict_keys
 from riko.definitions._context import Context
-from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.definitions._wrapping import stamp_wrapper_meta, validate_call_keywords
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType
@@ -405,7 +405,8 @@ class Module[B: bool]:
 
         A decoration option (``skip_if``, ``ftype``, ``extract``, …) is fixed when the
         module is decorated. Passing one to a call or to ``prepare`` would otherwise be
-        silently ignored, so it raises instead.
+        silently ignored, so it raises instead. So does ``mode``: a pipe only runs, and
+        ``describe_module`` reports what a workflow reads and runs.
 
         Args:
 
@@ -414,9 +415,11 @@ class Module[B: bool]:
 
         Raises:
 
-            TypeError: When any name is a decoration option this decorator reads.
+            TypeError: When any name is ``mode`` or a decoration option this decorator
+                reads.
 
         """
+        validate_call_keywords(wrapper.name, names)
         fixed = self.decoration_options - self.call_options - self.context_options
 
         if invalid := sorted(fixed.intersection(names)):
@@ -819,8 +822,8 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         extra: dict[str, object],
     ) -> SyncProcessorWrapperInternalOutput:
         if is_listlike(item):
-            run = partial(self._run, context=context, extra=extra)
-            processed = chain.from_iterable(map(run, item))
+            runs = map(self._run, item, repeat(context), repeat(extra))
+            processed = chain.from_iterable(runs)
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
 
@@ -844,7 +847,11 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         processed: AsyncProcessorWrapperInternalOutput
 
         if is_streamlike(item):
-            _run = partial(self._arun, context=context, extra=extra)
+            arun = self._arun
+
+            async def _run(value: ItemOrValue) -> AsyncProcessorWrapperInternalOutput:
+                return await arun(value, context, extra)
+
             run = cast("AsyncItemProcessor", _run)
             processed = _aprocess_stream(run, as_async(item))
         else:

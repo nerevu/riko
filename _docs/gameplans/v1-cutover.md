@@ -249,7 +249,7 @@ step 3 rebuilt it on `riko/runtime/_codegen.py` over canonical v2, so
   `_codegen.render_value`), leaving only the `Id` placeholder and `PyKwargValue`, whose
   sole importer is `_compile.py`. Nothing in `_codegen.py` depends on the v1 compiler.
   `write_file` went at step 4 with its last consumer.
-- **Keep `migrate_v1_to_v2`**: its v1 translation (`migrate_pipe_def`) lives in
+- **Keep `migrate_v1_to_v2`**: its v1 translation (`parse_pipedef`) lives in
   `riko/definitions/_migrate.py` with no `_compile` import (its `_lower_keys` helper is
   private to that module). Delete the then-orphaned v1 wire/pipe-def types from
   `riko/types/_compiler.py` except those migrate and `Workflow.parse` retain.
@@ -287,9 +287,10 @@ same commit; since `write` survives until `WriteNode` executes (R5C), `SINK_NAME
 
 - remove `SINK_NAMES`; regenerate discovery (`manage codegen --names` →
   `riko/modules/_names.py`, `riko/types/_module_ids.py`);
-- drop the `metadata.name in SINK_NAMES` branch of `get_module_category`
-  (`riko/modules/_metadata.py`) and its `"write"` → `'sink'` doctest; the body becomes
-  `"source" if metadata.subtype == "source" else "transform"`. The branch matches
+- drop the `self.name in SINK_NAMES` branch of the `ModuleMetadata.category` property
+  (`riko/types/modules.py`) and the `category="sink"` doctests of `list_modules`/
+  `list_module_metadata` (`riko/modules/_metadata.py`); the body becomes
+  `"source" if self.subtype == "source" else "transform"`. The branch matches
   unqualified names only, so a provider's `example.write` is already a transform;
 - remove `Sinks` from `riko/__init__.py` + the `MODULES` set in `_api_surface.py`
   (`manage codegen --api`);

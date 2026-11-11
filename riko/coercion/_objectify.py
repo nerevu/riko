@@ -11,10 +11,10 @@ from riko.base._funcutils import map_keys
 from riko.base._guards import is_mapping
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, ItemsView, Iterator, KeysView, ValuesView
+    from collections.abc import ItemsView, Iterator, KeysView, ValuesView
     from typing import Protocol
 
-    from riko.types._wrappers import ArgCaster
+    from riko.types._wrappers import ArgCaster, Func
 
     class _Valued[V](Protocol):
         @property
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         def __init__(
             self,
             kwargs: Mapping[str, object],
-            func: Callable[[object], object] | None = None,
+            func: Func[object] | None = None,
             **defaults: object,
         ) -> None: ...
         def keys(self) -> KeysView[str]: ...
@@ -57,7 +57,7 @@ class Objectify[V](_Objectify, Mapping[str, V]):
     def __init__(
         self,
         data: Mapping[str, V],
-        func: Callable[[object], object] | None = None,
+        func: Func[object] | None = None,
         **defaults: object,
     ) -> None:
         """

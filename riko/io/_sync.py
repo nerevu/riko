@@ -2,6 +2,16 @@
 """
 Synchronous file and URL I/O helpers.
 
+Examples:
+
+    Basic usage::
+
+        >>> from riko import get_path
+        >>>
+        >>> with Fetch(get_path("spreadsheet.csv")) as f:
+        ...     print(f.readline())
+        Member,Name,...
+
 Attributes:
 
     STREAMING_THRESHOLD: Response size above which content is streamed.
@@ -10,12 +20,13 @@ Attributes:
 
 from __future__ import annotations
 
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO
 from math import isinf
-from tempfile import SpooledTemporaryFile
-from typing import TYPE_CHECKING, Literal, cast, overload
+from pathlib import Path
+from tempfile import NamedTemporaryFile, SpooledTemporaryFile, TemporaryDirectory
+from typing import IO, TYPE_CHECKING, Literal, cast, overload
 from urllib.request import Request, urlopen
 
 import mezmorize
@@ -28,11 +39,11 @@ from riko.base._sentinels import MISSING, is_missing_type
 from riko.coercion._canonical import repr_cache
 from riko.types._io import resolve_user_agent
 
-from ._reencode import reencode
+from ._reencode import TextReencoder
 
 if TYPE_CHECKING:
     from codecs import StreamReader
-    from collections.abc import Iterable, Iterator, Mapping
+    from collections.abc import Generator, Iterable, Iterator, Mapping
     from http.client import HTTPResponse
     from urllib.response import addinfourl
 
@@ -338,8 +349,10 @@ def seekable(
         >>> from io import StringIO
         >>>
         >>> f = StringIO("abc")
-        >>> seekable(f) is f
-        True
+        >>> f.read()
+        'abc'
+        >>> seekable(f).read()
+        'abc'
 
     """
     seek = getattr(f, "seek", None)
@@ -550,7 +563,7 @@ def opener(
                 response = StringIO(r.text)
             else:
                 encoding = r.encoding or encoding
-                response = reencode(r.raw, encoding, decode=True, owner=r)
+                response = TextReencoder(r.raw, encoding, owner=r)
         else:
             req = Request(url, headers=headers)  # noqa: S310
             r = urlopen(req, timeout=timeout)  # noqa: S310
@@ -565,7 +578,7 @@ def opener(
                 response = buffer(r, encoding=encoding)
             else:
                 encoding = get_response_encoding(r, encoding or ENCODING)
-                response = reencode(r.fp, encoding, decode=True, owner=r)
+                response = TextReencoder(r.fp, encoding, owner=r)
 
         if not memoize:
             stack.pop_all()
@@ -614,6 +627,56 @@ def build_opener(
         current_opener = mezmorize.memoize(**kwargs)(current_opener)
 
     return current_opener
+
+
+def get_temp_file() -> IO[bytes]:
+    """
+    Gets a named binary temporary file that is removed when its context exits.
+
+    The file stays on disk inside the ``with`` block.
+
+    Returns:
+
+        The open temporary file.
+
+    Examples:
+
+        >>> with get_temp_file() as fp:
+        ...     Path(fp.name).exists()
+        True
+
+    """
+    return NamedTemporaryFile(delete=True, delete_on_close=False)
+
+
+@contextmanager
+def get_temp_path(filename: str = "tmp", *, delete: bool = True) -> Generator[Path]:
+    """
+    Gets a temporary path, in a fresh directory, that no file occupies yet.
+
+    The path and its directory are removed when the context exits.
+
+    Kwargs:
+
+        filename: The path's file name, e.g. ``"items.csv"`` (default: "tmp").
+        delete: Whether the context's exit removes the path (default: True).
+
+    Yields:
+
+        The unoccupied temporary path.
+
+    Examples:
+
+        >>> with get_temp_path("report.csv") as temp_path:
+        ...     print(temp_path.name, temp_path.exists())
+        ...     _ = temp_path.write_text("x\\n1\\n")
+        report.csv False
+        >>> temp_path.exists()
+        False
+
+    """
+    with TemporaryDirectory(delete=delete) as tmpdir:
+        yield Path(tmpdir, filename)
 
 
 class Fetch[B: (Literal[True], Literal[False])]:

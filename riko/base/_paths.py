@@ -15,8 +15,6 @@ Examples:
 
 from os import path
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-from typing import IO, Literal, overload
 
 PACKAGE_DIR = Path(__file__).parent.parent.absolute()
 ROOT_DIR = PACKAGE_DIR.parent
@@ -123,15 +121,3 @@ def get_path(name: str) -> str:
 
     """
     return normalize_url(name, absolute=False, offline=True)
-
-
-@overload
-def get_temp_file(as_path: Literal[True]) -> str: ...
-@overload
-def get_temp_file(as_path: Literal[False] = ...) -> IO[bytes]: ...
-def get_temp_file(as_path: bool = False) -> str | IO[bytes]:
-    if as_path:
-        with NamedTemporaryFile(delete=False) as fp:
-            return fp.name
-    else:
-        return NamedTemporaryFile(delete=True, delete_on_close=False)

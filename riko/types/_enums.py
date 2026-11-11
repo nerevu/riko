@@ -3,10 +3,10 @@ String enums shared by Riko's stable, extension, and implementation APIs.
 
 Examples:
 
-    >>> from riko import ExecutionMode, Formats
+    >>> from riko import Formats
     >>>
-    >>> Formats.JSON.value, ExecutionMode.RUN.value
-    ('json', 'run')
+    >>> Formats.JSON.value
+    'json'
 
 """
 
@@ -25,36 +25,17 @@ type IdentityModeLike = IdentityMode | str
 type DocumentShapeLike = DocumentShape | str
 type ConcurrencyLike = int | Literal["auto"]
 type UserAgentLike = UserAgent | CustomUserAgent | str
+type FeedTypeLike = FeedType | str
 
 CustomUserAgent = NewType("CustomUserAgent", str)
 
 
 class ModuleName(StrEnum):
-    """
-    A type-safe module name base populated by module-name discovery.
-
-    Examples:
-
-        >>> from riko.ext import ModuleName
-        >>>
-        >>> issubclass(ModuleName, str)
-        True
-
-    """
+    """A type-safe module name base populated by module-name discovery."""
 
 
 class Formats(StrEnum):
-    """
-    How a write serializes items to a destination.
-
-    Examples:
-
-        >>> from riko import Formats
-        >>>
-        >>> Formats.JSON.value
-        'json'
-
-    """
+    """How a write serializes items to a destination."""
 
     CSV = "csv"
     GEOJSON = "geojson"
@@ -76,15 +57,7 @@ class Backends(StrEnum):
 
 
 class LocationType(StrEnum):
-    """
-    The kind of lookup ``cast_location`` performs.
-
-    Examples:
-
-        >>> LocationType.CURRENCY.value
-        'currency'
-
-    """
+    """The kind of lookup ``cast_location`` performs."""
 
     COORDINATES = "coordinates"
     CURRENCY = "currency"
@@ -93,15 +66,7 @@ class LocationType(StrEnum):
 
 
 class BasicCastType(StrEnum):
-    """
-    Cast types a module may set as its ``ftype``/``ptype``.
-
-    Examples:
-
-        >>> BasicCastType.INT.value
-        'int'
-
-    """
+    """Cast types a module may set as its ``ftype``/``ptype``."""
 
     DATE = "date"
     DATETIME = "datetime"
@@ -115,15 +80,7 @@ class BasicCastType(StrEnum):
 
 
 class SortableCastType(StrEnum):
-    """
-    Cast types whose values are orderable for sort comparisons.
-
-    Examples:
-
-        >>> SortableCastType.BOOL.value
-        'bool'
-
-    """
+    """Cast types whose values are orderable for sort comparisons."""
 
     BOOL = "bool"
     DATE = "date"
@@ -137,17 +94,7 @@ class SortableCastType(StrEnum):
 
 
 class CastType(StrEnum):
-    """
-    Every cast type ``cast_value`` can dispatch to.
-
-    Examples:
-
-        >>> from riko import CastType
-        >>>
-        >>> CastType.LOCATION.value
-        'location'
-
-    """
+    """Every cast type ``cast_value`` can dispatch to."""
 
     BOOL = "bool"
     DATE = "date"
@@ -162,27 +109,6 @@ class CastType(StrEnum):
     URL = "url"
 
 
-class ExecutionMode(StrEnum):
-    """
-    Whether a workflow module's pipe runs its workflow or only describes it.
-
-    A ``Pipeline`` ignores the describe modes and always runs.
-
-    Examples:
-
-        >>> from riko import ExecutionMode
-        >>>
-        >>> ExecutionMode.DESCRIBE_INPUTS.value
-        'describe_inputs'
-
-    """
-
-    RUN = "run"
-    DESCRIBE_INPUTS = "describe_inputs"
-    DESCRIBE_DEPENDENCIES = "describe_dependencies"
-    DESCRIBE = "describe"
-
-
 class Executor(StrEnum):
     """
     Where a run executes per-item work.
@@ -193,13 +119,6 @@ class Executor(StrEnum):
     native async work runs inline and synchronous work runs on worker threads.
     ``INLINE`` never uses workers, while ``THREAD`` and ``PROCESS`` use a pool of
     threads or worker processes.
-
-    Examples:
-
-        >>> from riko import Executor
-        >>>
-        >>> Executor("thread") is Executor.THREAD, Executor.AUTO.value
-        (True, 'auto')
 
     """
 
@@ -218,13 +137,6 @@ class IdentityMode(StrEnum):
     result's identity from every item that contributed to it. A node carries the mode
     it declares, but no run acts on it yet.
 
-    Examples:
-
-        >>> from riko import IdentityMode
-        >>>
-        >>> IdentityMode("derive") is IdentityMode.DERIVE, IdentityMode.COMBINE.value
-        (True, 'combine')
-
     """
 
     PRESERVE = "preserve"
@@ -239,13 +151,6 @@ class DocumentShape(StrEnum):
     ``DAG`` is a bare-bones DAG (``PipeDag``), ``V1`` a serialized pipe definition
     (``PipeDef``), and ``V2`` a workflow document (``WorkflowDocument``, a serialized
     ``Workflow``).
-
-    Examples:
-
-        >>> from riko import DocumentShape
-        >>>
-        >>> DocumentShape.DAG.value
-        'dag'
 
     """
 
@@ -264,21 +169,29 @@ class UserAgent(StrEnum):
     other non-empty string of printable ASCII with no leading or trailing whitespace (a
     ``CustomUserAgent``) is sent as is.
 
-    Examples:
-
-        >>> from riko import UserAgent
-        >>>
-        >>> UserAgent("random") is UserAgent.RANDOM
-        True
-        >>> UserAgent.MOBILE.value
-        'mobile'
-
     """
 
     DEFAULT = "default"
     RANDOM = "random"
     DESKTOP = "desktop"
     MOBILE = "mobile"
+
+
+class FeedType(StrEnum):
+    """
+    A link type feed discovery recognizes as a feed.
+
+    Each value matches a link's ``type`` (whole or after its last ``/``). E.g., ``ATOM``
+    matches ``application/atom+xml``. The declaration order is the default preference.
+
+    """
+
+    RSS = "rss+xml"
+    ATOM = "atom+xml"
+    RDF = "rdf+xml"
+    JSON = "feed+json"
+    TEXT_XML = "text/xml"
+    XML = "xml"
 
 
 def is_custom_user_agent(value: object) -> TypeIs[CustomUserAgent]:

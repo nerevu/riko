@@ -66,9 +66,9 @@ They live in the private execution modules `riko/execution/_pools.py` and
 `riko/execution/_concurrency.py`; what was `collections.py` survives only as
 `riko/runtime/_export.py` (`Formats`, `export`, `list_formats`).
 
-**Workflow graph index** is a retained foundation. `Workflow.index` (`GraphIndex` in
+**Workflow graph index** is a retained foundation. `Workflow.index` (`WorkflowIndex` in
 `riko/types/_workflow.py`; formerly the v1 `parse_pipe_def`, deleted at cutover step 5)
-builds one immutable `GraphIndex` (`riko/types/_workflow.py`) that interprets a
+builds one immutable `WorkflowIndex` (`riko/types/_workflow.py`) that interprets a
 workflow's edges exactly once — wire-level `edges`/`incoming`/`outgoing` (ports kept
 verbatim) plus node-level `order`/`upstream`/`downstream`/`roots`/`leaves`/`outputs`. It
 replaces the old `ParsedPipeDef` `graph`+`wires` fields; R4A's
@@ -82,8 +82,8 @@ execution concepts (resolved callables, portals, resource values, task groups) o
 The reuse seam runs *through* the compiler, not around it. Graph
 parsing/validation/ordering/resolution is kept and adapted; the legacy
 generator-construction tail is replaced. Concretely: graph ordering (`topological_sort`,
-cycles reported by `GraphIndex.cyclic`),
-`ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `GraphIndex`, and the
+cycles reported by `WorkflowIndex.cyclic`),
+`ModuleRegistry`/`PipeResolver`/`WorkflowResolver`, the `WorkflowIndex`, and the
 argument-binding *concepts* in `_get_input_module`/`_gen_pykwargs` all survive into R4B
 preparation. What was replaced (and deleted at cutover step 5, 2026-10-03) is
 `_gen_steps`/`_build_pipeline`/`build_pipeline`, which resolved, wire, invoke, and
@@ -176,7 +176,7 @@ R4B  private executions + lifetime + EventSink transport
 R4C  callable nodes (pure 1→1 `map`)
               |
               v
-R4D  workflow input declarations
+R4D  workflow input schemas
               |
               v
 R5A  FeedResult / _FeedItem / provenance
@@ -311,7 +311,7 @@ Do not force every current legacy call site through the new hierarchy in this PR
 Establish the public types and use them in new code; migrate old call sites when
 touched.
 
-As built, the tree in `riko/base/exceptions.py` has `RikoError`, the
+As built, the tree in `riko/base/_exceptions.py` has `RikoError`, the
 `ModuleError`/`TargetError`/ `PipelineError` (incl. `PipelineStateError`)/`PubSubError`
 families, and the `IdentityError` branch's
 `IdentityEncodingError`/`CyclicIdentityError`. The rest of the tree lands with its first
@@ -618,7 +618,7 @@ Deliver:
 - full `source`/`target` edge endpoints with explicit node/port; reject `src`/`tgt` and
   `from`/`to`;
 - top-level named `outputs`, with omitted output sugar only for one unambiguous leaf;
-- top-level typed `inputs` declarations normalized to full JSON Schema;
+- top-level `inputs`, each input's schema normalized to full JSON Schema;
 - resource references and declared resource slots;
 - configured immutable serializable `Target` and `Format` definitions/references;
 - `TargetRegistry` contract and sync/async target capability protocols;
@@ -1106,7 +1106,7 @@ Deliver:
   context manager, with no `first`/`afirst` on either (all decided there 2026-10-10).
 
 Resolved (triaged 2026-10-16, decided 2026-10-23): which node a seed targets. The
-default port alone decides openness: `GraphIndex.is_open` is true when no edge enters
+default port alone decides openness: `WorkflowIndex.is_open` is true when no edge enters
 the node's bare default `in` port, so a node wired only through named `in:<name>` or
 positional `in:<n>` ports is open (`GraphEdge.is_positional` is renamed `is_default` and
 the edge-level `is_positional` no longer exists). A seed feeds the single open node that
@@ -1148,15 +1148,15 @@ for durable identity, and [callable-pipes.md](callable-pipes.md) § Existing dec
 model keeps the target. Strict xfail
 `tests/public/test_pipeline.py::TestPipelineChaining::test_or_composes_a_decorated_processor`.
 
-### R4D — Workflow input declarations
+### R4D — Workflow input schemas
 
-**Goal:** make workflow inputs top-level typed declarations in the canonical IR, with
+**Goal:** give each workflow input a top-level schema in the canonical IR, with
 execution values arriving through `Context.inputs`, per
 [extensibility.md § E3.6](extensibility.md#e36-inputs).
 
 Deliver:
 
-- `Workflow` input declarations (canonical full JSON Schema; authoring shorthands
+- each `Workflow` input's schema (canonical full JSON Schema; authoring shorthands
   normalize to it; requiredness inferred from an absent default; `default: null` implies
   nullable); until then a strict `Workflow` accepts a non-mapping declaration (tripwire
   `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`);
@@ -1170,37 +1170,45 @@ Deliver:
 - validation of `Context.inputs` against the declarations at plan/preparation time,
   before resources open or sources are consumed;
 - serialization/normalization/migration round-trip coverage for the new top-level field.
-- a stored workflow's module subtype derived from what its roots need: today a workflow
-  store tags the pipe `"transformer" if flow.inputs else "source"`
-  (`riko/runtime/_workflow_resolver.py`, and the generated module's
-  `workflow(subtype=…)` in `riko/runtime/_compile.py`), so a workflow whose root takes
-  an input stream but declares no inputs counts as a source and starts itself as a node
-  of another pipeline, while one that declares inputs over a source root counts as a
-  transformer. Routed here from R4C's per-run seed work (2026-10-24) because the fix
-  belongs with the input declarations it reads. Since R4C's self-starting check, the
-  second case fails outright: run unseeded, it raises "requires a seed" instead of
-  starting its source root (triaged 2026-10-28). Strict xfail
-  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_that_declares_inputs`.
-- an explicit value-source declaration (triaged 2026-10-27): R4C's value-feeder rule
-  starts any non-output node whose outgoing edges all enter named ports, inferred from
-  graph position alone, so an ordinary transform there runs on the internal placeholder
-  seed (`hash` feeding `itembuilder`'s `in:v` yields `{"k": 0}` unseeded). The rule
-  stays for v1 parity (the Yahoo Pipes String Builder root in `pipe_b962874`) until a
-  node can declare itself a value source; whether undeclared feeders then keep starting
-  themselves is this phase's call (if they do, delete the tripwire rather than flip it).
-  Strict xfail
-  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_never_starts_an_undeclared_value_feeder_unseeded`.
-  Today's rule is asserted by
-  `TestPlanRun::test_run_starts_a_transformer_that_only_feeds_named_ports` and the
-  `is_self_starting` doctest in `riko/execution/_prepared.py`; flipping the tripwire
-  changes both.
-- a strict `Workflow.inputs` that holds only canonical schema mappings: today the field
-  is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare type-name string
-  or a non-schema value (`{"q": 5}`) that re-normalization then rejects; strict xfails
-  in `tests/internal/test_definitions.py` mark it for this phase. Narrow the field's
-  static input type (`inputs_converter`'s `accepted`, today `Mapping[str, object]`) to
-  one schema mapping per name in the same change: narrowing it alone fails pyright
-  wherever a stored `Workflow.inputs` is passed back to the constructor.
+- a stored workflow's module subtype derived from what its roots need (triaged
+  2026-10-28; landed 2026-11-09): `build_workflow_pipes`
+  (`riko/runtime/_workflow_pipes.py`) tags the pipe `"source"` when it can run without a
+  seed (`ExecutionPlan.is_self_starting_output`) and `"transformer"` otherwise; declared
+  inputs don't affect the tag. The old rule,
+  `"transformer" if flow.inputs else "source"`, made a workflow whose root takes an
+  input stream but declares no inputs a source that started itself as a node of another
+  pipeline, and made one that declares inputs over a source root a transformer that
+  raised "requires a seed" when run unseeded. Routed here from R4C's per-run seed work
+  (2026-10-24) because the fix belongs with the input schemas it reads. Strict xfail
+  flipped:
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_starts_a_stored_source_workflow_with_input_schemas`.
+- value sources without a graph heuristic (triaged 2026-10-27; decided and landed
+  2026-11-05): R4C's rule started any non-output node whose outgoing edges all entered
+  named ports, so an ordinary transform there ran on the internal placeholder seed. No
+  generic node flag. Registered source modules are eligible to start unseeded, but only
+  when their configuration has no `subkey` dependencies and all `terminal` references
+  resolve to connected named ports. The same condition applies to explicitly recognized
+  value-feeder modules (`strconcat`, the Yahoo Pipes String Builder root in
+  `pipe_b962874`). Other transformers require a default input. Terminal names use the
+  runtime's existing normalization (`replacer(name, "")`), so `1_URL` matches the port
+  `in:_1_URL`; an empty `subkey`/`terminal` counts as unset, as conf resolution treats
+  it. The `Sources` registry and `ftype=NONE` classification are unchanged: they
+  establish source capability, not unconditional permission to run without input
+  (revised 2026-11-06).
+  `PreparedNode.is_self_starting` (`riko/execution/_prepared.py`) owns the check; a
+  module capability contract replaces it only if plugins show a real need. Asserted by
+  `TestPlanRun::test_strconcat_starts_when_it_reads_no_default_input`,
+  `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`,
+  and the `is_self_starting` doctest.
+- a strict `Workflow.input_schemas` that holds only canonical schema mappings: today
+  the field is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare
+  type-name string or a non-schema value (`{"q": 5}`) that re-normalization then
+  rejects; the strict xfail
+  `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`
+  marks it for this phase. Narrow the field's static input type
+  (`input_schemas_converter`'s `accepted`, today `Mapping[str, object]`) to one schema
+  mapping per name in the same change: narrowing it alone fails pyright wherever a
+  stored `Workflow.input_schemas` is passed back to the constructor.
 - the `Context.inputs` value type: `Inputs` (`Mapping[str, str | int | bool]`) types the
   field as scalar-valued, yet its converter list deep-freezes nested values
   (`{"tags": ["a"]}` is stored as `('a',)`), so pyright rejects valid calls and
@@ -1215,28 +1223,26 @@ Deliver:
   downstream; a tenant or reporting-period input must give two executions of one
   definition different cache keys and `StateKey`s (gameplan audit triage 2026-11-05).
 
-Audit note (2026-10-31 sibling audit): stored-workflow describe (`build_workflow_pipes`
-in `riko/runtime/_workflow_pipes.py`) returns its `description`/`inputs` dicts by
-reference in the DESCRIBE and `describe_input` modes, so a caller's mutation leaks into
-later calls. Return fresh or frozen data when input declarations land (tripwire
-`tests/internal/test_resolution.py::TestResolvedDocuments::test_document_description_is_fresh_per_call`).
+Audit note (2026-10-31 sibling audit, retired 2026-11-09): stored-workflow describe
+(`build_workflow_pipes` in `riko/runtime/_workflow_pipes.py`) returned its
+`description`/`inputs` dicts by reference in the describe modes, so a caller's mutation
+leaked into later calls. The describe modes are gone: `describe_module` reads the frozen
+`input_schemas` and the `dependencies` tuple stamped on the pipe, so the tripwire
+`test_document_description_is_fresh_per_call` was deleted with them.
 
 **Exit:**
 
-- **ADD:** typed input declarations and `{"input": …}` references exist in the Workflow
+- **ADD:** typed input schemas and `{"input": …}` references exist in the Workflow
   v2 IR and are validated against `Context.inputs` during preparation.
 - **MIGRATE:** the `input` module's default/prompt/`test` behavior and the generated
   module's describe-inputs mode read the declared inputs instead of scanning node
-  configuration. `Pipeline` iteration ignores the `Context.mode` describe modes today
-  (only generated workflow modules honor them); a strict xfail in
-  `tests/public/test_pipeline.py` marks it for this phase. The hand-maintained probes in
-  `tests/pyworkflows`/`examples/pyworkflows` migrate with it: their describe-inputs
-  branches still return `[]` or the scanned `input`-node tuples while the generated pipe
-  returns the declared `Workflow.inputs` mapping (strict xfail
-  `tests/internal/test_codegen.py::TestWorkflowProbes::test_probe_describes_the_inputs_its_document_declares`),
-  and `migrate_v1_to_v2` declares nothing from a `PipeDef`'s `input` modules (strict
-  xfail
-  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_declared_input`).
+  configuration. (Superseded 2026-11-09: the describe modes, including the `Pipeline`
+  xfail in `tests/public/test_pipeline.py` and the probes' describe-inputs branches,
+  were retired; the probes declare `@workflow(input_schemas=, dependencies=)` and
+  `TestWorkflowProbes.test_probe_declares_what_its_document_declares` compares them with
+  each sibling `Workflow`.) Also, `migrate_v1_to_v2` declares nothing from a `PipeDef`'s
+  `input` modules (strict xfail
+  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_workflow_input`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists
   beside the IR.
 
@@ -1306,6 +1312,16 @@ fails mid-run with whatever error the parser hits.
 
 Deliver:
 
+- input schemas inferred from conf fields (vocabulary and rule:
+  [extensibility.md § E3.6](extensibility.md#e36-inputs), decided 2026-11-08): an
+  `{"input": name}` reference in a typed conf field takes that field's schema, so
+  authors write only what the fields cannot supply (a default, a description, a narrower
+  rule); each input's schema is the merge of what was written and every field it feeds;
+  a build-time check rejects an input whose written schema the field does not accept, or
+  that feeds fields no value can satisfy; `flow.serialize()` writes each input's merged
+  schema, so a stored document stays self-describing without the module catalog;
+  `describe_module()` and the `Workflow.input_schemas` attribute report the merged
+  schema, so there is one view;
 - `ModuleDefinition` declares its configuration contract, derived from the existing
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
@@ -1318,8 +1334,31 @@ Deliver:
   source is read; a node whose module declares no contract is not rejected. The check
   lands inside `ModuleWrapper.prepare`, which the plan already calls once per node
   (`PreparedNode.sync_interface`/`async_interface`), so no second preparation path is
-  needed;
+  needed. The contract also decides whether an empty string in a required key is
+  missing: the fetch-family modules already reject an empty `url` at call time
+  (`require_conf_key(strict=True)`), while `urlbuilder.base`, `subelement.path`, and
+  `currencyformat.currency` still accept `""` (2026-11-10 triage); make the three
+  consistent with the ruling;
 - the same check for built-in and entry-point modules;
+- the describe modes retired (ruled 2026-11-09, [release-readiness.md
+  § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work);
+  brought forward from R4E and **done 2026-11-09** on phase-13): `describe_module()`
+  takes a name, a stored workflow's `pipe_<id>`/`pipe:<id>` name, or a pipe, and its
+  `ModuleDefinition.input_schemas`/`.dependencies` read the metadata `@workflow` stamps
+  (`riko.ext` exports `workflow` and `resolve_inputs`); `ExecutionMode`, `Context.mode`/
+  `describe_input`/`describe_dependencies`, the generated `DEPENDENCIES` constant, and
+  the describe branches in generated pipes and the `pyworkflows` probes are removed, and
+  a pipe call passing `mode=` raises `TypeError`, so a pipe only runs. Deferred (not
+  built): `list_modules` listing stored workflows, a `riko describe` CLI command, and a
+  dry run (an `ExecutionSettings` knob, never a `Context` mode;
+  [execution-semantics.md](execution-semantics.md));
+- `resolve_conf`'s `item` (`riko/parsing/config.py`) is typed `Item | None` while the
+  `SyncConfParseFunc` protocol passes `ItemOrValue`; `_prepare.py`'s
+  `conf_parser: Func[AnyModuleConf | None]` masks the mismatch (triaged 2026-11-10,
+  assigned here with the conf contract). Retype it here, narrowing with `is_mapping`
+  inside (widening alone gives 15 pyright errors in `config.py`), and settle whether a
+  scalar item can reach it: `resolve_conf` tests `if item` for truthiness before
+  `DotDict.dictize`.
 - interface classification by `isasync` rather than by attribute name, so a single async
   implementation named `pipe` (`@processor async def pipe`) wraps as the async interface
   instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
@@ -1335,6 +1374,30 @@ Deliver:
   callable raise "neither a sync nor an async callable" although `udf` itself never
   runs. The E1 plain-callable slot decision removes the borrowing. Strict xfail
   `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
+
+Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong value):
+
+- the interface flag on resolution: `Resolver.require`/`Dispatcher.resolve`
+  (`riko/types/_wrappers.py`), `ResolverDispatcher.require`/`resolve`/`is_capable`
+  (`riko/runtime/_resolver.py`), `ModuleRegistry.require`, `WorkflowResolver.require`,
+  and `require_interface` (`riko/runtime/_importutils.py`) take `is_async=` and switch
+  the returned wrapper's type, yet every caller passes a constant, and
+  `ResolvedModule.from_dispatcher` (`riko/execution/_prepared.py`) calls `resolve()`
+  once per color. When the interface slots change here, one dispatcher call returns both
+  interfaces (a pair of optional wrappers), which removes `is_capable` (a restated
+  `require_interfaces`) and the double lookup. Decide
+  `ModuleDefinition.get_pipe(is_async)` in the same change, so the flag goes from both
+  or neither;
+- `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
+  `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
+  favor of `interfaces` when classification moves to `isasync`, updating the
+  [module-documentation.md](module-documentation.md) generator inputs;
+- legacy conf keys declared in the raw conf types but read by no module:
+  `FetchRawConf.offline`, `CsvRawConf.other_sep`, and `InputRawConf.debug`/`param`/
+  `position` (`tests/workflows/pipe_e519dd393f943315f7e4128d19db2eac.json` and
+  `tests/workflows/pipe_UuvYtuMe3hGDsmRgPm7D0g.json` set `offline`/`other_sep`).
+  Since the contract derives from these types, decide whether these legacy keys are
+  accepted and ignored or rejected as unknown before the strict check lands.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a
 parser's `objconf` annotation and returns the generated `<Name>Objconf`, but no runtime
@@ -1373,7 +1436,13 @@ conf contract:
   copies at each hand-off (convention only).
 
 Do not freeze `PreparedModule.conf` or flip the conf keys to `ReadOnly` ahead of this
-decision.
+decision. The same contract covers the cast objconf one layer down (repository audit
+triage 2026-11-11): `PreparedModule.static_casted` caches one mutable `Objectify` for a
+static configuration and the processor wrapper hands that same object to every item (and
+to every worker under threaded mapping), so a parser's write to it reaches the next
+item. No built-in parser writes to its objconf; the frozen config object closes the
+hazard for extension parsers. Strict xfail
+`tests/internal/test_modules.py::TestPrepare::test_prepared_static_objconf_is_isolated_per_item`.
 
 Measured 2026-10-20 (triage of the conf-parse memoization removal): a direct `pipe()`
 call once per item costs 198 µs against 116 µs on v0.77.3, because every call prepares
@@ -1450,7 +1519,10 @@ stubs are rewritten once, with the conf contract. The last three
 `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
 sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2
 `embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`isasync` interface classification here should type that split instead.
+`isasync` interface classification here should type that split instead; the
+cast on the worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial`
+because the process executor pickles it) and on its async twin's `sync_call` closure
+narrows the same `NodeCall` output union and goes with it (2026-11-11 triage).
 `manage lint --escapes` lowers its ceilings as these go. The stub rewrite also gives
 call options one owner (2026-11-03 repo-audit triage, deferred here): `Module.prepare`
 copies `count` into `prepared.opts` where nothing reads it, while `_PreparedCall`
@@ -1711,7 +1783,7 @@ Deliver:
   audit triage 2026-10-05);
 - preserve only the bounded persisted-v1 `write` migration owned by R4A/extensibility.
 - a write node that feeds no workflow output still runs: execution today plans only each
-  output's upstream subgraph (`GraphIndex.required`), so an effect branch hanging off
+  output's upstream subgraph (`WorkflowIndex.required`), so an effect branch hanging off
   the main path would be skipped. Pure off-output branches stay skipped (their values
   are discarded, per [fanout-topology.md](fanout-topology.md)), so validation does not
   reject unreachable nodes (repo-audit triage 2026-10-29). Tripwire:
@@ -1891,7 +1963,10 @@ Deliver:
 - buffer default `0`, overflow `block`, optional drop-oldest where permitted;
 - receive-time `func=` semantics in sync and async together: run at subscription
   delivery/materialization time, discard the return value, and preserve the original
-  item;
+  item; the migrated subscriber resolves `func`'s accepted keyword names once at
+  subscription (the legacy `_apply` in `riko/modules/receive.py` calls
+  `inspect.signature(func)` per received item; left alone because this phase deletes
+  the module, 2026-11-09 triage);
 - an explicit disposition for bounded waiting (GitHub issue #82): the tripwire
   `TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait` in
   `tests/public/test_modules.py` exercises the legacy `receive` module this phase
@@ -2522,16 +2597,14 @@ R7 adds the execution's async task group, not a parallel one.
 
 ## 6. Next implementation slice
 
-R0–R4C have landed (status: the R-track table in
-[PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4C closed 2026-11-03 with
-`Pipeline.map`, the bare decorator form, and `Pipeline.open()`). The branch is working
-toward the **M1 v1-parity merge** (§ 4): R4D → R5A → R7 → merge. The next coding PR is
-therefore **R4D — workflow input declarations**: top-level typed `Workflow` inputs with
-execution values arriving through `Context.inputs`, per that section and
-[extensibility.md § E3.6](extensibility.md#e36-inputs); not an Operations as Code,
-state-store, cache, or pub/sub PR.
+R0–R4D have landed (status: the R-track table in
+[PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R4D closed 2026-11-10 with each
+`Workflow` input's schema, `{"input": name}` references, and `Context.inputs`
+validation). The branch is working toward the **M1 v1-parity merge** (§ 4): R5A → R7 →
+merge. The next coding PR is therefore **R5A**, per that section; not an Operations as
+Code, state-store, cache, or pub/sub PR.
 
-After R4D, R5A and R7 follow (they may overlap per § 5), then the merge. R2B (`version=`
+R5A and R7 may overlap per § 5, then the merge. R2B (`version=`
 plumbing) remains open beside them. R11A is **not** permission to jump around those
 prerequisites; it is the first Operations as Code slice once the owning lower-level
 seams exist.

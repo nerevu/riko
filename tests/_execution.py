@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import reduce
 from inspect import isasyncgenfunction, iscoroutinefunction
-from itertools import pairwise
 from typing import TYPE_CHECKING, Self, cast
 
 from riko.definitions._nodes import ModuleNode, StreamEdge
@@ -27,12 +27,12 @@ if TYPE_CHECKING:
         AsyncIterator,
         Awaitable,
         Generator,
-        Mapping,
         Sequence,
     )
 
     from riko.definitions._module_definition import ModuleDefinition
     from riko.definitions._settings import ExecutionSettings
+    from riko.definitions._workflow_definition import Outputs
     from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
@@ -45,16 +45,18 @@ OUTPUT_A = {"default": Endpoint("a", "out")}
 def registered_modules(
     *definitions: ModuleDefinition, replace: bool = False
 ) -> Generator[ModuleRegistry]:
-    """Registers *definitions* in a fresh module registry, reset again on exit."""
-    module_registry.reset()
-
-    try:
-        for definition in definitions:
-            module_registry.register(definition, replace=replace)
-
-        yield module_registry
-    finally:
+    """Registers *definitions* in an emptied module registry, restored on exit."""
+    with module_registry.restoring():
         module_registry.reset()
+
+        try:
+            for definition in definitions:
+                module_registry.register(definition, replace=replace)
+
+            yield module_registry
+        finally:
+            # drops any entry-point cache a test filled from patched entry points
+            module_registry.reset()
 
 
 def tag_source[F: Func[object]](fn: F) -> F:
@@ -90,7 +92,7 @@ def build_workflow(
     edges: Sequence[StreamEdge] = (),
     resources: Sequence[str] = (),
     *,
-    outputs: Mapping[str, Endpoint] | None = None,
+    outputs: Outputs | None = None,
 ) -> Workflow:
     if outputs is None:
         outputs = {"default": Endpoint(nodes[-1].id, "out")}
@@ -99,9 +101,7 @@ def build_workflow(
 
 
 def build_chain(*nodes: ModuleNode) -> Workflow:
-    pairs = pairwise(nodes)
-    edges = [StreamEdge(Endpoint(a.id, "out"), Endpoint(b.id, "in")) for a, b in pairs]
-    return build_workflow(list(nodes), edges=tuple(edges))
+    return reduce(Workflow.with_node, nodes, Workflow())
 
 
 def module_workflow(name: str = "m") -> Workflow:

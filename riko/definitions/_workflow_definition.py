@@ -2,7 +2,7 @@
 """
 The immutable ``Workflow`` graph model, with its loaders and serializers.
 
-A ``Workflow`` holds the nodes, edges, outputs, input declarations, and declared
+A ``Workflow`` holds the nodes, edges, outputs, input schemas, and declared
 resources of one graph. It is the structural immutable definition that wraps the
 nodes and edges, checks graph validity on request, and reads itself from, and writes
 itself to, a workflow document (``WorkflowDocument``).
@@ -28,114 +28,176 @@ Examples:
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Mapping
-from functools import cached_property, partial
+from collections.abc import Mapping, Sequence
+from functools import cached_property
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 from attrs import define, evolve, field
 
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values
-from riko.base._guards import require_sequence
-from riko.base._iterutils import unique_everseen
-from riko.base._require_guards import normalize_strs, require_instances
-from riko.base._typing import resolve_enum
+from riko.base._guards import is_mapping, require_listlike, require_mapping
+from riko.base._iterutils import sort_stably, unique_everseen
+from riko.base._require_guards import (
+    normalize_strs,
+    require_instances,
+    require_str,
+    require_strlike,
+)
+from riko.base._typing import require_enum
 from riko.types._enums import DocumentShape
 from riko.types._frozendict import (
+    EMPTY_INPUT_SCHEMAS,
     FrozenDict,
-    FrozenJSON,
-    freeze_json,
+    FrozenInputSchemas,
+    FrozenNodes,
+    FrozenOutputs,
+    FrozenResources,
+    FrozenWorkflowEdges,
+    InputSchemasLike,
+    freeze,
     instances_freezer,
+    json_freeze,
     mapping_converter,
 )
+from riko.types._pipedef import Embed, PipeDag
 from riko.types._workflow import (
     WORKFLOW_VERSION,
-    Edge,
     Endpoint,
-    GraphEdge,
-    GraphIndex,
     NodeId,
+    PortEdge,
+    RawEdge,
+    RawEndpoint,
+    RawNode,
     RawWorkflow,
+    WorkflowEdge,
+    WorkflowIndex,
     parse_port,
 )
 
-from ._migrate import migrate_pipe_def
+from ._inputs import compile_input_schema
 from ._nodes import (
     CallableNode,
     ModuleNode,
-    Node,
+    RikoNode,
     RunnableNode,
     StreamEdge,
     SubscribeNode,
     get_family_edges,
 )
-from ._normalize import build_raw_graph, build_workflow_fields, get_free_occurrence
-from ._serialize import parse_graph, serialize_graph
+from ._normalize import (
+    build_nodes,
+    build_raw_workflow,
+    get_free_occurrence,
+    normalize_edge,
+    normalize_input_schemas,
+    normalize_outputs,
+    require_raw_workflow,
+)
+from ._serialize import parse_document, serialize_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from riko.types._enums import DocumentShapeLike
+    from riko.types._frozendict import FrozenPortEdges, JSONValue
     from riko.types._io import PathLike
-    from riko.types._pipedef import Embed, PipeDag, PipeDefLike
+    from riko.types._pipedef import PipeDefLike
     from riko.types._workflow import EdgeFamily, WorkflowDocument
 
 type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
-type NodesInput = Iterable[Node]
-type OutputsInput = Mapping[str, Endpoint]
+type DocumentMapping = RawWorkflow | PipeDefLike | PipeDag
+type DocumentLike = str | WorkflowDocument | Workflow | DocumentMapping
+type RawNodes = Sequence[RawNode] | Mapping[str, RawNode]
+type NodeLike = RikoNode | RawNode | Mapping[str, object]
+type NodesLike = Sequence[NodeLike] | Mapping[str, NodeLike]
+type EndpointLike = Endpoint | RawEndpoint | Mapping[str, object]
+type EdgeLike = PortEdge | RawEdge | Mapping[str, object]
+type RikoNodeCollection = Mapping[NodeId, RikoNode]
+type RikoNodes = Sequence[RikoNode]
+type PortEdges = Sequence[PortEdge]
+type RawPortEdges = Sequence[RawEdge]
+type RawInputs = Mapping[str, object]
+type Inputs = Mapping[str, JSONValue]
+type RawOutputs = Mapping[str, RawEndpoint]
+type Outputs = Mapping[str, Endpoint]
+type OutputsLike = Mapping[str, EndpointLike]
 
-_EMPTY_INPUTS: FrozenDict[str, FrozenJSON] = FrozenDict()
-_EMPTY_OUTPUTS: FrozenDict[str, Endpoint] = FrozenDict()
-_EMPTY_NODES: FrozenDict[NodeId, Node] = FrozenDict()
-_EMPTY_EDGES: tuple[Edge, ...] = ()
-_EMPTY_RESOURCES: tuple[str, ...] = ()
+_EMPTY_OUTPUTS: FrozenOutputs = FrozenDict()
+_EMPTY_NODES: FrozenNodes = FrozenDict()
+_EMPTY_EDGES: FrozenPortEdges = ()
+_EMPTY_RESOURCES: FrozenResources = ()
+_RESOURCES_WHAT = "Workflow 'resources'"
 
 endpoint_freezer = instances_freezer(Endpoint, "Workflow output")
 outputs_converter = mapping_converter(
-    endpoint_freezer, OutputsInput, what="Workflow 'outputs'"
-)
-inputs_converter = mapping_converter(freeze_json, what="Workflow 'inputs'")
-
-resource_names_converter = partial(
-    normalize_strs, what="Workflow 'resources'", strict=True
+    endpoint_freezer, Outputs, what="Workflow 'outputs'"
 )
 
 
-def _edges_converter(value: Iterable[Edge]) -> tuple[Edge, ...]:
-    """Requires every workflow edge to be an ``Edge``."""
-    edges = require_sequence(value, "Workflow 'edges'")
-    return tuple(require_instances(Edge, edges, "Workflow edge"))
+def _normalize_resource_names(value: object) -> FrozenResources:
+    """Normalizes resource names to a tuple, rejecting ``None`` and non-strings."""
+    return normalize_strs(require_strlike(value, _RESOURCES_WHAT), _RESOURCES_WHAT)
 
 
-def nodes_converter(value: NodesInput) -> FrozenDict[NodeId, Node]:
-    """Keys each workflow node by its id, rejecting a mapping or a repeated id."""
-    if value is _EMPTY_NODES:
-        result = _EMPTY_NODES
+def _input_schemas_freezer(value: InputSchemasLike) -> FrozenInputSchemas:
+    """Requires every input's schema to be a mapping and freezes it."""
+    what = "Workflow 'input_schemas'"
+    schemas = {k: require_mapping(v, f"{what} {k!r}") for k, v in value.items()}
+    return freeze(schemas, mapping_value_func=json_freeze)
+
+
+input_schemas_converter = mapping_converter(
+    _input_schemas_freezer, InputSchemasLike, what="Workflow 'input_schemas'"
+)
+
+
+def _edges_converter(value: PortEdges) -> FrozenPortEdges:
+    """Requires every workflow edge to be a ``PortEdge``."""
+    edges = require_listlike(value, "Workflow 'edges'")
+    return tuple(require_instances(PortEdge, edges, "Workflow edge"))
+
+
+def _require_keyed_nodes(value: RikoNodeCollection, what: str) -> RikoNodeCollection:
+    """Requires ``value`` to hold nodes keyed by their own ids, as a ``Workflow``'s."""
+    items = value.items()
+
+    if not all(isinstance(node, RikoNode) and node.id == key for key, node in items):
+        raise InvalidPipelineError(f"{what} must be a list")
+
+    return value
+
+
+def nodes_converter(value: RikoNodes | RikoNodeCollection) -> FrozenNodes:
+    """
+    Keys each workflow node by its id and rejects mappings or repeated ids.
+
+    The id-keyed nodes of another ``Workflow`` pass through, so ``evolve`` keeps them.
+    """
+    if is_mapping(value):
+        result = _require_keyed_nodes(value, "Workflow 'nodes'")
     else:
-        _nodes = require_sequence(value, "Workflow 'nodes'")
-        nodes = list(require_instances(Node, _nodes, "Workflow node"))
-        keyed = {node.id: node for node in nodes}
+        _nodes = require_listlike(value, "Workflow 'nodes'")
+        nodes = list(require_instances(RikoNode, _nodes, "Workflow node"))
+        result = {node.id: node for node in nodes}
 
-        if len(keyed) < len(nodes):
+        if len(result) < len(nodes):
             raise InvalidPipelineError("Workflow 'nodes' must not repeat a node id")
 
-        result = FrozenDict.from_frozen(keyed)
-
-    return result
+    return freeze(result)
 
 
 @define(frozen=True, slots=True, repr=False)
 class Workflow:
     """
-    The strict in-memory workflow graph: nodes, edges, outputs, and input declarations.
+    The strict in-memory workflow graph: nodes, edges, outputs, and input schemas.
 
-    Construction canonicalizes field-local representation details such as immutable
-    mappings and resource-name shorthand. Does not perform shorthand normalization
-    or closed-schema rejection. Cross-field graph validity is checked explicitly by
-    ``validate()``. ``parse()`` and ``load()`` read a workflow from any readable
-    workflow input, and ``serialize()`` writes it back out as a workflow document.
+    Cross-field graph validity is checked explicitly by ``validate()``. ``parse()`` and
+    ``load()`` read a workflow from any readable workflow input. ``serialize()`` writes
+    it back out as a workflow document.
 
     Attributes:
 
@@ -147,7 +209,10 @@ class Workflow:
         index: The graph index derived from the nodes, edges, and outputs.
         edges: The stream and publish edges, in listing order.
         outputs: The workflow outputs: named endpoints the workflow exposes.
-        inputs: The declared JSON Schemas.
+
+        input_schemas: Each input's schema (a JSON Schema), keyed by input name. Node
+            configuration refers to an input with an ``{"input": name}`` mapping.
+
         resources: The workflow declared resources (must include each one a node binds).
         version: The workflow format version.
 
@@ -162,46 +227,102 @@ class Workflow:
         ... )
         >>> flow.resources
         ('db',)
-        >>> flow.isvalid
+        >>> flow.is_valid
         True
 
     """
 
-    nodes: FrozenDict[NodeId, Node] = field(
-        default=_EMPTY_NODES, converter=nodes_converter
+    nodes: FrozenNodes = field(default=_EMPTY_NODES, converter=nodes_converter)
+    outputs: FrozenOutputs = field(default=_EMPTY_OUTPUTS, converter=outputs_converter)
+    input_schemas: FrozenInputSchemas = field(
+        default=EMPTY_INPUT_SCHEMAS, converter=input_schemas_converter
     )
-    outputs: FrozenDict[str, Endpoint] = field(
-        default=_EMPTY_OUTPUTS, converter=outputs_converter
-    )
-    inputs: FrozenDict[str, FrozenJSON] = field(
-        default=_EMPTY_INPUTS, converter=inputs_converter
-    )
-    edges: tuple[Edge, ...] = field(default=_EMPTY_EDGES, converter=_edges_converter)
-    resources: tuple[str, ...] = field(
-        default=_EMPTY_RESOURCES, converter=resource_names_converter
+    edges: FrozenPortEdges = field(default=_EMPTY_EDGES, converter=_edges_converter)
+    resources: FrozenResources = field(
+        default=_EMPTY_RESOURCES, converter=_normalize_resource_names
     )
     version: str = WORKFLOW_VERSION
 
     @classmethod
+    def from_raw(cls, value: WorkflowLike) -> Self:
+        """
+        Builds a ``Workflow`` from any workflow mapping (``WorkflowLike``).
+
+        This is the one structural normalization boundary. Listed nodes get
+        ``<name>-<occurrence>`` ids, legacy port names become the canonical grammar,
+        omitted outputs default to the lone leaf node, and string input's schemas become
+        full JSON Schemas. The result is not validated. Call ``validate()`` or
+        ``parse()`` for that.
+
+        Args:
+
+            value: A mapping with ``nodes`` and optional ``edges``, ``outputs``,
+                ``input_schemas``, ``resources``, and ``version``.
+
+        Returns:
+
+            The normalized ``Workflow``.
+
+        Raises:
+
+            InvalidPipelineError: If ``value`` is not a mapping or its structure is
+                malformed, or a ``Workflow`` has a callable node (a Python callable has
+                no workflow document form).
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>>
+            >>> flow = Workflow.from_raw({"nodes": [{"name": "fetch"}]})
+            >>> flow
+            Workflow(fetch-1; outputs: default)
+            >>> flow.nodes["fetch-1"].name
+            'fetch'
+
+        """
+        loose = build_raw_workflow(value) if isinstance(value, Workflow) else value
+        raw = require_raw_workflow(require_mapping(loose, "workflow"))
+        nodes = build_nodes(raw.get("nodes", ()))
+        _edges = require_listlike(raw.get("edges", ()), "edges")
+        edges = [normalize_edge(require_mapping(e, "edge"), **nodes) for e in _edges]
+        version = raw.get("version", WORKFLOW_VERSION)
+
+        return cls(
+            nodes=nodes,
+            outputs=normalize_outputs(raw.get("outputs"), edges, *nodes),
+            input_schemas=normalize_input_schemas(raw.get("input_schemas")),
+            edges=edges,
+            resources=normalize_strs(raw.get("resources"), "Workflow 'resources'"),
+            version=require_str(version, "workflow 'version'"),
+        )
+
+    @classmethod
     def parse(
-        cls,
-        document: WorkflowDocument | str | WorkflowLike | PipeDefLike | PipeDag,
-        *,
-        shape: DocumentShapeLike | None = None,
+        cls, document: DocumentLike, *, shape: DocumentShapeLike | None = None
     ) -> Self:
         """
         Parses a workflow input of any readable shape into a validated ``Workflow``.
 
-        A workflow document, a serialized pipe definition (``PipeDef``), and a
-        serialized ``PipeDag`` are each recognized from their structure, as text,
-        bytes, or an already parsed mapping. A mapping listing ``modules`` with neither
-        ``src``/``tgt`` wires nor an ``output`` node reads as a ``PipeDag``. A
-        ``Workflow`` is re-normalized, so parsing a result again returns an equal
-        ``Workflow``.
+        Recognizes workflow documents, pipe definitions (``PipeDef``), and ``PipeDag``s
+        from their structure. Accepts text, bytes, or a parsed mapping.
 
         Args:
 
-            document: The workflow input.
+            document: The workflow input:
+
+                - ``WorkflowDocument``: Mapping containing ``nodes`` or ``version``
+
+                - ``PipeDef``: Mapping containing ``modules`` and either ``src``/``tgt``
+                  ``wires``, an ``output`` module, or a ``PipeDef``-only module key
+
+                - ``PipeDag``: Mapping containing ``modules`` and either ``wires``
+                  written as lists or a ``PipeDag``-only module key
+
+                - ``Workflow``: Re-normalized to an equivalent ``Workflow``
+
+                A mapping containing ``modules`` with none of these markers is a
+                ``PipeDef`` when it has at least one module and every module has a
+                ``type``, ``id``, and ``conf``; and a ``PipeDag`` otherwise.
 
         Kwargs:
 
@@ -215,9 +336,13 @@ class Workflow:
 
         Raises:
 
-            InvalidPipelineError: If ``document`` is not valid JSON or not a mapping,
-                its shape cannot be detected, it does not hold the shape it is read
-                as, or the resulting workflow is invalid.
+            InvalidPipelineError: If ``document`` is neither valid JSON nor a mapping,
+                its shape cannot be detected, it does not hold the shape it is read as,
+                a module or wire is malformed, a key has no ``Workflow`` equivalent, two
+                configuration keys differ only in case, two ``input`` modules give an
+                input different schemas, a ``Workflow`` has a callable node (a Python
+                callable has no workflow document form), or the resulting workflow is
+                invalid.
 
         Examples:
 
@@ -234,20 +359,22 @@ class Workflow:
             >>> Workflow.parse("[]")
             Traceback (most recent call last):
             ...
-            riko.base.exceptions.InvalidPipelineError: ...workflow must be a mapping
+            riko.exceptions.InvalidPipelineError: ...document must be a mapping...
 
         """
-        resolved = resolve_enum(DocumentShape, shape, "shape", strict=False)
+        resolved = (
+            None if shape is None else require_enum(DocumentShape, shape, "shape")
+        )
 
         if not isinstance(document, Workflow):
-            fields = parse_graph(document, shape=resolved)
+            raw = parse_document(document, shape=resolved)
         elif resolved is None or resolved is DocumentShape.V2:
-            fields = build_workflow_fields(build_raw_graph(document))
+            raw = build_raw_workflow(document)
         else:
             msg = f"a Workflow can only be read as shape 'v2', not {resolved.value!r}"
             raise InvalidPipelineError(msg)
 
-        flow = cls(**fields)
+        flow = cls.from_raw(raw)
         flow.validate()
         return flow
 
@@ -271,19 +398,15 @@ class Workflow:
         Raises:
 
             OSError: If the file cannot be read.
-
             InvalidPipelineError: If the file does not hold a valid workflow input.
 
         Examples:
 
-            >>> from pathlib import Path
-            >>> from tempfile import TemporaryDirectory
-            >>> from riko import Workflow
+            >>> from riko import Workflow, get_temp_path
             >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>>
-            >>> with TemporaryDirectory() as tmp:
-            ...     path = Path(tmp) / "flow.json"
+            >>> with get_temp_path("flow.json") as path:
             ...     _ = path.write_bytes(flow.serialize())
             ...     Workflow.load(path) == flow
             True
@@ -318,7 +441,7 @@ class Workflow:
             '    "edges": [],'
 
         """
-        return serialize_graph(self, indent=indent)
+        return serialize_workflow(self, indent=indent)
 
     def _is_chain(self) -> bool:
         """Reports whether the nodes form one unbranched, acyclic line."""
@@ -399,10 +522,10 @@ class Workflow:
                 yield f"{endpoint} is not an {direction!r} port"
 
     @cached_property
-    def graph_edges(self) -> tuple[GraphEdge, ...]:
+    def graph_edges(self) -> FrozenWorkflowEdges:
         """Flattens each edge into the node-and-port record the graph index reads."""
         return tuple(
-            GraphEdge(e.source.node, e.target.node, e.source.port, e.target.port)
+            WorkflowEdge(e.source.node, e.target.node, e.source.port, e.target.port)
             for e in self.edges
         )
 
@@ -435,12 +558,12 @@ class Workflow:
         """The module and stored-workflow names the nodes and their loop embeds run."""
         names = (node.name for node in self.module_nodes.values())
         embeds = (embed["name"] for embed in self.embeds.values())
-        return tuple(sorted({*names, *embeds}))
+        return sort_stably({*names, *embeds})
 
     @cached_property
-    def index(self) -> GraphIndex:
+    def index(self) -> WorkflowIndex:
         """Interprets the topology once; edges and outputs name declared nodes."""
-        return GraphIndex(self.nodes, self.graph_edges, self.outputs)
+        return WorkflowIndex(self.nodes, self.graph_edges, self.outputs)
 
     @property
     def is_empty(self) -> bool:
@@ -458,6 +581,12 @@ class Workflow:
         """Collects the Context resource names the workflow's nodes bind."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_resources for node in nodes))
+
+    @property
+    def referenced_inputs(self) -> set[str]:
+        """Collects the input names the workflow's node configurations refer to."""
+        nodes = self.nodes.values()
+        return set(chain.from_iterable(node.referenced_inputs for node in nodes))
 
     def get_node_id(self, name: str) -> NodeId:
         """
@@ -484,7 +613,7 @@ class Workflow:
 
     def _require_default_output(self, what: str) -> Endpoint | None:
         """Requires a default output to chain through, unless the workflow is empty."""
-        if (default := self.outputs.get("default")) is None and self.nodes:
+        if (default := self.outputs.get(DEFAULT_OUTPUT)) is None and self.nodes:
             msg = f"{what} has nodes but no default output. Build it with "
             msg += "Workflow().with_node(node), or declare "
             msg += "outputs={'default': Endpoint(id, 'out')}"
@@ -492,9 +621,9 @@ class Workflow:
 
         return default
 
-    def with_node(self, node: Node) -> Self:
+    def with_node(self, node: RikoNode) -> Self:
         """
-        Builds a workflow with ``node`` appended as its default output.
+        Builds a workflow with ``node`` appended to its end.
 
         The previous default output streams into ``node``, and the workflow appends any
         new resources the ``node`` binds at the end.
@@ -533,7 +662,7 @@ class Workflow:
         return evolve(
             self,
             nodes=[*self.nodes.values(), node],
-            outputs={**self.outputs, "default": Endpoint(node.id, "out")},
+            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, "out")},
             edges=edges,
             resources=unique_everseen(chain(self.resources, node.resources.values())),
         )
@@ -558,7 +687,7 @@ class Workflow:
 
     def with_workflow(self, other: Workflow) -> Self:
         """
-        Builds a workflow with ``other`` appended after its default output.
+        Builds a workflow with ``other`` appended to its end.
 
         The previous default output streams into ``other``'s open default input port.
         ``other``'s workflow outputs replace existing ones of the same name. In case of
@@ -577,8 +706,8 @@ class Workflow:
 
             InvalidPipelineError: If either workflow has nodes but no default output;
                 ``other`` doesn't have exactly one node with an open default input port;
-                both define the same non-default workflow output; or both declare the
-                same input differently.
+                both define the same non-default workflow output; or both give the same
+                input different schemas.
 
         Examples:
 
@@ -601,17 +730,19 @@ class Workflow:
         heads = [free_ids[node_id] for node_id in index.order if index.is_open(node_id)]
         tail = self._require_default_output("this workflow")
         other._require_default_output("the appended workflow")
-        inputs = other.inputs
+        schemas = other.input_schemas
 
         if tail is not None and other.nodes and len(heads) != 1:
             msg = "an appended workflow needs exactly one node with an open input, "
             msg += f"not {len(heads)}: {heads}"
             raise InvalidPipelineError(msg)
-        elif named := (set(self.outputs).intersection(outputs)) - {"default"}:
+        elif named := (set(self.outputs).intersection(outputs)) - {DEFAULT_OUTPUT}:
             msg = f"both workflows define workflow output(s): {sorted(named)}"
             raise InvalidPipelineError(msg)
-        elif redeclared := [k for k, v in inputs.items() if self.inputs.get(k, v) != v]:
-            msg = f"both workflows declare input(s) differently: {sorted(redeclared)}"
+        elif clashing := [
+            k for k, v in schemas.items() if self.input_schemas.get(k, v) != v
+        ]:
+            msg = f"both workflows give input(s) different schemas: {sorted(clashing)}"
             raise InvalidPipelineError(msg)
         elif tail is None or not other.nodes:
             wiring = []
@@ -628,24 +759,52 @@ class Workflow:
             self,
             nodes=[*self.nodes.values(), *nodes],
             outputs={**self.outputs, **outputs},
-            inputs={**self.inputs, **inputs},
+            input_schemas={**self.input_schemas, **schemas},
             edges=[*self.edges, *wiring, *edges],
             resources=unique_everseen(chain(self.resources, other.resources)),
         )
 
+    def validate_input_schemas(self) -> None:
+        """
+        Validates the schema of each workflow input.
+
+        Each input's schema must be a JSON Schema whose ``type``, when present, names
+        JSON types. ``validate`` runs this along with the graph checks.
+
+        Raises:
+
+            InvalidPipelineError: If an input's schema is not a valid JSON Schema.
+
+        Examples:
+
+            >>> integer = Workflow(input_schemas={"limit": {"type": "integer"}})
+            >>> integer.validate_input_schemas()
+            >>> misspelled = Workflow(input_schemas={"q": {"type": "strng"}})
+            >>> misspelled.validate_input_schemas()
+            Traceback (most recent call last):
+            ...
+            riko.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
+
+        """
+        for name, schema in self.input_schemas.items():
+            compile_input_schema(name, schema)
+
     def validate(self) -> None:
         """
-        Validate workflow graph structure and references.
+        Validates workflow graph structure, references, and input schemas.
 
         Raises:
 
             InvalidPipelineError: If the graph has an unsupported version, an empty node
                 set, a dangling edge or output reference, more than one stream edge into
                 a port, a publish/subscribe edge mismatch, a misdirected or malformed
-                port, a cycle, an unresolved resource, or no workflow output.
+                port, a cycle, an unresolved resource, a reference to an input with no
+                schema, an invalid input schema, or no workflow output.
 
         """
+        self.validate_input_schemas()
         endpoints = {endpoint.node for endpoint in self.endpoints}
+        inputs = self.referenced_inputs
 
         if self.version != WORKFLOW_VERSION:
             msg = f"unsupported workflow version: {self.version!r}"
@@ -670,6 +829,8 @@ class Workflow:
         elif undeclared := sorted(self.referenced_resources.difference(self.resources)):
             msg = f"unresolved resource reference(s): {undeclared}"
             raise InvalidPipelineError(msg)
+        elif unresolved := sorted(inputs.difference(self.input_schemas)):
+            raise InvalidPipelineError(f"unresolved input reference(s): {unresolved}")
         elif not self.outputs:
             msg = "workflow exposes no workflow output; declare 'outputs'"
             raise InvalidPipelineError(msg)
@@ -692,7 +853,7 @@ class Workflow:
             >>> flow.with_node(node).validate_document_nodes()
             Traceback (most recent call last):
                 ...
-            riko.base.exceptions.InvalidPipelineError: ...callable node(s) ['len-1']...
+            riko.exceptions.InvalidPipelineError: ...callable node(s) ['len-1']...
 
         """
         if callables := sorted(self.callable_nodes):
@@ -732,10 +893,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow(
-            ...     nodes=[ModuleNode(id="a", name="hash")],
-            ...     outputs={"default": Endpoint("a", "out")},
-            ... )
+            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
             >>> flow.require_runnable_only("execution")
 
         """
@@ -747,7 +905,7 @@ class Workflow:
             raise InvalidPipelineError(msg)
 
     @property
-    def isvalid(self) -> bool:
+    def is_valid(self) -> bool:
         """Confirms whether the workflow validates."""
         try:
             self.validate()
@@ -759,112 +917,4 @@ class Workflow:
         return result
 
 
-def normalize_workflow(value: WorkflowLike) -> Workflow:
-    """
-    Normalizes a flexible ``WorkflowLike`` into a strict ``Workflow``.
-
-    A ``Workflow`` is re-normalized through the same normalization rather than trusted,
-    so a hand-built workflow is re-canonicalized and normalization is idempotent on
-    its own output.
-
-    This is the one structural normalization boundary: no compiler, runtime, or CLI
-    subsystem independently reinterprets shorthand, legacy port names, or omitted
-    outputs. It stays contract-free and does not validate the result; call
-    ``validate()`` for that.
-
-    Args:
-
-        value: A ``WorkflowLike`` with ``nodes`` and optional ``edges``, ``outputs``,
-            ``inputs``, ``resources``, and ``version``.
-
-    Returns:
-
-        The normalized ``Workflow``.
-
-    Raises:
-
-        InvalidPipelineError: If ``value`` is not a mapping, its structure is
-            malformed, or it is a ``Workflow`` with a callable node.
-
-    Examples:
-
-        >>> from riko.ext import normalize_workflow
-        >>>
-        >>> flow = normalize_workflow(
-        ...     {
-        ...         "nodes": [
-        ...             {"id": "fetch-1", "name": "fetch"},
-        ...             {"name": "write", "family": "write", "backend": "file"},
-        ...         ],
-        ...         "edges": [
-        ...             {"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}
-        ...         ],
-        ...     }
-        ... )
-        >>> flow.nodes["write-1"].backend.value
-        'file'
-        >>> flow.outputs["default"]
-        Endpoint(node='write-1', port='out')
-
-    """
-    raw = build_raw_graph(value) if isinstance(value, Workflow) else value
-    return Workflow(**build_workflow_fields(raw))
-
-
-def migrate_v1_to_v2(pipe_def: PipeDefLike) -> Workflow:
-    """
-    Migrates a ``PipeDef`` into a ``Workflow``.
-
-    Warns that a ``PipeDef`` was migrated, then returns the ``Workflow``. Legacy ports,
-    the ``write`` module, and the ``PipeDef`` ``output`` node (``_OUTPUT``) are
-    translated to their ``Workflow`` equivalents. Orphan nodes are kept, and run only
-    when a workflow output needs them. Empty-graph rejection is left to validation.
-
-    A module's call options become the node's ``options``, a loop's embedded module and
-    its configuration become the node's ``embed``, and a ``write`` module's file-open
-    mode maps to a reconcile mode. A key with no ``Workflow`` equivalent is rejected
-    rather than silently dropped, as are configuration keys that differ only in case.
-
-    Args:
-
-        pipe_def: A ``PipeDef`` with ``modules`` and ``src``/``tgt`` ``wires``;
-            editor ``layout``/``terminaldata`` are ignored.
-
-    Returns:
-
-        The ``Workflow``.
-
-    Raises:
-
-        InvalidPipelineError: If a module or wire is malformed, a key has no
-            ``Workflow`` equivalent, or two configuration keys differ only in case.
-
-    Examples:
-
-        >>> from riko.ext import migrate_v1_to_v2
-        >>>
-        >>> pipe_def = {
-        ...     "modules": [
-        ...         {"id": "sw-1", "type": "fetch", "conf": {}},
-        ...         {"id": "sw-2", "type": "write", "conf": {"fmt": "json"}},
-        ...     ],
-        ...     "wires": [
-        ...         {
-        ...             "id": "_w1",
-        ...             "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-        ...             "tgt": {"id": "_INPUT", "moduleid": "sw-2"},
-        ...         }
-        ...     ],
-        ... }
-        >>> flow = migrate_v1_to_v2(pipe_def)
-        >>> node = flow.nodes["sw-2"]
-        >>> node.backend.value, node.fmt.value
-        ('file', 'json')
-        >>> flow.outputs["default"]
-        Endpoint(node='sw-2', port='out')
-
-    """
-    return Workflow(**build_workflow_fields(migrate_pipe_def(pipe_def)))
-
-
-__all__ = ["Workflow", "migrate_v1_to_v2", "normalize_workflow"]
+__all__ = ["Workflow"]

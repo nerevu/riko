@@ -14,7 +14,7 @@ from meza import fntools as ft
 
 from riko.base._guards import require_mapping
 from riko.base._iterutils import sort_stably
-from riko.base._typing import resolve_enum
+from riko.base._typing import require_enum
 from riko.types._enums import Formats
 from riko.types._frozendict import thaw
 
@@ -90,7 +90,7 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
     Kwargs:
 
         newline: Whether to write one JSON object per line instead of an array.
-        **kwargs: Extra keyword arguments forwarded to ``json.dumps``.
+        **kwargs: Extra keyword arguments forwarded to the JSON encoder.
 
     Returns:
 
@@ -109,7 +109,7 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
 
     """
     options = {"sort_keys": True, "ensure_ascii": False, **kwargs}
-    dump = partial(dumps, cls=_SortedSetEncoder, **options)
+    dump = _SortedSetEncoder(**options).encode
     return StringIO("\n".join(map(dump, items)) if newline else dump(list(items)))
 
 
@@ -172,7 +172,7 @@ def require_conversion_format(fmt: str, what: str = "conversion format") -> Form
         ValueError: Invalid conversion format: 'xml'. Expected one of ...
 
     """
-    member = resolve_enum(Formats, fmt, what, error=ValueError)
+    member = require_enum(Formats, fmt, what, error=ValueError)
     _require_converter(member)
     return member
 
@@ -240,8 +240,9 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
 
     """
     convert = _require_converter(fmt)
-    require = partial(require_mapping, what="item", error=TypeError)
-    thawed = (thaw(require(item)) for item in items)
+    thawed = (
+        thaw(require_mapping(item, what="item", error=TypeError)) for item in items
+    )
     first = next(thawed, None)
 
     if first is None and fmt == Formats.GEOJSON:

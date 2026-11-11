@@ -73,7 +73,8 @@ def parser(
     """
     parsed = urlparse(url)
     items = parsed._asdict().items()
-    return ({"component": k, objconf.normalize_key: v} for k, v in items)
+    key = objconf.normalize_key
+    return ({"component": k, key: v} for k, v in items)
 
 
 @processor(DEFAULTS, isasync=True, **OPTS)

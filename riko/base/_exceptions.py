@@ -2,7 +2,7 @@
 """
 Defines riko's exceptions and warnings.
 
-The public import path is ``riko.base.exceptions``, which re-exports every class here
+The public import path is ``riko.exceptions``, which re-exports every class here
 and names them as its own.
 """
 
@@ -62,6 +62,29 @@ class RikoError(Exception):
 
 class ModuleError(RikoError):
     """Base class for module-related errors."""
+
+
+class RemovedOptionError(ModuleError, TypeError):
+    """
+    Raised when a pipe call passes an option riko no longer accepts.
+
+    It is a ``TypeError``, like any other unexpected keyword argument.
+
+    Examples:
+
+        >>> error = RemovedOptionError("mode", name="hash", hint="a pipe only runs")
+        >>> str(error)
+        "the 'hash' module no longer takes 'mode'; a pipe only runs"
+        >>> isinstance(error, TypeError), error.option
+        (True, 'mode')
+
+    """
+
+    def __init__(self, option: str, *, name: str, hint: str):
+        super().__init__(f"the {name!r} module no longer takes {option!r}; {hint}")
+        self.option = option
+        self.name = name
+        self.hint = hint
 
 
 class UnsupportedModuleError(ModuleError):
@@ -204,6 +227,7 @@ __all__ = [
     "PipelineStateError",
     "PubSubError",
     "ReceiverUnavailableError",
+    "RemovedOptionError",
     "ResourceInterpretationWarning",
     "RikoError",
     "RikoWarning",
@@ -215,4 +239,4 @@ __all__ = [
 
 # Tracebacks and pickles name the public module these are imported from.
 for _name in __all__:
-    globals()[_name].__module__ = "riko.base.exceptions"
+    globals()[_name].__module__ = "riko.exceptions"

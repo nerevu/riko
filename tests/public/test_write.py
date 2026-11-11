@@ -12,6 +12,7 @@ import pytest
 
 from riko import export
 from riko.base._exceptions import InvalidPipelineError, UnsupportedTargetError
+from riko.base._iterutils import gen_non_null
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
@@ -77,7 +78,7 @@ SKIPPED_TARGETS = [
 def _skipped_conf(path, conf) -> WriteConf:
     """Builds an unwritable conf aimed at ``path`` (``dest: None`` drops it)."""
     target = {"dest": path} | conf
-    return cast("WriteConf", {k: v for k, v in target.items() if v is not None})
+    return cast("WriteConf", dict(gen_non_null(target.items(), cmp_pos=1)))
 
 
 FINANCE_WRITES = [

@@ -99,14 +99,14 @@ abstraction.
 
 In particular, riko provides:
 
-- a pure-Python, embedded execution model with no required external services
-- a library of configuration-driven modules for filtering, sorting, parsing, transforming, aggregating, and composing streams
-- first-class RSS/Atom and web-content processing
-- synchronous and asynchronous APIs
-- local thread and process-pool execution
-- lazy iterator-oriented processing
-- workflows written in Python or stored as JSON
-- tools to inspect, execute, and compile pipelines
+- a pure-Python, embedded execution model with lazy iterator-oriented processing and no
+  required external services
+- a library of configuration-driven modules for filtering, sorting, parsing,
+  transforming, aggregating, and composing streams, with first-class RSS/Atom and
+  web-content processing
+- synchronous and asynchronous APIs, plus local thread and process-pool execution
+- workflows written in Python or stored as JSON, and tools to inspect, execute, and
+  compile pipelines
 
 Why you shouldn't use riko
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -214,7 +214,7 @@ Here's the ``riko`` vocabulary at a glance:
 |                     | can be an ``item``, ``stream``, or    | ``pipeline.open(items)``                           |
 |                     | ``items``                             |                                                    |
 +---------------------+---------------------------------------+----------------------------------------------------+
-| ``Context``         | input values + ``ExecutionMode``      | ``Context(inputs=...)``                            |
+| ``Context``         | input values + resources              | ``Context(inputs=...)``                            |
 +---------------------+---------------------------------------+----------------------------------------------------+
 
 Core concepts
@@ -497,27 +497,28 @@ the definition.
 
 .. code-block:: python
 
-    from riko import get_path, Pipeline, Sources
-
-    fetch_conf = {'url': get_path('feed.xml')}
-    filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-
-    # The following pipeline will:
-    #   1. fetch a (cached) RSS feed
-    #   2. filter for items with an 'a' in the title
-    #   3. hash each title
-    #   4. perform the hashing in parallel four items at a time
-    #
-    # Note: no point in sorting before the hash since unordered execution (the
-    # default) doesn't guarantee order
-    pipeline = (
-        Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
-        .filter(conf={'rule': filter_rule})                     # 2
-        .hash(options={'field': 'title'})                       # 3
-        .with_execution(concurrency=4)                          # 4
-    )
-
-    sorted(item['title'] for item in pipeline)[:3]
+    >>> from riko import get_path, Pipeline, Sources
+    >>>
+    >>> fetch_conf = {'url': get_path('feed.xml')}
+    >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
+    >>>
+    >>> # The following pipeline will:
+    >>> #   1. fetch a (cached) RSS feed
+    >>> #   2. filter for items with an 'a' in the title
+    >>> #   3. hash each title
+    >>> #   4. perform the hashing in parallel four items at a time
+    >>> #
+    >>> # Note: no point in sorting before the hash since unordered execution (the
+    >>> # default) doesn't guarantee order
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
+    ...     .filter(conf={'rule': filter_rule})                     # 2
+    ...     .hash(options={'field': 'title'})                       # 3
+    ...     .with_execution(concurrency=4)                          # 4
+    ... )
+    >>>
+    >>> sorted(item['title'] for item in pipeline)[:3]
+    ['Donations', 'FAQ', 'General Comments']
 
 Asynchronous processing
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -620,6 +621,7 @@ E.g., ``pipe.py``
 
 .. code-block:: python
 
+    # pipe.py
     from riko import Pipeline, Sources
 
     conf1 = {'attrs': [{'value': 'https://google.com', 'key': 'content'}]}
@@ -658,7 +660,7 @@ then see the following output in your terminal:
 .. code-block:: bash
 
     Deadline to clear up health law eligibility near
-    682
+    692
 
 The ``examples`` directory bundles more runnable pipe scripts. E.g., try ``run-pipe
 usage``, ``run-pipe simple1``, or ``run-pipe wired``. The `Cookbook`_ covers the

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, timedelta, tzinfo
+from datetime import UTC, date, timedelta, timezone, tzinfo
 from datetime import datetime as dt
 from functools import lru_cache
 from time import struct_time
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, overload
+from zoneinfo import ZoneInfo
 
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -27,18 +28,6 @@ from riko.base._dateutils import (
 if TYPE_CHECKING:
     from riko.types._scalars import DateDict
     from riko.types._wrappers import Func
-
-TT_KEYS = (
-    "year",
-    "month",
-    "day",
-    "hour",
-    "minute",
-    "second",
-    "day_of_week",
-    "day_of_year",
-    "daylight_savings",
-)
 
 
 @lru_cache(maxsize=config.parsed_date_cache_size)
@@ -109,31 +98,22 @@ def date_to_datetime(
 
 
 @overload
-def tt_to_datetime(
-    tt: None, as_date: bool = ..., def_tzinfo: tzinfo | None = ...
-) -> None: ...
+def tt_to_datetime(tt: None, *, def_tzinfo: tzinfo | None = ...) -> None: ...
 @overload
 def tt_to_datetime(
-    tt: AwareST | NaiveST, as_date: Literal[True], def_tzinfo: tzinfo | None = ...
-) -> date: ...
-@overload
-def tt_to_datetime(
-    tt: AwareST | NaiveST,
-    as_date: Literal[False] = ...,
-    def_tzinfo: tzinfo | None = ...,
+    tt: AwareST | NaiveST, *, def_tzinfo: tzinfo | None = ...
 ) -> AwareDT | NaiveDT: ...
 def tt_to_datetime(
-    tt: struct_time | None, as_date: bool = False, def_tzinfo: tzinfo | None = None
-) -> date | dt | None:
+    tt: struct_time | None, *, def_tzinfo: tzinfo | None = None
+) -> dt | None:
     # convert and account for leapseconds
-    if tt:
+    if tt is None:
+        result = None
+    else:
         _tzinfo = resolve_tt_tzinfo(tt, def_tzinfo=def_tzinfo)
         result = dt(*tt[:5] + (min(tt[5], 59),), tzinfo=_tzinfo)
-        _date = result.date() if as_date else result
-    else:
-        _date = None
 
-    return _date
+    return result
 
 
 @overload
@@ -146,11 +126,7 @@ def date_to_tt(content: AwareDT | NaiveDT | date | None) -> AwareST | NaiveST | 
     tzname = get_tzname(content)
 
     if isinstance(content, dt) and tzname:
-        if utcoffset := content.utcoffset():
-            tm_gmtoff = int(utcoffset.total_seconds())
-        else:
-            tm_gmtoff = 0
-
+        tm_gmtoff = int((content.utcoffset() or timedelta(0)).total_seconds())
         tt = struct_time(content.timetuple() + (tzname, tm_gmtoff))
     elif content:
         tt = content.timetuple()
@@ -160,29 +136,68 @@ def date_to_tt(content: AwareDT | NaiveDT | date | None) -> AwareST | NaiveST | 
     return tt
 
 
-@overload
-def tt_to_datedict(tt: None, normal: date, def_tzinfo: tzinfo | None = ...) -> None: ...
-@overload
-def tt_to_datedict(
-    tt: AwareST | NaiveST, normal: date, def_tzinfo: tzinfo | None = ...
-) -> DateDict: ...
-def tt_to_datedict(
-    tt: struct_time | None, normal: date, def_tzinfo: tzinfo | None = None
-) -> DateDict | None:
-    # Make Sunday the first day of the week
-    if tt:
-        day_of_w = 0 if tt[6] == 6 else tt[6] + 1
-        isdst = None if tt[8] == -1 else bool(tt[8])
-        _tzinfo = resolve_tt_tzinfo(tt, def_tzinfo=def_tzinfo)
-        tm_zone = _tzinfo.tzname(None) if _tzinfo else None
-        aware = dt(*tt[:5], min(tt[5], 59), tzinfo=_tzinfo or UTC)
-        result = {"utime": int(aware.timestamp()), "timezone": tm_zone, "date": normal}
-        result.update(zip(TT_KEYS, tt, strict=False))  # pylint: disable=W1637
-        result.update({"day_of_week": day_of_w, "daylight_savings": isdst})
+def _get_zone_label(moment: AwareDT) -> str:
+    if isinstance(moment.tzinfo, ZoneInfo) and "/" in moment.tzinfo.key:
+        label = moment.tzinfo.key
     else:
-        result = None
+        label = timezone(moment.utcoffset() or timedelta(0)).tzname(None)
 
-    return result
+    return label
+
+
+def datetime_to_datedict(moment: dt) -> DateDict:
+    """
+    Builds a ``datebuilder`` date dict from a datetime.
+
+    A naive datetime is read as UTC. Sub-second precision is dropped.
+
+    Examples:
+
+        >>> from datetime import datetime, timezone, timedelta
+        >>>
+        >>> moment = datetime(2014, 12, 3, 9, tzinfo=timezone(timedelta(hours=8)))
+        >>> built = datetime_to_datedict(moment)
+        >>> built["utime"], built["utc_offset"], built["timezone"], built["hour"]
+        (1417568400, 28800, 'UTC+08:00', 9)
+
+    """
+    aware = resolve_aware_datetime(moment, try_local_tz=False).replace(microsecond=0)
+    offset = aware.utcoffset() or timedelta(0)
+    dst = aware.dst()
+
+    return {
+        "utime": int(aware.timestamp()),
+        "utc_offset": int(offset.total_seconds()),
+        "timezone": _get_zone_label(aware),
+        "year": aware.year,
+        "month": aware.month,
+        "day": aware.day,
+        "hour": aware.hour,
+        "minute": aware.minute,
+        "second": aware.second,
+        "day_of_week": aware.isoweekday() % 7,
+        "day_of_year": aware.timetuple().tm_yday,
+        "daylight_savings": None if dst is None else bool(dst),
+    }
+
+
+def datedict_to_datetime(value: DateDict) -> AwareDT:
+    """
+    Converts a ``datebuilder`` date dict back into the aware datetime it describes.
+
+    Only ``utime`` and ``utc_offset`` are read.
+
+    Examples:
+
+        >>> from datetime import datetime, timezone, timedelta
+        >>>
+        >>> moment = datetime(2020, 6, 15, 9, tzinfo=timezone(timedelta(hours=3)))
+        >>> datedict_to_datetime(datetime_to_datedict(moment)).isoformat()
+        '2020-06-15T09:00:00+03:00'
+
+    """
+    offset = timezone(timedelta(seconds=value["utc_offset"]))
+    return dt.fromtimestamp(value["utime"], offset)
 
 
 @overload

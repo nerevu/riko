@@ -2,8 +2,10 @@
 """
 Obtains and casts user input.
 
-Values come from ``inputs`` when supplied, from the configured default in test
-mode, and otherwise from stdin.
+Values come from ``inputs`` when supplied, from the configured default in test mode, and
+otherwise from stdin. In a workflow run, each workflow input with a schema arrives in
+``inputs``. ``default`` and ``prompt`` apply only when ``pipe`` is called on its own,
+outside a workflow run, or for an ``input_key`` with no schema in the workflow.
 
 Examples:
 
@@ -39,7 +41,7 @@ if TYPE_CHECKING:
     from riko.types._options import DecorationOptions, Defaults
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import Item
-    from riko.types._values import Inputs
+    from riko.types._values import BasicMapping
 
 logger: Logger = get_logger(__name__)
 
@@ -58,28 +60,32 @@ def parser(
     _: Item,
     extraction: object,
     objconf: InputObjconf,
-    skip: bool = False,
     *,
-    inputs: Inputs | None = None,
+    inputs: BasicMapping | None = None,
+    test: bool = False,
     **kwargs: object,
 ) -> PrimitiveValue:
     """
-    Obtains one user input value and casts it.
+    Obtains and casts one user input value.
 
-    Reads ``inputs[input_key]`` when ``inputs`` is given, falls back to
-    ``default`` when skipping, and otherwise prompts on stdin.
+    Reads ``inputs[input_key]`` when ``inputs`` is given, ``default`` in test mode, and
+    otherwise prompts on stdin.
 
     Args:
 
         _: The item. Unused.
+
         extraction: The extracted conf value. Unused.
-        objconf: The module configuration: ``prompt``, ``default``, ``type``, and
-            ``input_key``.
+
+        objconf: The module configuration: ``prompt``, ``default``, ``type``, ``test``,
+            and ``input_key``.
 
     Kwargs:
 
-        skip: Whether to use ``default`` instead of prompting.
         inputs: Preset answers keyed by ``input_key``, used instead of prompting.
+
+        test: Whether the run's ``Context`` is in test mode, which uses ``default``
+            instead of prompting (ignored if ``objconf.test`` is set).
 
     Returns:
 
@@ -98,7 +104,7 @@ def parser(
     """
     if inputs is not None:
         value = inputs.get(objconf.input_key, objconf.default)
-    elif objconf.test or skip or kwargs.get("test"):
+    elif objconf.test or test:
         value = objconf.default
     else:
         raw = input(f"{objconf.prompt} (default={objconf.default}) ")
@@ -121,18 +127,19 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when no input value is given or
-                prompting is skipped (default: "").
+            default (scalar): Value used when no input value is given or prompting is
+                skipped, e.g., when the pipe runs outside a workflow or for an
+                ``input_key`` with no schema in the workflow (default: "").
 
-            type (str): Type to cast the value to, one of "bool", "date",
-                "datetime", "decimal", "float", "int", "location", "none",
-                "pass", "text", "url" (default: "text").
+            type (str): Type to cast the value to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text", "url"
+                (default: "text").
 
-            input_key (str): Key read from ``inputs`` to find the value — not
-                the field it is assigned to (default: "content").
+            input_key (str): Key read from ``inputs`` to find the value. Not the field
+                it is assigned to (default: "content").
 
-            test (bool): Whether to use ``default`` instead of prompting
-                (default: False).
+            test (bool): Whether to use ``default`` instead of prompting (default:
+                False).
 
         context (Context): the run environment
 
@@ -141,8 +148,8 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         inputs (dict): Values used in place of prompting, keyed by
             ``input_key``, e.g. ``{"content": "30"}``.
 
-        test (bool): Whether to use ``default`` instead of prompting. Same
-            effect as ``conf["test"]``.
+        test (bool): Whether to use ``default`` instead of prompting. Overrides
+            the ``context``'s ``test`` flag for this call.
 
         assign (str): Field the value is nested under. Ignored when ``emit`` is
             True (default: "content").
@@ -186,18 +193,19 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
             prompt (str): Command line prompt shown when reading from stdin
                 (default: "Enter text").
 
-            default (scalar): Value used when no input value is given or
-                prompting is skipped (default: "").
+            default (scalar): Value used when no input value is given or prompting is
+                skipped, e.g., when the pipe runs outside a workflow or for an
+                ``input_key`` with no schema in the workflow (default: "").
 
-            type (str): Type to cast the value to, one of "bool", "date",
-                "datetime", "decimal", "float", "int", "location", "none",
-                "pass", "text", "url" (default: "text").
+            type (str): Type to cast the value to, one of "bool", "date", "datetime",
+                "decimal", "float", "int", "location", "none", "pass", "text", "url"
+                (default: "text").
 
-            input_key (str): Key read from ``inputs`` to find the value — not
-                the field it is assigned to (default: "content").
+            input_key (str): Key read from ``inputs`` to find the value. Not the field
+                it is assigned to (default: "content").
 
-            test (bool): Whether to use ``default`` instead of prompting
-                (default: False).
+            test (bool): Whether to use ``default`` instead of prompting (default:
+                False).
 
         context (Context): the run environment
 
@@ -206,8 +214,8 @@ def pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
         inputs (dict): Values used in place of prompting, keyed by
             ``input_key``, e.g. ``{"content": "30"}``.
 
-        test (bool): Whether to use ``default`` instead of prompting. Same
-            effect as ``conf["test"]``.
+        test (bool): Whether to use ``default`` instead of prompting. Overrides
+            the ``context``'s ``test`` flag for this call.
 
         assign (str): Field the value is nested under. Ignored when ``emit`` is
             True (default: "content").

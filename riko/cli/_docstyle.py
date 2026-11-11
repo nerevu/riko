@@ -283,9 +283,9 @@ def gen_misplaced_params(node: FunctionDef | AsyncFunctionDef) -> Iterator[str]:
     """
     Finds parameters documented in the wrong one of ``Args:`` and ``Kwargs:``.
 
-    A parameter with a default belongs under ``Kwargs:``. One without a default belongs
-    under ``Args:``, whether or not it is keyword-only. A ``**kwargs`` bag belongs
-    under ``Kwargs:``.
+    A keyword-only parameter, a positional one with a default, and a ``**kwargs`` bag
+    belong under ``Kwargs:``. A positional parameter without a default belongs under
+    ``Args:``.
 
     Args:
 
@@ -299,30 +299,26 @@ def gen_misplaced_params(node: FunctionDef | AsyncFunctionDef) -> Iterator[str]:
 
         >>> from ast import parse
         >>>
-        >>> source = "def f(a, b=1, *, c):\\n '''S.\\n\\n Args:\\n\\n  a: A.\\n"
-        >>> source += "  b: B.\\n\\n Kwargs:\\n\\n  c: C.\\n '''\\n"
+        >>> source = "def f(a, *, c):\\n '''S.\\n\\n Args:\\n\\n  c: C.\\n\\n"
+        >>> source += " Kwargs:\\n\\n  a: A.\\n '''\\n"
         >>> list(gen_misplaced_params(parse(source).body[0]))
-        ['b under Args: (move to Kwargs:)', 'c under Kwargs: (move to Args:)']
+        ['c under Args: (move to Kwargs:)', 'a under Kwargs: (move to Args:)']
 
     """
     get_arg = attrgetter("arg")
     args = node.args
     positional = [*args.posonlyargs, *args.args]
-    pairs = zip(args.kwonlyargs, args.kw_defaults, strict=True)
-    positional_args = positional[len(positional) - len(args.defaults) :]
-    paired_args = gen_non_null(pairs, cmp_pos=1, arg_pos=0)
-    defaulted = set(map(get_arg, chain(positional_args, paired_args)))
-    required = set(map(get_arg, chain(positional, args.kwonlyargs))) - defaulted
+    split = len(positional) - len(args.defaults)
+    bag = [] if args.kwarg is None else [args.kwarg]
+    keyword = set(map(get_arg, chain(positional[split:], args.kwonlyargs, bag)))
+    required = set(map(get_arg, positional[:split]))
     doc = get_docstring(node) or ""
 
-    for name in filter(defaulted.__contains__, gen_section_names(doc, "Args")):
+    for name in filter(keyword.__contains__, gen_section_names(doc, "Args")):
         yield f"{name} under Args: (move to Kwargs:)"
 
     for name in filter(required.__contains__, gen_section_names(doc, "Kwargs")):
         yield f"{name} under Kwargs: (move to Args:)"
-
-    if args.kwarg is not None and args.kwarg.arg in gen_section_names(doc, "Args"):
-        yield f"{args.kwarg.arg} under Args: (move to Kwargs:)"
 
 
 def gen_unordered_params(node: FunctionDef | AsyncFunctionDef) -> Iterator[str]:
@@ -519,8 +515,9 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     """
     Flags a private module whose module example does not match its public API.
 
-    A private module that defines no public name carries no module example, and one
-    whose public names include a runtime function or class must carry one.
+    A private module that defines no public name carries no module example, one whose
+    public names include a runtime function or class must carry one, and one whose
+    public names are all type-only carries none.
 
     """
     doc = get_docstring(tree) or ""
@@ -536,6 +533,10 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     elif private and runtime and not has_example:
         problem = "private module with a public runtime API has no module example"
         yield DocstringIssue(path, 1, "<module>", problem, ", ".join(runtime))
+    elif private and exported and not runtime and has_example:
+        problem = "private module with a type-only public API carries a module example"
+        first = next(line.strip() for line in doc.splitlines() if ">>>" in line)
+        yield DocstringIssue(path, 1, "<module>", problem, first)
 
 
 def _iter_python_files(root: Path) -> Iterator[Path]:
@@ -553,8 +554,8 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     check a result with ``is None``, or import a public name through a private module.
 
     A parameter with a default is documented under ``Kwargs:``, one without under
-    ``Args:``. A private module without a public API carries no module example, and one
-    with a public runtime API carries one.
+    ``Args:``. A private module without a public API or with only a type-only public API
+    carries no module example, and one with a public runtime API carries one.
 
     Args:
 

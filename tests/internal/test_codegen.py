@@ -17,8 +17,8 @@ import pytest
 
 import riko
 import riko.bado
-import riko.base.exceptions
 import riko.definitions._workflow_definition
+import riko.exceptions
 import riko.ext
 import riko.ext.codegen
 import riko.ext.modules
@@ -66,8 +66,7 @@ from riko.cli._gen_user_agents import (
 )
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
 from riko.definitions._context import Context
-from riko.definitions._nodes import ModuleNode
-from riko.definitions._workflow_definition import Workflow, normalize_workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.ext.codegen import (
@@ -75,13 +74,13 @@ from riko.ext.codegen import (
     generate_module_ids,
     generate_module_names,
 )
-from riko.modules._metadata import gen_module_catalog, get_module_category, list_modules
+from riko.modules._metadata import describe_module, gen_module_catalog, list_modules
 from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
-from riko.runtime._workflow_resolver import _build_resolved_workflow
-from riko.types._enums import ExecutionMode, UserAgent
+from riko.types._enums import UserAgent
 from riko.types._workflow import Endpoint
+from riko.types._wrappers import WrapperMeta, require_wrapper_meta
 from riko.types.modules import (
     ConfArg,
     RenameRawConf,
@@ -169,14 +168,14 @@ SURFACE_MODULES = (
     riko.definitions._workflow_definition,
     riko.ext,
     riko.modules,
-    riko.base.exceptions,
+    riko.exceptions,
     riko,
     riko.types,
 )
 
 PARTIAL_SURFACES = (
     (riko.modules.__all__ + riko.modules._names.__all__, MODULES),
-    (riko.base.exceptions.__all__, ROOT_EXCEPTIONS),
+    (riko.exceptions.__all__, ROOT_EXCEPTIONS),
 )
 
 CONF_TYPES = riko.types.modules.__all__
@@ -186,10 +185,7 @@ EQUAL_SURFACES = (
     (riko.bado, BADO),
     (riko.runtime._export, EXPORT),
     (riko.runtime._compile, CODEGEN),
-    (
-        riko.definitions._workflow_definition,
-        {"Workflow", "migrate_v1_to_v2", "normalize_workflow"},
-    ),
+    (riko.definitions._workflow_definition, {"Workflow"}),
     (riko.ext, EXTENSION),
     (riko.ext.codegen, EXT_CODEGEN),
     (riko.ext.modules, EXT_MODULES),
@@ -215,6 +211,13 @@ RESOLUTION_MODULES = (
     riko.runtime._workflow_pipes,
     riko.runtime._workflow_stores,
     riko.runtime._workflow_resolver,
+)
+
+DECLARING_FLOW = Workflow.parse(
+    {
+        "nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}],
+        "input_schemas": DESCRIBED_INPUTS,
+    }
 )
 
 
@@ -301,8 +304,12 @@ class TestWorkflowModule:
     def test_generated_matches_document_failure(self, path: Path, tmp_path: Path):
         """A document that cannot run standalone fails the same way once generated."""
         flow = Workflow.parse(path.read_text())
-        module = _build(flow, path.stem, tmp_path)
-        generated = _failure(lambda: list(module.pipe(context=Context(test=True))))
+
+        def run_generated() -> list[object]:
+            module = _build(flow, path.stem, tmp_path)
+            return list(module.pipe(context=Context(test=True)))
+
+        generated = _failure(run_generated)
         assert generated == _failure(lambda: run_workflow(flow))
 
     @pytest.mark.parametrize("stem", ASYNC_FIXTURES)
@@ -335,6 +342,15 @@ class TestWorkflowModule:
         expected = [{"greeting": "hello"}, {"greeting": "bye"}]
         assert [item async for item in module.async_pipe(source())] == expected
 
+    @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+    def test_generated_pipe_carries_its_declarations(self, is_async, tmp_path: Path):
+        """A generated pipe declares its workflow's inputs and modules, embeds too."""
+        module = _build(DECLARING_FLOW, "pipe_declared", tmp_path, is_async=is_async)
+        pipe = module.async_pipe if is_async else module.pipe
+        definition = describe_module(require_wrapper_meta(pipe))
+        declared = (definition.input_schemas, definition.dependencies)
+        assert declared == (DESCRIBED_INPUTS, ("loop", "tokenizer"))
+
     @async_test
     async def test_abandoned_async_pipe_closes_its_execution(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -360,71 +376,6 @@ class TestWorkflowModule:
         assert log == ["execution exit", "after close"]
 
 
-DESCRIBE_INPUT_CASES = [
-    pytest.param(ExecutionMode.DESCRIBE_INPUTS, DESCRIBED_INPUTS, id="inputs"),
-    pytest.param(
-        ExecutionMode.DESCRIBE,
-        {"inputs": DESCRIBED_INPUTS, "dependencies": ["rename"]},
-        id="inputs-and-dependencies",
-    ),
-]
-
-
-def _inputs_workflow() -> Workflow:
-    """Builds a one-node workflow that declares an input."""
-    node = ModuleNode(id="rename-1", name="rename", conf=RENAME_CONF)
-    outputs = {"default": Endpoint(node.id, "out")}
-    return Workflow(nodes=[node], outputs=outputs, inputs=DESCRIBED_INPUTS)
-
-
-DESCRIBED_DEPENDENCIES = [
-    pytest.param(
-        Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF).workflow,
-        ["itembuilder", "rename"],
-        id="nodes",
-    ),
-    pytest.param(
-        Workflow.parse({"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}),
-        ["loop", "tokenizer"],
-        id="loop-embed",
-    ),
-]
-
-
-class TestWorkflowModuleDescribe:
-    @pytest.mark.parametrize(("flow", "expected"), DESCRIBED_DEPENDENCIES)
-    def test_generated_pipe_describes_dependencies(self, flow, expected, tmp_path):
-        """Describing dependencies reports the workflow's module names, sorted."""
-        module = _build(flow, "pipe_described", tmp_path)
-        context = Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
-        assert list(module.pipe(context=context)) == expected
-
-    @async_test
-    async def test_generated_async_pipe_describes_dependencies(self, tmp_path: Path):
-        pipeline = Pipeline.from_module("itembuilder").pipe("rename", conf=RENAME_CONF)
-        module = _build(pipeline.workflow, "pipe_adescribed", tmp_path, is_async=True)
-        stream = module.async_pipe(
-            context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES)
-        )
-        assert [item async for item in stream] == ["itembuilder", "rename"]
-
-    @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
-    def test_generated_pipe_describes_inputs(self, mode, expected, tmp_path: Path):
-        """Describing inputs reports the declared schemas, alone or with more."""
-        module = _build(_inputs_workflow(), "pipe_inputs", tmp_path)
-        assert module.pipe(context=Context(mode=mode)) == expected
-
-    @pytest.mark.parametrize(("mode", "expected"), DESCRIBE_INPUT_CASES)
-    @async_test
-    async def test_generated_async_pipe_describes_inputs(
-        self, mode, expected, tmp_path: Path
-    ):
-        """The ``async_pipe`` yields the same description as one item."""
-        module = _build(_inputs_workflow(), "pipe_ainputs", tmp_path, is_async=True)
-        stream = module.async_pipe(context=Context(mode=mode))
-        assert [item async for item in stream] == [expected]
-
-
 class TestCompileWorkflow:
     def test_conf_is_typed_by_its_module(self):
         """A configured node is rendered through its module's raw config class."""
@@ -438,7 +389,7 @@ class TestCompileWorkflow:
             "value": ConfArg(type="text", value="riko"),
         }
         conf = {"attrs": [attrs], "EXTRA": ConfArg(type="text", value="x")}
-        flow = normalize_workflow({"nodes": [{"name": "itembuilder", "conf": conf}]})
+        flow = Workflow.from_raw({"nodes": [{"name": "itembuilder", "conf": conf}]})
         module = _build(flow, "pipe_verbatim", tmp_path)
         assert module.flow == flow
         assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
@@ -453,6 +404,14 @@ class TestCompileWorkflow:
         assert compile_workflow(flow, "pipe_twice") == compile_workflow(
             flow, "pipe_twice"
         )
+
+    def test_empty_fields_are_left_out(self, tmp_path: Path):
+        """A workflow without edges or input schemas generates neither keyword."""
+        flow = Pipeline.from_module("hash").workflow
+        source = compile_workflow(flow, "pipe_bare")
+        assert "edges=" not in source
+        assert "input_schemas=" not in source
+        assert _load(source, "pipe_bare", tmp_path).flow == flow
 
     def test_generated_source_parses(self, tmp_path: Path):
         """The generated source is valid Python and imports without running."""
@@ -490,7 +449,7 @@ class TestPythonise:
 
 @pytest.fixture
 def categories() -> dict[str, ModuleCategory]:
-    return {md.name: get_module_category(md) for md in gen_module_catalog()}
+    return {md.name: md.category for md in gen_module_catalog()}
 
 
 class TestModuleCategory:
@@ -510,7 +469,7 @@ class TestModuleCategory:
     def test_sink_name_is_classified_as_sink(self):
         md = next(md for md in gen_module_catalog() if md.name == "fetch")
         renamed = dataclasses.replace(md, name="write")
-        assert get_module_category(renamed) == "sink"
+        assert renamed.category == "sink"
 
     @pytest.mark.xfail(
         strict=True,
@@ -603,29 +562,42 @@ class TestWorkflowFixtures:
         assert path.read_text() == _render(flow)
 
 
-def _probes() -> list[Any]:
-    params = []
-
+def _gen_probe_documents() -> Iterator[tuple[str, Path]]:
+    """Finds each probe's package and its sibling workflow document."""
     for directory, package in PROBE_PACKAGES.items():
         for path in sorted(directory.glob("pipe_*.py")):
             document = directory.parent / "workflows" / f"{path.stem}.json"
 
-            if not document.exists() or path.stem in SUBPIPE_ONLY:
-                continue
-
-            marks = PROBE_MARKS.get(path.stem, ())
-            param = pytest.param(package, document, id=path.stem, marks=marks)
-            params.append(param)
-
-    return params
+            if document.exists():
+                yield package, document
 
 
-def _describing_probes(attr: str) -> list[Any]:
+def _probes() -> list[Any]:
     return [
-        pytest.param(f"{package}.{path.stem}", id=path.stem)
+        pytest.param(
+            package,
+            document,
+            id=document.stem,
+            marks=PROBE_MARKS.get(document.stem, ()),
+        )
+        for package, document in _gen_probe_documents()
+        if document.stem not in SUBPIPE_ONLY
+    ]
+
+
+def _declaring_probes() -> list[Any]:
+    return [
+        pytest.param(package, document, id=document.stem)
+        for package, document in _gen_probe_documents()
+    ]
+
+
+def _building_probes() -> list[Any]:
+    return [
+        pytest.param(package, path.stem, id=path.stem)
         for directory, package in PROBE_PACKAGES.items()
         for path in sorted(directory.glob("pipe_*.py"))
-        if attr in path.read_text() and "describe_input" in path.read_text()
+        if "def build()" in path.read_text()
     ]
 
 
@@ -640,6 +612,12 @@ def _run_probe(package: str, name: str) -> list[object]:
     return list(stream)
 
 
+def _probe_pipe(package: str, name: str) -> WrapperMeta:
+    probe = import_module(f"{package}.{name}")
+    attr = "pipe" if hasattr(probe, "pipe") else "async_pipe"
+    return require_wrapper_meta(getattr(probe, attr))
+
+
 class TestWorkflowProbes:
     @pytest.mark.parametrize(("package", "path"), _probes())
     def test_probe_matches_document(self, package: str, path: Path):
@@ -647,46 +625,22 @@ class TestWorkflowProbes:
         expected = _run_probe(package, path.stem)
         assert run_document(path) == expected
 
-    @pytest.mark.parametrize("name", _describing_probes("def pipe("))
-    def test_probe_describes_inputs_and_dependencies(self, name: str):
-        """Describing everything reports what each describe mode reports on its own."""
-        probe = import_module(name)
-        inputs = probe.pipe(context=Context(mode=ExecutionMode.DESCRIBE_INPUTS))
-        mode = ExecutionMode.DESCRIBE_DEPENDENCIES
-        dependencies = list(probe.pipe(context=Context(mode=mode)))
-        expected = {"inputs": inputs, "dependencies": dependencies}
-        assert probe.pipe(context=Context(mode=ExecutionMode.DESCRIBE)) == expected
+    @pytest.mark.parametrize(("package", "document"), _declaring_probes())
+    def test_probe_declares_what_its_document_declares(
+        self, package: str, document: Path
+    ):
+        """Each probe declares the input schemas and dependencies its document does."""
+        definition = describe_module(_probe_pipe(package, document.stem))
+        flow = Workflow.parse(document.read_text())
+        declared = (definition.input_schemas, definition.dependencies)
+        assert declared == (flow.input_schemas, flow.dependencies)
 
-    @pytest.mark.parametrize("name", _describing_probes("def async_pipe("))
-    @async_test
-    async def test_async_probe_describes_inputs_and_dependencies(self, name: str):
-        """The ``async_pipe`` yields the full description as one item."""
-        probe = import_module(name)
-        mode = ExecutionMode.DESCRIBE_DEPENDENCIES
-        dependencies = [
-            item async for item in probe.async_pipe(context=Context(mode=mode))
-        ]
-        expected = {"inputs": probe.INPUTS, "dependencies": dependencies}
-        context = Context(mode=ExecutionMode.DESCRIBE)
-        assert [item async for item in probe.async_pipe(context=context)] == [expected]
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="a hand-written probe still reports the inputs its input node scans, "
-        "not the declared inputs the pipe built from its document reports, until "
-        "workflows declare their inputs",
-    )
-    def test_probe_describes_the_inputs_its_document_declares(self):
-        """A probe's describe-inputs output matches the pipe built from its document."""
-        name = "pipe_975789b47f17690a21e89b10a702bcbd"
-        flow = Workflow.parse((TESTS_DIR / "workflows" / f"{name}.json").read_text())
-        generated = _build_resolved_workflow(name, flow, dispatcher)
-        probe = import_module(f"tests.pyworkflows.{name}")
-        context = Context(mode=ExecutionMode.DESCRIBE_INPUTS)
-        declared = generated.pipe(context=context)
-        assert declared == dict(flow.inputs)
-        assert probe.pipe(context=context) == declared
+    @pytest.mark.parametrize(("package", "name"), _building_probes())
+    def test_probe_declares_what_it_builds(self, package: str, name: str):
+        """A probe without a document declares the modules its ``build()`` runs."""
+        dependencies = describe_module(_probe_pipe(package, name)).dependencies
+        probe = import_module(f"{package}.{name}")
+        assert dependencies == probe.build().workflow.dependencies
 
 
 def id_func(val):
@@ -759,12 +713,12 @@ class TestImportSurface:
         mismatches = sorted(
             name
             for name in ROOT_EXCEPTIONS
-            if getattr(riko, name) is not getattr(riko.base.exceptions, name)
+            if getattr(riko, name) is not getattr(riko.exceptions, name)
         )
         assert not mismatches, f"Exception reexports differ from riko: {mismatches}"
 
     def test_exceptions_naming_the_public_module_are_importable_from_it(self):
-        public = riko.base.exceptions
+        public = riko.exceptions
         roots = (public.RikoError, public.RikoWarning)
         unexported = sorted(
             cls.__name__

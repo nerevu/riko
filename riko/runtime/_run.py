@@ -52,12 +52,13 @@ def run_pipeline[T](
 
     Yields:
 
-        The items produced at the definition's default output.
+        The items the definition produces.
 
     Raises:
 
-        InvalidPipelineError: If the definition's workflow cannot be planned, or no
-            ``seed`` is given and the definition is not self-starting.
+        InvalidPipelineError: If the definition's workflow cannot be planned, a declared
+            input is missing or invalid, or no ``seed`` is given and the definition is
+            not self-starting.
 
     Examples:
 
@@ -70,8 +71,9 @@ def run_pipeline[T](
 
     """
     plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
+    settings = definition.settings
 
-    with SyncExecution(definition.context, settings=definition.settings) as execution:
+    with SyncExecution(definition.context, settings=settings) as execution:
         yield from execution.run(plan, seed=seed)
 
 
@@ -103,12 +105,13 @@ async def arun_pipeline[T](
 
     Yields:
 
-        The items produced at the definition's default output.
+        The items the definition produces.
 
     Raises:
 
-        InvalidPipelineError: If the definition's workflow cannot be planned, or no
-            ``seed`` is given and the definition is not self-starting.
+        InvalidPipelineError: If the definition's workflow cannot be planned, a declared
+            input is missing or invalid, or no ``seed`` is given and the definition is
+            not self-starting.
 
     Examples:
 
@@ -255,7 +258,7 @@ class _PipelineStream[T]:
 
         Returns:
 
-            The next item at the pipeline's default output.
+            The pipeline's next item.
 
         Raises:
 
@@ -320,7 +323,7 @@ class _PipelineStream[T]:
 
         Returns:
 
-            The next item at the pipeline's default output.
+            The pipeline's next item.
 
         Raises:
 
@@ -427,7 +430,7 @@ class _PipelineRun[T]:
 
         Returns:
 
-            An iterator over the items at the pipeline's default output.
+            An iterator over the pipeline's items.
 
         """
         return iter(self.stream)
@@ -442,7 +445,7 @@ class _PipelineRun[T]:
 
         Returns:
 
-            An async iterator over the items at the pipeline's default output.
+            An async iterator over the pipeline's items.
 
         """
         return aiter(self.stream)

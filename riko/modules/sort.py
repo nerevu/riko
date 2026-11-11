@@ -10,7 +10,8 @@ rule ``type``, rather than being compared with the values the other items carry.
 A rule ``default`` makes them sort as that value instead.
 
 A rule without a ``type`` orders values numerically when every one is a number or
-numeric string, and as text otherwise.
+numeric string, and as text otherwise. A ``datebuilder`` date dict orders by the
+moment it describes.
 
 Examples:
 

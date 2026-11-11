@@ -77,19 +77,24 @@ The `tests/pyworkflows/pipe_*.py` and `examples/pyworkflows/pipe_*.py` modules a
 reduced covering set of hand-maintained typed probes. Their job is to put the
 `<Name>RawConf`/`<Name>Conf`/`<Name>ConfRule` shapes in real call position so pyright
 surfaces a config-contract error; the same test asserts each probe yields the items
-its JSON sibling does. There is no generator behind them — edit them by hand, and add
-one only for a config shape the surviving probes do not already reach.
+its JSON sibling does. Each probe also demonstrates the `@workflow` contract: its pipe
+declares `input_schemas=`/`dependencies=`, and
+`TestWorkflowProbes.test_probe_declares_what_its_document_declares` asserts the stamped
+metadata `describe_module` reads equals its sibling `Workflow`'s. There is no generator
+behind them — edit them by hand, and add one only for a config shape the surviving
+probes do not already reach.
 
 The compiler implementation lives under `riko/runtime/`; workflow loading lives under
 `riko/definitions/`:
 
 - `riko/runtime/_compile.py` — the Workflow v2 generator behind `compile_workflow`.
-- `riko/definitions/_workflow_definition.py` — `Workflow.parse`/`load`/`serialize`, plus
-  `migrate_v1_to_v2` (`PipeDef`, a pipe definition), over the data-returning
+- `riko/definitions/_workflow_definition.py` —
+  `Workflow.from_raw`/`parse`/`load`/`serialize` (`Workflow.parse` also reads a
+  `PipeDef`, a pipe definition), over the data-returning
   `_normalize.py`/`_migrate.py`/`_serialize.py`.
-- `GraphIndex` (`riko/types/_workflow.py`) — derives the topology from node ids, edges,
-  and outputs; `Workflow.index` builds it, and validation and execution planning both
-  read it.
+- `WorkflowIndex` (`riko/types/_workflow.py`) — derives the topology from node ids,
+  edges, and outputs; `Workflow.index` builds it, and validation and execution planning
+  both read it.
 - `riko/runtime/templates/` — `pyworkflow.txt`, the v2 generator template.
 - `riko/types/_pipedef.py` — `PipeDef`/`PipeDefLike` and `PipeDag` type contracts;
   all three are exported on `riko.types`.
@@ -197,7 +202,10 @@ sync when source is moved between package groups.
   `[tool.pytest.ini_options] timeout` (`get_backstop`) as the outer bound of a test with
   no `timeout` marker. One scope walk (top-level function, class, method) feeds both the
   bound checks and the public `gen_bounds(tree)`, which yields
-  `(owner, Bound, is_marker)` for `.claude/skills/tidy/fit_bounds.py`. The table counts
+  `(owner, Bound, is_marker)` for `.claude/skills/tidy/fit_bounds.py`; the fitter also
+  imports the walk itself (`gen_scopes`, `Scope.get_outer`) and the literal readers
+  (`gen_module_constants`, `get_seconds`, `get_leaf`), so the two tools read a marker,
+  a constant, and a number literal (never a `bool`) the same way. The table counts
   (`inline-tables`, `rows-without-id`) go through the shared `_ratchet.ratchet_ceiling`
   against `[tool.riko.tests]`, and `_lint._lint_tests` prints the sites only when a
   count is over its ceiling. What these checks and the tracked-doc-read check cannot see
@@ -230,9 +238,11 @@ sync when source is moved between package groups.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
   that ends in `is None` (`gen_null_checks`; the bare call shows a `None` result), a
   doctest that imports a public name through a private `riko` module path, a module
-  example in an underscore-prefixed module that defines no public name, and a missing
-  one in an underscore-prefixed module whose public names include a function or a
-  class other than a `Protocol`, `TypedDict`, or exception. The last three read the
+  example in an underscore-prefixed module that defines no public name or only
+  type-only public names (aliases, `Protocol`s, `TypedDict`s, exceptions, constants),
+  and a missing one in an underscore-prefixed module whose public names include a
+  function or a class other than a `Protocol`, `TypedDict`, or exception. The last
+  three read the
   public names from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION`
   to `riko.ext`, `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`,
   first match winning (`resolve_public_path` in `riko/cli/_docstyle.py`).
@@ -310,6 +320,16 @@ sync when source is moved between package groups.
   keep their own bullets. The general bullet names
   classes of fixes (async runs, dates, …) but no release and no individual fix; a new
   2026-origin fix whose class is missing extends the list.
+- **Summary-first bullets.** Bullets that share a shape fold into one leading bullet
+  whose items are nested sub-bullets: "Added to ``riko``: …", "Added to
+  ``riko.ext``: …", and "Added module options: …" under **New**; "Invalid input now
+  raises instead of being ignored or yielding nothing: …" (no exception types) under
+  **Changes**; "Removed (old → replacement): …" under **Removed**, nested like the
+  rename list; and "Fixed <subject>: …" for several fixes to one subject. Each item
+  keeps only its name and a few words; what a name does belongs to its docstring, and
+  API walkthroughs go to the Cookbook or FAQ. A list a reader needs in full (the
+  ``RIKO_*`` variables, an old-to-new call map) gets a doc home and the bullet points
+  at it. **Dev** is one line pointing at ``manage --help``.
 - **Unreleased features get one entry, not a history.** The changelog describes the
   delta against the *last release*, so a feature that has never shipped (today:
   `Pipeline` and the workflow model) is one "Added …" bullet under **New** that
@@ -345,8 +365,8 @@ sync when source is moved between package groups.
   only in a run of methods on a receiver the same sentence just named. The verb names
   what the method acts on: attribute chaining "chains a module", never "a workflow".
 - **A rename is a lookup, not a definition.** The rename bullet under **Changes** alone
-  maps old to new names, as one "Renamed (old → new):" paragraph of `old` → `new`
-  pairs separated by semicolons. Other bullets, **New** included, use the new name
+  maps old to new names, as one "Renamed (old → new):" bullet with one nested
+  `old` → `new` sub-bullet per pair. Other bullets, **New** included, use the new name
   bare, with no "(formerly …)", so **New** preceding **Changes** needs no forward
   reference.
 - **No cross-section pointers.** Never write "see above/below". A bullet that only makes

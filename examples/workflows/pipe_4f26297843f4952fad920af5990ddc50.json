@@ -45,6 +45,13 @@
             }
         }
     ],
+    "input_schemas": {
+        "format_input": {
+            "default": "%B %d, %Y",
+            "description": "enter date format",
+            "type": "string"
+        }
+    },
     "nodes": {
         "sw-1": {
             "conf": {
@@ -109,21 +116,9 @@
         },
         "sw-fmt": {
             "conf": {
-                "default": {
-                    "type": "text",
-                    "value": "%B %d, %Y"
-                },
-                "name": {
+                "input_key": {
                     "type": "text",
                     "value": "format_input"
-                },
-                "prompt": {
-                    "type": "text",
-                    "value": "enter date format"
-                },
-                "test": {
-                    "type": "bool",
-                    "value": "true"
                 },
                 "type": {
                     "type": "text",

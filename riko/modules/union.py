@@ -168,6 +168,8 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> other2 = ({"x": x + 10} for x in range(5))
         >>> len(list(pipe(items, others=[other1, other2])))
         15
+        >>> list(pipe([{"x": 0}], others=[[{"x": 1}]], emit=False))
+        [{'union': {'x': 0}}, {'union': {'x': 1}}]
 
     """
     return parser(*args, **kwargs)

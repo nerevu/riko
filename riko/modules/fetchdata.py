@@ -90,7 +90,7 @@ async def async_parser(
         Business System Analyst
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchdata")
+    url: str = require_conf_key(objconf, "url", "fetchdata", strict=True)
     ext = splitext(url)[1].lstrip(".")
     path = ".".join(listize(objconf.path))
     binary = ext == "json"
@@ -137,7 +137,7 @@ def parser(
         'Business System Analyst'
 
     """
-    url: str = require_conf_key(objconf, "url", "fetchdata")
+    url: str = require_conf_key(objconf, "url", "fetchdata", strict=True)
     ext = splitext(url)[1].lstrip(".")
     path = ".".join(listize(objconf.path))
 

@@ -21,9 +21,7 @@ Examples:
         >>> pipeline = itembuilder.rename(conf={"rule": [{"field": "title"}]})
         >>> source = compile_workflow(pipeline.workflow, "pipe_demo")
         >>> print(next(l for l in source.splitlines() if l.startswith("pipe")))
-        pipe = build_workflow_pipes(
-        >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
-        DEPENDENCIES: list[str] = ["itembuilder", "rename"]
+        pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").sync_pipe
 
 """
 
@@ -35,17 +33,14 @@ from jinja2 import Environment, PackageLoader
 
 from riko.base._guards import is_known_sequence, is_mapping
 from riko.base._strutils import pythonise, ruff_format
-from riko.definitions._workflow_definition import normalize_workflow
+from riko.definitions._workflow_definition import Workflow
 from riko.types._workflow import WorkflowModule
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from riko.definitions._nodes import ModuleNode
-    from riko.definitions._workflow_definition import WorkflowLike
-    from riko.types._frozendict import FrozenConf
+    from riko.definitions._workflow_definition import Outputs, WorkflowLike
+    from riko.types._frozendict import FrozenConf, FrozenPortEdges
     from riko.types._pipedef import Embed
-    from riko.types._workflow import Edge, Endpoint
     from riko.types.modules import Conf
 
 RAW_CONFS = {
@@ -154,13 +149,12 @@ def _render_node(node: ModuleNode) -> str:
     return f"ModuleNode({', '.join(parts)})"
 
 
-def _render_edges(edges: tuple[Edge, ...]) -> str:
-    """Renders the edge tuple, keeping a one-edge graph a tuple."""
-    rendered = ", ".join(map(str, edges))
-    return "()" if not rendered else f"({rendered},)"
+def _render_edges(edges: FrozenPortEdges) -> str:
+    """Renders a non-empty edge tuple."""
+    return f"({', '.join(map(str, edges))},)"
 
 
-def _render_outputs(outputs: Mapping[str, Endpoint]) -> str:
+def _render_outputs(outputs: Outputs) -> str:
     """Renders the named outputs as a dict of endpoint references."""
     pairs = (f"{name!r}: {ref}" for name, ref in outputs.items())
     return "{" + ", ".join(pairs) + "}"
@@ -189,13 +183,10 @@ def compile_workflow(
     """
     Generates the ``WorkflowModule`` that rebuilds and runs ``flow``.
 
-    A ``RawWorkflow`` is normalized into a ``Workflow`` first. This way module always
-    reflects the normalized graph rather than the shorthand it was written in. The
-    module declares the workflow with typed configuration classes and exposes a
-    single ``pipe`` (or ``async_pipe``) callable over it. That callable takes one
-    item, a stream, or nothing; reports the workflow's input declarations and the
-    modules and stored workflows it uses in the describe modes; and otherwise yields
-    the items produced at the workflow's default output.
+    A ``RawWorkflow`` is first normalized into a ``Workflow`` graph. The returned module
+    declares the workflow with typed configuration classes and exposes a single ``pipe``
+    (or ``async_pipe``) callable. That callable takes one item, a stream, or nothing,
+    and yields the workflow's items.
 
     Args:
 
@@ -208,7 +199,8 @@ def compile_workflow(
 
     Returns:
 
-        The formatted ``WorkflowModule``.
+        The formatted ``WorkflowModule``. It carries the workflow's input schemas,
+        modules, and stored workflows. Use ``describe_module`` to list them.
 
     Raises:
 
@@ -220,14 +212,14 @@ def compile_workflow(
 
         >>> raw = {"nodes": [{"name": "forever"}]}
         >>> source = compile_workflow(raw, "pipe_demo")
-        >>> print(next(l for l in source.splitlines() if l.startswith("DEPEND")))
-        DEPENDENCIES: list[str] = ["forever"]
+        >>> print(next(l for l in source.splitlines() if l.startswith("flow")))
+        flow = Workflow(
         >>> source = compile_workflow(raw, "pipe_demo", is_async=True)
         >>> print(next(l for l in source.splitlines() if l.startswith("async")))
-        async_pipe = build_workflow_pipes(
+        async_pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").async_pipe
 
     """
-    flow = normalize_workflow(flow)
+    flow = Workflow.from_raw(flow)
     flow.validate()
     flow.require_runnable_only("code generation")
     nodes = list(flow.module_nodes.values())
@@ -244,12 +236,12 @@ def compile_workflow(
         has_embed=any(node.embed is not None for node in nodes),
         nodes=[_render_node(node) for node in nodes],
         edges=_render_edges(flow.edges),
+        has_edges=len(flow.edges) > 0,
         outputs=_render_outputs(flow.outputs),
-        inputs=render_value(flow.inputs),
+        input_schemas=render_value(flow.input_schemas),
+        has_input_schemas=len(flow.input_schemas) > 0,
         resources=render_value(flow.resources),
         has_resources=len(flow.resources) > 0,
-        dependencies=render_value(flow.dependencies),
-        subtype="transformer" if len(flow.inputs) else "source",
     )
 
     return WorkflowModule(ruff_format(rendered))

@@ -123,12 +123,12 @@ Read feeds
 
     >>> from riko import Pipeline, Sources, get_path
     >>>
-    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
+    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('gawker.xml')})
     >>> item = pipeline.first()
-    >>> {'author', 'content', 'id', 'link', 'published', 'summary', 'title'} <= set(item)
-    True
-    >>> item['title']
-    'Donations'
+    >>> sorted(item)[:3]
+    ['author', 'author_detail', 'authors']
+    >>> item['pubDate'][:3]
+    (2014, 8, 27)
 
 Use ``fetchsitefeed`` to fetch the first feed discovered on a page or
 ``feedautodiscovery`` to return feed links for separate processing.
@@ -137,28 +137,22 @@ Read unstructured web content
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``fetchpage`` returns page content and can select text between delimiters and
-strip markup. This example uses an offline HTML fixture.
+strip markup. This example uses an offline HTML fixture and keeps the text of the
+page's ``<body>``.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Sources, get_path
     >>>
-    >>> pipeline = (
-    ...     Pipeline.from_module(
-    ...         Sources.FETCHPAGE,
-    ...         conf={
-    ...             'url': get_path('users.jyu.fi.html'),
-    ...             'start': '<body>',
-    ...             'end': '</body>',
-    ...             'detag': True})
-    ...         .strreplace(
-    ...             conf={'rule': {'find': '\n', 'replace': ' '}},
-    ...             options={'assign': 'content'})
-    ...         .tokenizer(conf={'delimiter': ' '}, options={'emit': True})
-    ...         .count()
-    ... )
-    >>> list(pipeline)
-    [{'count': 70}]
+    >>> conf = {
+    ...     'url': get_path('users.jyu.fi.html'),
+    ...     'start': '<body>',
+    ...     'end': '</body>',
+    ...     'detag': True,
+    ... }
+    >>> pipeline = Pipeline.from_module(Sources.FETCHPAGE, conf=conf)
+    >>> pipeline.first()[:14]
+    'Tidy your HTML'
 
 Use ``fetchtext`` for plain text files and ``xpathfetchpage`` when XPath-based
 selection is required and its optional XML parser (``lxml``) is installed.
@@ -185,45 +179,20 @@ Intermediate recipes
 Fetching data and feeds
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-``riko`` can read both local and remote filepaths via ``source`` modules. All ``source``
-modules return a ``pipeline``. Use ``iter`` to obtain a ``stream`` iterator of
-dictionaries, aka ``items``.
+`Read structured data`_ and `Read feeds`_ cover single sources. ``feedautodiscovery``
+finds every feed linked from a page, and a ``union`` node fetches them all into one
+``stream`` (wires, ports, and ``Workflow.parse`` are explained under
+`Fetch several sources`_). Regardless of how a feed is fetched, its ``items`` have the
+same structure.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Sources, Workflow, get_path
     >>>
-    >>> # Note: `get_path` looks up a cached copy of a URL in the `data`
-    >>> # directory, so these examples run offline
-    >>>
-    >>> ### Fetch a web page ###
-    >>> page = Pipeline.from_module(Sources.FETCHPAGE, conf={'url': get_path('users.jyu.fi.html')})
-    >>>
-    >>> ### Fetch a data file ###
-    >>> data = Pipeline.from_module(Sources.FETCHDATA, conf={'url': get_path('quote.json')})
-    >>>
-    >>> ### View the fetched data ###
-    >>> item = data.first()
-    >>> item['base']
-    'USD'
-    >>> ### Fetch an RSS feed ###
-    >>> feed = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
-    >>>
-    >>> ### Fetch the first RSS feed found on a page ###
-    >>> site_feed = Pipeline.from_module(Sources.FETCHSITEFEED, conf={'url': get_path('cnn.html')})
-    >>>
-    >>> ### Find all RSS links on a page and fetch the feeds ###
     >>> discovery = Pipeline.from_module(Sources.FEEDAUTODISCOVERY, conf={'url': get_path('bbc.html')})
     >>> urls = [entry['link'] for entry in discovery]
     >>> urls
     ['file://riko/data/bbci.co.uk.xml']
-    >>> discovered = Pipeline.from_module(Sources.FETCH, conf={'url': urls[0]})
-    >>>
-    >>> ### Alternatively, fetch every discovered feed in one workflow ###
-    >>> #
-    >>> # A `union` node merges any number of `fetch` nodes wired into it, so
-    >>> # several sources become a single stream (wires, ports, and `Workflow.parse`
-    >>> # are explained under "Fetch several sources" below)
     >>> modules = [
     ...     {'id': f'feed-{n}', 'name': 'fetch', 'conf': {'url': url}}
     ...     for n, url in enumerate(urls)
@@ -232,13 +201,9 @@ dictionaries, aka ``items``.
     ...     [f'feed-{n}', 'merged', f'in:{n}' if n else 'in']
     ...     for n in range(len(urls))
     ... ]
-    >>> modules.append({'id': 'merged', 'name': 'union', 'conf': {}})
-    >>> merged = Pipeline(Workflow.parse({'modules': modules, 'wires': wires}))
-    >>>
-    >>> ### View the fetched RSS feed(s) ###
-    >>> #
-    >>> # Note: regardless of how you fetch an RSS feed, it will have the same
-    >>> # structure
+    >>> union = {'id': 'merged', 'name': 'union', 'conf': {}}
+    >>> dag = {'modules': [*modules, union], 'wires': wires}
+    >>> merged = Pipeline(Workflow.parse(dag))
     >>> merged.first()['title']
     "EU sets out 'phased' Brexit strategy"
 
@@ -440,11 +405,11 @@ shot run. Calling it twice runs the ``pipeline`` twice.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'content': 'a'}, {'content': 'b'}]
-    >>> pipeline = Pipeline.from_module("hash")
-    >>> len(list(pipeline(items)))             # one run
-    2
-    >>> len(list(pipeline(items)))             # a fresh run, same result
-    2
+    >>> pipeline = Pipeline.from_module('truncate', conf={'count': 1})
+    >>> list(pipeline(items))                  # one run
+    [{'content': 'a'}]
+    >>> list(pipeline(items))                  # a fresh run, same result
+    [{'content': 'a'}]
 
 ``pipeline.open(items)`` returns a context manager instead. Leaving its ``with`` block
 tears that run down and releases any acquired resources.
@@ -454,11 +419,11 @@ tears that run down and releases any acquired resources.
     >>> from riko import Pipeline
     >>>
     >>> items = [{'content': 'a'}, {'content': 'b'}]
-    >>> pipeline = Pipeline.from_module("hash")
+    >>> pipeline = Pipeline.from_module('truncate', conf={'count': 1})
     >>>
     >>> with pipeline.open(items) as stream:
-    ...     next(stream)['content']
-    'a'
+    ...     next(stream)
+    {'content': 'a'}
 
 Chaining derives a *new* definition and leaves the original untouched. A ``pipeline``
 can serve as the prefix of several ``pipelines``.
@@ -570,11 +535,13 @@ Asynchronous pipelines
 
 The ``async`` extra (``python -m pip install "riko[async]"``) lets the same ``Pipeline``
 run asynchronously. Build a ``pipeline`` as normal, then consume it with ``async for``,
-or run it as a context manager with ``async with pipeline.open()``.
+or run it as a context manager with ``async with pipeline.open()``. A ``dag`` needs no
+changes either: the ``union`` fan-in from `Fetch several sources`_ runs unchanged under
+``async for``.
 
-Each async ``source`` fetch reads its body fully into memory before parsing (a
-single ``await``). So ``stream`` here means ``Iterator[item]``, not an incremental
-network read.
+Each async ``source`` fetch reads its body fully into memory before parsing (a single
+``await``). So ``stream`` here means ``Iterator[item]``, not an incremental network
+read.
 
 Lazy async iteration
 ^^^^^^^^^^^^^^^^^^^^
@@ -598,50 +565,25 @@ Lazy async iteration
     >>> run(main)
     Donations / 5
 
-To stop early, use the context manager ``async with pipeline.open() as stream:``.
-Leaving the block closes the run.
+To read one item without a loop, ``await pipeline.afirst(items)``. To stop early, use
+the context manager ``async with pipeline.open(items) as stream:``. Leaving the block
+closes the run.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, get_path, run
+    >>> from riko import Pipeline, run
     >>>
-    >>> conf = {'url': get_path('feed.xml')}
+    >>> items = [{'content': 'riko,pipes,async'}]
+    >>> pipeline = Pipeline.from_module('tokenizer', conf={'delimiter': ','}, options={'emit': True})
     >>>
     >>> async def first():
-    ...     async with Pipeline.from_module('fetch', conf=conf).open() as stream:
+    ...     async with pipeline.open(items) as stream:
     ...         item = await anext(stream)
     ...
-    ...     print(item['title'])
+    ...     print(item['content'])
     >>>
     >>> run(first)
-    Donations
-
-Fetching feeds asynchronously
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The ``union`` fan-in ``dag`` from `Fetch several sources`_ runs unchanged under
-``async for``. Each ``fetch`` node is awaited on the async backend and their output
-streams merge into a single ``stream``. As under ``for``, the branches are pulled one at a
-time. Pulling them concurrently is not available yet.
-
-.. code-block:: python
-
-    >>> from riko import Pipeline, Workflow, get_path, run
-    >>>
-    >>> async def main():
-    ...     dag = {
-    ...         'modules': [
-    ...             {'id': 'first', 'name': 'fetch', 'conf': {'url': get_path('feed.xml')}},
-    ...             {'id': 'second', 'name': 'fetch', 'conf': {'url': get_path('gawker.xml')}},
-    ...             {'id': 'merged', 'name': 'union', 'conf': {}},
-    ...         ],
-    ...         'wires': [['first', 'merged'], ['second', 'merged', 'in:1']],
-    ...     }
-    ...     feeds = Pipeline(Workflow.parse(dag))
-    ...     print(len([item async for item in feeds]))
-    >>>
-    >>> run(main)
-    32
+    riko
 
 Bounded parallelism
 ^^^^^^^^^^^^^^^^^^^
@@ -722,24 +664,11 @@ required.
 Using a one-off function
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The built-in ``udf`` ``processor`` applies a Python callable to each ``item``.
-It is the simplest option when a transformation is local to one application.
-Call its ``pipe`` functionally:
-
-.. code-block:: python
-
-    >>> from riko.modules.udf import pipe as udf
-    >>>
-    >>> def set_length(item):
-    ...     return {**item, "length": len(item["content"])}
-    >>>
-    >>> items = [{"content": "a"}, {"content": "abcd"}]
-    >>> [item["length"] for item in udf(items, func=set_length, emit=True)]
-    [1, 4]
-
-Inside a ``Pipeline`` chain, ``map`` appends the callable as its own node. It passes
-keyword arguments to the callable, and ``resources=`` passes resources the ``Context``
-provides to it.
+``map`` applies a Python callable to each ``item``. It is the simplest option when a
+transformation is local to one application. Inside a ``Pipeline`` chain, ``map``
+appends the callable as its own node. It passes keyword arguments to the callable, and
+``resources=`` passes resources the ``Context`` provides to it (see
+`Providing resources`_).
 
 .. code-block:: python
 
@@ -835,32 +764,49 @@ with resources (from a ``context.with_resource``), pass it to the ``Pipeline`` w
     >>> from riko import Context, Pipeline
     >>>
     >>> def open_db():
-    ...     connection = {'rows': []}
-    ...     yield connection
+    ...     yield {'owner': 'ops'}
     >>>
-    >>> pipeline = Pipeline.from_module('fetch').with_resource('db', open_db)
-    >>> sorted(pipeline.context.resources)
-    ['db']
+    >>> def enrich(item, *, db):
+    ...     return {**item, 'db_owner': db['owner']}
+    >>>
+    >>> items = [{'content': 'a'}]
+    >>> resources = {'db': 'db'}
+    >>> pipeline = (
+    ...     Pipeline()
+    ...     .with_resource('db', open_db)
+    ...     .map(enrich, resources=resources)
+    ... )
+    >>> list(pipeline(items))
+    [{'content': 'a', 'db_owner': 'ops'}]
     >>> context = Context(inputs={'limit': 5}).with_resource('db', open_db)
-    >>> pipeline = Pipeline.from_module('fetch').with_context(context)
-    >>> pipeline.context is context
-    True
+    >>> shared = Pipeline().with_context(context).map(enrich, resources=resources)
+    >>> list(shared(items))
+    [{'content': 'a', 'db_owner': 'ops'}]
+    >>> shared.context.inputs['limit']
+    5
 
 A generator function like ``open_db`` is a lifecycle that riko enters before the run and
 closes after it. To share a client you already manage, wrap it with
-``Resource.from_external``. Modules receive it, and riko never closes it. A plain
-callable that returns the value should use ``Resource.from_factory`` with an explicit
-``cleanup``.
+``Resource.from_external``. Modules receive it, and riko never closes it.
 
 .. code-block:: python
 
     >>> from riko import Pipeline, Resource
     >>>
-    >>> client = {'session': 'open'}
-    >>> shared = Resource.from_external(client)
-    >>> pipeline = Pipeline.from_module('fetch').with_resource('client', shared)
-    >>> pipeline.context.resources['client'].value is client
-    True
+    >>> def tag(item, *, client):
+    ...     return {**item, 'tagged_session': client['session']}
+    >>>
+    >>> shared = Resource.from_external({'session': 'open'})
+    >>> pipeline = (
+    ...     Pipeline()
+    ...     .with_resource('client', shared)
+    ...     .map(tag, resources={'client': 'client'})
+    ... )
+    >>> list(pipeline([{'content': 'a'}]))
+    [{'content': 'a', 'tagged_session': 'open'}]
+
+A plain callable that returns the value should instead use ``Resource.from_factory``
+with an explicit ``cleanup``.
 
 Under ``for``, a resource value whose only close is async (an ``aclose`` with no
 ``close``) is rejected with a message naming the fix. Produce it with an async factory
@@ -1016,6 +962,17 @@ operators such as ``union``/``join`` expressible too.
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]
 
+Other ways in and out of a ``Workflow``:
+
+- ``Workflow.parse`` also reads a workflow document (``WorkflowDocument``) or a pipe
+  definition (``PipeDef``)
+- ``Workflow.load(path)`` reads any of them from a file
+- ``Workflow.from_raw`` builds one from a ``WorkflowLike`` mapping
+- ``flow.serialize()`` writes a ``WorkflowDocument``
+- ``flow.input_schemas`` lists the JSON Schema input schemas ``Workflow.parse``
+  creates, ``flow.validate_input_schemas()`` checks them, and
+  ``pipeline.with_input_schemas(…)`` overrides them for a run
+
 A ``Workflow`` composes like a ``Pipeline``: ``flow.with_node(node)`` appends a node
 after the default output, and ``flow.with_workflow(other)`` appends a whole workflow.
 
@@ -1030,8 +987,8 @@ after the default output, and ``flow.with_workflow(other)`` appends a whole work
     >>> list(Pipeline(counted))
     [{'count': 1}]
     >>> hashed = flow.with_workflow(Pipeline.from_module('hash').workflow)
-    >>> sorted(node.name for node in hashed.nodes.values())
-    ['hash', 'itembuilder']
+    >>> hashed.dependencies
+    ('hash', 'itembuilder')
 
 ``compile_workflow`` turns the same ``Workflow`` into a workflow module
 (``WorkflowModule``): the Python source of a module that rebuilds it. The module
@@ -1058,10 +1015,8 @@ as ``pipe_<id>.py`` in a package. Register the package with
     ... }
     >>> flow = Workflow.parse(dag)
     >>> source = compile_workflow(flow, 'pipe_demo')
-    >>> print(next(l for l in source.splitlines() if l.startswith('DEPENDENCIES')))
-    DEPENDENCIES: list[str] = ["itembuilder", "rename"]
     >>> print(next(l for l in source.splitlines() if l.startswith('pipe')))
-    pipe = build_workflow_pipes(
+    pipe = build_workflow_pipes(flow, dispatcher, name="pipe_demo").sync_pipe
 
 The ``build-workflow``, ``compile-workflow``, and ``run-pipe`` commands work on the same
 forms stored as files: ``build-workflow`` expands a serialized ``PipeDag`` into a
@@ -1097,18 +1052,15 @@ You can also use ``pipe:<id>`` as an alias for ``pipe_<id>``.
 
 .. code-block:: python
 
-    >>> from pathlib import Path
-    >>> from tempfile import TemporaryDirectory
-    >>> from riko import Pipeline
-    >>> from riko.ext import register_workflow_store
+    >>> from riko import Pipeline, get_temp_path
+    >>> from riko.ext import register_workflow_store, temporary_registrations
     >>>
     >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> greet = Pipeline.from_module('itembuilder', conf=conf)
     >>>
-    >>> with TemporaryDirectory() as tmp:
-    ...     document = Path(tmp) / 'pipe_greet.json'
+    >>> with get_temp_path('pipe_greet.json') as document, temporary_registrations():
     ...     _ = document.write_bytes(greet.workflow.serialize())
-    ...     register_workflow_store(directory=Path(tmp), replace=True)
+    ...     register_workflow_store(directory=document.parent, replace=True)
     ...     list(Pipeline.from_module('pipe:greet'))
     [{'greeting': 'hello'}]
 
@@ -1120,21 +1072,26 @@ Notes:
 - Registering a second package or directory raises ``ValueError`` unless you pass
   ``replace=True``.
 
-- ``riko.ext.reset_workflow_resolver()`` unregisters the package and the
-  directory. No stored workflow will be found until you register one again.
+- ``riko.ext.temporary_registrations()`` scopes registrations to a ``with`` block. On
+  exit it restores any previously registered modules, targets, and workflow stores.
 
 - Running a ``pipe_<id>`` that neither has raises ``UnsupportedWorkflowError``.
+
+- ``get_temp_path(name)`` (``async_get_temp_path`` in an async run) gives a temporary
+  path named ``name`` (default ``"tmp"``) in a fresh temporary directory. The
+  directory is removed on exit unless you pass ``delete=False``.
 
 Inspecting a pipeline
 ^^^^^^^^^^^^^^^^^^^^^
 
-You can introspect a workflow *without running it*. Its nodes name the modules
-the ``pipeline`` uses — handy for validating that every required ``module`` is
-installed before execution.
+The FAQ's `How do I see a workflow's inputs and dependencies without running it`_
+covers inspecting a ``Pipeline`` or a stored workflow. A compiled workflow module (see
+`Compiling workflow documents`_) reports the same without running: its ``pipe`` carries
+the ``dependencies`` and ``input_schemas`` of the ``Workflow`` it was compiled from.
 
 .. code-block:: python
 
-    >>> from riko import Workflow
+    >>> from riko import Workflow, compile_workflow
     >>>
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
@@ -1145,38 +1102,15 @@ installed before execution.
     ...     ]
     ... }
     >>> flow = Workflow.parse(dag)
-    >>> sorted(node.name for node in flow.nodes.values())
-    ['itembuilder', 'rename']
-
-A *compiled* workflow module's ``pipe`` function (see `Compiling workflow documents`_)
-can additionally report its input declarations or dependencies (the modules and stored
-workflows it uses) at run time.
-
-Pass a ``Context`` whose ``mode`` is ``ExecutionMode.DESCRIBE_INPUTS`` or
-``DESCRIBE_DEPENDENCIES`` and the generated ``pipe()`` will return the input
-declarations or list of module and stored-workflow names instead of running.
-``DESCRIBE`` returns both as a mapping with ``inputs`` and ``dependencies`` keys.
-
-.. code-block:: python
-
-    >>> from riko import Context, ExecutionMode, Workflow, compile_workflow
-    >>>
-    >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hi'}}
-    >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
-    >>> dag = {
-    ...     'modules': [
-    ...         {'name': 'itembuilder', 'conf': itembuilder_conf},
-    ...         {'name': 'rename', 'conf': rename_conf},
-    ...     ]
-    ... }
-    >>> flow = Workflow.parse(dag)
+    >>> flow.dependencies
+    ('itembuilder', 'rename')
     >>> namespace = {}
     >>> exec(compile_workflow(flow, 'pipe_demo'), namespace)
     >>> pipe = namespace['pipe']
-    >>> pipe(context=Context(mode=ExecutionMode.DESCRIBE_DEPENDENCIES))
-    ['itembuilder', 'rename']
-    >>> pipe(context=Context(mode=ExecutionMode.DESCRIBE))
-    {'inputs': {}, 'dependencies': ['itembuilder', 'rename']}
+    >>> pipe.dependencies
+    ('itembuilder', 'rename')
+    >>> pipe.input_schemas
+    FrozenDict({})
 
 Performance and memory
 ----------------------
@@ -1216,3 +1150,4 @@ the scheduler.
 .. _Design Principles: ../README.rst#design-principles
 .. _Pipeline chaining: ../README.rst#synchronous-processing
 .. _DAG format doc: DAG_FORMAT.rst
+.. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

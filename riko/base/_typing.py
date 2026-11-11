@@ -19,13 +19,11 @@ from types import ModuleType, UnionType
 from typing import (
     TYPE_CHECKING,
     Annotated,
-    Literal,
     TypeAliasType,
     Union,
     get_args,
     get_origin,
     get_type_hints,
-    overload,
 )
 from uuid import UUID
 
@@ -187,72 +185,34 @@ HashableType: tuple[type, ...] = (
 )
 
 
-@overload
-def resolve_enum[E: StrEnum](
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[True] = ...,
-    error: type[Exception] = ...,
-) -> E: ...
-@overload
-def resolve_enum[E: StrEnum](
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: Literal[False],
-    error: type[Exception] = ...,
-) -> E | None: ...
-@overload
-def resolve_enum[E: StrEnum](
-    enum: type[E],
-    value: E | str | None,
-    what: str | None = ...,
-    *,
-    default: E | None = ...,
-    strict: bool,
-    error: type[Exception] = ...,
-) -> E | None: ...
-def resolve_enum[E: StrEnum](
-    enum: type[E],
+def require_enum[E: StrEnum](
+    cls: type[E],
     value: E | str | None,
     what: str | None = None,
     *,
-    default: E | None = None,
-    strict: bool = True,
     error: type[Exception] = InvalidPipelineError,
-) -> E | None:
+) -> E:
     """
-    Resolves a member or member value into the given string enum.
-
-    A missing ``value`` resolves to ``default``; with no default, it is an error
-    unless ``strict`` is off, in which case it resolves to ``None``.
+    Requires a member or member value of the given string enum.
 
     Args:
 
-        enum: The string enum to resolve into.
+        cls: The string enum to read ``value`` as.
         value: A member or member value, or ``None`` when absent.
 
     Kwargs:
 
         what: How error messages name the value (default: the enum's name).
-        default: The member a missing ``value`` resolves to.
-        strict: Whether a missing ``value`` with no ``default`` raises.
         error: The exception class raised for a missing or invalid ``value``.
 
     Returns:
 
-        The resolved member, or ``None`` when ``value`` is missing, there is no
-        ``default``, and ``strict`` is off.
+        The matching member.
 
     Raises:
 
-        error: ``value`` is not one of the enum's values, or is missing while
-            required. The invalid-value message lists every accepted value.
+        error: If ``value`` is missing or not one of the enum's values. The
+            invalid-value message lists every accepted value.
 
     Examples:
 
@@ -260,27 +220,72 @@ def resolve_enum[E: StrEnum](
         ...     RED = "red"
         ...     BLUE = "blue"
         >>>
-        >>> resolve_enum(Color, "red")
+        >>> require_enum(Color, "red")
         <Color.RED: 'red'>
-        >>> resolve_enum(Color, None, default=Color.BLUE)
-        <Color.BLUE: 'blue'>
-        >>> resolve_enum(Color, None, strict=False)
+        >>> require_enum(Color, None, "color")
+        Traceback (most recent call last):
+        ...
+        riko.exceptions.InvalidPipelineError: ...missing required color
 
     """
-    what = enum.__name__ if what is None else what
+    what = cls.__name__ if what is None else what
 
-    if value is None and default is None and strict:
+    if value is None:
         raise error(f"missing required {what}")
-    elif value is None:
-        result = default
-    else:
-        try:
-            result = value if isinstance(value, enum) else enum(value)
-        except ValueError as e:
-            accepted = ", ".join(member.value for member in enum)
-            raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}") from e
+
+    try:
+        result = value if isinstance(value, cls) else cls(value)
+    except ValueError as e:
+        accepted = ", ".join(cls)
+        raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}") from e
 
     return result
+
+
+def resolve_enum[E: StrEnum](
+    enum: type[E],
+    value: E | str | None,
+    default: E,
+    what: str | None = None,
+    *,
+    error: type[Exception] = InvalidPipelineError,
+) -> E:
+    """
+    Resolves a member or member value of the given string enum, or ``default``.
+
+    Args:
+
+        enum: The string enum to read ``value`` as.
+        value: A member or member value.
+        default: The member a missing ``value`` resolves to.
+
+    Kwargs:
+
+        what: How error messages name the value (default: the enum's name).
+        error: The exception class raised for an invalid ``value``.
+
+    Returns:
+
+        The matching member, or ``default`` when ``value`` is missing.
+
+    Raises:
+
+        error: If ``value`` is not one of the enum's values. The message lists every
+            accepted value.
+
+    Examples:
+
+        >>> class Color(StrEnum):
+        ...     RED = "red"
+        ...     BLUE = "blue"
+        >>>
+        >>> resolve_enum(Color, "red", Color.BLUE)
+        <Color.RED: 'red'>
+        >>> resolve_enum(Color, None, Color.BLUE)
+        <Color.BLUE: 'blue'>
+
+    """
+    return default if value is None else require_enum(enum, value, what, error=error)
 
 
 def import_or_else(target: str, *, strict: bool = False) -> ModuleType | None:
