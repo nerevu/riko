@@ -272,25 +272,25 @@ when control flow is easier to express explicitly.
     >>> from riko.modules.strreplace import pipe as strreplace
     >>> from riko.modules.tokenizer import pipe as tokenizer
     >>> from riko.modules.count import pipe as count
-    >>>
-    >>> ### Set the module configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   - `get_path` just looks up files in the `data` directory to simplify
-    >>> #      testing
-    >>> #   - the `detag` option will strip all html tags from the result
+
+    ### Set the module configurations ###
+    #
+    # Notes:
+    #   - `get_path` just looks up files in the `data` directory to simplify
+    #      testing
+    #   - the `detag` option will strip all html tags from the result
     >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
-    >>>
-    >>> ### Create a pipeline ###
-    >>> #
-    >>> # The following pipeline will:
-    >>> #   1. fetch the URL and return the content between the body tags
-    >>> #   2. replace newlines with spaces
-    >>> #   3. tokenize (split) the content by spaces, i.e., yield words
-    >>> #   4. count the words
-    >>> #
+
+    ### Create a pipeline ###
+    #
+    # The following pipeline will:
+    #   1. fetch the URL and return the content between the body tags
+    #   2. replace newlines with spaces
+    #   3. tokenize (split) the content by spaces, i.e., yield words
+    #   4. count the words
+    #
     >>> pages = fetchpage(conf=fetch_conf)
     >>> replaced = strreplace(pages, conf=replace_conf, assign='content')
     >>> words = tokenizer(replaced, conf={'delimiter': ' '}, emit=True)
@@ -316,8 +316,8 @@ also accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # chain a module by name
+
+    # chain a module by name
     >>> (pipeline | Transforms.HASH).first(items)
     {'content': 'a', 'hash': 393565300}
 
@@ -332,12 +332,12 @@ chained ``pipeline`` is no different, so compose first and seed last.
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # seed a pipeline with items
+
+    # seed a pipeline with items
     >>> list(items | pipeline)
     [{'content': 'a'}, {'content': 'b'}, {'content': 'c'}, {'content': 'a'}]
-    >>>
-    >>> # seed a chained pipeline with items
+
+    # seed a chained pipeline with items
     >>> list(items | pipeline.pipe(Transforms.TRUNCATE, conf={"count": 2}))
     [{'content': 'a'}, {'content': 'b'}]
 
@@ -350,8 +350,8 @@ chained ``pipeline`` is no different, so compose first and seed last.
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # compose reusable steps
+
+    # compose reusable steps
     >>> chained = Pipeline.from_module(Transforms.UNIQ) | Transforms.COUNT
     >>> (pipeline | chained).first(items)
     {'count': 3}
@@ -552,8 +552,8 @@ Lazy async iteration
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> ### Consume a Pipeline item-by-item with `async for` ###
+
+    ### Consume a Pipeline item-by-item with `async for` ###
     >>> async def main():
     ...     pipeline = (
     ...         Pipeline.from_module(Sources.FETCH, conf=fetch_conf)
@@ -946,8 +946,8 @@ operators such as ``union``/``join`` expressible too.
 .. code-block:: python
 
     >>> from riko import Pipeline, Workflow
-    >>>
-    >>> ### Author a terse, linear DAG (no wires, no ids) ###
+
+    ### Author a terse, linear DAG (no wires, no ids) ###
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
     >>> dag = {
@@ -956,8 +956,8 @@ operators such as ``union``/``join`` expressible too.
     ...         {'name': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
-    >>>
-    >>> ### Expand it into a validated Workflow and run it ###
+
+    ### Expand it into a validated Workflow and run it ###
     >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]

@@ -19,7 +19,7 @@ Index
 - `What protocols are supported`_
 - `Which optional dependencies are available`_
 - `How do synchronous and asynchronous pipelines differ`_
-- `What does parallel=True do`_
+- `How do I run a pipeline in parallel`_
 - `Is riko distributed`_
 - `Which environment variables tune riko`_
 - `Why does a pipeline see no items the second time`_
@@ -332,37 +332,44 @@ metadata. The catalog is derived from the modules installed in ``riko.modules``.
     'aggregate'
     >>> len(list_modules())
     52
-    >>> # filter by decorator type (`operator`, `processor`, `splitter`)
+
+    # filter by decorator type (`operator`, `processor`, `splitter`)
     >>> list_modules(type='operator')[0]
     'aggregate'
     >>> len(list_modules(type='operator'))
     16
-    >>> # filter by ``loopable``
+
+    # filter by ``loopable``
     >>> list_modules(loopable=True)[0]
     'csv'
     >>> len(list_modules(loopable=True))
     34
-    >>> # filter by ``subtype``
+
+    # filter by ``subtype``
     >>> list_modules(subtype='aggregator')[0]
     'count'
     >>> len(list_modules(subtype='aggregator'))
     2
-    >>> # filter by modules whose default behavior
+
+    # filter by modules whose default behavior
     >>> list_modules(subtype='composer', primary=True)[0]
     'aggregate'
     >>> len(list_modules(subtype='composer', primary=True))
     14
-    >>> # filter by ``category``
+
+    # filter by ``category``
     >>> list_modules(category='source')[0]
     'csv'
     >>> len(list_modules(category='source'))
     14
-    >>> # Full module metadata
+
+    # Full module metadata
     >>> metadata = list_module_metadata()[0]
     >>> metadata.name, metadata.type, metadata.subtype
     ('aggregate', 'operator', 'composer')
-    >>> # Available export formats ('ofx'/'qif' only available once installing the
-    >>> # ``finance`` extra.)
+
+    # Available export formats ('ofx'/'qif' only available once installing the
+    # ``finance`` extra.)
     >>> list_formats()[0]
     'csv'
     >>> len(list_formats()) >= 4
@@ -583,7 +590,7 @@ The ways to consume one ``Pipeline``:
 | ``with pipeline.open(items)``         | context manager; ``async with`` for    | closes the run when the block exits,           |
 |                                       | async                                  | including on ``break``                         |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
-| ``pipeline.with_execution(...)``      | thread/process executor                | ``concurrency`` ceiling; optionally ordered    |
+| ``pipeline.with_execution(...)``      | thread/process executor                | ``concurrency`` limit; optionally ordered      |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
 | ``pipeline.split(n)`` / ``publish``   | streaming fan-out (pending)            | branches and local subscriptions               |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
@@ -594,29 +601,33 @@ The ways to consume one ``Pipeline``:
     ``NotImplementedError`` until streaming fan-out, local subscriptions, and publishing
     land.
 
-What does ``parallel=True`` do?
--------------------------------
+How do I run a pipeline in parallel?
+------------------------------------
 
-There is no ``parallel`` flag on ``Pipeline``. By default, ``processors`` process one
-``item`` at a time. Concurrency is an execution-wide ceiling set via ``with_execution``
-and shared by every ``processor`` step in the run. ``operators`` such as ``sort`` and
-``count`` are not impacted.
+By default, a pipeline processes one ``item`` at a time. To process several at once,
+pass ``concurrency`` to ``with_execution``. It limits how many ``items`` are in flight
+across the whole run. Every ``processor`` step shares that limit. ``operators`` such as
+``sort`` and ``count`` work on the whole stream, so they aren't affected.
 
-``executor`` picks where per-item work runs (``"inline"``, ``"thread"``, or
-``"process"``). ``concurrency`` caps how much work runs at once, and ``ordered`` says
-whether items keep their source order.
+``with_execution`` takes three settings:
 
-Under ``for``, the default auto executor uses a thread pool once ``concurrency``
-exceeds one. The thread and process executors without a set ``concurrency`` run one
-item at a time, and ``concurrency="auto"`` sizes the pool from the machine's cores.
-The inline executor never uses workers. A pool pulls the ``source`` no further ahead
-than it has workers.
+- ``concurrency``: how many ``items`` can be in flight at once (default: one).
+  ``"auto"`` picks a size for you.
+- ``executor``: where each ``item``'s work runs. ``"inline"`` runs it in the calling
+  thread without workers, ``"thread"`` uses a thread pool, and ``"process"`` uses
+  worker processes. The default, ``"auto"``, picks for you.
+- ``ordered``: whether results keep their source order (default: False, i.e.,
+  results arrive as they finish).
 
-Under ``async for``, native async work runs inline and synchronous work runs on worker
-threads (or on the event-loop thread with the inline executor). ``concurrency="auto"``
-keeps the default concurrency limit in flight. The process executor raises there. The
-``source`` advances only as workers free up. The branches feeding a fan-in such as
-``union`` are still pulled one at a time.
+When you iterate with ``for``, the default executor uses a thread pool once
+``concurrency`` > 1. ``"auto"`` concurrency sizes the pool based on the machine's number
+of cores. The pool reads ahead of the ``source`` only as far as it has free workers.
+
+When you iterate with ``async for``, async work runs on the event loop and synchronous
+work runs on worker threads (or on the event loop with ``"inline"``). ``"auto"``
+concurrency uses the ``RIKO_CONCURRENCY_LIMIT`` setting. The ``"process"`` executor
+raises an error. The branches feeding a fan-in such as ``union`` are still read one at a
+time.
 
 .. code-block:: python
 
@@ -666,6 +677,10 @@ logs a warning and keeps the default. Defaults are shown in parentheses.
 - ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
   processes (``32``).
 - ``RIKO_PARSED_DATE_CACHE_SIZE``: how many parsed date strings are cached (``1024``).
+- ``RIKO_STRICT_CHECK_CACHE_SIZE``: how many protocol checks are remembered per object
+  type, such as whether a stream can be closed (``512``).
+- ``RIKO_RETURN_KINDS_CACHE_SIZE``: how many pipe functions' inferred return kinds
+  (a stream or a single value) are remembered (``256``).
 - ``RIKO_BENCHMARK_DELAY`` and ``RIKO_BENCHMARK_WORKERS``: the ``benchmark`` script's
   per-item delay (``0.1``) and worker count (``0``, one per item).
 
@@ -745,8 +760,8 @@ Conversely, iterating a ``Pipeline`` yields ``items`` as they are produced, unde
 ``for`` and ``async for``.
 
 Execution-wide settings (``with_execution``) keep in-flight work bounded by
-``concurrency``, or to one item at a time when ``concurrency`` is unset (see `What does
-parallel=True do`_).
+``concurrency``, or to one item at a time when ``concurrency`` is unset (see `How do I
+run a pipeline in parallel`_).
 
 See the `Cookbook`_'s performance and memory section for practical guidance.
 
@@ -965,7 +980,7 @@ documentation workflow.
 .. _What protocols are supported: #what-protocols-are-supported
 .. _Which optional dependencies are available: #which-optional-dependencies-are-available
 .. _How do synchronous and asynchronous pipelines differ: #how-do-synchronous-and-asynchronous-pipelines-differ
-.. _What does parallel=True do: #what-does-paralleltrue-do
+.. _How do I run a pipeline in parallel: #how-do-i-run-a-pipeline-in-parallel
 .. _Is riko distributed: #is-riko-distributed
 .. _Why does a pipeline see no items the second time: #why-does-a-pipeline-see-no-items-the-second-time
 .. _Which operations materialize or retain input: #which-operations-materialize-or-retain-input
