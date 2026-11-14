@@ -240,6 +240,8 @@ Fixes
   - the ``loop`` and ``exchangerate`` modules and ``filter`` comparisons
   - JSON and feed parsing, HTTP fetching and feed discovery, and URL and path resolution
 
+- ``import riko`` works on hosts without a system time-zone database.
+
 - ``rename`` now renames (or, with an omitted ``newval``, deletes), instead of copying,
   a field named by a dotted path or in a different case.
 

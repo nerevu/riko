@@ -7,9 +7,10 @@ declared in ``[project]`` or an extra is unused, since nothing imports it). But 
 counts an import under ``TYPE_CHECKING`` as a use, counts an optional extra as declared
 wherever it is imported, and never reads hook configuration.
 
-This module holds every required dependency to an import that runs, every import of an
-optional extra to a ``try`` that catches its ``ImportError``, and every pre-commit tool
-pin to the version ``uv.lock`` resolves.
+This module holds every required dependency to an import that runs (deptry's ``DEP002``
+ignore list exempts data-only packages), every import of an optional extra to a ``try``
+that catches its ``ImportError``, and every pre-commit tool pin to the version
+``uv.lock`` resolves.
 """
 
 from __future__ import annotations
@@ -223,9 +224,10 @@ def gen_import_issues(
 
     An import of a distribution that only ``[project.optional-dependencies]``
     declares must be guarded, so riko still imports without the extra; and every
-    ``[project]`` dependency must be imported somewhere outside ``TYPE_CHECKING``.
-    A module no installed distribution provides is assumed to share its
-    distribution's name.
+    ``[project]`` dependency must be imported somewhere outside ``TYPE_CHECKING``,
+    unless deptry's ``DEP002`` ignore list names it (a package another library reads
+    as data, e.g., ``tzdata``). A module no installed distribution provides is
+    assumed to share its distribution's name.
 
     Args:
 
@@ -245,7 +247,10 @@ def gen_import_issues(
 
     """
     provided = packages_distributions() if distributions is None else distributions
-    project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+    document = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    project = document.get("project", {})
+    ignores = document.get("tool", {}).get("deptry", {}).get("per_rule_ignores", {})
+    data_only = set(map(normalize_distribution, ignores.get("DEP002", [])))
     required = set(map(_get_requirement_name, project.get("dependencies", [])))
     extras = {
         _get_requirement_name(entry)
@@ -267,7 +272,7 @@ def gen_import_issues(
                 )
                 yield DependencyIssue(f"{path}:{runtime.lineno}", msg)
 
-    for name in sorted(required - used):
+    for name in sorted(required - used - data_only):
         msg = (
             f"{name!r} is a [project] dependency that nothing imports at run time; "
             "import it outside TYPE_CHECKING or move it to a dependency group"

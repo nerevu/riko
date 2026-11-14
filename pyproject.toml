@@ -45,6 +45,7 @@ dependencies = [
     "pytz>=2019.3",
     "requests>=2.22.0,<3.0.0",
     "typing-extensions>=4.13.0",
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]
@@ -257,6 +258,9 @@ python-slugify = "slugify"
 # `manage lint --rst` imports docutils in a try/except ImportError block; it is
 # declared in the lint group because only the lint tooling needs it.
 DEP004 = ["docutils"]
+# ``zoneinfo`` loads ``tzdata``'s zone files itself when the host has no time-zone
+# database, so riko never imports the package directly.
+DEP002 = ["tzdata"]
 
 [tool.pyright]
 venv = "riko"

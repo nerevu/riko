@@ -183,7 +183,10 @@ sync when source is moved between package groups.
   neither `uv` on the Git client's `PATH` nor an active venv (`uv run --active` without
   `VIRTUAL_ENV` silently falls back to a stale `.venv`). Those pins are the only copies
   of locked versions outside `uv.lock`: `manage upgrade` rewrites them and
-  `manage lint --deps` fails when one drifts. Upgrades happen locally:
+  `manage lint --deps` fails when one drifts. That lint also requires every `[project]`
+  dependency to be imported at run time, except the data-only packages deptry's
+  `DEP002` ignore list names (`tzdata`, which `zoneinfo` reads itself). Upgrades happen
+  locally:
   `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package` per `--package`) and
   syncs the active environment with every group and extra. Both hold to
   `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a

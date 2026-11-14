@@ -137,6 +137,11 @@ xml = ["lxml>=5", "requests"]
 lint = ["types-requests"]
 """
 
+DATA_ONLY_TOML = f"""{PYPROJECT_TOML}
+[tool.deptry.per_rule_ignores]
+DEP002 = ["Python.Dateutil"]
+"""
+
 
 ABSOLUTE = "import a.b\nfrom c import d\nfrom . import e\n"
 TRY = "try:\n    import a\nexcept ImportError:\n    pass\n"
@@ -1358,12 +1363,14 @@ class TestEscapeLint:
         assert recorded == tomllib.loads(ceilings)
 
 
-def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
+def _issues(
+    tmp_path: Path, source: str, toml: str = PYPROJECT_TOML
+) -> tuple[list[str], list[int]]:
     package = tmp_path / "pkg"
     package.mkdir(exist_ok=True)
     (package / "mod.py").write_text(source, encoding="utf-8")
     config = tmp_path / "pyproject.toml"
-    config.write_text(PYPROJECT_TOML, encoding="utf-8")
+    config.write_text(toml, encoding="utf-8")
     issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
     required = [issue.message for issue in issues if issue.where == str(config)]
     lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
@@ -1422,6 +1429,9 @@ class TestDependencyLint:
         self, tmp_path: Path, source: str, expected: list[str]
     ) -> None:
         assert _issues(tmp_path, source)[0] == expected
+
+    def test_data_only_dependencies_need_no_import(self, tmp_path: Path) -> None:
+        assert _issues(tmp_path, REQUESTS, DATA_ONLY_TOML)[0] == []
 
     @pytest.mark.parametrize(("source", "expected"), OPTIONAL_CASES)
     def test_optional_extras_must_be_imported_under_a_guard(
