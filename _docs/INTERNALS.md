@@ -239,6 +239,12 @@ sync when source is moved between package groups.
   that starts with a `TODO` marker (bare or after `#`) or carries an unquoted `???`
   outside doctest source (`gen_review_notes`); a mid-line `TODO` and a double-backtick
   ```` ``???`` ```` are prose and pass.
+- **Docstring run-binding lint.** `manage lint --docstrings` flags a `>>> NAME = run(`
+  line in a doctest whose pytest name (dotted module path plus qualname) contains
+  none of `ASYNC_DOCTEST_MARKERS` (`riko/base/_config.py`, `async`/`bado`;
+  `gen_run_bindings`). Without async support conftest
+  skips such a doctest's `run(` examples one at a time, so the bound name would be
+  undefined for the examples after it; only `async`/`bado` doctests are skipped whole.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
   that ends in `is None` (`gen_null_checks`; the bare call shows a `None` result), a
   doctest that imports a public name through a private `riko` module path, a module
