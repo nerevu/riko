@@ -141,7 +141,7 @@ class TestReiteration:
         assert shared() == shared() == LAST
 """
 SCRIPT = """\
-from tests import run_module
+from tests import run_module, run_python
 
 
 class TestRunPipe:
@@ -154,6 +154,11 @@ class TestRunPipe:
     def test_module_form(self):
         \"\"\"The ``python -m`` form runs.\"\"\"
         assert run_module("runpipe", "demo")
+
+
+class TestScriptImports:
+    def test_a_script_imports_riko(self, tmp_path):
+        assert run_python("probe.py", cwd=tmp_path)
 """
 LEADS = [
     pytest.param("helpers", "build_pair body inlined in", id="inlined-helper"),
@@ -224,6 +229,10 @@ def test_a_process_with_a_stated_reason_is_not_a_lead(report):
     assert len(report["processes"]) == 1, report["processes"]
 
 
+def test_a_run_python_probe_is_a_functional_marker(report):
+    assert not report["tier"]
+
+
 def test_a_concept_named_class_is_not_an_unnamed_subject(report):
     assert not [text for text in report["placement"] if "Reiteration" in text]
 
@@ -256,6 +265,44 @@ def test_is_rejection_reads_the_test_body(body, expected):
     source = "def test_x():\n" + "".join(f"    {line}\n" for line in body.splitlines())
     func = ast.parse(source).body[0]
     assert overlap_scan.is_rejection(func) is expected
+
+
+_VACUOUS = "asserts only inside a for loop or all(...)"
+VACUITY = [
+    pytest.param("f()", "no assertion", id="no-assertion"),
+    pytest.param("for x in xs:\n    assert x", _VACUOUS, id="loop"),
+    pytest.param("assert all(map(ok, xs))", _VACUOUS, id="all-map"),
+    pytest.param("xs = [1, 2]\nassert all(map(ok, xs))", None, id="all-literal"),
+    pytest.param("for x in xs:\n    assert x\nassert len(xs) == 2", None, id="counted"),
+    pytest.param("for x in xs:\n    assert x\n_assert_done(xs)", None, id="helper"),
+    pytest.param("with pytest.raises(E):\n    f()", None, id="raises"),
+    pytest.param("result.stdout.fnmatch_lines(['ok'])", None, id="fnmatch"),
+    pytest.param("result.stdout.no_re_match_line('err')", None, id="no-match"),
+]
+ABSENT = [
+    pytest.param("assert d.get('k') is None", True, id="is-none"),
+    pytest.param("assert not d.get('k')", True, id="not"),
+    pytest.param("assert d.get('k') == 1", False, id="value"),
+]
+
+
+def _parse_test(body: str) -> ast.FunctionDef:
+    source = "def test_x():\n" + "".join(f"    {line}\n" for line in body.splitlines())
+    func = ast.parse(source).body[0]
+    assert isinstance(func, ast.FunctionDef)
+    return func
+
+
+@pytest.mark.parametrize(("body", "expected"), VACUITY)
+def test_get_vacuity_reads_where_the_checks_sit(body, expected):
+    assert overlap_scan.get_vacuity(_parse_test(body), set()) == expected
+
+
+@pytest.mark.parametrize(("body", "expected"), ABSENT)
+def test_is_absent_get_flags_a_lookup_compared_to_none(body, expected):
+    node = _parse_test(body).body[0]
+    assert isinstance(node, ast.Assert)
+    assert overlap_scan.is_absent_get(node) is expected
 
 
 FIXTURE_PLUGIN = """\
