@@ -601,7 +601,9 @@ decorator instance.
 `.pipe()` — plus the `ModuleName` `StrEnum` base (`riko/types/_enums.py`) and
 `normalize_module_name` (`riko/definitions/_module_definition.py`); a name may be a
 `str` or `ModuleName` member anywhere, normalized to its canonical string at the
-boundary. The generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER`
+boundary; the `Resolver`/`Dispatcher` protocols (`riko/types/_wrappers.py`) and their
+implementations take `ModuleNameLike`, so registry errors carry the plain string. The
+generated `Modules` tree (P9A) shipped — `pipeline | Transforms.FILTER`
 resolves identically to `pipeline.filter()`; see §24.
 
 ## Workflow graph index (shipped)

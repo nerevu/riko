@@ -345,6 +345,18 @@ without an `async def` parser materializes its whole async input; today async `t
 pulls its whole (finite, counted) source before yielding its first item, while the sync
 run is lazy. It flips when `truncate` migrates or the seam goes.
 
+Closing a bare `truncate`, `uniq`, or `filter` pipe early never closes a source the
+caller still holds, sync and async alike: the operator wrapper closes only the parser's
+result (`maybe_closing(result)` in `_gen`, `auto_close(…, result)` in `_agen`,
+`riko/modules/_decorators.py`), never its input, and a generator parser's frame unwinds
+without closing it. Input lifetime under execution belongs to the run object (R7,
+[execution-semantics.md](execution-semantics.md)). Each S1 Feed-native rewrite closes
+the source it stops reading. Tripwires (S1, strict xfail tables over the three pipes,
+triage 2026-11-14):
+`tests/internal/test_modules.py::TestOperatorInputClose::test_closing_sync_early_closes_a_held_source`
+and `…::test_closing_async_early_closes_a_held_source`; each row flips as its pipe
+migrates.
+
 The same seam never yields to the event loop while it drains (`materialize` reads a sync
 source through `as_async(cooperative=False)`), so async `forever | truncate` through
 `Pipeline` hangs, grows without bound, and ignores a cancel scope (2026-10-29
