@@ -41,16 +41,15 @@ number of times each word appears.
 .. code-block:: python
 
     >>> from riko import get_path, Pipeline
-    >>>
-    >>> ### Set the module configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   1. look up cached html file in the `data` directory
-    >>> #   2. fetch text in the 'body' tag and strip html tags
-    >>> #   3. replace newlines with spaces and assign the result to 'content'
-    >>> #   4. split text in words using whitespace as the delimiter
-    >>> #   5. count the number of times each word appears
-    >>>
+
+    ### Set the module configurations ###
+    #
+    # Notes:
+    #   1. look up cached html file in the `data` directory
+    #   2. fetch text in the 'body' tag and strip html tags
+    #   3. replace newlines with spaces and assign the result to 'content'
+    #   4. split text in words using whitespace as the delimiter
+    #   5. count the number of times each word appears
     >>> url = get_path('users.jyu.fi.html')                                # 1
     >>> fetch_conf = {
     ...     'url': url,
@@ -464,14 +463,13 @@ Synchronous processing
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> # The following pipeline will:
-    >>> #   1. fetch a (cached) RSS feed
-    >>> #   2. filter for items with an 'a' in the title
-    >>> #   3. sort the items ascending by title
-    >>> #
-    >>> # Note: sorting is not lazy so take caution when using this module
-    >>>
+
+    # The following pipeline will:
+    #   1. fetch a (cached) RSS feed
+    #   2. filter for items with an 'a' in the title
+    #   3. sort the items ascending by title
+    #
+    # Note: sorting is not lazy so take caution when using this module
     >>> pipeline = (
     ...     Pipeline.from_module(Sources.FETCH, conf=fetch_conf)   # 1
     ...     .filter(conf={'rule': filter_rule})                    # 2
@@ -501,15 +499,15 @@ the definition.
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> # The following pipeline will:
-    >>> #   1. fetch a (cached) RSS feed
-    >>> #   2. filter for items with an 'a' in the title
-    >>> #   3. hash each title
-    >>> #   4. perform the hashing in parallel four items at a time
-    >>> #
-    >>> # Note: no point in sorting before the hash since unordered execution (the
-    >>> # default) doesn't guarantee order
+
+    # The following pipeline will:
+    #   1. fetch a (cached) RSS feed
+    #   2. filter for items with an 'a' in the title
+    #   3. hash each title
+    #   4. perform the hashing in parallel four items at a time
+    #
+    # Note: no point in sorting before the hash since unordered execution (the
+    # default) doesn't guarantee order
     >>> pipeline = (
     ...     Pipeline.from_module(Sources.FETCH, conf=fetch_conf)    # 1
     ...     .filter(conf={'rule': filter_rule})                     # 2
@@ -540,11 +538,10 @@ early, use ``pipeline.open()`` to create a context manager (iterate it via
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> # The following pipeline will:
-    >>> #   1. fetch a (cached) RSS feed
-    >>> #   2. filter for items with an 'a' in the title
-    >>>
+
+    # The following pipeline will:
+    #   1. fetch a (cached) RSS feed
+    #   2. filter for items with an 'a' in the title
     >>> async def main():
     ...     pipeline = (
     ...         Pipeline.from_module(Sources.FETCH, conf=fetch_conf)   # 1
