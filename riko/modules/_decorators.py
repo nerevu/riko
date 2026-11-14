@@ -44,6 +44,7 @@ from riko.bado.itertools import (
     async_flatten,
     async_iter,
     async_map_ordered_stream,
+    auto_close,
     materialize,
 )
 from riko.base._guards import (
@@ -907,7 +908,7 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
                 args = (casted.field, casted.extraction, casted.conf)
                 parsed = self.parser(*args, **call.kwargs)
                 stream = await as_awaitable(parsed)
-                processed = self._finish(call, stream)
+                processed = auto_close(self._finish(call, stream), stream)
             else:
                 processed = call
 
@@ -1066,7 +1067,7 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
                 msg = "Async parser must be async def to parse async iterators"
                 raise TypeError(msg)
 
-            processed = async_iter(self._finish(result))
+            processed = async_iter(auto_close(self._finish(result), result))
 
         async with maybe_aclosing(processed) as iterator:
             async for item in iterator:
