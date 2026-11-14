@@ -96,6 +96,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
+    from riko.types._enums import ModuleNameLike
     from riko.types._pipedef import PipeIdLike
     from riko.types._wrappers import (
         AsyncModuleWrapper,
@@ -336,7 +337,7 @@ class WorkflowResolver:
         self._document_store = None
         self._resolved_documents.clear()
 
-    def is_compatible(self, name: str) -> bool:
+    def is_compatible(self, name: ModuleNameLike) -> bool:
         """
         Checks whether ``name`` names a stored workflow.
 
@@ -479,11 +480,13 @@ class WorkflowResolver:
 
     @overload
     def require(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload
-    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
+    def require(
+        self, name: ModuleNameLike, is_async: Literal[True]
+    ) -> AsyncModuleWrapper: ...
+    def require(self, name: ModuleNameLike, is_async: bool = False) -> ModuleWrapper:
         """
         Finds a stored workflow's pipe by its ``pipe_<id>`` name, or raises.
 
@@ -547,7 +550,7 @@ class WorkflowResolver:
 
         return tagged
 
-    def require_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: ModuleNameLike) -> frozenset[Interface]:
         """
         Finds which of ``pipe`` and ``async_pipe`` a stored workflow defines.
 
