@@ -335,6 +335,10 @@ and invalid values, and substitutes values for their references.
 ``"default": null`` allows ``null``. ``flow.input_schemas`` lists a parsed workflow's
 input schemas, and ``flow.validate()`` validates them.
 
+In a node's ``conf`` or ``map`` keywords, ``{"input": name}`` is always a reference,
+never a literal value. For example, a ``regex`` ``default`` of ``{"input": "fallback"}``
+uses the value of the ``fallback`` input.
+
 Commands
 --------
 

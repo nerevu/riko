@@ -160,18 +160,27 @@ selection is required and its optional XML parser (``lxml``) is installed.
 User input
 ^^^^^^^^^^
 
-Some ``pipelines`` require user input (via the ``input`` module). By default,
-``input`` prompts the user via the console, but in some situations this may not
-be appropriate, e.g., testing or integrating with a website. In such cases, set
-``test`` in the ``conf`` so the module uses its ``default`` instead of prompting.
+The ``input`` module reads a value and casts it to its ``type``. Supply the value in the
+``Context``'s ``inputs``, keyed by the module's ``input_key``. Otherwise ``input``
+prompts on the console. It uses its ``default`` when ``inputs`` lacks the key, the
+prompt receives an empty answer, or in test mode.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources
+    >>> from riko import Context, Pipeline, Sources
     >>>
-    >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'default': '30', 'test': True}
-    >>> Pipeline.from_module(Sources.INPUT, conf=conf).first()
+    >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'input_key': 'age'}
+    >>> pipeline = Pipeline.from_module(Sources.INPUT, conf=conf)
+    >>> answered = pipeline.with_context(Context(inputs={'age': '42'}))
+    >>> answered.first()
+    42
+    >>> test_conf = {**conf, 'default': '30', 'test': True}
+    >>> Pipeline.from_module(Sources.INPUT, conf=test_conf).first()
     30
+
+A workflow run never prompts. Each input named in the workflow's input schemas comes
+from ``inputs``, else from its schema's ``default``. The run raises when neither is
+present (see "Workflow inputs" in the `DAG format doc`_).
 
 Intermediate recipes
 --------------------

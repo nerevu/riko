@@ -1333,7 +1333,11 @@ Deliver:
   that feeds fields no value can satisfy; `flow.serialize()` writes each input's merged
   schema, so a stored document stays self-describing without the module catalog;
   `describe_module()` and the `Workflow.input_schemas` attribute report the merged
-  schema, so there is one view;
+  schema, so there is one view; the same field schemas disambiguate a literal from a
+  reference (triaged 2026-11-14): a field whose closed object schema declares an `input`
+  property reads `{"input": name}` as a literal, and every other position, open mapping
+  fields such as `regex` `default` and `map` keywords included, keeps the shape reserved
+  for references ([extensibility.md § E3.6](extensibility.md#e36-inputs));
 - `ModuleDefinition` declares its configuration contract, derived from the existing
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
