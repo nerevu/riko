@@ -58,8 +58,10 @@ uv run --active pytest --collect-only -q --no-cov > "$SCRATCH/ids-head.txt"
 
 Add these only when their dimension is in scope:
 
-- **Tripwires:** `pytest --runxfail -q --no-cov -rf <files>` shows *why* each
-  strict xfail fails today.
+- **Tripwires:** `PYTHONPATH=.claude/skills/tidy uv run --active pytest -p
+  xfail_probe --no-cov -n auto <files>` records why each xfail fails today and
+  lists the suspects: `SETUP` (satisfied by a setup error), `MISMATCH` (not its
+  `raises=`), `UNPINNED` (no `raises=`), `PASSES` (the capability may have landed).
 - **Bounds and speed:** `pytest -n auto --no-cov --durations=0` three times, each
   saved to a file; `uv run --active python .claude/skills/tidy/fit_bounds.py FILE...`
   keeps each test's worst `call` time and labels every bound LOOSE, TIGHT, or ok; an

@@ -63,6 +63,11 @@ RULE_CASES = [
         "RM801",
         id="twin-keywords",
     ),
+    pytest.param(
+        "def f(x):\n    if x is None:\n        return 0\n    return x\n",
+        "RM901",
+        id="early-return",
+    ),
 ]
 CLEAN_CASES = [
     pytest.param("def f(limit):\n    return limit or 0\n", id="empty-default"),
@@ -89,6 +94,10 @@ CLEAN_CASES = [
     ),
     pytest.param(
         "def f(limit):\n    return limit or 10  # mistake-ok: RM101\n", id="suppressed"
+    ),
+    pytest.param(
+        "def f(x):\n    def g():\n        return 1\n\n    return g\n",
+        id="nested-return",
     ),
 ]
 

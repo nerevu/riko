@@ -111,7 +111,7 @@ files go in the same call.
 In the same response, scan the added lines for the defect classes past fix
 sessions kept repairing (closing, last-wins, truthiness, sync/async drift,
 chunk decoding, `next()` without a default, hash-seed order, frozen-record
-mutability, unbounded timeouts, `find()` slicing):
+mutability, unbounded timeouts, `find()` slicing) and for a second `return`:
 
 ```bash
 python .claude/skills/land/gates.py scope tidy | uv run --active --no-sync python .claude/skills/tidy/mistake_scan.py --diff-file -

@@ -30,6 +30,9 @@ Rules (code, class, what it flags):
                       no ``converter=``
     RM801 parity      sync/async twins (``x``/``ax``, ``_x``/``_ax``) passing
                       different I/O keywords (``timeout``, ``encoding``, ...)
+    RM901 multi-return  a function with more than one ``return`` (the house style is
+                      a single return at the end); each ``return`` is a lead, so a
+                      change to any of them is in scope
 
 Known gaps, found by running the rules on the pre-fix files: RM404 sees only a
 receiver typed in the same function, so a generic value reached through an attribute
@@ -54,6 +57,9 @@ Inputs:
     --rule CODE    only these rule codes or prefixes (repeatable: ``--rule RM1``)
     --tests        also scan ``tests/``
     paths          restrict to these files/directories
+
+RM901 is a style rule, not a mined defect class: it has no fix history and sorts
+last. Nested functions, lambdas, and classes count their own returns.
 
 Truthiness and frozen-record rules skip ``riko/cli`` (flags and argv, not data).
 Suppress a reviewed site with a trailing ``# mistake-ok: RM101`` comment, not
@@ -166,6 +172,7 @@ FROZEN_TYPES = {
     "Sequence",
 }
 SET_OPS = (ast.BitOr, ast.BitAnd, ast.Sub, ast.BitXor)
+SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
 CLASS_HISTORY = {
     "close": (
         12,
@@ -216,6 +223,7 @@ CLASS_HISTORY = {
         "737f19d6 fetch timeout, 998daf8b async_map limit; 10-31 async fetch timeout",
     ),
     "find-slice": (1, "10-31 fetchpage.get_string"),
+    "multi-return": (0, "house style: one return per function"),
 }
 
 
@@ -835,6 +843,33 @@ def _check_parity(tree: ast.Module, path: Path) -> Iterator[Lead]:
                 )
 
 
+def _gen_returns(node: ast.AST) -> Iterator[ast.Return]:
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Return):
+            yield child
+        elif not isinstance(child, SCOPE_NODES):
+            yield from _gen_returns(child)
+
+
+def _check_returns(tree: ast.Module, path: Path) -> Iterator[Lead]:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            returns = list(_gen_returns(node))
+
+            if len(returns) > 1:
+                lines = ", ".join(str(r.lineno) for r in returns)
+
+                for ret in returns:
+                    yield Lead(
+                        path,
+                        ret.lineno,
+                        "RM901",
+                        "multi-return",
+                        f"`{node.name}` returns at lines {lines}; "
+                        "use one return at the end",
+                    )
+
+
 def _annotate_parents(tree: ast.AST) -> None:
     for node in ast.walk(tree):
         for child in ast.iter_child_nodes(node):
@@ -847,7 +882,7 @@ def scan_file(path: Path) -> list[Lead]:
     _annotate_parents(tree)
     scanner = Scanner(path, source)
     scanner.visit(tree)
-    leads = [*scanner.leads, *_check_parity(tree, path)]
+    leads = [*scanner.leads, *_check_parity(tree, path), *_check_returns(tree, path)]
     lines = scanner.lines
     kept = []
 

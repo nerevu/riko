@@ -55,14 +55,17 @@ every line is a lead to read, not a verdict. Sections:
   table or tripwire; and classes whose subject is a riko name (a class, function,
   or constant defined under ``riko/``) that they never name.
 - ``tier`` -- functional-tier classes that touch none of the end-to-end markers
-  (CLI runners, examples, stored fixture workflows).
+  (CLI runners, examples, stored fixture workflows, a ``run_python`` process).
 - ``doctest-balance`` -- docstrings with many doctest examples, and the tests whose
   tables name one of their callees (move the edge cases into a table).
 - ``assertless`` -- tests with no assertion-shaped node (an ``assert``, a call
   whose name ends in ``raises``/``warns``/``fail``/``approx``/``deprecated_call``
-  or starts with ``assert``/``check``/``expect``, or a call to a helper of the file
-  or class that asserts), and tests whose every ``assert`` sits inside a ``for``
-  loop (an empty iterable passes).
+  or a pytester ``match_lines``/``match_line``, or starts with
+  ``assert``/``check``/``expect``, or a call to a helper of the file or class that
+  asserts), tests whose every check sits inside a ``for`` loop or is an
+  ``assert all(...)`` over an iterable that may be empty (an empty iterable passes;
+  a non-empty literal, or a name bound to one in the test, is exempt), and asserts
+  that a ``.get(...)`` is ``None`` or falsy (a wrong key passes too).
 - ``processes`` -- tests that start a subprocess (``run_module``, ``run_python``,
   ``subprocess.*``, ``runpytest_subprocess``) with no reason a process is needed: no
   ``entry_point``/``cwd``/``env``/``hash_seed`` keyword and no docstring naming one
@@ -172,6 +175,7 @@ E2E_NAMES = frozenset(
         "CliRunner",
         "run_command",
         "run_module",
+        "run_python",
         "run_document",
         "run_workflow",
         "gen_fixture_paths",
@@ -190,7 +194,15 @@ SPAWN_CALLS = frozenset(
     {"run_module", "run_python", "runpytest_subprocess", "check_output", "Popen"}
 )
 
-CHECK_SUFFIXES = ("raises", "warns", "fail", "approx", "deprecated_call")
+CHECK_SUFFIXES = (
+    "raises",
+    "warns",
+    "fail",
+    "approx",
+    "deprecated_call",
+    "match_lines",
+    "match_line",
+)
 CHECK_PREFIXES = ("assert", "check", "_assert", "_check", "expect", "_expect")
 
 PROCESS_KEYWORDS = frozenset({"entry_point", "cwd", "env", "hash_seed"})
@@ -1430,26 +1442,113 @@ def gen_called(node: ast.AST):
             )
 
 
-def has_check(node: ast.AST, helpers: set[str]) -> bool:
-    called = list(gen_called(node))
-    has_assert = any(isinstance(child, ast.Assert) for child in ast.walk(node))
-    has_call = any(
+def is_check_name(name: str, helpers: set[str]) -> bool:
+    return (
         name.endswith(CHECK_SUFFIXES)
         or name.startswith(CHECK_PREFIXES)
         or name in helpers
-        for name in called
     )
-    return has_assert or has_call
 
 
-def is_loop_only(func: ast.AST) -> bool:
-    asserts = [node for node in ast.walk(func) if isinstance(node, ast.Assert)]
+def gen_checks(node: ast.AST, helpers: set[str]):
+    for child in ast.walk(node):
+        name = get_leaf(child.func) if isinstance(child, ast.Call) else None
+
+        if isinstance(child, ast.Assert) or is_check_name(name or "", helpers):
+            yield child
+
+
+def has_check(node: ast.AST, helpers: set[str]) -> bool:
+    return next(gen_checks(node, helpers), None) is not None
+
+
+def get_all_iterable(node: ast.AST) -> ast.expr | None:
+    match node:
+        case ast.Assert(test=ast.Call(func=ast.Name(id="all"), args=[arg])):
+            match arg:
+                case (
+                    ast.GeneratorExp(generators=[first, *_])
+                    | ast.ListComp(generators=[first, *_])
+                ):
+                    iterable = first.iter
+                case ast.Call(func=ast.Name(id="map"), args=[_, mapped, *_]):
+                    iterable = mapped
+                case _:
+                    iterable = arg
+        case _:
+            iterable = None
+
+    return iterable
+
+
+def get_sized(func: ast.AST) -> set[str]:
+    return {
+        target.id
+        for node in ast.walk(func)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, (ast.List, ast.Tuple, ast.Set))
+        and node.value.elts
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def is_unsized_all(node: ast.AST, sized: set[str]) -> bool:
+    iterable = get_all_iterable(node)
+
+    if isinstance(iterable, (ast.List, ast.Tuple, ast.Set)):
+        unsized = not iterable.elts
+    elif isinstance(iterable, ast.Name):
+        unsized = iterable.id not in sized
+    else:
+        unsized = iterable is not None
+
+    return unsized
+
+
+def is_vacuous(func: ast.AST, helpers: set[str]) -> bool:
     loops = [
         node for node in ast.walk(func) if isinstance(node, (ast.For, ast.AsyncFor))
     ]
     looped = {id(node) for loop in loops for node in ast.walk(loop)}
-    raises = any(name.endswith(CHECK_SUFFIXES) for name in gen_called(func))
-    return bool(asserts) and all(id(a) in looped for a in asserts) and not raises
+    sized = get_sized(func)
+    return all(
+        id(check) in looped or is_unsized_all(check, sized)
+        for check in gen_checks(func, helpers)
+    )
+
+
+def is_get_call(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get"
+    )
+
+
+def is_absent_get(node: ast.Assert) -> bool:
+    match node.test:
+        case ast.UnaryOp(op=ast.Not(), operand=operand):
+            absent = is_get_call(operand)
+        case ast.Compare(
+            left=left, ops=[ast.Is() | ast.Eq()], comparators=[ast.Constant(None)]
+        ):
+            absent = is_get_call(left)
+        case _:
+            absent = False
+
+    return absent
+
+
+def get_vacuity(func: ast.AST, helpers: set[str]) -> str | None:
+    if not has_check(func, helpers):
+        reason = "no assertion"
+    elif is_vacuous(func, helpers):
+        reason = "asserts only inside a for loop or all(...)"
+    else:
+        reason = None
+
+    return reason
 
 
 def gen_assertless(files: list[TestFile]):
@@ -1469,16 +1568,17 @@ def gen_assertless(files: list[TestFile]):
             }
 
             for func in gen_tests(cls):
-                if not has_check(func, helpers):
-                    reason = "no assertion"
-                elif is_loop_only(func):
-                    reason = "asserts only inside a for loop"
-                else:
-                    reason = None
+                where = f"{cls.name}::{func.name}"
 
-                if reason is not None:
-                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {reason}"
-                    yield text, [file.rel]
+                if (reason := get_vacuity(func, helpers)) is not None:
+                    yield f"{file.rel}:{func.lineno} {where}: {reason}", [file.rel]
+
+                for node in ast.walk(func):
+                    if isinstance(node, ast.Assert) and is_absent_get(node):
+                        message = (
+                            "asserts a .get() is None or falsy (a wrong key passes too)"
+                        )
+                        yield f"{file.rel}:{node.lineno} {where}: {message}", [file.rel]
 
 
 def is_spawn(node: ast.AST) -> TypeIs[ast.Call]:
