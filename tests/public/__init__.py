@@ -27,6 +27,6 @@ Index (file, then the subjects it owns, in file order):
                                   Serialize
     test_write.py                 Write, PipelineWriteDefinition, PipelineWrite,
                                   Formats, ExportFormats, ExportPipeline, ExportFinance,
-                                  AsyncWriteIterables, WriteMode, WriteCapabilities,
-                                  FileTarget
+                                  AsyncWriteIterables, TempPath, WriteMode,
+                                  WriteCapabilities, FileTarget
 """

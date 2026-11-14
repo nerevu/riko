@@ -27,6 +27,7 @@ type ModuleLike = Mapping[str, object]
 type PipeLike = PipeDef | PipeDag
 
 PipeId = NewType("PipeId", str)
+type PipeIdLike = PipeId | str
 CountValues = Literal["first", "all"]
 
 
@@ -154,6 +155,8 @@ __all__ = [
     "PipeDag",
     "PipeDef",
     "PipeDefLike",
+    "PipeId",
+    "PipeIdLike",
     "PipeModule",
     "Wire",
     "Wires",

@@ -24,10 +24,10 @@ LAYER_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "coercion": ("types",),
     "bado": ("types",),
     "definitions": ("types",),
-    "io": ("coercion", "bado", "definitions"),
+    "io": ("bado", "coercion", "definitions"),
     "parsing": ("io",),
     "rss": ("parsing",),
-    "execution": ("bado", "definitions"),
+    "execution": ("bado", "coercion", "definitions"),
     "runtime": ("execution", "parsing"),
     "modules": ("runtime", "rss"),
     "api": ("modules",),
@@ -118,6 +118,8 @@ class Settings:
     exchange_api: str = "https://openexchangerates.org/api/latest.json"
     shipped_call_cache_size: int = 32
     parsed_date_cache_size: int = 1024
+    strict_check_cache_size: int = 512
+    return_kinds_cache_size: int = 256
     benchmark_delay: float = 0.1
     benchmark_workers: int = 0
 
@@ -248,6 +250,18 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             source,
             "RIKO_PARSED_DATE_CACHE_SIZE",
             defaults.parsed_date_cache_size,
+            minimum=0,
+        ),
+        strict_check_cache_size=_env_int(
+            source,
+            "RIKO_STRICT_CHECK_CACHE_SIZE",
+            defaults.strict_check_cache_size,
+            minimum=0,
+        ),
+        return_kinds_cache_size=_env_int(
+            source,
+            "RIKO_RETURN_KINDS_CACHE_SIZE",
+            defaults.return_kinds_cache_size,
             minimum=0,
         ),
         benchmark_delay=_env_float(

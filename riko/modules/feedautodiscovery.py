@@ -261,10 +261,12 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> conf = {"url": get_path("bbc.html")}
         >>> next(pipe(conf=conf))["link"]
         'file://riko/data/bbci.co.uk.xml'
-        >>> # Include links that declare no feed type:
+
+        # Include links that declare no feed type:
         >>> next(pipe(conf={"url": get_path("bbc.html"), "strict": False}))["link"]
         'file:///.../riko/data/greenhughes.xml'
-        >>> # Accept only Atom links:
+
+        # Accept only Atom links:
         >>> list(pipe(conf={"url": get_path("bbc.html"), "link_type": "atom+xml"}))
         []
 

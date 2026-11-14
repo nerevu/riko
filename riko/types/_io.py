@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-from functools import partial
+from functools import lru_cache, partial
 from pathlib import Path
 from random import choice
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, TypeGuard, runtime_checkable
 
 from riko._package import default_user_agent
+from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_async_callable, isinstance_strict
+from riko.base._guards import is_async_callable, is_type_bound, isinstance_strict
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 
 from ._enums import UserAgent, require_custom_user_agent
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable
 
     from ._enums import UserAgentLike
     from ._resource import Cleanup
-    from ._wrappers import Func
+    from ._wrappers import AsyncFunc, Func
 
 type PathLike = str | Path
 type Closeable = SyncCloseable | AsyncCloseable
@@ -53,7 +54,23 @@ class AsyncCloseable(Protocol):
 PathLikeType: tuple[type[str], type[Path]] = (str, Path)
 
 
-def get_sync_closer(value: object) -> Callable[[], object] | None:
+@lru_cache(maxsize=settings.strict_check_cache_size)
+def _has_async_close(cls: type) -> bool:
+    """Whether instances of ``cls`` close asynchronously through their type."""
+    return is_async_callable(getattr(cls, "close", None))
+
+
+def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
+    """Whether ``owner``'s ``close`` is async."""
+    if is_type_bound(owner, "close"):
+        result = _has_async_close(type(owner))
+    else:
+        result = is_async_callable(close)
+
+    return result
+
+
+def get_sync_closer(value: object) -> Func[object] | None:
     """
     Gets the method that closes ``value`` without an event loop.
 
@@ -79,13 +96,15 @@ def get_sync_closer(value: object) -> Callable[[], object] | None:
     """
     closer = None
 
-    if isinstance_strict(value, SyncCloseable) and not is_async_callable(value.close):
+    if isinstance_strict(value, SyncCloseable) and not _is_async_close(
+        value.close, value
+    ):
         closer = value.close
 
     return closer
 
 
-def get_async_closer(value: object) -> Callable[[], Awaitable[object]] | None:
+def get_async_closer(value: object) -> AsyncFunc[object] | None:
     """
     Gets the method that closes ``value`` on an event loop.
 
@@ -113,7 +132,9 @@ def get_async_closer(value: object) -> Callable[[], Awaitable[object]] | None:
 
     if isinstance_strict(value, AsyncCloseable):
         closer = value.aclose
-    elif isinstance_strict(value, SyncCloseable) and is_async_callable(value.close):
+    elif isinstance_strict(value, SyncCloseable) and _is_async_close(
+        value.close, value
+    ):
         closer = value.close
 
     return closer

@@ -282,9 +282,12 @@ class Pipeline(PipelineDefinition[T_co]):
             resources: The Context resources ``fn`` receives as keywords.
             version: The durable identity of ``fn``'s behavior, if declared.
 
-            identity: How each result's identity relates to its input item
-                (``"preserve"``, ``"derive"``, or ``"combine"``), if declared. Not yet
-                implemented.
+            identity: How each result's identity relates to its input item. One of
+
+                - ``"preserve"``: each result keeps its item's identity.
+                - ``"derive"``: each result is a new item derived from its input.
+
+                (default: "preserve")
 
             kwargs (JSONValue): The JSON-native keywords ``fn`` receives with each item.
 
@@ -294,9 +297,13 @@ class Pipeline(PipelineDefinition[T_co]):
 
         Raises:
 
-            InvalidPipelineError: If a resource alias is not a Python identifier, a
-                keyword argument shares its name with a resource alias, a keyword
-                argument is not JSON-native, or ``identity`` is not an identity mode.
+            InvalidPipelineError: If any of these hold:
+
+                - A resource alias is not a Python identifier.
+                - A keyword argument shares its name with a resource alias, or is not
+                  JSON-native.
+                - ``identity`` is not an identity mode, or is ``"combine"`` (``fn`` sees
+                  one item at a time).
 
             TypeError: If ``fn`` is not callable, or ``version`` is ``None`` or
                 unhashable.

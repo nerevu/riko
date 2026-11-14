@@ -12,6 +12,8 @@ New
   - build one with ``Pipeline.from_module``
   - chain modules by attribute (``pipeline.sort``), ``pipeline.pipe(name)``,
     ``pipeline | name``, or ``pipeline.map(fn)``
+  - pass ``identity="derive"`` (``riko.IdentityMode``) to ``pipeline.map`` when ``fn``
+    returns a new item rather than the one it received
   - configure a run with ``with_context``, ``with_resource``, ``with_input_schemas``,
     and ``with_execution``
   - run it by calling it with items, iterating it, or opening it as a context manager
@@ -101,7 +103,8 @@ Changes
 - Fetching a URL (including async ``exchangerate``) now times out after
   ``RIKO_FETCH_TIMEOUT`` seconds.
 
-- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``.
+- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``
+  and is keyword-only, as in ``async_map_stream``.
 
 - ``riko.PipelineStateError`` now requires a ``subject`` and names the errant object
   (e.g., a write session) instead of "pipe".
@@ -298,6 +301,8 @@ Fixes
 
 - A sync ``udf`` call whose ``func`` return is awaitable raises ``InvalidPipelineError``
   instead of yielding the coroutine object.
+
+- A run that exits early closes its seed and any iterator the seed hands out.
 
 Dev
 ~~~

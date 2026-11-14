@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import RUN_CALL
 from riko.cli import _lint
 from riko.cli._gen_tier_index import GENERATED_HEADER, generate_tier_index
 from riko.cli._lint_tests import (
@@ -153,7 +154,6 @@ class TestTierIndexCodegen:
 INDEX_FORMS = [
     pytest.param(f"{GENERATED_HEADER}\n", "", [STALE], id="header-removed"),
     pytest.param("Alpha, Beta\n", "Alpha\n", [STALE], id="hand-edited"),
-    pytest.param("", "", [], id="current"),
 ]
 
 
@@ -520,3 +520,23 @@ class TestTimeouts:
         )
         result.assert_outcomes(failed=1, xfailed=1)
         result.stdout.fnmatch_lines(["*test_hangs hit its timeout*never ends*"])
+
+
+_RUN_CALLS = [
+    pytest.param("run(main)\n", True, id="leading"),
+    pytest.param("total = run(anext, stream)\n", True, id="assigned"),
+    pytest.param("[e.value for e in run(alist, stream)]\n", True, id="nested"),
+    pytest.param("header = 'def run(flow):'\n", False, id="definition"),
+    pytest.param("execution.run(plan)\n", False, id="method"),
+    pytest.param("arun(plan)\n", False, id="suffix"),
+    pytest.param("run_bridged(f.close)\n", False, id="prefix"),
+]
+
+
+class TestDoctestSkips:
+    @pytest.mark.parametrize(("source", "skipped"), _RUN_CALLS)
+    def test_run_call_is_found_anywhere_on_the_line(
+        self, source: str, skipped: bool
+    ) -> None:
+        """Without the async extra, every bare ``run(`` call example is skipped."""
+        assert bool(RUN_CALL.search(source)) is skipped

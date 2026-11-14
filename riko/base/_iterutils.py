@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from itertools import cycle, dropwhile, islice, takewhile
+from itertools import chain, cycle, dropwhile, islice, takewhile
 from typing import TYPE_CHECKING, Literal, overload
 
 from ._guards import is_known_sequence, is_mapping, require_sequence
@@ -384,18 +384,15 @@ def betwix[T](
 
 
 def partition[T](
-    values: Iterable[T], predicate: Callable[[T], bool] | None = None
+    predicate: Callable[[T], bool] | None, values: Iterable[T]
 ) -> tuple[list[T], list[T]]:
     """
     Splits an iterable into matching and non-matching lists by a predicate.
 
     Args:
 
+        predicate: The test applied to each element; ``None`` tests truthiness.
         values: The source iterable.
-
-    Kwargs:
-
-        predicate: The test applied to each element; defaults to truthiness.
 
     Returns:
 
@@ -403,9 +400,9 @@ def partition[T](
 
     Examples:
 
-        >>> partition([1, 2, 3, 4], lambda n: n % 2 == 0)
+        >>> partition(lambda n: n % 2 == 0, [1, 2, 3, 4])
         ([2, 4], [1, 3])
-        >>> partition([0, 1, "", "x"])
+        >>> partition(None, [0, 1, "", "x"])
         ([1, 'x'], [0, ''])
 
     """
@@ -458,6 +455,34 @@ def sort_stably[T](items: Iterable[T], key: SortKey[T] | None = None) -> tuple[T
         result = sorted(items, key=key)
 
     return tuple(result)
+
+
+def peek[T](source: Iterable[T], n: int) -> tuple[tuple[T, ...], Iterator[T]]:
+    """
+    Reads up to *n* items ahead without losing them.
+
+    Args:
+
+        source: An iterable.
+        n: The most items to read ahead.
+
+    Returns:
+
+        The items read ahead, and an iterator over every item of *source* in order,
+            starting with them.
+
+    Examples:
+
+        >>> head, stream = peek(iter("abc"), 2)
+        >>> head, list(stream)
+        (('a', 'b'), ['a', 'b', 'c'])
+        >>> peek([], 2)[0]
+        ()
+
+    """
+    stream = iter(source)
+    head = tuple(islice(stream, n))
+    return head, chain(head, stream)
 
 
 def unzip[T, U](pairs: Iterable[tuple[T, U]]) -> tuple[list[T], list[U]]:

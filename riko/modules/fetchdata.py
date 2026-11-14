@@ -28,13 +28,14 @@ from __future__ import annotations
 from os.path import splitext
 from typing import TYPE_CHECKING, Any
 
+from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion._sequences import listize
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
-from riko.io._sync import Fetch, auto_close
+from riko.io._sync import Fetch
 from riko.parsing.documents import any2dict
 from riko.types._options import DecorationOptions, Defaults
 

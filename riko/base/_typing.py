@@ -9,6 +9,7 @@ and holds the ``isinstance`` tuples behind the scalar type aliases.
 from __future__ import annotations
 
 from collections import ChainMap
+from contextlib import suppress
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -39,8 +40,10 @@ def resolve_alias(annotation: object) -> object:
     """
     Resolves a ``type`` alias to the annotation it names.
 
-    An alias may name another alias (``type A = B``; ``type B = int``), so this
-    follows the chain to its end. Any other annotation passes through.
+    Follows alias chains to their end (e.g., ``type A = B``; ``type B = int``). Any
+    other annotation passes through. As does an alias whose value names something
+    missing at runtime (e.g., a name imported only for type checking). The chain stops
+    at the last resolvable alias.
 
     Args:
 
@@ -56,10 +59,14 @@ def resolve_alias(annotation: object) -> object:
         >>> type Total = Count
         >>> resolve_alias(Total), resolve_alias(str)
         (<class 'int'>, <class 'str'>)
+        >>> type Unknown = Missing
+        >>> resolve_alias(Unknown)
+        Unknown
 
     """
-    while isinstance(annotation, TypeAliasType):
-        annotation = annotation.__value__
+    with suppress(NameError):
+        while isinstance(annotation, TypeAliasType):
+            annotation = annotation.__value__
 
     return annotation
 
@@ -69,7 +76,8 @@ def gen_union_members(annotation: object) -> Iterator[object]:
     Generates the arms of an annotation once aliases, unions, and ``Annotated`` go.
 
     Aliases are resolved and unions flattened at every level, and ``Annotated[T, ...]``
-    yields the arms of ``T``. Anything else is one arm.
+    yields the arms of ``T``. Anything else is one arm, as is an alias whose value names
+    something missing at runtime (e.g., a name imported only for type checking).
 
     Args:
 
@@ -146,17 +154,9 @@ def resolve_type_hints(
 
 
 AnyStrType: tuple[type[str], type[bytes]] = (str, bytes)
-
-
 BasicValueType: tuple[type[str], type[int]] = (str, int)
-
-
 TemporalType: tuple[type, ...] = (datetime, date, struct_time)
-
-
 DateLikeType: tuple[type, ...] = (str, int, datetime, date, struct_time)
-
-
 NumLikeType: tuple[type, ...] = (float, int, Decimal)
 
 

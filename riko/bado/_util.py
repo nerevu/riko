@@ -18,8 +18,8 @@ Examples:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from functools import partial
 from inspect import iscoroutine
 from math import inf
@@ -49,14 +49,7 @@ from ._backend import (
 from ._backend import asyncify as _asyncify
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        AsyncGenerator,
-        Awaitable,
-        Callable,
-        Generator,
-        Iterable,
-        Mapping,
-    )
+    from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
     from logging import Logger
 
     from anyio import CapacityLimiter
@@ -246,7 +239,7 @@ async def as_awaitable[T](value: T | Awaitable[T]) -> T:
 class _AbandonableCall[T]:
     """A blocking call that warns when it raises after its caller stopped waiting."""
 
-    func: Callable[..., T]
+    func: Func[T]
     done: bool = field(default=False, init=False)
     abandoned: bool = field(default=False, init=False)
 
@@ -296,7 +289,7 @@ async def asyncify[T](
     Examples:
 
         >>> import threading
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     name = await asyncify(lambda: threading.current_thread().name)
@@ -347,7 +340,7 @@ def syncify[**P, T](
 
     Examples:
 
-        >>> from riko.bado import run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -444,21 +437,22 @@ def run_bridged[T](
         require_value(result, ASYNC_CLEANUP_MSG)
 
 
-@contextmanager
-def maybe_closing[T: Iterator[object]](stream: T) -> Generator[T, None]:
+class maybe_closing[T]:  # noqa: N801
     """
-    Closes ``stream`` on exit when it has a ``close`` method.
+    Closes ``value`` on exit when it has a ``close`` method.
 
-    Unlike :func:`contextlib.closing`, a stream with no closer (such as a plain
-    iterator) passes through untouched, so callers needn't check first.
+    Unlike :func:`contextlib.closing`, a value with no closer (such as a plain
+    iterator) passes through untouched. Callers needn't check first. Entering returns
+    ``value``.
 
     Args:
 
-        stream: The iterator to close on exit.
+        value: The value to close on exit.
 
-    Yields:
+    Raises:
 
-        ``stream``.
+        InvalidPipelineError: If ``value``'s ``close`` returns an awaitable since there
+            is no event loop to await it on.
 
     Examples:
 
@@ -477,30 +471,33 @@ def maybe_closing[T: Iterator[object]](stream: T) -> Generator[T, None]:
         1 False None
 
     """
-    try:
-        yield stream
-    finally:
-        if (closer := get_sync_closer(stream)) is not None:
-            run_bridged(closer)
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: T) -> None:
+        self.value = value
+
+    def __enter__(self) -> T:
+        return self.value
+
+    def __exit__(self, *exc: object) -> None:
+        closer = get_sync_closer(self.value)
+
+        if closer is not None and (result := closer()) is not None:
+            require_value(result, ASYNC_CLEANUP_MSG)
 
 
-@asynccontextmanager
-async def maybe_aclosing[T: AsyncIterator[object]](
-    stream: T,
-) -> AsyncGenerator[T, None]:
+class maybe_aclosing[T: AsyncIterator[object]]:  # noqa: N801
     """
     Closes ``stream`` on exit when it has an ``aclose`` or ``close`` method.
 
     Unlike :func:`contextlib.aclosing`, a stream with no closer (such as a plain async
-    iterator) passes through untouched, so callers needn't check first.
+    iterator) passes through untouched. Callers needn't check first. Entering returns
+    ``stream``.
 
     Args:
 
         stream: The async iterator to close on exit.
-
-    Yields:
-
-        ``stream``
 
     Examples:
 
@@ -521,19 +518,33 @@ async def maybe_aclosing[T: AsyncIterator[object]](
         1 False None
 
     """
-    try:
-        yield stream
-    finally:
-        if (closer := resolve_closer(stream, is_async=True)) is not None:
+
+    __slots__ = ("stream",)
+
+    def __init__(self, stream: T) -> None:
+        self.stream = stream
+
+    async def __aenter__(self) -> T:
+        return self.stream
+
+    async def __aexit__(self, *exc: object) -> None:
+        if (closer := resolve_closer(self.stream, is_async=True)) is not None:
             await maybe_async(closer)
 
 
 def async_partial[T](
     func: Func[T | Awaitable[T]], *args: object, **kwargs: object
 ) -> AsyncFunc[T]:
-    """Applies ``args`` and ``kwargs`` to ``func`` for awaiting via ``maybe_async``."""
+    """
+    Applies ``args`` and ``kwargs`` to ``func`` for awaiting via ``maybe_async``.
+
+    ``func``'s arguments are bound in their own partial, so a keyword of ``func`` named
+    ``inline``, ``limiter``, or ``abandon_on_cancel`` never reaches ``maybe_async``.
+    ``_inline`` and ``_abandon_on_cancel`` set its options instead.
+    """
     inline = bool(kwargs.pop("_inline", True))
     abandon_on_cancel = bool(kwargs.pop("_abandon_on_cancel", False))
+
     call = partial(func, *args, **kwargs)
     return partial(
         maybe_async, call, inline=inline, abandon_on_cancel=abandon_on_cancel

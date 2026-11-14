@@ -2,8 +2,8 @@
 """
 Worker pool lifetime for per-item work in synchronous executions.
 
-An execution maps a loopable node's items across one shared thread or process pool. It
-pulls its source no further ahead than the pool can take. A worker process that dies
+An execution spreads a mappable node's items across one shared thread or process pool.
+It pulls its source no further ahead than the pool can take. A worker process that dies
 fails the run with ``BrokenProcessPool`` rather than leaving it waiting.
 """
 
@@ -76,14 +76,12 @@ class _PoolLifetime:
 
     Examples:
 
-        Basic usage::
-
-            >>> from concurrent.futures import ThreadPoolExecutor
-            >>> from riko.execution._pools import _PoolLifetime
-            >>>
-            >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
-            ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))
-            [1, 1, 2, 2]
+        >>> from concurrent.futures import ThreadPoolExecutor
+        >>> from riko.execution._pools import _PoolLifetime
+        >>>
+        >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
+        ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))
+        [1, 1, 2, 2]
 
     """
 
@@ -136,19 +134,19 @@ class _PoolLifetime:
         self, func: Callable[[T], list[T]], source: Iterable[T], *, ordered: bool
     ) -> Iterator[T]:
         """
-        Maps ``func`` over ``source`` on the pool and flattens each item's results.
+        Maps ``func`` over ``source`` on the pool and flattens the per-item results.
 
         The source is pulled by the consumer, never ahead of it by more than the pool's
         width. Mapped nodes can share one pool and chain freely.
 
         Args:
 
-            func: Collects one item's results.
+            func: Collects a node's per-item results.
             source: The items to map.
 
         Kwargs:
 
-            ordered: Whether results keep source order.
+            ordered: Whether items keep source order.
 
         Yields:
 

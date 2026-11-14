@@ -27,7 +27,7 @@ from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, DocumentShape, Formats
-from riko.types._workflow import Endpoint
+from riko.types._workflow import Endpoint, NodeId
 from riko.types.modules import TruncateRawConf
 from tests._workflows import (
     CALLABLE_FLOW,
@@ -334,18 +334,22 @@ class TestWorkflowParse:
         with pytest.raises(InvalidPipelineError, match="cannot hold a callable node"):
             Workflow.parse(raw)
 
+    def test_a_non_mapping_document_raises(self):
+        with pytest.raises(InvalidPipelineError, match="document must be a mapping"):
+            Workflow.parse(["not", "a", "mapping"])  # pyright: ignore[reportArgumentType]
+
 
 def _dag(name: str) -> PipeDag:
     """Loads a committed fixture holding a serialized ``PipeDag``."""
     return json.loads((DAG_DIR / f"{name}.json").read_text())
 
 
-def _edges(flow: Workflow) -> list[tuple[str, str]]:
+def _edges(flow: Workflow) -> list[tuple[NodeId, NodeId]]:
     """Projects a workflow's edges onto their source and target node ids."""
     return [(edge.source.node, edge.target.node) for edge in flow.edges]
 
 
-def _module_node(flow: Workflow, node_id: str) -> ModuleNode:
+def _module_node(flow: Workflow, node_id: NodeId) -> ModuleNode:
     """Narrows one of a workflow's nodes to a module node."""
     node = flow.nodes[node_id]
     assert isinstance(node, ModuleNode)
@@ -1321,6 +1325,34 @@ class TestMigrate:
         Workflow.parse({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
         assert any("pipe definition" in record.message for record in caplog.records)
 
+    def test_input_module_becomes_a_workflow_input(self):
+        conf = {"name": "fmt", "prompt": "enter", "default": "%Y"}
+        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        assert "fmt" in flow.input_schemas
+
+    @pytest.mark.parametrize(("conf", "name", "schema", "kept"), MIGRATED_INPUTS)
+    def test_input_module_conf_migrates(self, conf, name, schema, kept):
+        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        node = flow.nodes["i"]
+        assert isinstance(node, ModuleNode)
+        assert flow.input_schemas == {name: schema}
+        assert node.conf == {"input_key": {"type": "text", "value": name}, **kept}
+
+    @pytest.mark.parametrize(("v1_type", "default", "schema"), V1_TYPED_DEFAULTS)
+    def test_input_module_type_sets_its_schema(self, v1_type, default, schema):
+        conf = {"name": "q", "type": v1_type, "default": default}
+        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        node = flow.nodes["i"]
+        assert isinstance(node, ModuleNode)
+        assert flow.input_schemas == {"q": schema}
+        assert node.conf["type"] == {"type": "text", "value": v1_type}
+
+    def test_migrated_url_input_accepts_a_schemeless_host(self):
+        conf = {"name": "u", "type": "url"}
+        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        pipeline = Pipeline(flow).with_context(Context(inputs={"u": "example.com"}))
+        assert list(pipeline) == ["http://example.com"]
+
     @pytest.mark.parametrize(
         ("module", "match"),
         [
@@ -1366,41 +1398,9 @@ class TestMigrate:
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse(document)
 
-    def test_non_mapping_pipe_def_raises(self):
-        with pytest.raises(InvalidPipelineError, match="document"):
-            Workflow.parse(["not", "a", "mapping"])  # pyright: ignore[reportArgumentType]
-
     def test_missing_modules_raises(self):
         with pytest.raises(InvalidPipelineError, match=r"the document needs"):
             Workflow.parse({"wires": []})
-
-    def test_input_module_becomes_a_workflow_input(self):
-        conf = {"name": "fmt", "prompt": "enter", "default": "%Y"}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        assert "fmt" in flow.input_schemas
-
-    @pytest.mark.parametrize(("conf", "name", "schema", "kept"), MIGRATED_INPUTS)
-    def test_input_module_conf_migrates(self, conf, name, schema, kept):
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        node = flow.nodes["i"]
-        assert isinstance(node, ModuleNode)
-        assert flow.input_schemas == {name: schema}
-        assert node.conf == {"input_key": {"type": "text", "value": name}, **kept}
-
-    @pytest.mark.parametrize(("v1_type", "default", "schema"), V1_TYPED_DEFAULTS)
-    def test_input_module_type_sets_its_schema(self, v1_type, default, schema):
-        conf = {"name": "q", "type": v1_type, "default": default}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        node = flow.nodes["i"]
-        assert isinstance(node, ModuleNode)
-        assert flow.input_schemas == {"q": schema}
-        assert node.conf["type"] == {"type": "text", "value": v1_type}
-
-    def test_migrated_url_input_accepts_a_schemeless_host(self):
-        conf = {"name": "u", "type": "url"}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        pipeline = Pipeline(flow).with_context(Context(inputs={"u": "example.com"}))
-        assert list(pipeline) == ["http://example.com"]
 
 
 class TestSerialize:

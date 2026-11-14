@@ -43,7 +43,7 @@ from ._reencode import TextReencoder
 
 if TYPE_CHECKING:
     from codecs import StreamReader
-    from collections.abc import Generator, Iterable, Iterator, Mapping
+    from collections.abc import Generator, Iterator, Mapping
     from http.client import HTTPResponse
     from urllib.response import addinfourl
 
@@ -168,47 +168,6 @@ def get_response_encoding(
     return encoding or def_encoding
 
 
-# https://docs.python.org/3.3/reference/expressions.html#examples
-def auto_close[T](stream: Iterable[T], *files: FileLike | None) -> Iterator[T]:
-    """
-    Passes ``stream`` through so it closes ``files`` when iteration ends.
-
-    Unconditionally closes the file backing a fetched stream so that each file is
-    released on exhaustion, an early ``break``, or an exception. This is the tool for
-    handles whose consumption is deferred. I.e., a parser that returns a lazy iterator
-    after opening a file keeps the file alive until the caller drains it. Whereas a
-    ``with``/``async with`` block would close it before the first item is read. Pass
-    multiple files when a ``seekable`` copy is read but the original fetch must still be
-    released. Closing an already closed file is a harmless no-op.
-
-    Args:
-
-        stream: The items to yield.
-        files: The files closed once iteration finishes.
-
-    Yields:
-
-        The elements of ``stream``.
-
-    Examples:
-
-        >>> from io import StringIO
-        >>>
-        >>> f = StringIO("hi")
-        >>> list(auto_close(f, f))
-        ['hi']
-        >>> f.closed
-        True
-
-    """
-    try:
-        yield from stream
-    finally:
-        for f in files:
-            if f is not None:
-                f.close()
-
-
 def gen_rows(rows: Stream) -> Stream:
     """
     Generates the rows of a table read by meza, or none when the source is empty.
@@ -222,7 +181,7 @@ def gen_rows(rows: Stream) -> Stream:
 
     Yields:
 
-        Each row, in order.
+        Each row.
 
     Examples:
 
@@ -735,7 +694,8 @@ class Fetch[B: (Literal[True], Literal[False])]:
         user_agent: UserAgentLike | None = None,
         **kwargs: BasicArg | float,
     ) -> None:
-        # TODO: need to use separate timeouts for memoize and urlopen
+        # TODO: need to use separate timeouts for memoize and urlopen (owned by the
+        # planned anyio-aligned memoize options)
         self.binary = binary  # pyright: ignore[reportAttributeAccessIssue]
         self.file = None
         opener = build_opener(

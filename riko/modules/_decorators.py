@@ -21,7 +21,6 @@ Examples:
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
-from contextlib import aclosing
 from functools import partial, wraps
 from itertools import chain, repeat
 from typing import (
@@ -39,9 +38,10 @@ from typing import (
 
 from attrs import define
 
-from riko.bado._util import as_awaitable, maybe_aclosing
+from riko.bado._util import as_awaitable, maybe_aclosing, maybe_closing
 from riko.bado.itertools import (
     as_async,
+    async_flatten,
     async_iter,
     async_map_ordered_stream,
     materialize,
@@ -59,7 +59,7 @@ from riko.definitions._context import Context
 from riko.definitions._wrapping import stamp_wrapper_meta, validate_call_keywords
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
-from riko.types._enums import BasicCastType
+from riko.types._enums import BasicCastType, IdentityMode
 from riko.types._io import get_async_closer
 from riko.types._options import (
     Casted,
@@ -84,10 +84,11 @@ from riko.types._streams import (
     StreamOrValueStream,
 )
 from riko.types._wrappers import Func, PreparedCall
-from riko.types.modules import Conf, require_conf
+from riko.types.modules import Conf, OperatorReturnKind, require_conf
 
 from ._assignment import build_assignment, gen_assignments
 from ._derive import get_module_subtypes, has_sequential_inputs, is_loopable
+from ._inference import infer_return_kinds
 from ._loop import loop_embed_async, loop_embed_sync
 from ._prepare import PreparedModule, resolve_and_cast
 
@@ -646,26 +647,23 @@ async def _materialize_terminal[T](value: object) -> object:
     return materialized
 
 
-async def _aprocess_stream[T](
+def _aprocess_stream[T](
     wrapper: Callable[[T], Awaitable[Iterable[ItemOrValue]]], items: AsyncIterable[T]
 ) -> AsyncStreamOrValueStream:
     """
-    Maps a processor over an async stream lazily, in order, flattening its results.
+    Maps a processor over an async stream lazily and flattens its results.
 
     Args:
 
-        wrapper: The per-item processor call, returning that item's results.
+        wrapper: The per-item processor call (returns per-item results).
         items: The async stream of items to process.
 
-    Yields:
+    Returns:
 
         Each result of every item, in stream order.
 
     """
-    async with aclosing(async_map_ordered_stream(wrapper, items)) as mapped:
-        async for processed in mapped:
-            for value in processed:
-                yield value
+    return async_flatten(async_map_ordered_stream(wrapper, items))
 
 
 async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
@@ -689,7 +687,7 @@ async def _materialize_terminals(**kwargs: object) -> dict[str, object]:
 
 
 def _validate_opts(
-    module_type: str, supported: frozenset[str], kwargs: Mapping[str, object]
+    module_type: ModuleType, supported: frozenset[str], kwargs: Mapping[str, object]
 ) -> None:
     """
     Rejects decoration options a decorator does not read.
@@ -724,6 +722,24 @@ class _ProcessorCall(NamedTuple):
     casted: Casted[ItemOrValue, object]
     kwargs: dict[str, object]
     stream_count: CountValues | None
+
+
+@overload
+def _wrap_item(item: ItemOrValue, copy: Literal[True] = ...) -> DotDict[RikoValue]: ...
+@overload
+def _wrap_item(item: ItemOrValue, copy: bool) -> Item: ...
+def _wrap_item(item: ItemOrValue, copy: bool = True) -> Item:
+    """
+    Wraps a mapping as a ``DotDict`` and any other value under ``"content"``.
+
+    Without ``copy``, a ``DotDict`` passes through as the same object.
+    """
+    if not copy and isinstance(item, DotDict):
+        wrapped: Item = item
+    else:
+        wrapped = DotDict(item if is_mapping(item) else {"content": item})
+
+    return wrapped
 
 
 # Declared covariant: inferred variance turns invariant on Python 3.13+, where the
@@ -765,23 +781,52 @@ class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
         """Whether to keep the first result or all of them, else ``None``."""
         return self.options.get("count")
 
+    @property
+    def return_kinds(self) -> frozenset[OperatorReturnKind]:
+        """The kinds of value the parser may return."""
+        return infer_return_kinds(self.parser)
+
+    @property
+    def identity(self) -> IdentityMode | None:
+        """How each result's identity relates to its input item, else ``None``."""
+        return None
+
 
 @define(frozen=True, slots=True)
 class _PreparedProcessor(_PreparedCall["processor[bool]"]):
     """A processor call prepared once and run once per item."""
 
+    @property
+    def identity(self) -> IdentityMode | None:
+        """
+        How each result's identity relates to its input item, else ``None``.
+
+        An item's emitted stream of results each derive from it. Any other result keeps
+        the item's identity. ``None`` when the parser's return kind cannot be inferred.
+        """
+        kinds = self.return_kinds
+
+        if OperatorReturnKind.UNKNOWN in kinds:
+            identity = None
+        elif OperatorReturnKind.STREAM in kinds and self.prepared.emit:
+            identity = IdentityMode.DERIVE
+        else:
+            identity = IdentityMode.PRESERVE
+
+        return identity
+
     def __call__(
         self,
         item: ProcessorWrapperInput | None = None,
-        *,
         context: Context | None = None,
         **extra: object,
     ) -> SyncProcessorWrapperOutput | AsyncProcessorWrapperOutput:
         if self.wrapper.isasync:
-            make = partial(self._arun, item, context, extra)
+            make = partial(self.arun_item, context, extra, item)
             result = cast("AsyncProcessorWrapperOutput", _AsyncWrapperStream(make))
         else:
-            result = cast("SyncProcessorWrapperOutput", self._run(item, context, extra))
+            output = self.run_item(context, extra, item)
+            result = cast("SyncProcessorWrapperOutput", output)
 
         return result
 
@@ -808,51 +853,51 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
         return built
 
     def _finish[O: ItemOrValue](
-        self, call: _ProcessorCall, stream: ProcessorParserOutput[O]
+        self, call: _ProcessorCall, result: ProcessorParserOutput[O]
     ) -> StreamOrValueStream:
         """Assigns or emits a parser's result for a prepared item."""
-        emit = self.prepared.resolve_emit(stream)
-        args = (call.input_, stream, self.prepared.assign)
+        emit = self.prepared.resolve_emit(result)
+        args = (call.input_, result, self.prepared.assign)
         return self.module.process(*args, emit=emit, count=call.stream_count)
 
-    def _run(
+    def run_item(
         self,
-        item: SyncProcessorWrapperInput | None,
         context: Context | None,
         extra: dict[str, object],
+        item: SyncProcessorWrapperInput | None,
+        /,
     ) -> SyncProcessorWrapperInternalOutput:
+        """Runs one item with the call's context and the item's keyword arguments."""
         if is_listlike(item):
-            runs = map(self._run, item, repeat(context), repeat(extra))
-            processed = chain.from_iterable(runs)
+            runs = map(self.run_item, repeat(context), repeat(extra), item)
+            result = processed = chain.from_iterable(runs)
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
 
             if isinstance(call, _ProcessorCall):
                 casted = call.casted
                 args = (casted.field, casted.extraction, casted.conf)
-                stream = self.parser(*args, **call.kwargs)
-                processed = self._finish(call, stream)
+                result = self.parser(*args, **call.kwargs)
+                processed = self._finish(call, result)
             else:
-                processed = call
+                result = processed = call
 
-        yield from processed
+        with maybe_closing(result):
+            yield from processed
 
-    async def _arun(
+    async def arun_item(
         self,
-        item: ProcessorWrapperInput | None,
         context: Context | None,
         extra: dict[str, object],
+        item: ProcessorWrapperInput | None,
+        /,
     ) -> AsyncProcessorWrapperInternalOutput:
+        """Runs one item asynchronously, as ``run_item`` does."""
         extra = await _materialize_terminals(**extra)
         processed: AsyncProcessorWrapperInternalOutput
 
         if is_streamlike(item):
-            arun = self._arun
-
-            async def _run(value: ItemOrValue) -> AsyncProcessorWrapperInternalOutput:
-                return await arun(value, context, extra)
-
-            run = cast("AsyncItemProcessor", _run)
+            run = cast("AsyncItemProcessor", partial(self.arun_item, context, extra))
             processed = _aprocess_stream(run, as_async(item))
         else:
             call = self._start(cast("ItemOrValue", item), context, extra)
@@ -873,10 +918,29 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
 class _PreparedOperator(_PreparedCall["operator[bool]"]):
     """An operator call prepared once and run once per stream."""
 
+    @property
+    def identity(self) -> IdentityMode | None:
+        """
+        How each result's identity relates to the items it came from.
+
+        An aggregator combines every item it reads into its result. A composer passes
+        items through with their identities.
+        """
+        is_aggregator = self.wrapper.subtype == "aggregator"
+        return IdentityMode.COMBINE if is_aggregator else IdentityMode.PRESERVE
+
+    def normalize_item(self, item: ItemOrValue, /) -> Item:
+        """
+        Normalizes one input item as the operator reads it.
+
+        A ``DotDict`` passes through as the same object. Any other mapping is wrapped,
+        and any other value is placed under ``"content"``.
+        """
+        return _wrap_item(item, copy=False)
+
     def __call__(
         self,
         item: AsyncOperatorWrapperInput | None = None,
-        *,
         context: Context | None = None,
         **extra: object,
     ) -> SyncOperatorWrapperOutput | AsyncOperatorWrapperOutput:
@@ -902,11 +966,11 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         return embedded_kwargs
 
     def _finish[T: ItemOrValue](
-        self, stream: OperatorParserOutput[T]
+        self, result: OperatorParserOutput[T]
     ) -> StreamOrValueStream:
         """Assigns or emits a parser's result."""
-        emit = self.prepared.resolve_emit(stream)
-        return self.module.process(stream, self.prepared.assign, emit=emit)
+        emit = self.prepared.resolve_emit(result)
+        return self.module.process(result, self.prepared.assign, emit=emit)
 
     def _gen(
         self,
@@ -937,14 +1001,15 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         )
 
         if looped or handled:
-            processed = embed_stream
+            result = processed = embed_stream
         else:
             parser = self.parser
             sync_pipe = cast("SyncOperatorParser[ItemOrValue, object]", parser)
-            stream = sync_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
-            processed = self._finish(stream)
+            result = sync_pipe(orig_stream, casted.extraction, tuples, **pkwargs)
+            processed = self._finish(result)
 
-        yield from processed
+        with maybe_closing(result):
+            yield from processed
 
     async def _agen(
         self,
@@ -994,14 +1059,14 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         else:
             if async_native:
                 args = (orig_stream, casted.extraction, tuples)
-                stream = await parser(*args, **pkwargs)
+                result = await parser(*args, **pkwargs)
             elif isinstance(orig_stream, Iterator) and isinstance(tuples, Iterator):
-                stream = parser(orig_stream, casted.extraction, tuples, **pkwargs)
+                result = parser(orig_stream, casted.extraction, tuples, **pkwargs)
             else:
                 msg = "Async parser must be async def to parse async iterators"
                 raise TypeError(msg)
 
-            processed = async_iter(self._finish(stream))
+            processed = async_iter(self._finish(result))
 
         async with maybe_aclosing(processed) as iterator:
             async for item in iterator:
@@ -1015,7 +1080,6 @@ class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
     def __call__(
         self,
         item: SplitterWrapperInput | None = None,
-        *,
         context: Context | None = None,
         **extra: object,
     ) -> SplitterWrapperOutput:
@@ -1053,12 +1117,6 @@ class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
             self._parse(items, kwargs),
         )
         return await as_awaitable(parsed)
-
-
-def _wrap_item(item: ItemOrValue) -> DotDict[RikoValue]:
-    """Wraps a mapping as a ``DotDict`` and any other value under ``"content"``."""
-    _item = item if is_mapping(item) else {"content": item}
-    return DotDict(_item)
 
 
 class processor[B: bool](Module[B]):  # noqa: N801
@@ -1214,12 +1272,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
             The item as a ``DotDict``.
 
         """
-        if item is None:
-            parsed: DotDict[RikoValue] = DotDict()
-        else:
-            parsed = _wrap_item(item)
-
-        return parsed
+        return DotDict() if item is None else _wrap_item(item)
 
     def setup[I, E](
         self,
@@ -1275,7 +1328,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
     def process[O: ItemOrValue](
         self,
         input_: DotDict[RikoValue],
-        stream: ProcessorParserOutput[O],
+        result: ProcessorParserOutput[O],
         assign: str,
         emit: bool = False,
         skip: bool = False,
@@ -1290,7 +1343,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
         Args:
 
             input_: The original input item to merge into.
-            stream: The parser's results.
+            result: The parser's result.
             assign: The field the result is assigned to.
 
         Kwargs:
@@ -1305,12 +1358,12 @@ class processor[B: bool](Module[B]):  # noqa: N801
 
         """
         if skip or emit:
-            _, result = build_assignment(stream, skip=skip, count=count)
+            _, processed = build_assignment(result, skip=skip, count=count)
         else:
-            one, assignment = build_assignment(stream, skip=False, count=count)
-            result = gen_assignments(input_, assignment, assign=assign, one=one)
+            one, assignment = build_assignment(result, skip=False, count=count)
+            processed = gen_assignments(input_, assignment, assign=assign, one=one)
 
-        return result
+        return processed
 
     @overload
     def __call__[I, E, O: ItemOrValue](
@@ -1518,9 +1571,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
             ...     item, objconf = next(tuples)
             ...     content = await async_return(item["content"])
             ...     return f'say "{content}" {objconf.times} times!'
-            >>>
-            >>> # Explicit isasync=True needed since async_pipe2 is not named async_pipe
-            >>> # and it is not an async function
+
+            # Explicit isasync=True needed since async_pipe2 is not named async_pipe
+            # and it is not an async function
             >>> @operator(isasync=True, emit=False)
             ... def async_pipe2(stream, objconf, tuples, **kwargs):
             ...     return sum(len(item["content"].split()) for item in stream)
@@ -1555,8 +1608,9 @@ class operator[B: bool](Module[B]):  # noqa: N801
         """
         Normalizes a sync input stream into ``DotDict`` items.
 
-        Non-mapping elements are placed under ``"content"``; an empty or ``None``
-        input yields nothing.
+        A ``DotDict`` passes through as the same object. A pass-through operator yields
+        the items it received. Any other mapping is wrapped. A non-mapping element is
+        placed under ``"content"``, and an empty or ``None`` input yields nothing.
 
         Kwargs:
 
@@ -1567,8 +1621,10 @@ class operator[B: bool](Module[B]):  # noqa: N801
             Each input element as a ``DotDict``.
 
         """
-        for item in [] if items is None else items:
-            yield _wrap_item(item)
+        if items is None:
+            items = []
+
+        return map(_wrap_item, items, repeat(False))
 
     async def anormalize_input(self, items: AsyncItemsOrValues) -> AsyncStream:
         """
@@ -1587,7 +1643,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
         """
         async for item in items:
-            yield _wrap_item(item)
+            yield _wrap_item(item, copy=False)
 
     @overload
     def setup[T, E](
@@ -1686,7 +1742,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
         return (tuples, orig_stream, casted)
 
     def process[T: ItemOrValue](
-        self, stream: OperatorParserOutput[T], assign: str, emit: bool = False
+        self, result: OperatorParserOutput[T], assign: str, emit: bool = False
     ) -> StreamOrValueStream:
         """
         Assigns an operator parser's result into a single-item stream.
@@ -1696,7 +1752,7 @@ class operator[B: bool](Module[B]):  # noqa: N801
 
         Args:
 
-            stream: The parser's results.
+            result: The parser's result.
             assign: The field the result is assigned to.
 
         Kwargs:
@@ -1708,15 +1764,14 @@ class operator[B: bool](Module[B]):  # noqa: N801
             The resulting stream.
 
         """
-        items = stream
-        one, assignment = build_assignment(items, skip=False)
+        one, assignment = build_assignment(result, skip=False)
 
         if emit:
-            result = assignment
+            processed = assignment
         else:
-            result = gen_assignments(DotDict(), assignment, assign=assign, one=one)
+            processed = gen_assignments(DotDict(), assignment, assign=assign, one=one)
 
-        return result
+        return processed
 
     @overload
     def __call__[T: ItemOrValue, E](

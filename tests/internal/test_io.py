@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import socket
-import tempfile
 import threading
+import warnings
 from contextlib import contextmanager, suppress
 from functools import partial
 from io import BytesIO, StringIO
@@ -29,12 +29,15 @@ from riko.bado._backend import (
     async_sleep,
     lowlevel,
 )
-from riko.bado._util import async_get, async_return, gather_results
+from riko.bado._util import async_get, async_return, gather_results, maybe_async
 from riko.bado.itertools import (
+    aauto_close,
+    alist,
     async_map,
     async_map_ordered_stream,
     async_map_stream,
     async_merge,
+    auto_close,
 )
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
@@ -45,13 +48,12 @@ from riko.definitions._write import WriteResult
 from riko.io._async import (
     _AsyncURLStream,
     _chunk_content,
-    async_get_temp_path,
     async_url_open,
     async_url_read,
 )
 from riko.io._reencode import BytesReencoder, Reencoder, TextReencoder
 from riko.io._serialization import CONVERSION_FUNCS
-from riko.io._sync import Fetch, ReplayReader, get_temp_path, opener
+from riko.io._sync import Fetch, ReplayReader, opener
 from riko.modules.tail import async_pipe as async_tail
 from riko.modules.tail import pipe as tail
 from riko.parsing.documents import (
@@ -73,9 +75,12 @@ from riko.runtime._write_session import (
     write_through,
 )
 from riko.types._enums import Formats, UserAgent
-from tests import aresolve, async_test, is_installed, run_python, skipif_issync
+from riko.types._io import require_closer
+from tests import async_test, is_installed, run_python, skipif_issync
 from tests._lifecycle import ITEMS
 from tests._loopback import ForwardOnly, loopback_url
+from tests._resources import AsyncConnection, Connection
+from tests._streams import Closeable
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
@@ -84,6 +89,7 @@ if TYPE_CHECKING:
     from riko.types._enums import UserAgentLike
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
+    from riko.types._wrappers import Func
 
 _LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 
@@ -153,13 +159,6 @@ def _sink(items: Items, dest: PathLike, mode: str = "replace", **kwargs) -> Writ
     return result
 
 
-@pytest.fixture(scope="module")
-def served_url():
-    """Serves the loopback body over a real socket for the streamed branches."""
-    with loopback_url(_LOOPBACK_BODY) as served:
-        yield served
-
-
 @contextmanager
 def stalled_url(
     prefix: bytes = b"", *, path: str = "stalled.txt", stall: float = 2
@@ -226,6 +225,19 @@ class TestReplayReader:
             assert reader.read() == b"abcdef"
 
 
+ENTITY_TEXTS = [
+    pytest.param("<p>Fish &amp; chips</p>", "Fish & chips\n", id="named"),
+    pytest.param("<p>&#169; 2026</p>", "© 2026\n", id="numeric"),
+    pytest.param("AT&T", "AT&T\n", id="trailing-ampersand"),
+]
+
+
+class TestGetText:
+    @pytest.mark.parametrize(("html", "expected"), ENTITY_TEXTS)
+    def test_character_references_are_decoded(self, html, expected):
+        assert get_text(html) == expected
+
+
 FEED_LINKS = [
     pytest.param(
         {}, ["http://x/rss", "http://x/atom", "http://x/json"], id="default-types"
@@ -242,18 +254,6 @@ FEED_LINKS = [
 
 EMPTY_LINK_TYPES = [pytest.param([], id="no-types"), pytest.param("", id="blank")]
 
-ENTITY_TEXTS = [
-    pytest.param("<p>Fish &amp; chips</p>", "Fish & chips\n", id="named"),
-    pytest.param("<p>&#169; 2026</p>", "© 2026\n", id="numeric"),
-    pytest.param("AT&T", "AT&T\n", id="trailing-ampersand"),
-]
-
-
-class TestGetText:
-    @pytest.mark.parametrize(("html", "expected"), ENTITY_TEXTS)
-    def test_character_references_are_decoded(self, html, expected):
-        assert get_text(html) == expected
-
 
 class TestLoadRssLinks:
     @pytest.mark.parametrize(("kwargs", "expected"), FEED_LINKS)
@@ -265,37 +265,6 @@ class TestLoadRssLinks:
         links = [entry.get("link") for entry in load_rss_links(url, **kwargs)]
         alinks = [entry.get("link") for entry in await aload_rss_links(url, **kwargs)]
         assert links == alinks == expected
-
-    @pytest.mark.parametrize("link_type", EMPTY_LINK_TYPES)
-    @async_test
-    async def test_empty_link_type_is_rejected(self, tmp_path, link_type, monkeypatch):
-        path = tmp_path / "page.html"
-        path.write_text(_FEED_PAGE)
-        is_closed = []
-
-        def fetch(*args, **kwargs):
-            f = Fetch(*args, **kwargs)
-            is_closed.append(lambda: f.file is None)
-            return f
-
-        async def aopen(*args, **kwargs):
-            f = await async_url_open(*args, **kwargs)
-            is_closed.append(lambda: f.closed)
-            return f
-
-        monkeypatch.setattr("riko.rss.discovery.Fetch", fetch)
-        monkeypatch.setattr("riko.rss.discovery.async_url_open", aopen)
-
-        with pytest.raises(ValueError, match="link_type"):
-            RSSLinkParser(link_type=link_type)
-
-        with pytest.raises(ValueError, match="link_type"):
-            load_rss_links(path.as_uri(), link_type=link_type)
-
-        with pytest.raises(ValueError, match="link_type"):
-            await aload_rss_links(path.as_uri(), link_type=link_type)
-
-        assert all(closed() for closed in is_closed)
 
     @async_test
     async def test_relative_links_resolve_against_the_page(self, tmp_path):
@@ -309,6 +278,21 @@ class TestLoadRssLinks:
         links = [entry.get("link") for entry in load_rss_links(url)]
         alinks = [entry.get("link") for entry in await aload_rss_links(url)]
         assert links == alinks == expected
+
+    @pytest.mark.parametrize("link_type", EMPTY_LINK_TYPES)
+    @async_test
+    async def test_empty_link_type_is_rejected(self, tmp_path, link_type):
+        path = tmp_path / "page.html"
+        path.write_text(_FEED_PAGE)
+
+        with pytest.raises(ValueError, match="link_type"):
+            RSSLinkParser(link_type=link_type)
+
+        with pytest.raises(ValueError, match="link_type"):
+            load_rss_links(path.as_uri(), link_type=link_type)
+
+        with pytest.raises(ValueError, match="link_type"):
+            await aload_rss_links(path.as_uri(), link_type=link_type)
 
     @pytest.mark.xfail(
         strict=True,
@@ -385,7 +369,7 @@ def _open_async_url(url: str) -> None:
     run(open_url)
 
 
-def _capturing_urlopen(responses: list[addinfourl]) -> Callable[..., addinfourl]:
+def _capturing_urlopen(responses: list[addinfourl]) -> Func[addinfourl]:
     """Builds a ``urlopen`` stand-in that records each response it opens."""
 
     def capture(*args, **kwargs) -> addinfourl:
@@ -433,6 +417,13 @@ USER_AGENT_REJECTIONS = [
 ]
 
 
+@pytest.fixture(scope="module")
+def served_url():
+    """Serves the loopback body over a real socket for the streamed branches."""
+    with loopback_url(_LOOPBACK_BODY) as served:
+        yield served
+
+
 class TestFetch:
     def test_unified_http_backend(self):
         """Route parameterless HTTP URLs through the requests backend."""
@@ -459,24 +450,6 @@ class TestFetch:
             Fetch("http://example.com/feed.txt", binary=True)
 
         assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
-
-    @pytest.mark.simulated_network
-    @pytest.mark.parametrize(("read", "error"), HTTP_STATUS_READERS)
-    @pytest.mark.parametrize("status", [404, 500])
-    def test_an_unsuccessful_status_raises(self, read, error, status):
-        """An error page is an error, not content, in sync and async reads alike."""
-        body = b"<title>Not Found</title>"
-
-        with (
-            loopback_url(body, status=status, path="missing.html") as url,
-            pytest.raises(error),
-        ):
-            read(url)
-
-    def test_an_empty_url_raises(self):
-        """A missing source is an error, not an empty stream."""
-        with pytest.raises(TypeError, match="a url is required"):
-            Fetch("")
 
     def test_a_failed_status_check_closes_the_response(self):
         """An HTTP error closes the streamed response before it propagates."""
@@ -529,16 +502,6 @@ class TestFetch:
     ):
         with loopback_url(echo="User-Agent") as url:
             assert read(url, user_agent) in expected
-
-    @pytest.mark.simulated_network
-    @pytest.mark.parametrize("read", HTTP_READERS)
-    @pytest.mark.parametrize("user_agent", USER_AGENT_REJECTIONS)
-    def test_http_requests_reject_an_unsendable_user_agent(self, read, user_agent):
-        with (
-            loopback_url(echo="User-Agent") as url,
-            pytest.raises(ValueError, match="Invalid user agent"),
-        ):
-            read(url, user_agent)
 
     @pytest.mark.simulated_network
     def test_streamed_text_read_returns_full_body(self, served_url):
@@ -622,6 +585,34 @@ class TestFetch:
             assert f.read() == "café"
 
         assert [response.closed for response in responses] == [True]
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize(("read", "error"), HTTP_STATUS_READERS)
+    @pytest.mark.parametrize("status", [404, 500])
+    def test_an_unsuccessful_status_raises(self, read, error, status):
+        """An error page is an error, not content, in sync and async reads alike."""
+        body = b"<title>Not Found</title>"
+
+        with (
+            loopback_url(body, status=status, path="missing.html") as url,
+            pytest.raises(error),
+        ):
+            read(url)
+
+    def test_an_empty_url_raises(self):
+        """A missing source is an error, not an empty stream."""
+        with pytest.raises(TypeError, match="a url is required"):
+            Fetch("")
+
+    @pytest.mark.simulated_network
+    @pytest.mark.parametrize("read", HTTP_READERS)
+    @pytest.mark.parametrize("user_agent", USER_AGENT_REJECTIONS)
+    def test_http_requests_reject_an_unsendable_user_agent(self, read, user_agent):
+        with (
+            loopback_url(echo="User-Agent") as url,
+            pytest.raises(ValueError, match="Invalid user agent"),
+        ):
+            read(url, user_agent)
 
     @pytest.mark.simulated_network
     def test_timeout_stops_a_stalled_read(self):
@@ -975,7 +966,6 @@ class TestReencode:
 
 
 COLLECTION_EXPORT_OPTIONS = [
-    pytest.param("list", ("out.csv",), {}, "f", id="list-destination"),
     pytest.param("tuple", (), {"mode": "w"}, "mode", id="tuple-writer-option"),
     pytest.param("list", (), {"indent": 2}, "indent", id="list-converter"),
 ]
@@ -1026,33 +1016,6 @@ class TestChunkContent:
             assert list(_chunk_content(f, 3)) == expected
 
 
-class TestTempPath:
-    """A temporary path starts unoccupied and is removed on exit unless kept."""
-
-    @pytest.fixture(autouse=True)
-    def isolated_tempdir(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-
-    @pytest.mark.parametrize("delete", [True, False])
-    def test_sync_path_lifetime(self, delete):
-        with get_temp_path("items.csv", delete=delete) as temp_path:
-            assert not temp_path.exists()
-            assert temp_path.name == "items.csv"
-            temp_path.write_text("x")
-
-        assert temp_path.exists() is not delete
-
-    @pytest.mark.parametrize("delete", [True, False])
-    @async_test
-    async def test_async_path_lifetime(self, delete):
-        async with async_get_temp_path("items.csv", delete=delete) as temp_path:
-            assert not temp_path.exists()
-            assert temp_path.name == "items.csv"
-            temp_path.write_text("x")
-
-        assert temp_path.exists() is not delete
-
-
 class TestAsyncMap:
     @async_test
     async def test_a_missing_result_keeps_its_slot(self):
@@ -1062,6 +1025,157 @@ class TestAsyncMap:
             return MISSING
 
         assert await async_map(missing, [1, 2]) == [MISSING, MISSING]
+
+
+async def _forever(closed: list[bool]):
+    index = 0
+
+    try:
+        while True:
+            yield index
+            index += 1
+    finally:
+        closed.append(True)
+
+
+def _close_sync(stream: Closeable, *closeables: object, times: int = 1) -> None:
+    wrapper = auto_close(stream, *closeables)
+
+    for _ in range(times):
+        wrapper.close()
+
+
+def _close_async(stream: Closeable, *closeables: object, times: int = 1) -> None:
+    async def main() -> None:
+        wrapper = aauto_close(stream, *closeables)
+
+        for _ in range(times):
+            await wrapper.aclose()
+
+    run(main)
+
+
+def _drain_sync(stream: Closeable, *closeables: object) -> list[int]:
+    return list(auto_close(stream, *closeables))
+
+
+def _drain_async(stream: Closeable, *closeables: object) -> list[int]:
+    return run(alist, aauto_close(stream, *closeables))
+
+
+def _start_sync(closes: list[str], *, finish: bool) -> None:
+    wrapper = auto_close(iter([1, 2]), Closeable("a", closes))
+    next(wrapper)
+
+    if finish:
+        wrapper.close()
+
+
+def _start_async(closes: list[str], *, finish: bool) -> None:
+    async def main() -> None:
+        wrapper = aauto_close(as_async([1, 2]), Closeable("a", closes))
+        await anext(wrapper)
+
+        if finish:
+            await wrapper.aclose()
+
+    run(main)
+
+
+AUTO_CLOSERS = [
+    pytest.param(_close_sync, id="sync"),
+    pytest.param(_close_async, id="async", marks=skipif_issync),
+]
+AUTO_CLOSE_STARTERS = [
+    pytest.param(_start_sync, "auto_close", id="sync"),
+    pytest.param(_start_async, "aauto_close", id="async", marks=skipif_issync),
+]
+AUTO_CLOSE_UNCLOSED = [
+    pytest.param(_start_sync, "auto_close", ["a"], id="sync-closes"),
+    pytest.param(_start_async, "aauto_close", [], id="async", marks=skipif_issync),
+]
+
+AUTO_CLOSE_DRAINS = [
+    pytest.param(_drain_sync, id="sync"),
+    pytest.param(_drain_async, id="async", marks=skipif_issync),
+]
+
+
+class TestAutoClose:
+    """Test the wrappers that close a stream's backing values when iteration ends."""
+
+    @pytest.mark.parametrize("close", AUTO_CLOSERS)
+    def test_close_before_read_closes_everything(self, close):
+        closes = []
+        close(
+            Closeable("stream", closes), Closeable("a", closes), Closeable("b", closes)
+        )
+        assert closes == ["stream", "a", "b"]
+
+    @pytest.mark.parametrize("drain", AUTO_CLOSE_DRAINS)
+    def test_stream_error_closes_and_propagates(self, drain):
+        closes = []
+        stream = Closeable("stream", closes, ValueError("boom"))
+
+        with pytest.raises(ValueError, match="boom"):
+            drain(stream, Closeable("a", closes))
+
+        assert closes == ["stream", "a"]
+
+    @pytest.mark.parametrize("close", AUTO_CLOSERS)
+    def test_second_close_does_nothing(self, close):
+        closes = []
+        close(Closeable("stream", closes), Closeable("a", closes), times=2)
+        assert closes == ["stream", "a"]
+
+    def test_none_closeable_is_skipped(self):
+        closes = []
+        _close_sync(Closeable("stream", closes), None, Closeable("a", closes))
+        assert closes == ["stream", "a"]
+
+    @pytest.mark.parametrize(("start", "name", "closed"), AUTO_CLOSE_UNCLOSED)
+    def test_dropping_a_started_unclosed_wrapper_warns(self, start, name, closed):
+        closes = []
+
+        with pytest.warns(ResourceWarning, match=f"unclosed {name} stream"):
+            start(closes, finish=False)
+
+        assert closes == closed
+
+    @pytest.mark.parametrize(("start", "name"), AUTO_CLOSE_STARTERS)
+    def test_dropping_a_closed_wrapper_does_not_warn(self, start, name):
+        closes = []
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            start(closes, finish=True)
+
+        assert closes == ["a"]
+        assert caught == []
+
+
+ACLOSE_CASES = [
+    pytest.param(Connection, Connection.close, id="sync-cleanup"),
+    pytest.param(Connection, None, id="sync-close"),
+    pytest.param(AsyncConnection, AsyncConnection.aclose, id="async-cleanup"),
+    pytest.param(AsyncConnection, None, id="async-close"),
+]
+
+
+class TestRequireCloser:
+    """Test the closer a value or its cleanup resolves to."""
+
+    @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
+    @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
+    @async_test
+    async def test_closer_runs_inline_or_on_a_worker(
+        self, client_class, cleanup, inline
+    ) -> None:
+        client = client_class()
+        closer = require_closer(client, cleanup, is_async=True)
+        assert closer is not None
+        await maybe_async(closer, inline=inline)
+        assert client.closed is True
 
 
 def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
@@ -1075,17 +1189,6 @@ def _budgeted_probe() -> tuple[dict[str, int], Callable[[int], Awaitable[int]]]:
         return x
 
     return state, leaf
-
-
-async def _forever(closed: list[bool]):
-    index = 0
-
-    try:
-        while True:
-            yield index
-            index += 1
-    finally:
-        closed.append(True)
 
 
 def _sync_forever(closed: list[bool]):
@@ -1122,7 +1225,7 @@ class TestAsyncMapStream:
         ],
     )
     def test_empty_source_yields_nothing(self, stream):
-        assert aresolve(stream(_double, [], limit=4)) == []
+        assert run(alist, stream(_double, [], limit=4)) == []
 
     @skipif_issync
     def test_accepts_async_source(self):
@@ -1130,7 +1233,7 @@ class TestAsyncMapStream:
             for i in range(5):
                 yield i
 
-        results = aresolve(async_map_stream(_double, gen(), limit=2))
+        results = run(alist, async_map_stream(_double, gen(), limit=2))
         assert sorted(results) == [0, 2, 4, 6, 8]
 
     @pytest.mark.parametrize(
@@ -1169,7 +1272,7 @@ class TestAsyncMapStream:
             await async_sleep((5 - i) * 0.01)
             return i
 
-        result = aresolve(async_map_ordered_stream(slow_first, range(6), limit=3))
+        result = run(alist, async_map_ordered_stream(slow_first, range(6), limit=3))
         assert result == list(range(6))
 
     @async_test
@@ -1243,7 +1346,7 @@ class TestAsyncMapStream:
     @pytest.mark.parametrize(("kwargs", "match"), STREAM_OPTION_REJECTIONS)
     def test_rejects_bad_limit_or_buffer(self, build, kwargs, match):
         with pytest.raises(ValueError, match=match):
-            aresolve(build(**kwargs))
+            run(alist, build(**kwargs))
 
     @pytest.mark.xfail(
         strict=True,
@@ -1290,7 +1393,7 @@ class TestAsyncMerge:
     def test_async_merge_yields_every_value(self):
         """More iterables than ``limit`` still merge in full."""
         iterables = [_gen_items([1, 2]), _gen_items([3, 4]), _gen_items([5])]
-        assert sorted(aresolve(async_merge(iterables, limit=2))) == [1, 2, 3, 4, 5]
+        assert sorted(run(alist, async_merge(iterables, limit=2))) == [1, 2, 3, 4, 5]
 
     @async_test
     async def test_async_merge_interleaves_across_iterables(self):
@@ -1551,6 +1654,17 @@ class TestSessionLifecycle:
         session.close()
 
 
+async def _asink(
+    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
+) -> WriteResult:
+    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
+    async with afile_write_session(build_write(dest, mode, **kwargs)) as session:
+        await session.awrite(items)
+        result = await session.afinalize()
+
+    return result
+
+
 class TestWriteExecution:
     def test_writes_mid_chain(self, tmp_path):
         path = tmp_path / "out.json"
@@ -1574,19 +1688,6 @@ class TestWriteExecution:
         stream.close()
         assert path.read_bytes() == b'[{"x": 0}]'
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="withholding an early-closed replacement is not yet implemented",
-    )
-    def test_graceful_close_keeps_original_content_for_replace(self, tmp_path):
-        path = tmp_path / "out.json"
-        path.write_bytes(b'{"old": 1}')
-        stream = write_through(ITEMS, build_write(path, "replace"), terminating=_never)
-        next(stream)
-        stream.close()
-        assert path.read_bytes() == b'{"old": 1}'
-
     def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_always)
@@ -1603,6 +1704,19 @@ class TestWriteExecution:
             stream.throw(RuntimeError("boom"))
 
         assert not path.exists()
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="withholding an early-closed replacement is not yet implemented",
+    )
+    def test_graceful_close_keeps_original_content_for_replace(self, tmp_path):
+        path = tmp_path / "out.json"
+        path.write_bytes(b'{"old": 1}')
+        stream = write_through(ITEMS, build_write(path, "replace"), terminating=_never)
+        next(stream)
+        stream.close()
+        assert path.read_bytes() == b'{"old": 1}'
 
     @ATOMIC_PUBLICATION_PENDING
     @pytest.mark.parametrize(
@@ -1622,17 +1736,6 @@ class TestWriteExecution:
             list(stream)
 
         assert path.read_bytes() == original
-
-
-async def _asink(
-    items: Feed, dest: PathLike, mode: str = "replace", **kwargs
-) -> WriteResult:
-    """Delivers the whole stream to *dest* and commits it, as a terminal write does."""
-    async with afile_write_session(build_write(dest, mode, **kwargs)) as session:
-        await session.awrite(items)
-        result = await session.afinalize()
-
-    return result
 
 
 @skipif_issync

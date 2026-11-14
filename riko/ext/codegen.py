@@ -64,7 +64,7 @@ _CANONICAL: dict[ModuleCategory, ModuleClass] = {
 _GENERATED_CLASSES = frozenset({*_CANONICAL.values(), "Modules"})
 
 
-# TODO: compare to pythonise
+# TODO: compare to pythonise (owned by the planned single identifier sanitizer)
 def enum_member_name(name: str, *, override: str | None = None) -> str:
     """Builds a valid enum member name for a module id."""
     source = override or name

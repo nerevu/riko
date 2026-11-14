@@ -17,16 +17,15 @@ from typing import TYPE_CHECKING, Any, Never, overload
 from attrs import Factory, define, field
 
 from riko.bado._util import maybe_async
-from riko.base._config import FOREVER_ITEM
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._context import Context
 from riko.definitions._inputs import resolve_inputs
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
-from riko.types._frozendict import FrozenDict, FrozenWorkflowEdges
 from riko.types._workflow import parse_port
 
 from ._prepared import ExecutionPlan, require_default_output_port
+from ._provenance import PLACEHOLDER
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -35,10 +34,13 @@ if TYPE_CHECKING:
 
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
+    from riko.types._feed import _ItemEnvelope
+    from riko.types._frozendict import FrozenWorkflowEdges
+    from riko.types._workflow import NodeId, PortName, ResourceName
     from riko.types._wrappers import Func
 
-type SyncExecSteps[T] = dict[str, Iterator[T]]
-type AsyncExecSteps[T] = dict[str, AsyncIterator[T]]
+type SyncExecSteps[T] = dict[NodeId, Iterator[T]]
+type AsyncExecSteps[T] = dict[NodeId, AsyncIterator[T]]
 type Acquisition[T] = _Acquired[T] | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition[Any]]
 
@@ -60,7 +62,7 @@ class _NullEventSink:
 
 
 _NULL_EVENT_SINK = _NullEventSink()
-DEFAULT_SEED: tuple[FrozenDict[str, bool], ...] = (FrozenDict(FOREVER_ITEM),)
+DEFAULT_ENVELOPES: tuple[_ItemEnvelope[object], ...] = (PLACEHOLDER,)
 
 
 @define(frozen=True, slots=True)
@@ -213,7 +215,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         return self._stack.enter_context(cm)
 
     def _require_bindings(
-        self, binding: Mapping[str, str]
+        self, binding: Mapping[str, ResourceName]
     ) -> dict[str, Resource[object]]:
         """Requires the context to provide every resource a node binds, by slot."""
         context = self.context
@@ -228,12 +230,12 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
     def _resolve_node_inputs[I, V: (Iterator[Any], AsyncIterator[Any])](
         self,
+        steps: Mapping[NodeId, V],
         incoming: FrozenWorkflowEdges,
-        steps: Mapping[str, V],
         seed: I | None,
         *,
         as_stream: Callable[[I | Iterable[Any]], V],
-    ) -> tuple[V, dict[str, V], list[V] | None]:
+    ) -> tuple[V, dict[PortName, V], list[V] | None]:
         """
         Wires the output streams of a node's upstream nodes onto its input ports.
 
@@ -250,8 +252,8 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
         Args:
 
-            incoming: The stream edges that target the node.
             steps: The output stream of each upstream node, keyed by node id.
+            incoming: The stream edges that target the node.
             seed: The items fed to the node's open input, if any.
 
         Kwargs:
@@ -266,7 +268,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         """
         stream: V | None = None if seed is None else as_stream(seed)
         indexed: list[tuple[int, V]] = []
-        named: dict[str, V] = {}
+        named: dict[PortName, V] = {}
 
         for edge in incoming:
             require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
@@ -284,7 +286,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         others = [_stream for _, _stream in ordered] if ordered else None
 
         if stream is None:
-            stream = as_stream(() if indexed else DEFAULT_SEED)
+            stream = as_stream(() if indexed else DEFAULT_ENVELOPES)
 
         return stream, named, others
 

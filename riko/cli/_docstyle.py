@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
+_REVIEW_NOTE: re.Pattern[str] = re.compile(
+    r"(#\s*)?TODO\b|(?!>>>|\.\.\.).*(?<!``)\?\?\?(?!``)"
+)
 _ENTRY: re.Pattern[str] = re.compile(r"\*{0,2}(?P<name>\w+)( \(.*\))?:(\s|$)")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
@@ -168,9 +171,9 @@ def gen_example_prose(doc: str) -> Iterator[str]:
     """
     Finds prose paragraphs that narrate between doctest examples.
 
-    A paragraph that follows an example and introduces the next one belongs in a
-    ``>>> #`` comment instead. A paragraph ending in ``::`` labels a new example
-    group and is allowed.
+    A paragraph that follows an example and introduces the next one belongs in a ``#``
+    comment instead. A paragraph ending in ``::`` labels a new example group and is
+    allowed.
 
     Args:
 
@@ -185,7 +188,10 @@ def gen_example_prose(doc: str) -> Iterator[str]:
         >>> doc = ">>> f(1)\\n1\\n\\nWith two:\\n\\n>>> f(2)\\n2"
         >>> list(gen_example_prose(doc))
         ['With two:']
-        >>> list(gen_example_prose(">>> f(1)\\n1\\n\\n>>> # With two\\n>>> f(2)\\n2"))
+        >>> list(gen_example_prose(">>> f(1)\\n1\\n\\n# With two\\n>>> f(2)\\n2"))
+        []
+        >>> bare = ">>> f(1)\\n1\\n\\n# With two\\n>>> f(2)\\n2\\n\\n>>> f(3)\\n3"
+        >>> list(gen_example_prose(bare))
         []
 
     """
@@ -196,7 +202,7 @@ def gen_example_prose(doc: str) -> Iterator[str]:
         starts_paragraph = started and line and (i == 0 or not lines[i - 1])
         started = started or line.startswith(">>>")
 
-        if starts_paragraph and not line.startswith((">>>", "...")):
+        if starts_paragraph and not line.startswith((">>>", "...", "#")):
             end = next((j for j in range(i, len(lines)) if not lines[j]), len(lines))
             following = next((rest for rest in lines[end:] if rest), "")
 
@@ -386,6 +392,35 @@ def gen_null_checks(doc: str) -> Iterator[str]:
     yield from (line for line in lines if _NONE_CHECK.fullmatch(line))
 
 
+def gen_review_notes(doc: str) -> Iterator[str]:
+    """
+    Finds review notes left in docstring text.
+
+    A line that starts with a ``TODO`` marker, bare or after ``#``, or that contains
+    an unquoted ``???`` is an open question for a reviewer, not documentation. A
+    ``TODO`` mid-line is prose and passes.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each line carrying a review note.
+
+    Examples:
+
+        >>> doc = "S.\\n\\n# TODO: clarify\\nA positional??? record.\\nA mid-line TODO."
+        >>> len(list(gen_review_notes(doc)))
+        2
+        >>> list(gen_review_notes("A mid-line TODO."))
+        []
+
+    """
+    lines = (line.strip() for line in doc.splitlines())
+    yield from (line for line in lines if _REVIEW_NOTE.match(line))
+
+
 def resolve_public_path(name: str) -> str | None:
     """
     Finds the supported import path of a public name.
@@ -551,7 +586,8 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
 
     Function summaries must not lead with the output or with a different general-purpose
     verb than the function name. No docstring may narrate between its doctest examples,
-    check a result with ``is None``, or import a public name through a private module.
+    check a result with ``is None``, leave a ``TODO`` or ``???`` review note, or import
+    a public name through a private module.
 
     A parameter with a default is documented under ``Kwargs:``, one without under
     ``Args:``. A private module without a public API or with only a type-only public API
@@ -613,12 +649,16 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     yield DocstringIssue(path, lineno, name, problem, entry)
 
                 for prose in gen_example_prose(doc):
-                    problem = "narrates between examples (use a >>> # comment)"
+                    problem = "narrates between examples (use a # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
 
                 for check in gen_null_checks(doc):
                     problem = "checks for None (show the bare call instead)"
                     yield DocstringIssue(path, lineno, name, problem, check)
+
+                for note in gen_review_notes(doc):
+                    problem = "leaves a TODO or ??? review note"
+                    yield DocstringIssue(path, lineno, name, problem, note)
 
                 for line, imported, public in gen_private_imports(doc):
                     problem = (
@@ -640,6 +680,7 @@ __all__ = [
     "gen_misplaced_params",
     "gen_null_checks",
     "gen_private_imports",
+    "gen_review_notes",
     "gen_section_names",
     "gen_unordered_params",
     "get_name_verb",

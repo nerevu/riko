@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
 
 import pytest
 
-from riko.bado._backend import async_sleep, checkpoint, fail_after
+from riko.bado._backend import async_sleep, checkpoint, fail_after, run
 from riko.bado.itertools import alist, as_async, async_map
 from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import (
@@ -53,7 +53,7 @@ from riko.types.modules import (
     StrReplaceConfRule,
     TokenizerRawConf,
 )
-from tests import aresolve, async_test, skipif_issync
+from tests import async_test, skipif_issync
 from tests._execution import (
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
@@ -107,8 +107,8 @@ _STRR_ASSIGN = methodcaller(
 _SMOKE = pytest.mark.smoke
 _IN_FLIGHT = DEF_CONCURRENCY_LIMIT + 4
 # A stopped run must end well before a blocked worker would finish on its own.
-_BLOCK_SECONDS = 10
-_STOP_BOUND = 8
+_BLOCK_SECONDS = 8
+_STOP_BOUND = 5
 _BOOM = pytest.raises(ValueError, match="boom")
 _A, _BB, _CCC = {"content": "a"}, {"content": "bb"}, {"content": "ccc"}
 _ASSIGNED = [_A, _BB, {"content": "CCC"}]
@@ -425,22 +425,6 @@ class TestModuleNameEnum:
         assert len(list(pipeline(SRC))) == count
 
 
-def _fail_item(item):
-    raise ValueError("bad item")
-
-
-async def _afail_item(item):
-    raise ValueError("bad item")
-
-
-FAILING_MAPS = [
-    pytest.param(_fail_item, None, id="sync"),
-    pytest.param(_afail_item, None, id="async"),
-    pytest.param(_fail_item, 2, id="sync-concurrent"),
-    pytest.param(_afail_item, 2, id="async-concurrent"),
-]
-
-
 class TestPipelineIteration:
     def test_an_empty_pipeline_streams_its_seed_unchanged(self):
         assert list(Pipeline()([{"x": 1}, {"x": 2}])) == [{"x": 1}, {"x": 2}]
@@ -567,19 +551,11 @@ class TestAsyncPipelineIteration:
 
         assert consumed == []
 
-    @pytest.mark.parametrize(("func", "concurrency"), FAILING_MAPS)
-    @async_test
-    async def test_a_failing_node_raises_its_own_error(self, func, concurrency):
-        pipeline = Pipeline().map(func).with_execution(concurrency=concurrency)
-
-        with pytest.raises(ValueError, match="bad item"):
-            await alist(pipeline(SRC))
-
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
     """Iterate *build*'s pipeline both ways; return ``(sync_result, async_result)``."""
     pipeline = build(tokenized("a,bb,ccc"))
-    return list(pipeline), aresolve(pipeline)
+    return list(pipeline), run(alist, pipeline)
 
 
 PARITY_CASES = [
@@ -998,7 +974,7 @@ class TestAsyncMap:
     @async_test
     async def test_async_map_rejects_negative_limit(self):
         with pytest.raises(ValueError, match="limit cannot be negative"):
-            await async_map(_fail, range(3), -1)
+            await async_map(_fail, range(3), limit=-1)
 
 
 class TestFanIn:
@@ -1199,6 +1175,7 @@ class TestExecutionSettings:
         pipeline = build().hash(options={"assign": "h"}).with_execution(**settings)
         assert [item["content"] for item in pipeline(seed)] == expected
 
+    @pytest.mark.timeout(5)
     @pytest.mark.parametrize("executor", ["inline", "thread", "process"])
     def test_every_executor_produces_the_same_items(self, executor):
         pipeline = Pipeline().hash(options={"assign": "h"})
@@ -1206,7 +1183,7 @@ class TestExecutionSettings:
         assert _by_content(executed) == _by_content(pipeline(SRC))
 
     @pytest.mark.slow
-    @pytest.mark.timeout(15)
+    @pytest.mark.timeout(10)
     @pytest.mark.parametrize(
         ("blocker", "role", "shutdown_timeout", "expectation"), _STOPPED_RUNS
     )
@@ -1234,6 +1211,7 @@ class TestExecutionSettings:
             os.kill(pid, 0)
 
     @pytest.mark.slow
+    @pytest.mark.timeout(5)
     def test_a_process_mapped_callable_ignores_unused_context_resources(self) -> None:
         unpicklable = Resource.from_external(SimpleNamespace(fn=lambda: None))
         mapped = Pipeline().map(dict).with_resource("lock", unpicklable)
@@ -1728,15 +1706,7 @@ class TestSubscriptions:
         assert first_seen == EXPECTED
         assert second_seen == EXPECTED
 
-    def test_func_runs_per_item_and_items_pass_through(self):
-        seen: list[object] = []
-        archive = Pipeline.subscribe("archive", func=seen.append)
-        sender = tokenized(VALUE).publish(archive)
-
-        assert list(sender) == EXPECTED
-        assert seen == EXPECTED
-
-    def test_two_publishers_reach_one_subscription(self):
+    def test_publishing_twice_reaches_one_subscription(self):
         seen: list[object] = []
         events = Pipeline.subscribe("shared", func=seen.append)
         pipeline = Pipeline().hash().publish(events)

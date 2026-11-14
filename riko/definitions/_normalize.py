@@ -36,6 +36,7 @@ from riko.types._workflow import (
     Endpoint,
     NodeId,
     Port,
+    PortDirection,
     PortEdge,
     RawEdge,
     RawEndpoint,
@@ -93,19 +94,19 @@ require_raw_edge = require_from_typed_dict(RawEdge, "PortEdge")
 require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 
 
-def _get_legacy_index(port: str, prefix: str, default: int) -> int:
+def _get_legacy_index(port: Port, prefix: str, default: int) -> int:
     """Reads the trailing number off a legacy ``_OTHER``/``_OUTPUT`` port suffix."""
     suffix = port.removeprefix(prefix)
     return int(suffix) if suffix.isdigit() else default
 
 
-def _is_legacy_port(port: str, prefix: str) -> bool:
+def _is_legacy_port(port: Port, prefix: str) -> bool:
     """Confirms a legacy port suffix is empty or a bare series number."""
     suffix = port.removeprefix(prefix)
     return not suffix or suffix.isdigit()
 
 
-def _normalize_port(port: str, direction: str) -> str:
+def _normalize_port(port: Port, direction: PortDirection) -> Port:
     """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
     if not port or port in PORT_DIRECTIONS:
         result = port
@@ -126,7 +127,7 @@ def _normalize_port(port: str, direction: str) -> str:
     return result
 
 
-def _validate_port(port: str) -> None:
+def _validate_port(port: Port) -> None:
     """Rejects an empty port or a malformed ``in``/``out`` directional form."""
     try:
         parse_port(port)
@@ -232,7 +233,7 @@ def _gen_nodes(raw_nodes: Iterable[NodeLike]) -> Iterator[NodeLike]:
             yield {"id": str(node_id)} | {k: v for k, v in node.items() if k != "id"}
 
 
-def _keyed_node(key: str, raw_node: NodeLike) -> NodeLike:
+def _keyed_node(key: NodeId, raw_node: NodeLike) -> NodeLike:
     """Applies the authoritative mapping key and rejects a conflicting inner ``id``."""
     if isinstance(raw_node, RikoNode):
         inner: object = raw_node.id
@@ -296,7 +297,7 @@ def resolve_port(port: Port | None, default: Port) -> Port:
     return default if port is None else str(port)
 
 
-def _normalize_endpoint(raw: EndpointLike, default_port: str) -> Endpoint:
+def _normalize_endpoint(default_port: PortDirection, raw: EndpointLike) -> Endpoint:
     """Normalizes an authored endpoint into a canonical ``node``/``port`` reference."""
     if isinstance(raw, Endpoint):
         result = raw
@@ -363,8 +364,8 @@ def normalize_edge(raw: EdgeLike, **nodes: RikoNode) -> PortEdge:
         raise InvalidPipelineError(f"use 'source'/'target', not {sorted(present)}")
     else:
         edge = require_raw_edge(_resolve_aliases(raw, "edge"))
-        source = _normalize_endpoint(edge["source"], "out")
-        target = _normalize_endpoint(edge["target"], "in")
+        source = _normalize_endpoint("out", edge["source"])
+        target = _normalize_endpoint("in", edge["target"])
         publish = _resolve_edge_family(edge.get("family"), target, **nodes)
         result = PublishEdge(source, target) if publish else StreamEdge(source, target)
 
@@ -411,7 +412,7 @@ def normalize_outputs(
         result = {DEFAULT_OUTPUT: Endpoint(ends[0], "out")} if len(ends) == 1 else {}
     else:
         outputs = require_mapping(raw, "outputs")
-        normalize = partial(_normalize_endpoint, default_port="out")
+        normalize = partial(_normalize_endpoint, "out")
         result = map_keys_and_values(str, normalize, outputs)
 
     return result

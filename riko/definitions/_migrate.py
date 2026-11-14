@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 
     from riko.types._frozendict import InputSchema, InputSchemas, JSONValue
     from riko.types._pipedef import PipeDefLike, Wires
+    from riko.types._workflow import NodeId, Port
     from riko.types.modules import Conf, InputRawConf
 
     from ._workflow_definition import RawOutputs, RawPortEdges
@@ -358,7 +359,7 @@ def _merge_input_schemas(*schemas: InputSchemas) -> InputSchemas:
     return merged
 
 
-def _migrate_dag_module(index: int, module: DagModule) -> tuple[str, RawNode]:
+def _migrate_dag_module(index: int, module: DagModule) -> tuple[NodeId, RawNode]:
     """Translates a ``DagModule`` into a RawNode."""
     _require_dag_fields(module, "module")
     mid = module.get("id")
@@ -370,12 +371,14 @@ def _migrate_dag_module(index: int, module: DagModule) -> tuple[str, RawNode]:
     return node_id, node
 
 
-def _migrate_target_port(port: str) -> str:
+def _migrate_target_port(port: Port) -> Port:
     """Sanitizes a ``PipeDef`` target port into the id the receiving module looks up."""
     return port if port.startswith("_") else pythonise(port)
 
 
-def _migrate_wires(wires: Wires, *output_ids: str) -> tuple[RawPortEdges, RawOutputs]:
+def _migrate_wires(
+    wires: Wires, *output_ids: NodeId
+) -> tuple[RawPortEdges, RawOutputs]:
     """Splits ``PipeDef`` wires into stream edges and ``output``-node references."""
     edges: RawPortEdges = []
     endpoints: RawOutputs = {}
@@ -402,7 +405,7 @@ def _migrate_wires(wires: Wires, *output_ids: str) -> tuple[RawPortEdges, RawOut
     return edges, endpoints
 
 
-def _require_output_id(module: ModuleLike) -> str:
+def _require_output_id(module: ModuleLike) -> NodeId:
     """Requires a ``PipeDef`` ``output`` module to be bare and gets its id."""
     output = _require_output_module(module)
 
@@ -440,7 +443,7 @@ def parse_pipedef(_pipe_def: PipeDefLike) -> RawWorkflow:
     _modules = require_listlike(pipe_def["modules"], "modules")
     modules = [require_mapping(m, "module") for m in _modules]
 
-    outputs, others = partition(modules, lambda m: m.get("type") == OUTPUT_MODULE)
+    outputs, others = partition(lambda m: m.get("type") == OUTPUT_MODULE, modules)
     output_ids = map(_require_output_id, outputs)
     nodes, schemas = unzip(_migrate_pipe_module(require_pipe(m)) for m in others)
     input_schemas = _merge_input_schemas(*schemas)

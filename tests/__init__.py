@@ -84,18 +84,14 @@ import pickle  # noqa: S403
 import subprocess
 import sys
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
-from riko.bado._backend import issync, run
+from riko.bado._backend import issync
 from riko.base._funcutils import resolve_default
 from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterable
-
 
 SCRIPT_TIMEOUT = 5
 
@@ -124,15 +120,6 @@ def async_test(f):
 def is_installed(module: str) -> bool:
     """Check whether *module* is importable in this environment."""
     return find_spec(module) is not None
-
-
-def aresolve[T](items: AsyncIterable[T]) -> list[T]:
-    """Drain *items* to a list via ``riko.bado.run`` (one event loop)."""
-
-    async def _collect() -> list[T]:
-        return [item async for item in items]
-
-    return run(_collect)
 
 
 def run_python(

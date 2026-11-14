@@ -122,22 +122,6 @@ def check_credential_and_lazy(resource):
     assert resource.lazy
 
 
-def check_metadata(
-    resource,
-    typ: type,
-    *,
-    external: bool,
-    reusable: bool,
-    classification: type | None = None,
-):
-    assert isinstance(resource, typ)
-    assert resource.external == external
-    assert resource.reusable == reusable
-
-    if classification is not None:
-        assert isinstance(resource._plan, classification)
-
-
 VALUE_FACTORIES = [
     pytest.param(sync_callable_factory, close_connection, id="sync"),
     pytest.param(async_callable_factory, close_async_connection, id="async"),
@@ -149,10 +133,10 @@ sync_contextmanager = pytest.fixture(sync_cm_factory)
 async_contextmanager = pytest.fixture(async_cm_factory)
 scalar = pytest.fixture(lambda: SCALAR)
 
-
-@pytest.fixture
-def one_shot_resource(connection: Connection) -> Resource[Connection]:
-    return Resource(connection)
+WRAPPED_VALUES = [
+    pytest.param("scalar", {"cleanup": lambda _: None}, id="scalar-with-cleanup"),
+    pytest.param("connection", {}, id="closeable"),
+]
 
 
 @pytest.fixture

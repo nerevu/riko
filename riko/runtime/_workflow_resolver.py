@@ -83,7 +83,7 @@ from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
 from riko.base._graph import get_cycle
 from riko.base._strutils import pythonise
 from riko.definitions._module_definition import ModuleDefinition
-from riko.types._pipedef import is_pipe_id
+from riko.types._pipedef import PipeId, is_pipe_id
 from riko.types._workflow import ResolvedWorkflow
 from riko.types._wrappers import is_subpipe, is_wrapper_meta
 
@@ -96,6 +96,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
+    from riko.types._pipedef import PipeIdLike
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         Dispatcher,
@@ -109,12 +110,12 @@ if TYPE_CHECKING:
     from ._workflow_stores import DocumentStore, ModuleStore
 
 
-def _get_stored_names(names: Iterable[str]) -> frozenset[str]:
+def _get_stored_names(names: Iterable[str]) -> frozenset[PipeId]:
     """Gets the stored workflows' ``pipe_<id>`` names among ``names``."""
-    return frozenset(map(pythonise, filter(is_pipe_id, names)))
+    return frozenset(PipeId(pythonise(name)) for name in names if is_pipe_id(name))
 
 
-def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[str]:
+def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[PipeId]:
     """
     Gets the names of a stored workflow's declared dependencies.
 
@@ -246,7 +247,7 @@ class WorkflowResolver:
 
     @staticmethod
     def _resolve_store[T](
-        current: T | None, value: T | None, kind: str, replace: bool
+        replace: bool, current: T | None, value: T | None, kind: str
     ) -> T | None:
         if value is not None and current is not None and not replace:
             raise ValueError(f"workflow {kind} already registered")
@@ -294,7 +295,7 @@ class WorkflowResolver:
             ValueError: workflow module store already registered
 
         """
-        resolve_store = partial(self._resolve_store, replace=replace)
+        resolve_store = partial(self._resolve_store, replace)
         margs = (self._module_store, module_store)
         dargs = (self._document_store, document_store)
         self._module_store, self._document_store = (
@@ -357,7 +358,7 @@ class WorkflowResolver:
         """
         return is_pipe_id(name)
 
-    def _load_dependencies(self, pipe_id: str) -> frozenset[str]:
+    def _load_dependencies(self, pipe_id: PipeIdLike) -> frozenset[PipeId]:
         """
         Loads the ``pipe_<id>`` names a stored workflow's nodes run.
 
@@ -379,7 +380,7 @@ class WorkflowResolver:
 
         return names
 
-    def _require_acyclic(self, pipe_id: str, *dependencies: str) -> None:
+    def _require_acyclic(self, pipe_id: PipeIdLike, *dependencies: PipeIdLike) -> None:
         """
         Requires that ``pipe_id``'s stored-workflow dependencies never lead back to it.
 
@@ -389,7 +390,7 @@ class WorkflowResolver:
 
         Args:
 
-            pipe_id: The stored workflow being loaded.
+            pipe_id: Id of the stored workflow being loaded.
             dependencies: The names its nodes and loop embeds run.
 
         Raises:
@@ -398,7 +399,9 @@ class WorkflowResolver:
                 the cycle and points to ``loop`` for repeating its steps.
 
         """
-        graph = {pipe_id: frozenset(dependencies)}
+        graph: dict[PipeIdLike, frozenset[PipeIdLike]] = {
+            pipe_id: frozenset(dependencies)
+        }
         pending = list(dependencies)
 
         while pending:
@@ -406,7 +409,7 @@ class WorkflowResolver:
                 graph[name] = self._load_dependencies(name)
                 pending.extend(graph[name])
 
-        if cycle := get_cycle(pipe_id, graph):
+        if cycle := get_cycle(graph, pipe_id):
             path = " -> ".join([*cycle, cycle[0]])
             msg = f"stored workflow {cycle[0]!r} embeds itself ({path}). Move steps to"
             msg += " a separate stored workflow and run it from a 'loop' node instead"
@@ -425,7 +428,7 @@ class WorkflowResolver:
 
         return module
 
-    def _load_stored(self, pipe_id: str) -> ResolvedWorkflow | None:
+    def _load_stored(self, pipe_id: PipeIdLike) -> ResolvedWorkflow | None:
         store = self._module_store
         module = None if store is None else store.load(pipe_id)
         return self._load_resolved(pipe_id) if module is None else module

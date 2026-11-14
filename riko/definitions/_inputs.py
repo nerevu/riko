@@ -237,7 +237,7 @@ def gen_input_references(value: MaybeFrozenConf) -> Iterator[str]:
 
     Yields:
 
-        Each referenced input name, in order.
+        Each referenced input name.
 
     Examples:
 

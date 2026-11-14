@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from functools import cached_property, partial
 from inspect import Parameter, signature
-from itertools import chain, filterfalse
+from itertools import chain, islice
 from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
 
@@ -46,6 +46,7 @@ from riko.definitions._nodes import (
 )
 from riko.definitions._workflow_definition import Inputs, Workflow
 from riko.definitions._wrapping import build_call
+from riko.types._enums import IdentityMode
 from riko.types._frozendict import (
     FrozenConf,
     FrozenDict,
@@ -59,7 +60,12 @@ from riko.types._frozendict import (
 )
 from riko.types._options import RawCallOptions
 from riko.types._workflow import parse_port
-from riko.types._wrappers import Func, require_single_output
+from riko.types._wrappers import (
+    DeclaresIdentity,
+    Func,
+    NormalizesItems,
+    require_single_output,
+)
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -77,7 +83,16 @@ if TYPE_CHECKING:
     from riko.types._frozendict import FrozenJSON, FrozenWorkflowEdges
     from riko.types._options import CallOptions
     from riko.types._streams import AnyIterable
-    from riko.types._workflow import Endpoint, NodeId, ParsedPort, WorkflowIndex
+    from riko.types._workflow import (
+        Endpoint,
+        NodeId,
+        OutputName,
+        ParsedPort,
+        Port,
+        PortName,
+        ResourceName,
+        WorkflowIndex,
+    )
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -99,18 +114,17 @@ _MODULE_FLAGS = ("loopable", "sequential_inputs")
 _CALLABLE_MODULE = "udf"
 _REFERENCE_KEYS = ("subkey", SentinelValue)
 _VALUE_SOURCE_MODULES = frozenset({"strconcat"})
+_KEYWORD_KINDS = frozenset({Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY})
 _EMPTY_EMBEDS: ResolvedModules = FrozenDict()
 _NO_INPUTS: FrozenInputs = FrozenDict()
 
 
-class NodeCall(Protocol):
+class NodeCall[T](Protocol):
     """A node's call that is prepared once with its configuration and call options."""
 
     def __call__(
-        self, item: object = None, *, context: Context | None = None, **extra: object
-    ) -> (
-        WrapperOutput | SplitterWrapperOutput | Iterator[object] | AsyncIterator[object]
-    ): ...
+        self, item: T = None, context: Context | None = None, **extra: object
+    ) -> WrapperOutput | SplitterWrapperOutput | Iterator[T] | AsyncIterator[T]: ...
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -172,35 +186,41 @@ class ExecutionExtras[V]:
         """The fields that are set, keyed by name."""
         return asdict(self, recurse=False, filter=lambda _, value: value is not None)
 
-    def map_others[R](self, func: Callable[[V], R]) -> ExecutionExtras[R]:
+    def map_kwargs(
+        self, func: Callable[[V], object], named: Mapping[PortName, V]
+    ) -> dict[str, object]:
         """
-        Maps ``func`` over every stream in ``self.others``.
+        Maps ``func`` over a node's secondary input streams to build its call's kwargs.
 
         Args:
 
-            func: Applied to one ``self.others`` stream.
+            func: Applied to each ``named`` stream and each ``others`` stream.
+            named: The streams wired to the node's named input ports.
 
         Returns:
 
-            A new record holding the mapped ``self.others`` streams.
+            The node's call kwargs: each ``named`` and ``others`` stream with ``func``
+            applied, plus ``resources`` and ``embed`` when they are set.
 
         Examples:
 
             >>> extras = ExecutionExtras(others=[[1], [2]])
-            >>> extras.map_others(len).others
-            [1, 1]
+            >>> extras.map_kwargs(len, {"other": [3, 4]})
+            {'other': 2, 'others': [1, 1]}
 
         """
         others = None if self.others is None else [func(s) for s in self.others]
-        return ExecutionExtras(
+        mapped = ExecutionExtras(
             others=others, resources=self.resources, embed=self.embed
         )
+        return {**map_values(func, named), **mapped.kwargs}
 
 
 def _get_keyword_names(*funcs: Func[object]) -> frozenset[str]:
-    """Gets the names of the keyword-only parameters ``funcs`` take."""
-    params = chain.from_iterable(signature(f).parameters.values() for f in funcs)
-    return frozenset(p.name for p in params if p.kind is Parameter.KEYWORD_ONLY)
+    """Gets the names ``funcs`` accept by keyword, after each one's first parameter."""
+    _params = (islice(signature(f).parameters.values(), 1, None) for f in funcs)
+    params = chain.from_iterable(_params)
+    return frozenset(p.name for p in params if p.kind in _KEYWORD_KINDS)
 
 
 # Operators keep ``count`` as a port: stored workflows wire a count stream into
@@ -243,7 +263,7 @@ def _has_flag(pipe: AnyModuleWrapper, flag: str) -> bool:
 
 
 def _has_flag_mismatch(
-    flag: str, sync_pipe: SyncModuleWrapper, async_pipe: AsyncModuleWrapper
+    sync_pipe: SyncModuleWrapper, async_pipe: AsyncModuleWrapper, flag: str
 ) -> bool:
     return _has_flag(sync_pipe, flag) != _has_flag(async_pipe, flag)
 
@@ -252,7 +272,7 @@ def _is_consistent(
     instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
 ) -> None:
     if (sync_pipe := instance.sync_pipe) is not None and value is not None:
-        _diff = partial(_has_flag_mismatch, sync_pipe=sync_pipe, async_pipe=value)
+        _diff = partial(_has_flag_mismatch, sync_pipe, value)
 
         if differing := tuple(filter(_diff, _MODULE_FLAGS)):
             msg = f"{instance.name!r} has sync and async callables that disagree on "
@@ -418,8 +438,8 @@ def _gen_references(value: FrozenJSON) -> Iterator[tuple[str, object]]:
 def _gen_item_result(
     fn: Func[object],
     item: object = None,
-    *,
     context: Context | None = None,
+    *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
 ) -> Iterator[object]:
@@ -437,8 +457,8 @@ def _gen_item_result(
 async def _agen_item_result[T](
     fn: Func[T | Awaitable[T]],
     item: object = None,
-    *,
     context: Context | None = None,
+    *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
 ) -> AsyncIterator[T]:
@@ -450,8 +470,8 @@ async def _agen_item_result[T](
 def _gen_stream_results[T](
     fn: Func[T | Awaitable[T]],
     items: Iterable[object] = (),
-    *,
     context: Context | None = None,
+    *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
 ) -> Iterator[T]:
@@ -463,8 +483,8 @@ def _gen_stream_results[T](
 async def _agen_stream_results[T](
     fn: Func[T | Awaitable[T]],
     item: AnyIterable[object] = (),
-    *,
     context: Context | None = None,
+    *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
 ) -> AsyncIterator[T]:
@@ -489,13 +509,17 @@ class PreparedInterface(NamedTuple):
         call: The pipe with the node's configuration, options, and extras applied.
         item_call: The per-item call the mapped paths run (``call`` for a module node).
         native: Whether ``pipe`` runs natively for the execution, without an adapter.
+        identity: How each result's identity relates to its input items.
+        item_normalizer: The function the pipe applies to each input item.
 
     """
 
     pipe: AnyModuleWrapper
-    call: NodeCall
-    item_call: NodeCall
+    call: NodeCall[object]
+    item_call: NodeCall[object]
     native: bool
+    identity: IdentityMode | None
+    item_normalizer: Func[object] | None = None
 
 
 def _resolve_callable[T](
@@ -524,13 +548,9 @@ class PreparedNode:
     Attributes:
 
         node: The ``Workflow`` module or callable node this was resolved from.
-
         module: The node's resolved implementation.
-
-        embed: The resolved module a loop node runs per item, else ``None``.
-
+        embed: The resolved module a loop node runs per item.
         incoming: The stream edges that target the node.
-
         input_ports: The parsed target port of each incoming stream edge.
 
         extras: The names of the extra inputs delivered with each item: a named
@@ -538,7 +558,6 @@ class PreparedNode:
             resources as ``resources``, and a loop's embed as ``embed``, in that order.
 
         sync_interface: The pipe a synchronous execution runs, with its call.
-
         async_interface: The pipe an asynchronous execution runs, with its call.
 
     Examples:
@@ -558,6 +577,8 @@ class PreparedNode:
         {'db': 'db'}
         >>> prepared.extras
         ('part', 'others', 'resources')
+        >>> prepared.is_self_starting
+        True
 
     """
 
@@ -567,7 +588,7 @@ class PreparedNode:
     incoming: FrozenWorkflowEdges = field(default=(), converter=tuple)
 
     @property
-    def resources(self) -> Mapping[str, str]:
+    def resources(self) -> Mapping[str, ResourceName]:
         return self.node.resources
 
     @property
@@ -665,39 +686,49 @@ class PreparedNode:
         """
         return self.loopable and not self.has_secondary_input_streams
 
-    def is_thread_holder(self, *, mapped: bool) -> bool:
+    @cached_property
+    def is_thread_holder(self) -> bool:
         """
-        Reports whether an async run holds a thread while the node reads upstream.
+        Whether an async run holds a thread while the node reads upstream.
 
-        Only a node without an async implementation does. When items are mapped across
-        workers, a loopable node with no secondary input stream instead runs each item
-        after it has been read.
-
-        Kwargs:
-
-            mapped: Whether the execution maps loopable nodes' items across workers.
-
-        Returns:
-
-            ``True`` when the node holds a thread while it reads upstream.
-
+        Only a node without an async implementation does, and only when it reads its
+        whole input in one call. A mappable node instead runs each item after it has
+        been read.
         """
-        return self.module.async_pipe is None and not (mapped and self.is_mappable)
+        return self.module.async_pipe is None and not self.is_mappable
 
     def _build_native(self, pipe: AnyModuleWrapper) -> PreparedInterface:
+        identity, normalizer = None, None
+
         if isinstance(node := self.node, CallableNode):
             if self.module.is_async_pipe(pipe):
                 stream, one = _agen_stream_results, _agen_item_result
             else:
                 stream, one = _gen_stream_results, _gen_item_result
 
-            call: NodeCall = partial(stream, node.fn, **self.module.conf)
-            item_call: NodeCall = partial(one, node.fn, **self.module.conf)
+            # partials, not closures: the prepared state ships to the process pool
+            call: NodeCall[object] = partial(stream, node.fn, **self.module.conf)
+            item_call: NodeCall[object] = partial(one, node.fn, **self.module.conf)
+            identity = IdentityMode.PRESERVE if node.identity is None else node.identity
         else:
             conf, options = self.embed_or_self_conf, self.options.kwargs
-            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+            prepared = build_call(pipe, *self.extras, conf=conf, **options)
+            call = item_call = prepared
 
-        return PreparedInterface(pipe, call, item_call, native=True)
+            if isinstance(prepared, DeclaresIdentity):
+                identity = prepared.identity
+
+            if isinstance(prepared, NormalizesItems):
+                normalizer = prepared.normalize_item
+
+        return PreparedInterface(
+            pipe,
+            call,
+            item_call,
+            native=True,
+            identity=identity,
+            item_normalizer=normalizer,
+        )
 
     @cached_property
     def sync_interface(self) -> PreparedInterface:
@@ -752,13 +783,13 @@ _require_workflow = narrow_from_require(
 )
 
 
-def _is_reserved_input(port: str, module: ResolvedModule | None) -> bool:
+def _is_reserved_input(port: Port, module: ResolvedModule | None) -> bool:
     is_processor = module is not None and module.is_processor
     reserved = _PROCESSOR_RESERVED_INPUTS if is_processor else _RESERVED_INPUTS
     return parse_port(port).name in reserved
 
 
-def require_default_output_port(port: str, ref: str) -> None:
+def require_default_output_port(port: Port, ref: str) -> None:
     """
     Rejects a port other than ``out`` until multi-output delivery is executable.
 
@@ -805,11 +836,14 @@ class ExecutionPlan:
 
     Raises:
 
-        InvalidPipelineError: If ``workflow`` is not a ``Workflow``, its graph is
-            invalid, a source port fans out to more than one edge, a node is neither a
-            module node nor a callable node, a named input port uses a reserved name
-            (e.g., ``conf``), ``modules`` does not resolve the workflow's nodes, or
-            ``embeds`` does not resolve its loop embeds.
+        InvalidPipelineError: If any of these hold:
+
+            - ``workflow`` is not a ``Workflow``, or its graph is invalid.
+            - A source port fans out to more than one edge.
+            - A node is neither a module node nor a callable node.
+            - A named input port uses a reserved name (e.g., ``conf``).
+            - ``modules`` does not resolve the workflow's nodes, or ``embeds`` does not
+              resolve its loop embeds.
 
     Examples:
 
@@ -856,10 +890,14 @@ class ExecutionPlan:
 
         Raises:
 
-            InvalidPipelineError: If the graph is invalid, a source port fans out to
-                more than one edge, a node isn't a module or callable node (write,
-                action, cache, or subscribe), a named input port uses a reserved name
-                (e.g., ``conf``), or a node runs a splitter.
+            InvalidPipelineError: If any of these hold:
+
+                - The graph is invalid.
+                - A source port fans out to more than one edge.
+                - A node isn't a module or callable node (write, action, cache, or
+                  subscribe).
+                - A named input port uses a reserved name (e.g., ``conf``).
+                - A node runs a splitter.
 
             UnsupportedModuleError: If no module has the name a node gives.
 
@@ -901,7 +939,7 @@ class ExecutionPlan:
         }
         return FrozenDict.from_frozen(prepared)
 
-    def require_output(self, output: str) -> Endpoint:
+    def require_output(self, output: OutputName) -> Endpoint:
         """
         Requires a workflow output on the bare ``out`` port.
 
@@ -925,26 +963,23 @@ class ExecutionPlan:
         require_default_output_port(endpoint.port, f"workflow output {output!r}")
         return endpoint
 
-    def get_thread_demand(self, output: str, *, mapped: bool) -> int:
+    def get_thread_demand(self, output: OutputName) -> int:
         """
         Computes how many node threads an async run of ``output`` may hold at once.
 
-        A node without an async implementation holds a thread while it reads its input
-        streams. Unless its items are mapped, it reads them one at a time and needs one
-        thread more than the max number of threads any one of its input streams holds.
+        A node without an async implementation that reads its whole input in one call
+        holds a thread while it reads its input streams. It needs one thread more than
+        the max number of threads any one of its input streams holds. A mappable node
+        runs each item after it has been read. It needs no threads.
 
-        Nodes with a module that reads its input streams one at a time, such as
-        ``union`` or ``join``, need only the max any one input stream holds.
-        Otherwise a node may read its input streams together, so it needs as many
-        threads as the sum of its input streams.
+        Nodes with a ``union`` or ``join`` module read their input streams one at a
+        time. They need only the max any one input stream holds. Otherwise a node may
+        read its input streams together. In that case, it needs as many threads as the
+        sum of its input streams.
 
         Args:
 
             output: The name of the workflow output being run.
-
-        Kwargs:
-
-            mapped: Whether the execution maps loopable nodes' items across workers.
 
         Returns:
 
@@ -954,27 +989,28 @@ class ExecutionPlan:
 
             >>> from riko import Workflow
             >>> from riko.ext import ModuleNode
-            >>> from riko.modules.hash import pipe
+            >>> from riko.modules import hash, uniq
             >>>
-            >>> a, b = ModuleNode(id="a", name="hash"), ModuleNode(id="b", name="hash")
+            >>> def plan(name, pipe):
+            ...     a, b = ModuleNode(id="a", name=name), ModuleNode(id="b", name=name)
+            ...     flow = Workflow().with_node(a).with_node(b)
+            ...     modules = dict.fromkeys("ab", ResolvedModule(name, sync_pipe=pipe))
+            ...     return ExecutionPlan(workflow=flow, modules=modules)
             >>>
-            >>> flow = Workflow().with_node(a).with_node(b)
-            >>> module = ResolvedModule("hash", sync_pipe=pipe)
-            >>> plan = ExecutionPlan(workflow=flow, modules={"a": module, "b": module})
-            >>> plan.get_thread_demand("default", mapped=False)
+            >>> plan("uniq", uniq.pipe).get_thread_demand("default")
             2
-            >>> plan.get_thread_demand("default", mapped=True)
+            >>> plan("hash", hash.pipe).get_thread_demand("default")
             0
 
         """
-        demand: dict[str, int] = {}
+        demand: dict[NodeId, int] = {}
 
         for node_id in self.index.required[output]:
             upstream_demand = [demand[src] for src in self.index.upstream[node_id]]
             node = self.nodes[node_id]
             max_count = max(upstream_demand, default=0)
 
-            if node.is_thread_holder(mapped=mapped):
+            if node.is_thread_holder:
                 demand[node_id] = max_count + 1
             elif node.sequential_inputs:
                 demand[node_id] = max_count
@@ -983,60 +1019,22 @@ class ExecutionPlan:
 
         return max(demand.values(), default=0)
 
-    def is_self_starting(self, node_id: str) -> bool:
-        """
-        Reports whether a node runs without a seed.
-
-        A source module or a built-in ``strconcat`` is self-starting when its conf reads
-        nothing from its default input. That means no ``subkey`` reference, and every
-        ``terminal`` reference names a connected named input port.
-
-        Args:
-
-            node_id: The id of the node to check.
-
-        Returns:
-
-            ``True`` when the node needs no seed on its default input.
-
-        Examples:
-
-            >>> from riko import Endpoint, Workflow
-            >>> from riko.ext import ModuleNode, StreamEdge
-            >>> from riko.modules import hash, strconcat
-            >>>
-            >>> conf = {"part": "hello"}
-            >>> a = ModuleNode(id="a", name="strconcat", conf=conf)
-            >>> b = ModuleNode(id="b", name="hash")
-            >>>
-            >>> flow = Workflow(
-            ...     nodes=[a, b],
-            ...     edges=[StreamEdge(Endpoint("a", "out"), Endpoint("b", "in:part"))],
-            ...     outputs={"default": Endpoint("b", "out")},
-            ... )
-            >>> modules = {
-            ...     "a": ResolvedModule("strconcat", conf, sync_pipe=strconcat.pipe),
-            ...     "b": ResolvedModule("hash", sync_pipe=hash.pipe),
-            ... }
-            >>> plan = ExecutionPlan(workflow=flow, modules=modules)
-            >>> plan.is_self_starting("a"), plan.is_self_starting("b")
-            (True, False)
-
-        """
-        return self.nodes[node_id].is_self_starting
-
-    def _gen_seed_takers(self, output: str) -> Iterator[str]:
+    def _gen_seed_takers(self, output: OutputName) -> Iterator[NodeId]:
         """Ids of ``output``'s nodes that take a default seed and can't self start."""
         nodes, required = self.nodes, self.index.required[output]
-        defaulted = (_id for _id in required if nodes[_id].takes_default_seed)
-        return filterfalse(self.is_self_starting, defaulted)
+        return (
+            _id
+            for _id in required
+            if nodes[_id].takes_default_seed and not nodes[_id].is_self_starting
+        )
 
-    def is_self_starting_output(self, output: str = DEFAULT_OUTPUT) -> bool:
+    def is_self_starting_output(self, output: OutputName = DEFAULT_OUTPUT) -> bool:
         """
         Whether ``output`` runs without a seed.
 
         It does when every node it runs without a seed is self-starting (see
-        ``is_self_starting``). An empty workflow never does, since it streams its seed.
+        ``PreparedNode.is_self_starting``). An empty workflow never does, since it
+        streams its seed.
 
         Kwargs:
 
@@ -1067,12 +1065,12 @@ class ExecutionPlan:
 
         return not needy
 
-    def require_self_starting_output(self, output: str) -> None:
+    def require_self_starting_output(self, output: OutputName) -> None:
         """
         Requires every default-seeded node that ``output`` runs to be self-starting.
 
         A node whose default input port gets neither an input stream nor a seed must be
-        self-starting (see ``is_self_starting``).
+        self-starting (see ``PreparedNode.is_self_starting``).
 
         Args:
 
@@ -1092,7 +1090,7 @@ class ExecutionPlan:
             msg = f"node(s) {names} take an input stream; this pipeline requires a seed"
             raise InvalidPipelineError(msg)
 
-    def require_seed_target(self, output: str) -> str:
+    def require_seed_target(self, output: OutputName) -> NodeId:
         """
         Requires that ``output``'s subgraph has exactly one node to feed.
 
@@ -1115,7 +1113,7 @@ class ExecutionPlan:
 
         """
         open_nodes = list(filter(self.index.is_open, self.index.required[output]))
-        needy = list(filterfalse(self.is_self_starting, open_nodes))
+        needy = [_id for _id in open_nodes if not self.nodes[_id].is_self_starting]
         candidates = needy or open_nodes
 
         if (count := len(candidates)) == 1:
@@ -1126,7 +1124,7 @@ class ExecutionPlan:
 
         return target
 
-    def require_seed[S](self, seed: S | None, output: str) -> S:
+    def require_seed[S](self, seed: S | None, output: OutputName) -> S:
         """
         Requires the seed that an empty workflow streams back unchanged.
 
@@ -1157,8 +1155,8 @@ class ExecutionPlan:
         return seed
 
     def gen_build_order[V](
-        self, output: str, *, seed: V | None = None
-    ) -> Iterator[tuple[str, V | None]]:
+        self, output: OutputName, *, seed: V | None = None
+    ) -> Iterator[tuple[NodeId, V | None]]:
         """
         Pairs each node that ``output`` runs, in build order, with the seed it takes.
 
@@ -1252,11 +1250,14 @@ class ExecutionPlan:
 
         Raises:
 
-            InvalidPipelineError: If the graph is invalid, a source port fans out to
-                more than one edge, a workflow node is neither a module node nor a
-                callable node, a named input port uses a reserved name (e.g., ``conf``),
-                ``modules`` does not resolve the workflow's nodes, or ``embeds`` does
-                not resolve its loop embeds.
+            InvalidPipelineError: If any of these hold:
+
+                - The graph is invalid.
+                - A source port fans out to more than one edge.
+                - A workflow node is neither a module node nor a callable node.
+                - A named input port uses a reserved name (e.g., ``conf``).
+                - ``modules`` does not resolve the workflow's nodes, or ``embeds``
+                  does not resolve its loop embeds.
 
         """
         flow = self.workflow

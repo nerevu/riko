@@ -202,7 +202,8 @@ def pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]
         >>> stream = ({"content": x} for x in range(5))
         >>> next(pipe(stream))["sum"]
         Decimal('10')
-        >>> # Sum by group:
+
+        # Sum by group:
         >>> items = [
         ...     {"amount": 2, "x": "one"},
         ...     {"amount": 1, "x": "one"},

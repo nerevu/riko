@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import pickle  # noqa: S403
+from functools import partial
 from threading import get_ident
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from attrs import evolve
 
-from riko.bado._util import maybe_async
+from riko.bado._util import maybe_async, syncify
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions import _workflow_definition as workflow_definitions
@@ -21,6 +22,7 @@ from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._adapt import (
     adapt_embed,
     async_adapt_embed,
+    async_drain,
     require_async_stream,
     require_stream,
 )
@@ -38,7 +40,7 @@ from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import workflow
 from riko.runtime._workflow_resolver import workflow_resolver
-from riko.types._enums import BasicCastType
+from riko.types._enums import BasicCastType, IdentityMode
 from riko.types._options import CallOptions
 from riko.types._workflow import Endpoint, WorkflowIndex
 from tests import async_test, skipif_issync
@@ -50,7 +52,7 @@ from tests._execution import (
     build_chain_plan,
     build_dispatcher,
     build_workflow,
-    mark_loopable,
+    echo_pipe,
     module_workflow,
     passthrough_pipe,
     run_plan,
@@ -59,7 +61,7 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from riko.types._streams import Cascade, Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
@@ -259,6 +261,22 @@ class TestExecutionPlan:
 
         assert plan.require_seed_target("default") == "n"
 
+    def test_inputs_are_only_set_with_the_confs_built_from_them(self):
+        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
+        node = ModuleNode(id="b", name="itembuilder", conf=conf)
+        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+        resolved = plan.with_inputs({"q": 5})
+
+        assert resolved.inputs == {"q": 5}
+        assert resolved.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
+
+        with pytest.raises(TypeError, match="inputs"):
+            evolve(plan, inputs={"q": 5})
+
+        with pytest.raises(InvalidPipelineError, match="already built"):
+            resolved.with_inputs({"q": 6})
+
     @pytest.mark.parametrize(("flow", "match"), BUILD_REJECTIONS)
     def test_build_rejects_an_invalid_graph(self, flow, match) -> None:
         with pytest.raises(InvalidPipelineError, match=match):
@@ -308,22 +326,6 @@ class TestExecutionPlan:
 
         with pytest.raises(InvalidPipelineError, match="splitter"):
             ExecutionPlan.from_workflow(module_workflow("listy"), dispatcher=dispatcher)
-
-    def test_inputs_are_only_set_with_the_confs_built_from_them(self):
-        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
-        node = ModuleNode(id="b", name="itembuilder", conf=conf)
-        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
-        plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        resolved = plan.with_inputs({"q": 5})
-
-        assert resolved.inputs == {"q": 5}
-        assert resolved.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
-
-        with pytest.raises(TypeError, match="inputs"):
-            evolve(plan, inputs={"q": 5})
-
-        with pytest.raises(InvalidPipelineError, match="already built"):
-            resolved.with_inputs({"q": 6})
 
     @pytest.mark.parametrize(
         ("flow", "modules", "embeds", "match"), CONSTRUCTION_REJECTIONS
@@ -421,17 +423,15 @@ class _EmbedStub:
         return iter(())
 
 
-def _unused_drain(source):
-    return iter(())
-
-
-async def _unused_worker(func, *args):
+async def _unused_worker[R, *Ts](func: Callable[[*Ts], R], /, *args: *Ts) -> R:
     return func(*args)
 
 
 ADAPTERS = [
     pytest.param(
-        lambda stub: adapt_embed(cast("AsyncModuleWrapper", stub), _unused_drain),
+        lambda stub: adapt_embed(
+            cast("AsyncModuleWrapper", stub), partial(async_drain, syncify)
+        ),
         True,
         id="for-sync",
     ),
@@ -895,11 +895,73 @@ class TestPreparedCall:
         assert fallback == native._replace(native=False)
 
 
+IDENTITIES = [
+    pytest.param("hash", {}, IdentityMode.PRESERVE, id="hash"),
+    pytest.param("strtransform", {}, IdentityMode.PRESERVE, id="strtransform"),
+    pytest.param("tokenizer", {}, IdentityMode.DERIVE, id="tokenizer-emits"),
+    pytest.param(
+        "tokenizer", {"emit": False}, IdentityMode.PRESERVE, id="tokenizer-assigns"
+    ),
+    pytest.param("count", {}, IdentityMode.COMBINE, id="count"),
+    pytest.param("sum", {}, IdentityMode.COMBINE, id="sum"),
+    pytest.param("filter", {}, IdentityMode.PRESERVE, id="filter"),
+    pytest.param("truncate", {}, IdentityMode.PRESERVE, id="truncate"),
+    pytest.param("union", {}, IdentityMode.PRESERVE, id="union"),
+    pytest.param("sort", {}, IdentityMode.PRESERVE, id="sort"),
+    pytest.param("regex", {}, IdentityMode.PRESERVE, id="regex"),
+    pytest.param("rename", {}, IdentityMode.PRESERVE, id="rename"),
+    pytest.param("simplemath", {}, IdentityMode.PRESERVE, id="simplemath"),
+    pytest.param("typecast", {}, IdentityMode.PRESERVE, id="typecast"),
+    pytest.param("udf", {}, IdentityMode.PRESERVE, id="udf"),
+    pytest.param("itembuilder", {}, IdentityMode.PRESERVE, id="itembuilder"),
+    pytest.param("rssitembuilder", {}, IdentityMode.PRESERVE, id="rssitembuilder"),
+    pytest.param("datebuilder", {}, IdentityMode.PRESERVE, id="datebuilder"),
+    pytest.param("fetch", {}, IdentityMode.DERIVE, id="fetch"),
+    pytest.param("fetchsitefeed", {}, IdentityMode.DERIVE, id="fetchsitefeed"),
+    pytest.param("subelement", {}, IdentityMode.DERIVE, id="subelement"),
+]
+
+CALLABLE_IDENTITIES = [
+    pytest.param(None, IdentityMode.PRESERVE, id="undeclared"),
+    pytest.param("derive", IdentityMode.DERIVE, id="derive"),
+]
+
+
 class TestPreparedNode:
     def test_a_callable_node_prepares_with_no_call_options(self):
         node = CallableNode(id="a", name="len", fn=len, resources="db")
         prepared = PreparedNode(node, _HASH)
         assert (prepared.options, prepared.extras) == (CallOptions(), ("resources",))
+
+    @pytest.mark.parametrize(("name", "options", "expected"), IDENTITIES)
+    def test_a_module_node_reports_its_result_identity(
+        self, name, options, expected
+    ) -> None:
+        node = ModuleNode(id="n", name=name, options=options)
+        module = ResolvedModule.from_dispatcher(dispatcher, name)
+        prepared = PreparedNode(node, module)
+        assert prepared.sync_interface.identity is expected
+        assert prepared.async_interface.identity is expected
+
+    @pytest.mark.parametrize("name", ["count", "filter"])
+    def test_an_operator_node_prepares_with_an_item_normalizer(self, name) -> None:
+        node = ModuleNode(id="n", name=name)
+        module = ResolvedModule.from_dispatcher(dispatcher, name)
+        prepared = PreparedNode(node, module)
+        assert prepared.sync_interface.item_normalizer is not None
+        assert prepared.async_interface.item_normalizer is not None
+
+    def test_a_plain_wrapper_declares_no_identity(self) -> None:
+        node = ModuleNode(id="p", name="probe")
+        module = ResolvedModule("probe", sync_pipe=passthrough_pipe)
+        assert PreparedNode(node, module).sync_interface.identity is None
+
+    @pytest.mark.parametrize(("identity", "expected"), CALLABLE_IDENTITIES)
+    def test_a_callable_node_reports_its_result_identity(
+        self, identity, expected
+    ) -> None:
+        node = CallableNode(id="a", name="len", fn=len, identity=identity)
+        assert PreparedNode(node, _HASH).sync_interface.identity is expected
 
     def test_prepared_node_reports_loopable(self) -> None:
         plan = build_chain_plan("hash", "count")
@@ -908,11 +970,8 @@ class TestPreparedNode:
 
     @pytest.mark.parametrize("port", ["in:1", "in:side"])
     def test_secondary_input_stream_makes_a_node_unmappable(self, port) -> None:
-        def echo(item, **_):
-            return iter([item])
-
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="echo", sync_pipe=mark_loopable(echo))
+            ModuleDefinition(name="echo", sync_pipe=echo_pipe)
         )
         nodes = [ModuleNode(id=id_, name="echo") for id_ in ("a", "b", "c")]
         edges = (

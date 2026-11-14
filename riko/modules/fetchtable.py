@@ -29,12 +29,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.io import read
 
+from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
-from riko.io._sync import Fetch, auto_close, gen_rows, seekable
+from riko.io._sync import Fetch, gen_rows, seekable
 
 from ._decorators import processor
 

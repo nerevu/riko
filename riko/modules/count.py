@@ -180,10 +180,12 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         5
         >>> next(pipe(items))["count"]
         5
-        >>> # Assign the count to "content":
+
+        # Assign the count to "content":
         >>> next(pipe(items, assign="content"))
         {'content': 5}
-        >>> # Count by the "word" field:
+
+        # Count by the "word" field:
         >>> items = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
         >>> counted = pipe(items, conf={"count_key": "word"})
         >>> next(counted)

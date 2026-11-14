@@ -341,8 +341,8 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 325
-uncovered-lowered = 2026-11-11
+uncovered = 322
+uncovered-lowered = 2026-11-13
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
@@ -351,14 +351,14 @@ uncovered-lowered = 2026-11-11
 any = 125
 any-lowered = 2026-11-10
 cast = 85
-cast-lowered = 2026-11-10
+cast-lowered = 2026-11-11
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the
 # `pytest.param` rows without `id=` in `tests/`. Each only goes down: a run fails above
 # either and lowers it on a gain. It records the day as `<key>-lowered`.
-inline-tables = 68
-inline-tables-lowered = 2026-11-09
+inline-tables = 66
+inline-tables-lowered = 2026-11-12
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30
 

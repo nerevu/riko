@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import aclosing, suppress
+from functools import partial
 from itertools import count
 from threading import Event as ThreadEvent
 from threading import get_ident
@@ -16,7 +17,7 @@ from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
-from riko.definitions._nodes import ModuleNode, StreamEdge
+from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
@@ -30,6 +31,7 @@ from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_workflow
 from riko.runtime._workflow_stores import MappingStore
 from riko.types._workflow import Endpoint
+from riko.types.modules import ItemBuilderConf
 from tests import async_test, skipif_issync
 from tests._execution import (
     EMPTY,
@@ -42,6 +44,7 @@ from tests._execution import (
     build_dispatcher,
     build_workflow,
     gen_closing_seed,
+    mark_async_loopable,
     mark_loopable,
     module_workflow,
     passthrough_pipe,
@@ -52,20 +55,27 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Iterator
+    from collections.abc import (
+        AsyncGenerator,
+        AsyncIterator,
+        Awaitable,
+        Generator,
+        Iterator,
+    )
 
     from riko.types._streams import AsyncItemGenerator, Item
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
+    from riko.types._wrappers import AsyncModuleWrapper, Func, SyncModuleWrapper
     from riko.types.modules import Conf
-
 
 _SRC = ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
 _ECHO = cast("SyncModuleWrapper", lambda items, **_: iter(list(items)))
 _SINK = ModuleDefinition(name="sink", sync_pipe=_ECHO)
 _PROBE = ModuleDefinition(name="probe", sync_pipe=passthrough_pipe)
+
 _PROCESSOR_PROBE = ModuleDefinition(
     name="probe", sync_pipe=mark_loopable(lambda item, **_: iter([item]))
 )
+
 _DOUBLED = [{"x": 2}, {"x": 4}]
 _SRC_SINK = [ModuleNode(id="a", name="src"), ModuleNode(id="b", name="sink")]
 _PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
@@ -76,6 +86,10 @@ _NON_DEFAULT = "instead of 'out'"
 _SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
 _NOPE = "no workflow output 'nope'"
 _RESERVED = "use a reserved name"
+_TERMINAL_PART = {"terminal": "p", "type": "text"}
+_SUBKEY_PART = {"subkey": "word", "type": "text"}
+_URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
+_FAN_IN_RESULT = [{"x": "1"}]
 
 
 @tag_source
@@ -176,16 +190,23 @@ class _DualSeed:
         return as_async([{"x": 100}])
 
 
+async def _awaitable_none() -> None:
+    return None
+
+
 # An async stream seed is the stream itself, never one item holding the stream
-# object, and an awaitable seed is awaited once for its items.
+# object, and an awaitable seed is awaited once for its items; one resolving to
+# ``None`` feeds nothing, as a missing seed does.
 SEEDS = [
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
     pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
     pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
+    pytest.param(_awaitable_none, [], id="awaitable-none", marks=skipif_issync),
     pytest.param(_DualSeed, [{"x": 2}], id="dual-iterable"),
 ]
 ASYNC_SEEDS = [
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
+    pytest.param(_awaitable_none, [], id="awaitable-none"),
     pytest.param(_DualSeed, [{"x": 200}], id="dual-iterable"),
 ]
 
@@ -198,16 +219,79 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
         closed.append("closed")
 
 
+class _ClosingIterator:
+    """A two-item sync iterator with ``close`` that is not a generator."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.index = closed, 0
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Item:
+        if self.index == 2:
+            raise StopIteration
+
+        self.index += 1
+        return {"x": self.index}
+
+    def close(self) -> None:
+        self.closed.append("closed")
+
+
+class _CursorHandle:
+    """A sync iterable, without a close of its own, over a fresh closeable cursor."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+
+    def __iter__(self) -> Iterator[Item]:
+        return _ClosingIterator(self.closed)
+
+
+class _AsyncCursorHandle:
+    """An async iterable, without a close of its own, over a fresh closeable cursor."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+
+    def __aiter__(self) -> AsyncIterator[Item]:
+        return ClosingAsyncIterator(self.closed)
+
+
 # A sync root reads the seed on a worker thread, and the caller may close the output
 # stream before the execution exits.
 SEED_READERS = [
     pytest.param(False, id="sync-root"),
     pytest.param(True, id="sync-root-closed-early"),
 ]
+
+
+async def _agen_two() -> AsyncGenerator[Item]:
+    for index in (1, 2):
+        yield {"x": index}
+
+
+class ClosingAsyncHandle:
+    """An ``aclose``-able handle that hands out a fresh two-item async iterator."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+
+    def __aiter__(self) -> AsyncIterator[Item]:
+        return _agen_two()
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+
 CLOSING_SEEDS = [
     pytest.param(gen_closing_seed, id="generator"),
+    pytest.param(_CursorHandle, id="cursor-handle"),
     pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
     pytest.param(ClosingAsyncIterator, id="async-iterator", marks=skipif_issync),
+    pytest.param(_AsyncCursorHandle, id="async-cursor-handle", marks=skipif_issync),
+    pytest.param(ClosingAsyncHandle, id="async-handle", marks=skipif_issync),
     pytest.param(
         AsyncCloseAsyncIterator, id="async-close-iterator", marks=skipif_issync
     ),
@@ -342,30 +426,23 @@ class AcloseOnlyIterator(_TwoItems):
         self.closed.append("closed")
 
 
+async def _record_close(closed: list[str]) -> None:
+    closed.append("closed")
+
+
+class AwaitableCloseIterator(_TwoItems):
+    """A two-item iterator whose sync ``close`` returns an awaitable."""
+
+    def close(self) -> Awaitable[None]:
+        return _record_close(self.closed)
+
+
 class FailingAcloseIterator(_TwoItems):
     """A two-item iterator whose only close, ``aclose``, records itself then fails."""
 
     async def aclose(self) -> None:
         self.closed.append("closed")
         raise RuntimeError("close failed")
-
-
-async def _agen_two() -> AsyncGenerator[Item]:
-    for index in (1, 2):
-        yield {"x": index}
-
-
-class ClosingAsyncHandle:
-    """An ``aclose``-able handle that hands out a fresh two-item async iterator."""
-
-    def __init__(self, closed: list[str]) -> None:
-        self.closed = closed
-
-    def __aiter__(self) -> AsyncIterator[Item]:
-        return _agen_two()
-
-    async def aclose(self) -> None:
-        self.closed.append("closed")
 
 
 COUNTING_SOURCES = [
@@ -500,9 +577,6 @@ NATIVE_CLOSED_INPUTS = [
     pytest.param(_agen_endless, _apassthrough, id="generator"),
     pytest.param(ClosingAsyncIterator, _aclosing_passthrough, id="aclosing-iterator"),
 ]
-_TERMINAL_PART = {"terminal": "p", "type": "text"}
-_SUBKEY_PART = {"subkey": "word", "type": "text"}
-_URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
 # A strconcat part, whether a stream reaches its in:p port, and whether it self-starts.
 STRCONCAT_STARTS = [
     pytest.param("extVal", False, True, id="literal"),
@@ -537,7 +611,53 @@ def _build_default_input_plan(default: int) -> ExecutionPlan:
     return ExecutionPlan.from_workflow(flow, dispatcher)
 
 
+def _ignore_part(item: Item, part: object) -> Item:
+    return item
+
+
+def _build_callable_fan_in() -> Workflow:
+    """Builds a callable node that reads a second stream, so it runs whole-stream."""
+    a = ModuleNode(
+        id="a",
+        name="itembuilder",
+        conf=ItemBuilderConf({"attrs": [{"key": "x", "value": "1"}]}),
+    )
+    b = ModuleNode(
+        id="b",
+        name="itembuilder",
+        conf=ItemBuilderConf({"attrs": [{"key": "y", "value": "2"}]}),
+    )
+    c = CallableNode(id="c", name="ignore_part", fn=_ignore_part)
+    edges = (
+        StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("c", "in:part")),
+    )
+    outputs = {"default": Endpoint("c", "out")}
+    return Workflow(nodes=[a, b, c], edges=edges, outputs=outputs)
+
+
+def _tag_loopable_source(fn: Func[object]) -> SyncModuleWrapper:
+    return tag_source(mark_loopable(fn))
+
+
+# Tags a source that runs over its whole input, or once per input item.
+SOURCE_TAGS = [
+    pytest.param(tag_source, id="whole-stream"),
+    pytest.param(_tag_loopable_source, id="per-item"),
+]
+
+
+async def _acollect(stream, seen):
+    async for item in stream:
+        seen.append(item)
+
+
 class TestPlanRun:
+    def test_run_maps_a_callable_node_over_a_stream_beside_a_second_one(self) -> None:
+        flow = _build_callable_fan_in()
+        assert not ExecutionPlan.from_workflow(flow, dispatcher).nodes["c"].is_mappable
+        assert run_plan(flow) == _FAN_IN_RESULT
+
     def test_run_executes_single_source_node(self) -> None:
         @tag_source
         def src(_items=None, **_):
@@ -702,7 +822,7 @@ class TestPlanRun:
         flow = build_workflow(nodes, edges=edges, outputs=outputs)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
-        assert plan.is_self_starting("c") is expected
+        assert plan.nodes["c"].is_self_starting is expected
 
         with SyncExecution() as execution:
             if expected:
@@ -723,7 +843,7 @@ class TestPlanRun:
         flow = build_workflow(nodes, edges=edges, outputs=outputs)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
-        assert plan.is_self_starting("f") is expected
+        assert plan.nodes["f"].is_self_starting is expected
 
     def test_run_starts_a_literal_strconcat_feeding_a_named_port(self) -> None:
         concat = ModuleNode(
@@ -742,7 +862,7 @@ class TestPlanRun:
         flow = build_workflow([concat, builder], edges=(edge,))
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
-        assert plan.is_self_starting("c")
+        assert plan.nodes["c"].is_self_starting
         assert not plan.nodes["c"].is_source
 
         with SyncExecution() as execution:
@@ -759,7 +879,7 @@ class TestPlanRun:
         flow = build_workflow([a, b], edges=(edge,), outputs=outputs)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
-        assert not plan.is_self_starting("a")
+        assert not plan.nodes["a"].is_self_starting
 
         with (
             SyncExecution() as execution,
@@ -894,12 +1014,11 @@ class TestPlanRun:
 
         assert closed == ["closed"]
 
+    @pytest.mark.parametrize("tag", SOURCE_TAGS)
     @pytest.mark.parametrize("build", COUNTING_SOURCES)
-    def test_run_closes_a_sync_source_once_on_early_exit(self, build) -> None:
+    def test_run_closes_a_sync_source_once_on_early_exit(self, build, tag) -> None:
         closed: list[bool] = []
-        src = cast(
-            "SyncModuleWrapper", tag_source(lambda _items=None, **_: build(closed))
-        )
+        src = cast("SyncModuleWrapper", tag(lambda _items=None, **_: build(closed)))
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=src),
             ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
@@ -934,6 +1053,42 @@ class TestPlanRun:
             assert closed == []
 
         assert closed == ["closed"]
+
+    def test_run_rejects_an_item_result_whose_close_must_be_awaited(self) -> None:
+        closed: list[str] = []
+        make = partial(AwaitableCloseIterator, closed, fresh=False)
+        src = _tag_loopable_source(lambda _items=None, **_: make())
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match="async resource cleanup"),
+        ):
+            list(execution.run(plan))
+
+        assert closed == []
+
+    @skipif_issync
+    def test_run_closes_an_unfinished_async_only_item_on_the_portal(self) -> None:
+        closed: list[str] = []
+
+        async def src(_items=None, **_):
+            try:
+                while True:
+                    yield {"x": 1}
+            finally:
+                closed.append("closed")
+
+        pipe = tag_source(mark_async_loopable(src))
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with SyncExecution() as execution:
+            stream = cast("Generator[Item]", execution.run(plan))
+            assert next(stream) == {"x": 1}
+            stream.close()
+            assert closed == ["closed"]
 
     def test_run_without_seed_keeps_forever_source(self) -> None:
         seen: list[object] = []
@@ -992,6 +1147,53 @@ class TestPlanRun:
             execution.run(plan)
 
         assert closed == ["closed"]
+
+    def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
+        schemas = '{"q": {"type": "string", "default": "x"}}'
+        raw = f'{{"input_schemas": {schemas}, "nodes": [{{"name": "forever"}}]}}'
+        resolved = _build_resolved_workflow(
+            "pipe_demo", Workflow.parse(raw), dispatcher
+        )
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        stored = ResolverDispatcher(module_registry, resolver)
+        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
+
+        with SyncExecution() as execution:
+            assert next(iter(execution.run(plan))) == {"forever": True}
+
+    @pytest.mark.parametrize(("given", "values", "expected"), INPUT_SOURCES)
+    def test_run_uses_the_inputs_its_plan_was_built_from(
+        self, given: Context | None, values: dict[str, int] | None, expected: int
+    ) -> None:
+        plan = _build_default_input_plan(1)
+        planned = plan if values is None else plan.with_inputs(values)
+
+        with SyncExecution(given) as execution:
+            assert list(execution.run(planned)) == [{"q": expected}]
+
+    def test_run_resolves_each_plan_s_own_input_default(self) -> None:
+        """A later run of another plan does not inherit an earlier run's inputs."""
+        with SyncExecution() as execution:
+            first = list(execution.run(_build_default_input_plan(1)))
+            second = list(execution.run(_build_default_input_plan(2)))
+            assert (first, second) == ([{"q": 1}], [{"q": 2}])
+
+    def test_a_stored_workflow_ignores_the_outer_context_s_other_inputs(self) -> None:
+        conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
+        raw = {
+            "input_schemas": {"q": {"type": "string", "default": "x"}},
+            "nodes": [{"name": "itembuilder", "conf": conf}],
+        }
+        resolved = _build_resolved_workflow(
+            "pipe_demo", Workflow.parse(raw), dispatcher
+        )
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        stored = ResolverDispatcher(module_registry, resolver)
+        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
+        context = Context(inputs={"q": "y", "other": 1})
+
+        with SyncExecution(context) as execution:
+            assert list(execution.run(plan)) == [{"q": "y"}]
 
     @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
     def test_run_rejects_a_value_whose_only_close_is_async(self, build, make) -> None:
@@ -1082,52 +1284,27 @@ class TestPlanRun:
         ):
             execution.run(plan)
 
-    def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
-        schemas = '{"q": {"type": "string", "default": "x"}}'
-        raw = f'{{"input_schemas": {schemas}, "nodes": [{{"name": "forever"}}]}}'
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="per-run stream ownership under sync execution is not yet implemented",
+    )
+    def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
+        closed: list[bool] = []
+        src = tag_source(lambda _items=None, **_: _gen_counting(closed))
+        src = cast("SyncModuleWrapper", src)
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=src),
+            ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
         )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
-        stored = ResolverDispatcher(module_registry, resolver)
-        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
+        a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
+        plan = ExecutionPlan.from_workflow(build_chain(a, b), dispatcher)
 
         with SyncExecution() as execution:
-            assert next(iter(execution.run(plan))) == {"forever": True}
-
-    @pytest.mark.parametrize(("given", "values", "expected"), INPUT_SOURCES)
-    def test_run_uses_the_inputs_its_plan_was_built_from(
-        self, given: Context | None, values: dict[str, int] | None, expected: int
-    ) -> None:
-        plan = _build_default_input_plan(1)
-        planned = plan if values is None else plan.with_inputs(values)
-
-        with SyncExecution(given) as execution:
-            assert list(execution.run(planned)) == [{"q": expected}]
-
-    def test_run_resolves_each_plan_s_own_input_default(self) -> None:
-        """A later run of another plan does not inherit an earlier run's inputs."""
-        with SyncExecution() as execution:
-            first = list(execution.run(_build_default_input_plan(1)))
-            second = list(execution.run(_build_default_input_plan(2)))
-            assert (first, second) == ([{"q": 1}], [{"q": 2}])
-
-    def test_a_stored_workflow_ignores_the_outer_context_s_other_inputs(self) -> None:
-        conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
-        raw = {
-            "input_schemas": {"q": {"type": "string", "default": "x"}},
-            "nodes": [{"name": "itembuilder", "conf": conf}],
-        }
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
-        )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
-        stored = ResolverDispatcher(module_registry, resolver)
-        plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
-        context = Context(inputs={"q": "y", "other": 1})
-
-        with SyncExecution(context) as execution:
-            assert list(execution.run(plan)) == [{"q": "y"}]
+            stream = execution.run(plan)
+            assert next(stream) == {"x": 0}
+            stream.close()  # pyright: ignore[reportAttributeAccessIssue]
+            assert closed == [True]
 
     @pytest.mark.xfail(
         strict=True,
@@ -1157,12 +1334,13 @@ class TestPlanRun:
         assert events == []
 
 
-async def _acollect(stream, seen):
-    async for item in stream:
-        seen.append(item)
-
-
 class TestAsyncPlanRun:
+    @async_test
+    async def test_arun_maps_a_callable_node_over_a_stream_beside_a_second_one(
+        self,
+    ) -> None:
+        assert await arun_plan(_build_callable_fan_in()) == _FAN_IN_RESULT
+
     @async_test
     async def test_arun_resolves_each_plan_s_own_input_default(self) -> None:
         """A later run of another plan does not inherit an earlier run's inputs."""
@@ -1452,11 +1630,12 @@ class TestAsyncPlanRun:
 
         assert seen == [{"x": 1}, {"x": 2}]
 
+    @pytest.mark.parametrize("tag", SOURCE_TAGS)
     @pytest.mark.parametrize("build", COUNTING_SOURCES)
     @async_test
-    async def test_arun_sync_only_source_closes_on_early_exit(self, build) -> None:
+    async def test_arun_sync_only_source_closes_on_early_exit(self, build, tag):
         closed = []
-        src = tag_source(lambda _items=None, **_: build(closed))
+        src = tag(lambda _items=None, **_: build(closed))
         sync_pipe = cast("SyncModuleWrapper", src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
         plan = ExecutionPlan.from_workflow(
@@ -1621,23 +1800,24 @@ class TestAsyncPlanRun:
     @pytest.mark.timeout(1)
     @async_test
     async def test_arun_unconsumed_sync_only_source_does_not_block_exit(self) -> None:
+        pulled = []
+
         @tag_source
         def src(_items=None, **_):
-            index = 0
-
-            while True:
+            for index in range(10_000_000):
+                pulled.append(index)
                 yield {"x": index}
-                index += 1
 
         sync_pipe = cast("SyncModuleWrapper", src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
         plan = ExecutionPlan.from_workflow(
             module_workflow("src"), dispatcher=dispatcher
         )
-
         async with AsyncExecution() as execution:
             stream = await execution.arun(plan)
             assert stream is not None
+
+        assert pulled == []
 
     @async_test
     async def test_arun_sync_worker_node_reads_secondary_inputs_lazily(self) -> None:

@@ -8,25 +8,31 @@ from collections.abc import (
     Awaitable,
     Callable,
     Iterable,
+    Iterator,
     Mapping,
     Sequence,
 )
 from dataclasses import is_dataclass
+from functools import lru_cache, partial
 from inspect import (
     Parameter,
     Signature,
+    getattr_static,
     getmembers_static,
     isawaitable,
     iscoroutinefunction,
     isfunction,
     signature,
 )
+from itertools import filterfalse, repeat
+from types import MemberDescriptorType, MethodType
 from typing import TYPE_CHECKING, TypeGuard, overload
 
 import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs, TypeVar
 
+from ._config import settings
 from ._exceptions import InvalidPipelineError
 from ._sentinels import MISSING
 from ._typing import BasicValueType, PrimitiveValueType
@@ -39,6 +45,9 @@ if TYPE_CHECKING:
     from riko.types._values import BasicList
     from riko.types._wrappers import AsyncFunc, Func
     from riko.types.modules import Conf
+
+_KT = TypeVar("_KT", default=str)
+_VT = TypeVar("_VT", default=object)
 
 
 def _protocol_signature(method: Func[object]) -> Signature:
@@ -76,46 +85,68 @@ def _signature_compatible(expected: Signature, actual: Signature) -> bool:
     return result
 
 
-def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeIs[P]:
-    """
-    Checks runtime protocol membership and method call compatibility.
+def _is_public_function(value: object) -> bool:
+    return isfunction(value) and not value.__name__.startswith("_")
 
-    A callable built-in method whose signature cannot be inspected (e.g., a
-    generator's ``close``) counts as compatible.
+
+@lru_cache(maxsize=settings.strict_check_cache_size)
+def _get_protocol_members(protocol: type) -> tuple[tuple[str, Func[object]], ...]:
+    return tuple(getmembers_static(protocol, _is_public_function))
+
+
+@lru_cache(maxsize=settings.strict_check_cache_size)
+def _is_type_bound_static(cls: type, *names: str) -> bool:
+    """Whether ``cls`` has no ``__getattr__`` and none of ``names`` is a slot."""
+    get_cls_attr_static = partial(getattr_static, cls)
+    static_attrs = map(get_cls_attr_static, names, repeat(None))
+    has_static = map(isinstance, static_attrs, repeat(MemberDescriptorType))
+    return not (get_cls_attr_static("__getattr__", None) is not None or any(has_static))
+
+
+def is_type_bound(obj: object, *names: str) -> bool:
     """
+    Whether ``obj``'s methods named ``names`` come from its type alone.
+
+    That holds when the instance has no ``__dict__``, its type has no ``__getattr__``,
+    and none of the names is a slot. It means no instance can add or replace them.
+    """
+    return not hasattr(obj, "__dict__") and _is_type_bound_static(type(obj), *names)
+
+
+def _get_bound_method(cls: type, name: str) -> object:
+    """Gets ``cls``'s method ``name`` as an instance of ``cls`` would see it."""
+    attr = getattr(cls, name, None)
+
+    if isfunction(attr) and isfunction(getattr_static(cls, name, None)):
+        method: object = MethodType(attr, MISSING)
+    else:
+        method = attr
+
+    return method
+
+
+def _check_strict(
+    is_member: bool, protocol: type, get_method: Callable[[str], object], *methods: str
+) -> bool:
+    available, selected = _get_instance_methods(protocol, *methods)
     match = False
 
-    if isinstance(obj, protocol):
-        predicate = lambda v: isfunction(v) and not v.__name__.startswith("_")
-        available = getmembers_static(protocol, predicate)
-        available_names = {name for name, _ in available}
-        selected = set(methods)
-
-        if selected and (unknown := selected - available_names):
-            unknown_names = ", ".join(sorted(unknown))
-            msg = f"{protocol.__name__} has no instance method(s): {unknown_names}"
-            raise TypeError(msg)
-
+    if is_member:
         for name, member in available:
-            if isinstance(member, (staticmethod, classmethod)):
-                if not selected or name in selected:
-                    msg = f"{protocol.__name__}.{name} must be an instance method"
-                    raise TypeError(msg)
-
-                continue
-            elif selected and name not in selected:
+            if selected and name not in selected:
                 continue
 
-            expected = _protocol_signature(member)
-            obj_method = getattr(obj, name, None)
+            method = get_method(name)
 
-            if not callable(obj_method):
+            if not callable(method):
                 break
 
             try:
-                actual = signature(obj_method)
+                actual = signature(method)
             except (TypeError, ValueError):
                 continue
+
+            expected = _protocol_signature(member)
 
             if not _signature_compatible(expected, actual):
                 break
@@ -125,8 +156,56 @@ def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeI
     return match
 
 
-_KT = TypeVar("_KT", default=str)
-_VT = TypeVar("_VT", default=object)
+def _get_instance_methods(
+    protocol: type, *methods: str
+) -> tuple[Iterator[tuple[str, Func[object]]], set[str]]:
+    """Gets the protocol's instance methods and the selected names, checking both."""
+    available = _get_protocol_members(protocol)
+    available_names = {name for name, _ in available}
+    selected = set(methods)
+
+    if selected and (unknown := selected - available_names):
+        unknown_names = ", ".join(sorted(unknown))
+        raise TypeError(f"{protocol.__name__} has unknown method(s): {unknown_names}")
+
+    def isnt_instance_method(pair: tuple[str, Func[object]]) -> bool:
+        return isinstance(pair[1], (staticmethod, classmethod))
+
+    for name, _ in filter(isnt_instance_method, available):
+        if not selected or name in selected:
+            msg = f"{protocol.__name__}.{name} must be an instance method"
+            raise TypeError(msg)
+
+    return filterfalse(isnt_instance_method, available), selected
+
+
+def _check_strict_protocol(obj: object, protocol: type, *methods: str) -> bool:
+    get_method = partial(getattr, obj)
+    return _check_strict(isinstance(obj, protocol), protocol, get_method, *methods)
+
+
+@lru_cache(maxsize=settings.strict_check_cache_size)
+def _check_strict_type(cls: type, protocol: type, *methods: str) -> bool:
+    get_method = partial(_get_bound_method, cls)
+    return _check_strict(issubclass(cls, protocol), protocol, get_method, *methods)
+
+
+def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeIs[P]:
+    """
+    Checks runtime protocol membership and method call compatibility.
+
+    A callable built-in method whose signature cannot be inspected (e.g., a generator's
+    ``close``) counts as compatible.
+    """
+    names = (name for name, _ in _get_protocol_members(protocol))
+    by_type = not getattr(protocol, "__non_callable_proto_members__", None)
+
+    if by_type and is_type_bound(obj, *names):
+        match = _check_strict_type(type(obj), protocol, *methods)
+    else:
+        match = _check_strict_protocol(obj, protocol, *methods)
+
+    return match
 
 
 def is_mapping(val: Mapping[_KT, _VT] | object) -> TypeIs[Mapping[_KT, _VT]]:

@@ -33,6 +33,7 @@ import riko.runtime._workflow_pipes
 import riko.runtime._workflow_resolver
 import riko.runtime._workflow_stores
 import riko.types
+from riko.bado._backend import fail_after
 from riko.base._api_surface import (
     BADO,
     COMPILE,
@@ -371,7 +372,9 @@ class TestWorkflowModule:
         async for _ in stream:
             break
 
-        await stream.aclose()
+        with fail_after(1):
+            await stream.aclose()
+
         log.append("after close")
         assert log == ["execution exit", "after close"]
 

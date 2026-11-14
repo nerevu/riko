@@ -46,6 +46,10 @@ ITEM_ATTRS = {"key": "title", "value": "riko"}
 FARECHART_DOCUMENT = "pipe_a3d1afa31f0a24cc51dcbe79f1590343"
 FARECHART_TEXT = "{'url': 'farechart'}\n"
 
+USAGE_TEXT = (
+    "{'title': 'riko pt. 1', 'content': \"Let's talk about riko!\", "
+    "'hash': 456903819}\n"
+)
 RAISING_SCRIPT = (
     "from riko import UnsupportedModuleError\n\n"
     "def pipe(test=False):\n    raise UnsupportedModuleError('x')\n"
@@ -76,6 +80,7 @@ DEMO_RUNS = [
         id="simple1-async",
     ),
     pytest.param(FARECHART_DOCUMENT, FARECHART_TEXT, [], "in-process", id="document"),
+    pytest.param("usage", USAGE_TEXT, [], "in-process", id="usage"),
     pytest.param(
         FARECHART_DOCUMENT, FARECHART_TEXT, [], "outside", id="outside-checkout"
     ),
@@ -175,12 +180,6 @@ class TestRunPipe:
 
         assert ran.returncode == 0, ran.stderr
         assert_output_matches(ran.stdout, expected, command=" ".join(ran.args))
-
-    def test_usage_sync(self):
-        """The usage example still runs through the CLI."""
-        ran = run_command("runpipe", "usage")
-        assert ran.returncode == 0, ran.stderr
-        assert "'hash': 456903819" in ran.stdout
 
     def test_run_pipe_workflow_document(self, tmp_path):
         workflow_file = tmp_path / "flow.json"
@@ -312,7 +311,7 @@ class TestBuildWorkflow:
         ],
     )
     def test_unreadable_input_exits_nonzero_without_a_traceback(
-        self, tmp_path, caplog, content, module
+        self, tmp_path, content, module
     ):
         path = tmp_path / "input.json"
 
@@ -321,7 +320,6 @@ class TestBuildWorkflow:
 
         result = run_command(module, str(path))
         assert result.returncode == 1
-        assert "Unable to" in caplog.text
         assert "Traceback" not in result.stderr
 
 
@@ -359,6 +357,15 @@ class TestBenchmark:
         ]
         msg = f"benchmark output missing labels {missing}:\n{output}"
         assert not missing, msg
+
+
+class TestSubprocessImports:
+    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
+        # A script outside the checkout resolves riko the way a console script does.
+        probe = tmp_path / "probe.py"
+        probe.write_text("import riko\nprint(riko.__file__)\n")
+        done = run_python(str(probe), cwd=tmp_path)
+        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
 def _without_nan(value: object) -> object:

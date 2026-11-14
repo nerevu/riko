@@ -26,9 +26,9 @@ from ._gen_verbs import VERB_DOCS
 from ._gen_verbs import main as gen_verbs_main
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from riko.types._wrappers import Func
 
-_CODEGEN: dict[str, tuple[Callable[[], int], str, str]] = {
+_CODEGEN: dict[str, tuple[Func[int], str, str]] = {
     "config": (
         gen_config_main,
         f"wrote configuration file to {CONFIG_PATH}",

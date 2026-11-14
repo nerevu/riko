@@ -12,26 +12,27 @@ Index (file, then the subjects it owns, in file order):
                               EscapeLint, DependencyLint, HookPinLint,
                               CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
-                              ReadDocument, SubprocessImports, LogLevel
+                              ReadDocument, LogLevel
     test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
                               ModuleCategory, GeneratedNamesDrift, GenerateModuleIds,
                               ConfigCodegen, UserAgentCodegen, WorkflowFixtures,
                               WorkflowProbes, ImportSurface, VerbTables,
                               GenerateApiSurface
-    test_concurrency.py       BuildItemCall, RequireProcessSafe, SyncPolicy,
+    test_concurrency.py       BuildTrackedCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
     test_definitions.py       FrozenDict, Resource, ResourceFreezing, WorkflowFields,
                               NormalizeInternals, ParsePort, RawWorkflowFields,
                               PipelineDefinitionFields, WriteOperation, NormalizeTarget,
                               ResolveFormat, ValidateTargetMode, BuildWrite
-    test_execution.py         SyncExecution, ResourceAcquisition, ResourceView
+    test_execution.py         SyncExecution, ResourceAcquisition, ResourceView,
+                              ResultEnvelopes, NodeProvenance, RunEnvelopes
     test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, RequireStream,
                               PreparedCall, PreparedNode
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
                               AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
-                              TempPath, AsyncMap, AsyncMapStream, AsyncMerge,
-                              GatherResults, CapabilityFlags, ConverterPath, Csv, Jsonl,
-                              Framed, SessionLifecycle, WriteExecution, Sink
+                              AsyncMap, AutoClose, RequireCloser, AsyncMapStream,
+                              AsyncMerge, GatherResults, CapabilityFlags, ConverterPath,
+                              Csv, Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, SyncPipeAsyncInput,
                               ReturnInference, ModuleMetadata, WrapperMeta, Loop,
@@ -44,9 +45,10 @@ Index (file, then the subjects it owns, in file order):
                               ResolverDispatcher, RequireInterface, EntryPointModules,
                               WorkflowResolver, PackageStore, DirectoryStore,
                               CompositeStore, Catalog, ResolvedDocuments, TargetRegistry
-    test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts
+    test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts, DoctestSkips
     test_upstream.py          Meza
-    test_values.py            CanonicalBytes, Digest, ReprCache, ResolveConf,
+    test_values.py            CanonicalBytes, Digest, IdentityAccumulator, Metadata,
+                              ItemEnvelope, FeedResult, ReprCache, ResolveConf,
                               CastDatetime, CastValue, OverloadTypes, ResolveCastType,
                               DefItemgetter, Fromdict, ParseDateString,
                               ResolveAwareDatetime, DatetimeToDatedict, DotDict,

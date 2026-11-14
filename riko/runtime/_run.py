@@ -71,9 +71,9 @@ def run_pipeline[T](
 
     """
     plan = ExecutionPlan.from_workflow(definition.workflow, dispatcher)
-    settings = definition.settings
+    execution = SyncExecution(definition.context, settings=definition.settings)
 
-    with SyncExecution(definition.context, settings=settings) as execution:
+    with execution:
         yield from execution.run(plan, seed=seed)
 
 

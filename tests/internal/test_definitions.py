@@ -47,7 +47,7 @@ from riko.definitions._targets import (
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.types._enums import Formats
-from riko.types._frozendict import FrozenDict
+from riko.types._frozendict import FrozenDict, freeze
 from riko.types._io import get_async_closer, get_sync_closer
 from riko.types._options import CallOptions, RawCallOptions
 from riko.types._resource import (
@@ -75,12 +75,12 @@ from tests._resources import (
     CREDENTIAL,
     SCALAR,
     VALUE_FACTORIES,
+    WRAPPED_VALUES,
     Connection,
     async_callable_factory,
     async_cm_factory,
     async_gen_factory,
     check_credential_and_lazy,
-    check_metadata,
     close_async_connection,
     close_connection,
     sync_callable_factory,
@@ -94,8 +94,9 @@ from tests._resources import (
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from contextlib import AbstractContextManager
+
+    from riko.types._wrappers import Func
 
 
 _RESOLVED = "Expected a resolved resource value"
@@ -104,20 +105,16 @@ _NODE_ALIASES = frozenset({"family", "format"})
 _EDGE_ALIASES = frozenset({"family"})
 
 
-def untyped_inputs(**values: Any) -> dict[str, Any]:
-    """Builds inputs whose nested values fall outside the declared scalar type."""
-    return values
-
-
 def gen_client(*_args: object, **_kwargs: object):
     yield object()
 
 
-class _Client:
-    closed = False
-
-    def close(self) -> None:
-        self.closed = True
+FROZEN_DICT_MERGES = [
+    pytest.param(
+        FrozenDict({"a": 1}) | {"a": 2, "b": [3]}, {"a": 2, "b": (3,)}, id="or"
+    ),
+    pytest.param({"a": 2, "b": 3} | FrozenDict({"a": 1}), {"a": 1, "b": 3}, id="ror"),
+]
 
 
 class TestFrozenDict:
@@ -130,20 +127,14 @@ class TestFrozenDict:
     def test_equal_frozen_dicts_hash_alike(self):
         assert hash(FrozenDict({"a": [1]})) == hash(FrozenDict({"a": (1,)}))
 
-    @pytest.mark.parametrize(
-        ("merged", "expected"),
-        [
-            pytest.param(
-                FrozenDict({"a": 1}) | {"a": 2, "b": [3]}, {"a": 2, "b": (3,)}, id="or"
-            ),
-            pytest.param(
-                {"a": 2, "b": 3} | FrozenDict({"a": 1}), {"a": 1, "b": 3}, id="ror"
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("merged", "expected"), FROZEN_DICT_MERGES)
     def test_merging_returns_a_frozen_dict(self, merged: Any, expected: dict):
         assert isinstance(merged, FrozenDict)
         assert merged == expected
+
+    def test_permissive_freeze_keeps_a_frozen_mapping(self):
+        frozen = FrozenDict({"a": 1})
+        assert freeze(frozen) is frozen
 
     def test_an_unhashable_value_makes_it_unhashable(self):
         with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
@@ -209,9 +200,9 @@ RESOURCE_SHAPES = [
 
 
 MARKER_CONSTRUCTION_CASES = [
-    pytest.param(lambda: ReusableResource(_Client()), id="reusable-direct"),
-    pytest.param(lambda: OneShotResource(_Client()), id="one-shot-direct"),
-    pytest.param(lambda: ReusableResource.from_external(_Client()), id="external"),
+    pytest.param(lambda: ReusableResource(Connection()), id="reusable-direct"),
+    pytest.param(lambda: OneShotResource(Connection()), id="one-shot-direct"),
+    pytest.param(lambda: ReusableResource.from_external(Connection()), id="external"),
     pytest.param(
         lambda: OneShotResource.from_factory(dict, cleanup=False), id="factory"
     ),
@@ -255,6 +246,39 @@ def cleanup_contextmanager(_: AbstractContextManager[Connection]):
     pass
 
 
+LIFECYCLE_FACTORY_PLANS = [
+    pytest.param(sync_gen_factory, SyncLifecyclePlan, id="sync-gen"),
+    pytest.param(async_gen_factory, AsyncLifecyclePlan, id="async-gen"),
+    pytest.param(sync_cm_factory, SyncLifecyclePlan, id="sync-cm"),
+    pytest.param(async_cm_factory, AsyncLifecyclePlan, id="async-cm"),
+    pytest.param(wrapped_sync_gen_factory, SyncLifecyclePlan, id="wraps-sync-gen"),
+    pytest.param(wrapped_async_gen_factory, AsyncLifecyclePlan, id="wraps-async-gen"),
+    pytest.param(wrapped_sync_cm_factory, SyncLifecyclePlan, id="wraps-sync-cm"),
+    pytest.param(wrapped_async_cm_factory, AsyncLifecyclePlan, id="wraps-async-cm"),
+]
+
+
+@pytest.fixture
+def one_shot_resource(connection: Connection) -> Resource[Connection]:
+    return Resource(connection)
+
+
+def check_metadata(
+    resource,
+    typ: type,
+    *,
+    external: bool,
+    reusable: bool,
+    classification: type | None = None,
+):
+    assert isinstance(resource, typ)
+    assert resource.external == external
+    assert resource.reusable == reusable
+
+    if classification is not None:
+        assert isinstance(resource._plan, classification)
+
+
 class TestResource:
     @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
     def test_pickle_and_copy_round_trip(self, round_trip):
@@ -267,27 +291,7 @@ class TestResource:
         assert restored.lazy
         assert restored._plan.kwargs["retries"] == (1, 2)
 
-    @pytest.mark.parametrize(
-        ("factory", "classification"),
-        [
-            pytest.param(sync_gen_factory, SyncLifecyclePlan, id="sync-gen"),
-            pytest.param(async_gen_factory, AsyncLifecyclePlan, id="async-gen"),
-            pytest.param(sync_cm_factory, SyncLifecyclePlan, id="sync-cm"),
-            pytest.param(async_cm_factory, AsyncLifecyclePlan, id="async-cm"),
-            pytest.param(
-                wrapped_sync_gen_factory, SyncLifecyclePlan, id="wraps-sync-gen"
-            ),
-            pytest.param(
-                wrapped_async_gen_factory, AsyncLifecyclePlan, id="wraps-async-gen"
-            ),
-            pytest.param(
-                wrapped_sync_cm_factory, SyncLifecyclePlan, id="wraps-sync-cm"
-            ),
-            pytest.param(
-                wrapped_async_cm_factory, AsyncLifecyclePlan, id="wraps-async-cm"
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("factory", "classification"), LIFECYCLE_FACTORY_PLANS)
     def test_lifecycle_factory_metadata[T](
         self, factory: LifecycleFactory[T], classification: type
     ):
@@ -334,6 +338,19 @@ class TestResource:
         )
         check_credential_and_lazy(resource)
 
+    @pytest.mark.parametrize(("fixture", "kwargs"), WRAPPED_VALUES)
+    def test_wrapped_values_report_their_metadata(self, fixture, kwargs, request):
+        value = request.getfixturevalue(fixture)
+        owned = Resource(value, **kwargs)
+        check_metadata(owned, OneShotResource, external=False, reusable=False)
+
+        external = Resource.from_external(value)
+        check_metadata(external, ReusableResource, external=True, reusable=True)
+
+        context = Context().with_resource("value", external)
+        borrowed = context.resources["value"]
+        check_metadata(borrowed, ReusableResource, external=True, reusable=True)
+
     def test_context_manager_lifecycle_metadata(self, sync_contextmanager):
         lifecycle = Resource.from_lifecycle(sync_contextmanager)
         check_metadata(lifecycle, OneShotResource, external=False, reusable=False)
@@ -353,7 +370,7 @@ class TestResource:
     )
     def test_plan_derived_properties(
         self,
-        build: Callable[[], Resource[Any]],
+        build: Func[Resource[Any]],
         strategy: ResourceStrategy,
         async_native: bool,
         has_value: bool,
@@ -396,7 +413,7 @@ class TestResource:
             Resource.from_factory(factory)  # pyright: ignore[reportArgumentType]
 
     @pytest.mark.parametrize("construct", MARKER_CONSTRUCTION_CASES)
-    def test_marker_types_cannot_be_constructed(self, construct: Callable[[], object]):
+    def test_marker_types_cannot_be_constructed(self, construct: Func[object]):
         with pytest.raises(TypeError, match="is a declaration type"):
             construct()
 
@@ -450,7 +467,7 @@ class TestResourceFreezing:
         assert headers["accept"] == ("json",)
 
     def test_opaque_argument_values_are_untouched(self):
-        client = _Client()
+        client = Connection()
         resource = Resource.from_factory(gen_client, client, session=client)
 
         assert isinstance(resource._plan, SyncLifecyclePlan)
@@ -472,6 +489,11 @@ class TestResourceFreezing:
 
         with pytest.raises(AttributeError):
             resource._plan.enter = sync_gen_factory  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def untyped_inputs(**values: Any) -> dict[str, Any]:
+    """Builds inputs whose nested values fall outside the declared scalar type."""
+    return values
 
 
 class TestWorkflowFields:

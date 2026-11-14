@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from pathlib import Path
 
+    from riko.types._wrappers import Func
+
     from ._lint_terms import BannedTerm
 
 _INTERNAL_DOCS = ROOT_DIR / "_docs"
@@ -772,7 +774,7 @@ def lint_docs() -> int:
     roadmap_checks = {
         f"{_ROADMAP}: {rule}": partial(check, roadmap) for rule, check in roadmap_items
     }
-    checks: dict[str, Callable[[], Iterable[object]]] = {
+    checks: dict[str, Func[Iterable[object]]] = {
         **roadmap_checks,
         f"{_INTERNAL_DOCS}: root Markdown docs require explicit authority": (
             _root_markdown_offenders

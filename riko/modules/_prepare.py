@@ -169,8 +169,8 @@ def build_casters(opts: DecorationOptions) -> CastFuncs[ItemOrValue, object]:
         ]
         _conf_caster = objectify
     elif opts.get("objectify"):
-        extract_caster = partial(objectify, func=value_caster)
-        _conf_caster = objectify if extract else partial(objectify, func=value_caster)
+        extract_caster = lambda data: objectify(data, value_caster)
+        _conf_caster = objectify if extract else extract_caster
     else:
         extract_caster = value_caster
         _conf_caster = cast_pass
@@ -191,33 +191,23 @@ class PreparedModule[T, E]:
     Attributes:
 
         name: The module name.
-
         conf: The merged module configuration.
-
         opts: The decoration options plus the resolved call options.
 
         extras: The names of the extra inputs delivered with each item. A
             configuration value naming one is resolved per item.
 
         defaults: The module's default configuration.
-
         assign: The field results are assigned to (default: the module name).
-
         emit: Whether (or a predicate deciding whether) to emit rather than assign.
-
         is_conf_parsed: Whether the module parses its configuration.
-
         is_dynamic: Whether the configuration varies per item.
-
-        static_conf: The parsed configuration when it does not vary per item, else
-            ``None``.
-
+        static_conf: The parsed configuration when it does not vary per item.
         parsers: The field and conf parsers.
-
         casters: The field, extract, and conf casters.
 
         static_casted: The cast field caster, extraction, and conf when the
-            configuration does not vary per item, else ``None``.
+            configuration does not vary per item.
 
     Examples:
 

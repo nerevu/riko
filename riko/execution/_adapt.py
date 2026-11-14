@@ -10,15 +10,15 @@ private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
+from collections.abc import AsyncIterator, Iterator
 from functools import partial
 from typing import TYPE_CHECKING, Protocol, cast
 
 from riko.bado.itertools import aiter_sentinel
-from riko.base._guards import is_listlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._wrappers import (
+    AsyncFunc,
     Func,
     require_async_wrapper,
     require_single_output,
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from ._prepared import ResolvedModule
 
-type Drain[T] = Callable[[AsyncIterable[T]], Iterator[T]]
+type Drain[T] = Callable[[AsyncIterator[T]], Iterator[T]]
 
 _FUNC_META = ("__name__", "__qualname__", "__doc__")
 
@@ -47,7 +47,7 @@ _FUNC_META = ("__name__", "__qualname__", "__doc__")
 class LoopCall(Protocol):
     """Runs an awaitable-returning callable to completion from a worker thread."""
 
-    def __call__[R](self, func: Callable[[], Awaitable[R]], /) -> R: ...
+    def __call__[R](self, func: AsyncFunc[R], /) -> R: ...
 
 
 class WorkerCall(Protocol):
@@ -113,54 +113,27 @@ def require_async_stream[T](
     return cast("AsyncIterator[T]", aiter(value))
 
 
-# TODO: isnt this just listize?
-def normalize_items[T](value: T | Iterable[T]) -> Iterable[T]:
-    """
-    Normalizes a synchronous seed to the item stream it denotes.
-
-    A mapping or primitive is one item; any other iterable already is the stream.
-    Async and awaitable seeds are resolved by the execution that owns the loop.
-
-    Args:
-
-        value: One item or an item stream.
-
-    Returns:
-
-        The item stream ``value`` denotes.
-
-    Examples:
-
-        >>> normalize_items({"x": 1})
-        [{'x': 1}]
-        >>> normalize_items([{"x": 1}, {"x": 2}])
-        [{'x': 1}, {'x': 2}]
-
-    """
-    return value if is_listlike(value) else [cast("T", value)]
-
-
-def async_drain[T](items: AsyncIterable[T], call: LoopCall) -> Iterator[T]:
+def async_drain[T](call: LoopCall, stream: AsyncIterator[T]) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
-    Args:
+    The caller owns ``stream`` and should close it. This only reads it.
 
-        items: The async stream to read.
+    Args:
 
         call: Runs an awaitable-returning callable to completion on the event loop from
             the calling thread.
 
+        stream: The async iterator to read.
+
     Yields:
 
-        Each item ``source`` produces, in order.
+        Each item ``stream`` produces.
 
     """
-    iterator = aiter(items)
-
     while True:
         try:
-            item = call(iterator.__anext__)
+            item = call(stream.__anext__)
         except StopAsyncIteration:
             break
         else:
@@ -172,21 +145,20 @@ def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
     return next(stream, MISSING)
 
 
-def pull_stream[T](stream: Iterator[T], *, func: WorkerCall) -> AsyncIterator[T]:
+def pull_stream[T](func: WorkerCall, stream: Iterator[T]) -> AsyncIterator[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
+    The caller owns ``stream`` and should close it. This only reads it.
+
     Args:
 
-        stream: The synchronous item stream to read.
-
-    Kwargs:
-
         func: Runs a blocking callable off the event loop.
+        stream: The synchronous iterator to read.
 
     Returns:
 
-        The async stream over ``stream``'s items, pulled one per request.
+        The async stream over ``stream`` that pulls one item per request.
 
     """
     return aiter_sentinel(partial(func, _next_or_missing), stream, MissingType)
@@ -270,21 +242,21 @@ def async_adapt_embed(
     embed: SyncModuleWrapper, run_sync: WorkerCall
 ) -> AsyncModuleWrapper:
     """
-        Wraps a sync-only loop embed as an asynchronous one.
+    Wraps a sync-only loop embed as an asynchronous one.
 
-        The caller gets a callable with the asynchronous calling convention that
-        carries the embed's discovery metadata, so the loop machinery treats it as a
-        native async embed. Each parent item's results are collected off the event
-        loop, which the per-parent result count keeps bounded.
+    The caller gets a callable with the asynchronous calling convention that
+    carries the embed's discovery metadata, so the loop machinery treats it as a
+    native async embed. The embed's per-item results are collected off the event
+    loop, which the per-parent result count keeps bounded.
 
     Args:
 
-            embed: The blocking pipe to run per parent item.
-            run_sync: Runs a blocking callable off the event loop.
+        embed: The blocking pipe to run per parent item.
+        run_sync: Runs a blocking callable off the event loop.
 
     Returns:
 
-            An asynchronous embed whose per-item results are produced on a worker.
+        An asynchronous embed whose per-item results are produced on a worker.
 
     """
 
@@ -340,7 +312,6 @@ __all__ = [
     "adapt_embed",
     "async_adapt_embed",
     "async_drain",
-    "normalize_items",
     "pull_stream",
     "require_async_stream",
     "require_stream",

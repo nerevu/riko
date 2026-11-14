@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from riko.coercion._configs import ReceiveObjconf
     from riko.runtime._pubsub._types import ReceiveFunc, Receiver
     from riko.types._options import DecorationOptions, Defaults
-    from riko.types._wrappers import PipeTuples
+    from riko.types._wrappers import Func, PipeTuples
 
 logger: Logger = get_logger(__name__)
 
@@ -84,7 +84,7 @@ def register_receiver(
     func: ReceiveFunc | None = None,
     *,
     on_receive: Callable[[Item], object] | None = None,
-    on_complete: Callable[[], object] | None = None,
+    on_complete: Func[object] | None = None,
     func_kwargs: Mapping[str, object] | None = None,
 ) -> None:
     # See https://github.com/ICRAR/ijson#push-interfaces
