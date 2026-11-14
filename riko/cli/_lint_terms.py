@@ -80,6 +80,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("export target", "export format"),
     BannedTerm("destination type", "cast type"),
     BannedTerm("item attribute", "item field"),
+    BannedTerm("item's result", "a node's per-item results"),
     BannedTerm("resolver façade", "dispatcher"),
     BannedTerm("entry-point plugin", "plugin"),
     BannedTerm("extension package", "plugin"),

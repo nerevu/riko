@@ -76,7 +76,7 @@ The package hierarchy is executable policy. Current layers are:
 
 ```text
 base < types < {bado | coercion | definitions} < io < parsing < rss
-        {bado | definitions} < execution
+        {bado | coercion | definitions} < execution
         {execution | parsing} < runtime
         {rss | runtime} < modules < api < cli
 ```
@@ -215,7 +215,8 @@ new permanent bullet here.
   on first use), `PipeDag`; old JSON is a "serialized `PipeDef`". Full rule and
   exemptions: `_docs/DOCUMENTATION_STANDARD.md` (No internal jargon in shipped text).
 - New code is fully typed and documented. Prefer type narrowing over `cast`; narrow
-  untyped values once at the boundary and carry the tightened type forward.
+  untyped values once at the boundary and carry the tightened type forward. A value
+  that is a workflow node id is annotated `NodeId`, never bare `str`.
 - **Constants at the top** — after the imports come the module `logger`, then `type`
   aliases, then constants, private (`_NAME`) before public (`NAME`), one-line
   constants on adjacent lines; a helper a constant calls goes just above the first
@@ -255,6 +256,10 @@ new permanent bullet here.
   discovery *tree* is the enum layer. A lone sentinel option beside another type
   (`concurrency: int | Literal["auto"]`) is also `Literal` — a one-member enum buys no
   choice, only a public name; promote it to a `StrEnum` when a second member arrives.
+- **Callable parameter names.** `fn` is a callable the user supplies
+  (`Pipeline.map(fn)`, `CallableNode.fn`); `call` is a pipe's or node's prepared call,
+  its configuration and context already bound (`NodeCall`, `ItemCall`, `LoopCall`,
+  `build_item_call`); `func` is any other callable (helpers, pools, parsers).
 - **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
   when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,
   `write`/`awrite`); sibling sync/async classes never share a method name across colors.

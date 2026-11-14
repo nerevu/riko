@@ -22,6 +22,11 @@ Good:  count_key: Field to count by.
 Do not use `mixed:` / `Awaitable:` / `Deferred:` return labels, and do not name a
 parameter in the docstring that differs from the signature.
 
+A value annotated with an id alias such as `NodeId` is described as an id
+(`Id of the node the call belongs to.`), never as `The node …`. The alias is a plain
+`str`, and "node" names the node objects (`RikoNode`, `PreparedNode`) that often sit
+beside it, so the "Id of" prefix tells the two apart; it is not a restated type.
+
 ### Exception: values consumed from an untyped `**kwargs` keep their type labels
 
 The rule above assumes annotations that describe the call. Every module's
@@ -693,12 +698,15 @@ is caught unless it also gains one).
 
   Those two positions only — no other empty prompts for visual spacing. A true
   blank line still terminates the example, so it can never substitute for `>>>`.
-- Narrate a case inside the example as a `>>> #` comment, not as prose between
-  examples, and write names plainly (no RST markup) since the comment renders as
-  code:
+- Narrate a second case as a plain `#` comment line after a blank line, directly
+  above the example it introduces, not as prose between examples or a `>>> #`
+  prompt; write names plainly (no RST markup) since the comment renders as code:
 
   ```text
-  >>> # A falsy value passes unless strict is set
+  >>> require_arg(1, "others", "send")
+  1
+
+  # A falsy value passes unless strict is set
   >>> require_arg([], "others", "send")
   []
   ```
@@ -756,6 +764,16 @@ Examples:
     >>> run(main)
     {'count': 5}
 ```
+
+`run` forwards positional arguments to the coroutine function, so an example that
+only collects a stream or awaits one positional call drops the wrapper:
+`run(alist, stream)`, `run(anext, stream)`, `run(async_parser, None, None, objconf)`.
+Keep `async def main()` when the example needs `async with`, keyword arguments,
+several awaits, or shows the function used inside async code. The `run(` call may
+sit anywhere on the line; the skip still finds it. Consume the result on that same
+line (`run(anext, stream).value`, `[e.value for e in run(alist, stream)]`): the
+skip is per example, so a later line that reads a name the `run(` line bound fails
+with `NameError` without the extra.
 
 Do not reintroduce `FakeReactor` / Deferred scaffolding.
 
@@ -885,7 +903,7 @@ reader to the wrong place.
 | **context** | the `Context` a module runs in: the run environment that supplies `inputs`, the `test` flag, and the resources it provides (`with_context`, the `context=` parameter); an immutable definition, not part of the execution | not "execution context" or "pipeline context": a `pipe` parameter line reads `context (Context): the run environment`; say "context manager" in full for a `with` target |
 | **input** | qualified in its riko senses (plain "the input" for a function's argument or a CLI file is ordinary English). *Input values* are the answers a run supplies (`Context.inputs`, the `inputs=` keyword argument) that an `input` module reads by its `input_key` instead of prompting; each workflow input has one *schema* (see **schema**; the workflow's `input_schemas` holds them); an *input port* is where an edge enters a node (`in`, positional `in:N`, named `in:<name>`), and every port delivers an *input stream* (the default one, or a "secondary input stream" through `in:N`/`in:<name>`); the `input` module keeps its name | never bare "inputs" in prose; not "value input" for a named port (it carries a stream); not "source" for a secondary input stream; not "input requirements" or "input declaration" for an input's schema |
 | **output** | qualified in its riko senses (an output file, printed output, or serialized output is ordinary English). A node's *output stream* is what it yields after `count`/`assign`/`emit` shape its results, and it pairs with the input stream the next node receives (a stream on an edge is the upstream node's output stream until a port takes it, then that port's input stream; never an "upstream stream"); an *output port* is where an edge leaves a node (`out`, positional `out:N`, named `out:<name>`); a *workflow output* is a named endpoint a workflow exposes (`Workflow.outputs`), and the *default output* is the one a `Pipeline` yields; a `PipeDef`'s terminal marker is its ``output`` node | never bare "output(s)" in prose; not "output" for what a parser returns (that is a result); not "output module" (there is no such module) |
-| **result** | what a module's parser returns: zero or more per input item for a processor, one reduced value for an aggregator; `assign` names the field a result is assigned to, `emit` yields it as is, `count` sets how many to keep. `WriteResult`, `FeedResult`, and `ActionResult` keep their names in backticks | never "results" for the items a pipeline yields ("items", "whether items keep source order", "Exporting a stream"); "the result of `Workflow.parse`" stays ordinary English |
+| **result** | what something returns, always named by its owner where senses could meet: *a parser's result* is what a module's parser returns (zero or more per input item for a processor, one reduced value for an aggregator; `assign` names the field a result is assigned to, `emit` yields it as is, `count` sets how many to keep); *a node's per-item results* are the zero or more items a node yields from one input item once `assign`/`emit`/`count` have shaped its parser's results, the unit identity is decided over. Once the sentence fixes the owner and scope, bare "result(s)" may refer back. `WriteResult`, `FeedResult`, and `ActionResult` keep their names in backticks | never "results" for the items a pipeline yields, or a node's whole output stream ("items", "whether items keep source order", "Exporting a stream"); not "an item's results" (the node, not the item, owns them); "the result of `Workflow.parse`" stays ordinary English |
 | **terminal** | only a conf *terminal reference* (`{"terminal": "<name>", "type": …}`, the `Terminal` conf type): it takes the next item from the secondary input stream wired into `in:<name>`; its `type` is the *terminal type* (a shell terminal stays ordinary English) | "consumes the stream" for a call that ends a pipeline (`export()`), never "terminal call/verb"; "the `PipeDef` `output` node" for the old `_OUTPUT` marker; "secondary input stream" for a stream passed as a keyword argument, never "terminal sub-source" or "terminal input" |
 | **key** | always qualified: a *conf key* ("no ``url`` key"), a *sort key* (`build_sort_key`), the *match keys* a keyed write needs (`write(keys=)`), or a lookup/registry key; the `*_key` conf names (`count_key`, `join_key`, `input_key`) keep their names but each *names a field*; a mapping key in a generic helper is ordinary English | "field" for anything naming item data; "group value" for what a grouping reports per group; "subkey" only for the `{"subkey": …}` reference |
 | **sink** | a receiver of side-channel values: the *event sink* (`EventSink`, `event_sink=`) and, later, the error sink; until the `write` module retires, also the `Sinks` discovery category ("sink module", `category="sink"`) | never a call or verb that ends a pipeline (there is no `sink()`; a call that ends one "consumes the stream"); never "sink pipe"; "write" or "target" for where items end up |

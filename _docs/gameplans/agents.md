@@ -307,7 +307,7 @@ They therefore use the common rules:
 ## 13. Observation and metadata
 
 Agent/tool results may return `FeedResult` metadata/state like other Riko sources.
-Per-item provenance remains private in `_FeedItem`; parsers/agent callables receive
+Per-item provenance remains private in `_ItemEnvelope`; parsers/agent callables receive
 ordinary values.
 
 Ordinary 1-to-1 transforms preserve truthful item identity/generation. Fan-out and

@@ -179,7 +179,7 @@ R4C  callable nodes (pure 1→1 `map`)
 R4D  workflow input schemas
               |
               v
-R5A  FeedResult / _FeedItem / provenance
+R5A  FeedResult / _ItemEnvelope / provenance
        |                         |
        |                         +---------------------> R7 fanout topology
        v
@@ -222,7 +222,7 @@ language and normalization boundary before R4B executes it. That is the same
 definition/IR-before-runtime split used by mature workflow/compiler systems and keeps
 authoring sugar, migration, and graph validation out of execution code.
 
-R7 depends on R5A because branch delivery must carry the final `_FeedItem`
+R7 depends on R5A because branch delivery must carry the final `_ItemEnvelope`
 identity/provenance envelope. It does **not** depend on cache, effects, or durable
 state.
 
@@ -394,7 +394,16 @@ Deliver:
   values it references, and its upstream nodes' effective fingerprints, is what cache
   keys (R5B) and `StateKey`s/idempotency keys (R6) use
   ([execution-semantics.md § Callable and resource fingerprints](execution-semantics.md#callable-and-resource-fingerprints);
-  gameplan audit triage 2026-11-05).
+  gameplan audit triage 2026-11-05);
+- node semantic fingerprints using R2A encoding and the best-effort/version contract
+  above;
+- node `version=` override plumbing (`CallableNode.version` is carried but inert until
+  then);
+- declared resource bindings included in semantic fingerprints by resolved definition,
+  not Context lookup name.
+
+The last three were re-homed from R5A on 2026-11-11: R5A is on the M1 path only for the
+per-item envelope R7 transports, and no M1 consumer reads a fingerprint.
 
 The scope reduction is intentional. Automatic introspection of arbitrary Python
 callables — AST plus closure plus globals plus decorators plus instance config plus
@@ -939,11 +948,11 @@ in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_pla
    sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`)
    and pulls its output one item per `__anext__` as the consumer demands it, while the
    pipe reads its async primary source and every async secondary input (named ports
-   through `map_values`, `others` through `ExecutionExtras.map_others`) lazily from the
+   and `others`, both through `ExecutionExtras.map_kwargs`) lazily from the
    worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
    `run_from_thread`). `_adapt.py` owns the pieces:
    `require_stream`/`require_async_stream` (the node-output boundary, moved out of
-   `_execution.py`), `async_drain(source, call)` — one
+   `_execution.py`), `async_drain(call, stream)` — one
    async-stream-as-lazy-sync-iterator function that the sync execution's portal drain
    and the worker-side upstream reader share with a different `call` — and
    `pull_stream(...)`, its sync-iterator-as-lazy-async-stream counterpart.
@@ -1020,8 +1029,8 @@ that wire `in:1` into `passthrough_pipe` need a host with declared positional po
 `TestPlanRun::test_run_rejects_seed_with_multiple_open_inputs` in `test_plan_runs.py`).
 The R4B "source normalization at one boundary" item is also done: `InputLike`
 (`Item | ValueFeed | Awaitable[Item | ValueFeed]`) is resolved once in
-`SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing
-`normalize_items` in `_adapt.py`); `Pipeline.__call__`, `__ror__`, and the generated
+`SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing `listize`
+from `riko/coercion/_sequences.py`); `Pipeline.__call__`, `__ror__`, and the generated
 module template hand the raw seed through, and the async `processor` wrapper maps an
 `AsyncIterable` input lazily (`_aprocess_stream`) instead of treating it as one item.
 Shutdown reporting now meets the cleanup-error contract: plain callbacks and task/budget
@@ -1083,8 +1092,9 @@ Deliver:
 - the callable node in the canonical Workflow v2 IR in the representation
   callable-pipes.md settles, with declared `resources=` bound through the common R3
   model;
-- `version=`/`identity=` accepted and carried on the node; their fingerprint semantics
-  arrive with R2B/R5A rather than being invented here;
+- `version=`/`identity=` accepted and carried on the node; `version=`'s fingerprint
+  semantics arrive with R2B and `identity=`'s propagation with R5A rather than being
+  invented here;
 - process execution fails during planning when the callable or its configuration cannot
   be serialized.
 - the bare decorator form: `@processor` / `@operator` / `@splitter` wrap a function
@@ -1261,9 +1271,11 @@ tripwire written for a retired v1 behavior — execution settings
 (`tests/public/test_pipeline.py`, `TestExecutionSettings`), local pub/sub and split
 (`TestSubscriptions`, `TestSplit`, the `split` rows in `test_script.py`; confirm
 `TestSplit::test_upstream_node_runs_once_for_every_branch`'s count of 3 against the
-split semantics, since it seeds each branch separately), and callable nodes
-(`TestCallableNodes`) — has flipped, with the sole documented exception of per-item
-gating (`skip_if`), whose successor is still undecided. Write execution
+split semantics, since it seeds each branch separately, and bound the drain in
+`TestSubscriptions::test_idle_drain_returns_promptly` below its elapsed-time assertion
+when it flips, since today only the global backstop ends a blocked drain), and callable
+nodes (`TestCallableNodes`) — has flipped, with the sole documented exception of
+per-item gating (`skip_if`), whose successor is still undecided. Write execution
 (`TestPipelineWrite`) is R5C and is **not** a parity item.
 [release-readiness.md § 9.1](release-readiness.md#91-merge-gate-features--main) points
 here for merge sequencing; its correctness-audit rows remain the gate's defect half.
@@ -1519,15 +1531,32 @@ stubs are rewritten once, with the conf contract. The last three
 `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
 sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2
 `embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`isasync` interface classification here should type that split instead; the
-cast on the worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial`
-because the process executor pickles it) and on its async twin's `sync_call` closure
-narrows the same `NodeCall` output union and goes with it (2026-11-11 triage).
-`manage lint --escapes` lowers its ceilings as these go. The stub rewrite also gives
-call options one owner (2026-11-03 repo-audit triage, deferred here): `Module.prepare`
-copies `count` into `prepared.opts` where nothing reads it, while `_PreparedCall`
-answers `field`/`count` from its raw `options` and `prepared.opts` answers
-`emit`/`assign`; drop the dead copy and read every call option from one place then.
+`isasync` interface classification here should type that split instead; the cast on the
+worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial` because the
+process executor pickles it) and on `build_item_call`'s return in
+`riko/execution/_concurrency.py` narrows the same `NodeCall` output union and goes with
+it (2026-11-11 triage). `manage lint --escapes` lowers its ceilings as these go. The
+stub rewrite also gives call options one owner (2026-11-03 repo-audit triage, deferred
+here): `Module.prepare` copies `count` into `prepared.opts` where nothing reads it,
+while `_PreparedCall` answers `field`/`count` from its raw `options` and `prepared.opts`
+answers `emit`/`assign`; drop the dead copy and read every call option from one place
+then.
+
+Open typing question (2026-10-27 `Any`/`cast` triage; assigned here from R5A 2026-11-11,
+which kept the casts): `Item` is a union that includes TypedDicts (`RSSEntry`,
+`StatefulItem`, `AnyLocation`, `StringyDict`), so `{**item, key: value}` and
+`DotDict(item)` infer `object` values and need a `cast("Item", ...)`
+(`riko/modules/_loop.py`, `join`, `rename`, `regex`, `subelement`,
+`riko/coercion/cast.py` location merge). Annotating the spread as `dict[str, ItemValue]`
+still fails. Decide the `Item` shape with the typed module conf contracts above; until
+then the casts stay. The same decision removes the `copy` flag on `_wrap_item`
+(`riko/modules/_decorators.py`, 2026-11-11): processors copy a `DotDict` input only so
+the processor chain stays typed `DotDict[RikoValue]` (an unchanged pass-through could be
+a `DotDict[PrimitiveValue]`, and `DotDict` is invariant); once `Item` is settled, both
+paths pass a `DotDict` through, and the operator's `normalize_item` (the input
+normalizer execution applies before identity tracking) drops its
+`cast("ItemOrValue", item)`: it takes `object` because execution handles values
+generically.
 
 Audit note (2026-11-03 triage): a `DynamicConf` objconf parses a value only on
 `__getitem__` or attribute access; its `items()`/`values()`/`get()` are the raw dict's
@@ -1656,52 +1685,85 @@ Deliver:
 - immutable `FeedResult[ItemsT]`;
 - typed mapping/attribute `Metadata`;
 - generic `FeedState[T]` shell;
-- private `_FeedItem[T]` carrying value/item_key/generation/observation;
+- private `_ItemEnvelope[T]` carrying value/item_key/generation/observation;
 - automatic provenance propagation through ordinary 1→1 transforms;
 - explicit derive/combine handling for 1→N/N→1/N→N;
 - source-node namespace in root identity;
-- node semantic fingerprints using R2A encoding and the R2B best-effort/version
-  contract;
 - custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference
-  is ambiguous, including which modes a one-to-one `map` accepts (R4C carries all three
-  inert; strict xfail
-  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`);
-- node `version=` override plumbing;
-- declared resource bindings included in semantic fingerprints by resolved definition,
-  not Context lookup name;
+  is ambiguous, including which modes a one-to-one `map` accepts: `preserve` (default)
+  and `derive`; `combine` raises `InvalidPipelineError` at definition time (tripwire
+  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`,
+  flipped from strict xfail);
 - `FeedResult.metadata` carries observation outcome, declared source selection, and
   completeness at result scope, established only after successful traversal, with
-  `_FeedItem.observation` staying optional per-item provenance; interpreting those
+  `_ItemEnvelope.observation` staying optional per-item provenance; interpreting those
   outcomes (unchanged, complete-empty, incremental-empty, incomplete) belongs to
   [feed-monitoring.md § 8](feed-monitoring.md#8-m3--source-position-is-a-feedstate-payload),
   and generic `Metadata` stays extensible rather than gaining three mandatory fields
   (gameplan audit triage 2026-11-05).
 
-Normal parser APIs still receive values and their prepared arguments, not `_FeedItem`.
+Normal parser APIs still receive values and their prepared arguments, not
+`_ItemEnvelope`.
 
 Once R5A lands, ordinary Feed-native transforms whose semantics depend only on the final
 execution envelope may migrate immediately rather than waiting for R10.
 
-Open typing question (2026-10-27 `Any`/`cast` triage, no owner yet): `Item` is a union
-that includes TypedDicts (`RSSEntry`, `StatefulItem`, `AnyLocation`, `StringyDict`), so
-`{**item, key: value}` and `DotDict(item)` infer `object` values and need a
-`cast("Item", ...)` (`riko/modules/_loop.py`, `join`, `rename`, `regex`, `subelement`,
-`riko/coercion/cast.py` location merge). Annotating the spread as `dict[str, ItemValue]`
-still fails. Decide the `Item` shape when this phase retypes values for the `_FeedItem`
-envelope; until then the casts stay.
+Node semantic fingerprints, `version=` override plumbing, and resource-binding
+fingerprints were re-homed to R2B on 2026-11-11 (R5A is on the M1 path only for the
+envelope R7 transports). The open `Item` typing question moved to R4E the same day.
+
+Decided design (2026-11-11):
+
+- generations are structural tuples, never hashed in the hot path: a root (a source
+  node's result, or a per-run seed item) is `(namespace, index)` under the source node
+  id or the seed target node id, with `item_key` `MISSING`; a derived item is
+  `(node_id, parent_generation, index)`; a preserved item keeps its tuple. Identity is
+  run-local until R6 key configuration. Durable consumers (R5B cache keys, R6
+  `StateKey`s and idempotency keys) digest a generation once at their boundary with
+  `digest(generation, IdentityDomain.GENERATION)`; `canonical_bytes` has a fast path
+  for these small str/int/None/tuple shapes (same bytes);
+- pass-through operators preserve identity exactly through a per-node identity table
+  (value object → envelope, released when the value dies; an object read more than once
+  gets its envelopes back in input order); a miss, and every
+  new-object operator, derives from the last input consumed. Only combining operators
+  (`count`, `sum`) fold their contributors, into `(node_id, contributor digest, index)`;
+- measured overhead budget: ≤10 % for processor chains and roots (measured 0–4 %);
+  derive costs about 13–15 % (`tokenizer`: building each child's generation and
+  envelope, inherent per child; any further cut belongs to S1/R8); pass-through
+  operators may cost up to about 25 % (measured 24 %) until S1 makes the built-ins
+  envelope-native and they bypass the table (S1 exit item);
+- mappable nodes (loopable, no secondary input streams) always run per item in both
+  executions, so 1→1 results preserve and 1→N results derive per item;
+- `run_envelopes`/`arun_envelopes` is the envelope seam R7 transports; `run`/`arun`
+  strip envelopes to plain values;
+- `FeedResult`, `Metadata`, and `FeedState` stay private (absent from the API surface)
+  until a consumer lands;
+- exact provenance for `join` is owned by S1/R10, for `loop`/embeds by R9, and for
+  `receive` by R7; until then their outputs derive from the last input consumed. The
+  same holds for any processor or callable node fed a secondary input stream (it runs
+  whole-stream, so the identity table applies and its declared or inferred
+  `preserve`/`derive` mode does not): S1/R10 owns honoring the mode there, beside `join`
+  (triage 2026-11-13; tripwire
+  `tests/internal/test_execution.py::TestRunEnvelopes::test_run_envelopes_keeps_a_fan_in_node_s_declared_identity`).
 
 **Exit:**
 
-- **ADD:** `FeedResult`, `Metadata`, and the private `_FeedItem` provenance/identity
+- **ADD:** `FeedResult`, `Metadata`, and the private `_ItemEnvelope` provenance/identity
   envelope exist.
 - **MIGRATE:** ordinary streaming transforms that are otherwise ready use the final
-  Feed-native envelope and resolved resource definitions participate in semantic
-  fingerprints.
+  Feed-native envelope.
 - **DELETE:** none at the public surface; migrated modules retain no second per-item
-  provenance/identity carrier beside `_FeedItem`.
-- **CHANGES:** `riko.IdentityMode` is exported but inert until this phase; its
-  `docs/CHANGES.rst` entry lands with the phase that makes `identity=` take effect
-  (triage 2026-10-27).
+  provenance/identity carrier beside `_ItemEnvelope`.
+- **CHANGES:** `riko.IdentityMode` was exported inert until this phase; its
+  `docs/CHANGES.rst` entry lands here, where `map`'s `identity=` takes effect (triage
+  2026-10-27).
+
+Positional embed call (triage 2026-11-12, deferred): the loop embedder
+(`bind_subpipe`, `riko/modules/_assignment.py`) binds `context` with a keyword partial
+per parent item, as `build_item_call` did before `RunsItems`. Switching it needs
+`bind_subpipe`'s `partial` return overloads retyped and a check that async embeds are
+awaited, not iterated, since `arun_item` returns a coroutine where `__call__` returns
+the dual-protocol stream.
 
 ### R5B — CacheNode runtime / Mezmoize replay
 
@@ -1895,6 +1957,20 @@ is the R2B effective fingerprint, so executions of one definition over different
 referenced inputs never share a cursor, observation, or checkpoint; no new `StateKey`
 field or scope type is added (gameplan audit triage 2026-11-05).
 
+Key-inference candidate (2026-11-11): R5A leaves `item_key` `MISSING`, so identity is
+run-local. R6 key configuration may infer `item_key` from feed entry ids (`id`, `guid`,
+`link`) where a source supplies them, before falling back to configured keys.
+
+Tracking on demand (2026-11-11, decide when the first identity consumer lands, R5B or
+R6): R5A tracks identity on every run although nothing reads it at runtime except
+`run_envelopes`/`arun_envelopes`; `run()` strips it at the endpoint. The measured cost
+is about 0–3 % on processor chains, about 13 % on derive (`tokenizer`), and about 25 %
+on pass-through operators until S1. The zero-overhead shape tracks identity only when
+the plan contains a consumer (R7 cross-branch delivery, `cache`, `checkpoint`,
+idempotent writes) or the caller asks for envelopes, and runs bare otherwise. It costs a
+second, envelope-free execution mode in every node builder and a doubled parity matrix,
+so it waits for a consumer whose needs fix the plan-level rule.
+
 R6 adds checkpoint declarations to the canonical Workflow v2 structure (R4A did not
 build them) together with owner resolution, restore, persistence, CAS, cleanup, and
 runtime validation.
@@ -1914,7 +1990,7 @@ runtime validation.
 **Goal:** implement the R4A `SubscribeNode`/`PublishEdge` topology and replace hidden
 global hub lifecycle.
 
-R7 depends on R5A so fanout transports the final `_FeedItem` provenance envelope. It
+R7 depends on R5A so fanout transports the final `_ItemEnvelope` provenance envelope. It
 does not depend on cache/effects/state.
 
 Deliver:
@@ -2060,17 +2136,17 @@ router on port streams (the splitter-union exit below). The `Acquisitions` map
 `Resource[object]` rejects the typed call sites until `_aacquire_entry` returns a type a
 generic `_acquire_entry_once[R]` can carry. One typing unsoundness rides on this
 (2026-10-27 triage, typing only, so no runtime tripwire): the router hands
-`DEFAULT_SEED` (a `FrozenDict`) to `as_stream` as `V = Iterator[T]` for an unbounded
-`T`; retyping the router on `Stream`/`AsyncStream` port streams removes it. The second
-one, acquisition entries holding `Acquisition[R | Closeable]` while `acquire`/`aacquire`
-return `R`, closed on 2026-11-02: the `ResolvedValue` alias is gone,
-`OwnedPlan[T]`/`ExternalPlan[T]` hold a plain `T`, and `register_owned` (sync and async
-executions) types its `cleanup` as `Cleanup[R]` for the registered value (it was
-`Cleanup[Never]` while the plan paired a `T | Closeable` value with a `Cleanup[T]`).
-Still open: the `Resource(value: Closeable)` overload leaves `T` unbound (a
-method-scoped `[C: Closeable]` with `cls: type[Resource[C]]` is inconsistent with the
-`__new__` implementation under pyright), so `Resource(client)` with no cleanup types as
-`OneShotResource[Unknown]`.
+`DEFAULT_ENVELOPES` (the placeholder envelope in a tuple) to `as_stream` as
+`V = Iterator[T]` for an unbounded `T`; retyping the router on `Stream`/`AsyncStream`
+port streams removes it. The second one, acquisition entries holding
+`Acquisition[R | Closeable]` while `acquire`/`aacquire` return `R`, closed on
+2026-11-02: the `ResolvedValue` alias is gone, `OwnedPlan[T]`/`ExternalPlan[T]` hold a
+plain `T`, and `register_owned` (sync and async executions) types its `cleanup` as
+`Cleanup[R]` for the registered value (it was `Cleanup[Never]` while the plan paired a
+`T | Closeable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closeable)`
+overload leaves `T` unbound (a method-scoped `[C: Closeable]` with
+`cls: type[Resource[C]]` is inconsistent with the `__new__` implementation under
+pyright), so `Resource(client)` with no cleanup types as `OneShotResource[Unknown]`.
 
 Typing note (2026-10-30): the splitter exit retypes call outputs by module type, not by
 color. `PreparedInterface` (`riko/execution/_prepared.py`) is one record for both
@@ -2295,11 +2371,14 @@ R10 therefore owns:
   Until then a nested run that would wait for threads while its parent's node thread
   reads it raises `InvalidPipelineError` (`_reserve_threads` in
   `riko/execution/_async_execution.py`), because that wait can never end (2026-11-03
-  repo-audit triage).
+  repo-audit triage). When the tripwire flips, re-check its neighbour
+  `TestThreadBudget::test_async_nested_run_short_of_threads_raises`: once the parent's
+  demand counts the nested threads, `arun` may raise the up-front demand error outside
+  that test's `pytest.raises` block (2026-11-12 test audit).
 - a sync run under `with_execution(concurrency>1)` streams a mapped node's per-item
-  output instead of collecting it on the worker first (`run_item` returns
-  `list(call(item))` in `riko/execution/_concurrency.py`), so an endless per-item source
-  such as `forever` yields its first item there as it does at `concurrency=1`
+  output instead of collecting it on the worker first (`run_tracked_item` collects the
+  node's per-item results in `riko/execution/_provenance.py`), so an endless per-item
+  source such as `forever` yields its first item there as it does at `concurrency=1`
   (strict-xfail tripwire
   `tests/internal/test_concurrency.py::TestSyncPolicy::test_sync_mapped_node_output_streams_before_the_item_completes`;
   user ruling 2026-11-03 repo-audit triage: fix it with or before the legacy parity
@@ -2369,6 +2448,16 @@ operators take it as a port (`in:count` on `truncate`/`tail`). Deliver named inp
 their own mapping as part of the parser input contract above; that retires the reserved
 list and the processor-only `count` rule. It changes the `riko.ext` parser protocol
 (what `**kwargs` holds), so it shares that contract's compatibility boundary.
+
+Triage note (2026-11-13): an undeclared-identity processor's per-item results are
+peeked twice. `build_assignment` (`riko/modules/_assignment.py`) peeks the parser's
+output to choose one result or many, and `gen_result_envelopes`/`agen_result_envelopes`
+(`riko/execution/_provenance.py`) peek the processed output again to choose preserve or
+derive. Both share `peek`/`apeek`, but the second read stays because the per-item seam
+carries bare values. The processor wrapper already knows the answer (assign yields
+exactly one item; emit yields the parser's count, which `process` discards today), so
+the processor wrapper/parser contract above should report it to provenance and drop the
+second peek.
 
 Audit note (2026-10-31 sibling audit): a sync pipe given async input (an async-only
 embed for sync `loop`, an async generator as `union` others or `join` other) fails with

@@ -55,6 +55,21 @@ marks it (2026-10-27). The typed `__or__` overloads on `PipelineDefinition` and
 decorated-module overload to both and drops the test's
 `pyright: ignore[reportOperatorIssue]`.
 
+**Lifted whole-stream callables (design question, reopened by triage 2026-11-13).**
+`.map(fn)` stays the only spelling for a transform. The open question is whether
+selection and reordering get a callable spelling of their own: a user predicate or sort
+key applied through the envelope (`keep_if(pred)`, `order_by(key)`; names are
+placeholders) keeps each item's identity exactly, where the same logic written as a
+whole-stream callable today runs through the pass-through identity table
+(`riko/execution/_provenance.py`) and a `map` cannot drop or reorder. The names
+`filter`/`sort` are taken: `Pipeline.__getattr__` resolves every module name
+(`riko/runtime/_pipeline.py`), so `pipeline.filter(conf=...)` appends the `filter`
+module and `pipeline.filter(pred)` would collide. Landing it needs a callable node that
+declares a select/reorder shape so the execution hands it envelopes rather than bare
+values, which is the same seam S1's envelope-native built-ins use
+([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order));
+settle it beside S1, not before. No owner yet; nothing in the runtime or tests marks it.
+
 Execution/planning characteristics may extend existing module options/metadata,
 including:
 
@@ -289,7 +304,7 @@ keyword arguments as they do to module configuration, so
 [implementation-sequence.md](implementation-sequence.md) R4D.
 
 Do not turn `Context` into mutable per-item execution state. Position, item key,
-generation, and observation live in the private `_FeedItem` runtime wrapper; task
+generation, and observation live in the private `_ItemEnvelope` runtime wrapper; task
 groups, state-store adapters, channels, portals, and resolved resource values stay on
 the private execution.
 
@@ -369,9 +384,9 @@ identity: IdentityMode  # "preserve" | "derive" | "combine"
 ```
 
 The values are an `IdentityMode` `StrEnum` (`PRESERVE`/`DERIVE`/`COMBINE`, bare strings
-accepted), since callers supply them at a Python call site (decided 2026-10-22). R4C's
-`map` accepts and carries all three without semantics; R5A decides which apply to a
-one-to-one node (strict xfail
+accepted), since callers supply them at a Python call site (decided 2026-10-22). A
+one-to-one `map` accepts `preserve` (the default) and `derive` and refuses `combine` at
+definition time (R5A, 2026-11-11;
 `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
 
 * `preserve`: 1 -> 1 identity/generation preservation;

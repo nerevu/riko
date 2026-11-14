@@ -333,8 +333,13 @@ CONSOLIDATE
 - ModuleName tests into one owner
 ```
 
-**Do not** reduce `test_compile`, `test_parallel`, `test_streams`, or the core lifecycle
-tests just to shrink the suite — they cover contracts hard to catch elsewhere.
+**Do not** reduce the compile, concurrency, streaming, or core lifecycle classes just to
+shrink the suite — they cover contracts hard to catch elsewhere: `TestCompileWorkflow`
+in `tests/public/test_workflow.py`; `TestSyncPolicy`, `TestPoolLifetime`,
+`TestAsyncPolicy`, and `TestThreadBudget` in `tests/internal/test_concurrency.py`;
+`TestAsyncOperatorLaziness` in `tests/internal/test_modules.py`; and
+`TestSyncExecution`, `TestAsyncExecution`, `TestResourceAcquisition`, and
+`TestAsyncResourceAcquisition` in `tests/internal/test_execution.py`.
 
 **Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
 

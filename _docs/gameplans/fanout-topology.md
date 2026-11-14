@@ -463,7 +463,7 @@ phase.
 This phase owns the replacement of that guard: value addressing becomes
 `(node, port)`-keyed so distinct output ports resolve to distinct streams (ordinary
 modules normalize to `out`; split/branch/route produce their declared ports). Because
-branch delivery must carry the final `_FeedItem` provenance envelope, the port-keyed
+branch delivery must carry the final `_ItemEnvelope` provenance envelope, the port-keyed
 production mechanism lands here (after R5A), not as an R4B interim. The current
 fail-closed guard is pinned by
 `tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects` row

@@ -181,8 +181,8 @@ Drop a lead that matches one of these unless something else confirms it:
   had to be strengthened first.
 
 Protected (report, never propose deleting): every strict xfail and its owner, the tests
-`testing.md` §5 protects (`test_parallel` and the core lifecycle tests), sync/async
-mirrors, and tests a gameplan cites by name as a guard.
+`testing.md` §5 protects (the compile, concurrency, streaming, and core lifecycle
+classes it names), sync/async mirrors, and tests a gameplan cites by name as a guard.
 
 ## 5. Verify before reporting
 

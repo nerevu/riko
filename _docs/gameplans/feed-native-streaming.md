@@ -35,7 +35,7 @@ does not wait wholesale for R10. Once the runtime capability a module needs is s
 that module may migrate:
 
 ```text
-R5A  ordinary transforms/reducers using the final _FeedItem envelope
+R5A  ordinary transforms/reducers using the final _ItemEnvelope envelope
 R5C  streaming WriteNode/effect path + removal of legacy Python write module
 R7   publish/subscribe runtime + removal of send/receive modules + bounded split
 R8   batch representation optimization
@@ -76,6 +76,12 @@ seam cleanup at R10.
 | `join` | B/C | incremental/hash strategy where semantics permit | R10 if not earlier |
 | `sort` | C | collect then sort | intentionally eager |
 | `reverse` | C | collect then reverse | intentionally eager |
+
+Each async parser rewrite also tightens its `stream` parameter from `Feed` to
+`Stream | AsyncStream`: the wrapper's `setup` always hands a parser an iterator, and the
+docstrings already say it shares the `tuples` iterator (`aggregate`/`timeout` at R5A,
+`send` at R7, `write` at R5C; `AwaitableOperatorParser.__call__` in
+`riko/types/_wrappers.py` with the R10 seam cleanup; 2026-11-13 audit).
 
 The target is semantic sync/async parity, not replacing every helper with AnyIO.
 
@@ -246,7 +252,7 @@ Ordinary transforms propagate state/metadata while truthful. Final finite
 `FeedResult.state` is only committable after successful completion of `items`; infinite
 feeds require explicit incremental checkpoint boundaries.
 
-Per-item provenance remains private in `_FeedItem` and is not surfaced as a second
+Per-item provenance remains private in `_ItemEnvelope` and is not surfaced as a second
 parser API. Fanout transports that envelope so crossing a split/publish boundary does
 not accidentally invent new item identity.
 
@@ -279,7 +285,7 @@ the object-first surface.
 
 Streaming ports must not invent replay/checkpoint semantics.
 
-- item identity/generation follows canonical `_FeedItem` propagation rules;
+- item identity/generation follows canonical `_ItemEnvelope` propagation rules;
 - explicit `Pipeline.cache()` owns replay semantics; ordinary streaming helpers do not
   cache results;
 - side-effecting `write` uses the centrally derived idempotency key where the
@@ -307,6 +313,31 @@ S8  Pipeline batch representation optimization under R8
 
 R10 is the final S7-style cleanup/proof, not the first time S1–S6 are attempted.
 
+Identity at S1 (2026-11-11, recorded with R5A): R5A keeps pass-through operators'
+per-item identity with an execution-owned identity table that strips each
+`_ItemEnvelope` going in and re-attaches it to the same value coming out. S1's
+envelope-native built-in operators receive and yield `_ItemEnvelope`s directly and so
+bypass that table; the table remains for extension composers that still see plain
+values. S1 exit: the built-in pass-through operators run within the ≤10 % provenance
+overhead budget that R5A holds processor chains to (R5A allows them about 25 % while the
+table carries them).
+
+S1 design note (traced 2026-11-13): a `value_of` accessor threaded through the
+operator decorator's `setup` alone does not reach envelope-native operators. An envelope
+would cross five seams: `normalize_input`/`anormalize_input` (`_wrap_item` would wrap it
+as `{"content": envelope}`), `setup` → `resolve_and_cast` (per-item conf reads the
+item's fields), every built-in pass-through parser and its async twin, the
+`loop_embed_*` path, and `process` → `build_assignment` (`DotDict.dictize`, `peek`).
+`ItemDispatch(item, casted)` is the natural carrier at `setup`; the parsers and
+`build_assignment` are the real cost. S1 plugs in at the execution call site (a node
+whose interface takes envelopes natively skips `NodeProvenance`), so the table and fold
+strategies stay for extension composers. Built-in pass-through operators already return
+their input objects and `normalize_item` makes every input weak-referenceable, so S1
+buys overhead, not correctness. The bypass is a per-interface capability the execution
+reads at that call site, not a third `NodeProvenance` strategy (the table and the fold
+are the complete fallback set), and no envelope-native interface flag lands before S1
+gives it a setter.
+
 Tripwire for S1/S7:
 `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_stays_lazy_over_a_long_source`
 (strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator
@@ -319,8 +350,8 @@ source through `as_async(cooperative=False)`), so async `forever | truncate` thr
 `Pipeline` hangs, grows without bound, and ignores a cancel scope (2026-10-29
 unboundedness audit: 566 MB after 6 s). The sync run returns at `concurrency=1`; under
 `with_execution(concurrency>1)` the sync worker pool collects each item's whole output
-before yielding it (`run_item` in `riko/execution/_concurrency.py`), so it hangs the
-same way (2026-11-03 repo-audit triage; tripwire listed under R10 in
+before yielding it (`run_tracked_item` in `riko/execution/_provenance.py`), so it hangs
+the same way (2026-11-03 repo-audit triage; tripwire listed under R10 in
 [implementation-sequence.md](implementation-sequence.md#r10--final-feed-native-legacy-seam-cleanup)).
 Tripwire (S1/S7, strict xfail, finite source so the suite never hangs):
 `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_yields_to_the_event_loop_while_draining`.
