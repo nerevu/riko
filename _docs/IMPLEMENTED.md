@@ -1577,7 +1577,9 @@ inline `strtransform` run takes ~46 ms. Regressions:
 once per stream: `bind_subpipe` (`riko/modules/_assignment.py`) runs the embed's conf
 and call options through `build_call` and calls the prepared call per parent item, so
 the embed is no longer re-prepared per parent (2026-10-20; conf-parse memoization in
-`riko/parsing/config.py` went with it).
+`riko/parsing/config.py` went with it). Since 2026-11-14 it binds a `RunsItems` call's
+`run_item`/`arun_item` positionally when the embed's color fits the loop's
+(`host_isasync`), and keeps the keyword-bound call otherwise.
 
 ## Callable nodes — `Pipeline.map` (R4C, shipped)
 

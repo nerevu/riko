@@ -1766,12 +1766,15 @@ Decided design (2026-11-11):
   `docs/CHANGES.rst` entry lands here, where `map`'s `identity=` takes effect (triage
   2026-10-27).
 
-Positional embed call (triage 2026-11-12, deferred): the loop embedder
-(`bind_subpipe`, `riko/modules/_assignment.py`) binds `context` with a keyword partial
-per parent item, as `build_item_call` did before `RunsItems`. Switching it needs
-`bind_subpipe`'s `partial` return overloads retyped and a check that async embeds are
-awaited, not iterated, since `arun_item` returns a coroutine where `__call__` returns
-the dual-protocol stream.
+Positional embed call (triage 2026-11-12; landed 2026-11-14): the loop
+embedder (`bind_subpipe`, `riko/modules/_assignment.py`) binds a `RunsItems` call's
+`run_item`/`arun_item` positionally, as `build_item_call` does; the async loop awaits
+`arun_item`'s coroutine through `maybe_async`. Its keyword-only `host_isasync` is the
+loop's color: an async embed in a sync loop (and any non-`RunsItems` call, such as a
+stored workflow) keeps the keyword-bound `__call__`, so the lazy dual-protocol stream
+never starts a coroutine nobody awaits (the strict xfail
+`TestSyncPipeAsyncInput::test_sync_pipe_names_an_async_input[loop-async-embed]` still
+owns the error for that case).
 
 ### R5B — CacheNode runtime / Mezmoize replay
 
