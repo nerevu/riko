@@ -34,11 +34,11 @@ Index (file, then the subjects it owns, in file order):
                               AsyncMerge, GatherResults, CapabilityFlags, ConverterPath,
                               Csv, Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
-                              AsyncOperatorLaziness, SyncPipeAsyncInput,
-                              ReturnInference, ModuleMetadata, WrapperMeta, Loop,
-                              AsyncProcessor, Prepare, Objectify, GetString, CsvParser,
-                              ExchangeRate, AsyncSend, AsyncReceive,
-                              AsyncTimeoutIterator
+                              AsyncOperatorLaziness, OperatorInputClose,
+                              SyncPipeAsyncInput, ReturnInference, ModuleMetadata,
+                              WrapperMeta, Loop, AsyncProcessor, AsyncOperator, Prepare,
+                              Objectify, GetString, CsvParser, ExchangeRate, AsyncSend,
+                              AsyncReceive, AsyncTimeoutIterator
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
                               DescribeModule, PublicRegister, TemporaryRegistrations,
