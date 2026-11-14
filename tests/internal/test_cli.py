@@ -111,6 +111,10 @@ _NEGATED = (
     "from typing import TYPE_CHECKING\nif not TYPE_CHECKING:\n    pass\nelse:\n    "
 )
 _LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+_RUN_BINDING = (
+    "binds a run( result that is skipped without async support "
+    "(move it to an async example)"
+)
 
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
@@ -810,6 +814,19 @@ EXAMPLE_RULES = [
         _function("# TODO: clarify\nA mid-line TODO is prose."),
         ["leaves a TODO or ??? review note"],
         id="review-note",
+    ),
+    pytest.param("mod.py", _doctest("x = run(g())"), [_RUN_BINDING], id="run-bind"),
+    pytest.param(
+        "mod.py",
+        _doctest("x = run(g())").replace("f()", "async_f()"),
+        [],
+        id="run-bind-async",
+    ),
+    pytest.param(
+        "mod.py",
+        "class AsyncThing:\n" + indent(_doctest("x = run(g())"), "    "),
+        [],
+        id="run-bind-method",
     ),
 ]
 

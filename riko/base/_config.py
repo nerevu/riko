@@ -66,6 +66,7 @@ BUILTIN_PROVIDER = "riko"
 LINE_LENGTH = 88
 SINK_NAMES: frozenset[str] = frozenset({OUTPUT_MODULE, "write"})
 PIPE_ID_PREFIXES: tuple[str, ...] = ("pipe_", "pipe:")
+ASYNC_DOCTEST_MARKERS: tuple[str, ...] = ("async", "bado")
 
 DUPLICATE_BASENAMES: frozenset[str] = frozenset(
     {"_async.py", "_sync.py", "_logging.py", "modules.py"}
