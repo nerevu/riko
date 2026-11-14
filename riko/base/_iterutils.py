@@ -384,18 +384,15 @@ def betwix[T](
 
 
 def partition[T](
-    values: Iterable[T], predicate: Callable[[T], bool] | None = None
+    predicate: Callable[[T], bool] | None, values: Iterable[T]
 ) -> tuple[list[T], list[T]]:
     """
     Splits an iterable into matching and non-matching lists by a predicate.
 
     Args:
 
+        predicate: The test applied to each element; ``None`` tests truthiness.
         values: The source iterable.
-
-    Kwargs:
-
-        predicate: The test applied to each element; defaults to truthiness.
 
     Returns:
 
@@ -403,9 +400,9 @@ def partition[T](
 
     Examples:
 
-        >>> partition([1, 2, 3, 4], lambda n: n % 2 == 0)
+        >>> partition(lambda n: n % 2 == 0, [1, 2, 3, 4])
         ([2, 4], [1, 3])
-        >>> partition([0, 1, "", "x"])
+        >>> partition(None, [0, 1, "", "x"])
         ([1, 'x'], [0, ''])
 
     """

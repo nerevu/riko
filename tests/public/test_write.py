@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
@@ -12,12 +13,12 @@ import pytest
 
 from riko import export
 from riko.base._exceptions import InvalidPipelineError, UnsupportedTargetError
-from riko.base._iterutils import gen_non_null
 from riko.definitions._nodes import ModuleNode, StreamEdge, WriteNode
 from riko.definitions._targets import FileTarget
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteCapabilities, WriteMode
-from riko.io._async import async_write
+from riko.io._async import async_get_temp_path, async_write
+from riko.io._sync import get_temp_path
 from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.write import async_pipe, pipe
 from riko.runtime._export import list_formats
@@ -78,7 +79,7 @@ SKIPPED_TARGETS = [
 def _skipped_conf(path, conf) -> WriteConf:
     """Builds an unwritable conf aimed at ``path`` (``dest: None`` drops it)."""
     target = {"dest": path} | conf
-    return cast("WriteConf", dict(gen_non_null(target.items(), cmp_pos=1)))
+    return cast("WriteConf", {k: v for k, v in target.items() if v is not None})
 
 
 FINANCE_WRITES = [
@@ -318,6 +319,18 @@ class TestPipelineWrite:
         assert path.read_bytes() == JSON_BYTES
 
 
+class TestFormats:
+    def test_format_values(self):
+        assert [f.value for f in Formats] == [
+            "csv",
+            "geojson",
+            "json",
+            "jsonl",
+            "ofx",
+            "qif",
+        ]
+
+
 EXPORT_OPTIONS = [
     pytest.param("csv", {"mode": "w"}, "x,y\n1,2\n", id="csv-writer-mode"),
     pytest.param("csv", {"chunksize": 1}, "x,y\n1,2\n", id="csv-chunksize"),
@@ -332,18 +345,6 @@ WRITER_OPTIONS = [
     pytest.param("csv", {"bar_len": 50}, id="bar_len"),
     pytest.param("list", {"mode": "w"}, id="list"),
 ]
-
-
-class TestFormats:
-    def test_format_values(self):
-        assert [f.value for f in Formats] == [
-            "csv",
-            "geojson",
-            "json",
-            "jsonl",
-            "ofx",
-            "qif",
-        ]
 
 
 class TestExportFormats:
@@ -473,6 +474,31 @@ class TestAsyncWriteIterables:
         path = tmp_path / "out.txt"
         assert await async_write(path, content, mode="w", chunksize=chunksize) == 5
         assert path.read_text(encoding="utf-8") == "héllo"
+
+
+class TestTempPath:
+    """A kept temporary path starts unoccupied and survives the context's exit."""
+
+    @pytest.fixture(autouse=True)
+    def isolated_tempdir(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    def test_sync_path_is_kept(self):
+        with get_temp_path("items.csv", delete=False) as temp_path:
+            assert not temp_path.exists()
+            assert temp_path.name == "items.csv"
+            temp_path.write_text("x")
+
+        assert temp_path.exists()
+
+    @async_test
+    async def test_async_path_is_kept(self):
+        async with async_get_temp_path("items.csv", delete=False) as temp_path:
+            assert not temp_path.exists()
+            assert temp_path.name == "items.csv"
+            temp_path.write_text("x")
+
+        assert temp_path.exists()
 
 
 class TestWriteMode:

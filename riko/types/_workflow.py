@@ -75,6 +75,8 @@ if TYPE_CHECKING:
 
 type NodeId = str
 type Port = str
+type PortName = str
+type OutputName = str
 type ResourceName = str
 type WorkflowDocument = bytes
 
@@ -129,8 +131,8 @@ def is_input_ref(value: object) -> TypeIs[InputRef]:
 class RawEndpoint(TypedDict, total=False):
     """Shorthand for an edge or output endpoint; ``node`` is required."""
 
-    node: Required[str]
-    port: str
+    node: Required[NodeId]
+    port: Port
 
 
 class RawEdge(TypedDict, total=False):
@@ -144,7 +146,7 @@ class RawEdge(TypedDict, total=False):
 class RawNode(TypedDict, total=False):
     """Shorthand for a node of any family."""
 
-    id: str
+    id: NodeId
     name: Required[str]
     family: DocumentNodeFamily
     label: str
@@ -180,7 +182,7 @@ class Endpoint:
 
     Attributes:
 
-        node: The id of the node, named like the serialized endpoint's ``node`` key.
+        node: Id of the node the endpoint points into.
         port: The port on that node (e.g. ``out``/``in``/``in:1``).
 
     """
@@ -192,7 +194,7 @@ class Endpoint:
         return f"Endpoint({self.node!r}, {self.port!r})"
 
     @property
-    def port_key(self) -> tuple[NodeId, str]:
+    def port_key(self) -> tuple[NodeId, Port]:
         """
         The node id and the port's canonical spelling.
 
@@ -232,7 +234,7 @@ class ParsedPort:
 
     direction: PortDirection
     index: int | None
-    name: str | None
+    name: PortName | None
 
     def __str__(self) -> str:
         qualifier = self.name if self.index is None else self.index
@@ -305,10 +307,10 @@ class WorkflowEdge:
 
     """
 
-    source: str
-    target: str
-    source_port: str
-    target_port: str
+    source: NodeId
+    target: NodeId
+    source_port: Port
+    target_port: Port
 
     @property
     def is_default(self) -> bool:
@@ -361,9 +363,9 @@ class WorkflowIndex:
     outputs: FrozenOutputs = field(converter=FrozenDict)
 
     def _freeze_edges(
-        self, key: Callable[[WorkflowEdge], str]
+        self, key: Callable[[WorkflowEdge], NodeId]
     ) -> FrozenWorkflowEdgeCollection:
-        grouped: dict[str, list[WorkflowEdge]] = defaultdict(list)
+        grouped: dict[NodeId, list[WorkflowEdge]] = defaultdict(list)
 
         for edge in self.edges:
             grouped[key(edge)].append(edge)
@@ -388,44 +390,44 @@ class WorkflowIndex:
         return freeze(reverse_graph(self.downstream))
 
     @cached_property
-    def _groups(self) -> tuple[tuple[str, ...], ...]:
+    def _groups(self) -> tuple[tuple[NodeId, ...], ...]:
         return tuple(topological_sort(self.downstream))
 
     @cached_property
-    def order(self) -> tuple[str, ...]:
+    def order(self) -> tuple[NodeId, ...]:
         return tuple(chain.from_iterable(self._groups))
 
     @cached_property
-    def cyclic(self) -> tuple[str, ...]:
+    def cyclic(self) -> tuple[NodeId, ...]:
         return sort_stably(cyclic_nodes(self.downstream, list(self._groups)))
 
     @cached_property
-    def roots(self) -> tuple[str, ...]:
+    def roots(self) -> tuple[NodeId, ...]:
         return tuple(node_id for node_id in self.order if not self.upstream[node_id])
 
     @cached_property
-    def leaves(self) -> tuple[str, ...]:
+    def leaves(self) -> tuple[NodeId, ...]:
         return tuple(leaves(self.downstream))
 
     @cached_property
-    def required(self) -> FrozenDict[str, tuple[str, ...]]:
-        reach = partial(descendants, graph=self.upstream)
+    def required(self) -> FrozenDict[str, tuple[NodeId, ...]]:
+        reach = partial(descendants, self.upstream)
         items = self.outputs.items()
         members = {name: reach(ref.node) | {ref.node} for name, ref in items}
         get_ids = lambda value: tuple(_id for _id in self.order if _id in value)
         ordered = map_values(get_ids, members)
         return FrozenDict(ordered)
 
-    def is_open(self, node_id: str) -> bool:
+    def is_open(self, node_id: NodeId) -> bool:
         """
-        Reports whether node's default input port can accept a seed.
+        Reports whether the node's default input port can accept a seed.
 
         Only an edge into the bare default ``in`` port closes it. Positional ``in:<n>``
         and named ``in:<name>`` edges leave it open.
 
         Args:
 
-            node_id: The id of the node to check.
+            node_id: Id of the node to check.
 
         Returns:
 
@@ -451,9 +453,11 @@ __all__ = [
     "InputRef",
     "NodeFamily",
     "NodeId",
+    "OutputName",
     "ParsedPort",
     "Port",
     "PortDirection",
+    "PortName",
     "ResourceName",
     "WorkflowEdge",
     "WorkflowIndex",

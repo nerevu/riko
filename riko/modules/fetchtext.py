@@ -28,12 +28,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.io._async import async_url_open
 from riko.io._reencode import gen_without_bom
-from riko.io._sync import Fetch, auto_close
+from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor

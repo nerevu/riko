@@ -13,6 +13,7 @@ from enum import Enum, StrEnum
 from functools import partial, update_wrapper
 from hashlib import blake2b
 from itertools import chain
+from json.encoder import encode_basestring as _dump_str
 from math import isinf, isnan
 from pathlib import PurePath, PureWindowsPath
 from time import struct_time
@@ -99,6 +100,15 @@ def _canon_struct_time(value: struct_time) -> str:
     return _canon_datetime(tt_to_datetime(value, def_tzinfo=UTC))
 
 
+def _encode_utf8(dumped: str) -> bytes:
+    try:
+        encoded = dumped.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise IdentityEncodingError(str) from e
+
+    return encoded
+
+
 def canonical_json(canon: CanonicalValue) -> bytes:
     """
     Encode a canonical value into fixed canonical UTF-8 JSON bytes.
@@ -121,16 +131,7 @@ def canonical_json(canon: CanonicalValue) -> bytes:
         canon, ensure_ascii=False, separators=(",", ":"), allow_nan=False
     )
 
-    try:
-        encoded = dumped.encode("utf-8")
-    except UnicodeEncodeError as e:
-        raise IdentityEncodingError(str) from e
-
-    return encoded
-
-
-def _sort_key(canon: CanonicalValue) -> bytes:
-    return canonical_json(canon)
+    return _encode_utf8(dumped)
 
 
 def _canon_seq(tag: str, values: Iterable[object], seen: set[int]) -> CanonicalValue:
@@ -139,13 +140,13 @@ def _canon_seq(tag: str, values: Iterable[object], seen: set[int]) -> CanonicalV
 
 
 def _canon_set(tag: str, value: AbstractSet[object], seen: set[int]) -> CanonicalValue:
-    canon = sorted((_canon(v, seen) for v in value), key=_sort_key)
+    canon = sorted((_canon(v, seen) for v in value), key=canonical_json)
     return [tag, canon]
 
 
 def _canon_map[K](value: Mapping[K, object], seen: set[int]) -> CanonicalValue:
     pairs = [(_canon(k, seen), _canon(v, seen)) for k, v in value.items()]
-    ordered = sorted(pairs, key=lambda pair: _sort_key([pair[0], pair[1]]))
+    ordered = sorted(pairs, key=lambda pair: canonical_json([pair[0], pair[1]]))
     return ["map", [[k, v] for k, v in ordered]]
 
 
@@ -180,49 +181,51 @@ def _guard[V](
 
 
 def _canon(value: object, seen: set[int]) -> CanonicalValue:
-    if value is None:
-        result: CanonicalValue = ["none", None]
-    elif isinstance(value, Enum):
-        result = ["enum", _type_id(type(value)), value.name]
-    elif isinstance(value, bool):
-        result = ["bool", value]
-    elif isinstance(value, int):
-        result = ["int", str(value)]
-    elif isinstance(value, float):
-        result = ["float", _canon_float(value)]
-    elif isinstance(value, Decimal):
-        result = ["dec", _canon_decimal(value)]
-    elif isinstance(value, str):
-        result = ["str", value]
-    elif isinstance(value, bytes):
-        result = ["bytes", value.hex()]
-    elif isinstance(value, datetime):
-        result = ["dt", _canon_datetime(value)]
-    elif isinstance(value, struct_time):
-        result = ["tt", _canon_struct_time(value)]
-    elif isinstance(value, date):
-        result = ["date", value.isoformat()]
-    elif isinstance(value, PurePath):
-        flavor = "windows" if isinstance(value, PureWindowsPath) else "posix"
-        result = ["path", flavor, str(value)]
-    elif isinstance(value, UUID):
-        result = ["uuid", value.hex]
-    elif is_mapping(value):
-        result = _guard(value, seen, _canon_map)
-    elif isinstance(value, frozenset):
-        result = _guard(value, seen, partial(_canon_set, "fset"))
-    elif isinstance(value, AbstractSet):
-        result = _guard(value, seen, partial(_canon_set, "set"))
-    elif isinstance(value, tuple):
-        result = _guard(value, seen, partial(_canon_seq, "tup"))
-    elif isinstance(value, list):
-        result = _guard(value, seen, partial(_canon_seq, "list"))
-    elif attrs.has(type(value)):
-        result = _guard(value, seen, _canon_attrs)
-    elif is_dataclass(value) and not isinstance(value, type):
-        result = _guard(value, seen, _canon_dataclass)
-    else:
-        raise IdentityEncodingError(type(value))
+    match value:
+        case None:
+            result: CanonicalValue = ["none", None]
+        case Enum():
+            result = ["enum", _type_id(type(value)), value.name]
+        case bool():
+            result = ["bool", value]
+        case int():
+            result = ["int", str(value)]
+        case float():
+            result = ["float", _canon_float(value)]
+        case Decimal():
+            result = ["dec", _canon_decimal(value)]
+        case str():
+            result = ["str", value]
+        case bytes():
+            result = ["bytes", value.hex()]
+        case datetime():
+            result = ["dt", _canon_datetime(value)]
+        case struct_time():
+            result = ["tt", _canon_struct_time(value)]
+        case date():
+            result = ["date", value.isoformat()]
+        case PurePath():
+            flavor = "windows" if isinstance(value, PureWindowsPath) else "posix"
+            result = ["path", flavor, str(value)]
+        case UUID():
+            result = ["uuid", value.hex]
+        case _ if is_mapping(value):
+            result = _guard(value, seen, _canon_map)
+        case frozenset():
+            result = _guard(value, seen, partial(_canon_set, "fset"))
+        case AbstractSet():
+            result = _guard(value, seen, partial(_canon_set, "set"))
+        case tuple():
+            result = _guard(value, seen, partial(_canon_seq, "tup"))
+        case list():
+            result = _guard(value, seen, partial(_canon_seq, "list"))
+        case _:
+            if attrs.has(type(value)):
+                result = _guard(value, seen, _canon_attrs)
+            elif is_dataclass(value) and not isinstance(value, type):
+                result = _guard(value, seen, _canon_dataclass)
+            else:
+                raise IdentityEncodingError(type(value))
 
     return result
 
@@ -252,6 +255,43 @@ def canonicalize(value: object) -> CanonicalValue:
     return _canon(value, set())
 
 
+def _dump_simple(value: object) -> str | None:
+    """
+    Dumps a str, int, ``None``, or a (nested) tuple of them as canonical JSON text.
+
+    The identity tuples a run builds are made of these. They skip the tagged
+    intermediate structure and ``json.dumps``. The text is exactly what the general path
+    produces. Any other value (a ``bool``, a subclass, a named tuple) returns ``None``
+    so the caller takes the general path. ``_native_key`` is the process-local twin for
+    ``repr_cache``: it keys on Python's own hashing, which durable bytes must never
+    depend on.
+
+    Args:
+
+        value: The value to dump.
+
+    Returns:
+
+        The canonical JSON text, or ``None`` when the value needs the general path.
+
+    """
+    if type(value) is str:
+        result = f'["str",{_dump_str(value)}]'
+    elif type(value) is int:
+        result = f'["int","{value}"]'
+    elif value is None:
+        result = '["none",null]'
+    elif type(value) is tuple:
+        dumped = map(_dump_simple, value)
+        parts = [part for part in dumped if part is not None]
+        complete = len(parts) == len(value)
+        result = f'["tup",[{",".join(parts)}]]' if complete else None
+    else:
+        result = None
+
+    return result
+
+
 def canonical_bytes(value: object) -> bytes:
     """
     Canonicalize and encode a value into canonical UTF-8 JSON bytes.
@@ -270,7 +310,16 @@ def canonical_bytes(value: object) -> bytes:
         b'["bool",true]'
 
     """
-    return canonical_json(canonicalize(value))
+    if (dumped := _dump_simple(value)) is None:
+        result = canonical_json(canonicalize(value))
+    else:
+        result = _encode_utf8(dumped)
+
+    return result
+
+
+def _build_header(domain: IdentityDomain) -> bytes:
+    return f"riko-identity:{IDENTITY_FORMAT_VERSION}:{domain.value}".encode()
 
 
 def digest(value: object, domain: IdentityDomain) -> str:
@@ -290,9 +339,49 @@ def digest(value: object, domain: IdentityDomain) -> str:
         False
 
     """
-    header = f"riko-identity:{IDENTITY_FORMAT_VERSION}:{domain.value}".encode()
+    header = _build_header(domain)
     _bytes = canonical_bytes(value)
     return blake2b(header + b"\x00" + _bytes, digest_size=16).hexdigest()
+
+
+@attrs.define(eq=False)
+class IdentityAccumulator:
+    """
+    Folds values into one running domain-separated digest, one value at a time.
+
+    Each added value extends the hash with a separator byte and the value's canonical
+    bytes, under the same domain header ``digest`` uses. One added value digests exactly
+    as ``digest`` does. The fold is order-sensitive.
+
+    Args:
+
+        domain: The identity domain that separates the running digest.
+
+    Examples:
+
+        >>> acc = IdentityAccumulator(IdentityDomain.GENERATION)
+        >>> acc.add(1)
+        >>> acc.digest() == digest(1, IdentityDomain.GENERATION)
+        True
+        >>> acc.add("a")
+        >>> acc.digest() == digest(1, IdentityDomain.GENERATION)
+        False
+
+    """
+
+    domain: IdentityDomain
+    _hasher: blake2b = attrs.field(init=False, repr=False)
+
+    def __attrs_post_init__(self) -> None:
+        self._hasher = blake2b(_build_header(self.domain), digest_size=16)
+
+    def add(self, value: object) -> None:
+        """Adds a value's canonical bytes to the running digest."""
+        self._hasher.update(b"\x00" + canonical_bytes(value))
+
+    def digest(self) -> str:
+        """Gets the digest of every value added so far while leaving the fold open."""
+        return self._hasher.copy().hexdigest()
 
 
 def _is_native_val(value: object) -> bool:
@@ -306,6 +395,13 @@ def _is_native_val(value: object) -> bool:
 
 
 def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
+    """
+    Gets the process-local key for a call whose arguments are all exact-type scalars.
+
+    Python's own hashing keys the call. This is cheaper than ``_dump_simple``'s durable
+    bytes. It covers ``float``, ``bool``, and ``bytes``; and accepts a lone-surrogate
+    string the durable encoder rejects. Any other argument returns ``None``.
+    """
     if all(map(_is_native_val, chain(args, kwargs.values()))):
         tagged = tuple((type(a), a) for a in args)
         key = (tagged, sort_stably((k, type(v), v) for k, v in kwargs.items()))

@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 
+type AsyncPipeFunc = Func[AsyncIterator[object] | Awaitable[object]]
+
 EMPTY = Workflow(nodes=[], outputs={})
 OUTPUT_A = {"default": Endpoint("a", "out")}
 
@@ -128,12 +130,17 @@ def mark_loopable(func: Func[object]) -> SyncModuleWrapper:
     return cast("SyncModuleWrapper", func)
 
 
-def mark_async_loopable(
-    func: Func[AsyncIterator[object] | Awaitable[object]],
-) -> AsyncModuleWrapper:
+def mark_async_loopable(func: AsyncPipeFunc) -> AsyncModuleWrapper:
     """Mark async *func* as a loopable processor so a plan may map it per item."""
     _mark(func)
     return cast("AsyncModuleWrapper", func)
+
+
+def _echo(item, **_):
+    return iter([item])
+
+
+echo_pipe = mark_loopable(_echo)
 
 
 def build_chain_plan(*names: str) -> ExecutionPlan:
@@ -143,7 +150,7 @@ def build_chain_plan(*names: str) -> ExecutionPlan:
 
 
 class RecordingSink:
-    """Records every execution event it receives, in order."""
+    """Records every execution event it receives."""
 
     def __init__(self) -> None:
         self.events: list[object] = []

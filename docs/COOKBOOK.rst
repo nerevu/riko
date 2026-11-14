@@ -682,6 +682,22 @@ appends the callable as its own node. It passes keyword arguments to the callabl
     >>> [item["length"] for item in pipeline(items)]
     [11, 14]
 
+``map`` considers each result the same item that ``fn`` received, even when ``fn``
+returns a changed copy (as above). If ``fn`` instead builds a new item, pass
+``riko.IdentityMode.DERIVE`` to ``identity``.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, IdentityMode
+    >>>
+    >>> def get_length(item):
+    ...     return {"length": len(item["content"])}
+    >>>
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
+    >>> lengths = Pipeline().map(get_length, identity=IdentityMode.DERIVE)
+    >>> list(lengths(items))
+    [{'length': 1}, {'length': 4}]
+
 Use the extension decorators when the transformation should have normal ``riko``
 configuration, assignment, metadata, and sync/async wrappers.
 
@@ -705,6 +721,24 @@ by name (see `Registering a custom module`_ below).
 
 A ``processor`` can return one value, an ``item``, or an iterator. Use ``field``
 and ``assign`` at the call site to control extraction and assignment.
+
+A ``Pipeline`` considers a processor's results new items derived from the ``item`` they
+came from. If your processor instead yields ``item`` as it is received, set ``identity``
+to ``riko.IdentityMode.PRESERVE`` on the decorated function, and on its async version
+too if the module has one.
+
+.. code-block:: python
+
+    >>> from riko import IdentityMode
+    >>> from riko.ext import processor
+    >>>
+    >>> @processor
+    ... def uppercase(item, extraction, objconf, **kwargs) -> str:
+    ...     return str(item['content']).upper()
+    >>>
+    >>> uppercase.identity = IdentityMode.PRESERVE
+    >>> uppercase.identity
+    <IdentityMode.PRESERVE: 'preserve'>
 
 The wrapped function can be a plain ``def`` that returns a synchronous result (as built-in
 ``count``/``reverse``/``sort`` do) *or* an ``async def`` that awaits real I/O (as
@@ -732,9 +766,10 @@ or composition that cannot be expressed as an item-level ``processor``.
     >>> [item['value'] for item in every_other(items)]
     [0, 2, 4]
 
-``operator`` functions should preserve iterator behavior unless the operation
-requires materialization. Add both sync and async wrappers when users need both
-execution APIs.
+``operator`` functions should preserve iterator behavior unless the operation requires
+materialization. Add both sync and async wrappers when users need both execution APIs.
+An async operator's ``async_pipe`` returns an async iterator. Closing it before it is
+exhausted also closes the streams it reads.
 
 Registering a custom module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

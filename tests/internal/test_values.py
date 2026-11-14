@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal, localcontext
 from enum import Enum, StrEnum
 from graphlib import CycleError
+from hashlib import blake2b
 from io import BytesIO, StringIO
 from json import dumps, loads
 from logging import ERROR, WARNING
@@ -54,7 +55,12 @@ from riko.base._graph import (
     native_topological_sort,
     topological_sort,
 )
-from riko.base._guards import require_listlike, require_mapping
+from riko.base._guards import (
+    _check_strict_protocol,
+    isinstance_strict,
+    require_listlike,
+    require_mapping,
+)
 from riko.base._iterutils import gen_non_null
 from riko.base._logging import get_logger, set_log_level
 from riko.base._paths import get_path
@@ -75,8 +81,10 @@ from riko.base._typing import require_enum
 from riko.coercion import _canonical
 from riko.coercion import cast as cast_module
 from riko.coercion._canonical import (
+    IdentityAccumulator,
     IdentityDomain,
     canonical_bytes,
+    canonical_json,
     canonicalize,
     digest,
     repr_cache,
@@ -102,7 +110,15 @@ from riko.parsing.documents import XML_PARSER, any2dict
 from riko.rss.feeds import augment_entries, resolve_date
 from riko.types import _workflow as workflow_types
 from riko.types._enums import CastType, Executor
+from riko.types._feed import (
+    EMPTY_METADATA,
+    FeedResult,
+    FeedState,
+    Metadata,
+    _ItemEnvelope,
+)
 from riko.types._frozendict import FrozenDict, freeze
+from riko.types._io import AsyncCloseable, SyncCloseable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
@@ -117,6 +133,9 @@ if TYPE_CHECKING:
     from riko.types._frozendict import FrozenSetMapping
     from riko.types._scalars import BasicValue
     from riko.types._wrappers import Func
+
+type _UnavailableAlias = BasicValue | int
+type _Coord = _Point | int | str
 
 _INVALID: list[tuple[Func[object], object]] = [
     (require_str, 1),
@@ -167,7 +186,6 @@ GOLDEN_DIGESTS = {
 
 SKIP_ITEM = {"content": "Some content"}
 DOTTED_PATHS = ["a.b", "a.b.c", "author.name", "AUTHOR.NAME"]
-
 LARGE_JSON_RECORDS = [{"id": index, "text": "x" * 100} for index in range(12000)]
 CASE_DUPLICATE_JSON = '{"X": [{"a": 1}], "x": [{"a": 2}]}'
 
@@ -193,10 +211,27 @@ class Pin:
     y: int
 
 
+SIMPLE_SHAPES = [
+    pytest.param("", id="empty-str"),
+    pytest.param('quote " back \\ tab \t nul \x00', id="escaped-str"),
+    pytest.param("caf\u00e9 \u2603 \U0001f600", id="unicode-str"),
+    pytest.param(0, id="zero"),
+    pytest.param(-17, id="negative-int"),
+    pytest.param(10**40, id="big-int"),
+    pytest.param(True, id="bool"),
+    pytest.param(None, id="none"),
+    pytest.param((), id="empty-tuple"),
+    pytest.param(("fetch-1", ("src", 0), 5), id="nested-tuple"),
+    pytest.param((1, True, None), id="tuple-with-bool"),
+    pytest.param((("a", ((-1,),)), 2.5), id="tuple-with-float"),
+    pytest.param(Color.RED, id="enum"),
+]
+
 DISTINCT_PAIRS = [
     pytest.param(1, 1.0, id="int-vs-float"),
     pytest.param(1.0, Decimal(1), id="float-vs-decimal"),
     pytest.param([1], (1,), id="list-vs-tuple"),
+    pytest.param((1,), (True,), id="tuple-int-vs-tuple-bool"),
     pytest.param({1}, frozenset({1}), id="set-vs-frozenset"),
     pytest.param(NOON_UTC, date(2020, 6, 15), id="datetime-vs-date"),
     pytest.param(NOON_TT, NOON_UTC, id="struct-time-vs-datetime"),
@@ -268,6 +303,10 @@ class TestCanonicalBytes:
         assert canonical_bytes(record(1, 2)) == canonical_bytes(record(1, 2))
         assert canonical_bytes(record(1, 2)) != canonical_bytes(record(2, 1))
 
+    @pytest.mark.parametrize("value", SIMPLE_SHAPES)
+    def test_simple_shapes_encode_as_the_general_path_does(self, value):
+        assert canonical_bytes(value) == canonical_json(canonicalize(value))
+
     def test_cyclic_structure_is_rejected(self):
         data: list[object] = [1]
         data.append(data)
@@ -299,6 +338,99 @@ class TestDigest:
         self, hash_seed_probes
     ):
         assert len({probes["digest"] for probes in hash_seed_probes.values()}) == 1
+
+
+class TestIdentityAccumulator:
+    def test_incremental_fold_matches_reference_fold(self):
+        domain = IdentityDomain.GENERATION
+        accumulator = IdentityAccumulator(domain)
+        accumulator.add("a")
+        accumulator.add(1)
+        header = f"riko-identity:{_canonical.IDENTITY_FORMAT_VERSION}:{domain.value}"
+        folded = b"\x00" + canonical_bytes("a") + b"\x00" + canonical_bytes(1)
+        expected = blake2b(header.encode() + folded, digest_size=16).hexdigest()
+        assert accumulator.digest() == expected
+
+    def test_one_value_matches_digest(self):
+        accumulator = IdentityAccumulator(IdentityDomain.GENERATION)
+        accumulator.add({"a": 1})
+        assert accumulator.digest() == digest({"a": 1}, IdentityDomain.GENERATION)
+
+    def test_domains_stay_separate(self):
+        generation = IdentityAccumulator(IdentityDomain.GENERATION)
+        fingerprint = IdentityAccumulator(IdentityDomain.FINGERPRINT)
+        generation.add(1)
+        fingerprint.add(1)
+        assert generation.digest() != fingerprint.digest()
+
+    def test_reading_the_digest_leaves_the_fold_open(self):
+        accumulator = IdentityAccumulator(IdentityDomain.GENERATION)
+        accumulator.add(1)
+        first = accumulator.digest()
+        assert accumulator.digest() == first
+        accumulator.add(2)
+        assert accumulator.digest() != first
+
+    def test_fold_is_order_sensitive(self):
+        forward = IdentityAccumulator(IdentityDomain.GENERATION)
+        reverse = IdentityAccumulator(IdentityDomain.GENERATION)
+
+        for value in (1, 2):
+            forward.add(value)
+
+        for value in (2, 1):
+            reverse.add(value)
+
+        assert forward.digest() != reverse.digest()
+
+
+class TestMetadata:
+    def test_reserved_names_resolve_to_the_mapping_interface(self):
+        metadata = Metadata({"items": 1, "get": 2})
+        assert metadata["items"] == 1
+        assert metadata["get"] == 2
+        assert callable(metadata.items)
+        assert metadata.get("items") == 1
+
+    def test_metadata_canonicalizes_by_contents(self):
+        data = {"title": "News", "count": 2}
+        assert canonical_bytes(Metadata(data)) == canonical_bytes(data)
+        assert digest(Metadata(data), IdentityDomain.GENERATION) == digest(
+            data, IdentityDomain.GENERATION
+        )
+
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_metadata_round_trips(self, round_trip):
+        copied = round_trip(Metadata({"title": "News"}))
+        assert isinstance(copied, Metadata)
+        assert copied.title == "News"
+        assert repr(copied) == "Metadata({'title': 'News'})"
+
+    def test_missing_attribute_raises_attribute_error(self):
+        with pytest.raises(AttributeError):
+            _ = EMPTY_METADATA.title
+
+
+class TestItemEnvelope:
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_envelope_round_trips(self, round_trip):
+        generation = ("split", ("fetch", 0), 1)
+        envelope = _ItemEnvelope({"x": 1}, "k", generation, Metadata({"a": 1}))
+        assert round_trip(envelope) == envelope
+
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_missing_identity_survives_a_round_trip(self, round_trip):
+        copied = round_trip(_ItemEnvelope({"x": 1}))
+        assert copied.item_key is MISSING
+        assert copied.generation is MISSING
+
+
+class TestFeedResult:
+    @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
+    def test_feed_result_round_trips(self, round_trip):
+        state = FeedState("cursor", Metadata({"etag": "abc"}))
+        result = FeedResult((1, 2), Metadata({"title": "News"}), state)
+        assert round_trip(result) == result
 
 
 class _Opaque:
@@ -375,19 +507,9 @@ class TestResolveConf:
         assert first == second
         assert first is not second
 
-
-@contextmanager
-def _local_zone(name: str) -> Generator[None]:
-    if not hasattr(time, "tzset"):
-        pytest.skip("tzset is POSIX-only")
-
-    try:
-        with pytest.MonkeyPatch.context() as patch:
-            patch.setenv("TZ", name)
-            time.tzset()
-            yield
-    finally:
-        time.tzset()
+    def test_a_location_value_is_left_uncast(self):
+        conf = {"type": "location", "value": "isle of wight, uk"}
+        assert resolve_conf(None, conf=conf) == "isle of wight, uk"
 
 
 @pytest.fixture
@@ -502,14 +624,6 @@ class TestCastValue:
     def test_a_datetime_casts_to_its_date(self):
         moment = datetime(2010, 10, 14, 5, tzinfo=UTC)
         assert cast_value(moment, CastType.DATE) == date(2010, 10, 14)
-
-    def test_a_location_value_is_left_uncast(self):
-        conf = {"type": "location", "value": "isle of wight, uk"}
-        assert resolve_conf(None, conf=conf) == "isle of wight, uk"
-
-    def test_permissive_freeze_keeps_a_frozen_mapping(self):
-        frozen = FrozenDict({"a": 1})
-        assert freeze(frozen) is frozen
 
 
 class TestOverloadTypes:
@@ -683,6 +797,20 @@ class NamelessZone(tzinfo):
 
     def dst(self, dt: datetime | None) -> timedelta:
         return timedelta(0)
+
+
+@contextmanager
+def _local_zone(name: str) -> Generator[None]:
+    if not hasattr(time, "tzset"):
+        pytest.skip("tzset is POSIX-only")
+
+    try:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv("TZ", name)
+            time.tzset()
+            yield
+    finally:
+        time.tzset()
 
 
 class TestResolveAwareDatetime:
@@ -1209,15 +1337,15 @@ UNINDEXABLE_ITEMS = [
 
 
 class TestGenNonNull:
-    @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
-    def test_an_unindexable_item_raises(self, items, positions, match):
-        with pytest.raises(TypeError, match=match):
-            list(gen_non_null(items, **positions))
-
     def test_a_position_then_an_attribute_selects_a_field(self):
         items = [(SimpleNamespace(n=1),), (SimpleNamespace(n=None),)]
         selected = gen_non_null(items, cmp_pos=0, cmp_attr="n", arg_pos=0, arg_attr="n")
         assert list(selected) == [1]
+
+    @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
+    def test_an_unindexable_item_raises(self, items, positions, match):
+        with pytest.raises(TypeError, match=match):
+            list(gen_non_null(items, **positions))
 
 
 DESCENDANT_CASES = [
@@ -1230,7 +1358,7 @@ DESCENDANT_CASES = [
 class TestGraph:
     @pytest.mark.parametrize(("node", "graph", "expected"), DESCENDANT_CASES)
     def test_descendants(self, node, graph, expected):
-        assert descendants(node, graph) == expected
+        assert descendants(graph, node) == expected
 
     def test_cyclic_nodes_accepts_a_frozen_graph(self):
         graph = freeze({"a": {"b"}, "b": {"a"}, "c": set()})
@@ -1252,7 +1380,7 @@ class TestGraph:
 
     def test_descendants_rejects_unknown_node(self):
         with pytest.raises(KeyError):
-            descendants("c", {"a": {"b"}})
+            descendants({"a": {"b"}}, "c")
 
     def test_native_topological_sort_raises_on_a_cycle(self):
         with pytest.raises(CycleError):
@@ -1263,9 +1391,9 @@ class TestGraphIndex:
     def test_graph_index_derives_on_first_use(self, monkeypatch) -> None:
         calls: list[str] = []
 
-        def counting(source: str, graph: FrozenSetMapping) -> frozenset[str]:
+        def counting(graph: FrozenSetMapping, source: str) -> frozenset[str]:
             calls.append(source)
-            return descendants(source, graph)
+            return descendants(graph, source)
 
         monkeypatch.setattr(workflow_types, "descendants", counting)
         edge = WorkflowEdge("a", "b", "out", "in")
@@ -1307,6 +1435,13 @@ ENV_OVERRIDES = [
     pytest.param(
         "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
     ),
+    pytest.param(
+        "RIKO_RETURN_KINDS_CACHE_SIZE",
+        "0",
+        "return_kinds_cache_size",
+        0,
+        id="return-kinds-zero",
+    ),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "inf", "shutdown_timeout", inf, id="inf"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "-1", "shutdown_timeout", 30.0, id="neg"),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "nan", "shutdown_timeout", 30.0, id="nan"),
@@ -1322,7 +1457,97 @@ class TestLoadSettings:
         assert getattr(load_settings({key: raw}), name) == expected
 
 
+class _SlottedClose:
+    __slots__ = ()
+
+    def close(self) -> None:
+        pass
+
+
+class _Plain:
+    pass
+
+
+def _gen_one():
+    yield 1
+
+
+def _with_close() -> _Plain:
+    plain = _Plain()
+    plain.close = lambda: None  # pyright: ignore[reportAttributeAccessIssue]
+    return plain
+
+
+class _SlottedAsyncClose:
+    __slots__ = ()
+
+    async def close(self) -> None:
+        pass
+
+
+async def _aclose_plain() -> None:
+    pass
+
+
+def _with_async_close() -> _Plain:
+    plain = _Plain()
+    plain.close = _aclose_plain  # pyright: ignore[reportAttributeAccessIssue]
+    return plain
+
+
+class _SlottedNeedsArg:
+    __slots__ = ()
+
+    def close(self, how: str) -> None:
+        pass
+
+
+class _SlottedStaticClose:
+    __slots__ = ()
+
+    @staticmethod
+    def close() -> None:
+        pass
+
+
+# Values whose protocol verdict is remembered per type, or checked in full each time.
+STRICT_CHECKS = [
+    pytest.param(_gen_one, SyncCloseable, id="generator"),
+    pytest.param(_gen_one, AsyncCloseable, id="generator-async"),
+    pytest.param(_SlottedClose, SyncCloseable, id="slotted"),
+    pytest.param(_SlottedNeedsArg, SyncCloseable, id="slotted-wrong-signature"),
+    pytest.param(_SlottedStaticClose, SyncCloseable, id="slotted-static"),
+    pytest.param(_with_close, SyncCloseable, id="instance-close"),
+    pytest.param(_Plain, SyncCloseable, id="plain"),
+]
+
+
 class TestRequireGuards:
+    @pytest.mark.parametrize(("make", "protocol"), STRICT_CHECKS)
+    def test_a_remembered_strict_verdict_matches_the_full_check(
+        self, make, protocol
+    ) -> None:
+        values = (make(), make())
+        expected = [_check_strict_protocol(v, protocol) for v in values]
+        assert [isinstance_strict(v, protocol) for v in values] == expected
+        assert [isinstance_strict(v, protocol) for v in values] == expected
+
+    def test_an_instance_level_close_is_checked_on_each_instance(self) -> None:
+        plain, closing = _Plain(), _with_close()
+        verdicts = [isinstance_strict(v, SyncCloseable) for v in (plain, closing)]
+        reversed_verdicts = [
+            isinstance_strict(v, SyncCloseable) for v in (closing, plain)
+        ]
+        assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
+
+    def test_an_async_close_is_found_per_type_and_per_instance(self) -> None:
+        closers = (
+            get_async_closer(_SlottedAsyncClose()),
+            get_async_closer(_with_async_close()),
+            get_async_closer(_Plain()),
+        )
+        assert [closer is None for closer in closers] == [False, False, True]
+
     @pytest.mark.parametrize(("require", "value"), _INVALID)
     def test_document_error_is_the_default(self, require, value):
         with pytest.raises(InvalidPipelineError, match="field"):
@@ -1332,6 +1557,54 @@ class TestRequireGuards:
     def test_caller_can_pick_the_error(self, require, value):
         with pytest.raises(ValueError, match="field"):
             require(value, "field", error=ValueError)
+
+
+_UNSUPPORTED_FORMS = [
+    pytest.param(list[str], "is not a class, TypedDict, or Literal", id="one"),
+    pytest.param(
+        list[str] | dict[str, int],
+        "are not classes, TypedDicts, or Literals",
+        id="every-one-named",
+    ),
+    pytest.param(
+        _UnavailableAlias,
+        "alias _UnavailableAlias refers to a name that is not available at runtime",
+        id="unavailable-alias",
+    ),
+]
+
+
+class _Point(TypedDict):
+    x: int
+
+
+# Each row: the form, its error name, the error raised, a value that doesn't fit.
+_FORM_REJECTIONS = [
+    pytest.param(
+        _Point,
+        None,
+        InvalidPipelineError,
+        {"y": 1},
+        r"unknown _Point key\(s\): \['y'\]",
+        id="typeddict-unknown-key",
+    ),
+    pytest.param(
+        _Coord,
+        None,
+        TypeError,
+        1.5,
+        r"_Coord must be of type int \| str \| mapping, not float",
+        id="alias-union-wrong-type",
+    ),
+    pytest.param(
+        Literal["a", "b"],
+        "mode",
+        InvalidPipelineError,
+        "c",
+        "mode: 'c'. Expected one of a, b",
+        id="literal-unknown-value",
+    ),
+]
 
 
 class TestRequireFromForm:
@@ -1356,13 +1629,17 @@ class TestRequireFromForm:
         with pytest.raises(InvalidPipelineError, match="'auto', not str"):
             require_from_form(int | Literal["auto"], "limit")("all")
 
-    def test_an_unsupported_form_raises_when_built(self):
-        with pytest.raises(TypeError, match="not a class, TypedDict, or Literal"):
-            require_from_form(list[str])
+    @pytest.mark.parametrize(("form", "match"), _UNSUPPORTED_FORMS)
+    def test_an_unsupported_form_raises_when_built(self, form, match):
+        with pytest.raises(TypeError, match=match):
+            require_from_form(form)
 
-    def test_every_unsupported_form_is_named(self):
-        with pytest.raises(TypeError, match="are not classes, TypedDicts, or Literals"):
-            require_from_form(list[str] | dict[str, int])
+    @pytest.mark.parametrize(
+        ("form", "what", "error", "value", "match"), _FORM_REJECTIONS
+    )
+    def test_a_value_outside_the_form_raises(self, form, what, error, value, match):
+        with pytest.raises(error, match=match):
+            require_from_form(form, what, error=error)(value)
 
 
 class TestRequireEnum:

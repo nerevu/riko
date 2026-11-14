@@ -8,14 +8,23 @@ import builtins
 import textwrap
 from ast import AsyncFunctionDef, FunctionDef
 from collections.abc import Awaitable, Coroutine, Iterator
+from contextlib import suppress
+from functools import lru_cache
 from inspect import getsource, isasyncgenfunction, isgeneratorfunction, unwrap
-from typing import TYPE_CHECKING, Any, NamedTuple, get_args, get_origin
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeAliasType, get_args, get_origin
 
 from typing_extensions import TypeIs
 
+import riko.types._rss as _rss_module
+import riko.types._scalars as _scalars_module
 import riko.types._streams as _streams_module
+import riko.types._values as _values_module
+from riko.base._config import settings
 from riko.base._logging import get_logger
 from riko.base._typing import gen_union_members, resolve_type_hints
+from riko.types._streams import Item, ItemOrValue
+from riko.types._values import RikoDict
 from riko.types.modules import (
     Inference,
     InferenceSource,
@@ -58,6 +67,8 @@ _NONSTREAM_CALLS = {
 }
 
 _PASSTHROUGH_NAMESPACES = ("asyncio.", "bado.", "riko.bado.")
+_HINT_NAMESPACES = (_rss_module, _scalars_module, _values_module, _streams_module)
+_ITEM_ALIASES = frozenset({Item, ItemOrValue, RikoDict})
 
 _FIX_HINT = (
     "add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream "
@@ -331,14 +342,38 @@ def infer_from_source(pipe: Func[object]) -> ReturnInference:
     return result
 
 
+def _resolve_return_hint(pipe: Func[object]) -> object | None:
+    """
+    Resolves a pipe's return annotation alone, else ``None``.
+
+    Only the return hint is evaluated. A hint naming something imported only for type
+    checking cannot make it fail. The item, value, and feed-entry type namespaces are
+    supplied so a PEP 563 (``from __future__ import annotations``) return hint like
+    ``-> Stream`` still resolves when the module imports those names only under
+    ``TYPE_CHECKING``.
+    """
+    function, annotation = unwrap(pipe), None
+    annotations = getattr(function, "__annotations__", {})
+
+    if "return" in annotations:
+        hints = {"return": annotations["return"]}
+        globalns = getattr(function, "__globals__", {})
+        stub = SimpleNamespace(__annotations__=hints, __globals__=globalns)
+
+        with suppress(NameError, TypeError):
+            annotation = resolve_type_hints(stub, *_HINT_NAMESPACES).get("return")
+
+    return annotation
+
+
 def gen_return_inferences(pipe: Func[object]) -> Iterator[ReturnInference]:
     """
     Infers a pipe's return kind using the most reliable evidence.
 
-    A generator or async-generator function is a stream outright. Otherwise the
-    return annotation decides: one inference per union arm, ``UNKNOWN`` for an
-    ``Any``/``object`` arm too broad to classify. With no annotation, it falls
-    back to the AST inspection of ``infer_from_source``.
+    A generator or async-generator function is a stream. Any other function is inferred
+    from its return annotation. Single item and value aliases (e.g., ``Item``,
+    ``ItemOrValue``, ``RikoDict``) are never a stream. With no resolvable return
+    annotation, it falls back to ``infer_from_source``'s AST inspection.
 
     Args:
 
@@ -346,8 +381,8 @@ def gen_return_inferences(pipe: Func[object]) -> Iterator[ReturnInference]:
 
     Yields:
 
-        One ``ReturnInference`` per considered arm (a single inference for the
-        generator and source-fallback paths).
+        One ``ReturnInference`` per return arm (``UNKNOWN`` for an ``Any``/``object``
+        return or a return alias the runtime cannot resolve).
 
     Examples:
 
@@ -363,30 +398,25 @@ def gen_return_inferences(pipe: Func[object]) -> Iterator[ReturnInference]:
     if isgeneratorfunction(pipe) or isasyncgenfunction(pipe):
         yield ReturnInference(OperatorReturnKind.STREAM, InferenceSource.GENERATOR)
     else:
-        # Supplies the stream-type namespace so a PEP 563 (from __future__ import
-        # annotations) return hint like `-> Stream` still resolves when the module
-        # imports those names only under TYPE_CHECKING.
-        try:
-            annotation = resolve_type_hints(pipe, _streams_module).get("return")
-        except (NameError, TypeError):
-            annotation = None
+        if annotation := _resolve_return_hint(pipe):
+            nonstream_anno = (OperatorReturnKind.NONSTREAM, InferenceSource.ANNOTATION)
+            stream_anno = (OperatorReturnKind.STREAM, InferenceSource.ANNOTATION)
+            unknown = (OperatorReturnKind.UNKNOWN, None)
+            anno_reason = f"return annotation {annotation!r} is too broad to classify; "
+            anno_reason += "narrow it to a concrete stream (Iterator[…]) or value type"
 
-        if annotation:
             for member, candidate in _gen_members(annotation):
-                if member in {Any, object}:
-                    reason = (
-                        f"return annotation {annotation!r} is too broad to classify; "
-                        "narrow it to a concrete stream (Iterator[...]) or value type"
-                    )
-                    yield ReturnInference(OperatorReturnKind.UNKNOWN, None, reason)
+                if member in _ITEM_ALIASES:
+                    yield ReturnInference(*nonstream_anno)
+                elif member in {Any, object}:
+                    yield ReturnInference(*unknown, anno_reason)
+                elif isinstance(member, TypeAliasType):
+                    reason = f"return annotation alias {member!r} names a type that is "
+                    yield ReturnInference(*unknown, reason + "not available at runtime")
                 elif _matches_abc(candidate, Iterator):
-                    yield ReturnInference(
-                        OperatorReturnKind.STREAM, InferenceSource.ANNOTATION
-                    )
+                    yield ReturnInference(*stream_anno)
                 else:
-                    yield ReturnInference(
-                        OperatorReturnKind.NONSTREAM, InferenceSource.ANNOTATION
-                    )
+                    yield ReturnInference(*nonstream_anno)
         else:
             yield infer_from_source(pipe)
 
@@ -404,7 +434,7 @@ def gen_operator_return_kinds(pipe: Func[object]) -> Iterator[OperatorReturnKind
 
     Yields:
 
-        The bare ``OperatorReturnKind`` of each inference, in order.
+        The bare ``OperatorReturnKind`` of each inference.
 
     Examples:
 
@@ -417,3 +447,31 @@ def gen_operator_return_kinds(pipe: Func[object]) -> Iterator[OperatorReturnKind
     """
     for inference in gen_return_inferences(pipe):
         yield inference.kind
+
+
+@lru_cache(maxsize=settings.return_kinds_cache_size)
+def infer_return_kinds(pipe: Func[object]) -> frozenset[OperatorReturnKind]:
+    """
+    Infers the set of a pipe's bare return kinds, remembered per function.
+
+    The inference reads only the function's definition (its kind, return annotation,
+    or source), which never changes once defined.
+
+    Args:
+
+        pipe: The undecorated pipe function to classify.
+
+    Returns:
+
+        Every ``OperatorReturnKind`` the pipe may return.
+
+    Examples:
+
+        >>> def counted(items) -> int:
+        ...     return sum(items)
+        >>>
+        >>> sorted(kind.value for kind in infer_return_kinds(counted))
+        ['nonstream']
+
+    """
+    return frozenset(gen_operator_return_kinds(pipe))

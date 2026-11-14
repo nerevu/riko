@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, assert_type, cast
 import pytest
 
 from riko.bado._backend import checkpoint
+from riko.bado.itertools import alist
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._context import Context
 from riko.definitions._nodes import CallableNode
@@ -150,6 +151,12 @@ class TestCallableNodes:
         pipeline = Pipeline().map(len).with_execution(**settings)
         assert list(pipeline([[1, 2], [3]])) == [2, 1]
 
+    @pytest.mark.parametrize("settings", [{}, _THREAD], ids=["inline", "thread"])
+    def test_map_receives_each_seed_item_unchanged(self, settings):
+        seed = {"x": 1}
+        pipeline = Pipeline().map(lambda item: (type(item), item is seed))
+        assert list(pipeline.with_execution(**settings)([seed])) == [(dict, True)]
+
     @pytest.mark.parametrize("returned", [[1, 2], []], ids=["full", "empty"])
     def test_map_returns_an_iterator_as_one_item(self, returned):
         items = list(Pipeline().map(lambda _: iter(returned))([{"x": 1}]))
@@ -245,6 +252,7 @@ class TestCallableNodes:
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
 
     @pytest.mark.slow
+    @pytest.mark.timeout(8)
     def test_process_executor_runs_a_module_level_callable(self):
         pipeline = Pipeline().map(_scaled).with_execution(**_PROCESS)
         assert list(pipeline([{"x": x} for x in range(4)])) == [0, 2, 4, 6]
@@ -299,14 +307,6 @@ class TestCallableNodes:
         with pytest.raises(InvalidPipelineError, match="cannot be pickled"):
             list(pipeline.with_execution(**settings)([{"x": 1}]))
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=pytest.fail.Exception,
-        reason=(
-            "rejecting identity modes a one-to-one map cannot honor is not yet "
-            "implemented"
-        ),
-    )
     def test_map_rejects_combine_identity(self):
         with pytest.raises(InvalidPipelineError, match="combine"):
             Pipeline().map(len, identity="combine")
@@ -328,6 +328,22 @@ class TestCallableNodes:
             assert list(Pipeline().map(_ascaled)([{"x": 1}])) == [2]
 
 
+def _fail_item(item):
+    raise ValueError("bad item")
+
+
+async def _afail_item(item):
+    raise ValueError("bad item")
+
+
+FAILING_MAPS = [
+    pytest.param(_fail_item, None, id="sync"),
+    pytest.param(_afail_item, None, id="async"),
+    pytest.param(_fail_item, 2, id="sync-concurrent"),
+    pytest.param(_afail_item, 2, id="async-concurrent"),
+]
+
+
 class TestAsyncCallableNodes:
     @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
     @async_test
@@ -335,6 +351,12 @@ class TestAsyncCallableNodes:
         pipeline = Pipeline().map(produce).map(_count)
         mapped = pipeline.with_execution(concurrency=2)
         assert [item async for item in mapped([{"x": 1}])] == [2]
+
+    @async_test
+    async def test_async_map_receives_each_seed_item_unchanged(self):
+        seed = {"x": 1}
+        pipeline = Pipeline().map(lambda item: (type(item), item is seed))
+        assert [item async for item in pipeline([seed])] == [(dict, True)]
 
     @async_test
     async def test_async_map_passes_only_bound_keywords(self):
@@ -359,3 +381,11 @@ class TestAsyncCallableNodes:
         seed = ["hi", "you"]
         stream = pipeline(seed)
         assert [item async for item in stream] == [2, 3]
+
+    @pytest.mark.parametrize(("fn", "concurrency"), FAILING_MAPS)
+    @async_test
+    async def test_a_failing_node_raises_its_own_error(self, fn, concurrency):
+        pipeline = Pipeline().map(fn).with_execution(concurrency=concurrency)
+
+        with pytest.raises(ValueError, match="bad item"):
+            await alist(pipeline([{"x": 1}, {"x": 2}]))

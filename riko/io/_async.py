@@ -39,14 +39,7 @@ from riko.base._paths import is_http_url, normalize_url
 from ._sync import ext_from_content_type
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        AsyncGenerator,
-        Awaitable,
-        Callable,
-        Generator,
-        Iterable,
-        Iterator,
-    )
+    from collections.abc import AsyncGenerator, Generator, Iterable, Iterator
     from contextlib import AbstractAsyncContextManager
     from logging import Logger
 
@@ -55,6 +48,7 @@ if TYPE_CHECKING:
     from riko.types._enums import UserAgentLike
     from riko.types._io import PathLike
     from riko.types._scalars import AnyStr
+    from riko.types._wrappers import AsyncFunc
 
     from ._filelike import IOFileLike
 
@@ -278,7 +272,7 @@ class _AsyncURLStream[T: BytesIO | NamedTextIOWrapper]:
     ``async with`` exits raises ``RuntimeError``.
     """
 
-    def __init__(self, opener: Callable[[], Awaitable[T]]) -> None:
+    def __init__(self, opener: AsyncFunc[T]) -> None:
         self._open = opener
         self._stream: BytesIO | NamedTextIOWrapper | None = None
         self._entered = False
@@ -342,17 +336,16 @@ def async_url_open(
     """
     Opens a URL or local file as an in-memory, buffered file object.
 
-    The whole body is read into memory up front, in a single ``await``. The
-    returned handle wraps a *buffered* copy, not an incremental network read, so
-    there is no read-time backpressure. Only downstream parsing stays lazy.
+    The whole body is read into memory up front, in a single ``await``. The returned
+    handle wraps a *buffered* copy, not an incremental network read. There is no
+    read-time backpressure. Only downstream parsing stays lazy.
 
-    The handle may be ``await``-ed for the buffer (the caller then closes it) or
-    used with ``async with`` to auto-close it on exit. Entering it again before the
-    previous ``async with`` exits raises ``RuntimeError``. Use ``async with`` only when
-    the buffer is consumed inside the block. When returning a lazy iterator that
-    outlives the block, keep the ``await`` form and release the handle on iteration
-    end with :func:`riko.io._sync.auto_close` (an ``async with`` would close it
-    before the caller ever reads it).
+    The handle may be ``await``-ed for the buffer (the caller then closes it) or used
+    with ``async with`` to auto-close it on exit. Use ``async with`` only when the
+    buffer is consumed inside the block. When returning a lazy iterator that outlives
+    the block, keep the ``await`` form and release the handle on iteration end with
+    :class:`riko.bado.itertools.auto_close` (an ``async with`` would close it before the
+    caller ever reads it).
 
     Args:
 
@@ -374,6 +367,11 @@ def async_url_open(
 
         A handle whose buffer is a ``BytesIO`` when ``binary`` is True, else a
         ``NamedTextIOWrapper`` carrying the source name and content type.
+
+    Raises:
+
+        RuntimeError: If the handle is re-entered before the previous ``async with``
+            exits.
 
     Examples:
 

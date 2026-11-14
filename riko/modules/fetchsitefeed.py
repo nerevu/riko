@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from riko.bado._util import maybe_closing
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
@@ -84,7 +85,10 @@ async def async_parser(
     url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = await aload_rss_links(url, user_agent=objconf.user_agent)
 
-    if (first := next(rss, None)) is None:
+    with maybe_closing(rss):
+        first = next(rss, None)
+
+    if first is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
@@ -130,7 +134,10 @@ def parser(
     url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = load_rss_links(url, user_agent=objconf.user_agent)
 
-    if (first := next(rss, None)) is None:
+    with maybe_closing(rss):
+        first = next(rss, None)
+
+    if first is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:

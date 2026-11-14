@@ -32,19 +32,16 @@ from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import AsyncPolicy, ExecutionSettings, SyncPolicy
 from riko.execution import _async_execution, _sync_execution
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._concurrency import (
-    _load_call,
-    build_item_call,
-    run_item,
-    run_shipped_item,
-)
+from riko.execution._concurrency import _load_call, build_tracked_call, run_shipped_item
 from riko.execution._pools import _PoolLifetime
 from riko.execution._prepared import ExecutionPlan
+from riko.execution._provenance import PLACEHOLDER, run_tracked_item
 from riko.execution._sync_execution import SyncExecution
 from riko.modules import join, union
 from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes
 from riko.types._enums import Executor
+from riko.types._feed import _ItemEnvelope
 from riko.types._workflow import Endpoint
 from tests import async_test
 from tests._execution import (
@@ -53,6 +50,7 @@ from tests._execution import (
     build_chain_plan,
     build_dispatcher,
     build_workflow,
+    echo_pipe,
     mark_async_loopable,
     mark_loopable,
     run_plan,
@@ -60,10 +58,9 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterator
 
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
-
 
 _INLINE = {"executor": "inline"}
 _PROCESS = {"executor": "process"}
@@ -71,6 +68,7 @@ _THREAD = {"executor": "thread"}
 ITEMS = [{"x": x} for x in range(20)]
 LIMIT = config.concurrency_limit
 INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
+_INLINE_POLICY = SyncPolicy(INLINE, None)
 THREADS, PROCS = get_worker_cnt(threads=True), get_worker_cnt(threads=False)
 
 
@@ -78,28 +76,35 @@ def _key(item):
     return sort_stably(item.items())
 
 
-def _pair(item: str) -> list[str]:
-    return [item, item]
+def _pair(item: str) -> Iterator[str]:
+    return iter((item, item))
 
 
 ITEM_CALLS = [
-    pytest.param(THREAD, run_item, (_pair,), id="thread"),
-    pytest.param(PROCESS, run_shipped_item, (pickle.dumps(_pair),), id="process"),
+    pytest.param(THREAD, run_tracked_item, _pair, id="thread"),
+    pytest.param(PROCESS, run_shipped_item, pickle.dumps(_pair), id="process"),
 ]
 
 
-class TestBuildItemCall:
-    @pytest.mark.parametrize(("executor", "func", "args"), ITEM_CALLS)
-    def test_item_call_binds_the_pipe_for_its_executor(self, executor, func, args):
-        call = build_item_call(_pair, executor)
+def _values(envelopes):
+    return [env.value for env in envelopes]
+
+
+class TestBuildTrackedCall:
+    @pytest.mark.parametrize(("executor", "func", "bound"), ITEM_CALLS)
+    def test_item_call_binds_the_pipe_for_its_executor(self, executor, func, bound):
+        call = build_tracked_call(_pair, executor, node_id="n")
         assert isinstance(call, partial)
-        assert (call.func, call.args) == (func, args)
-        assert call("a") == ["a", "a"]
+        assert (call.func, call.args) == (func, (bound, "n", None))
+        envelope = _ItemEnvelope.from_parent(PLACEHOLDER, "s", "a")
+        assert _values(call(envelope)) == ["a", "a"]
 
     def test_shipped_call_is_unpickled_once_per_worker(self) -> None:
         _load_call.cache_clear()
-        func = build_item_call(_pair, Executor.PROCESS)
-        assert (func("a"), func("b")) == (["a", "a"], ["b", "b"])
+        func = build_tracked_call(_pair, node_id="n")
+        chars = enumerate("ab")
+        a, b = (_ItemEnvelope.from_parent(PLACEHOLDER, "s", v, i) for i, v in chars)
+        assert (_values(func(a)), _values(func(b))) == (["a", "a"], ["b", "b"])
         assert _load_call.cache_info()[:2] == (1, 1)
 
 
@@ -131,12 +136,9 @@ class _Unpicklable:
 
 
 def _loop_dispatcher():
-    def fakeloop(item, **_):
-        return iter([item])
-
     up = cast("AsyncModuleWrapper", lambda item, **_: item)
     return build_dispatcher(
-        ModuleDefinition(name="fakeloop", sync_pipe=mark_loopable(fakeloop)),
+        ModuleDefinition(name="fakeloop", sync_pipe=echo_pipe),
         ModuleDefinition(name="up", async_pipe=up),
     )
 
@@ -202,14 +204,12 @@ class TestRequireProcessSafe:
 
 
 SYNC_POLICIES = [
-    pytest.param({"concurrency": 1}, SyncPolicy(INLINE, None), id="one"),
-    pytest.param(_INLINE, SyncPolicy(INLINE, None), id="inline"),
+    pytest.param({"concurrency": 1}, _INLINE_POLICY, id="one"),
+    pytest.param(_INLINE, _INLINE_POLICY, id="inline"),
     pytest.param(_THREAD, SyncPolicy(THREAD, 1), id="thread"),
     pytest.param(_PROCESS, SyncPolicy(PROCESS, 1), id="process"),
     pytest.param({"concurrency": "auto"}, SyncPolicy(THREAD, THREADS), id="auto"),
-    pytest.param(
-        {**_INLINE, "concurrency": 4}, SyncPolicy(INLINE, None), id="inline-4"
-    ),
+    pytest.param({**_INLINE, "concurrency": 4}, _INLINE_POLICY, id="inline-4"),
     pytest.param({**_THREAD, "concurrency": 3}, SyncPolicy(THREAD, 3), id="thread-3"),
     pytest.param(
         {**_PROCESS, "concurrency": 2}, SyncPolicy(PROCESS, 2), id="process-2"
@@ -224,9 +224,7 @@ SYNC_POLICIES = [
         SyncPolicy(PROCESS, PROCS),
         id="process-auto",
     ),
-    pytest.param(
-        {**_INLINE, "concurrency": "auto"}, SyncPolicy(INLINE, None), id="inline-auto"
-    ),
+    pytest.param({**_INLINE, "concurrency": "auto"}, _INLINE_POLICY, id="inline-auto"),
 ]
 
 
@@ -376,32 +374,6 @@ class TestSyncPolicy:
 
         assert events == ["worker done", "cleanup"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="streaming a mapped node's per-item output under a sync worker pool is "
-        "not yet implemented: each item's whole output is collected first",
-    )
-    def test_sync_mapped_node_output_streams_before_the_item_completes(self) -> None:
-        pulled: list[int] = []
-
-        def fan(item, **_):
-            for n in range(50):
-                pulled.append(n)
-                yield {"n": n}
-
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="fan", sync_pipe=mark_loopable(fan))
-        )
-        flow = build_workflow([ModuleNode(id="f", name="fan")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
-
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
-            stream = cast("Generator", execution.run(plan, seed=[{"x": 0}]))
-            next(stream)
-            assert len(pulled) < 50
-            stream.close()
-
     @pytest.mark.slow
     @pytest.mark.parametrize("ordered", [False, True])
     def test_sync_chained_mapping_reads_the_source_on_demand(self, ordered) -> None:
@@ -469,6 +441,32 @@ class TestSyncPolicy:
         with SyncExecution() as execution, pytest.raises(PipelineStateError):
             _ = execution._pool
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="streaming a mapped node's per-item output under a sync worker pool is "
+        "not yet implemented: each item's whole output is collected first",
+    )
+    def test_sync_mapped_node_output_streams_before_the_item_completes(self) -> None:
+        pulled: list[int] = []
+
+        def fan(item, **_):
+            for n in range(50):
+                pulled.append(n)
+                yield {"n": n}
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="fan", sync_pipe=mark_loopable(fan))
+        )
+        flow = build_workflow([ModuleNode(id="f", name="fan")])
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+
+        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
+            stream = cast("Generator", execution.run(plan, seed=[{"x": 0}]))
+            next(stream)
+            assert len(pulled) < 50
+            stream.close()
+
 
 def _mark_and_block(directory: str) -> None:
     staged = Path(directory, f"{getpid()}.tmp")
@@ -496,7 +494,7 @@ class TestPoolLifetime:
         assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(8)
     def test_terminate_kills_every_stuck_worker_within_one_grace(
         self, tmp_path: Path
     ) -> None:
@@ -739,7 +737,7 @@ class TestThreadBudget:
         plan = _passthru_plan(45)
         result: list = []
 
-        with fail_after(3):
+        with fail_after(2):
             async with AsyncExecution() as execution:
                 stream = await execution.arun(plan, seed=ITEMS[:2])
                 result = [item async for item in stream]
@@ -751,11 +749,7 @@ class TestThreadBudget:
         self, node_threads
     ) -> None:
         node_threads(1)
-
-        def echo(item, **_):
-            return iter([item])
-
-        definition = ModuleDefinition(name="echo", sync_pipe=mark_loopable(echo))
+        definition = ModuleDefinition(name="echo", sync_pipe=echo_pipe)
         nodes = [ModuleNode(id=f"n{i}", name="echo") for i in range(3)]
         plan = ExecutionPlan.from_workflow(
             build_chain(*nodes), dispatcher=build_dispatcher(definition)
@@ -780,7 +774,7 @@ class TestThreadBudget:
                 await arun_plan(plan, settings=ExecutionSettings(), seed=ITEMS[:5])
             )
 
-        with fail_after(2):
+        with fail_after(1):
             async with create_task_group() as tg:
                 for _ in range(4):
                     tg.start_soon(consume)
@@ -920,10 +914,10 @@ class TestThreadBudget:
         flow = build_workflow([*chains[0], *chains[1], fan_in], edges=tuple(edges))
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
-        with fail_after(5):
+        with fail_after(3):
             result = await arun_plan(plan, settings=ExecutionSettings())
 
-        assert plan.get_thread_demand("default", mapped=False) == 25
+        assert plan.get_thread_demand("default") == 25
         assert len(result) == count
 
     @pytest.mark.parametrize(("budget", "depth"), THREAD_BUDGET_OVERFLOWS)
@@ -946,28 +940,6 @@ class TestThreadBudget:
         assert read == []
 
     @async_test
-    async def test_async_nested_run_short_of_threads_raises(self, node_threads) -> None:
-        node_threads(1)
-
-        with fail_after(2):
-            async with AsyncExecution() as execution:
-                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
-
-                with pytest.raises(
-                    InvalidPipelineError, match="nested stored workflow"
-                ):
-                    _ = [item async for item in stream]
-
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="counting a nested stored workflow's node threads in its parent's "
-        "demand is not yet implemented",
-    )
-    def test_nested_stored_workflow_threads_enter_the_parent_demand(self) -> None:
-        assert _nested_plan().get_thread_demand("default", mapped=False) == 2
-
-    @async_test
     async def test_async_run_beside_own_open_stream_over_budget_raises(
         self, node_threads
     ) -> None:
@@ -987,8 +959,30 @@ class TestThreadBudget:
 
         assert rest == ITEMS[1:2]
 
+    @async_test
+    async def test_async_nested_run_short_of_threads_raises(self, node_threads) -> None:
+        node_threads(1)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
+
+                with pytest.raises(
+                    InvalidPipelineError, match="nested stored workflow"
+                ):
+                    _ = [item async for item in stream]
+
     def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
         monkeypatch.setattr(_async_execution, "_budgets", None)
 
         with pytest.raises(RuntimeError, match="anyio is required"):
             _async_execution._resolve_thread_budget()
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="counting a nested stored workflow's node threads in its parent's "
+        "demand is not yet implemented",
+    )
+    def test_nested_stored_workflow_threads_enter_the_parent_demand(self) -> None:
+        assert _nested_plan().get_thread_demand("default") == 2

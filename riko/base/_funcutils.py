@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Concatenate, overload
 
 from ._logging import get_logger
 
@@ -124,6 +124,46 @@ def map_values[K, V, R](
     return result
 
 
+def call_if_distinct[T, **P](
+    func: Callable[Concatenate[T, P], object],
+    value: T,
+    other: object,
+    /,
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> None:
+    """
+    Calls ``func`` with ``value`` unless ``value`` is ``other``.
+
+    The test is identity, never equality.
+
+    Args:
+
+        func: Called with ``value`` and the remaining arguments.
+        value: The first argument to ``func``.
+        other: The object ``value`` must not be.
+        *args: Positional arguments passed to ``func``.
+
+    Kwargs:
+
+        **kwargs: Keyword arguments passed to ``func``.
+
+    Examples:
+
+        >>> calls = []
+        >>> source, stream = [1], iter([1])
+        >>> call_if_distinct(calls.append, stream, stream)
+        >>> calls
+        []
+        >>> call_if_distinct(calls.append, source, stream)
+        >>> calls
+        [[1]]
+
+    """
+    if value is not other:
+        func(value, *args, **kwargs)
+
+
 def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
     """
     Applies a function to each key of a mapping.
@@ -228,7 +268,7 @@ def dispatch(split: Sequence[object], *funcs: Func[object]) -> tuple[object, ...
 
     Returns:
 
-        The result of each function, in order.
+        The result of each function.
 
     Examples:
 
@@ -278,7 +318,7 @@ def broadcast(
 
     Returns:
 
-        The result of each function, in order.
+        The result of each function.
 
     Examples:
 

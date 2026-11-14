@@ -134,8 +134,8 @@ class IdentityMode(StrEnum):
 
     ``PRESERVE`` keeps each input item's identity on its one result. ``DERIVE`` gives
     each result a child identity derived from its input item. ``COMBINE`` builds a
-    result's identity from every item that contributed to it. A node carries the mode
-    it declares, but no run acts on it yet.
+    result's identity from every item that contributed to it. A run carries each
+    item's identity through the node according to its mode.
 
     """
 

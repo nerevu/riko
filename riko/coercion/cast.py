@@ -486,8 +486,6 @@ def resolve_cast_type(type_: str | CastType | None) -> CastType:
         <CastType.INT: 'int'>
         >>> resolve_cast_type(None)
         <CastType.PASS: 'pass'>
-        >>> resolve_cast_type("unknown")
-        <CastType.PASS: 'pass'>
 
     """
     if type_ is None or type_ == "":

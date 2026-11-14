@@ -245,17 +245,15 @@ class Deadline:
 
     Examples:
 
-        Basic usage::
-
-            >>> from math import inf
-            >>> from riko.base._dateutils import Deadline
-            >>>
-            >>> deadline = Deadline.from_timeout(60)
-            >>> deadline.expired, 0 < deadline.remaining <= 60
-            (False, True)
-            >>> Deadline.from_timeout(0).expired
-            True
-            >>> Deadline.from_timeout(inf).remaining
+        >>> from math import inf
+        >>> from riko.base._dateutils import Deadline
+        >>>
+        >>> deadline = Deadline.from_timeout(60)
+        >>> deadline.expired, 0 < deadline.remaining <= 60
+        (False, True)
+        >>> Deadline.from_timeout(0).expired
+        True
+        >>> Deadline.from_timeout(inf).remaining
 
     """
 

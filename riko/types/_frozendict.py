@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from itertools import repeat
-from typing import TYPE_CHECKING, Literal, final, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import attrs
 from typing_extensions import TypeForm, TypeIs
@@ -32,7 +32,14 @@ if TYPE_CHECKING:
 
     from riko.definitions._nodes import RikoNode
 
-    from ._workflow import Endpoint, NodeId, PortEdge, WorkflowEdge
+    from ._workflow import (
+        Endpoint,
+        NodeId,
+        OutputName,
+        PortEdge,
+        ResourceName,
+        WorkflowEdge,
+    )
     from ._wrappers import Func
     from .modules import AnyConfRule
 
@@ -61,15 +68,15 @@ type FrozenConf = FrozenDict[str, FrozenJSON]
 type FrozenInputs = FrozenDict[str, FrozenJSON]
 type FrozenInputSchema = FrozenDict[str, FrozenJSON]
 type FrozenInputSchemas = FrozenDict[str, FrozenInputSchema]
-type FrozenOutputs = FrozenDict[str, Endpoint]
+type FrozenOutputs = FrozenDict[OutputName, Endpoint]
 type FrozenNodes = FrozenDict[NodeId, RikoNode]
 type FrozenPortEdges = tuple[PortEdge, ...]
 type FrozenWorkflowEdges = tuple[WorkflowEdge, ...]
-type FrozenResources = tuple[str, ...]
+type FrozenResources = tuple[ResourceName, ...]
 type FrozenParams = FrozenDict[str, FrozenJSON]
 type FrozenPolicy = FrozenDict[str, FrozenJSON]
-type FrozenWorkflowEdgeCollection = FrozenDict[str, FrozenWorkflowEdges]
-type FrozenSetMapping = FrozenDict[str, frozenset[str]]
+type FrozenWorkflowEdgeCollection = FrozenDict[NodeId, FrozenWorkflowEdges]
+type FrozenSetMapping = FrozenDict[NodeId, frozenset[NodeId]]
 type Freezer[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
 type MappingConverter[FV] = Callable[[Mapping[str, object]], FrozenDict[str, FV]]
 type TypeConverter[T, FV] = Callable[[T], FrozenDict[str, FV]]
@@ -181,7 +188,6 @@ def _freeze_items[K, V](
     return map_keys_and_values(check, freeze_item, item)
 
 
-@final
 @attrs.define(frozen=True, slots=True, eq=False, repr=False, init=False)
 class FrozenDict[K, V](Mapping[K, V]):
     """

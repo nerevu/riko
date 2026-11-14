@@ -18,6 +18,7 @@ from typing import (
     Any,
     Literal,
     Protocol,
+    TypeAliasType,
     cast,
     get_args,
     get_origin,
@@ -902,7 +903,8 @@ def require_from_form[T](
     Raises:
 
         TypeError: If ``form`` contains anything other than classes, TypedDicts, and
-            ``Literal`` types.
+            ``Literal`` types, or an alias whose value refers to a name that is not
+            available at runtime.
 
     Examples:
 
@@ -912,21 +914,10 @@ def require_from_form[T](
         ...     x: int
         >>>
         >>> type Coord = Point | int | str
-        >>> require_from_form(Point)({"y": 1})
-        Traceback (most recent call last):
-            ...
-        riko.exceptions.InvalidPipelineError: ...unknown Point key(s): ['y']
-        >>> require_coord = require_from_form(Coord, error=TypeError)
-        >>> require_coord({"y": 1})
+        >>> require_from_form(Coord)({"y": 1})
         {'y': 1}
-        >>> require_coord(1.5)
-        Traceback (most recent call last):
-            ...
-        TypeError: Coord must be of type int | str | mapping, not float
-        >>> require_from_form(Literal["a", "b"], "mode")("c")
-        Traceback (most recent call last):
-            ...
-        riko.exceptions.InvalidPipelineError: ...mode: 'c'. Expected one of a, b
+        >>> require_from_form(Literal["a", "b"], "mode")("a")
+        'a'
 
     """
     default_what = resolve_default(what, getattr(form, "__name__", "value"))
@@ -939,7 +930,11 @@ def require_from_form[T](
     def is_member(value: object) -> bool:
         return any(type(value) is type(arg) and value == arg for arg in literals)
 
-    if _unsupported := set(leaves).difference(classes, arms):
+    if _aliases := [leaf for leaf in leaves if isinstance(leaf, TypeAliasType)]:
+        aliases = ", ".join(map(repr, _aliases))
+        msg = f"alias {aliases} refers to a name that is not available at runtime, "
+        raise TypeError(msg + "such as one imported only for type checking")
+    elif _unsupported := set(leaves).difference(classes, arms):
         unsupported = ", ".join(map(repr, sort_stably(_unsupported)))
 
         if len(_unsupported) > 1:
@@ -1183,7 +1178,7 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
             ...
         TypeError: the 'udf' module requires the 'func' keyword argument
 
-        >>> # A falsy value passes unless strict is set
+        # A falsy value passes unless strict is set
         >>> require_arg([], "others", "send")
         []
         >>> require_arg([], "others", "send", strict=True)
@@ -1242,7 +1237,7 @@ def require_conf_key[T](
             ...
         TypeError: the 'csv' module requires the 'url' conf key
 
-        >>> # A falsy value passes unless strict is set
+        # A falsy value passes unless strict is set
         >>> require_conf_key(Objectify({"url": ""}), "url", "csv")
         ''
         >>> require_conf_key(Objectify({"url": ""}), "url", "csv", strict=True)

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from functools import partial
-from itertools import chain, islice
 from typing import TYPE_CHECKING, cast, overload
 
+from riko.base._iterutils import peek
 from riko.base._logging import get_logger
 from riko.definitions._wrapping import build_call
 from riko.parsing._dotdict import DotDict
@@ -124,18 +124,17 @@ def build_assignment(
         one = False
         result = dictized
     else:
-        results = list(islice(dictized, 2))
-        multiple = len(results) > 1
+        head, result = peek(dictized, 2)
+        multiple = len(head) > 1
         # multiple result pipe, e.g., fetchpage/tokenizer
         # one result pipe, e.g., strconcat
 
-        result = chain(results, dictized) if results else iter(())
         first = bool(count == "first")
         _all = count == "all"
         one = first or not (multiple or _all)
 
-        if one and results:
-            result = islice(results, 1)
+        if one and head:
+            result = iter(head[:1])
         elif one:
             result = iter(())
 

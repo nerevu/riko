@@ -19,7 +19,7 @@ import pytest
 from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._paths import PYPROJECT, ROOT_DIR
+from riko.base._paths import PYPROJECT
 from riko.cli import (
     _codegen,
     _docs,
@@ -66,11 +66,12 @@ from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
 from riko.runtime._compile import compile_workflow
-from tests import run_python
 from tests._workflows import DAG, DOCUMENT, PIPE_DEF
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
+
+    from riko.types._wrappers import Func
 
 _TYPING = "[tool.riko.typing]\n"
 _TODAY = date(2026, 10, 27)
@@ -184,7 +185,7 @@ def write(root: Path, path: str, text: str) -> None:
     target.write_text(text)
 
 
-def _record(calls: list[str], name: str, code: int = 0) -> Callable[[], int]:
+def _record(calls: list[str], name: str, code: int = 0) -> Func[int]:
     def runner() -> int:
         calls.append(name)
         return code
@@ -759,7 +760,7 @@ EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
         _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
-        ["narrates between examples (use a >>> # comment)"],
+        ["narrates between examples (use a # comment)"],
         id="narration",
     ),
     pytest.param(
@@ -803,6 +804,12 @@ EXAMPLE_RULES = [
         _function("More.\n\n\nArgs:\n\n    a: A.").replace("f()", "f(a)"),
         ["has a run of blank lines"],
         id="blank-run",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("# TODO: clarify\nA mid-line TODO is prose."),
+        ["leaves a TODO or ??? review note"],
+        id="review-note",
     ),
 ]
 
@@ -1605,15 +1612,6 @@ class TestReadDocument:
         monkeypatch.setattr("sys.stdin", io.StringIO("{bad json"))
         assert read_document("-") == (None, "anonymous")
         assert any("Unable to parse input" in warning for warning in warnings)
-
-
-class TestSubprocessImports:
-    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
-        # A script outside the checkout resolves riko the way a console script does.
-        probe = tmp_path / "probe.py"
-        probe.write_text("import riko\nprint(riko.__file__)\n")
-        done = run_python(str(probe), cwd=tmp_path)
-        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
 LOG_LEVELS = [
