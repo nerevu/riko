@@ -220,13 +220,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> str | int:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"rule": {"transform": "title"}}
-        ...     result = async_pipe({"content": "hello world"}, conf=conf)
-        ...     print((await anext(result))["strtransform"])
-        >>>
-        >>> run(main)
-        Hello World
+        >>> item = {"content": "hello world"}
+        >>> conf = {"rule": {"transform": "title"}}
+        >>> stream = async_pipe(item, conf=conf)
+        >>> run(anext, stream)["strtransform"]
+        'Hello World'
 
     """
     return await async_parser(*args, **kwargs)

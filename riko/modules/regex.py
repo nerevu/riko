@@ -255,14 +255,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
         >>> item = {"content": "hello world", "title": "greeting"}
         >>> match = r"(\\w+)\\s(\\w+)"
         >>>
-        >>> async def main():
-        ...     rule = {"field": "content", "match": match, "replace": "$2wide"}
-        ...     conf = {"rule": rule}
-        ...     result = async_pipe(item, conf=conf)
-        ...     print((await anext(result))["content"])
-        >>>
-        >>> run(main)
-        worldwide
+        >>> rule = {"field": "content", "match": match, "replace": "$2wide"}
+        >>> conf = {"rule": rule}
+        >>> stream = async_pipe(item, conf=conf)
+        >>> run(anext, stream)["content"]
+        'worldwide'
 
     """
     return await async_parser(*args, **kwargs)

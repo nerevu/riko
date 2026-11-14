@@ -130,13 +130,10 @@ def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"type": "currency"}
-        ...     result = async_pipe({"content": "GBP"}, conf=conf)
-        ...     print((await anext(result))["country"])
-        >>>
-        >>> run(main)
-        United Kingdom
+        >>> conf = {"type": "currency"}
+        >>> stream = async_pipe({"content": "GBP"}, conf=conf)
+        >>> run(anext, stream)["country"]
+        'United Kingdom'
 
     """
     return parser(*args, **kwargs)

@@ -118,11 +118,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe({"content": "http://yahoo.com"})
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> run(anext, async_pipe({"content": "http://yahoo.com"}))
         {'component': 'scheme', 'content': 'http'}
 
     """

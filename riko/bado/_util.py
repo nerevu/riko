@@ -8,11 +8,8 @@ Examples:
 
         >>> from riko import async_return, run
         >>>
-        >>> async def main():
-        ...     print(await async_return("riko"))
-        >>>
-        >>> run(main)
-        riko
+        >>> run(async_return, "riko")
+        'riko'
 
 """
 
@@ -291,11 +288,9 @@ async def asyncify[T](
         >>> import threading
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     name = await asyncify(lambda: threading.current_thread().name)
-        ...     print(name == threading.main_thread().name)
-        >>>
-        >>> run(main)
+        >>> get_name = lambda: threading.current_thread().name
+        >>> main_name = threading.main_thread().name
+        >>> run(asyncify, get_name) == main_name
         False
 
     """
@@ -345,10 +340,7 @@ def syncify[**P, T](
         >>> async def double(x):
         ...     return x * 2
         >>>
-        >>> async def main():
-        ...     print(await asyncify(syncify, double, 21))
-        >>>
-        >>> run(main)
+        >>> run(asyncify, syncify, double, 21)
         42
 
     """

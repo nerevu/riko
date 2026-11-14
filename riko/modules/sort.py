@@ -221,12 +221,9 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = [{"rank": "b"}, {"rank": "a"}, {"rank": "c"}]
-        ...     result = async_pipe(items, conf={"rule": {"field": "rank"}})
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> items = [{"rank": "b"}, {"rank": "a"}, {"rank": "c"}]
+        >>> stream = async_pipe(items, conf={"rule": {"field": "rank"}})
+        >>> run(anext, stream)
         {'rank': 'a'}
 
     """

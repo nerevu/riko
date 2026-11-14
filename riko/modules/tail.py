@@ -123,12 +123,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = ({"x": x} for x in range(5))
-        ...     result = async_pipe(items, conf={"count": 2})
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> items = ({"x": x} for x in range(5))
+        >>> run(anext, async_pipe(items, conf={"count": 2}))
         {'x': 3}
 
     """

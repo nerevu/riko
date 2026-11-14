@@ -159,13 +159,10 @@ def async_pipe(*args: Any, **kwargs: object) -> NumLike:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"op": "divide", "other": "5"}
-        ...     result = async_pipe({"content": "10"}, conf=conf)
-        ...     print((await anext(result))["simplemath"])
-        >>>
-        >>> run(main)
-        2
+        >>> conf = {"op": "divide", "other": "5"}
+        >>> stream = async_pipe({"content": "10"}, conf=conf)
+        >>> run(anext, stream)["simplemath"]
+        Decimal('2')
 
     """
     return parser(*args, **kwargs)

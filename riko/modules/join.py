@@ -206,13 +206,10 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = ({"x": "foo", "sum": x} for x in range(5))
-        ...     other = ({"x": "foo", "count": x + 5} for x in range(5))
-        ...     result = async_pipe(items, conf={"join_key": "x"}, other=other)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> items = ({"x": "foo", "sum": x} for x in range(5))
+        >>> other = ({"x": "foo", "count": x + 5} for x in range(5))
+        >>> stream = async_pipe(items, conf={"join_key": "x"}, other=other)
+        >>> run(anext, stream)
         {'x': 'foo', 'sum': 0, 'count': 5}
 
     """

@@ -133,16 +133,13 @@ def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     attrs = [
-        ...         {"key": "title", "value": "the title"},
-        ...         {"key": "desc.content", "value": "the desc"}]
-        ...
-        ...     result = async_pipe(conf={"attrs": attrs})
-        ...     print((await anext(result))["title"])
-        >>>
-        >>> run(main)
-        the title
+        >>> attrs = [
+        ...     {"key": "title", "value": "the title"},
+        ...     {"key": "desc.content", "value": "the desc"},
+        ... ]
+        >>> stream = async_pipe(conf={"attrs": attrs})
+        >>> run(anext, stream)["title"]
+        'the title'
 
     """
     return parser(*args, **kwargs)

@@ -81,14 +81,10 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     url = get_path("gigs.json")
-        ...     objconf = Objectify({"url": url, "path": "value.items"})
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["title"])
-        >>>
-        >>> run(main)
-        Business System Analyst
+        >>> url = get_path("gigs.json")
+        >>> objconf = Objectify({"url": url, "path": "value.items"})
+        >>> next(run(async_parser, None, None, objconf))["title"]
+        'Business System Analyst'
 
     """
     url: str = require_conf_key(objconf, "url", "fetchdata", strict=True)
@@ -206,14 +202,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     path = "value.items"
-        ...     conf = {"url": get_path("gigs.json"), "path": path}
-        ...     result = async_pipe(conf=conf)
-        ...     print((await anext(result))["title"])
-        >>>
-        >>> run(main)
-        Business System Analyst
+        >>> path = "value.items"
+        >>> conf = {"url": get_path("gigs.json"), "path": path}
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)["title"]
+        'Business System Analyst'
 
     """
     return await async_parser(*args, **kwargs)

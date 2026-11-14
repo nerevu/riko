@@ -80,13 +80,9 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     objconf = Objectify({"url": get_path("feed.xml")})
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["title"])
-        >>>
-        >>> run(main)
-        Donations
+        >>> objconf = Objectify({"url": get_path("feed.xml")})
+        >>> next(run(async_parser, None, None, objconf))["title"]
+        'Donations'
 
     """
     url: str = require_conf_key(objconf, "url", "fetch", strict=True)
@@ -182,12 +178,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("feed.xml")})
-        ...     item = await anext(result)
-        ...     print(sorted(keys.intersection(item)))
-        >>>
-        >>> run(main)
+        >>> conf = {"url": get_path("feed.xml")}
+        >>> stream = async_pipe(conf=conf)
+        >>> sorted(keys.intersection(run(anext, stream)))
         ['author', 'dc:creator', 'id', 'link', 'pubDate', 'summary', 'title']
 
     """

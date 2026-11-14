@@ -151,11 +151,8 @@ async def async_parser(
         ...         await async_sleep(0.1)
         ...         yield {"page": page, "data": f"result_{page}"}
         >>>
-        >>> async def main():
-        ...     result = await async_parser(paginated_api(), objconf, iter(()))
-        ...     print(len(list(result)))
-        >>>
-        >>> run(main)
+        >>> api = paginated_api()
+        >>> len(list(run(async_parser, api, objconf, iter(()))))
         2
 
     """
@@ -255,18 +252,16 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     Examples:
 
         >>> from itertools import count
-        >>> from riko import async_sleep, run
+        >>> from riko import alist, async_sleep, run
         >>>
         >>> async def paginated_api():
         ...     for page in count():
         ...         await async_sleep(0.1)
         ...         yield {"page": page}
         >>>
-        >>> async def main():
-        ...     result = async_pipe(paginated_api(), conf={"milliseconds": 290})
-        ...     print(len([item async for item in result]))
-        >>>
-        >>> run(main)
+        >>> conf = {"milliseconds": 290}
+        >>> stream = async_pipe(paginated_api(), conf=conf)
+        >>> len(run(alist, stream))
         2
 
     """

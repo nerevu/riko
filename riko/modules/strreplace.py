@@ -186,13 +186,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"rule": {"find": "hello", "replace": "bye"}}
-        ...     result = async_pipe({"content": "hello world"}, conf=conf)
-        ...     print((await anext(result))["strreplace"])
-        >>>
-        >>> run(main)
-        bye world
+        >>> conf = {"rule": {"find": "hello", "replace": "bye"}}
+        >>> stream = async_pipe({"content": "hello world"}, conf=conf)
+        >>> run(anext, stream)["strreplace"]
+        'bye world'
 
     """
     return await async_parser(*args, **kwargs)

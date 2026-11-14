@@ -73,13 +73,9 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     objconf = Objectify({"url": get_path("bbc.html"), "strict": True})
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["link"])
-        >>>
-        >>> run(main)
-        file://riko/data/bbci.co.uk.xml
+        >>> objconf = Objectify({"url": get_path("bbc.html"), "strict": True})
+        >>> next(run(async_parser, None, None, objconf))["link"]
+        'file://riko/data/bbci.co.uk.xml'
 
     """
     url: str = require_conf_key(objconf, "url", "feedautodiscovery", strict=True)
@@ -193,12 +189,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("bbc.html")})
-        ...     print((await anext(result))["link"])
-        >>>
-        >>> run(main)
-        file://riko/data/bbci.co.uk.xml
+        >>> stream = async_pipe(conf={"url": get_path("bbc.html")})
+        >>> run(anext, stream)["link"]
+        'file://riko/data/bbci.co.uk.xml'
 
     """
     return await async_parser(*args, **kwargs)

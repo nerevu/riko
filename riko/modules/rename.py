@@ -187,13 +187,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"rule": {"field": "content", "newval": "greeting"}}
-        ...     result = async_pipe({"content": "hello world"}, conf=conf)
-        ...     print((await anext(result))["greeting"])
-        >>>
-        >>> run(main)
-        hello world
+        >>> conf = {"rule": {"field": "content", "newval": "greeting"}}
+        >>> stream = async_pipe({"content": "hello world"}, conf=conf)
+        >>> run(anext, stream)["greeting"]
+        'hello world'
 
     """
     return await async_parser(*args, **kwargs)

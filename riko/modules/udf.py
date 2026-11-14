@@ -183,12 +183,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Item:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     func = lambda item: {"y": item["x"] + 3}
-        ...     result = async_pipe({"x": 0}, func=func)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> func = lambda item: {"y": item["x"] + 3}
+        >>> stream = async_pipe({"x": 0}, func=func)
+        >>> run(anext, stream)
         {'y': 3}
 
     """

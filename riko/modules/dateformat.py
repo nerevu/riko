@@ -127,12 +127,9 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
         >>> from datetime import date
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe({"date": date(2015, 5, 4)})
-        ...     print((await anext(result))["dateformat"])
-        >>>
-        >>> run(main)
-        05/04/2015 00:00:00
+        >>> stream = async_pipe({"date": date(2015, 5, 4)})
+        >>> run(anext, stream)["dateformat"]
+        '05/04/2015 00:00:00'
 
     """
     return parser(*args, **kwargs)

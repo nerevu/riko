@@ -167,12 +167,9 @@ def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"prompt": "How old are you?", "type": "int"}
-        ...     result = async_pipe(conf=conf, inputs={"content": "30"})
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> conf = {"prompt": "How old are you?", "type": "int"}
+        >>> stream = async_pipe(conf=conf, inputs={"content": "30"})
+        >>> run(anext, stream)
         30
 
     """

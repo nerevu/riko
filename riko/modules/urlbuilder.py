@@ -173,17 +173,14 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {
-        ...         "base": "http://finance.yahoo.com",
-        ...         "path": ["rss", "headline"],
-        ...         "param": {"key": "s", "value": "gm"},
-        ...     }
-        ...     result = async_pipe(conf=conf)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
-        http://finance.yahoo.com/rss/headline?s=gm
+        >>> conf = {
+        ...     "base": "http://finance.yahoo.com",
+        ...     "path": ["rss", "headline"],
+        ...     "param": {"key": "s", "value": "gm"},
+        ... }
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)
+        'http://finance.yahoo.com/rss/headline?s=gm'
 
     """
     return parser(*args, **kwargs)

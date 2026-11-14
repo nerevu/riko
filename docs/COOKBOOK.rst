@@ -596,19 +596,16 @@ at most two at a time, in source order.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources, run
+    >>> from riko import Pipeline, Sources, alist, run
     >>>
-    >>> async def main():
-    ...     conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
-    ...     pipeline = (
-    ...         Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
-    ...         .tokenizer(options={'emit': True})
-    ...         .hash()
-    ...         .with_execution(concurrency=2, ordered=True)
-    ...     )
-    ...     print([item['content'] async for item in pipeline])
-    >>>
-    >>> run(main)
+    >>> conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
+    ...     .tokenizer(options={'emit': True})
+    ...     .hash()
+    ...     .with_execution(concurrency=2, ordered=True)
+    ... )
+    >>> [item['content'] for item in run(alist, pipeline)]
     ['a', 'bb', 'ccc']
 
 Under ``async for`` native async work runs inline and synchronous work runs on worker

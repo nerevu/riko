@@ -148,13 +148,10 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = ({"content": x} for x in range(5))
-        ...     result = async_pipe(items)
-        ...     print((await anext(result))["sum"])
-        >>>
-        >>> run(main)
-        10
+        >>> items = ({"content": x} for x in range(5))
+        >>> stream = async_pipe(items)
+        >>> run(anext, stream)["sum"]
+        Decimal('10')
 
     """
     return parser(*args, **kwargs)

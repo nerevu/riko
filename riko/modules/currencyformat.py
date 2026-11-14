@@ -146,12 +146,9 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe({"content": "10.33"})
-        ...     print((await anext(result))["currencyformat"])
-        >>>
-        >>> run(main)
-        $10.33
+        >>> stream = async_pipe({"content": "10.33"})
+        >>> run(anext, stream)["currencyformat"]
+        '$10.33'
 
     """
     return parser(*args, **kwargs)

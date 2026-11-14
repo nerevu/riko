@@ -24,10 +24,7 @@ Examples:
         >>> async def double(x):
         ...     return x * 2
         >>>
-        >>> async def main():
-        ...     print(await async_map(double, range(3)))
-        >>>
-        >>> run(main)
+        >>> run(async_map, double, range(3))
         [0, 2, 4]
 
 """
@@ -100,12 +97,9 @@ async def async_iter[T](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
-        >>> async def main():
-        ...     print([x async for x in async_iter(range(3))])
-        >>>
-        >>> run(main)
+        >>> run(alist, async_iter(range(3)))
         [0, 1, 2]
 
     """
@@ -139,14 +133,10 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncItera
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> stream = as_async([1, 2])
-        >>>
-        >>> async def main():
-        ...     print([x async for x in stream])
-        >>>
-        >>> run(main)
+        >>> run(alist, stream)
         [1, 2]
 
     """
@@ -181,12 +171,9 @@ async def amap[T, S](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
-        >>> async def main():
-        ...     print([x async for x in amap(str, as_async([1, 2]))])
-        >>>
-        >>> run(main)
+        >>> run(alist, amap(str, as_async([1, 2])))
         ['1', '2']
 
     """
@@ -216,16 +203,13 @@ async def async_flatten[T](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> async def pairs():
         ...     yield (1, 2)
         ...     yield (3,)
         >>>
-        >>> async def main():
-        ...     print([x async for x in async_flatten(pairs())])
-        >>>
-        >>> run(main)
+        >>> run(alist, async_flatten(pairs()))
         [1, 2, 3]
 
     """
@@ -253,12 +237,9 @@ async def alist[T](source: AnyIterable[T]) -> list[T]:
 
     Examples:
 
-        >>> from riko import as_async, run
+        >>> from riko import alist, as_async, run
         >>>
-        >>> async def main():
-        ...     print(await alist(as_async([1, 2])))
-        >>>
-        >>> run(main)
+        >>> run(alist, as_async([1, 2]))
         [1, 2]
 
     """
@@ -331,10 +312,7 @@ async def materialize[T](source: AnyIterable[T]) -> Iterator[T]:
 
         >>> from riko import as_async, run
         >>>
-        >>> async def main():
-        ...     print(next(await materialize(as_async([1, 2]))))
-        >>>
-        >>> run(main)
+        >>> next(run(materialize, as_async([1, 2])))
         1
 
     """
@@ -367,16 +345,14 @@ async def aiter_sentinel[T, R, S](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> async def pull(items):
         ...     return next(items, None)
         >>>
-        >>> async def main():
-        ...     items = aiter_sentinel(pull, [1, 2, None, 3], type(None))
-        ...     print([x async for x in items])
-        >>>
-        >>> run(main)
+        >>> source = [1, 2, None, 3]
+        >>> stream = aiter_sentinel(pull, source, type(None))
+        >>> run(alist, stream)
         [1, 2]
 
     """
@@ -610,10 +586,7 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     print(await coop_reduce(lambda x, y: x + y, range(5)))
-        >>>
-        >>> run(main)
+        >>> run(coop_reduce, lambda x, y: x + y, range(5))
         10
 
     """
@@ -667,10 +640,7 @@ def async_reduce[T, S](
         >>> async def add(x, y):
         ...     return x + y
         >>>
-        >>> async def main():
-        ...     print(await async_reduce(add, range(5)))
-        >>>
-        >>> run(main)
+        >>> run(async_reduce, add, range(5))
         10
 
     """
@@ -905,16 +875,13 @@ def async_map_stream[T, S](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> async def double(x):
         ...     return x * 2
         >>>
-        >>> async def main():
-        ...     stream = async_map_stream(double, range(4), limit=2)
-        ...     print(sorted([result async for result in stream]))
-        >>>
-        >>> run(main)
+        >>> stream = async_map_stream(double, range(4), limit=2)
+        >>> sorted(run(alist, stream))
         [0, 2, 4, 6]
 
     """
@@ -966,16 +933,13 @@ async def async_map_ordered_stream[T, S](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> async def double(x):
         ...     return x * 2
         >>>
-        >>> async def main():
-        ...     stream = async_map_ordered_stream(double, range(4), limit=2)
-        ...     print([result async for result in stream])
-        >>>
-        >>> run(main)
+        >>> stream = async_map_ordered_stream(double, range(4), limit=2)
+        >>> run(alist, stream)
         [0, 2, 4, 6]
 
     """
@@ -1033,17 +997,15 @@ def async_merge[S](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
         >>> async def gen_items(*items):
         ...     for item in items:
         ...         yield item
         >>>
-        >>> async def main():
-        ...     merged = async_merge([gen_items(1, 2), gen_items(3, 4)], limit=2)
-        ...     print(sorted([item async for item in merged]))
-        >>>
-        >>> run(main)
+        >>> source = [gen_items(1, 2), gen_items(3, 4)]
+        >>> merged = async_merge(source, limit=2)
+        >>> sorted(run(alist, merged))
         [1, 2, 3, 4]
 
     """

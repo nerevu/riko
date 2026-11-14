@@ -87,18 +87,14 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     url = get_path("spreadsheet.csv")
-        ...     conf = {
-        ...         "url": url, "sanitize": True, "skip_rows": 0,
-        ...         "encoding": ENCODING,
-        ...     }
-        ...     objconf = Objectify(conf)
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["mileage"])
-        >>>
-        >>> run(main)
-        7213
+        >>> url = get_path("spreadsheet.csv")
+        >>> conf = {
+        ...     "url": url, "sanitize": True, "skip_rows": 0,
+        ...     "encoding": ENCODING,
+        ... }
+        >>> objconf = Objectify(conf)
+        >>> next(run(async_parser, None, None, objconf))["mileage"]
+        '7213'
 
     """
     url: str = require_conf_key(objconf, "url", "csv", strict=True)
@@ -226,12 +222,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("spreadsheet.csv")})
-        ...     print((await anext(result))["mileage"])
-        >>>
-        >>> run(main)
-        7213
+        >>> stream = async_pipe(conf={"url": get_path("spreadsheet.csv")})
+        >>> run(anext, stream)["mileage"]
+        '7213'
 
     """
     return await async_parser(*args, **kwargs)

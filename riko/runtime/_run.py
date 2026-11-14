@@ -115,17 +115,14 @@ async def arun_pipeline[T](
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>> from riko.definitions._pipeline_definition import PipelineDefinition
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> definition = PipelineDefinition.from_module("count")
         >>>
-        >>> async def main():
-        ...     stream = arun_pipeline(definition, dispatcher, seed=[{"x": 1}])
-        ...     print([item async for item in stream])
-        >>>
-        >>> run(main)
+        >>> seed = [{"x": 1}]
+        >>> run(alist, arun_pipeline(definition, dispatcher, seed=seed))
         [{'count': 1}]
 
     """
