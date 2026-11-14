@@ -1336,6 +1336,15 @@ PROCESSOR_FOLD_CASES = [
 ]
 
 
+ASSIGN_SHAPE_CASES = [
+    pytest.param("a b", {}, [{"content": "a"}, {"content": "b"}], id="many"),
+    pytest.param("a", {}, [{"content": "a"}], id="one-is-a-list"),
+    pytest.param("", {}, [], id="none-is-an-empty-list"),
+    pytest.param("a b", {"count": "first"}, {"content": "a"}, id="first"),
+    pytest.param("", {"count": "first"}, None, id="first-of-none-is-absent"),
+]
+
+
 IMPLICIT_FOLD_CASES = [
     pytest.param(
         {"emit": True},
@@ -1398,6 +1407,26 @@ class TestProcessor:
         item = {"title": "a b"}
         result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
         assert list(result) == [{"content": "a"}, {"content": "b"}]
+
+    @pytest.mark.parametrize(("title", "kwargs", "expected"), ASSIGN_SHAPE_CASES)
+    def test_assigned_stream_shape_depends_only_on_count(self, title, kwargs, expected):
+        item = {"title": title}
+        options = {"field": "title", "assign": "w", "emit": False, **kwargs}
+        [result] = tokenizer(item, conf=TOKENIZER_CONF, **options)
+        assert result.get("w") == expected
+        assert ("w" in result) is (expected is not None)
+
+    def test_emit_yields_a_result_before_reading_the_next(self):
+        pulled: list[int] = []
+
+        def gen_parts(item: Item, extraction, objconf, /, **kwargs):
+            for index in count():
+                pulled.append(index)
+                yield {"part": index}
+
+        pipe = processor()(gen_parts)
+        assert next(pipe({"x": 1}, emit=True)) == {"part": 0}
+        assert pulled == [0]
 
     def test_mode_keyword_raises_pointing_at_describe_module(self):
         with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):

@@ -188,9 +188,14 @@ class CallOptions:
     Attributes:
 
         emit: Whether to yield the result as a new item rather than assign it.
-        assign: The item field the result is assigned to.
+
+        assign: The item field the result is assigned to (as a list unless ``count``
+            is ``"first"``).
+
         field: The item field whose value the module receives.
-        count: Whether to keep the first result or all of them.
+
+        count: Whether to keep the first result or all of them. Set it to ``"first"``
+            to assign a single value instead of a list.
 
     Examples:
 

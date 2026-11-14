@@ -89,6 +89,9 @@ Changes
 
 - The ``datebuilder`` module emits a JSON-friendly date dict instead of ``struct_time``.
 
+- A module that assigns a stream of results (e.g., ``tokenizer`` with ``emit=False``)
+  now always assigns a list. Pass ``count="first"`` to assign only the first result.
+
 - A ``PipeDef`` no longer requires ``wires`` or a wire/endpoint ``id``.
 
 - ``Context`` and its ``inputs`` are now immutable. In a workflow run, the ``input``
