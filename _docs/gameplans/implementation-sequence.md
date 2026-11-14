@@ -2383,14 +2383,20 @@ R10 therefore owns:
   `TestThreadBudget::test_async_nested_run_short_of_threads_raises`: once the parent's
   demand counts the nested threads, `arun` may raise the up-front demand error outside
   that test's `pytest.raises` block (2026-11-12 test audit).
-- a sync run under `with_execution(concurrency>1)` streams a mapped node's per-item
-  output instead of collecting it on the worker first (`run_tracked_item` collects the
-  node's per-item results in `riko/execution/_provenance.py`), so an endless per-item
-  source such as `forever` yields its first item there as it does at `concurrency=1`
-  (strict-xfail tripwire
-  `tests/internal/test_concurrency.py::TestSyncPolicy::test_sync_mapped_node_output_streams_before_the_item_completes`;
-  user ruling 2026-11-03 repo-audit triage: fix it with or before the legacy parity
-  slice).
+- a sync run under `with_execution(concurrency>1)`, and an async run under any item
+  limit (an explicit `concurrency`, `1` included, or an explicit `thread`/`inline`
+  executor), stream a mapped node's per-item output instead of collecting it first
+  (`run_tracked_item` and its twin `arun_tracked_item` collect the node's per-item
+  results in `riko/execution/_provenance.py`), so an endless per-item source such as
+  `forever` yields its first item there as it does at sync `concurrency=1` and under the
+  default async settings (strict-xfail tripwires
+  `tests/internal/test_concurrency.py::TestSyncPolicy::test_sync_mapped_node_output_streams_before_the_item_completes`
+  and
+  `tests/internal/test_concurrency.py::TestAsyncPolicy::test_async_mapped_node_output_streams_before_the_item_completes`
+  under the user ruling of the 2026-11-03 repo-audit triage: fix it with or before the
+  legacy parity slice; the async twin was found by the 2026-11-14 external audit).
+  Streaming under `ordered=True` is a semantics decision (item 2's output must wait for
+  item 1's to end), so the fix is not an interim patch.
 
 Naming (2026-10-10 naming triage): `_materialize_terminal`/`_materialize_terminals`
 (`riko/modules/_decorators.py`) drain async terminal sub-sources for the sync conf

@@ -65,6 +65,7 @@ if TYPE_CHECKING:
 _INLINE = {"executor": "inline"}
 _PROCESS = {"executor": "process"}
 _THREAD = {"executor": "thread"}
+_ITEM_LIMITS = ({"concurrency": 1}, {"concurrency": 2}, _THREAD)
 ITEMS = [{"x": x} for x in range(20)]
 LIMIT = config.concurrency_limit
 INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
@@ -629,6 +630,41 @@ class TestAsyncPolicy:
                 await execution.arun(plan, seed=ITEMS)
 
         assert threads == []
+
+    @pytest.mark.parametrize("kwargs", _ITEM_LIMITS)
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="streaming a mapped node's per-item output under an async item limit "
+        "is not yet implemented: each item's whole output is collected first",
+    )
+    @async_test
+    async def test_async_mapped_node_output_streams_before_the_item_completes(
+        self, kwargs
+    ) -> None:
+        pulled: list[int] = []
+
+        async def fan(item, **_):
+            for n in range(50):
+                pulled.append(n)
+                yield {"n": n}
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="fan", async_pipe=mark_async_loopable(fan))
+        )
+        flow = build_workflow([ModuleNode(id="f", name="fan")])
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        settings = ExecutionSettings(**kwargs)
+        pulled_before_first: int | None = None
+
+        async with AsyncExecution(settings=settings) as execution:
+            stream = await execution.arun(plan, seed=[{"x": 0}])
+            await anext(stream)
+            pulled_before_first = len(pulled)
+            await stream.aclose()  # pyright: ignore[reportAttributeAccessIssue]
+
+        assert pulled_before_first is not None
+        assert pulled_before_first < 50
 
 
 def _passthru(stream, **_):

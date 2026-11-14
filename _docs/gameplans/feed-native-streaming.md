@@ -363,7 +363,9 @@ source through `as_async(cooperative=False)`), so async `forever | truncate` thr
 unboundedness audit: 566 MB after 6 s). The sync run returns at `concurrency=1`; under
 `with_execution(concurrency>1)` the sync worker pool collects each item's whole output
 before yielding it (`run_tracked_item` in `riko/execution/_provenance.py`), so it hangs
-the same way (2026-11-03 repo-audit triage; tripwire listed under R10 in
+the same way, as does the async run under any explicit `concurrency` (its twin
+`arun_tracked_item`; 2026-11-03 repo-audit triage, async twin found by the 2026-11-14
+external audit; tripwires listed under R10 in
 [implementation-sequence.md](implementation-sequence.md#r10--final-feed-native-legacy-seam-cleanup)).
 Tripwire (S1/S7, strict xfail, finite source so the suite never hangs):
 `tests/internal/test_modules.py::TestAsyncOperatorLaziness::test_async_truncate_yields_to_the_event_loop_while_draining`.
