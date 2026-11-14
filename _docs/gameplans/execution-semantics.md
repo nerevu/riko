@@ -238,7 +238,7 @@ marks it. The same thread rule keeps a sync-closeable seed's `close()` on the ev
 (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
 seed close that blocks; R11 owns that bound with the entry-thread exit (triage
 2026-11-03; tripwire
-`tests/internal/test_plan_runs.py::TestAsyncPlanRun::test_arun_bounds_a_blocking_sync_seed_close`).
+`tests/internal/test_plan_closes.py::TestAsyncPlanClose::test_arun_bounds_a_blocking_sync_seed_close`).
 
 The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an
 async factory that yields a resolved value — is bridged through the execution portal and
@@ -275,7 +275,7 @@ sync-iterable seed whose only close is `aclose()` was silently never closed (ver
 2026-10-31) and is now rejected; a seed whose `__iter__`/`__aiter__` hands out a
 separate closeable iterator had only the seed closed (verified 2026-11-13), so both seed
 openers now own that iterator beside the seed (`CLOSING_SEEDS` rows `cursor-handle` /
-`async-cursor-handle` in `tests/internal/test_plan_runs.py`). Stage 2 decisions
+`async-cursor-handle` in `tests/internal/test_plan_closes.py`). Stage 2 decisions
 (2026-10-31): under async execution a sync close keeps its per-kind threading (resource
 close/cleanup on a worker; seeds close inline; a sync node's stream and raw return keep
 their worker); under sync execution `shutdown_timeout` bounds every portal close, the
@@ -292,7 +292,7 @@ execution still registers each non-endpoint node stream on its exit stack with n
 object, so an upstream sync generator closes at execution exit, not when its downstream
 node finishes or the output stream closes; a sync twin of `_RunStream`/`_Owned` retires
 `_close_tracked` and the context parameter of the sync `_build_stream`. Tripwire:
-`tests/internal/test_plan_runs.py::TestPlanRun::test_run_closes_a_sync_source_when_its_output_closes`.
+`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`.
 `Workflow.require_executable` refuses fan-out, so each node stream has one consumer;
 when fan-out lands, a sync node's early input close must become per-consumer. Bare
 operator wrappers never close their input either (triage 2026-11-14): the wrapper closes

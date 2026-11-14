@@ -249,8 +249,8 @@ Seed close is owned twice on purpose (ruling amended 2026-11-03, superseding the
 2026-10-29 "retire together" line):
 `tests/public/test_pipeline.py::TestAsyncClose::test_early_close_closes_the_seed` owns
 an async root closing each `CLOSING_SEEDS` shape, and the plan-level pair
-`TestPlanRun::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanRun::test_arun_closes_an_unfinished_seed_on_exit`
-in `tests/internal/test_plan_runs.py` keeps only what `Pipeline` never reaches: a
+`TestPlanClose::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanClose::test_arun_closes_an_unfinished_seed_on_exit`
+in `tests/internal/test_plan_closes.py` keeps only what `Pipeline` never reaches: a
 sync-only root reading the seed on a worker thread, a close on execution exit without
 `aclose`, and one close across two triggers. An async-root row there would duplicate
 `TestAsyncClose`.

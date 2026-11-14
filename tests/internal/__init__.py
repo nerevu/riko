@@ -39,6 +39,7 @@ Index (file, then the subjects it owns, in file order):
                               WrapperMeta, Loop, AsyncProcessor, AsyncOperator, Prepare,
                               Objectify, GetString, CsvParser, ExchangeRate, AsyncSend,
                               AsyncReceive, AsyncTimeoutIterator
+    test_plan_closes.py       PlanClose
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
                               DescribeModule, PublicRegister, TemporaryRegistrations,
