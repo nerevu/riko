@@ -170,6 +170,23 @@ Reused: **1.3x sm, 1.4x lg**, excluding definition:
     >>> tuple(map(bound_kwarg, arg_values))
     (7, 13, 19)
 
+.. _composed callable:
+
+Chained one-argument functions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When a callable only feeds one function's result into another, use ``compose``. It costs
+about the same per call as a lambda. If you need a picklable object, use a module-level
+function instead. Keep a named function when it carries a docstring, doctest, or extra
+arguments; and a generator expression when the result is evaluated in place:
+
+.. code-block:: python
+
+    >>> from riko.base._funcutils import compose
+    >>>
+    >>> tuple(map(compose(str, abs), [-1, 2]))
+    ('1', '2')
+
 Disapproved for performance-oriented mapping
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

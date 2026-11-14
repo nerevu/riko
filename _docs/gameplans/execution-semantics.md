@@ -1588,6 +1588,16 @@ not change the public API or cross operator/resource/side-effect boundaries unsa
 Planner output for such regions is exposed through the planning diagnostics owned by
 `callable-pipes.md`, not a second explain surface.
 
+Map fusion is one such island (audit triage 2026-11-14): consecutive `map` steps run as
+separate nodes at about 3 µs per item each (sync, 5,000 items, identity `fn`;
+`.claude/skills/land/map_node_overhead_bench.py`). The functor composition law allows
+merging `map(f).map(g)` into one `map(g∘f)` step only when both steps use `preserve`
+identity with the same resources and `version=`: under `derive`, two steps give a
+grandchild generation and one merged step a child, and each node's fingerprint and
+per-step provenance would be lost. A fused step must also stay picklable for the process
+executor: `compose` (`riko/base/_funcutils.py`) returns a closure, so fusion holds both
+calls in a picklable record instead (wrapup triage 2026-11-14).
+
 ---
 
 ## 7. Timeout

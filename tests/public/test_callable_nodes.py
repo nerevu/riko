@@ -99,6 +99,12 @@ _LISTLIKE_PRODUCERS = [
 ]
 
 
+_FUNCTOR_LAWS = [
+    pytest.param([lambda item: item], [], id="identity"),
+    pytest.param([_scaled, str], [lambda item: str(_scaled(item))], id="composition"),
+]
+
+
 _PASSTHROUGH_CASES = [
     pytest.param(["hi"], [len], [2], id="scalar-reaches-fn-unwrapped"),
     pytest.param([{"c": "hi"}], [itemgetter("c"), len], [2], id="chained-scalar"),
@@ -140,6 +146,17 @@ class TestCallableNodes:
             pipeline = pipeline.map(fn)
 
         assert list(pipeline(source)) == expected
+
+    @pytest.mark.parametrize(("left", "right"), _FUNCTOR_LAWS)
+    def test_map_obeys_the_functor_laws(self, left, right):
+        seed = [{"x": 1}, {"x": 2}]
+        chains = [Pipeline(), Pipeline()]
+
+        for index, fns in enumerate((left, right)):
+            for fn in fns:
+                chains[index] = chains[index].map(fn)
+
+        assert list(chains[0](seed)) == list(chains[1](seed))
 
     @pytest.mark.parametrize(("produce", "settings"), _LISTLIKE_ITEMS)
     def test_a_listlike_item_reaches_the_next_map_whole(self, produce, settings):

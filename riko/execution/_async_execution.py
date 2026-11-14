@@ -45,7 +45,7 @@ from riko.bado.itertools import (
 from riko.base._config import DEFAULT_OUTPUT
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._funcutils import call_if_distinct
+from riko.base._funcutils import call_if_distinct, compose
 from riko.coercion._sequences import listize
 from riko.types._feed import (
     AsyncEnvelopes,
@@ -727,11 +727,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
             sync_call: ItemCall[T] = build_item_call(*args, **extra)
 
             if self.settings.async_policy.inline:
-
-                def call_inline(item: T) -> AsyncIterator[T]:
-                    return as_async(sync_call(item))
-
-                call = call_inline
+                call = compose(as_async, sync_call)
             else:
                 worker = partial(self._run_node_call, None)
 

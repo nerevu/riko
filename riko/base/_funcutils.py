@@ -80,6 +80,37 @@ def noop[T](value: T) -> T:
     return value
 
 
+def compose[A, B, R](
+    outer: Callable[[B], R], inner: Callable[[A], B]
+) -> Callable[[A], R]:
+    """
+    Combines two one-argument callables into one that calls ``inner``, then ``outer``.
+
+    Args:
+
+        outer: Called with the result of ``inner``.
+        inner: Called with the composed function's argument.
+
+    Returns:
+
+        A function equivalent to ``lambda value: outer(inner(value))``.
+
+    Examples:
+
+        >>> to_int = compose(int, float)
+        >>> to_int("2.5")
+        2
+
+    """
+
+    def composed(
+        value: A, _outer: Callable[[B], R] = outer, _inner: Callable[[A], B] = inner, /
+    ) -> R:
+        return _outer(_inner(value))
+
+    return composed
+
+
 def map_values[K, V, R](
     func: Callable[[V], R],
     item: Mapping[K, V],
