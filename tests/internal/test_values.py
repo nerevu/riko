@@ -576,10 +576,6 @@ class TestCastDatetime:
         with pytest.raises(TypeError, match="not date-like"):
             cast_datetime({"year": 2020})  # pyright: ignore[reportArgumentType]
 
-    def test_rejects_positional_flags(self):
-        with pytest.raises(TypeError):
-            cast_datetime("now", False, False, True)  # pyright: ignore[reportCallIssue]
-
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,

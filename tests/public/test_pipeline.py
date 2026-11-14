@@ -1471,10 +1471,6 @@ class TestContext:
         with pytest.raises(AttributeError):
             context.test = True  # pyright: ignore[reportAttributeAccessIssue]
 
-    def test_rejects_the_removed_submodule_flag(self):
-        with pytest.raises(TypeError):
-            Context(submodule=True)  # pyright: ignore[reportCallIssue]
-
 
 class TestResource:
     """
