@@ -19,11 +19,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._exceptions import UnsupportedModuleError, UnsupportedWorkflowError
+from riko.definitions._module_definition import normalize_module_name
 
 from ._module_registry import module_registry
 from ._workflow_resolver import WorkflowResolver, workflow_resolver
 
 if TYPE_CHECKING:
+    from riko.types._enums import ModuleNameLike
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         Interface,
@@ -51,7 +53,7 @@ class ResolverDispatcher:
     def __init__(self, *resolvers: Resolver) -> None:
         self.resolvers = resolvers
 
-    def require_resolver(self, name: str) -> Resolver:
+    def require_resolver(self, name: ModuleNameLike) -> Resolver:
         """
         Selects the first resolver that accepts ``name``.
 
@@ -67,17 +69,20 @@ class ResolverDispatcher:
         resolver = next((r for r in self.resolvers if r.is_compatible(name)), None)
 
         if resolver is None:
-            raise UnsupportedModuleError(name, "no resolver accepts it")
+            canonical = normalize_module_name(name)
+            raise UnsupportedModuleError(canonical, "no resolver accepts it")
 
         return resolver
 
     @overload
     def require(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload
-    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
+    def require(
+        self, name: ModuleNameLike, is_async: Literal[True]
+    ) -> AsyncModuleWrapper: ...
+    def require(self, name: ModuleNameLike, is_async: bool = False) -> ModuleWrapper:
         """
         Requires the ``pipe`` ``name`` names, or its ``async_pipe`` when ``is_async``.
 
@@ -93,7 +98,7 @@ class ResolverDispatcher:
         """
         return self.require_resolver(name).require(name, is_async)
 
-    def require_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: ModuleNameLike) -> frozenset[Interface]:
         """
         Reports which of ``pipe``/``async_pipe`` a module or stored workflow defines.
 
@@ -113,7 +118,7 @@ class ResolverDispatcher:
         """
         return self.require_resolver(name).require_interfaces(name)
 
-    def validate(self, name: str) -> None:
+    def validate(self, name: ModuleNameLike) -> None:
         """
         Validates that ``name`` exposes ``pipe`` and/or ``async_pipe``.
 
@@ -139,9 +144,9 @@ class ResolverDispatcher:
         if not resolver.require_interfaces(name):
             is_workflow = isinstance(resolver, WorkflowResolver)
             error = UnsupportedWorkflowError if is_workflow else UnsupportedModuleError
-            raise error(name, "it has no interfaces")
+            raise error(normalize_module_name(name), "it has no interfaces")
 
-    def is_capable(self, name: str, is_async: bool = False) -> bool:
+    def is_capable(self, name: ModuleNameLike, is_async: bool = False) -> bool:
         """
         Reports whether ``name`` exposes ``pipe``, or ``async_pipe`` when ``is_async``.
 
@@ -170,13 +175,15 @@ class ResolverDispatcher:
 
     @overload
     def resolve(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
     @overload
     def resolve(
-        self, name: str, is_async: Literal[True]
+        self, name: ModuleNameLike, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper | None:
+    def resolve(
+        self, name: ModuleNameLike, is_async: bool = False
+    ) -> ModuleWrapper | None:
         """
         Resolves ``name`` to its ``pipe`` (or ``async_pipe`` when ``is_async``).
 

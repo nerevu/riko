@@ -61,7 +61,7 @@ from riko.runtime._workflow_stores import (
     MappingStore,
     PackageStore,
 )
-from riko.types._enums import Backends
+from riko.types._enums import Backends, ModuleName
 from riko.types._wrappers import SubPipe, is_subpipe
 from tests import pyworkflows
 from tests._execution import module_workflow, registered_modules
@@ -175,6 +175,10 @@ class _FalsyPipe:
         return source
 
 
+class _Typo(ModuleName):
+    TRUNKATE = "trunkate"
+
+
 BUILTIN_SHADOWS = [
     pytest.param(
         ModuleRegistry(),
@@ -258,13 +262,15 @@ class TestModuleRegistry:
         with pytest.raises(NotImplementedError, match=rf"Registry\.{method} must"):
             getattr(Registry(), method)(arg)
 
+    @pytest.mark.parametrize("name", ["trunkate", _Typo.TRUNKATE])
     @pytest.mark.parametrize("method", ["require", "require_interfaces"])
-    def test_missing_module_hints_at_close_matches(self, fixed_registry, method):
+    def test_missing_module_hints_at_close_matches(self, fixed_registry, method, name):
         with pytest.raises(
             UnsupportedModuleError, match=r"did you mean 'truncate'\?"
         ) as e:
-            getattr(fixed_registry, method)("trunkate")
+            getattr(fixed_registry, method)(name)
 
+        assert type(e.value.module_name) is str
         assert e.value.module_name == "trunkate"
         assert e.value.matches == ("truncate",)
 
@@ -454,6 +460,14 @@ class TestResolverDispatcher:
             dispatcher.require("pipe_missing")
 
         assert err.value.pipe_id == "pipe_missing"
+
+    def test_name_no_resolver_accepts_raises_with_the_plain_name(self):
+        local = ResolverDispatcher(WorkflowResolver())
+
+        with pytest.raises(UnsupportedModuleError, match="no resolver accepts") as err:
+            local.require(_Typo.TRUNKATE)
+
+        assert type(err.value.module_name) is str
 
     def test_stored_workflow_without_interfaces_fails_validation_as_a_workflow(self):
         store = MappingStore({"pipe_empty": ModuleType("pipe_empty")})

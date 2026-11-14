@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Literal, overload
 from attrs import evolve
 
 from riko.base._exceptions import UnsupportedModuleError
-from riko.definitions._module_definition import ModuleDefinition
+from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._pipedef import is_pipe_id
 
@@ -43,6 +43,7 @@ from ._registry import Registry
 if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
 
+    from riko.types._enums import ModuleNameLike
     from riko.types._wrappers import (
         AsyncModuleWrapper,
         Interface,
@@ -121,22 +122,24 @@ class ModuleRegistry(Registry[ModuleDefinition]):
     def _resolve_builtin(self, name: str, is_async: bool = False) -> ModuleWrapper:
         return require_interface(name, is_async=is_async)
 
-    def is_compatible(self, name: str) -> bool:
+    def is_compatible(self, name: ModuleNameLike) -> bool:
         return not is_pipe_id(name)
 
     @overload
     def require(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload
-    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper:
+    def require(
+        self, name: ModuleNameLike, is_async: Literal[True]
+    ) -> AsyncModuleWrapper: ...
+    def require(self, name: ModuleNameLike, is_async: bool = False) -> ModuleWrapper:
         """
         Finds a module's sync or async callable by tier precedence, or raises.
 
         Args:
 
-            name: Canonical module name to resolve.
+            name: Module name to resolve.
 
         Kwargs:
 
@@ -163,22 +166,24 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             True
 
         """
-        if (definition := self._load_entry(name)) is None:
-            self._require_builtin_name(name)
-            pipe = self._resolve_builtin(name, is_async)
+        canonical = normalize_module_name(name)
+
+        if (definition := self._load_entry(canonical)) is None:
+            self._require_builtin_name(canonical)
+            pipe = self._resolve_builtin(canonical, is_async)
         elif (pipe := definition.get_pipe(is_async)) is None:
             interface = "async_pipe" if is_async else "pipe"
-            raise UnsupportedModuleError(name, f"it has no {interface!r}")
+            raise UnsupportedModuleError(canonical, f"it has no {interface!r}")
 
         return pipe
 
-    def require_interfaces(self, name: str) -> frozenset[Interface]:
+    def require_interfaces(self, name: ModuleNameLike) -> frozenset[Interface]:
         """
         Finds which of ``pipe`` and ``async_pipe`` a module defines.
 
         Args:
 
-            name: Canonical module name to inspect.
+            name: Module name to inspect.
 
         Returns:
 
@@ -197,21 +202,23 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             ['pipe']
 
         """
-        if (definition := self._load_entry(name)) is None:
-            self._require_builtin_name(name)
-            interfaces = load_interfaces(name)
+        canonical = normalize_module_name(name)
+
+        if (definition := self._load_entry(canonical)) is None:
+            self._require_builtin_name(canonical)
+            interfaces = load_interfaces(canonical)
         else:
             interfaces = definition.interfaces
 
         return interfaces
 
-    def load_definition(self, name: str) -> ModuleDefinition | None:
+    def load_definition(self, name: ModuleNameLike) -> ModuleDefinition | None:
         """
         Loads a runtime or entry-point definition by name.
 
         Args:
 
-            name: Canonical module name to inspect.
+            name: Module name to inspect.
 
         Returns:
 
@@ -226,7 +233,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
             True
 
         """
-        return self._load_entry(name)
+        return self._load_entry(normalize_module_name(name))
 
 
 module_registry: ModuleRegistry = ModuleRegistry()
