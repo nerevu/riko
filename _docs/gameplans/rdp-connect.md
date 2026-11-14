@@ -321,7 +321,7 @@ contracts.
 
 * Singer-compatible and Native RDP profiles;
 * actor capability negotiation;
-* state/provenance projection from core `FeedState` / `_FeedItem` semantics;
+* state/provenance projection from core `FeedState` / `_ItemEnvelope` semantics;
 * schema model;
 * transport-selection rules;
 * manifest protocol.

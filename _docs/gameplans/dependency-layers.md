@@ -14,9 +14,9 @@ An arrow points from a layer to the layers it may depend on. The compact form pr
 by `manage lint imports --architecture` is:
 
 ```text
-base < types < {bado | coercion | definitions} < io < parsing < rss
-        {bado | definitions} < execution
+base < types < {bado | coercion | definitions} < {execution | io}
         {execution | parsing} < runtime
+        io < parsing < rss
         {rss | runtime} < modules < api < cli
 ```
 
@@ -31,7 +31,7 @@ definitions -> types
 io          -> coercion, bado, definitions
 parsing     -> io
 rss         -> parsing
-execution   -> bado, definitions
+execution   -> bado, coercion, definitions
 runtime     -> execution, parsing
 modules     -> runtime, rss
 api         -> modules
@@ -41,7 +41,8 @@ cli         -> api
 A layer may also import any transitive dependency reachable through that DAG. The
 DAG is deliberately not flattened into one linear stack: `bado`, `coercion`, and
 `definitions` are peers, while `execution` forms a separate branch that rejoins at
-`runtime`.
+`runtime`. Like `io`, `execution` builds on that whole peer tier, so the executions
+can mint durable item identities through the canonical encoding in `coercion`.
 
 ## Package mapping
 

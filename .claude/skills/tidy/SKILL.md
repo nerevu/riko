@@ -170,7 +170,10 @@ neighborhood it affects:
    change (a fix for a 2026-introduced defect needs none: the general Fixes
    bullet covers it, per `_docs/INTERNALS.md`), fix narratives in CLAUDE.md or
    `_docs/`, per-release renames in `docs/MIGRATION.rst`, untracked scratch
-   docs cited from stable docs.
+   docs cited from stable docs. To check a bullet's "before" claim against the last
+   release, run a probe with `python .claude/skills/tidy/release_probe.py VERSION
+   PROBE.py --root SCRATCHPAD`, passing the session's scratchpad directory (pre-2026
+   releases: `--python 3.8 --build-pin 'setuptools<58' --build-pin 'cython<3'`).
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define

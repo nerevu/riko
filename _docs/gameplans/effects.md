@@ -191,9 +191,9 @@ and errors through `write_through` (`tests/internal/test_io.py`
 path: termination, the async terminate/throw cases (triage 2026-10-28).
 
 The write session stays concerned with **delivery only**. Per-item provenance/lineage is
-not the session's job: once `FeedResult`/`_FeedItem` lands (R5A), execution passes the
-appropriate record/value into the write effect and maintains lineage externally, rather
-than teaching the session about pipeline provenance.
+not the session's job: once `FeedResult`/`_ItemEnvelope` lands (R5A), execution passes
+the appropriate record/value into the write effect and maintains lineage externally,
+rather than teaching the session about pipeline provenance.
 
 Successful completion aggregates per write node and emits a `WriteResult` through
 `EventSink`. `WriteResult` is out-of-band execution information, not a replacement
