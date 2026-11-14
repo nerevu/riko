@@ -313,14 +313,11 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
-        ...     rule = {"field": "title", "op": "contains", "value": "web"}
-        ...     result = async_pipe(items, conf={"rule": rule})
-        ...     print((await anext(result))["title"])
-        >>>
-        >>> run(main)
-        Website Developer
+        >>> items = [{"title": "Good job!"}, {"title": "Website Developer"}]
+        >>> rule = {"field": "title", "op": "contains", "value": "web"}
+        >>> stream = async_pipe(items, conf={"rule": rule})
+        >>> run(anext, stream)["title"]
+        'Website Developer'
 
     """
     return parser(*args, **kwargs)

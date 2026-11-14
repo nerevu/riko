@@ -1227,7 +1227,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
 
         Examples:
 
-            >>> from riko import async_return, issync, run
+            >>> from riko import async_return, run
             >>>
             >>> @processor
             ... def pipe(item, extraction, objconf, **kwargs):
@@ -1243,14 +1243,7 @@ class processor[B: bool](Module[B]):  # noqa: N801
             >>> kwargs = {"conf": {"times": "three"}, "assign": "content"}
             >>> next(pipe(item, **kwargs))
             {'content': 'say "hello world" three times!'}
-            >>> async def main():
-            ...     result = async_pipe(item, **kwargs)
-            ...     print(await anext(result))
-            >>>
-            >>> if issync:
-            ...     {"content": 'say "hello world" three times!'}
-            ... else:
-            ...     run(main)
+            >>> run(anext, async_pipe(item, **kwargs))
             {'content': 'say "hello world" three times!'}
 
         """

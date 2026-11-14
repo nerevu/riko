@@ -111,11 +111,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe()
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
+        >>> stream = async_pipe()
+        >>> run(anext, stream)
         {'forever': True}
 
     """

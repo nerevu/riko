@@ -493,10 +493,8 @@ class Pipeline(PipelineDefinition[T_co]):
 
             >>> from riko import run
             >>>
-            >>> async def main():
-            ...     print(await Pipeline.from_module("count").afirst([{"x": 1}]))
-            >>>
-            >>> run(main)
+            >>> pipeline = Pipeline.from_module("count")
+            >>> run(pipeline.afirst, [{"x": 1}])
             {'count': 1}
 
         """

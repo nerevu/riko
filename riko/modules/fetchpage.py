@@ -218,14 +218,11 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     url, path = get_path("bbc.html"), "value.items"
-        ...     conf = {"url": url, "start": "DOCTYPE ", "end": "http"}
-        ...     result = async_pipe(conf=conf)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
-        html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "
+        >>> url = get_path("bbc.html")
+        >>> conf = {"url": url, "start": "DOCTYPE ", "end": "http"}
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)
+        'html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "'
 
     """
     return await async_parser(*args, **kwargs)

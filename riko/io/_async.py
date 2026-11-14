@@ -436,12 +436,8 @@ async def async_url_read(
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     content = await async_url_read(get_path("spreadsheet.csv"))
-        ...     print(content[:6])
-        >>>
-        >>> run(main)
-        Member
+        >>> run(async_url_read, get_path("spreadsheet.csv"))[:6]
+        'Member'
 
     """
     url = normalize_url(url, offline=True)

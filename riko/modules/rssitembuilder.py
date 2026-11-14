@@ -150,12 +150,9 @@ def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"title": "Hi", "guid": "a1", "mediaThumbURL": "img.png"}
-        ...     result = async_pipe(conf=conf)
-        ...     print((await anext(result))["media:thumbnail"])
-        >>>
-        >>> run(main)
+        >>> conf = {"title": "Hi", "guid": "a1", "mediaThumbURL": "img.png"}
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)["media:thumbnail"]
         {'url': 'img.png'}
 
     """

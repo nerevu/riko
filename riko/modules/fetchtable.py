@@ -222,12 +222,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("spreadsheet.csv")})
-        ...     print((await anext(result))["mileage"])
-        >>>
-        >>> run(main)
-        7213
+        >>> stream = async_pipe(conf={"url": get_path("spreadsheet.csv")})
+        >>> run(anext, stream)["mileage"]
+        '7213'
 
     """
     return await async_parser(*args, **kwargs)

@@ -117,16 +117,13 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Examples:
 
-        >>> from riko import run
+        >>> from riko import alist, run
         >>>
-        >>> async def main():
-        ...     items = ({"x": x} for x in range(5))
-        ...     other1 = ({"x": x + 5} for x in range(5))
-        ...     other2 = ({"x": x + 10} for x in range(5))
-        ...     result = async_pipe(items, others=[other1, other2])
-        ...     print(len([item async for item in result]))
-        >>>
-        >>> run(main)
+        >>> items = ({"x": x} for x in range(5))
+        >>> other1 = ({"x": x + 5} for x in range(5))
+        >>> other2 = ({"x": x + 10} for x in range(5))
+        >>> stream = async_pipe(items, others=[other1, other2])
+        >>> len(run(alist, stream))
         15
 
     """

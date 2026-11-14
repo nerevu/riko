@@ -127,14 +127,11 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     item = {"title": "Hello world"}
-        ...     part = [{"subkey": "title", "type": "text"}, "s"]
-        ...     result = async_pipe(item, conf={"part": part})
-        ...     print((await anext(result))["strconcat"])
-        >>>
-        >>> run(main)
-        Hello worlds
+        >>> item = {"title": "Hello world"}
+        >>> part = [{"subkey": "title", "type": "text"}, "s"]
+        >>> stream = async_pipe(item, conf={"part": part})
+        >>> run(anext, stream)["strconcat"]
+        'Hello worlds'
 
     """
     return parser(*args, **kwargs)

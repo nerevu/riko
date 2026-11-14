@@ -65,10 +65,8 @@ def async_pipe(*args: Any, **kwargs: Any) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     print(await anext(async_pipe(iter([{"content": "hi"}]))))
-        >>>
-        >>> run(main)
+        >>> stream = async_pipe(iter([{"content": "hi"}]))
+        >>> run(anext, stream)
         {'content': 'HI'}
 
     Notes:

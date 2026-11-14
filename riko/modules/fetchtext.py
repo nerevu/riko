@@ -200,13 +200,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     conf = {"url": get_path("lorem.txt")}
-        ...     result = async_pipe(conf=conf)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
-        What is Lorem Ipsum?
+        >>> conf = {"url": get_path("lorem.txt")}
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)
+        'What is Lorem Ipsum?'
 
     """
     return await async_parser(*args, **kwargs)
