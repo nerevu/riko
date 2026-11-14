@@ -1333,6 +1333,8 @@ class TestResolveDate:
 UNINDEXABLE_ITEMS = [
     pytest.param([1], {"cmp_pos": 0}, "cmp_pos=0", id="compare-position"),
     pytest.param([1], {"arg_pos": 0}, "arg_pos=0", id="argument-position"),
+    pytest.param([1], {"cmp_pos": 0, "arg_pos": 0}, "cmp_pos=0", id="same-position"),
+    pytest.param([1], {"cmp_pos": 0, "arg_pos": 1}, "cmp_pos=0", id="both-positions"),
 ]
 
 

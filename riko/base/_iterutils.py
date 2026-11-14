@@ -287,7 +287,7 @@ def gen_non_null(
             continue
 
         if pos_only:
-            item = require_sequence(item, cmp_msg)
+            item = require_sequence(item, cmp_msg, error=TypeError)
 
             if (cmp := item[cmp_idx]) is None:
                 continue
