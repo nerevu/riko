@@ -128,10 +128,12 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
         >>> from riko import run
         >>>
-        >>> items = ({"x": x} for x in range(5))
-        >>> stream = async_pipe(items)
-        >>> run(anext, stream)
-        {'count': 5}
+        >>> async def gen_items():
+        ...     for x in range(3):
+        ...         yield {"x": x}
+        >>>
+        >>> run(anext, async_pipe(gen_items()))
+        {'count': 3}
 
     """
     return parser(*args, **kwargs)
