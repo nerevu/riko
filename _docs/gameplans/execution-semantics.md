@@ -294,7 +294,12 @@ node finishes or the output stream closes; a sync twin of `_RunStream`/`_Owned` 
 `_close_tracked` and the context parameter of the sync `_build_stream`. Tripwire:
 `tests/internal/test_plan_runs.py::TestPlanRun::test_run_closes_a_sync_source_when_its_output_closes`.
 `Workflow.require_executable` refuses fan-out, so each node stream has one consumer;
-when fan-out lands, a sync node's early input close must become per-consumer.
+when fan-out lands, a sync node's early input close must become per-consumer. Bare
+operator wrappers never close their input either (triage 2026-11-14): the wrapper closes
+only the parser's result, so closing a direct `truncate`, `uniq`, or `filter` call early
+leaves a source the caller still holds open; that module-level contract is S1's
+([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)),
+and this run-object follow-up owns the execution-level close.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module,
 parser, factory, and extension code never creates event loops, portals, executors,
