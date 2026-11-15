@@ -542,6 +542,15 @@ ORDERED_COMPARES = [
     pytest.param(["-inf"], "less", "-5", [], id="inf-is-text"),
 ]
 
+STRING_FIELDS = [{"i": 0, "x": "web"}, {"i": 1}, {"i": 2, "x": None}]
+STRING_FIELDS += [{"i": 3, "x": ""}, {"i": 4, "x": "none of these"}]
+STRING_COMPARES = [
+    pytest.param("contains", "non", [4], id="contains-skips-missing"),
+    pytest.param("matches", "^N", [], id="matches-skips-missing"),
+    pytest.param("doesnotcontain", "web", [3, 4], id="doesnotcontain-skips-missing"),
+    pytest.param("contains", "", [0, 3, 4], id="empty-string-is-a-value"),
+]
+
 
 class TestFilter:
     @pytest.mark.parametrize(("values", "op", "value", "expected"), ORDERED_COMPARES)
@@ -550,6 +559,12 @@ class TestFilter:
         rule = FilterConfRule(field="x", op=op, value=value)
         conf = FilterConf({"rule": rule})
         assert _values(filter_pipe(items, conf=conf), "x") == expected
+
+    @pytest.mark.parametrize(("op", "value", "expected"), STRING_COMPARES)
+    def test_filter_string_compare_needs_a_value(self, op, value, expected):
+        rule = FilterConfRule(field="x", op=op, value=value)
+        conf = FilterConf({"rule": rule})
+        assert _values(filter_pipe(STRING_FIELDS, conf=conf), "i") == expected
 
     def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
         """A ``"today"`` rule value follows the clock, not its first evaluation."""

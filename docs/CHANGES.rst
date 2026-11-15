@@ -279,7 +279,8 @@ Fixes
   now logs one warning and passes the value through unchanged, wherever it appears.
 
 - ``filter`` resolves relative dates (e.g., ``"today"``) on every evaluation instead of
-  reusing the first value.
+  reusing the first value. Its ``contains``, ``doesnotcontain``, and ``matches`` no
+  longer match a missing or ``None`` field as the text ``"None"``.
 
 - ``sort`` orders strings numerically when every value is a number or numeric string.
 
