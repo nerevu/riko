@@ -250,8 +250,9 @@ def export(
 
     Returns:
 
-        The items for ``list``/``tuple``, a ``StringIO`` for a ``Formats`` value, or the
-        number of bytes written when ``f`` is given.
+        The items for ``list``/``tuple``, a ``StringIO`` for a ``Formats`` value (an
+        iterable of lines for ``ofx``/``qif``), or the number of bytes written when
+        ``f`` is given.
 
     Raises:
 
