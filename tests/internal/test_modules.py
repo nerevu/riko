@@ -729,6 +729,19 @@ class TestModuleMetadata:
         with pytest.raises(TypeError, match=r"riko\.modules\.bare pipe has no module"):
             get_module_metadata("bare")
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="module flags declared on the decorator are not yet implemented: a "
+        "plugin module named like a built-in inherits the built-in's flags",
+    )
+    def test_plugin_named_like_a_builtin_keeps_its_own_flags(self) -> None:
+        def parser(stream, objconf, tuples, **kwargs):
+            return iter(stream)
+
+        parser.__module__ = "acme.union"
+        assert operator(parser).sequential_inputs is False
+
 
 def _carries_wrapper_meta(func: object) -> bool:
     return all(hasattr(func, attr) for attr in WRAPPER_META)

@@ -1542,6 +1542,22 @@ class TestFramed:
 
         assert not path.exists()
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="publishing an empty replacement document is not yet implemented",
+    )
+    def test_empty_replace_publishes_empty_document(self, tmp_path):
+        # Stream delivery of no items writes ``[]``; a session that receives no
+        # items skips the commit and leaves the prior document in place.
+        path = tmp_path / "out.json"
+        path.write_bytes(b'[{"x": 9}]')
+
+        with file_write_session(build_write(path)) as session:
+            session.finalize()
+
+        assert path.read_bytes() == b"[]"
+
     @ATOMIC_PUBLICATION_PENDING
     def test_interrupted_finalize_keeps_original_content(self, tmp_path, monkeypatch):
         # The commit empties the destination on open, so an interruption before the

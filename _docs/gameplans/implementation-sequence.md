@@ -1383,7 +1383,17 @@ Deliver:
   [release-readiness.md § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)
   makes it a 1.0 requirement). It touches the decorator wrapper builder,
   `ModuleDefinition`'s interface slots, and codegen, beside the plain-callable slot
-  decision in [extensibility.md](extensibility.md) E1.
+  decision in [extensibility.md](extensibility.md) E1. That rebuild also owns two
+  findings from the 2026-11-14 repo audit: `loopable` and `sequential_inputs` are
+  derived from the module's file name (`is_loopable`/`has_sequential_inputs` in
+  `riko/modules/_derive.py`), so a plugin module named `union` or `input` inherits the
+  built-in's flags and no plugin can declare sequential inputs — strict xfail
+  `tests/internal/test_modules.py::TestModuleMetadata::test_plugin_named_like_a_builtin_keeps_its_own_flags`;
+  the end state is decoration options stamped as given (set on `join`/`union`/`input`)
+  with the name tables deleted. And the three decorator `__call__` methods in
+  `riko/modules/_decorators.py` repeat the same sync/async wrapper pair and
+  `wraps`/`cast`/`_set_wrapper_metadata` tail; the rebuilt wrapper builder dedupes them
+  into one helper, with the operator passing its own async body.
 - callable nodes that resolve without a donor module (triaged 2026-10-27):
   `Pipeline.map` borrows the registered `udf` module's metadata (`_resolve_callable`),
   so `register_module(..., replace=True)` of a sync-only `udf` makes `.map` of an async
@@ -1908,8 +1918,13 @@ front, so a failed run destroys it too. Tripwires:
 `tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
 and
 `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`,
-which share the `ATOMIC_PUBLICATION_PENDING` mark. Early close (gameplan audit triage
-2026-11-05): this phase distinguishes incremental consumption/encoding from publication
+which share the `ATOMIC_PUBLICATION_PENDING` mark. A framed replace that receives no
+items (`acquire`, no `write`, `finalize`) skips the commit and leaves the prior file,
+while stream delivery of `[]` writes `[]`; the staged publication decides the zero-item
+case — strict xfail
+`tests/internal/test_io.py::TestFramed::test_empty_replace_publishes_empty_document`
+(repo audit 2026-11-14). Early close (gameplan audit triage 2026-11-05): this phase
+distinguishes incremental consumption/encoding from publication
 ([effects.md § 12](effects.md#12-fileserialized-writes)). A replacing write stages its
 output and publishes only after a successful complete traversal and validation; a
 snapshot-destructive mode additionally validates match-key uniqueness across the
