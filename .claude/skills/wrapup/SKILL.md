@@ -14,14 +14,16 @@ owner exactly once, respecting what each one is allowed to contain.
 Wrapup runs at the end of a session, when the context is already several
 hundred thousand tokens. Every tool round trip re-reads all of it, so the cost
 of this skill is the number of turns, not the size of the files. Budget: **seven
-turns** — tidy, evidence, plan, edits, verify, memory, report. Structure the work so
-each phase is one response:
+turns** — tidy setup, tidy launch with the first evidence batch beside it, evidence
+after tidy, plan, edits, verify, memory; the report closes the last turn. Structure
+the work so each phase is one response:
 
 - **Never read a whole owner file.** IMPLEMENTED.md, CHANGES.rst,
   PHASE_CHECKLISTS.md, and the gameplans are tens of KB each. Use `grep -n`
-  and `sed -n 'A,Bp'` for the section you will touch, inside the evidence batch.
+  and `sed -n 'A,Bp'` for the section you will touch, inside the evidence batches.
 - **Batch, don't serialize.** Independent tool calls go in one response: all
-  evidence in one Bash call, all Edit/Write calls together, one lint run.
+  evidence in two Bash calls (one beside the tidy launch, one after its report), all
+  Edit/Write calls together, one lint run.
 - **Docs and memory only — except tidy.** Wrapup itself never edits code or
   tests and never runs prettify, the test suite, `lint --all`, or
   `check-types` — that is `/land` and `/go` work. The one exception is step 0:
@@ -42,45 +44,53 @@ park it in `.claude/skills/drafts/` as an unapproved candidate, or drop it. A dr
 folded script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only
 by the user (agents never delete it); report the verdict.
 
-First run `python .claude/skills/land/gates.py check tidy`. When it exits 0, tidy
-already ran on this exact tree (in this or another session): skip the agent and report
-"tidy current". Otherwise run `python .claude/skills/land/require_agents.py` (on
-failure, stop and report its output) and launch one fresh `implementer` agent with
+First, one setup Bash call runs `python .claude/skills/land/gates.py check tidy` and
+`python .claude/skills/land/require_agents.py` together. When `check tidy` exits 0,
+tidy already ran on this exact tree (in this or another session): skip the agent and
+report "tidy current". When `require_agents.py` fails, stop and report its output.
+Otherwise, in the next response, launch one fresh `implementer` agent with
 `model: "opus"` (not a fork — it needs only the diff, not this session's context; pin
 the model so it never inherits a Fable session's) with: "Follow
-`.claude/skills/tidy/SKILL.md`, reproduced below, in the repo at the current working
-directory; `/wrapup` is the caller. You cannot ask the user: apply mechanical fixes, and
-return phase-owned findings and framed judgment questions instead of deciding them." and
-then the whole file pasted in (`cat .claude/skills/tidy/SKILL.md`), so the agent never
-spends a turn reading it. Wait for its report before step 1, so the evidence batch sees
-the tidied tree. Its judgment questions join step 2's single AskUserQuestion call; its
-phase-owned findings and "tidy edits not yet through the full suite" (when it edited
-anything) go in the handoff for the next `/land`. If tidy reports nothing to tidy, move
-on.
+`.claude/skills/tidy/SKILL.md` in the repo at the current working directory; `/wrapup`
+is the caller. You cannot ask the user: apply mechanical fixes, and return phase-owned
+findings and framed judgment questions instead of deciding them." The agent reads that
+file itself. Never `cat` or `Read` the tidy skill in the main loop: at 200k context
+that costs several times what the agent's own read does, and the measurement tooling
+attributes the agent run by the `Follow` line, not the pasted body.
 
-## 1. Gather evidence (one Bash call)
+In the same response as the Agent launch, run step 1's tidy-independent evidence (one
+Bash call beside it). Only the tree-dependent evidence waits for tidy's report, so it
+sees the tidied tree. Tidy's judgment questions join step 2's single AskUserQuestion
+call; its phase-owned findings and "tidy edits not yet through the full suite" (when it
+edited anything) go in the handoff for the next `/land`. If tidy reports nothing to
+tidy, move on.
 
-Reconstruct the session's real outcome from evidence, not recollection, in a
-single command batch:
+## 1. Gather evidence (two Bash calls)
 
-- `git status --short`, `git diff --stat` (staged and unstaged), and
-  `git log --oneline -8`.
-- Pending fixups: `git log --format='%h %s' HEAD --not --remotes`. Each
+Reconstruct the session's real outcome from evidence, not recollection, in two
+command batches: one beside the tidy launch, one after tidy's report. When tidy is
+current, run both as one call in the turn after the setup call.
+
+- After tidy: `git status --short` and `git diff --stat` (staged and unstaged).
+- Beside the launch: `git log --oneline -8`.
+- Beside the launch: pending fixups,
+  `git log --format='%h %s' HEAD --not --remotes`. Each
   `fixup! <subject>` line names its target by subject. A target may already be
   pushed, so find it in `git log --format='%h %s' HEAD`, not in that range; the
   oldest target is the base for step 5's rebase line.
-- The suite count: `python .claude/skills/land/gates.py summary test` (the
-  last `/land` suite pass, from any session) and `grep -n '^Suite:'
+- Beside the launch: the suite count, `python .claude/skills/land/gates.py summary
+  test` (the last `/land` suite pass, from any session) and `grep -n '^Suite:'
   _docs/PHASE_CHECKLISTS.md`.
-- For each owner you expect to touch, the relevant section only: `grep -n` for
-  the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
+- After tidy: for each owner you expect to touch, the relevant section only:
+  `grep -n` for the slice/phase/feature names in `_docs/IMPLEMENTED.md`,
   `_docs/PHASE_CHECKLISTS.md`, the owning gameplan, `docs/CHANGES.rst`
   (top entry block), and `_docs/ROADMAP.md`.
-- The memory index (`MEMORY.md` is already in context — grep the memory
-  directory only for the specific file you will update) and the current
+- Beside the launch: the memory index (`MEMORY.md` is already in context — grep the
+  memory directory only for the specific file you will update) and the current
   `session-handoff.md`.
-- `grep -n` in `~/.claude/skills/riko/references/` for the symbols/paths the
-  session changed, plus the "Snapshot basis" line in `current-state.md`.
+- Beside the launch: `grep -n` in `~/.claude/skills/riko/references/` for the
+  symbols/paths the session changed, plus the "Snapshot basis" line in
+  `current-state.md`.
 
 Distinguish landed work from discussed-but-not-done work — only the former
 goes in status docs; the latter belongs in a gameplan or memory as an open item.

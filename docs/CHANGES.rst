@@ -11,7 +11,7 @@ New
 
   - build one with ``Pipeline.from_module``
   - chain modules by attribute (``pipeline.sort``), ``pipeline.pipe(name)``,
-    ``pipeline | name``, or ``pipeline.map(fn)``
+    ``pipeline | name``, or ``pipeline.map(fn, identity=…)`` (``riko.IdentityMode``)
   - configure a run with ``with_context``, ``with_resource``, ``with_input_schemas``,
     and ``with_execution``
   - run it by calling it with items, iterating it, or opening it as a context manager
@@ -19,22 +19,18 @@ New
 - Added ``riko.Resource`` to inject values via ``pipeline.with_resource``/``Context``.
 
 - Added the ``Workflow`` graph (``RikoNode``, ``PortEdge``, ``Endpoint``) that a
-  ``Pipeline`` runs. Create one from a workflow document (``riko.WorkflowDocument``),
-  bare-bones DAG (``PipeDag``), or pipe definition (``PipeDef``). It carries JSON Schema
-  input schemas (``InputSchema``) and a ``dependencies`` list.
+  ``Pipeline`` runs. Build one from a workflow document (``riko.WorkflowDocument``),
+  ``PipeDag``, or ``PipeDef``.
 
 - Added the ``WorkflowLike``, ``WorkflowModule``, ``RawWorkflow``, ``PipelineStream``,
-  and ``CallOptions`` type aliases to ``riko`` and ``riko.types``; and the
-  ``InputSchema``, ``RawInputSchema``, and ``InputSchemaLike`` type aliases to
-  ``riko.types``.
+  and ``CallOptions`` types to ``riko`` and ``riko.types``; and the ``InputSchema``,
+  ``RawInputSchema``, and ``InputSchemaLike`` types to ``riko.types``.
 
 - ``run-pipe`` can now run a ``WorkflowDocument`` or a ``WorkflowModule`` file.
 
-- A ``PipeDag`` wire can name an entry port as its third item (``["b", "u", "in:1"]``)
-  for fan-in modules like ``union``. A ``modules`` entry can ``name`` its module.
+- Added ``PipeDag`` wire entry ports and ``modules`` entry names.
 
-- Every riko logger is now a ``"riko"`` child logger. This allows setting the level for
-  all of them via ``logging.getLogger("riko").setLevel(…)``.
+- Every riko logger is now a ``"riko"`` child logger.
 
 - Added to ``riko``:
 
@@ -45,16 +41,15 @@ New
     ``async_get_temp_path``, and ``Formats.JSONL``
   - ``input_schemas`` and ``dependencies`` via ``describe_module``
 
-- Added to ``riko.ext`` (the Cookbook's "Compiling workflow documents" and "Running
-  stored workflows" recipes show several in use):
+- Added to ``riko.ext``:
 
   - the node, edge, and write-target classes (e.g., ``ModuleNode``, ``FileTarget``)
   - ``register_workflow_store``, ``register_target``, and ``temporary_registrations()``
   - ``prepare`` on module pipe callables, returning a ``PreparedCall``
   - the ``workflow`` decorator and ``resolve_inputs``
 
-- Added ``ModuleMetadata.provider`` and ``list_modules(provider=…)``; each plugin
-  provider gets a discovery class (e.g., ``Example.LOOKUP``).
+- Added ``ModuleMetadata.provider``, ``list_modules(provider=…)``, and plugin provider
+  discovery classes.
 
 - Added module options:
 
@@ -89,19 +84,22 @@ Changes
 
 - The ``datebuilder`` module emits a JSON-friendly date dict instead of ``struct_time``.
 
+- A module that assigns a stream of results (e.g., ``tokenizer`` with ``emit=False``)
+  now always assigns a list. Pass ``count="first"`` to assign only the first result.
+
 - A ``PipeDef`` no longer requires ``wires`` or a wire/endpoint ``id``.
 
 - ``Context`` and its ``inputs`` are now immutable. In a workflow run, the ``input``
   module reads each input named in ``input_schemas`` from ``inputs``, else from the
   schema's ``default``, instead of prompting. The run raises when neither is present.
 
-- ``fetchdata`` matches ``path`` keys case-insensitively when streaming JSON (with
-  ``ijson``). For keys differing only in case, it picks the first (in-memory the last).
+- With the ``perf`` extra, ``fetchdata`` matches JSON ``path`` keys case-insensitively.
 
 - Fetching a URL (including async ``exchangerate``) now times out after
   ``RIKO_FETCH_TIMEOUT`` seconds.
 
-- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``.
+- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``
+  and is keyword-only, as in ``async_map_stream``.
 
 - ``riko.PipelineStateError`` now requires a ``subject`` and names the errant object
   (e.g., a write session) instead of "pipe".
@@ -150,8 +148,7 @@ Changes
     is now ignored)
 
 - An async operator's ``async_pipe`` now returns an async iterator. Drop the ``await``.
-  Async processor and splitter results are still awaitable, and can now also be used
-  with ``async for``. Closing an async pipe's output early closes the streams it reads.
+  Async processor and splitter results can now also be used with ``async for``.
 
 - Pipes now parse ``conf`` on every call. Use ``pipe.prepare(conf=…)`` to parse it once.
 
@@ -161,7 +158,7 @@ Changes
 - The ``write`` module's ``url``/``target`` options are now ``dest``/``fmt``. ``url``
   alone writes nothing and warns.
 
-- ``sort`` groups items missing the field (a rule's ``default`` sets their sort value).
+- ``sort`` groups items missing the field.
 
 - ``hash`` now gives the same value in every process, whatever ``PYTHONHASHSEED`` is.
 
@@ -169,12 +166,10 @@ Changes
 
 - ``rename`` with an empty ``newval`` renames the field instead of deleting it.
 
-- The ``regex`` module applies consecutive ``seriesmatch=False`` rules to the original
-  text in one pass (leftmost match first) instead of to each rule's output.
+- The ``regex`` module applies consecutive ``seriesmatch=False`` rules in one pass.
 
 - ``cast_datetime`` always returns a ``datetime`` and no longer takes ``as_date`` or
-  ``as_datedict``: relative and plain dates resolve to midnight. Use ``cast_date`` for a
-  ``date``.
+  ``as_datedict``. Use ``cast_date`` for a ``date``.
 
 - ``subelement`` yields a ``None`` token for a path whose value is ``None``. A missing
   path still yields nothing.
@@ -196,9 +191,8 @@ Removed
 - Removed ``build_pipeline`` and ``extract_dependencies``. Removed ``convert_dag`` and
   ``parse_pipe_def``. Use ``Workflow.parse`` instead.
 
-- Removed the ``regex`` rule's ``offset`` key (positions are computed) and the no-op
-  ``multi`` conf key. A rule's ``default`` moved to the module conf; a rule ``default``
-  raises ``TypeError``.
+- Removed ``regex``'s ``offset`` rule key (now computed) and ``multi`` conf key
+  (``seriesmatch`` groups the passes). Set ``default`` on the conf, not the rule.
 
 - Removed execution modes. A pipe only runs: passing ``mode=`` to a pipe raises
   ``riko.RemovedOptionError`` (a ``TypeError``). Removed:
@@ -246,6 +240,8 @@ Fixes
   - the ``loop`` and ``exchangerate`` modules and ``filter`` comparisons
   - JSON and feed parsing, HTTP fetching and feed discovery, and URL and path resolution
 
+- ``import riko`` works on hosts without a system time-zone database.
+
 - ``rename`` now renames (or, with an omitted ``newval``, deletes), instead of copying,
   a field named by a dotted path or in a different case.
 
@@ -265,10 +261,9 @@ Fixes
     async fetch modules) raises ``httpx.HTTPStatusError`` for 4xx/5xx responses
     instead of reading the error page
   - ``fetchdata`` yields a dict for text-only XML roots and nothing for an empty file
-  - ``fetchpage`` returns ``""`` ``start`` is absent or immediately followed by ``end``
+  - ``fetchpage`` returns ``""`` without ``start``, or if ``end`` immediately follows it
   - ``csv`` and ``fetchtable`` yield nothing for an empty CSV file
-  - ``riko.async_url_open`` and ``exchangerate`` treat file names starting with ``http``
-    as files
+  - ``async_url_open`` and ``exchangerate`` recognize file names starting with ``http``
 
 - Fixed ``regex``:
 
@@ -284,7 +279,8 @@ Fixes
   now logs one warning and passes the value through unchanged, wherever it appears.
 
 - ``filter`` resolves relative dates (e.g., ``"today"``) on every evaluation instead of
-  reusing the first value.
+  reusing the first value. Its ``contains``, ``doesnotcontain``, and ``matches`` no
+  longer match a missing or ``None`` field as the text ``"None"``.
 
 - ``sort`` orders strings numerically when every value is a number or numeric string.
 
@@ -298,6 +294,8 @@ Fixes
 
 - A sync ``udf`` call whose ``func`` return is awaitable raises ``InvalidPipelineError``
   instead of yielding the coroutine object.
+
+- A run that exits early closes its seed and any iterator the seed hands out.
 
 Dev
 ~~~

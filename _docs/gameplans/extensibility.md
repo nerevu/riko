@@ -416,6 +416,17 @@ Structural references use:
 {"input": "customer_id"}
 ```
 
+The shape is reserved wherever references resolve (node `conf` and `map` keywords): a
+mapping whose only key is `input` with a string value is always a reference, so a
+literal of that exact shape has no escape there (ruled 2026-11-14 on an audit question;
+reproduced with a `regex` `default` of `{"input": "fallback"}`, which
+`Workflow.validate` rejects as an unresolved reference to `fallback`). R4E's conf-field
+schemas own the only disambiguation: a field whose closed object schema declares an
+`input` property reads the mapping as a literal. An open mapping field such as that
+`regex` `default` (`dict[str, str]`, no `input` property) and a `map` keyword (no conf
+schema) stay reserved after R4E lands, so a literal cannot be written there at all. No
+separate escape grammar is planned.
+
 An input's schema is full JSON Schema. Authoring shorthands normalize to that form.
 Requiredness is inferred from absence of a default; `default:null` means the input has a
 default of null and therefore must also be nullable. Canonical object schemas use

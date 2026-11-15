@@ -107,13 +107,10 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = ({"x": x} for x in range(5))
-        ...     result = async_pipe(items)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
-        {'x': 4}
+        >>> items = ({"x": x} for x in range(5))
+        >>> stream = async_pipe(items, emit=False, assign="last")
+        >>> run(anext, stream)
+        {'last': {'x': 4}}
 
     """
     return parser(*args, **kwargs)

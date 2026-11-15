@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from riko.bado._util import maybe_closing
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
@@ -72,19 +73,18 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     objconf = Objectify({"url": get_path("bbc.html")})
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["title"])
-        >>>
-        >>> run(main)
-        EU sets out 'phased' Brexit strategy
+        >>> objconf = Objectify({"url": get_path("bbc.html")})
+        >>> next(run(async_parser, None, None, objconf))["title"]
+        "EU sets out 'phased' Brexit strategy"
 
     """
     url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = await aload_rss_links(url, user_agent=objconf.user_agent)
 
-    if (first := next(rss, None)) is None:
+    with maybe_closing(rss):
+        first = next(rss, None)
+
+    if first is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
@@ -130,7 +130,10 @@ def parser(
     url: str = require_conf_key(objconf, "url", "fetchsitefeed", strict=True)
     rss = load_rss_links(url, user_agent=objconf.user_agent)
 
-    if (first := next(rss, None)) is None:
+    with maybe_closing(rss):
+        first = next(rss, None)
+
+    if first is None:
         logger.warning(f"No feed found at {url}")
         entries = []
     else:
@@ -185,12 +188,9 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("bbc.html")})
-        ...     print((await anext(result))["title"])
-        >>>
-        >>> run(main)
-        EU sets out 'phased' Brexit strategy
+        >>> stream = async_pipe(conf={"url": get_path("bbc.html")})
+        >>> run(anext, stream)["title"]
+        "EU sets out 'phased' Brexit strategy"
 
     """
     return await async_parser(*args, **kwargs)

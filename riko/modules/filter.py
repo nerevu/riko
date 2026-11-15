@@ -2,8 +2,11 @@
 """
 Filters items in a stream with one or more comparison rules.
 
-Rules can include or exclude matching items and can be combined with all/any
-semantics. Items are tested and yielded lazily.
+Rules can include or exclude matching items and can be combined with all/any semantics.
+Items are tested and yielded lazily. A missing or ``None`` field satisfies no
+comparison, positive or negative: ``truthy`` and ``falsy`` are the operators that test
+for absence. A present value is compared as itself, so an empty string contains ``""``
+and does not contain ``"x"``.
 
 Examples:
 
@@ -95,8 +98,8 @@ SWITCH: dict[str, Func[bool]] = {
     "atleast": _ordered(op.ge),
     "atmost": _ordered(op.le),
     "before": op.lt,
-    "contains": lambda x, y: x and y.lower() in x.lower(),
-    "doesnotcontain": lambda x, y: x and y.lower() not in x.lower(),
+    "contains": lambda x, y: y.lower() in x.lower(),
+    "doesnotcontain": lambda x, y: y.lower() not in x.lower(),
     "eq": op.eq,
     "falsy": op.not_,
     "greater": _ordered(op.gt),
@@ -116,7 +119,7 @@ TRUTHINESS_OPS = {"truthy", "falsy"}
 
 def cast_arg[VT](arg: VT, op: str) -> str | date | VT | None:
     if op in STRING_OPS:
-        value = str(arg)
+        value = None if arg is None else str(arg)
     elif op in DATE_OPS:
         try:
             value = cast_date(arg)  # pyright: ignore[reportArgumentType]
@@ -313,14 +316,11 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = [{"title": "Good job!"}, {"title": "Website Developer"}]
-        ...     rule = {"field": "title", "op": "contains", "value": "web"}
-        ...     result = async_pipe(items, conf={"rule": rule})
-        ...     print((await anext(result))["title"])
-        >>>
-        >>> run(main)
-        Website Developer
+        >>> items = [{"title": "Good job!"}, {"title": "Website Developer"}]
+        >>> rule = {"field": "title", "op": "contains", "value": "web"}
+        >>> stream = async_pipe(items, conf={"rule": rule})
+        >>> run(anext, stream)["title"]
+        'Website Developer'
 
     """
     return parser(*args, **kwargs)

@@ -117,11 +117,8 @@ def async_pipe(*args: Any, **kwargs: object) -> Cascade:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe({"x": x} for x in range(5))
-        ...     print(next(await anext(result)))
-        >>>
-        >>> run(main)
+        >>> stream = async_pipe({"x": x} for x in range(5))
+        >>> next(run(anext, stream))
         {'x': 0}
 
     """

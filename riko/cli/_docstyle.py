@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from ast import (
+    AST,
     AnnAssign,
     Assign,
     AsyncFunctionDef,
@@ -27,7 +28,9 @@ from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
+from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._iterutils import gen_instances, gen_non_null
+from riko.base._paths import ROOT_DIR
 from riko.base._verbs import VERBS
 
 from ._import_graph import FUNCTION_NODES
@@ -38,6 +41,10 @@ if TYPE_CHECKING:
 
 _RAISES_ENTRY: re.Pattern[str] = re.compile(r"[\w.]+:(\s|$)")
 _NONE_CHECK: re.Pattern[str] = re.compile(r">>> .* is None")
+_RUN_BINDING: re.Pattern[str] = re.compile(r">>> \w+ = run\(")
+_REVIEW_NOTE: re.Pattern[str] = re.compile(
+    r"(#\s*)?TODO\b|(?!>>>|\.\.\.).*(?<!``)\?\?\?(?!``)"
+)
 _ENTRY: re.Pattern[str] = re.compile(r"\*{0,2}(?P<name>\w+)( \(.*\))?:(\s|$)")
 _LEAD_VERBS: dict[str, str] = {rule.lead: rule.verb for rule in VERBS}
 _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
@@ -168,9 +175,9 @@ def gen_example_prose(doc: str) -> Iterator[str]:
     """
     Finds prose paragraphs that narrate between doctest examples.
 
-    A paragraph that follows an example and introduces the next one belongs in a
-    ``>>> #`` comment instead. A paragraph ending in ``::`` labels a new example
-    group and is allowed.
+    A paragraph that follows an example and introduces the next one belongs in a ``#``
+    comment instead. A paragraph ending in ``::`` labels a new example group and is
+    allowed.
 
     Args:
 
@@ -185,7 +192,10 @@ def gen_example_prose(doc: str) -> Iterator[str]:
         >>> doc = ">>> f(1)\\n1\\n\\nWith two:\\n\\n>>> f(2)\\n2"
         >>> list(gen_example_prose(doc))
         ['With two:']
-        >>> list(gen_example_prose(">>> f(1)\\n1\\n\\n>>> # With two\\n>>> f(2)\\n2"))
+        >>> list(gen_example_prose(">>> f(1)\\n1\\n\\n# With two\\n>>> f(2)\\n2"))
+        []
+        >>> bare = ">>> f(1)\\n1\\n\\n# With two\\n>>> f(2)\\n2\\n\\n>>> f(3)\\n3"
+        >>> list(gen_example_prose(bare))
         []
 
     """
@@ -196,7 +206,7 @@ def gen_example_prose(doc: str) -> Iterator[str]:
         starts_paragraph = started and line and (i == 0 or not lines[i - 1])
         started = started or line.startswith(">>>")
 
-        if starts_paragraph and not line.startswith((">>>", "...")):
+        if starts_paragraph and not line.startswith((">>>", "...", "#")):
             end = next((j for j in range(i, len(lines)) if not lines[j]), len(lines))
             following = next((rest for rest in lines[end:] if rest), "")
 
@@ -386,6 +396,65 @@ def gen_null_checks(doc: str) -> Iterator[str]:
     yield from (line for line in lines if _NONE_CHECK.fullmatch(line))
 
 
+def gen_run_bindings(doc: str, name: str) -> Iterator[str]:
+    """
+    Finds doctest lines that bind a ``run(`` result skipped without async support.
+
+    Without async support each ``run(`` example is skipped on its own, so the name it
+    binds is undefined for the examples after it. A doctest whose name contains
+    ``async`` or ``bado`` is skipped whole and passes.
+
+    Args:
+
+        doc: A cleaned docstring.
+        name: The doctest name, a dotted module path plus qualified name.
+
+    Yields:
+
+        Each ``>>> NAME = run(`` line.
+
+    Examples:
+
+        >>> list(gen_run_bindings(">>> items = run(f())", "riko.mod.f"))
+        ['>>> items = run(f())']
+        >>> list(gen_run_bindings(">>> items = run(f())", "riko.mod.async_f"))
+        []
+
+    """
+    skipped_whole = any(marker in name.lower() for marker in ASYNC_DOCTEST_MARKERS)
+    lines = () if skipped_whole else (line.strip() for line in doc.splitlines())
+    yield from (line for line in lines if _RUN_BINDING.match(line))
+
+
+def gen_review_notes(doc: str) -> Iterator[str]:
+    """
+    Finds review notes left in docstring text.
+
+    A line that starts with a ``TODO`` marker, bare or after ``#``, or that contains
+    an unquoted ``???`` is an open question for a reviewer, not documentation. A
+    ``TODO`` mid-line is prose and passes.
+
+    Args:
+
+        doc: A cleaned docstring.
+
+    Yields:
+
+        Each line carrying a review note.
+
+    Examples:
+
+        >>> doc = "S.\\n\\n# TODO: clarify\\nA positional??? record.\\nA mid-line TODO."
+        >>> len(list(gen_review_notes(doc)))
+        2
+        >>> list(gen_review_notes("A mid-line TODO."))
+        []
+
+    """
+    lines = (line.strip() for line in doc.splitlines())
+    yield from (line for line in lines if _REVIEW_NOTE.match(line))
+
+
 def resolve_public_path(name: str) -> str | None:
     """
     Finds the supported import path of a public name.
@@ -539,6 +608,24 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
         yield DocstringIssue(path, 1, "<module>", problem, first)
 
 
+def _get_module_name(path: Path) -> str:
+    """Gets the dotted module name pytest gives a file's doctests."""
+    resolved = path.resolve()
+    inside = resolved.is_relative_to(ROOT_DIR)
+    parts = resolved.relative_to(ROOT_DIR).with_suffix("").parts if inside else ()
+    return ".".join(part for part in parts or (path.stem,) if part != "__init__")
+
+
+def _gen_qualnames(node: AST, prefix: str) -> Iterator[tuple[AST, str]]:
+    """Pairs each class and function under ``node`` with its dotted doctest name."""
+    children = gen_instances(getattr(node, "body", ()), (ClassDef, *FUNCTION_NODES))
+
+    for child in children:
+        qualname = f"{prefix}.{child.name}"
+        yield child, qualname
+        yield from _gen_qualnames(child, qualname)
+
+
 def _iter_python_files(root: Path) -> Iterator[Path]:
     """Expands a root into the Python files under it (or itself, for a file)."""
     files = sorted(root.rglob("*.py")) if root.is_dir() else [root]
@@ -551,7 +638,9 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
 
     Function summaries must not lead with the output or with a different general-purpose
     verb than the function name. No docstring may narrate between its doctest examples,
-    check a result with ``is None``, or import a public name through a private module.
+    check a result with ``is None``, leave a ``TODO`` or ``???`` review note, import
+    a public name through a private module, or bind a ``run(`` result in a doctest
+    that is not skipped whole without async support.
 
     A parameter with a default is documented under ``Kwargs:``, one without under
     ``Args:``. A private module without a public API or with only a type-only public API
@@ -572,6 +661,8 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
         for path in _iter_python_files(root):
             tree = parse(path.read_text(encoding="utf-8"))
             nodes = gen_instances(walk(tree), types)
+            module_name = _get_module_name(path)
+            qualnames = {tree: module_name, **dict(_gen_qualnames(tree, module_name))}
 
             for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
                 doc = get_docstring(node) or ""
@@ -613,12 +704,25 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     yield DocstringIssue(path, lineno, name, problem, entry)
 
                 for prose in gen_example_prose(doc):
-                    problem = "narrates between examples (use a >>> # comment)"
+                    problem = "narrates between examples (use a # comment)"
                     yield DocstringIssue(path, lineno, name, problem, prose)
 
                 for check in gen_null_checks(doc):
                     problem = "checks for None (show the bare call instead)"
                     yield DocstringIssue(path, lineno, name, problem, check)
+
+                for note in gen_review_notes(doc):
+                    problem = "leaves a TODO or ??? review note"
+                    yield DocstringIssue(path, lineno, name, problem, note)
+
+                doctest_name = qualnames.get(node, f"{module_name}.{name}")
+
+                for binding in gen_run_bindings(doc, doctest_name):
+                    problem = (
+                        "binds a run( result that is skipped without async support "
+                    )
+                    problem += "(move it to an async example)"
+                    yield DocstringIssue(path, lineno, name, problem, binding)
 
                 for line, imported, public in gen_private_imports(doc):
                     problem = (
@@ -640,6 +744,8 @@ __all__ = [
     "gen_misplaced_params",
     "gen_null_checks",
     "gen_private_imports",
+    "gen_review_notes",
+    "gen_run_bindings",
     "gen_section_names",
     "gen_unordered_params",
     "get_name_verb",

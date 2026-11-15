@@ -111,7 +111,7 @@ files go in the same call.
 In the same response, scan the added lines for the defect classes past fix
 sessions kept repairing (closing, last-wins, truthiness, sync/async drift,
 chunk decoding, `next()` without a default, hash-seed order, frozen-record
-mutability, unbounded timeouts, `find()` slicing):
+mutability, unbounded timeouts, `find()` slicing) and for a second `return`:
 
 ```bash
 python .claude/skills/land/gates.py scope tidy | uv run --active --no-sync python .claude/skills/tidy/mistake_scan.py --diff-file -
@@ -170,7 +170,10 @@ neighborhood it affects:
    change (a fix for a 2026-introduced defect needs none: the general Fixes
    bullet covers it, per `_docs/INTERNALS.md`), fix narratives in CLAUDE.md or
    `_docs/`, per-release renames in `docs/MIGRATION.rst`, untracked scratch
-   docs cited from stable docs.
+   docs cited from stable docs. To check a bullet's "before" claim against the last
+   release, run a probe with `python .claude/skills/tidy/release_probe.py VERSION
+   PROBE.py --root SCRATCHPAD`, passing the session's scratchpad directory (pre-2026
+   releases: `--python 3.8 --build-pin 'setuptools<58' --build-pin 'cython<3'`).
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define
@@ -189,7 +192,11 @@ neighborhood it affects:
    it runs a CLI command, `examples` pipeline, or stored fixture end to end; public if
    it uses only supported names; else internal) and in the file whose index row names
    its subject? Does a collected doctest or an existing test already assert the same
-   input and outcome? Doctests show basic usage. An edge or error case in both places
+   input and outcome? Would `--check-types`, test collection, or a tox leg already fail
+   on the regression it guards (a frozen-field assignment or attrs signature under a
+   pyright ignore), and does it assert a riko contract rather than Python or a library
+   (`FrozenInstanceError`, a plain `pickle`/`json` round trip)? Then it is not pytest's
+   (`testing.md` §1). Doctests show basic usage. An edge or error case in both places
    leaves the doctest when the doctest already shows several other basic use cases. When
    it does not, prefer rewriting the doctest to show basic usage and keeping the edge
    case in pytest. Basic usage lives in its most appropriate doctest: move it into this

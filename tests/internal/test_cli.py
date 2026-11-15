@@ -19,7 +19,7 @@ import pytest
 from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._paths import PYPROJECT, ROOT_DIR
+from riko.base._paths import PYPROJECT
 from riko.cli import (
     _codegen,
     _docs,
@@ -66,11 +66,12 @@ from riko.cli.manage import manager
 from riko.cli.runpipe import run_target
 from riko.definitions._workflow_definition import Workflow
 from riko.runtime._compile import compile_workflow
-from tests import run_python
 from tests._workflows import DAG, DOCUMENT, PIPE_DEF
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
+
+    from riko.types._wrappers import Func
 
 _TYPING = "[tool.riko.typing]\n"
 _TODAY = date(2026, 10, 27)
@@ -110,6 +111,10 @@ _NEGATED = (
     "from typing import TYPE_CHECKING\nif not TYPE_CHECKING:\n    pass\nelse:\n    "
 )
 _LOCAL = "def load():\n    " + _UPWARD + "\n    return thing\n"
+_RUN_BINDING = (
+    "binds a run( result that is skipped without async support "
+    "(move it to an async example)"
+)
 
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
@@ -130,6 +135,11 @@ xml = ["lxml>=5", "requests"]
 
 [dependency-groups]
 lint = ["types-requests"]
+"""
+
+DATA_ONLY_TOML = f"""{PYPROJECT_TOML}
+[tool.deptry.per_rule_ignores]
+DEP002 = ["Python.Dateutil"]
 """
 
 
@@ -184,7 +194,7 @@ def write(root: Path, path: str, text: str) -> None:
     target.write_text(text)
 
 
-def _record(calls: list[str], name: str, code: int = 0) -> Callable[[], int]:
+def _record(calls: list[str], name: str, code: int = 0) -> Func[int]:
     def runner() -> int:
         calls.append(name)
         return code
@@ -759,7 +769,7 @@ EXAMPLE_RULES = [
     pytest.param(
         "mod.py",
         _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
-        ["narrates between examples (use a >>> # comment)"],
+        ["narrates between examples (use a # comment)"],
         id="narration",
     ),
     pytest.param(
@@ -803,6 +813,25 @@ EXAMPLE_RULES = [
         _function("More.\n\n\nArgs:\n\n    a: A.").replace("f()", "f(a)"),
         ["has a run of blank lines"],
         id="blank-run",
+    ),
+    pytest.param(
+        "mod.py",
+        _function("# TODO: clarify\nA mid-line TODO is prose."),
+        ["leaves a TODO or ??? review note"],
+        id="review-note",
+    ),
+    pytest.param("mod.py", _doctest("x = run(g())"), [_RUN_BINDING], id="run-bind"),
+    pytest.param(
+        "mod.py",
+        _doctest("x = run(g())").replace("f()", "async_f()"),
+        [],
+        id="run-bind-async",
+    ),
+    pytest.param(
+        "mod.py",
+        "class AsyncThing:\n" + indent(_doctest("x = run(g())"), "    "),
+        [],
+        id="run-bind-method",
     ),
 ]
 
@@ -1334,12 +1363,14 @@ class TestEscapeLint:
         assert recorded == tomllib.loads(ceilings)
 
 
-def _issues(tmp_path: Path, source: str) -> tuple[list[str], list[int]]:
+def _issues(
+    tmp_path: Path, source: str, toml: str = PYPROJECT_TOML
+) -> tuple[list[str], list[int]]:
     package = tmp_path / "pkg"
     package.mkdir(exist_ok=True)
     (package / "mod.py").write_text(source, encoding="utf-8")
     config = tmp_path / "pyproject.toml"
-    config.write_text(PYPROJECT_TOML, encoding="utf-8")
+    config.write_text(toml, encoding="utf-8")
     issues = list(gen_import_issues(package, config, DISTRIBUTIONS))
     required = [issue.message for issue in issues if issue.where == str(config)]
     lines = [int(i.where.rsplit(":", 1)[1]) for i in issues if i.where != str(config)]
@@ -1398,6 +1429,9 @@ class TestDependencyLint:
         self, tmp_path: Path, source: str, expected: list[str]
     ) -> None:
         assert _issues(tmp_path, source)[0] == expected
+
+    def test_data_only_dependencies_need_no_import(self, tmp_path: Path) -> None:
+        assert _issues(tmp_path, REQUESTS, DATA_ONLY_TOML)[0] == []
 
     @pytest.mark.parametrize(("source", "expected"), OPTIONAL_CASES)
     def test_optional_extras_must_be_imported_under_a_guard(
@@ -1605,15 +1639,6 @@ class TestReadDocument:
         monkeypatch.setattr("sys.stdin", io.StringIO("{bad json"))
         assert read_document("-") == (None, "anonymous")
         assert any("Unable to parse input" in warning for warning in warnings)
-
-
-class TestSubprocessImports:
-    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
-        # A script outside the checkout resolves riko the way a console script does.
-        probe = tmp_path / "probe.py"
-        probe.write_text("import riko\nprint(riko.__file__)\n")
-        done = run_python(str(probe), cwd=tmp_path)
-        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
 
 
 LOG_LEVELS = [

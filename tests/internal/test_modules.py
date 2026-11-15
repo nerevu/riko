@@ -25,8 +25,8 @@ import attrs
 import pytest
 
 from riko.bado._backend import Event, async_sleep, create_task_group
-from riko.bado._util import maybe_aclosing
-from riko.bado.itertools import as_async
+from riko.bado._util import maybe_aclosing, maybe_closing
+from riko.bado.itertools import as_async, auto_close
 from riko.base import _paths as paths_module
 from riko.base._exceptions import ReceiverUnavailableError
 from riko.base._paths import PACKAGE_DIR, get_path
@@ -36,11 +36,18 @@ from riko.coercion._objectify import objectify
 from riko.definitions._context import Context
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._resource_view import ResourceView
-from riko.modules import _metadata, csv, fetchtable
+from riko.modules import _inference, _metadata, csv, fetchtable
 from riko.modules import count as count_module
 from riko.modules import exchangerate as exchangerate_module
+from riko.modules import filter as filter_module
+from riko.modules import truncate as truncate_module
+from riko.modules import uniq as uniq_module
 from riko.modules._decorators import operator, processor, splitter
-from riko.modules._inference import gen_operator_return_kinds, gen_return_inferences
+from riko.modules._inference import (
+    gen_operator_return_kinds,
+    gen_return_inferences,
+    infer_return_kinds,
+)
 from riko.modules._metadata import get_module_metadata
 from riko.modules._prepare import build_conf, resolve_and_cast
 from riko.modules.fetchpage import get_string
@@ -57,6 +64,7 @@ from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.truncate import async_pipe as async_truncate
 from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union
+from riko.parsing._dotdict import DotDict
 from riko.runtime._pubsub import async_hub
 from riko.runtime._workflow_pipes import workflow
 from riko.types._options import ItemDispatch, ValueDispatch
@@ -65,6 +73,7 @@ from riko.types._wrappers import (
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
     AsyncSubPipe,
+    DeclaresIdentity,
     SyncProcessorWrapper,
     require_async_wrapper,
     require_sync_wrapper,
@@ -80,6 +89,7 @@ from riko.types.modules import (
 from tests import ROUND_TRIPS, async_test, skipif_issync
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
+from tests._streams import Closeable
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
@@ -87,6 +97,7 @@ if TYPE_CHECKING:
     from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
 
 type _AliasStream = Iterator[int]
+type _UnavailableAlias = DynamicConf | int
 
 
 def _sync_subpipe(item: Item, context: Context | None = None, **_) -> Stream:
@@ -279,9 +290,26 @@ class TestNormalizeInput:
         items = cast("Any", [None])
         assert next(operator().normalize_input(items)) == {"content": None}
 
+    def test_operator_yields_the_dotdicts_it_received(self) -> None:
+        items = [DotDict({"x": 1}), DotDict({"x": 2})]
+        results = list(union(items))
+        assert list(map(id, results)) == list(map(id, items))
+
+    @async_test
+    async def test_async_operator_yields_the_dotdicts_it_received(self) -> None:
+        items = [DotDict({"x": 1}), DotDict({"x": 2})]
+        stream = async_truncate(as_async(items), conf={"count": 5})
+        results = [item async for item in stream]
+        assert list(map(id, results)) == list(map(id, items))
+
 
 class TestSplitter:
     """The splitter wrapper over async input and context."""
+
+    def test_a_splitter_call_declares_no_identity(self) -> None:
+        prepared = split.prepare()
+        assert isinstance(prepared, DeclaresIdentity)
+        assert prepared.identity is None
 
     @pytest.mark.xfail(
         strict=True,
@@ -413,6 +441,67 @@ class TestAsyncOperatorLaziness:
         assert len(pulled) <= 1
 
 
+def _gen_held(closed: list[bool]) -> Iterator[Item]:
+    try:
+        for i in range(100):
+            yield {"i": i}
+    except GeneratorExit:
+        closed.append(True)
+        raise
+
+
+HELD_SOURCE_PIPES = [
+    pytest.param(truncate_module, {"count": 50}, id="truncate"),
+    pytest.param(uniq_module, {"uniq_key": "i"}, id="uniq"),
+    pytest.param(
+        filter_module,
+        {"rule": {"field": "i", "op": "less", "value": 1000}},
+        id="filter",
+    ),
+]
+
+
+class TestOperatorInputClose:
+    """Closing an operator's stream early closes a source the caller still holds."""
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="Feed-native streaming for these operators is not yet implemented: the "
+        "operator wrapper closes only its parser's result, so closing the pipe early "
+        "leaves a source the caller still holds open",
+    )
+    @pytest.mark.parametrize(("module", "conf"), HELD_SOURCE_PIPES)
+    def test_closing_sync_early_closes_a_held_source(self, module, conf) -> None:
+        closed: list[bool] = []
+        source = _gen_held(closed)
+        stream = module.pipe(source, conf=conf)
+
+        with maybe_closing(stream):
+            assert next(stream) == {"i": 0}
+
+        assert closed == [True]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="Feed-native streaming for these operators is not yet implemented: the "
+        "operator wrapper closes only its parser's result, so closing the pipe early "
+        "leaves a source the caller still holds open",
+    )
+    @pytest.mark.parametrize(("module", "conf"), HELD_SOURCE_PIPES)
+    @async_test
+    async def test_closing_async_early_closes_a_held_source(self, module, conf) -> None:
+        closed: list[bool] = []
+        source = _gen_held(closed)
+        stream = module.async_pipe(source, conf=conf)
+
+        async with maybe_aclosing(stream):
+            assert await anext(stream) == {"i": 0}
+
+        assert closed == [True]
+
+
 def _broad(items) -> Any:
     return items
 
@@ -470,8 +559,16 @@ def _unresolvable(items) -> Nonexistent:  # noqa: F821 # pyright: ignore[reportU
     return sum(items)
 
 
-def only(pipe):
-    return next(iter(gen_return_inferences(pipe)))
+def _item_alias(items) -> Item:
+    return items
+
+
+def _unavailable_parameter_hint(conf: DynamicConf) -> Stream:
+    return iter([dict(conf)])
+
+
+def _runtime_unresolvable_alias(items) -> _UnavailableAlias:
+    return items
 
 
 async def _async_rows() -> AsyncStream:
@@ -511,6 +608,10 @@ CLASSIFICATIONS = [
     pytest.param(_ann_value, NONSTREAM, MISSING, id="annotated-value"),
     pytest.param(_ann_wrapper, STREAM, MISSING, id="annotated-wrapper"),
     pytest.param(_alias, STREAM, MISSING, id="type-alias"),
+    pytest.param(_item_alias, NONSTREAM, MISSING, id="item-alias"),
+    pytest.param(
+        _unavailable_parameter_hint, STREAM, ANNOTATION, id="unavailable-parameter-hint"
+    ),
     pytest.param(_builtin_stream, STREAM, MISSING, id="builtin-stream"),
     pytest.param(_itertools_stream, STREAM, MISSING, id="itertools-stream"),
     pytest.param(_passthrough, STREAM, MISSING, id="passthrough-wrapper"),
@@ -519,6 +620,11 @@ CLASSIFICATIONS = [
 
 UNKNOWN_REASONS = [
     pytest.param(_broad, ("too broad",), id="broad-annotation"),
+    pytest.param(
+        _runtime_unresolvable_alias,
+        ("not available at runtime",),
+        id="runtime-unresolvable-alias",
+    ),
     pytest.param(len, ("return annotation",), id="unavailable-source"),
     pytest.param(_ambiguous, ("build_result", "return annotation"), id="ambiguous"),
     pytest.param(
@@ -527,6 +633,16 @@ UNKNOWN_REASONS = [
         id="lambda-in-expression",
     ),
 ]
+
+
+def _opaque_parser(
+    item: object, extraction: object, objconf: DynamicConf, **kwargs: object
+) -> Any:
+    return item
+
+
+def only(pipe):
+    return next(iter(gen_return_inferences(pipe)))
 
 
 class TestReturnInference:
@@ -550,6 +666,11 @@ class TestReturnInference:
         for reason in reasons:
             assert reason in inference.reason
 
+    def test_a_processor_of_unknown_return_kind_declares_no_identity(self):
+        prepared = processor()(_opaque_parser).prepare()
+        assert isinstance(prepared, DeclaresIdentity)
+        assert prepared.identity is None
+
     def test_nested_decorator_with_wraps(self):
         def deco(fn):
             @wraps(fn)
@@ -569,6 +690,21 @@ class TestReturnInference:
             return iter(items)
 
         assert set(gen_operator_return_kinds(pipe)) == {STREAM, NONSTREAM}
+
+    def test_return_kinds_are_inferred_once_per_function(self, monkeypatch):
+        calls = []
+
+        def counting(pipe):
+            calls.append(pipe)
+            return gen_operator_return_kinds(pipe)
+
+        def pipe(items) -> int:
+            return sum(items)
+
+        monkeypatch.setattr(_inference, "gen_operator_return_kinds", counting)
+        kinds = (infer_return_kinds(pipe), infer_return_kinds(pipe))
+        assert kinds == (frozenset({NONSTREAM}),) * 2
+        assert calls == [pipe]
 
     def test_unclassifiable_operator_error_explains_why(self):
         def pipe(items) -> Any:
@@ -592,6 +728,19 @@ class TestModuleMetadata:
 
         with pytest.raises(TypeError, match=r"riko\.modules\.bare pipe has no module"):
             get_module_metadata("bare")
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="module flags declared on the decorator are not yet implemented: a "
+        "plugin module named like a built-in inherits the built-in's flags",
+    )
+    def test_plugin_named_like_a_builtin_keeps_its_own_flags(self) -> None:
+        def parser(stream, objconf, tuples, **kwargs):
+            return iter(stream)
+
+        parser.__module__ = "acme.union"
+        assert operator(parser).sequential_inputs is False
 
 
 def _carries_wrapper_meta(func: object) -> bool:
@@ -1019,6 +1168,21 @@ class TestAsyncProcessor:
         assert [item async for item in stream] == []
         assert calls == []
 
+    @async_test
+    async def test_closing_early_closes_the_parser_stream(self):
+        closes: list[str] = []
+        streams: list[auto_close[str]] = []
+
+        def lines(item: Item, *args, **kwargs) -> auto_close[str]:
+            streams.append(auto_close(iter(["a", "b"]), Closeable("file", closes)))
+            return streams[-1]
+
+        stream = processor(isasync=True)(lines)({"x": 1}, emit=True)
+        async with maybe_aclosing(stream):
+            await anext(stream)
+
+        assert closes == ["file"]
+
     def test_wrapper_stubs_are_not_coroutine_functions(self):
         """
         Keep these stubs synchronous for async-iterator typing.
@@ -1048,6 +1212,24 @@ class TestAsyncProcessor:
         await result
         await result
         assert len(calls) == 1
+
+
+class TestAsyncOperator:
+    @async_test
+    async def test_closing_early_closes_the_parser_stream(self):
+        closes: list[str] = []
+        streams: list[auto_close[Item]] = []
+
+        def lines(*args, **kwargs) -> auto_close[Item]:
+            rows = iter([{"x": 1}, {"x": 2}])
+            streams.append(auto_close(rows, Closeable("file", closes)))
+            return streams[-1]
+
+        stream = operator(isasync=True)(lines)([{"x": 0}], emit=True)
+        async with maybe_aclosing(stream):
+            await anext(stream)
+
+        assert closes == ["file"]
 
 
 DECORATION_OPTION_CALLS = [
@@ -1314,14 +1496,6 @@ class TestExchangeRate:
         )
         assert str(rate) == "1.275201"
 
-    @pytest.mark.parametrize(("rate", "match"), UNUSABLE_RATES)
-    def test_an_unusable_rate_raises_naming_the_currency(self, rate, match):
-        """A rate that isn't a finite positive number raises with the raw value."""
-        rates = exchangerate_module.build_rates(USD=1, XYZ=rate)
-
-        with pytest.raises(ValueError, match=match):
-            exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
-
     @pytest.mark.parametrize("rate", [None, MISSING], ids=["null", "absent"])
     def test_a_missing_rate_warns_and_is_nan(self, rate, caplog):
         """A currency with no rate in the response yields ``NaN`` and logs a warning."""
@@ -1353,6 +1527,14 @@ class TestExchangeRate:
 
         assert str(rate) == "0.5"
         assert ("invalid rate: 'bad'" in caplog.text) is warns
+
+    @pytest.mark.parametrize(("rate", "match"), UNUSABLE_RATES)
+    def test_an_unusable_rate_raises_naming_the_currency(self, rate, match):
+        """A rate that isn't a finite positive number raises with the raw value."""
+        rates = exchangerate_module.build_rates(USD=1, XYZ=rate)
+
+        with pytest.raises(ValueError, match=match):
+            exchangerate_module.get_cross_rate("XYZ", "USD", places=_PLACES, **rates)
 
     @pytest.mark.parametrize(("document", "match"), MISSING_RATES)
     def test_a_response_without_rates_raises(self, document, match):

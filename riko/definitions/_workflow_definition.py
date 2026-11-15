@@ -68,11 +68,14 @@ from riko.types._workflow import (
     WORKFLOW_VERSION,
     Endpoint,
     NodeId,
+    OutputName,
+    Port,
     PortEdge,
     RawEdge,
     RawEndpoint,
     RawNode,
     RawWorkflow,
+    ResourceName,
     WorkflowEdge,
     WorkflowIndex,
     parse_port,
@@ -111,9 +114,9 @@ if TYPE_CHECKING:
 type WorkflowLike = Workflow | RawWorkflow | Mapping[str, object]
 type DocumentMapping = RawWorkflow | PipeDefLike | PipeDag
 type DocumentLike = str | WorkflowDocument | Workflow | DocumentMapping
-type RawNodes = Sequence[RawNode] | Mapping[str, RawNode]
+type RawNodes = Sequence[RawNode] | Mapping[NodeId, RawNode]
 type NodeLike = RikoNode | RawNode | Mapping[str, object]
-type NodesLike = Sequence[NodeLike] | Mapping[str, NodeLike]
+type NodesLike = Sequence[NodeLike] | Mapping[NodeId, NodeLike]
 type EndpointLike = Endpoint | RawEndpoint | Mapping[str, object]
 type EdgeLike = PortEdge | RawEdge | Mapping[str, object]
 type RikoNodeCollection = Mapping[NodeId, RikoNode]
@@ -122,9 +125,9 @@ type PortEdges = Sequence[PortEdge]
 type RawPortEdges = Sequence[RawEdge]
 type RawInputs = Mapping[str, object]
 type Inputs = Mapping[str, JSONValue]
-type RawOutputs = Mapping[str, RawEndpoint]
-type Outputs = Mapping[str, Endpoint]
-type OutputsLike = Mapping[str, EndpointLike]
+type RawOutputs = Mapping[OutputName, RawEndpoint]
+type Outputs = Mapping[OutputName, Endpoint]
+type OutputsLike = Mapping[OutputName, EndpointLike]
 
 _EMPTY_OUTPUTS: FrozenOutputs = FrozenDict()
 _EMPTY_NODES: FrozenNodes = FrozenDict()
@@ -336,13 +339,18 @@ class Workflow:
 
         Raises:
 
-            InvalidPipelineError: If ``document`` is neither valid JSON nor a mapping,
-                its shape cannot be detected, it does not hold the shape it is read as,
-                a module or wire is malformed, a key has no ``Workflow`` equivalent, two
-                configuration keys differ only in case, two ``input`` modules give an
-                input different schemas, a ``Workflow`` has a callable node (a Python
-                callable has no workflow document form), or the resulting workflow is
-                invalid.
+            InvalidPipelineError: If any of these hold:
+
+                - ``document`` is neither valid JSON nor a mapping.
+                - Its shape cannot be detected, or it does not hold the shape it is
+                  read as.
+                - A module or wire is malformed.
+                - A key has no ``Workflow`` equivalent.
+                - Two configuration keys differ only in case.
+                - Two ``input`` modules give an input different schemas.
+                - A ``Workflow`` has a callable node (a Python callable has no workflow
+                  document form).
+                - The resulting workflow is invalid.
 
         Examples:
 
@@ -356,10 +364,6 @@ class Workflow:
             >>> dag = {"modules": [{"name": "forever"}, {"name": "truncate"}]}
             >>> Workflow.parse(dag, shape="dag")
             Workflow(sw-1 -> sw-2; outputs: default)
-            >>> Workflow.parse("[]")
-            Traceback (most recent call last):
-            ...
-            riko.exceptions.InvalidPipelineError: ...document must be a mapping...
 
         """
         resolved = (
@@ -478,7 +482,7 @@ class Workflow:
 
     def get_family_sources(
         self, family: EdgeFamily = "stream"
-    ) -> Counter[tuple[str, str]]:
+    ) -> Counter[tuple[NodeId, Port]]:
         """
         Gets how many ``family`` edges each ``(node, port)`` source feeds.
 
@@ -489,7 +493,7 @@ class Workflow:
 
     def get_family_ports(
         self, family: EdgeFamily = "stream"
-    ) -> Counter[tuple[str, str]]:
+    ) -> Counter[tuple[NodeId, Port]]:
         """
         Gets how many ``family`` edges each ``(node, port)`` target receives.
 
@@ -577,7 +581,7 @@ class Workflow:
         return list(chain(ends, self.outputs.values()))
 
     @property
-    def referenced_resources(self) -> set[str]:
+    def referenced_resources(self) -> set[ResourceName]:
         """Collects the Context resource names the workflow's nodes bind."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_resources for node in nodes))
@@ -704,10 +708,13 @@ class Workflow:
 
         Raises:
 
-            InvalidPipelineError: If either workflow has nodes but no default output;
-                ``other`` doesn't have exactly one node with an open default input port;
-                both define the same non-default workflow output; or both give the same
-                input different schemas.
+            InvalidPipelineError: If any of these hold:
+
+                - Either workflow has nodes but no default output.
+                - ``other`` doesn't have exactly one node with an open default input
+                  port.
+                - Both define the same non-default workflow output.
+                - Both give the same input different schemas.
 
         Examples:
 
@@ -795,11 +802,16 @@ class Workflow:
 
         Raises:
 
-            InvalidPipelineError: If the graph has an unsupported version, an empty node
-                set, a dangling edge or output reference, more than one stream edge into
-                a port, a publish/subscribe edge mismatch, a misdirected or malformed
-                port, a cycle, an unresolved resource, a reference to an input with no
-                schema, an invalid input schema, or no workflow output.
+            InvalidPipelineError: If the graph has any of these:
+
+                - An unsupported version or an empty node set.
+                - A dangling edge or output reference.
+                - More than one stream edge into a port.
+                - A publish/subscribe edge mismatch.
+                - A misdirected or malformed port.
+                - A cycle or an unresolved resource.
+                - A reference to an input with no schema, or an invalid input schema.
+                - No workflow output.
 
         """
         self.validate_input_schemas()

@@ -170,8 +170,8 @@ def build_regex_rule(rule: DynamicConf | RegexConfRule) -> RegexRule:
         '\\1 delivery'
         >>> rule["match"].sub(rule["replace"], item[rule["field"]])
         'Express delivery'
-        >>>
-        >>> # A literal "$5" needs nativereplace. Otherwise it reads as group 5
+
+        # A literal "$5" needs nativereplace. Otherwise it reads as group 5
         >>> native_rule = build_regex_conf_rule(*args, r"\1: $5", nativereplace=True)
         >>> rule = build_regex_rule(native_rule)
         >>> rule["replace"]

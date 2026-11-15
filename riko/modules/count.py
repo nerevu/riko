@@ -128,13 +128,12 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     items = ({"x": x} for x in range(5))
-        ...     result = async_pipe(items)
-        ...     print(await anext(result))
+        >>> async def gen_items():
+        ...     for x in range(3):
+        ...         yield {"x": x}
         >>>
-        >>> run(main)
-        {'count': 5}
+        >>> run(anext, async_pipe(gen_items()))
+        {'count': 3}
 
     """
     return parser(*args, **kwargs)
@@ -180,10 +179,12 @@ def pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
         5
         >>> next(pipe(items))["count"]
         5
-        >>> # Assign the count to "content":
+
+        # Assign the count to "content":
         >>> next(pipe(items, assign="content"))
         {'content': 5}
-        >>> # Count by the "word" field:
+
+        # Count by the "word" field:
         >>> items = [{"word": "two"}, {"word": "one"}, {"word": "two"}]
         >>> counted = pipe(items, conf={"count_key": "word"})
         >>> next(counted)

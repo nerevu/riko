@@ -61,7 +61,7 @@ from riko.types._frozendict import (
 from riko.types._options import CallOptions
 from riko.types._pipedef import Embed
 from riko.types._scalars import is_non_null_hashable
-from riko.types._workflow import NodeId, PortEdge
+from riko.types._workflow import NodeId, PortEdge, ResourceName
 from riko.types.modules import ConfValues, MaybeFrozenConf
 
 from ._inputs import gen_input_references
@@ -85,7 +85,7 @@ type RunnableNode = ModuleNode | CallableNode[object]
 _FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
 NO_OPTIONS = CallOptions()
-EMPTY_BINDINGS: FrozenDict[str, str] = FrozenDict()
+EMPTY_BINDINGS: FrozenDict[str, ResourceName] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
 
 _normalize_backend = partial(require_enum, Backends)
@@ -108,7 +108,7 @@ def require_binding(
     *,
     error: type[Exception] = InvalidPipelineError,
     **_,
-) -> FrozenDict[str, str]:
+) -> FrozenDict[str, ResourceName]:
     """
     Narrows ``value`` to a resource binding (map of local alias to Context name).
 
@@ -202,18 +202,28 @@ def require_embed_fields(value: Embed, what: str = "embed") -> Embed:
 
 @define(frozen=True, slots=True, kw_only=True)
 class RikoNode:
-    """The identity, resource bindings, and label every node family carries."""
+    """
+    The identity, resource bindings, and label every node family carries.
+
+    Attributes:
+
+        id: The workflow-unique node identifier.
+        name: The registered implementation the node runs.
+        resources: Each resource alias the node uses, bound to a Context resource name.
+        label: Optional human-readable node identifier.
+
+    """
 
     family: ClassVar[NodeFamily]
     id: NodeId = field(validator=validator_from_require(require_nonblank_str))
     name: str = field(validator=validator_from_require(require_nonblank_str))
-    resources: FrozenDict[str, str] = field(
+    resources: FrozenDict[str, ResourceName] = field(
         default=EMPTY_BINDINGS, converter=binding_converter
     )
     label: str | None = field(default=None, converter=optional_str)
 
     @property
-    def referenced_resources(self) -> set[str]:
+    def referenced_resources(self) -> set[ResourceName]:
         """Collects the Context resource names this node binds."""
         return set(self.resources.values())
 
@@ -355,7 +365,7 @@ class WriteNode(RikoNode):
 
         Kwargs:
 
-            id: The node's id.
+            id: Id of the new write node.
 
         Returns:
 

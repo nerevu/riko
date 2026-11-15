@@ -121,13 +121,10 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     conf = {"start": "3", "length": "4"}
-        ...     result = async_pipe({"content": "hello world"}, conf=conf)
-        ...     print((await anext(result))["substr"])
-        >>>
-        >>> run(main)
-        lo w
+        >>> conf = {"start": "3", "length": "4"}
+        >>> stream = async_pipe({"content": "hello world"}, conf=conf)
+        >>> run(anext, stream)["substr"]
+        'lo w'
 
     """
     return parser(*args, **kwargs)

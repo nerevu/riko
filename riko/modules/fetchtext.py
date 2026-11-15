@@ -28,12 +28,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.io._async import async_url_open
 from riko.io._reencode import gen_without_bom
-from riko.io._sync import Fetch, auto_close
+from riko.io._sync import Fetch
 from riko.types._enums import BasicCastType
 
 from ._decorators import processor
@@ -199,13 +200,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     conf = {"url": get_path("lorem.txt")}
-        ...     result = async_pipe(conf=conf)
-        ...     print(await anext(result))
-        >>>
-        >>> run(main)
-        What is Lorem Ipsum?
+        >>> conf = {"url": get_path("lorem.txt")}
+        >>> stream = async_pipe(conf=conf)
+        >>> run(anext, stream)
+        'What is Lorem Ipsum?'
 
     """
     return await async_parser(*args, **kwargs)

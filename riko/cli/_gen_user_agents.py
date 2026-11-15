@@ -100,7 +100,7 @@ def generate_user_agents(
 
     Args:
 
-        pools: The user agents of each device type, in order.
+        pools: The user agents of each device type.
         source_version: The fake-useragent release the agents come from.
 
     Returns:

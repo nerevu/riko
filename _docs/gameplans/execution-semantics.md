@@ -238,7 +238,7 @@ marks it. The same thread rule keeps a sync-closeable seed's `close()` on the ev
 (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
 seed close that blocks; R11 owns that bound with the entry-thread exit (triage
 2026-11-03; tripwire
-`tests/internal/test_plan_runs.py::TestAsyncPlanRun::test_arun_bounds_a_blocking_sync_seed_close`).
+`tests/internal/test_plan_closes.py::TestAsyncPlanClose::test_arun_bounds_a_blocking_sync_seed_close`).
 
 The reverse direction under `SyncExecution` is asymmetric. Async value *production* — an
 async factory that yields a resolved value — is bridged through the execution portal and
@@ -272,23 +272,34 @@ pair plus a per-execution `register_owned` replace
 table (seed, native return, node stream, raw return × sync/async) for values whose only
 close is async, which leaked a never-awaited coroutine before it; under sync execution a
 sync-iterable seed whose only close is `aclose()` was silently never closed (verified
-2026-10-31) and is now rejected. Stage 2 decisions (2026-10-31): under async execution a
-sync close keeps its per-kind threading (resource close/cleanup on a worker; seeds close
-inline; a sync node's stream and raw return keep their worker); under sync execution
-`shutdown_timeout` bounds every portal close, the existing async-stream closes included.
-There is no stage 3. Close-once invariant: a value is close-once or has one closer, with
-dedupe state in the value, never a registry. Riko-made async generators close
-idempotently; a foreign value closable from two places (async seed, sync node raw return
-and stream, native closeable non-generator output) enters through `_Owned`, whose
-`inline` keeps the threading; `_RunStream` owns a run's streams, close-once.
-`aauto_close` (`riko/bado/itertools.py`) and `maybe_closing`/`maybe_aclosing` use
-`run_bridged`/`maybe_async`/`asyncify` (`riko/bado/_util.py`); closers come only from
-`get_sync_closer`/`get_async_closer`. Follow-up, no owner yet (2026-11-02): sync
+2026-10-31) and is now rejected; a seed whose `__iter__`/`__aiter__` hands out a
+separate closeable iterator had only the seed closed (verified 2026-11-13), so both seed
+openers now own that iterator beside the seed (`CLOSING_SEEDS` rows `cursor-handle` /
+`async-cursor-handle` in `tests/internal/test_plan_closes.py`). Stage 2 decisions
+(2026-10-31): under async execution a sync close keeps its per-kind threading (resource
+close/cleanup on a worker; seeds close inline; a sync node's stream and raw return keep
+their worker); under sync execution `shutdown_timeout` bounds every portal close, the
+existing async-stream closes included. There is no stage 3. Close-once invariant: a
+value is close-once or has one closer, with dedupe state in the value, never a registry.
+Riko-made async generators close idempotently; a foreign value closable from two places
+(async seed, sync node raw return and stream, native closeable non-generator output)
+enters through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a run's
+streams, close-once. `aauto_close` (`riko/bado/itertools.py`) and
+`maybe_closing`/`maybe_aclosing` use `run_bridged`/`maybe_async`/`asyncify`
+(`riko/bado/_util.py`); closers come only from `get_sync_closer`/`get_async_closer`.
+Follow-up, owned by R7 fan-out (assigned 2026-11-12, recorded 2026-11-02): sync
 execution still registers each non-endpoint node stream on its exit stack with no run
 object, so an upstream sync generator closes at execution exit, not when its downstream
-node finishes. `Workflow.require_executable` refuses fan-out, so each node stream has
-one consumer; when fan-out lands, a sync node's early input close must become
-per-consumer.
+node finishes or the output stream closes; a sync twin of `_RunStream`/`_Owned` retires
+`_close_tracked` and the context parameter of the sync `_build_stream`. Tripwire:
+`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`.
+`Workflow.require_executable` refuses fan-out, so each node stream has one consumer;
+when fan-out lands, a sync node's early input close must become per-consumer. Bare
+operator wrappers never close their input either (triage 2026-11-14): the wrapper closes
+only the parser's result, so closing a direct `truncate`, `uniq`, or `filter` call early
+leaves a source the caller still holds open; that module-level contract is S1's
+([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)),
+and this run-object follow-up owns the execution-level close.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module,
 parser, factory, and extension code never creates event loops, portals, executors,
@@ -715,7 +726,7 @@ result model. Conceptually:
 
 ```python
 @dataclass
-class _FeedItem[T]:
+class _ItemEnvelope[T]:
     value: T
     item_key: Hashable | MissingType
     generation: Hashable | MissingType
@@ -1012,6 +1023,13 @@ Root identity is automatically namespaced by the source node's canonical graph I
 generated Workflow v2 node ID is sufficient within one normalized definition. Use
 explicit `id=` where the logical node identity must remain stable across structural
 revisions that could change the generated ID.
+
+Until key configuration supplies an `item_key`, a root's generation is positional and
+run-local: the tuple of its namespace and its index in that source's output; a derived
+item nests its parent's generation, and durable consumers digest the tuple at their
+boundary. Per-run
+seed items are roots namespaced by the node they seed (the seed target), not by a
+source node.
 
 Generation propagation follows operator semantics:
 
@@ -1569,6 +1587,16 @@ or partition the graph into streaming regions separated by operators that declar
 not change the public API or cross operator/resource/side-effect boundaries unsafely.
 Planner output for such regions is exposed through the planning diagnostics owned by
 `callable-pipes.md`, not a second explain surface.
+
+Map fusion is one such island (audit triage 2026-11-14): consecutive `map` steps run as
+separate nodes at about 3 µs per item each (sync, 5,000 items, identity `fn`;
+`.claude/skills/land/map_node_overhead_bench.py`). The functor composition law allows
+merging `map(f).map(g)` into one `map(g∘f)` step only when both steps use `preserve`
+identity with the same resources and `version=`: under `derive`, two steps give a
+grandchild generation and one merged step a child, and each node's fingerprint and
+per-step provenance would be lost. A fused step must also stay picklable for the process
+executor: `compose` (`riko/base/_funcutils.py`) returns a closure, so fusion holds both
+calls in a picklable record instead (wrapup triage 2026-11-14).
 
 ---
 

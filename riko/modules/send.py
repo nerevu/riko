@@ -19,8 +19,6 @@ Examples:
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'state': <StreamState.PENDING: 1>}
-        >>> next(target)
         {'x': 0}
 
 Attributes:
@@ -160,8 +158,6 @@ def parser(
         >>> next(source)
         {'x': 0}
         >>> next(target)
-        {'state': <StreamState.PENDING: 1>}
-        >>> next(target)
         {'x': 0}
 
     """
@@ -251,8 +247,6 @@ def pipe(*args: Any, **kwargs: object) -> Stream:
         >>> source = pipe([{"x": 0}], others=["receiver3"])
         >>> next(source)
         {'x': 0}
-        >>> next(target)
-        {'state': <StreamState.PENDING: 1>}
         >>> next(target)
         {'x': 0}
 

@@ -138,11 +138,8 @@ def async_pipe(*args: Any, **kwargs: object) -> DateDict:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     result = async_pipe({"content": "12/2/2014"})
-        ...     print((await anext(result))["datebuilder"]["year"])
-        >>>
-        >>> run(main)
+        >>> stream = async_pipe({"content": "12/2/2014"})
+        >>> run(anext, stream)["datebuilder"]["year"]
         2014
 
     """

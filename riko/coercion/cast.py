@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 from urllib.parse import quote, urlparse
 
 from riko.base._dateutils import load_local_tz
+from riko.base._funcutils import compose, noop
 from riko.base._logging import get_logger
 from riko.base.currencies import CURRENCY_CODES
 from riko.base.locations import LOCATIONS
@@ -451,14 +452,14 @@ def _cast_decimal(value: str | int) -> Decimal:
 CAST_SWITCH: dict[str, PreCaster[PrimitiveValue | AnyLocation]] = {
     "float": {"default": float("nan"), "func": float},
     "decimal": {"default": Decimal("NaN"), "func": _cast_decimal},
-    "int": {"default": 0, "func": lambda i: int(float(i))},
+    "int": {"default": 0, "func": compose(int, float)},
     "text": {"default": "", "func": str},
     "datetime": {"default": None, "func": cast_datetime},
     "date": {"default": None, "func": cast_date},
     "url": {"default": "", "func": cast_url},
     "location": {"default": {}, "func": cast_location},
-    "bool": {"default": False, "func": lambda i: bool(cast_literal(i))},
-    "pass": {"default": None, "func": lambda i: i},
+    "bool": {"default": False, "func": compose(bool, cast_literal)},
+    "pass": {"default": None, "func": noop},
     "none": {"default": None, "func": lambda _: None},
 }
 
@@ -485,8 +486,6 @@ def resolve_cast_type(type_: str | CastType | None) -> CastType:
         >>> resolve_cast_type("int")
         <CastType.INT: 'int'>
         >>> resolve_cast_type(None)
-        <CastType.PASS: 'pass'>
-        >>> resolve_cast_type("unknown")
         <CastType.PASS: 'pass'>
 
     """

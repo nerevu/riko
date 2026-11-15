@@ -770,7 +770,7 @@ entry id/guid
 → stable record hash only when explicitly enabled
 ```
 
-These values seed the private per-item `_FeedItem` identity/provenance model. Root
+These values seed the private per-item `_ItemEnvelope` identity/provenance model. Root
 identity is automatically namespaced by source node identity, and generation remains
 stable across retries.
 

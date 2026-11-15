@@ -77,7 +77,8 @@ def get_conf_type(parser: object) -> type[DynamicConf]:
         >>>
         >>> get_conf_type(fetch_parser).__name__
         'FetchObjconf'
-        >>> # without a resolvable objconf annotation, a parser gets DynamicConf
+
+        # without a resolvable objconf annotation, a parser gets DynamicConf
         >>> def unannotated(objconf):
         ...     return objconf
         >>>

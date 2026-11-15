@@ -8,6 +8,7 @@ from functools import reduce
 from inspect import isasyncgenfunction, iscoroutinefunction
 from typing import TYPE_CHECKING, Self, cast
 
+from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
 from riko.definitions._workflow_definition import Workflow
@@ -30,12 +31,13 @@ if TYPE_CHECKING:
         Sequence,
     )
 
-    from riko.definitions._module_definition import ModuleDefinition
     from riko.definitions._settings import ExecutionSettings
     from riko.definitions._workflow_definition import Outputs
     from riko.types._streams import Item
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
+
+type AsyncPipeFunc = Func[AsyncIterator[object] | Awaitable[object]]
 
 EMPTY = Workflow(nodes=[], outputs={})
 OUTPUT_A = {"default": Endpoint("a", "out")}
@@ -128,12 +130,17 @@ def mark_loopable(func: Func[object]) -> SyncModuleWrapper:
     return cast("SyncModuleWrapper", func)
 
 
-def mark_async_loopable(
-    func: Func[AsyncIterator[object] | Awaitable[object]],
-) -> AsyncModuleWrapper:
+def mark_async_loopable(func: AsyncPipeFunc) -> AsyncModuleWrapper:
     """Mark async *func* as a loopable processor so a plan may map it per item."""
     _mark(func)
     return cast("AsyncModuleWrapper", func)
+
+
+def _echo(item, **_):
+    return iter([item])
+
+
+echo_pipe = mark_loopable(_echo)
 
 
 def build_chain_plan(*names: str) -> ExecutionPlan:
@@ -142,8 +149,26 @@ def build_chain_plan(*names: str) -> ExecutionPlan:
     return ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
 
 
+def build_doubler_plan(name: str) -> ExecutionPlan:
+    """Builds a one-node plan whose ``double``/``adouble`` module doubles ``x``."""
+
+    def double(source, **_):
+        return ({"x": row["x"] * 2} for row in source)
+
+    async def adouble(source, **_):
+        async for row in source:
+            yield {"x": row["x"] * 2}
+
+    sync_pipe = cast("SyncModuleWrapper", double)
+    async_pipe = cast("AsyncModuleWrapper", adouble)
+    definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
+    adefinition = ModuleDefinition(name="adouble", async_pipe=async_pipe)
+    dispatcher = build_dispatcher(definition, adefinition)
+    return ExecutionPlan.from_workflow(module_workflow(name), dispatcher)
+
+
 class RecordingSink:
-    """Records every execution event it receives, in order."""
+    """Records every execution event it receives."""
 
     def __init__(self) -> None:
         self.events: list[object] = []

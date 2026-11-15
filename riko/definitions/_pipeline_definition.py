@@ -34,6 +34,7 @@ from riko.base._require_guards import (
     validator_from_require,
 )
 from riko.base._sentinels import MISSING, MissingType
+from riko.types._enums import IdentityMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._streams import Item
 
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
     from riko.types._options import CallOptionsLike
     from riko.types._pipedef import Embed
     from riko.types._resource import LifecycleFactory
+    from riko.types._workflow import ResourceName
     from riko.types._wrappers import Func
     from riko.types.modules import AnyModuleConf, Conf
 
@@ -515,7 +517,7 @@ class PipelineDefinition(Generic[T_co]):
     @overload
     def with_resource[R](
         self,
-        name: str,
+        name: ResourceName,
         definition: LifecycleFactory[R],
         *,
         credential: str | None = ...,
@@ -524,7 +526,7 @@ class PipelineDefinition(Generic[T_co]):
     @overload
     def with_resource[R](
         self,
-        name: str,
+        name: ResourceName,
         definition: ReusableResource[R],
         *,
         credential: None = ...,
@@ -532,7 +534,7 @@ class PipelineDefinition(Generic[T_co]):
     ) -> Self: ...
     def with_resource[R](
         self,
-        name: str,
+        name: ResourceName,
         definition: ResourceDefinition[R],
         *,
         credential: str | None = None,
@@ -655,6 +657,11 @@ class PipelineDefinition(Generic[T_co]):
 
         ``Pipeline.map`` documents the call contract and its errors.
 
+        Raises:
+
+            InvalidPipelineError: If ``identity`` is ``"combine"``, or for any other
+                error ``Pipeline.map`` documents.
+
         Examples:
 
             >>> from operator import itemgetter
@@ -684,6 +691,11 @@ class PipelineDefinition(Generic[T_co]):
         _kwargs = {"version": version, "identity": identity, "kwargs": kwargs}
         _id = flow.get_node_id(name)
         node = CallableNode(id=_id, name=name, fn=fn, resources=resources, **_kwargs)
+
+        if node.identity is IdentityMode.COMBINE:
+            msg = "map calls fn with one item at a time, so identity='combine' does "
+            raise InvalidPipelineError(msg + "not apply. Use 'preserve' or 'derive'.")
+
         return flow.with_node(node)
 
     def __getattr__(self, name: str) -> Func[PipelineDefinition[Item]]:

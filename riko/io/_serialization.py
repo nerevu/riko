@@ -80,7 +80,8 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
     """
     Serializes items as a JSON array, or as JSON lines when ``newline`` is set.
 
-    Keys are sorted, non-ASCII text is kept as is, a set is written as a sorted
+    Each JSON line ends in a line terminator, so appended output stays one record per
+    line. Keys are sorted, non-ASCII text is kept as is, a set is written as a sorted
     array, and a date as its ISO string.
 
     Args:
@@ -103,14 +104,20 @@ def records2json(items: Items, *, newline: bool = False, **kwargs: object) -> St
         >>> records2json([{"tags": {"b", "a"}}]).read()
         '[{"tags": ["a", "b"]}]'
         >>> records2json([{"x": 1}, {"x": 2}], newline=True).read()
-        '{"x": 1}\\n{"x": 2}'
+        '{"x": 1}\\n{"x": 2}\\n'
         >>> records2json([{"on": date(2026, 10, 15)}]).read()
         '[{"on": "2026-10-15"}]'
 
     """
     options = {"sort_keys": True, "ensure_ascii": False, **kwargs}
     dump = _SortedSetEncoder(**options).encode
-    return StringIO("\n".join(map(dump, items)) if newline else dump(list(items)))
+
+    if newline:
+        text = "".join(f"{dump(item)}\n" for item in items)
+    else:
+        text = dump(list(items))
+
+    return StringIO(text)
 
 
 CONVERSION_FUNCS: dict[Formats, ConversionFunc] = {

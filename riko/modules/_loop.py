@@ -120,8 +120,8 @@ def _run_loop(
     embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
 
     for parent in source:
-        stream = _take(embedder(parent), count)
-        yield from _fold_parent(parent, stream, assign, emit)
+        taken = _take(embedder(parent), count)
+        yield from _fold_parent(parent, taken, assign, emit)
 
 
 async def _arun_loop(
@@ -135,15 +135,15 @@ async def _arun_loop(
     emit: bool,
     count: CountValues | None,
 ) -> AsyncStream:
-    embedder = bind_subpipe(embed, context, embedded_kwargs, field=field)
+    args = embed, context, embedded_kwargs
+    embedder = bind_subpipe(*args, field=field, host_isasync=True)
 
     async for parent in as_async(source):
         items = await maybe_async(embedder, parent)
-        stream = _take(items, count)
+        taken = _take(items, count)
+        stream = _afold_parent(parent, taken, assign, emit)
 
-        async with maybe_aclosing(
-            _afold_parent(parent, stream, assign, emit)
-        ) as folded:
+        async with maybe_aclosing(stream) as folded:
             async for value in folded:
                 yield value
 

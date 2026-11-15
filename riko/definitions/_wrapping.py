@@ -32,11 +32,25 @@ if TYPE_CHECKING:
     )
     from riko.types.modules import ModuleSubtype, ModuleType
 
+    from ._context import Context
+
 _RETIRED_CALL_OPTION = "mode"
 _RETIRED_MODE_HINT = (
     "a pipe only runs. Use describe_module() to read a workflow's input schemas and "
     "dependencies"
 )
+
+
+def _call_plain(
+    wrapper: Func[WrapperOutput | SplitterWrapperOutput],
+    conf: PrepareConf | None,
+    options: RawCallOptions,
+    item: object = None,
+    context: Context | None = None,
+    **extra: object,
+) -> WrapperOutput | SplitterWrapperOutput:
+    """Calls ``wrapper`` with its prepared configuration and call options."""
+    return wrapper(item, conf=conf, context=context, **options, **extra)
 
 
 def prepare_call(
@@ -88,7 +102,7 @@ def prepare_call(
         [{'y': 2, 'x': 1, 'emit': True, 'other': 'z'}]
 
     """
-    return partial(wrapper, conf=conf, **options)
+    return partial(_call_plain, wrapper, conf, options)
 
 
 def build_call(

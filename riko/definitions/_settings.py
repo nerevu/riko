@@ -60,8 +60,8 @@ class AsyncPolicy(NamedTuple):
 
     Attributes:
 
-        limit: The per-run ceiling on items in flight, or ``None`` to run items
-            sequentially.
+        limit: The limit on items in flight at once. Shared by every loopable node.
+            ``None`` runs items sequentially.
 
         inline: Whether a synchronous pipe runs on the event-loop thread instead of a
             worker thread.
@@ -117,8 +117,9 @@ class ExecutionSettings:
 
         executor: Where per-item work runs, as an ``Executor`` or its string value.
 
-        concurrency: The per-run ceiling on items in flight, ``"auto"`` to size it for
-            the machine, or ``None`` to run items sequentially.
+        concurrency: The limit on items in flight at once. Shared by every loopable
+            node. Use ``"auto"`` to size it for the machine, or ``None`` to run items
+            sequentially.
 
         ordered: Whether mapped results keep source order.
 
@@ -140,13 +141,11 @@ class ExecutionSettings:
 
     Examples:
 
-        Basic usage::
-
-            >>> from riko import ExecutionSettings
-            >>>
-            >>> settings = ExecutionSettings(executor="thread", concurrency=4)
-            >>> settings.executor, settings.concurrency
-            (<Executor.THREAD: 'thread'>, 4)
+        >>> from riko import ExecutionSettings
+        >>>
+        >>> settings = ExecutionSettings(executor="thread", concurrency=4)
+        >>> settings.executor, settings.concurrency
+        (<Executor.THREAD: 'thread'>, 4)
 
     """
 

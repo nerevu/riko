@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from functools import partial
-from itertools import chain, islice
+from itertools import islice
 from typing import TYPE_CHECKING, cast, overload
 
 from riko.base._logging import get_logger
 from riko.definitions._wrapping import build_call
 from riko.parsing._dotdict import DotDict
+from riko.types._wrappers import RunsItems
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     from riko.types._pipedef import CountValues, EmbedKwargs
     from riko.types._scalars import PrimitiveValue
     from riko.types._streams import (
+        AsyncStream,
         Item,
         ItemOrValue,
         Stream,
@@ -35,15 +37,14 @@ if TYPE_CHECKING:
         ProcessorWrapperInput,
         SubPipe,
         SyncProcessorWrapper,
-        SyncProcessorWrapperOutput,
         SyncSubPipe,
     )
 
 logger: Logger = get_logger(__name__)
 
-type Embedder = Callable[
-    [ProcessorWrapperInput],
-    SyncProcessorWrapperOutput | Awaitable[SyncProcessorWrapperOutput],
+type SyncEmbedder = Callable[[ProcessorWrapperInput], Stream]
+type AsyncEmbedder = Callable[
+    [ProcessorWrapperInput], Awaitable[Stream | AsyncStream] | Stream
 ]
 
 
@@ -53,20 +54,26 @@ def bind_subpipe(
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
-) -> partial[SyncProcessorWrapperOutput]: ...
+    *,
+    host_isasync: bool = ...,
+) -> SyncEmbedder: ...
 @overload
 def bind_subpipe(
     embed: AsyncProcessorWrapper | AsyncSubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
-) -> partial[Awaitable[SyncProcessorWrapperOutput]]: ...
+    *,
+    host_isasync: bool = ...,
+) -> AsyncEmbedder: ...
 def bind_subpipe(
     embed: ProcessorWrapper | SubPipe,
     context: Context,
     embedded_kwargs: EmbedKwargs | None = None,
     field: str | None = None,
-) -> Embedder:
+    *,
+    host_isasync: bool = False,
+) -> SyncEmbedder | AsyncEmbedder:
     if embedded_kwargs and "field" in embedded_kwargs:
         embed_field = embedded_kwargs["field"]
 
@@ -93,7 +100,14 @@ def bind_subpipe(
         options["emit"] = kwargs["emit"]
 
     call = build_call(embed, conf=kwargs.get("conf"), **options)
-    return cast("Embedder", partial(call, context=context))
+
+    if isinstance(call, RunsItems) and (host_isasync or not embed.isasync):
+        run = call.arun_item if embed.isasync else call.run_item
+        embedder = partial(run, context, {})
+    else:
+        embedder = partial(call, context=context)
+
+    return cast("SyncEmbedder | AsyncEmbedder", embedder)
 
 
 @overload
@@ -121,23 +135,13 @@ def build_assignment(
         dictized = iter([DotDict.dictize(items)])
 
     if skip:
-        one = False
-        result = dictized
+        one, result = False, dictized
+    elif not isinstance(items, Iterator):
+        one, result = True, dictized
+    elif count == "first":
+        one, result = True, islice(dictized, 1)
     else:
-        results = list(islice(dictized, 2))
-        multiple = len(results) > 1
-        # multiple result pipe, e.g., fetchpage/tokenizer
-        # one result pipe, e.g., strconcat
-
-        result = chain(results, dictized) if results else iter(())
-        first = bool(count == "first")
-        _all = count == "all"
-        one = first or not (multiple or _all)
-
-        if one and results:
-            result = islice(results, 1)
-        elif one:
-            result = iter(())
+        one, result = False, dictized
 
     return one, result
 

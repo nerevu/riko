@@ -21,6 +21,7 @@ from typing import (
     TypedDict,
     Unpack,
     overload,
+    runtime_checkable,
 )
 
 from typing_extensions import TypeIs, TypeVar
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
     from riko.definitions._context import Context
 
+    from ._enums import IdentityMode, ModuleNameLike
     from ._frozendict import FrozenInputSchemas
     from ._options import RawCallOptions
     from ._scalars import PrimitiveValue
@@ -248,8 +250,44 @@ class PreparedCall(Protocol):
     """
 
     def __call__(
-        self, item: Any = None, *, context: Context | None = None, **extra: object
+        self, item: Any = None, context: Context | None = None, **extra: object
     ) -> WrapperOutput | SplitterWrapperOutput: ...
+
+
+@runtime_checkable
+class DeclaresIdentity(Protocol):
+    """A prepared call that declares how its results' identities relate to its items."""
+
+    @property
+    def identity(self) -> IdentityMode | None:
+        """How each result's identity relates to its input item, else ``None``."""
+        ...
+
+
+@runtime_checkable
+class NormalizesItems(Protocol):
+    """A prepared call that normalizes each item of its input stream before reading."""
+
+    def normalize_item(self, item: ItemOrValue, /) -> ItemOrValue:
+        """Normalizes one input item as the call reads it."""
+        ...
+
+
+@runtime_checkable
+class RunsItems(Protocol):
+    """A prepared call whose per-item run takes its fixed arguments positionally."""
+
+    def run_item(
+        self, context: Context | None, extra: dict[str, object], item: object, /
+    ) -> SyncProcessorWrapperInternalOutput:
+        """Runs one item; ``extra`` holds the keyword arguments sent with each item."""
+        ...
+
+    def arun_item(
+        self, context: Context | None, extra: dict[str, object], item: object, /
+    ) -> Awaitable[AsyncProcessorWrapperInternalOutput]:
+        """Runs one item asynchronously, as ``run_item`` does."""
+        ...
 
 
 class Preparer(Protocol):
@@ -762,14 +800,18 @@ class Resolver(Protocol):
 
     @overload
     def require(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper: ...
     @overload
-    def require(self, name: str, is_async: Literal[True]) -> AsyncModuleWrapper: ...
-    def require(self, name: str, is_async: bool = False) -> ModuleWrapper: ...
+    def require(
+        self, name: ModuleNameLike, is_async: Literal[True]
+    ) -> AsyncModuleWrapper: ...
+    def require(
+        self, name: ModuleNameLike, is_async: bool = False
+    ) -> ModuleWrapper: ...
 
-    def is_compatible(self, name: str) -> bool: ...
-    def require_interfaces(self, name: str) -> frozenset[Interface]: ...
+    def is_compatible(self, name: ModuleNameLike) -> bool: ...
+    def require_interfaces(self, name: ModuleNameLike) -> frozenset[Interface]: ...
 
 
 class Dispatcher(Protocol):
@@ -780,14 +822,16 @@ class Dispatcher(Protocol):
     names.
     """
 
-    def validate(self, name: str) -> None: ...
+    def validate(self, name: ModuleNameLike) -> None: ...
 
     @overload
     def resolve(
-        self, name: str, is_async: Literal[False] = ...
+        self, name: ModuleNameLike, is_async: Literal[False] = ...
     ) -> SyncModuleWrapper | None: ...
     @overload
     def resolve(
-        self, name: str, is_async: Literal[True]
+        self, name: ModuleNameLike, is_async: Literal[True]
     ) -> AsyncModuleWrapper | None: ...
-    def resolve(self, name: str, is_async: bool = False) -> ModuleWrapper | None: ...
+    def resolve(
+        self, name: ModuleNameLike, is_async: bool = False
+    ) -> ModuleWrapper | None: ...

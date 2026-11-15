@@ -29,12 +29,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.io import read_csv
 
+from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
 from riko.io._async import async_url_open
-from riko.io._sync import Fetch, auto_close, gen_rows, seekable
+from riko.io._sync import Fetch, gen_rows, seekable
 
 from ._decorators import processor
 
@@ -86,18 +87,14 @@ async def async_parser(
         >>> from riko import get_path, run
         >>> from meza.fntools import Objectify
         >>>
-        >>> async def main():
-        ...     url = get_path("spreadsheet.csv")
-        ...     conf = {
-        ...         "url": url, "sanitize": True, "skip_rows": 0,
-        ...         "encoding": ENCODING,
-        ...     }
-        ...     objconf = Objectify(conf)
-        ...     result = await async_parser(None, None, objconf)
-        ...     print(next(result)["mileage"])
-        >>>
-        >>> run(main)
-        7213
+        >>> url = get_path("spreadsheet.csv")
+        >>> conf = {
+        ...     "url": url, "sanitize": True, "skip_rows": 0,
+        ...     "encoding": ENCODING,
+        ... }
+        >>> objconf = Objectify(conf)
+        >>> next(run(async_parser, None, None, objconf))["mileage"]
+        '7213'
 
     """
     url: str = require_conf_key(objconf, "url", "csv", strict=True)
@@ -225,12 +222,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     result = async_pipe(conf={"url": get_path("spreadsheet.csv")})
-        ...     print((await anext(result))["mileage"])
-        >>>
-        >>> run(main)
-        7213
+        >>> url = get_path("spreadsheet.csv")
+        >>> stream = async_pipe(conf={"url": url, "has_header": False})
+        >>> run(anext, stream)["column_1"]
+        'Member'
 
     """
     return await async_parser(*args, **kwargs)

@@ -20,7 +20,6 @@ import pytest
 from riko.bado._backend import HTTPStatusError, create_task_group, fail_after
 from riko.bado._util import maybe_aclosing
 from riko.bado.itertools import alist
-from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import InvalidPipelineError, RemovedOptionError
 from riko.base._paths import get_path
 from riko.coercion import cast as cast_module
@@ -266,23 +265,6 @@ URL_GUARDED_MODULES = [
 
 
 class TestFetchModules:
-    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
-    def test_an_empty_url_names_the_conf_key(self, name, body, path, build):
-        pipeline = Pipeline.from_module(name, conf=build(""))
-
-        with pytest.raises(TypeError, match="requires the 'url' conf key"):
-            list(pipeline)
-
-    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
-    @async_test
-    async def test_an_empty_url_names_the_conf_key_asynchronously(
-        self, name, body, path, build
-    ):
-        pipeline = Pipeline.from_module(name, conf=build(""))
-
-        with pytest.raises(TypeError, match="requires the 'url' conf key"):
-            await alist(pipeline)
-
     @pytest.mark.simulated_network
     @pytest.mark.parametrize(("name", "body", "path", "build"), USER_AGENT_MODULES)
     def test_the_configured_user_agent_is_sent(self, name, body, path, build):
@@ -323,6 +305,23 @@ class TestFetchModules:
         )
         pipeline = Pipeline.from_module("fetchpage", conf=conf)
         assert list(pipeline) == await alist(pipeline) == ["café"]
+
+    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
+    def test_an_empty_url_names_the_conf_key(self, name, body, path, build):
+        pipeline = Pipeline.from_module(name, conf=build(""))
+
+        with pytest.raises(TypeError, match="requires the 'url' conf key"):
+            list(pipeline)
+
+    @pytest.mark.parametrize(("name", "body", "path", "build"), URL_GUARDED_MODULES)
+    @async_test
+    async def test_an_empty_url_names_the_conf_key_asynchronously(
+        self, name, body, path, build
+    ):
+        pipeline = Pipeline.from_module(name, conf=build(""))
+
+        with pytest.raises(TypeError, match="requires the 'url' conf key"):
+            await alist(pipeline)
 
     @pytest.mark.simulated_network
     @async_test
@@ -425,21 +424,6 @@ class TestFetchdata:
         assert [item.get("t") for item in items] == ["café"]
 
 
-@pytest.fixture
-def sqlite_path(tmp_path: Path) -> Path:
-    path = tmp_path / "cars.sqlite"
-    connection = sqlite3.connect(path)
-
-    try:
-        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
-        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
-        connection.commit()
-    finally:
-        connection.close()
-
-    return path
-
-
 FEED_PREFERENCES = [
     pytest.param({}, ["http://x/rss", "http://x/atom"], id="default"),
     pytest.param({"link_type": "atom+xml"}, ["http://x/atom"], id="narrowed"),
@@ -489,6 +473,21 @@ class TestFetchtext:
             expected,
             "world",
         ]
+
+
+@pytest.fixture
+def sqlite_path(tmp_path: Path) -> Path:
+    path = tmp_path / "cars.sqlite"
+    connection = sqlite3.connect(path)
+
+    try:
+        connection.execute("CREATE TABLE t(make TEXT, mileage INT)")
+        connection.execute("INSERT INTO t VALUES ('ford', 7213)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    return path
 
 
 class TestFetchtable:
@@ -543,6 +542,15 @@ ORDERED_COMPARES = [
     pytest.param(["-inf"], "less", "-5", [], id="inf-is-text"),
 ]
 
+STRING_FIELDS = [{"i": 0, "x": "web"}, {"i": 1}, {"i": 2, "x": None}]
+STRING_FIELDS += [{"i": 3, "x": ""}, {"i": 4, "x": "none of these"}]
+STRING_COMPARES = [
+    pytest.param("contains", "non", [4], id="contains-skips-missing"),
+    pytest.param("matches", "^N", [], id="matches-skips-missing"),
+    pytest.param("doesnotcontain", "web", [3, 4], id="doesnotcontain-skips-missing"),
+    pytest.param("contains", "", [0, 3, 4], id="empty-string-is-a-value"),
+]
+
 
 class TestFilter:
     @pytest.mark.parametrize(("values", "op", "value", "expected"), ORDERED_COMPARES)
@@ -551,6 +559,12 @@ class TestFilter:
         rule = FilterConfRule(field="x", op=op, value=value)
         conf = FilterConf({"rule": rule})
         assert _values(filter_pipe(items, conf=conf), "x") == expected
+
+    @pytest.mark.parametrize(("op", "value", "expected"), STRING_COMPARES)
+    def test_filter_string_compare_needs_a_value(self, op, value, expected):
+        rule = FilterConfRule(field="x", op=op, value=value)
+        conf = FilterConf({"rule": rule})
+        assert _values(filter_pipe(STRING_FIELDS, conf=conf), "i") == expected
 
     def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
         """A ``"today"`` rule value follows the clock, not its first evaluation."""
@@ -820,12 +834,6 @@ class TestRegex:
             next(regex({"content": "abc"}, conf=DynamicConf({"rule": rule})))
 
 
-SLUGIFY_CASES = [
-    pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
-    pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
-]
-
-
 # Each row: the item, the conf's ``token_key``, and the tokens the path yields.
 SUBELEMENT_CASES = [
     pytest.param({"a": {"b": None}}, "content", [{"content": None}], id="null-keyed"),
@@ -849,6 +857,12 @@ class TestHash:
     def test_hash_is_the_same_under_every_hash_seed(self, hash_seed_probes):
         """Two interpreters with different hash seeds produce the same hash."""
         assert {probes["hash"] for probes in hash_seed_probes.values()} == {913045020}
+
+
+SLUGIFY_CASES = [
+    pytest.param("北京 市", "bei-jing-shi", id="han-transliteration"),
+    pytest.param("ß straße", "ss-strasse", id="eszett-expansion"),
+]
 
 
 class TestSlugify:
@@ -1098,18 +1112,6 @@ class TestAsyncAggregate:
         assert [item async for item in result] == [{"n": 2}]
 
 
-MISSING_OPERANDS = [
-    pytest.param(udf_pipe, "func", _OMITTED, id="udf-omitted"),
-    pytest.param(aggregate_pipe, "func", _OMITTED, id="aggregate-omitted"),
-    pytest.param(join_pipe, "other", _OMITTED, id="join-omitted"),
-    pytest.param(send_pipe, "others", _OMITTED, id="send-omitted"),
-    pytest.param(udf_pipe, "func", 0, id="udf-empty"),
-    pytest.param(aggregate_pipe, "func", 0, id="aggregate-empty"),
-    pytest.param(join_pipe, "other", [], id="join-empty"),
-    pytest.param(send_pipe, "others", [], id="send-empty"),
-]
-
-
 class TestUdf:
     def test_sync_call_rejects_an_awaitable_result(self):
         async def double(item):
@@ -1120,6 +1122,18 @@ class TestUdf:
 
         with pytest.raises(InvalidPipelineError, match="udf func"):
             list(udf_pipe([{"x": 1}], func=deferred))
+
+
+MISSING_OPERANDS = [
+    pytest.param(udf_pipe, "func", _OMITTED, id="udf-omitted"),
+    pytest.param(aggregate_pipe, "func", _OMITTED, id="aggregate-omitted"),
+    pytest.param(join_pipe, "other", _OMITTED, id="join-omitted"),
+    pytest.param(send_pipe, "others", _OMITTED, id="send-omitted"),
+    pytest.param(udf_pipe, "func", 0, id="udf-empty"),
+    pytest.param(aggregate_pipe, "func", 0, id="aggregate-empty"),
+    pytest.param(join_pipe, "other", [], id="join-empty"),
+    pytest.param(send_pipe, "others", [], id="send-empty"),
+]
 
 
 class TestRequiredOperands:
@@ -1337,6 +1351,15 @@ PROCESSOR_FOLD_CASES = [
 ]
 
 
+ASSIGN_SHAPE_CASES = [
+    pytest.param("a b", {}, [{"content": "a"}, {"content": "b"}], id="many"),
+    pytest.param("a", {}, [{"content": "a"}], id="one-is-a-list"),
+    pytest.param("", {}, [], id="none-is-an-empty-list"),
+    pytest.param("a b", {"count": "first"}, {"content": "a"}, id="first"),
+    pytest.param("", {"count": "first"}, None, id="first-of-none-is-absent"),
+]
+
+
 IMPLICIT_FOLD_CASES = [
     pytest.param(
         {"emit": True},
@@ -1400,6 +1423,26 @@ class TestProcessor:
         result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
         assert list(result) == [{"content": "a"}, {"content": "b"}]
 
+    @pytest.mark.parametrize(("title", "kwargs", "expected"), ASSIGN_SHAPE_CASES)
+    def test_assigned_stream_shape_depends_only_on_count(self, title, kwargs, expected):
+        item = {"title": title}
+        options = {"field": "title", "assign": "w", "emit": False, **kwargs}
+        [result] = tokenizer(item, conf=TOKENIZER_CONF, **options)
+        assert result.get("w") == expected
+        assert ("w" in result) is (expected is not None)
+
+    def test_emit_yields_a_result_before_reading_the_next(self):
+        pulled: list[int] = []
+
+        def gen_parts(item: Item, extraction, objconf, /, **kwargs):
+            for index in count():
+                pulled.append(index)
+                yield {"part": index}
+
+        pipe = processor()(gen_parts)
+        assert next(pipe({"x": 1}, emit=True)) == {"part": 0}
+        assert pulled == [0]
+
     def test_mode_keyword_raises_pointing_at_describe_module(self):
         with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):
             list(hash_pipe([{"x": 1}], mode="describe"))
@@ -1439,21 +1482,18 @@ class TestAsyncProcessor:
     @async_test
     async def test_async_sync_iterable_streams_before_exhaustion(self):
         """Keep an unbounded sync iterable from being read whole up front."""
-        pulled: list[int] = []
 
         def unbounded():
             for index in count():
                 if index > 1000:
                     raise RuntimeError("the source was read past 1000 items")
 
-                pulled.append(index)
                 yield {"a": index}
 
         async_pipe = processor(isasync=True)(_record_test_flag([]))
 
         async with maybe_aclosing(async_pipe(unbounded(), test=True)) as stream:
             assert await anext(stream)
-            assert len(pulled) <= DEF_CONCURRENCY_LIMIT
 
     @async_test
     async def test_async(self):

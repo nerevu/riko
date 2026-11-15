@@ -151,7 +151,8 @@ def def_itemgetter(
         5
         >>> keyfunc({})
         0
-        >>> # an invalid number sorts via -inf, not NaN
+
+        # an invalid number sorts via -inf, not NaN
         >>> keyfunc = def_itemgetter("n", type_="float")
         >>> keyfunc({}), keyfunc({"n": "abc"})
         (-inf, -inf)

@@ -9,6 +9,7 @@ Run after editing gates.py:
 from __future__ import annotations
 
 import fcntl
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -224,6 +225,52 @@ def test_run_keeps_the_last_pytest_summary_line(capsys):
     assert "ratchet ok" in capsys.readouterr().out
     assert gates.print_summary(path, "test") == 0
     assert capsys.readouterr().out.startswith("3 passed, 2 xfailed in 9s (current;")
+
+
+@pytest.mark.usefixtures("repo")
+def test_all_stops_at_the_first_failing_gate_and_skips_recorded_ones(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    fake = tmp_path / ".claude" / "manage.py"
+    fake.parent.mkdir()
+    fake.write_text(
+        "import sys\nsys.exit(3 if sys.argv[1:3] == ['lint', '--all'] else 0)\n"
+    )
+    argv = ["all", "--manage", shlex.join([sys.executable, str(fake)])]
+
+    assert gates.main(argv) == 3
+    out = capsys.readouterr().out
+    assert gates.check(path, "prettify") == 0
+    assert gates.check(path, "tidy") == 0
+    assert gates.check(path, "lint") == 1
+    summary = out.split("--- gates\n")[1].splitlines()
+    assert summary == [
+        "pass prettify",
+        "fail (3) lint",
+        "not run test",
+        "not run check-types",
+        "not run verify-types",
+    ]
+    capsys.readouterr()
+    assert gates.main(argv) == 3
+    assert "skip prettify" in capsys.readouterr().out.split("--- gates\n")[1]
+
+
+@pytest.mark.usefixtures("repo")
+def test_all_stops_at_a_pass_the_tree_change_left_unrecorded(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    fake = tmp_path / ".claude" / "manage.py"
+    fake.parent.mkdir()
+    fake.write_text(
+        "import pathlib, sys\n"
+        "if sys.argv[1:3] == ['lint', '--all']:\n"
+        "    pathlib.Path('touched.txt').write_text('x')\n"
+    )
+    argv = ["all", "--manage", shlex.join([sys.executable, str(fake)])]
+
+    assert gates.main(argv) == gates.UNRECORDED
+    summary = capsys.readouterr().out.split("--- gates\n")[1].splitlines()
+    assert summary[:3] == ["pass prettify", "pass (unrecorded) lint", "not run test"]
+    assert gates.check(path, "lint") == 1
 
 
 @pytest.mark.parametrize(

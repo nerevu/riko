@@ -183,7 +183,10 @@ sync when source is moved between package groups.
   neither `uv` on the Git client's `PATH` nor an active venv (`uv run --active` without
   `VIRTUAL_ENV` silently falls back to a stale `.venv`). Those pins are the only copies
   of locked versions outside `uv.lock`: `manage upgrade` rewrites them and
-  `manage lint --deps` fails when one drifts. Upgrades happen locally:
+  `manage lint --deps` fails when one drifts. That lint also requires every `[project]`
+  dependency to be imported at run time, except the data-only packages deptry's
+  `DEP002` ignore list names (`tzdata`, which `zoneinfo` reads itself). Upgrades happen
+  locally:
   `manage upgrade` runs `uv lock --upgrade` (or `--upgrade-package` per `--package`) and
   syncs the active environment with every group and extra. Both hold to
   `[tool.uv] exclude-newer = "1 week"`: no release younger than a week resolves, a
@@ -235,6 +238,16 @@ sync when source is moved between package groups.
   Built-in pipe docstrings list `item`, `conf`, and `context` under `Args:` and the
   call options under `Kwargs:`; a pipe's signature is `*args, **kwargs`, so none of
   those names is a parameter and the checks never see them.
+- **Docstring review-note lint.** `manage lint --docstrings` flags a docstring line
+  that starts with a `TODO` marker (bare or after `#`) or carries an unquoted `???`
+  outside doctest source (`gen_review_notes`); a mid-line `TODO` and a double-backtick
+  ```` ``???`` ```` are prose and pass.
+- **Docstring run-binding lint.** `manage lint --docstrings` flags a `>>> NAME = run(`
+  line in a doctest whose pytest name (dotted module path plus qualname) contains
+  none of `ASYNC_DOCTEST_MARKERS` (`riko/base/_config.py`, `async`/`bado`;
+  `gen_run_bindings`). Without async support conftest
+  skips such a doctest's `run(` examples one at a time, so the bound name would be
+  undefined for the examples after it; only `async`/`bado` doctests are skipped whole.
 - **Docstring example lint.** `manage lint --docstrings` also flags a doctest line
   that ends in `is None` (`gen_null_checks`; the bare call shows a `None` result), a
   doctest that imports a public name through a private `riko` module path, a module
@@ -275,8 +288,7 @@ sync when source is moved between package groups.
   no-coverage run) and measures the console scripts through `patch = ["subprocess"]`.
   The root `conftest.py` puts the checkout first on `PYTHONPATH`, so those subprocesses
   run the checkout under test (a git worktree included) rather than whatever checkout
-  the venv's editable install points at (`TestSubprocessImports` in
-  `tests/internal/test_cli.py`). Dev-only `manage` modules are listed in
+  the venv's editable install points at. Dev-only `manage` modules are listed in
   `[tool.coverage.run] omit`, so a new `manage` helper module must join that list. The
   ceiling is specific to the full dev environment on Python 3.12; other environments run
   `--no-cov`.

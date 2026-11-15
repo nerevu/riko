@@ -31,7 +31,13 @@ API behavior plus the generators' and linters' own mechanics over fixture text, 
 import architecture). A tracked Markdown or prose file is never pytest input: a check
 that a doc edit would fail belongs in `manage lint --docs`, so the suite cannot go red
 over documentation. Generated Python compared against its generator stays a pytest drift
-guard.
+guard. The same boundary holds against every other CI gate: a regression that
+`--check-types`, test collection, or a tox leg already fails is not a pytest owner's
+job, and a test proves a riko contract, never that Python or a library (attrs
+`frozen`, `pickle`, `json`) behaves as documented. The type checker owns a case only
+when its static error and the runtime exception come from one declaration (an attrs
+`frozen` field, an attrs or Python signature); a hand-written runtime guard is a riko
+contract pytest keeps even when the call site also needs a pyright ignore.
 
 Because pytest executes doctests in Python modules, `README.rst`, and `docs/*.rst`, the
 README/FAQ already exercise string-based `SyncPipe` construction and `list_modules()`
@@ -243,8 +249,8 @@ Seed close is owned twice on purpose (ruling amended 2026-11-03, superseding the
 2026-10-29 "retire together" line):
 `tests/public/test_pipeline.py::TestAsyncClose::test_early_close_closes_the_seed` owns
 an async root closing each `CLOSING_SEEDS` shape, and the plan-level pair
-`TestPlanRun::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanRun::test_arun_closes_an_unfinished_seed_on_exit`
-in `tests/internal/test_plan_runs.py` keeps only what `Pipeline` never reaches: a
+`TestPlanClose::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanClose::test_arun_closes_an_unfinished_seed_on_exit`
+in `tests/internal/test_plan_closes.py` keeps only what `Pipeline` never reaches: a
 sync-only root reading the seed on a worker thread, a close on execution exit without
 `aclose`, and one close across two triggers. An async-root row there would duplicate
 `TestAsyncClose`.
@@ -333,8 +339,13 @@ CONSOLIDATE
 - ModuleName tests into one owner
 ```
 
-**Do not** reduce `test_compile`, `test_parallel`, `test_streams`, or the core lifecycle
-tests just to shrink the suite — they cover contracts hard to catch elsewhere.
+**Do not** reduce the compile, concurrency, streaming, or core lifecycle classes just to
+shrink the suite — they cover contracts hard to catch elsewhere: `TestCompileWorkflow`
+in `tests/public/test_workflow.py`; `TestSyncPolicy`, `TestPoolLifetime`,
+`TestAsyncPolicy`, and `TestThreadBudget` in `tests/internal/test_concurrency.py`;
+`TestAsyncOperatorLaziness` in `tests/internal/test_modules.py`; and
+`TestSyncExecution`, `TestAsyncExecution`, `TestResourceAcquisition`, and
+`TestAsyncResourceAcquisition` in `tests/internal/test_execution.py`.
 
 **Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
 
@@ -580,10 +591,19 @@ this same contract rather than re-proving it.
 - **P13 exit tests** (see [MILESTONES.md](../MILESTONES.md)) — `public/test_modules.py`
   (extended public/EXT `__all__`; no accidental internal exports) + `tests/typing/`.
   This gameplan supplies the *layering* half of P13; the `tests/typing/{valid,invalid}/`
-  type-check split is MILESTONES' half. Two pytest tests already assert only what
-  pyright checks and move there with it:
+  type-check split is MILESTONES' half. Pytest tests that already assert only what
+  pyright checks move there with it:
   `tests/internal/test_modules.py::TestParserSignature::test_fixed_arity_parser_is_a_type_error`
-  and `TestBareDecorator::test_bare_and_called_forms_type_check`.
+  and `TestBareDecorator::test_bare_and_called_forms_type_check`; and the frozen-field
+  assignments pyright rejects under `reportAttributeAccessIssue` (the §1
+  same-declaration rule; found by the 2026-11-14 skill audit):
+  `tests/internal/test_definitions.py::TestResourceFreezing::test_plan_fields_are_read_only`
+  and `TestWriteOperation::test_is_frozen`,
+  `tests/internal/test_modules.py::TestPrepare::test_prepared_module_is_frozen`,
+  `tests/public/test_pipeline.py::TestContext::test_fields_cannot_be_reassigned`,
+  `TestResource::test_external_value_fields_are_read_only`, and the post-pickle frozen
+  assertion of `TestContext::test_roundtrips_through_pickle` (the round trip itself
+  stays).
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
 

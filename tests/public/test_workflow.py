@@ -421,14 +421,6 @@ class TestNodes:
             node(id="a", name="n", **kwargs)
 
 
-_CALLABLE_NODE_ERRORS = [
-    pytest.param({"resources": {"a-b": "db"}}, _INVALID, "identifiers", id="dashed"),
-    pytest.param({"resources": "def"}, _INVALID, "identifiers", id="keyword"),
-    pytest.param({"identity": "bogus"}, _INVALID, "'identity'", id="identity"),
-    pytest.param({"fn": "len"}, TypeError, "callable", id="uncallable"),
-]
-
-
 class TestResourceBinding:
     @pytest.mark.parametrize(
         ("resources", "expected"),
@@ -469,6 +461,14 @@ class TestResourceBinding:
     def test_an_alias_cannot_repeat(self):
         with pytest.raises(InvalidPipelineError, match="must not repeat an alias"):
             ModuleNode(id="a", name="hash", resources=["db", "db"])
+
+
+_CALLABLE_NODE_ERRORS = [
+    pytest.param({"resources": {"a-b": "db"}}, _INVALID, "identifiers", id="dashed"),
+    pytest.param({"resources": "def"}, _INVALID, "identifiers", id="keyword"),
+    pytest.param({"identity": "bogus"}, _INVALID, "'identity'", id="identity"),
+    pytest.param({"fn": "len"}, TypeError, "callable", id="uncallable"),
+]
 
 
 class TestCallableNode:

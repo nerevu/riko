@@ -37,6 +37,11 @@ Search for the phase that owns the behavior, in authority order:
 
 Grep the gameplans for the module, concept, and failure vocabulary — owners
 are often stated in a phase you wouldn't guess from the file that misbehaves.
+Batch, don't serialize: grep all four sources (`implementation-sequence.md`,
+the topical gameplans, `ROADMAP.md`, `PHASE_CHECKLISTS.md`) for every term in
+one Bash call with `grep -n`, and read only the matching sections with
+`sed -n 'A,Bp'` in a second call; one grep per turn is the costliest way to
+search.
 
 A defect in a dependency (meza, mezmorize, …) that riko works around belongs to
 `_docs/gameplans/upstream-fixes.md`: the local workaround is the repair, and it
@@ -110,6 +115,29 @@ listed first, when:
 Ask these in place of that finding's confirmation question, in the same
 calls (up to 4 questions per call). Clear-cut dispositions with a single
 decisive gameplan line need only the confirmation.
+
+### Apply the decided dispositions in one agent
+
+Once every question is answered, the main loop does not apply the fixes
+itself. Run `python .claude/skills/land/require_agents.py` (on failure, stop
+and report its output), then launch one fresh `implementer` agent with
+`model: "opus"` and a self-contained brief:
+
+- the decided disposition list verbatim (finding → disposition → deciding
+  gameplan line → artifact);
+- the exact files and tests to touch;
+- the tripwire template from §4, and the fail-first proof command above for
+  each regression test;
+- the rules: apply mechanical fixes; batch independent edits and targeted
+  test runs into single turns; and when a repair turns out to touch a caller,
+  gate, skill, or check the disposition did not list, stop and report it
+  rather than decide, so the main loop can ask again.
+
+Wait for its report, re-run the fail-first proof and the targeted tests once,
+and only then report. The main loop's context is several times larger than a
+fresh agent's, so every edit→test turn there costs far more. The agent
+inherits the rule above on a cost found after the user has answered: it
+reports the cost instead of deciding.
 
 ## 4. Tripwires for owned findings
 

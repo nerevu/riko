@@ -195,11 +195,11 @@ def gen_rule_passes(rules: Iterable[RegexRule]) -> Iterator[Sequence[RegexRule]]
 
     Args:
 
-        rules: The compiled regex rules, in order.
+        rules: The compiled regex rules.
 
     Yields:
 
-        Each pass of rules, in order.
+        Each pass of rules.
 
     Examples:
 

@@ -345,13 +345,10 @@ async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
 
         >>> from riko import get_path, run
         >>>
-        >>> async def main():
-        ...     url = get_path("quote.json")
-        ...     result = async_pipe({"content": "GBP"}, conf={"url": url})
-        ...     print((await anext(result))["exchangerate"])
-        >>>
-        >>> run(main)
-        1.275201
+        >>> conf = {"url": get_path("quote.json")}
+        >>> stream = async_pipe({"content": "GBP"}, conf=conf)
+        >>> run(anext, stream)["exchangerate"]
+        Decimal('1.275201')
 
     """
     return await async_parser(*args, **kwargs)

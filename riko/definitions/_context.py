@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
     from riko.types._frozendict import FrozenInputs
     from riko.types._resource import LifecycleFactory
+    from riko.types._workflow import ResourceName
 
     from ._resource_definition import ResourceDefinition, ReusableResources
     from ._workflow_definition import Inputs
@@ -139,7 +140,7 @@ class Context:
     @overload
     def with_resource[T](
         self,
-        name: str,
+        name: ResourceName,
         definition: LifecycleFactory[T],
         *,
         credential: str | None = ...,
@@ -148,7 +149,7 @@ class Context:
     @overload
     def with_resource[T](
         self,
-        name: str,
+        name: ResourceName,
         definition: ReusableResource[T],
         *,
         credential: None = ...,
@@ -157,7 +158,7 @@ class Context:
     @overload
     def with_resource[T](
         self,
-        name: str,
+        name: ResourceName,
         definition: ResourceDefinition[T],
         *,
         credential: str | None = ...,
@@ -165,7 +166,7 @@ class Context:
     ) -> Self: ...
     def with_resource[T](
         self,
-        name: str,
+        name: ResourceName,
         definition: ResourceDefinition[T],
         *,
         credential: str | None = None,

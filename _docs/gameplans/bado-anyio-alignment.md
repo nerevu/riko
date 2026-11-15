@@ -51,6 +51,11 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | `coop_reduce` | `itertools.py` | **Keep** | low | Distinct semantics: sync reducer + explicit `await checkpoint()` between iterations. Real consumers (`rename`, `regex`, `refind`, `strfind`, `strreplace`, `strtransform`). AnyIO `reduce` wants an awaitable reducer — not a drop-in. |
 | `async_iter` | `itertools.py` | **Reduce usage, keep** | low | AnyIO itertools increasingly take sync iterables, cutting adapter need — but Riko's `cooperative=True` (scheduler checkpoints) is a real feature. Shift the model from "convert every sync iterable" to "adapt only when an API needs `AsyncIterable` or cooperative iteration." |
 | `async_map`, `async_map_stream`, `async_map_ordered_stream`, `async_merge`, `_pool_stream` | `itertools.py` | **Keep** | — | Encode Riko's concurrency/ordering/shared-budget/streaming/backpressure semantics on top of AnyIO primitives (`create_memory_object_stream`, `create_task_group`) — the layering AnyIO itself recommends, not a reinvention. |
+| `amap` | `itertools.py` | **Keep** | — | Lazy one-iterable `map` over an async source that never closes it. `anyio.itertools` has `starmap` (tuple-splatting) but no plain `map`. Replaced three hand-written per-item loops 1:1 with no added generator layer (A/B bench flat, 2026-11-12). |
+| `async_flatten` | `itertools.py` | **Keep** | — | Flattens a concurrent mapper's batches and closes the mapper with it. `anyio.itertools.chain` takes the iterables as arguments, not as a stream of them. Backs `_amap_stream` and `_aprocess_stream`. |
+| `alist`, `materialize` | `itertools.py` | **Keep** | — | Drain a sync **or** async iterable (to a list / a sync iterator). AnyIO has no collector. |
+| `aiter_sentinel` | `itertools.py` | **Keep** | — | Two-argument `iter` for an async `func`, sentinel matched by type. No AnyIO counterpart. |
+| `auto_close`, `aauto_close` | `itertools.py` | **Keep** | — | Deferred-consumption close of a stream plus extra closeables, close-once, `ResourceWarning` on a leak. AnyIO's `aclosing` only covers scoped use. |
 
 Already-AnyIO, no action: `Path`, `async_sleep`, task groups, memory streams,
 `CapacityLimiter`, `Semaphore`.

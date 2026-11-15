@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Concatenate, overload
 
 from ._logging import get_logger
 
@@ -80,6 +80,37 @@ def noop[T](value: T) -> T:
     return value
 
 
+def compose[A, B, R](
+    outer: Callable[[B], R], inner: Callable[[A], B]
+) -> Callable[[A], R]:
+    """
+    Combines two one-argument callables into one that calls ``inner``, then ``outer``.
+
+    Args:
+
+        outer: Called with the result of ``inner``.
+        inner: Called with the composed function's argument.
+
+    Returns:
+
+        A function equivalent to ``lambda value: outer(inner(value))``.
+
+    Examples:
+
+        >>> to_int = compose(int, float)
+        >>> to_int("2.5")
+        2
+
+    """
+
+    def composed(
+        value: A, _outer: Callable[[B], R] = outer, _inner: Callable[[A], B] = inner, /
+    ) -> R:
+        return _outer(_inner(value))
+
+    return composed
+
+
 def map_values[K, V, R](
     func: Callable[[V], R],
     item: Mapping[K, V],
@@ -122,6 +153,46 @@ def map_values[K, V, R](
         result = {key: func(value, **kwargs) for key, value in item.items()}
 
     return result
+
+
+def call_if_distinct[T, **P](
+    func: Callable[Concatenate[T, P], object],
+    value: T,
+    other: object,
+    /,
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> None:
+    """
+    Calls ``func`` with ``value`` unless ``value`` is ``other``.
+
+    The test is identity, never equality.
+
+    Args:
+
+        func: Called with ``value`` and the remaining arguments.
+        value: The first argument to ``func``.
+        other: The object ``value`` must not be.
+        *args: Positional arguments passed to ``func``.
+
+    Kwargs:
+
+        **kwargs: Keyword arguments passed to ``func``.
+
+    Examples:
+
+        >>> calls = []
+        >>> source, stream = [1], iter([1])
+        >>> call_if_distinct(calls.append, stream, stream)
+        >>> calls
+        []
+        >>> call_if_distinct(calls.append, source, stream)
+        >>> calls
+        [[1]]
+
+    """
+    if value is not other:
+        func(value, *args, **kwargs)
 
 
 def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
@@ -228,7 +299,7 @@ def dispatch(split: Sequence[object], *funcs: Func[object]) -> tuple[object, ...
 
     Returns:
 
-        The result of each function, in order.
+        The result of each function.
 
     Examples:
 
@@ -278,7 +349,7 @@ def broadcast(
 
     Returns:
 
-        The result of each function, in order.
+        The result of each function.
 
     Examples:
 

@@ -87,9 +87,9 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         conf (dict): The module configuration.
 
-            part (str | dict | list): The pieces to join, in order. A single
-                piece is wrapped in a list. A str is used verbatim; a dict
-                resolves to a value and must hold one of:
+            part (str | dict | list): The pieces to join. A single piece is wrapped in a
+                list. A str is used verbatim. A dict resolves to a value and must hold
+                one of:
 
                     subkey (str): Item field supplying the piece. A dotted
                     path reads a nested value, e.g. ``"img.src"``.
@@ -127,14 +127,11 @@ def async_pipe(*args: Any, **kwargs: object) -> str:
 
         >>> from riko import run
         >>>
-        >>> async def main():
-        ...     item = {"title": "Hello world"}
-        ...     part = [{"subkey": "title", "type": "text"}, "s"]
-        ...     result = async_pipe(item, conf={"part": part})
-        ...     print((await anext(result))["strconcat"])
-        >>>
-        >>> run(main)
-        Hello worlds
+        >>> item = {"title": "Hello world"}
+        >>> part = [{"subkey": "title", "type": "text"}, "s"]
+        >>> stream = async_pipe(item, conf={"part": part})
+        >>> run(anext, stream)["strconcat"]
+        'Hello worlds'
 
     """
     return parser(*args, **kwargs)
@@ -154,9 +151,9 @@ def pipe(*args: Any, **kwargs: object) -> str:
 
         conf (dict): The module configuration.
 
-            part (str | dict | list): The pieces to join, in order. A single
-                piece is wrapped in a list. A str is used verbatim; a dict
-                resolves to a value and must hold one of:
+            part (str | dict | list): The pieces to join. A single piece is wrapped in a
+                list. A str is used verbatim. A dict resolves to a value and must hold
+                one of:
 
                     subkey (str): Item field supplying the piece. A dotted
                     path reads a nested value, e.g. ``"img.src"``.

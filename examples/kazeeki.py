@@ -65,9 +65,10 @@ def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
 def add_source(source: Pipeline) -> Pipeline:
     subelement_conf = SubelementConf({"path": "k:source.content.1", "token_key": None})
     urlparse_options = CallOptions(field="link", emit=False, assign="k:source")
+    subelement_options = CallOptions(emit=False, assign="k:source", count="first")
 
     return source.urlparse(options=urlparse_options).subelement(
-        conf=subelement_conf, options={"emit": False, "assign": "k:source"}
+        conf=subelement_conf, options=subelement_options
     )
 
 

@@ -129,21 +129,21 @@ def _module_sort_key(module: UnclassifiedModule) -> tuple[str, str]:
 
 
 def _graph_sort_key(layer: str) -> int:
-    return len(descendants(layer, _LAYER_DEPENDENCIES))
+    return len(descendants(_LAYER_DEPENDENCIES, layer))
 
 
 def _gen_remaining(
     source: str, target: set[str], graph: AnyGraph[str]
 ) -> Iterator[str]:
     remaining = target - {source}
-    yield from remaining - descendants(source, graph)
+    yield from remaining - descendants(graph, source)
 
-    if counts := Counter({edge: len(descendants(edge, graph)) for edge in remaining}):
+    if counts := Counter({edge: len(descendants(graph, edge)) for edge in remaining}):
         max_freq = counts.most_common(1)[0][1]
 
         for layer, freq in counts.items():
             if freq == max_freq:
-                remaining -= descendants(layer, graph)
+                remaining -= descendants(graph, layer)
 
         yield from remaining
     else:
@@ -273,7 +273,7 @@ def load_architecture_report(
                     nodes = graph[source_layer]
                     remaining = _gen_remaining(source_layer, nodes, dependencies)
                     graph[source_layer] = set(remaining)
-                    reachable = descendants(source_layer, dependencies)
+                    reachable = descendants(dependencies, source_layer)
 
                     if target_layer not in reachable:
                         code = ViolationCodes.FORBIDDEN_LAYER_DEPENDENCY

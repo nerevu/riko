@@ -160,18 +160,27 @@ selection is required and its optional XML parser (``lxml``) is installed.
 User input
 ^^^^^^^^^^
 
-Some ``pipelines`` require user input (via the ``input`` module). By default,
-``input`` prompts the user via the console, but in some situations this may not
-be appropriate, e.g., testing or integrating with a website. In such cases, set
-``test`` in the ``conf`` so the module uses its ``default`` instead of prompting.
+The ``input`` module reads a value and casts it to its ``type``. Supply the value in the
+``Context``'s ``inputs``, keyed by the module's ``input_key``. Otherwise ``input``
+prompts on the console. It uses its ``default`` when ``inputs`` lacks the key, the
+prompt receives an empty answer, or in test mode.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources
+    >>> from riko import Context, Pipeline, Sources
     >>>
-    >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'default': '30', 'test': True}
-    >>> Pipeline.from_module(Sources.INPUT, conf=conf).first()
+    >>> conf = {'prompt': 'How old are you?', 'type': 'int', 'input_key': 'age'}
+    >>> pipeline = Pipeline.from_module(Sources.INPUT, conf=conf)
+    >>> answered = pipeline.with_context(Context(inputs={'age': '42'}))
+    >>> answered.first()
+    42
+    >>> test_conf = {**conf, 'default': '30', 'test': True}
+    >>> Pipeline.from_module(Sources.INPUT, conf=test_conf).first()
     30
+
+A workflow run never prompts. Each input named in the workflow's input schemas comes
+from ``inputs``, else from its schema's ``default``. The run raises when neither is
+present (see "Workflow inputs" in the `DAG format doc`_).
 
 Intermediate recipes
 --------------------
@@ -272,25 +281,25 @@ when control flow is easier to express explicitly.
     >>> from riko.modules.strreplace import pipe as strreplace
     >>> from riko.modules.tokenizer import pipe as tokenizer
     >>> from riko.modules.count import pipe as count
-    >>>
-    >>> ### Set the module configurations ###
-    >>> #
-    >>> # Notes:
-    >>> #   - `get_path` just looks up files in the `data` directory to simplify
-    >>> #      testing
-    >>> #   - the `detag` option will strip all html tags from the result
+
+    ### Set the module configurations ###
+    #
+    # Notes:
+    #   - `get_path` just looks up files in the `data` directory to simplify
+    #      testing
+    #   - the `detag` option will strip all html tags from the result
     >>> url = get_path('users.jyu.fi.html')
     >>> fetch_conf = {'url': url, 'start': '<body>', 'end': '</body>', 'detag': True}
     >>> replace_conf = {'rule': {'find': '\n', 'replace': ' '}}
-    >>>
-    >>> ### Create a pipeline ###
-    >>> #
-    >>> # The following pipeline will:
-    >>> #   1. fetch the URL and return the content between the body tags
-    >>> #   2. replace newlines with spaces
-    >>> #   3. tokenize (split) the content by spaces, i.e., yield words
-    >>> #   4. count the words
-    >>> #
+
+    ### Create a pipeline ###
+    #
+    # The following pipeline will:
+    #   1. fetch the URL and return the content between the body tags
+    #   2. replace newlines with spaces
+    #   3. tokenize (split) the content by spaces, i.e., yield words
+    #   4. count the words
+    #
     >>> pages = fetchpage(conf=fetch_conf)
     >>> replaced = strreplace(pages, conf=replace_conf, assign='content')
     >>> words = tokenizer(replaced, conf={'delimiter': ' '}, emit=True)
@@ -316,8 +325,8 @@ also accept dynamic or dotted name modules, e.g., ``"microsoft.autopilot.ensure"
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # chain a module by name
+
+    # chain a module by name
     >>> (pipeline | Transforms.HASH).first(items)
     {'content': 'a', 'hash': 393565300}
 
@@ -332,12 +341,12 @@ chained ``pipeline`` is no different, so compose first and seed last.
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # seed a pipeline with items
+
+    # seed a pipeline with items
     >>> list(items | pipeline)
     [{'content': 'a'}, {'content': 'b'}, {'content': 'c'}, {'content': 'a'}]
-    >>>
-    >>> # seed a chained pipeline with items
+
+    # seed a chained pipeline with items
     >>> list(items | pipeline.pipe(Transforms.TRUNCATE, conf={"count": 2}))
     [{'content': 'a'}, {'content': 'b'}]
 
@@ -350,8 +359,8 @@ chained ``pipeline`` is no different, so compose first and seed last.
     >>>
     >>> items = [{"content": "a,b,c,a"}]
     >>> pipeline = Pipeline.from_module(Transforms.TOKENIZER)
-    >>>
-    >>> # compose reusable steps
+
+    # compose reusable steps
     >>> chained = Pipeline.from_module(Transforms.UNIQ) | Transforms.COUNT
     >>> (pipeline | chained).first(items)
     {'count': 3}
@@ -552,8 +561,8 @@ Lazy async iteration
     >>>
     >>> fetch_conf = {'url': get_path('feed.xml')}
     >>> filter_rule = {'field': 'title', 'op': 'contains', 'value': 'a'}
-    >>>
-    >>> ### Consume a Pipeline item-by-item with `async for` ###
+
+    ### Consume a Pipeline item-by-item with `async for` ###
     >>> async def main():
     ...     pipeline = (
     ...         Pipeline.from_module(Sources.FETCH, conf=fetch_conf)
@@ -596,19 +605,16 @@ at most two at a time, in source order.
 
 .. code-block:: python
 
-    >>> from riko import Pipeline, Sources, run
+    >>> from riko import Pipeline, Sources, alist, run
     >>>
-    >>> async def main():
-    ...     conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
-    ...     pipeline = (
-    ...         Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
-    ...         .tokenizer(options={'emit': True})
-    ...         .hash()
-    ...         .with_execution(concurrency=2, ordered=True)
-    ...     )
-    ...     print([item['content'] async for item in pipeline])
-    >>>
-    >>> run(main)
+    >>> conf = {'attrs': {'key': 'content', 'value': 'a,bb,ccc'}}
+    >>> pipeline = (
+    ...     Pipeline.from_module(Sources.ITEMBUILDER, conf=conf)
+    ...     .tokenizer(options={'emit': True})
+    ...     .hash()
+    ...     .with_execution(concurrency=2, ordered=True)
+    ... )
+    >>> [item['content'] for item in run(alist, pipeline)]
     ['a', 'bb', 'ccc']
 
 Under ``async for`` native async work runs inline and synchronous work runs on worker
@@ -682,6 +688,22 @@ appends the callable as its own node. It passes keyword arguments to the callabl
     >>> [item["length"] for item in pipeline(items)]
     [11, 14]
 
+``map`` considers each result the same item that ``fn`` received, even when ``fn``
+returns a changed copy (as above). If ``fn`` instead builds a new item, pass
+``riko.IdentityMode.DERIVE`` to ``identity``.
+
+.. code-block:: python
+
+    >>> from riko import Pipeline, IdentityMode
+    >>>
+    >>> def get_length(item):
+    ...     return {"length": len(item["content"])}
+    >>>
+    >>> items = [{"content": "a"}, {"content": "abcd"}]
+    >>> lengths = Pipeline().map(get_length, identity=IdentityMode.DERIVE)
+    >>> list(lengths(items))
+    [{'length': 1}, {'length': 4}]
+
 Use the extension decorators when the transformation should have normal ``riko``
 configuration, assignment, metadata, and sync/async wrappers.
 
@@ -705,6 +727,24 @@ by name (see `Registering a custom module`_ below).
 
 A ``processor`` can return one value, an ``item``, or an iterator. Use ``field``
 and ``assign`` at the call site to control extraction and assignment.
+
+A ``Pipeline`` considers a processor's results new items derived from the ``item`` they
+came from. If your processor instead yields ``item`` as it is received, set ``identity``
+to ``riko.IdentityMode.PRESERVE`` on the decorated function, and on its async version
+too if the module has one.
+
+.. code-block:: python
+
+    >>> from riko import IdentityMode
+    >>> from riko.ext import processor
+    >>>
+    >>> @processor
+    ... def uppercase(item, extraction, objconf, **kwargs) -> str:
+    ...     return str(item['content']).upper()
+    >>>
+    >>> uppercase.identity = IdentityMode.PRESERVE
+    >>> uppercase.identity
+    <IdentityMode.PRESERVE: 'preserve'>
 
 The wrapped function can be a plain ``def`` that returns a synchronous result (as built-in
 ``count``/``reverse``/``sort`` do) *or* an ``async def`` that awaits real I/O (as
@@ -732,9 +772,10 @@ or composition that cannot be expressed as an item-level ``processor``.
     >>> [item['value'] for item in every_other(items)]
     [0, 2, 4]
 
-``operator`` functions should preserve iterator behavior unless the operation
-requires materialization. Add both sync and async wrappers when users need both
-execution APIs.
+``operator`` functions should preserve iterator behavior unless the operation requires
+materialization. Add both sync and async wrappers when users need both execution APIs.
+An async operator's ``async_pipe`` returns an async iterator. Closing it before it is
+exhausted also closes the streams it reads.
 
 Registering a custom module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -946,8 +987,8 @@ operators such as ``union``/``join`` expressible too.
 .. code-block:: python
 
     >>> from riko import Pipeline, Workflow
-    >>>
-    >>> ### Author a terse, linear DAG (no wires, no ids) ###
+
+    ### Author a terse, linear DAG (no wires, no ids) ###
     >>> itembuilder_conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> rename_conf = {'rule': {'field': 'greeting', 'newval': 'salutation'}}
     >>> dag = {
@@ -956,8 +997,8 @@ operators such as ``union``/``join`` expressible too.
     ...         {'name': 'rename', 'conf': rename_conf},
     ...     ]
     ... }
-    >>>
-    >>> ### Expand it into a validated Workflow and run it ###
+
+    ### Expand it into a validated Workflow and run it ###
     >>> flow = Workflow.parse(dag)
     >>> list(Pipeline(flow))
     [{'salutation': 'hello'}]

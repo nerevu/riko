@@ -47,10 +47,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from riko.types._io import Closeable
+    from riko.types._workflow import ResourceName
 
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
 type Values = Mapping[str, object]
-type ReusableResources = FrozenDict[str, ReusableResource[object]]
+type ReusableResources = FrozenDict[ResourceName, ReusableResource[object]]
 type ResourceDefinition[T] = ReusableResource[T] | LifecycleFactory[T]
 
 

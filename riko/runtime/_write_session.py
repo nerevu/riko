@@ -30,7 +30,7 @@ from riko.io._serialization import serialize_items
 from riko.types._enums import FmtLike, Formats, StrLike
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator
+    from collections.abc import AsyncGenerator, Generator
 
     from _typeshed import OpenBinaryMode
     from anyio import AsyncFile
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
         Items,
         Stream,
     )
-    from riko.types._wrappers import ConversionOutput
+    from riko.types._wrappers import ConversionOutput, Func
 
 
 class _SessionState(Enum):
@@ -86,11 +86,6 @@ def _cast_bytes(
         text = IterStringIO(content)
 
     return text
-
-
-def _normalize_jsonl(content: str) -> str:
-    """Ensures newline-delimited JSON ends in exactly one line terminator."""
-    return f"{content}\n" if content and not content.endswith("\n") else content
 
 
 class _FileWriteSession:
@@ -269,7 +264,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         result = serialize_items(items, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_cast_text(result))
+            result = _cast_text(result)
 
         return result
 
@@ -483,7 +478,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             result = await asyncify(*args)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_cast_text(result))
+            result = _cast_text(result)
 
         return result
 
@@ -727,7 +722,7 @@ async def afile_write_session(
 
 
 def write_through(
-    source: Items, prepared: PreparedWrite, *, terminating: Callable[[], bool]
+    source: Items, prepared: PreparedWrite, *, terminating: Func[bool]
 ) -> ItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.
@@ -771,7 +766,7 @@ async def awrite_through(
     source: AsyncItems,
     prepared: PreparedWrite,
     *,
-    terminating: Callable[[], bool] | None = None,
+    terminating: Func[bool] | None = None,
 ) -> AsyncItemGenerator:
     """
     Passes each item through a lazily acquired write session unchanged.

@@ -23,7 +23,8 @@ by `.claude/skills/land/gates.py` (`G` below):
   folder for the other gates. Staging, committing, an autosquash, `/clear`, or
   another session leaves it valid; any content edit invalidates it, except
   that a skill edit reruns only tidy, lint, and prettify. Run each gate through
-  `python $G run <gate> [--mutates] [--lock] -- <command>`: it
+  `python $G run <gate> [--mutates] [--lock] -- <command>` (or all of `/land`'s
+  in order with `python $G all`, which runs each through `run`): it
   prints `skip <gate>` and exits 0 when the gate already passed on this tree
   (from any session), otherwise runs the command and records a pass only when
   it succeeds and the tree did not change during the run. Mutating gates
@@ -51,6 +52,18 @@ Order matters. Run from the repo root; `<manage>` is `uv run --active python -m
 riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
 `$G` is `.claude/skills/land/gates.py`.
 
+Steps 2–6 run as one command. On a tree with no known gate failures, run
+`python $G all [--codegen]` once (`--codegen` per step 3), in the foreground with
+nothing else running beside it, because it contains the suite. It runs prettify
+(then re-marks tidy), codegen, lint, the suite, and both type gates through
+`$G run`, in that order, so each gate already recorded on this tree prints `skip`;
+it stops at the first gate that fails, is busy, or passes unrecorded (the tree
+changed during its run) and ends with one summary line per gate (`skip`, `pass`,
+`pass (unrecorded)`, `fail (<code>)`, `busy`, or `not run`). When it stops, fix
+that gate's failures as its step below describes and rerun `all`, which skips the
+gates already recorded. Each step's `$G run` line is the fallback for iterating on
+one gate alone.
+
 0. **Upgrade dependencies**: `manage upgrade --daily` (not wrapped: `--daily`
    is its own once-a-day marker). It re-resolves `uv.lock` to the
    newest allowed versions and syncs the active environment, so a new ruff,
@@ -71,16 +84,21 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    header's floor line, and set each remaining entry's **Upstream branch/PR**
    line from `git -C ~/Documents/Projects/meza branch -a` and `gh pr list -R
    reubano/meza` (a merged or deleted branch reads "none yet" again). Name
-   every deleted workaround in the report.
+   every deleted workaround in the report. The command itself runs in step 1's setup
+   call.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh `implementer`
    subagent (`model: "opus"`, so it never inherits a Fable session's model), never as an
-   in-loop grep pass. Run `python $G check tidy` first and skip the agent when it exits
-   0 (tidy already ran on this tree, in any session). Before spawning, run
-   `python .claude/skills/land/require_agents.py`; when it fails, stop and report its
-   output (the user-level agent definitions are missing). The brief opens "Follow
-   `.claude/skills/tidy/SKILL.md`, reproduced below; `/land` is the caller, so skip its
-   verify step" and then **pastes the whole file** (`cat .claude/skills/tidy/SKILL.md`)
-   — the agent must never spend a turn reading it — plus the mid-run self-check (past
+   in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step
+   0), `python $G check tidy`, and `python .claude/skills/land/require_agents.py`
+   together. When `check tidy` exits 0, skip the agent (tidy already ran on this tree,
+   in any session); when `require_agents.py` fails, stop and report its output (the
+   user-level agent definitions are missing); otherwise launch the agent in the next
+   response. The brief opens "Follow `.claude/skills/tidy/SKILL.md`; `/land` is the
+   caller, so skip its verify step", and the agent reads that file itself as its first
+   action. Never `cat` or `Read` the tidy skill in the main loop: at 200k context that
+   costs several times what the agent's own read does, and the measurement tooling
+   attributes the agent run by the `Follow` line, not the pasted body. The brief ends
+   with the mid-run self-check (past
    about 10 minutes or 100k tokens with mechanical work left: pause, report, and name
    the helper script; afterwards inspect any scripts it wrote for itself and promote,
    fold, park in `.claude/skills/drafts/`, or drop each; a dropped or folded script
@@ -88,25 +106,29 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    user, never deleted by an agent). Its mechanical fixes join the change before the
    gates run; its judgment questions go to the user now, and phase-owned findings go
    through `/triage`.
-2. **Prettify first, always**:
+2. **Prettify first, always**: the gate sequence's first gate. Alone:
    `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`.
    Never hand-fix formatting-class lint errors — formatting is prettify's job, before
-   any linter runs. The `record tidy` re-marks the prettified tree: tidy skips its own
-   prettify under `/land`, so without it a format-only change would reopen tidy's scope
-   for the next session.
+   any linter runs. The tidy re-mark (`record tidy`, which `all` does itself after
+   a prettify pass) records the prettified tree: tidy skips its own prettify under
+   `/land`, so without it a format-only change would reopen tidy's scope for the next
+   session.
 3. **Codegen drift**: if the change touched anything with a generated artifact
-   (configs, module names/ids, API surface blocks, pipeline fixtures), run
-   `python $G run codegen --mutates -- <manage> codegen --all` and check `git diff`
+   (configs, module names/ids, API surface blocks, pipeline fixtures), pass
+   `--codegen` to `all` (alone:
+   `python $G run codegen --mutates -- <manage> codegen --all`) and check `git diff`
    on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
-4. **Lint**: `python $G run lint -- <manage> lint --all`. It already runs Ruff, rumdl,
-   the RST/docs/docstring/ terms/literals/deps/bindings/tests/basenames/escapes checks,
-   actionlint, YAML, and every import contract, so do not rerun `--docs`,
-   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
-   `--basenames`, or `--escapes` separately. It does **not** run the type gate.
+4. **Lint**: in the gate sequence; alone, `python $G run lint -- <manage> lint --all`.
+   It already runs Ruff, rumdl, the RST/docs/docstring/
+   terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and
+   every import contract, so do not rerun `--docs`, `--docstrings`, `--terms`,
+   `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes`
+   separately. It does **not** run the type gate.
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
-   suite `python $G run test --lock -- <manage> test --ratchet --quiet` before declaring
+   suite, in the gate sequence or alone with
+   `python $G run test --lock -- <manage> test --ratchet --quiet`, before declaring
    ready — in the foreground and alone: no other pytest or `manage` gate may run beside
    it: its thread/pool timing tests and the ~70s run degrade under CPU contention, and
    its own data folder isolates only the coverage file. Doctests are tests here — doc
@@ -125,7 +147,8 @@ riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
    When it lowers the ceiling, that `pyproject.toml` diff is part of the change — keep
    it. The ceiling is measured in the full dev environment (`--group dev --all-extras`,
    Python 3.12).
-6. **Types**: `python $G run check-types -- <manage> lint --check-types` and
+6. **Types**: the gate sequence's last two gates; alone,
+   `python $G run check-types -- <manage> lint --check-types` and
    `python $G run verify-types -- <manage> lint --verify-types`
    (neither is part of `--all`). Always run both: an internal change (for
    example a base class whose types come only from local `typings/` stubs) can
@@ -162,10 +185,12 @@ to an agent, which repeats their work by hand for many minutes.
    at or before the merge point never is. A pushed target is still a target:
    the autosquash then rewrites published history, so `/wrapup`'s handover
    ends with a force push (`git push --force-with-lease`).
-2. **Map hunks to targets**: run the mapper instead of blaming by hand:
+2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
+   with step 3's hunk list in one Bash call:
 
    ```bash
    python .claude/skills/land/fixup_map.py --blame-only
+   python .claude/skills/land/split_hunks.py list --body 12
    ```
 
    It blames each hunk of `git diff -U3 HEAD`, follows `fixup!` chains, and
@@ -174,14 +199,12 @@ to an agent, which repeats their work by hand for many minutes.
    `--blame-only` it offers only hunks whose blame points at one branch commit;
    drop the flag to also see `*` latest-touch guesses, worth offering only when
    the target's subject fits. Read each candidate hunk (and only those) before
-   offering it, and drop one whose meaning still depends on the change (an
-   import used only by new code, a doc line describing new behavior).
-3. **Write the plan**: list the change's hunks by id with
-
-   ```bash
-   python .claude/skills/land/split_hunks.py list
-   ```
-
+   offering it, from its `--body` excerpt, and drop one whose meaning still depends
+   on the change (an import used only by new code, a doc line describing new
+   behavior). Read a hunk with `git diff` only when its excerpt does not settle its
+   concept.
+3. **Write the plan**: the `split_hunks.py list --body 12` output from step 2's call
+   lists the change's hunks by id
    (`-U0` by default, so mixed-concept regions split finely; `path:N` is the hunk
    starting on new-side line `N`; new, deleted, untracked, and binary files are
    whole-file ids; `--body N` prints up to `N` of each hunk's lines under it, for

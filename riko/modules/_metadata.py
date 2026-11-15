@@ -353,8 +353,8 @@ def describe_module(
         >>> from riko import Sources
         >>> from riko.ext import register_workflow_store, temporary_registrations
         >>> from riko.modules.fetch import pipe as fetch
-        >>>
-        >>> # module name
+
+        # by module name
         >>> module_def = describe_module(Sources.FETCH)
         >>> module_def.name
         'fetch'
@@ -365,16 +365,16 @@ def describe_module(
         >>> module_def.dependencies
         ()
         >>> describe_module("does-not-exist")
-        >>>
-        >>> # stored workflow
+
+        # by stored workflow
         >>> with temporary_registrations():
         ...     register_workflow_store(package="examples.pyworkflows", replace=True)
         ...     describe_module("pipe:timezone").dependencies
         ...     describe_module("pipe:timezone").input_schemas
         ('dateformat', 'itembuilder')
         FrozenDict({})
-        >>>
-        >>> # pipe callable
+
+        # by pipe callable
         >>> describe_module(fetch).name
         'fetch'
 
