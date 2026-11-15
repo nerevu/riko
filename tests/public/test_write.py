@@ -384,6 +384,12 @@ class TestExportFormats:
         else:
             assert not (finance_targets & targets)
 
+    def test_jsonl_append_keeps_one_record_per_line(self, tmp_path):
+        path = tmp_path / "out.jsonl"
+        export([{"x": 0}], "jsonl", str(path), mode="ab")
+        export([{"x": 1}], "jsonl", str(path), mode="ab")
+        assert path.read_bytes() == b'{"x": 0}\n{"x": 1}\n'
+
     @pytest.mark.parametrize(("type_", "kwargs"), WRITER_OPTIONS)
     def test_writer_option_without_a_destination_raises(self, type_, kwargs):
         with pytest.raises(TypeError, match=next(iter(kwargs))):

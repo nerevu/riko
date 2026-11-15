@@ -88,11 +88,6 @@ def _cast_bytes(
     return text
 
 
-def _normalize_jsonl(content: str) -> str:
-    """Ensures newline-delimited JSON ends in exactly one line terminator."""
-    return f"{content}\n" if content and not content.endswith("\n") else content
-
-
 class _FileWriteSession:
     def __init__(self, prepared: PreparedWrite):
         if not isinstance(prepared.target, FileTarget):
@@ -269,7 +264,7 @@ class _SyncFileWriteSession(_FileWriteSession):
         result = serialize_items(items, self.fmt, **kwargs)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_cast_text(result))
+            result = _cast_text(result)
 
         return result
 
@@ -483,7 +478,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             result = await asyncify(*args)
 
         if result and self.jsonl_format:
-            result = _normalize_jsonl(_cast_text(result))
+            result = _cast_text(result)
 
         return result
 
