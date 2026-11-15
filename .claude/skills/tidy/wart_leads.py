@@ -5,7 +5,8 @@ Inputs: riko/ source tree (cwd = repo root). Outputs: lead sections on stdout.
 Origin: 2026-11-09 audit for "warts like the unneeded describe modes"; promoted to a
 tidy helper 2026-11-11. Leads need manual pruning: it misses values passed through
 partial, repeat(...), and **kwargs forwarding. Section G folded in 2026-11-11 from the
-closure-lookup audit draft.
+closure-lookup audit draft. Section H folded in 2026-11-14 from the deep-repo-audit
+dead-definition draft; `KEPT_DEFS` lists the definitions rulings keep despite no uses.
 """
 
 import ast
@@ -219,3 +220,30 @@ for p, t in trees.items():
                 if not any(o.startswith(f"{key}.") for o in seen):
                     kind = getattr(inner, "name", type(inner).__name__)
                     print(f"{p}:{line} {outer.name} -> {kind}: {key}")
+
+
+# H. definitions whose name occurs nowhere but their own definition
+section("H. definitions named only at their definition (riko/ tests/ docs/ _docs/)")
+DUNDERS = {"__init__", "__call__", "__new__", "__repr__", "__getattr__"}
+KEPT_DEFS = {"is_sync_callable", "is_readable", "is_io_like"}
+CALLBACK_PREFIXES = ("visit_", "handle_", "test")
+corpus_dirs = ("riko", "tests", "docs", "examples", "_docs")
+suffixes = {".py", ".rst", ".md", ".pyi", ".json", ".toml", ".j2", ".jinja"}
+corpus_paths = [
+    q for d in corpus_dirs for q in Path(d).rglob("*") if q.suffix in suffixes
+]
+corpus_paths += [Path("README.rst"), Path("pyproject.toml")]
+corpus = Counter()
+for q in corpus_paths:
+    corpus.update(re.findall(r"[A-Za-z_]\w*", q.read_text(errors="ignore")))
+for p, t in trees.items():
+    defs: Counter[str] = Counter()
+    first: dict[str, int] = {}
+    for node in ast.walk(t):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defs[node.name] += 1
+            first.setdefault(node.name, node.lineno)
+    for name, count in defs.items():
+        skip = name in DUNDERS | KEPT_DEFS or name.startswith(CALLBACK_PREFIXES)
+        if not skip and not name.startswith("__") and corpus[name] <= count:
+            print(f"{p}:{first[name]} {name}")

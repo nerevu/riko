@@ -8,6 +8,7 @@ Usage:
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
+    python .claude/skills/land/gates.py all [--codegen] [--manage CMD]
 
 A gate's marker is the content tree id of the working tree it passed on: every
 tracked and untracked, non-ignored file as ``git write-tree`` would store it.
@@ -45,6 +46,14 @@ real edits.
 (``1851 passed, 62 xfailed in 70s``) in the marker; ``summary`` prints it with
 whether the tree has changed since, so a later session can report the suite count
 without rerunning it. It exits 1 when the gate has no recorded summary.
+
+``all`` runs ``/land``'s gates in order through ``run``, one at a time in the
+foreground: prettify (then re-marks tidy, as ``record tidy`` does), codegen only
+with ``--codegen``, lint, the suite (locked), check-types, and verify-types. Each
+command is ``--manage`` (default ``uv run --active python -m riko.cli.manage``)
+plus the gate's arguments. It stops at the first gate that fails or is busy, exits
+with that gate's code, and ends with one line per gate: ``skip``, ``pass``,
+``fail (<code>)``, ``busy``, or ``not run``.
 """
 
 from __future__ import annotations
@@ -54,6 +63,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -69,6 +79,7 @@ if TYPE_CHECKING:
 DESCRIPTION = "Skip gates that already passed on the current tree."
 GIT = shutil.which("git") or "git"
 BUSY = 75
+UNRECORDED = 1
 EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
@@ -80,6 +91,15 @@ SCOPE_EXCLUDES = (
     "riko/coercion/_configs.py",
     "riko/modules/_names.py",
     "riko/types/_module_ids.py",
+)
+MANAGE = "uv run --active python -m riko.cli.manage"
+GATE_SEQUENCE = (
+    ("prettify", ("prettify",), True, False),
+    ("codegen", ("codegen", "--all"), True, False),
+    ("lint", ("lint", "--all"), False, False),
+    ("test", ("test", "--ratchet", "--quiet"), False, True),
+    ("check-types", ("lint", "--check-types"), False, False),
+    ("verify-types", ("lint", "--verify-types"), False, False),
 )
 
 
@@ -380,6 +400,54 @@ def _run_unlocked(path: Path, gate: str, command: list[str], *, mutates: bool) -
     return code
 
 
+def _get_status(code: int, *, skipped: bool, recorded: bool) -> str:
+    if code == BUSY:
+        status = "busy"
+    elif code != 0:
+        status = f"fail ({code})"
+    elif not recorded:
+        status = "pass (unrecorded)"
+    else:
+        status = "skip" if skipped else "pass"
+
+    return status
+
+
+def run_all(path: Path, manage: list[str], *, codegen: bool) -> int:
+    """
+    Runs ``/land``'s gates in order through ``run``, stopping at the first failure.
+
+    A prettify pass re-marks tidy on the tree it left. A gate that exits 0 without a
+    recorded pass (the tree changed during its run) stops the sequence too. Prints
+    one status line per gate at the end and returns the stopping gate's exit code,
+    else 0.
+    """
+    selected = [entry for entry in GATE_SEQUENCE if codegen or entry[0] != "codegen"]
+    statuses: dict[str, str] = {}
+    code = 0
+
+    for gate, args, mutates, lock in selected:
+        if code == 0:
+            skipped = get_passed(path, gate, get_tree_id(gate)) is not None
+            code = run(path, gate, [*manage, *args], mutates=mutates, lock=lock)
+            recorded = get_passed(path, gate, get_tree_id(gate)) is not None
+            statuses[gate] = _get_status(code, skipped=skipped, recorded=recorded)
+            code = UNRECORDED if code == 0 and not recorded else code
+
+            if gate == "prettify" and code == 0:
+                write_marker(path, "tidy", tree := get_tree_id("tidy"))
+                print(f"recorded tidy on tree {tree[:12]}")
+        else:
+            statuses[gate] = "not run"
+
+    print("--- gates")
+
+    for gate, status in statuses.items():
+        print(f"{status} {gate}")
+
+    return code
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parses the command line and runs the chosen subcommand."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
@@ -397,6 +465,17 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("gate")
     run_parser.add_argument("--mutates", action="store_true")
     run_parser.add_argument("--lock", action="store_true")
+    all_parser = sub.add_parser(
+        "all", help="run /land's gates in order, stopping at the first failure"
+    )
+    all_parser.add_argument(
+        "--codegen", action="store_true", help="also run codegen after prettify"
+    )
+    all_parser.add_argument(
+        "--manage",
+        default=MANAGE,
+        help=f"the manage command each gate runs (default: {MANAGE})",
+    )
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index("--") if "--" in argv else len(argv)
     args = parser.parse_args(argv[:split])
@@ -416,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
         write_marker(path, args.gate, tree := get_tree_id(args.gate))
         print(f"recorded {args.gate} on tree {tree[:12]}")
         code = 0
+    elif args.action == "all":
+        code = run_all(path, shlex.split(args.manage), codegen=args.codegen)
     elif command:
         code = run(path, args.gate, command, mutates=args.mutates, lock=args.lock)
     else:
