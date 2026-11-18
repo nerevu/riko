@@ -75,7 +75,6 @@ from tests._resources import (
     sync_cm_factory,
     sync_gen_factory,
 )
-from tests._workflows import SPLIT_METHOD_PENDING
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -1729,15 +1728,51 @@ class TestSubscriptions:
         assert list(events) == []
 
 
-@SPLIT_METHOD_PENDING
+_BAD_SPLITS = [
+    pytest.param(0, "at least one branch", id="zero"),
+    pytest.param(-1, "at least one branch", id="negative"),
+    pytest.param(2.0, "must be an integer", id="float"),
+    pytest.param("2", "must be an integer", id="str"),
+    pytest.param(True, "must be an integer", id="bool"),
+]
+
+
 class TestSplit:
     """Streaming fan-out into independently consumable branches."""
 
     def test_both_branches_yield_the_same_first_item(self):
         left, right = tokenized(VALUE).split(2)
-        assert next(iter(left)) == EXPECTED[0]
-        assert next(iter(right)) == EXPECTED[0]
+        assert left.first() == EXPECTED[0]
+        assert right.first() == EXPECTED[0]
 
+    def test_reading_a_branch_past_the_split_count_fails_before_reading(self):
+        consumed = []
+
+        def source():
+            consumed.append(1)
+            yield {"x": 1}
+
+        node = ModuleNode(id="split-1", name="split", conf={"splits": 2})
+        outputs = {"default": Endpoint("split-1", "out:2")}
+        pipeline = Pipeline(Workflow(nodes=[node], outputs=outputs))
+
+        with pytest.raises(InvalidPipelineError, match="no output port 'out:2'"):
+            list(pipeline(source()))
+
+        assert consumed == []
+
+    def test_split_records_its_count_and_isolation_in_the_node_conf(self):
+        shared, *_ = Pipeline().split(3, isolate=False)
+        node = shared.workflow.nodes["split-1"]
+        assert isinstance(node, ModuleNode)
+        assert dict(node.conf) == {"splits": 3, "isolate": False}
+
+    @pytest.mark.parametrize(("splits", "match"), _BAD_SPLITS)
+    def test_splitting_into_an_invalid_count_fails(self, splits: object, match: str):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Pipeline().split(splits)  # pyright: ignore[reportArgumentType]
+
+    @UNION_PENDING
     def test_upstream_node_runs_once_for_every_branch(self):
         consumed: list[int] = []
 
@@ -1747,7 +1782,8 @@ class TestSplit:
                 yield {"content": str(index)}
 
         left, right = Pipeline.from_module("hash").split(2)
-        assert list(left(source())) == list(right(source()))
+        merged = Pipeline.union(left, right)  # pyright: ignore[reportAttributeAccessIssue]
+        assert len(list(merged(source()))) == 6
         assert len(consumed) == 3
 
 

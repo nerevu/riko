@@ -859,10 +859,42 @@ Fanning out a stream
 Sometimes you need to consume the same ``stream`` from multiple independent pipelines.
 For example, archiving every item while also sending urgent items to an alert queue.
 Consuming the iterator twice would exhaust it, and materialising it into a list defeats
-lazy evaluation. ``publish`` and ``subscribe`` are planned for this: a subscription
-will itself be a ``Pipeline`` declared with ``Pipeline.subscribe``, and ``publish``
-will send a copy of each ``item`` into it while the main ``pipeline`` continues. The
-subscription's ``func`` will see each ``item`` as it is published.
+lazy evaluation. ``split`` fans a ``stream`` out today. ``publish`` and ``subscribe``
+are planned for branches that run independently of the main ``pipeline``.
+
+Splitting into branches
+'''''''''''''''''''''''
+
+``split`` returns one ``Pipeline`` per branch, each an identical copy of the
+``stream``:
+
+.. code-block:: python
+
+    >>> from riko import get_path, Pipeline, Sources
+    >>>
+    >>> url = get_path('feed.xml')
+    >>> pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': url})
+    >>> left, right = pipeline.split(2)
+    >>> left.first()['title']
+    'Donations'
+    >>> right.first()['title']
+    'Donations'
+
+The first branch to read an ``item`` gets it, and every other branch gets a copy. Pass
+``isolate=False`` to share each ``item`` across the branches instead.
+
+Each returned ``Pipeline`` is independent. Reading ``left`` and then ``right`` runs the
+upstream ``stream`` twice. Branches read together in one run share one upstream read
+(``union``, to merge them in one call, is planned). A branch that reads behind its
+siblings buffers the ``items`` it has not read yet, up to ``RIKO_BRANCH_BUFFER`` (1024
+by default). A run that falls further behind fails rather than dropping ``items``.
+
+Publishing to subscribers
+'''''''''''''''''''''''''
+
+A subscription will be a ``Pipeline`` declared with ``Pipeline.subscribe``, and
+``publish`` will send a copy of each ``item`` into it while the main ``pipeline``
+continues. The subscription's ``func`` will see each ``item`` as it is published.
 
 .. code-block:: python
 
@@ -927,29 +959,12 @@ Iterating a subscription on its own afterwards starts a fresh, empty run. Observ
 published ``items`` through ``func`` (or a write inside the subscription), not by
 draining the subscription later.
 
-``split`` vs ``publish``/``subscribe``
-''''''''''''''''''''''''''''''''''''''
+Choosing between them
+'''''''''''''''''''''
 
-``split`` is the other planned way to fan a ``stream`` out. It will return one
-``Pipeline`` per branch:
-
-.. code-block:: python
-
-    from riko import get_path, Pipeline, Sources
-
-    pipeline = Pipeline.from_module(Sources.FETCH, conf={'url': get_path('feed.xml')})
-    left, right = pipeline.split(2)
-    left.first(), right.first()
-
-.. note::
-
-   Pending. ``split`` exists on ``Pipeline`` but raises ``NotImplementedError``
-   until streaming fan-out lands.
-
-The planned difference between them is the shape of the API. ``split`` will return
-every branch at once, and each branch will be an identical copy of the ``stream``.
-``publish``/``subscribe`` will name each branch up front, let it carry its own
-per-item callback, and let the main ``pipeline`` keep flowing while each subscriber
+``split`` returns every branch at once, and each branch is an identical copy of the
+``stream``. ``publish``/``subscribe`` will name each branch up front, let it carry its
+own per-item callback, and let the main ``pipeline`` keep flowing while each subscriber
 handles the ``items`` published to it.
 
 +-------------------------------+---------------------------+----------------------------+
@@ -966,12 +981,12 @@ handles the ``items`` published to it.
 |                               | chain with N branches     | the chain                  |
 +-------------------------------+---------------------------+----------------------------+
 
-Once they land, ``split`` will suit branches that all need the same ``items`` through
-the simplest possible API. ``publish``/``subscribe`` will suit branches that should
-run independently, or a main ``pipeline`` that must stay in the chain (e.g., inside a
-``timeout`` or ``truncate`` composer). ``subscribe`` will also let each branch run its
-own side effect (``func``) on every ``item`` without touching the main ``pipeline``.
-
+``split`` suits branches that all need the same ``items`` through the simplest possible
+API. Once they land, ``publish``/``subscribe`` will suit branches that should run
+independently. They will also suit a main ``pipeline`` that must stay in the chain
+(e.g., inside a ``timeout`` or ``truncate`` composer). ``subscribe`` will also let each
+branch run its own side effect (``func``) on every ``item`` without touching the main
+``pipeline``.
 
 Compiling workflow documents
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1170,8 +1185,11 @@ Keep the following execution behaviors in mind:
 - Parallel execution is unordered by default. Ordering can reduce throughput since slow
   items can block the entire stream. See `Bounded parallelism`_ for how far ahead the
   ``source`` is pulled.
-- ``split`` and ``publish``/``subscribe`` are fan-out and raise ``NotImplementedError``
-  until streaming fan-out and local subscriptions land (see `Fanning out a stream`_).
+- ``split`` reads the upstream ``stream`` once. A branch may read up to
+  ``RIKO_BRANCH_BUFFER`` ``items`` (1024 by default) behind its siblings, and a run that
+  falls further behind fails (see `Splitting into branches`_).
+- ``publish``/``subscribe`` raise ``NotImplementedError`` until local subscriptions land
+  (see `Fanning out a stream`_).
 - Don't infer that parallel execution is faster. Measure the actual workload;
   pool startup, serialization, ordering, and I/O behavior can dominate small
   pipelines.

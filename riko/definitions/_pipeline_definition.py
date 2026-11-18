@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from functools import partial
+from itertools import chain
 from typing import (
     TYPE_CHECKING,
     Concatenate,
@@ -25,6 +26,7 @@ from typing import (
 from attrs import define, evolve, field, fields
 from typing_extensions import TypeVar
 
+from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import resolve_default
 from riko.base._guards import is_mapping
@@ -37,6 +39,7 @@ from riko.base._sentinels import MISSING, MissingType
 from riko.types._enums import IdentityMode
 from riko.types._module_ids import BUILTIN_MODULE_IDS
 from riko.types._streams import Item
+from riko.types._workflow import OUT, Endpoint
 
 from ._context import Context
 from ._module_definition import get_callable_name
@@ -624,24 +627,55 @@ class PipelineDefinition(Generic[T_co]):
         """
         raise NotImplementedError("publishing to a subscription is not available yet")
 
-    def split(self, *args: object, **kwargs: object) -> tuple[Self, ...]:
+    def split(self, splits: int = 2, *, isolate: bool = True) -> tuple[Self, ...]:
         """
-        Reserves streaming fan-out into branches; its arguments are not settled.
+        Builds one pipeline per branch of a streaming fan-out (broadcast).
 
-        Args:
-
-            args: The not-yet-settled positional arguments.
+        Each branch runs the pipeline once and yields the pipeline's items.
 
         Kwargs:
 
-            kwargs: The not-yet-settled keyword arguments.
+            splits: How many branches to fan out into (default: 2).
+            isolate: Gives every branch but the first reader a deep copy (default:
+                True).
+
+        Returns:
+
+            One pipeline per branch.
 
         Raises:
 
-            NotImplementedError: Always; streaming fan-out is not available yet.
+            InvalidPipelineError: If ``splits`` is not an integer or is less than 1.
+
+        Examples:
+
+            >>> from riko import Pipeline
+            >>>
+            >>> items = [{"x": 1}, {"x": 2}]
+            >>> left, right = Pipeline().split(2)
+            >>> left.first(items), right.first(items)
+            ({'x': 1}, {'x': 1})
+            >>> left.workflow.outputs["default"]
+            Endpoint(node='split-1', port='out')
+            >>> right.workflow.outputs["default"]
+            Endpoint(node='split-1', port='out:1')
 
         """
-        raise NotImplementedError("streaming fan-out is not available yet")
+        if not isinstance(splits, int) or isinstance(splits, bool):
+            msg = f"a split count must be an integer, got {splits!r}"
+            raise InvalidPipelineError(msg)
+
+        if splits < 1:
+            raise InvalidPipelineError(f"split needs at least one branch, not {splits}")
+
+        node_id = self.workflow.get_node_id("split")
+        conf: Conf = {"splits": splits, "isolate": isolate}
+        flow = self.workflow.with_node(ModuleNode(id=node_id, name="split", conf=conf))
+        ports = chain([OUT], (f"{OUT}:{k}" for k in range(1, splits)))
+        outputs = (
+            {**flow.outputs, DEFAULT_OUTPUT: Endpoint(node_id, p)} for p in ports
+        )
+        return tuple(self.replace(workflow=evolve(flow, outputs=o)) for o in outputs)
 
     def map[R](
         self,
