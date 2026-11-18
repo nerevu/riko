@@ -8,13 +8,18 @@ Usage:
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
-    python .claude/skills/land/gates.py all [--codegen] [--manage CMD]
+    python .claude/skills/land/gates.py all [--codegen | --read-only] [--manage CMD]
 
 A gate's marker is the content tree id of the working tree it passed on: every
-tracked and untracked, non-ignored file as ``git write-tree`` would store it.
-Each gate's id leaves out what that gate never reads under ``.claude/``: nothing
-for tidy, ``lint``, and ``prettify`` (Ruff and rumdl), and the whole folder for the
-other gates, so a skill edit reruns tidy, lint, and prettify alone. It ignores
+tracked and untracked, non-ignored file as ``git write-tree`` would store it, minus
+what that gate never reads. Tidy, ``lint``, and ``prettify`` (Ruff and rumdl) read
+everything. ``check-types`` and ``verify-types`` (pyright) keep only ``*.py``,
+``*.pyi``, ``pyproject.toml``, ``uv.lock``, and ``typings/`` outside ``.claude/``.
+``test`` and ``uncovered`` leave out ``.claude/``, ``_docs/``, ``.github/``, and the
+root ``*.md`` files (``docs/`` and ``README.rst`` hold doctests, so they stay). Every
+other gate, codegen included (it rewrites generated blocks in ``_docs/`` and
+``CLAUDE.md``), leaves out ``.claude/`` alone. So a skill edit reruns tidy, lint, and
+prettify alone, and a prose edit does not rerun pyright. It ignores
 ``HEAD`` and the index, so committing, staging, rebasing, or switching sessions
 keeps a marker valid while the content is unchanged; any other edit invalidates
 it. Markers live in ``.claude/gate-markers.json`` of each worktree.
@@ -24,7 +29,12 @@ it. Markers live in ``.claude/gate-markers.json`` of each worktree.
 it must run. ``record`` marks it passed on the current tree. ``run`` does both
 around a command: it skips a passed gate, otherwise runs the command and records
 a pass only when the command succeeds and the tree id did not change during the
-run (``--mutates`` records the tree the command left, for prettify and codegen).
+run (``--mutates`` records the tree the command left, for prettify and codegen). The
+one change a non-mutating run may make is the coverage ratchet lowering a ceiling:
+when every changed line is a ``<key> = <count>`` or ``<key> = <date>`` line of
+``pyproject.toml``, ``run`` records the tree the run left. A prettify pass that
+runs and is recorded carries tidy's mark to the tree it leaves when tidy was marked
+on the tree it started from; a skipped prettify never touches tidy's marker.
 ``--lock`` takes a non-blocking OS lock on ``riko-gate.lock`` in the git common
 directory, so every worktree of the repository shares it; when another session
 holds it, ``run`` exits 75 at once instead of waiting. The OS releases the lock when
@@ -47,13 +57,20 @@ real edits.
 whether the tree has changed since, so a later session can report the suite count
 without rerunning it. It exits 1 when the gate has no recorded summary.
 
-``all`` runs ``/land``'s gates in order through ``run``, one at a time in the
-foreground: prettify (then re-marks tidy, as ``record tidy`` does), codegen only
-with ``--codegen``, lint, the suite (locked), check-types, and verify-types. Each
-command is ``--manage`` (default ``uv run --active python -m riko.cli.manage``)
-plus the gate's arguments. It stops at the first gate that fails or is busy, exits
-with that gate's code, and ends with one line per gate: ``skip``, ``pass``,
-``fail (<code>)``, ``busy``, or ``not run``.
+``all`` runs ``/land``'s gates through ``run`` in three steps, in the foreground.
+First prettify (which carries tidy's mark to the tree it leaves when tidy was marked
+on the tree it started from) and, with
+``--codegen``, codegen, one at a time. Then lint, check-types, and verify-types side
+by side; each gate's output is held back and printed whole under a ``--- <gate>``
+header when it finishes. Last the suite (locked), alone, and only when every earlier
+gate passed and was recorded. Each command is ``--manage`` (default ``uv run
+--active python -m riko.cli.manage``) plus the gate's arguments. It stops after the
+first step with a gate that fails, is busy, or passes unrecorded (gates already
+running in the same step finish), exits with the first such gate's code in gate
+order, and ends with one line per gate: ``skip``, ``pass``, ``pass (unrecorded)``,
+``fail (<code>)``, ``busy``, or ``not run``. ``--read-only`` runs the side-by-side
+step alone (lint and both type gates), so it never writes the tree; the other gates
+report ``not run``.
 """
 
 from __future__ import annotations
@@ -68,10 +85,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple, TextIO
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -84,8 +104,23 @@ EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
 HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
-SKILL_READERS = frozenset({None, "tidy", "lint", "prettify"})
-UNGATED = (".claude",)
+RATCHET_LINE = re.compile(r"^([-+])uncovered(-lowered)? = (\d+|\d{4}-\d{2}-\d{2})\s*$")
+RATCHET_FILE = "pyproject.toml"
+MARKER_LOCK = threading.Lock()
+SKILLS = (".claude",)
+TYPE_UNREAD = (".", ":!*.py", ":!*.pyi", ":!pyproject.toml", ":!uv.lock", ":!typings")
+SUITE_UNREAD = (".claude", "_docs", ".github", ":(glob)*.md")
+DEFAULT_UNREAD = (SKILLS,)
+UNREAD: dict[str | None, tuple[tuple[str, ...], ...]] = {
+    None: (),
+    "tidy": (),
+    "lint": (),
+    "prettify": (),
+    "test": (SUITE_UNREAD,),
+    "uncovered": (SUITE_UNREAD,),
+    "check-types": (SKILLS, TYPE_UNREAD),
+    "verify-types": (SKILLS, TYPE_UNREAD),
+}
 SCOPE_EXCLUDES = (
     "uv.lock",
     "riko/coercion/_configs.py",
@@ -93,14 +128,41 @@ SCOPE_EXCLUDES = (
     "riko/types/_module_ids.py",
 )
 MANAGE = "uv run --active python -m riko.cli.manage"
+CARRIER = "prettify"
+TIDY_DIR = Path(__file__).resolve().parent.parent / "tidy"
+TIDY_LINT = ("lint", "--terms", "--literals", "--docstrings", "--bindings", "--tests")
+TEST_FILE = re.compile(r"^tests/[^/]+/test_[^/]*\.py$")
+CHANGELOG = "docs/CHANGES.rst"
+LEAD_NAMES = (
+    "lint",
+    "neighborhood",
+    "mistake_scan",
+    "heading_drift",
+    "changelog_widows",
+    "overlap_scan",
+)
 GATE_SEQUENCE = (
     ("prettify", ("prettify",), True, False),
     ("codegen", ("codegen", "--all"), True, False),
     ("lint", ("lint", "--all"), False, False),
-    ("test", ("test", "--ratchet", "--quiet"), False, True),
     ("check-types", ("lint", "--check-types"), False, False),
     ("verify-types", ("lint", "--verify-types"), False, False),
+    ("test", ("test", "--ratchet", "--quiet", "--parallel"), False, True),
 )
+
+
+class Outcome(NamedTuple):
+    """A gate run's exit code, whether it skipped, and whether its pass is recorded."""
+
+    code: int
+    skipped: bool
+    recorded: bool
+    tree: str | None
+
+    @property
+    def exit_code(self) -> int:
+        """The code ``all`` stops on: a pass left unrecorded counts as failed."""
+        return UNRECORDED if self.code == 0 and not self.recorded else self.code
 
 
 def _git(*args: str, env: dict[str, str] | None = None) -> str:
@@ -129,14 +191,13 @@ def get_tree_id(gate: str | None = None) -> str:
     """
     Gets the content tree id of the working tree, ignoring HEAD and the index.
 
-    The id leaves out what ``gate`` never reads under ``.claude/``: nothing for
-    tidy and the Ruff/rumdl gates, the whole folder for the rest.
+    The id leaves out what ``gate`` never reads (``UNREAD``): nothing for tidy and
+    the Ruff/rumdl gates, ``.claude/`` for most others, and more for the suite and
+    the pyright gates.
     """
     real_index = Path(
         _git("rev-parse", "--path-format=absolute", "--git-path", "index")
     )
-
-    unread: tuple[str, ...] = () if gate in SKILL_READERS else UNGATED
 
     with tempfile.TemporaryDirectory(prefix="gates-") as tmp:
         index = Path(tmp) / "index"
@@ -147,9 +208,16 @@ def get_tree_id(gate: str | None = None) -> str:
         env = {**os.environ, "GIT_INDEX_FILE": str(index)}
         _git("add", "-A", env=env)
 
-        if unread:
+        for pathspecs in UNREAD.get(gate, DEFAULT_UNREAD):
             _git(
-                "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *unread, env=env
+                "rm",
+                "-r",
+                "-q",
+                "--cached",
+                "--ignore-unmatch",
+                "--",
+                *pathspecs,
+                env=env,
             )
 
         tree = _git("write-tree", env=env)
@@ -169,20 +237,23 @@ def load_markers(path: Path) -> dict[str, dict[str, str]]:
 
 def write_marker(path: Path, gate: str, tree: str, summary: str | None = None) -> None:
     """Writes a pass marker for ``gate`` on ``tree``, with the run's summary line."""
-    markers = load_markers(path)
-    markers[gate] = {
-        "tree": tree,
-        "head": _git("rev-parse", "HEAD"),
-        "at": datetime.now(UTC).isoformat(timespec="seconds"),
-    }
+    head = _git("rev-parse", "HEAD")
 
-    if summary is not None:
-        markers[gate]["summary"] = summary
+    with MARKER_LOCK:
+        markers = load_markers(path)
+        markers[gate] = {
+            "tree": tree,
+            "head": head,
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
 
-    path.parent.mkdir(exist_ok=True)
-    temp = path.with_name(f"{path.name}.{os.getpid()}")
-    temp.write_text(json.dumps(markers, indent=2, sort_keys=True) + "\n")
-    temp.replace(path)
+        if summary is not None:
+            markers[gate]["summary"] = summary
+
+        path.parent.mkdir(exist_ok=True)
+        temp = path.with_name(f"{path.name}.{os.getpid()}")
+        temp.write_text(json.dumps(markers, indent=2, sort_keys=True) + "\n")
+        temp.replace(path)
 
 
 def get_passed(path: Path, gate: str, tree: str) -> dict[str, str] | None:
@@ -354,13 +425,43 @@ def print_summary(path: Path, gate: str) -> int:
     return 0 if summary is not None else 1
 
 
-def execute(command: list[str]) -> tuple[int, str | None]:
-    """Runs ``command``, echoing its output, and returns its last summary line."""
-    summary = None
+def is_ratchet_change(before: str, after: str) -> bool:
+    """
+    Reports whether ``before`` to ``after`` only lowers the coverage-ratchet ceiling.
 
-    with subprocess.Popen(command, stdout=subprocess.PIPE, text=True) as process:
+    That is, ``pyproject.toml`` is the only changed file, every changed line is the
+    ``uncovered = <count>`` or ``uncovered-lowered = <date>`` line the ratchet writes,
+    and a replaced count went down.
+    """
+    names = _git("diff", "--name-only", before, after).splitlines()
+    lines = [
+        line
+        for line in _git("diff", "--unified=0", before, after).splitlines()
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+    matches = [RATCHET_LINE.match(line) for line in lines]
+    counts = {
+        match[1]: int(match[3]) for match in matches if match and match[2] is None
+    }
+    lowered = "-" not in counts or "+" not in counts or counts["+"] < counts["-"]
+    return names == [RATCHET_FILE] and None not in matches and lowered
+
+
+def execute(command: list[str], out: TextIO | None = None) -> tuple[int, str | None]:
+    """
+    Runs ``command``, echoing its output, and returns its last summary line.
+
+    The output streams to stdout, or goes with stderr into ``out`` when given.
+    """
+    summary = None
+    sink = sys.stdout if out is None else out
+    stderr = None if out is None else subprocess.STDOUT
+
+    with subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=stderr, text=True
+    ) as process:
         for line in process.stdout or ():
-            sys.stdout.write(line)
+            sink.write(line)
 
             if SUMMARY.search(line):
                 summary = line.strip().strip("=").strip()
@@ -370,6 +471,19 @@ def execute(command: list[str]) -> tuple[int, str | None]:
 
 def run(path: Path, gate: str, command: list[str], *, mutates: bool, lock: bool) -> int:
     """Runs ``command`` unless ``gate`` passed on this tree, recording a clean pass."""
+    return run_gate(path, gate, command, mutates=mutates, lock=lock).code
+
+
+def run_gate(
+    path: Path,
+    gate: str,
+    command: list[str],
+    *,
+    mutates: bool,
+    lock: bool,
+    out: TextIO | None = None,
+) -> Outcome:
+    """Runs ``gate`` as ``run`` does, writing to ``out``, and returns its outcome."""
     path.parent.mkdir(exist_ok=True)
 
     with open(get_lock_path(), "a") as handle:
@@ -377,80 +491,154 @@ def run(path: Path, gate: str, command: list[str], *, mutates: bool, lock: bool)
             if lock:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            print(f"busy {gate}: another session holds the gate lock; rerun later")
-            code = BUSY
+            print(
+                f"busy {gate}: another session holds the gate lock; rerun later",
+                file=out,
+            )
+            outcome = Outcome(BUSY, skipped=False, recorded=False, tree=None)
         else:
-            code = _run_unlocked(path, gate, command, mutates=mutates)
+            outcome = _run_unlocked(path, gate, command, mutates=mutates, out=out)
 
-    return code
+    return outcome
 
 
-def _run_unlocked(path: Path, gate: str, command: list[str], *, mutates: bool) -> int:
+def _run_unlocked(
+    path: Path, gate: str, command: list[str], *, mutates: bool, out: TextIO | None
+) -> Outcome:
     before = get_tree_id(gate)
     marker = get_passed(path, gate, before)
 
     if marker is None:
-        code, summary = execute(command)
+        tidied = (
+            get_passed(path, "tidy", get_tree_id("tidy")) if gate == CARRIER else None
+        )
+        carry = tidied is not None
+        code, summary = execute(command, out)
         after = get_tree_id(gate)
+        changed = after != before and not mutates
+        ratcheted = code == 0 and changed and is_ratchet_change(before, after)
+        recorded = code == 0 and (not changed or ratcheted)
 
-        if code == 0 and (mutates or after == before):
+        if recorded:
             write_marker(path, gate, after, summary)
-            print(f"recorded {gate} on tree {after[:12]}")
-        elif code == 0:
-            print(f"not recorded {gate}: the tree changed during the run")
+            note = " (ratchet lowered a ceiling)" if ratcheted else ""
+            print(f"recorded {gate} on tree {after[:12]}{note}", file=out)
+
+        if recorded and carry:
+            write_marker(path, "tidy", tidy := get_tree_id("tidy"))
+            print(f"recorded tidy on tree {tidy[:12]}", file=out)
+        elif code == 0 and not recorded:
+            print(f"not recorded {gate}: the tree changed during the run", file=out)
+
+        outcome = Outcome(code, skipped=False, recorded=recorded, tree=after)
     else:
-        print(_skip_message(gate, marker))
-        code = 0
+        print(_skip_message(gate, marker), file=out)
+        outcome = Outcome(0, skipped=True, recorded=True, tree=before)
 
-    return code
+    return outcome
 
 
-def _get_status(code: int, *, skipped: bool, recorded: bool) -> str:
-    if code == BUSY:
+def _get_status(outcome: Outcome) -> str:
+    if outcome.code == BUSY:
         status = "busy"
-    elif code != 0:
-        status = f"fail ({code})"
-    elif not recorded:
+    elif outcome.code != 0:
+        status = f"fail ({outcome.code})"
+    elif not outcome.recorded:
         status = "pass (unrecorded)"
     else:
-        status = "skip" if skipped else "pass"
+        status = "skip" if outcome.skipped else "pass"
 
     return status
 
 
-def run_all(path: Path, manage: list[str], *, codegen: bool) -> int:
-    """
-    Runs ``/land``'s gates in order through ``run``, stopping at the first failure.
+def _run_buffered(
+    path: Path, gate: str, command: list[str], *, mutates: bool, lock: bool
+) -> tuple[Outcome, str]:
+    out = StringIO()
+    outcome = run_gate(path, gate, command, mutates=mutates, lock=lock, out=out)
+    return outcome, out.getvalue()
 
-    A prettify pass re-marks tidy on the tree it left. A gate that exits 0 without a
-    recorded pass (the tree changed during its run) stops the sequence too. Prints
-    one status line per gate at the end and returns the stopping gate's exit code,
-    else 0.
+
+def run_side_by_side(
+    path: Path,
+    manage: list[str],
+    entries: list[tuple[str, tuple[str, ...], bool, bool]],
+) -> dict[str, Outcome]:
+    """
+    Runs the gates in ``entries`` at once, printing each one's output when it ends.
+
+    Returns each gate's outcome in ``entries`` order.
+    """
+    with ThreadPoolExecutor(max(len(entries), 1)) as pool:
+        futures = {
+            pool.submit(
+                _run_buffered, path, gate, [*manage, *args], mutates=mutates, lock=lock
+            ): gate
+            for gate, args, mutates, lock in entries
+        }
+
+        for future in as_completed(futures):
+            print(f"--- {futures[future]}\n{future.result()[1]}", end="", flush=True)
+
+    results = {gate: future.result()[0] for future, gate in futures.items()}
+    return {gate: results[gate] for gate, *_ in entries}
+
+
+def run_in_turn(
+    path: Path,
+    manage: list[str],
+    entries: list[tuple[str, tuple[str, ...], bool, bool]],
+) -> dict[str, Outcome]:
+    """
+    Runs the gates in ``entries`` one at a time, stopping after the first one to stop.
+
+    Prettify carries tidy's mark to the tree it leaves when tidy was marked on the
+    tree it started from.
+    """
+    outcomes: dict[str, Outcome] = {}
+
+    for gate, args, mutates, lock in entries:
+        if all(outcome.exit_code == 0 for outcome in outcomes.values()):
+            outcome = run_gate(path, gate, [*manage, *args], mutates=mutates, lock=lock)
+            outcomes[gate] = outcome
+
+    return outcomes
+
+
+def run_all(
+    path: Path, manage: list[str], *, codegen: bool, read_only: bool = False
+) -> int:
+    """
+    Runs ``/land``'s gates through ``run`` in three steps, stopping after a failure.
+
+    The mutating gates run first, one at a time; then the read-only gates side by
+    side; then the locked suite alone. A gate that exits 0 without a recorded pass
+    (the tree changed during its run) stops the sequence too. ``read_only`` runs the
+    side-by-side step alone. Prints one status line per gate at the end and returns
+    the first stopping gate's exit code, else 0.
     """
     selected = [entry for entry in GATE_SEQUENCE if codegen or entry[0] != "codegen"]
-    statuses: dict[str, str] = {}
-    code = 0
+    checks = [entry for entry in selected if not entry[2] and not entry[3]]
+    steps = (
+        (run_in_turn, [entry for entry in selected if entry[2]]),
+        (run_side_by_side, checks),
+        (run_in_turn, [entry for entry in selected if entry[3]]),
+    )
+    chosen = steps[1:2] if read_only else steps
+    outcomes: dict[str, Outcome] = {}
 
-    for gate, args, mutates, lock in selected:
-        if code == 0:
-            skipped = get_passed(path, gate, get_tree_id(gate)) is not None
-            code = run(path, gate, [*manage, *args], mutates=mutates, lock=lock)
-            recorded = get_passed(path, gate, get_tree_id(gate)) is not None
-            statuses[gate] = _get_status(code, skipped=skipped, recorded=recorded)
-            code = UNRECORDED if code == 0 and not recorded else code
-
-            if gate == "prettify" and code == 0:
-                write_marker(path, "tidy", tree := get_tree_id("tidy"))
-                print(f"recorded tidy on tree {tree[:12]}")
-        else:
-            statuses[gate] = "not run"
+    for runner, entries in chosen:
+        if all(outcome.exit_code == 0 for outcome in outcomes.values()):
+            outcomes.update(runner(path, manage, entries))
 
     print("--- gates")
 
-    for gate, status in statuses.items():
+    for gate, *_ in selected:
+        status = _get_status(outcomes[gate]) if gate in outcomes else "not run"
         print(f"{status} {gate}")
 
-    return code
+    codes = (outcome.exit_code for outcome in outcomes.values())
+    return next((code for code in codes if code != 0), 0)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -481,6 +669,11 @@ def main(argv: list[str] | None = None) -> int:
         default=MANAGE,
         help=f"the manage command each gate runs (default: {MANAGE})",
     )
+    all_parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="run only lint and the type gates, side by side",
+    )
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index("--") if "--" in argv else len(argv)
     args = parser.parse_args(argv[:split])
@@ -500,8 +693,15 @@ def main(argv: list[str] | None = None) -> int:
         write_marker(path, args.gate, tree := get_tree_id(args.gate))
         print(f"recorded {args.gate} on tree {tree[:12]}")
         code = 0
+    elif args.action == "all" and args.read_only and args.codegen:
+        parser.error("--read-only cannot run codegen, which writes the tree")
     elif args.action == "all":
-        code = run_all(path, shlex.split(args.manage), codegen=args.codegen)
+        code = run_all(
+            path,
+            shlex.split(args.manage),
+            codegen=args.codegen,
+            read_only=args.read_only,
+        )
     elif command:
         code = run(path, args.gate, command, mutates=args.mutates, lock=args.lock)
     else:

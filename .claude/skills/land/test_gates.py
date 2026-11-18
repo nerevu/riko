@@ -22,6 +22,20 @@ sys.path.insert(0, str(Path(__file__).parent))
 import gates
 import require_agents
 
+RUFF_GATES = frozenset({"tidy", "lint", "prettify"})
+TYPE_GATES = frozenset({"check-types", "verify-types"})
+ALL_GATES = RUFF_GATES | TYPE_GATES | {"test", "uncovered", "codegen"}
+TREE_FILES = (
+    ".claude/skills/SKILL.md",
+    ".claude/skills/helper.py",
+    "_docs/x.md",
+    "CLAUDE.md",
+    ".github/ci.yml",
+    "docs/x.rst",
+    "pyproject.toml",
+    "typings/x.pyi",
+)
+
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
@@ -64,31 +78,33 @@ def test_tree_id_removes_its_temporary_index(repo, tmp_path, monkeypatch):
     assert list(scratch.iterdir()) == []
 
 
-def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path):
-    skill = tmp_path / ".claude" / "skills" / "SKILL.md"
-    script = skill.with_name("helper.py")
-    skill.parent.mkdir(parents=True)
-    skill.write_text("one\n")
-    script.write_text("x = 1\n")
-    repo("add", "-f", ".claude")
-    repo("commit", "-qm", "skill")
-    ids = {gate: gates.get_tree_id(gate) for gate in ("tidy", "lint", "test")}
-    skill.write_text("two\n")
-    (tmp_path / ".claude" / "scratch.md").write_text("x\n")
+@pytest.mark.parametrize(
+    ("edited", "changed"),
+    [
+        pytest.param(".claude/skills/SKILL.md", RUFF_GATES, id="skill-prose"),
+        pytest.param(".claude/skills/helper.py", RUFF_GATES, id="skill-script"),
+        pytest.param("_docs/x.md", {*RUFF_GATES, "codegen"}, id="internal-docs"),
+        pytest.param("CLAUDE.md", {*RUFF_GATES, "codegen"}, id="root-markdown"),
+        pytest.param(".github/ci.yml", {*RUFF_GATES, "codegen"}, id="workflows"),
+        pytest.param("docs/x.rst", ALL_GATES - TYPE_GATES, id="user-docs"),
+        pytest.param("a.py", ALL_GATES, id="source"),
+        pytest.param("pyproject.toml", ALL_GATES, id="pyproject"),
+        pytest.param("typings/x.pyi", ALL_GATES, id="stub"),
+    ],
+)
+def test_tree_id_leaves_out_what_each_gate_never_reads(repo, tmp_path, edited, changed):
+    for name in TREE_FILES:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("one\n")
 
-    assert gates.get_tree_id("tidy") != ids["tidy"]
-    assert gates.get_tree_id("lint") != ids["lint"]
-    assert gates.get_tree_id("test") == ids["test"]
+    repo("add", "-f", "-A")
+    repo("commit", "-qm", "files")
+    ids = {gate: gates.get_tree_id(gate) for gate in ALL_GATES}
+    (tmp_path / edited).write_text("two\n")
 
-    lint_after_prose = gates.get_tree_id("lint")
-    script.write_text("x = 2\n")
-
-    assert gates.get_tree_id("lint") != lint_after_prose
-    assert gates.get_tree_id("test") == ids["test"]
-
-    (tmp_path / "a.py").write_text("a = 2\n")
-
-    assert gates.get_tree_id("test") != ids["test"]
+    assert {
+        gate for gate in ALL_GATES if gates.get_tree_id(gate) != ids[gate]
+    } == changed
 
 
 @pytest.mark.usefixtures("repo")
@@ -240,15 +256,14 @@ def test_all_stops_at_the_first_failing_gate_and_skips_recorded_ones(tmp_path, c
     assert gates.main(argv) == 3
     out = capsys.readouterr().out
     assert gates.check(path, "prettify") == 0
-    assert gates.check(path, "tidy") == 0
     assert gates.check(path, "lint") == 1
     summary = out.split("--- gates\n")[1].splitlines()
     assert summary == [
         "pass prettify",
         "fail (3) lint",
+        "pass check-types",
+        "pass verify-types",
         "not run test",
-        "not run check-types",
-        "not run verify-types",
     ]
     capsys.readouterr()
     assert gates.main(argv) == 3
@@ -269,8 +284,156 @@ def test_all_stops_at_a_pass_the_tree_change_left_unrecorded(tmp_path, capsys):
 
     assert gates.main(argv) == gates.UNRECORDED
     summary = capsys.readouterr().out.split("--- gates\n")[1].splitlines()
-    assert summary[:3] == ["pass prettify", "pass (unrecorded) lint", "not run test"]
+    assert summary == [
+        "pass prettify",
+        "pass (unrecorded) lint",
+        "pass check-types",
+        "pass verify-types",
+        "not run test",
+    ]
     assert gates.check(path, "lint") == 1
+
+
+@pytest.mark.usefixtures("repo")
+def test_all_skips_the_suite_after_a_type_failure_but_reports_lint(tmp_path, capsys):
+    fake = tmp_path / ".claude" / "manage.py"
+    fake.parent.mkdir()
+    fake.write_text(
+        "import sys\nsys.exit(4 if sys.argv[1:3] == ['lint', '--check-types'] else 0)\n"
+    )
+    argv = ["all", "--manage", shlex.join([sys.executable, str(fake)])]
+
+    assert gates.main(argv) == 4
+    summary = capsys.readouterr().out.split("--- gates\n")[1].splitlines()
+    assert summary == [
+        "pass prettify",
+        "pass lint",
+        "fail (4) check-types",
+        "pass verify-types",
+        "not run test",
+    ]
+
+
+@pytest.mark.usefixtures("repo")
+def test_all_read_only_runs_only_the_side_by_side_gates(tmp_path, capsys):
+    fake = tmp_path / ".claude" / "manage.py"
+    fake.parent.mkdir()
+    fake.write_text("")
+    argv = ["all", "--read-only", "--manage", shlex.join([sys.executable, str(fake)])]
+
+    assert gates.main(argv) == 0
+    assert capsys.readouterr().out.split("--- gates\n")[1].splitlines() == [
+        "not run prettify",
+        "pass lint",
+        "pass check-types",
+        "pass verify-types",
+        "not run test",
+    ]
+
+
+def test_all_read_only_rejects_codegen():
+    with pytest.raises(SystemExit, match="2"):
+        gates.main(["all", "--read-only", "--codegen"])
+
+
+@pytest.mark.parametrize(
+    ("setup", "carried"),
+    [
+        pytest.param([["record", "tidy"]], True, id="marked"),
+        pytest.param([], False, id="unmarked"),
+    ],
+)
+@pytest.mark.usefixtures("repo")
+def test_prettify_carries_tidy_only_from_a_marked_tree(
+    tmp_path, capsys, setup, carried
+):
+    path = gates.get_state_dir() / "gate-markers.json"
+    command = ["sh", "-c", f"echo 'a = 3' > {tmp_path / 'a.py'}"]
+
+    for argv in setup:
+        gates.main(argv)
+
+    capsys.readouterr()
+    assert gates.main(["run", "prettify", "--mutates", "--", *command]) == 0
+    assert gates.check(path, "tidy") == (0 if carried else 1)
+    assert "not recorded" not in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("repo")
+def test_skipped_prettify_leaves_tidy_marker_alone(tmp_path):
+    path = gates.get_state_dir() / "gate-markers.json"
+    gates.main(["record", "tidy"])
+    tidied = gates.load_markers(path)["tidy"]
+    (tmp_path / "a.py").write_text("a = 4\n")
+    gates.main(["record", "prettify"])
+    command = ["sh", "-c", f"echo 'a = 3' > {tmp_path / 'a.py'}"]
+
+    assert gates.main(["run", "prettify", "--mutates", "--", *command]) == 0
+    assert gates.load_markers(path)["tidy"] == tidied
+    assert (tmp_path / "a.py").read_text() == "a = 4\n"
+
+
+@pytest.mark.usefixtures("repo")
+def test_all_prints_each_side_by_side_gate_whole_under_its_header(tmp_path, capsys):
+    fake = tmp_path / ".claude" / "manage.py"
+    fake.parent.mkdir()
+    fake.write_text(
+        "import sys, time\n"
+        "name = sys.argv[-1]\n"
+        "for n in range(3):\n"
+        "    print(f'{name} line {n}', flush=True)\n"
+        "    time.sleep(0.05)\n"
+    )
+    argv = ["all", "--manage", shlex.join([sys.executable, str(fake)])]
+
+    assert gates.main(argv) == 0
+    out = capsys.readouterr().out.split("--- gates\n")[0]
+    sections = dict(
+        section.split("\n", 1) for section in out.split("--- ")[1:] if section
+    )
+    assert set(sections) == {"lint", "check-types", "verify-types"}
+
+    for gate, flag in [("lint", "--all"), ("check-types", "--check-types")]:
+        lines = sections[gate].splitlines()
+        assert lines[:3] == [f"{flag} line {n}" for n in range(3)]
+        assert lines[3].startswith(f"recorded {gate} on tree ")
+
+
+@pytest.mark.parametrize(
+    ("ceiling", "recorded"),
+    [
+        pytest.param(
+            "uncovered = 319\nuncovered-lowered = 2026-11-18\n", True, id="lowered"
+        ),
+        pytest.param(
+            "uncovered = 321\nuncovered-lowered = 2026-11-18\n", False, id="raised"
+        ),
+        pytest.param("uncovered = 320\ntimeout = 30\n", False, id="other-key"),
+        pytest.param("uncovered = 319\nname = 'riko2'\n", False, id="other-line"),
+    ],
+)
+@pytest.mark.usefixtures("repo")
+def test_run_records_a_ratchet_lowering_its_ceiling(repo, tmp_path, ceiling, recorded):
+    path = gates.get_state_dir() / "gate-markers.json"
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("[tool.riko.coverage]\nuncovered = 320\n")
+    repo("add", "pyproject.toml")
+    repo("commit", "-qm", "pyproject")
+    script = "import pathlib, sys\npathlib.Path(sys.argv[1]).write_text(sys.argv[2])\n"
+    text = f"[tool.riko.coverage]\n{ceiling}"
+    command = [sys.executable, "-c", script, str(pyproject), text]
+
+    assert gates.run(path, "test", command, mutates=False, lock=False) == 0
+    assert gates.check(path, "test") == (0 if recorded else 1)
+
+
+@pytest.mark.usefixtures("repo")
+def test_ratchet_change_rejects_a_second_file(tmp_path):
+    before = gates.get_tree_id("test")
+    (tmp_path / "pyproject.toml").write_text("uncovered = 319\n")
+    (tmp_path / "a.py").write_text("a = 2\n")
+
+    assert not gates.is_ratchet_change(before, gates.get_tree_id("test"))
 
 
 @pytest.mark.parametrize(
