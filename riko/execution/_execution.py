@@ -128,7 +128,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
     That covers the context and settings, the closed-state guard, synchronous
     exit-stack entry, cleanup-error reporting, the resolved-resource cache,
-    resource-binding checks, input wiring, and ``run_sync``, which runs a blocking
+    resource-binding checks, input wiring, and ``to_async``, which runs a blocking
     callable on a worker thread from whichever event loop is running.
     """
 
