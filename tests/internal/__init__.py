@@ -31,9 +31,8 @@ Index (file, then the subjects it owns, in file order):
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
                               AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
                               AsyncMap, AutoClose, RequireCloser, AsyncMapStream,
-                              AsyncMerge, Tee, GatherResults, CapabilityFlags,
-                              ConverterPath, Csv, Jsonl, Framed, SessionLifecycle,
-                              WriteExecution, Sink
+                              AsyncMerge, GatherResults, CapabilityFlags, ConverterPath,
+                              Csv, Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, OperatorInputClose,
                               SyncPipeAsyncInput, ReturnInference, ModuleMetadata,
@@ -48,6 +47,7 @@ Index (file, then the subjects it owns, in file order):
                               WorkflowResolver, PackageStore, DirectoryStore,
                               CompositeStore, Catalog, ResolvedDocuments, TargetRegistry
     test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts, DoctestSkips
+    test_tee.py               Tee
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, IdentityAccumulator, Metadata,
                               ItemEnvelope, FeedResult, ReprCache, ResolveConf,

@@ -97,7 +97,7 @@ from riko.types.modules import (
 from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
-from tests._streams import Closeable
+from tests._streams import Closable
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
@@ -1277,7 +1277,7 @@ class TestAsyncProcessor:
         streams: list[auto_close[str]] = []
 
         def lines(item: Item, *args, **kwargs) -> auto_close[str]:
-            streams.append(auto_close(iter(["a", "b"]), Closeable("file", closes)))
+            streams.append(auto_close(iter(["a", "b"]), Closable("file", closes)))
             return streams[-1]
 
         stream = processor(is_async=True)(lines)({"x": 1}, emit=True)
@@ -1325,7 +1325,7 @@ class TestAsyncOperator:
 
         def lines(*args, **kwargs) -> auto_close[Item]:
             rows = iter([{"x": 1}, {"x": 2}])
-            streams.append(auto_close(rows, Closeable("file", closes)))
+            streams.append(auto_close(rows, Closable("file", closes)))
             return streams[-1]
 
         stream = operator(is_async=True)(lines)([{"x": 0}], emit=True)

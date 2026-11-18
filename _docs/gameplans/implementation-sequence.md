@@ -2067,7 +2067,7 @@ detailed in its topical owner:
 - **Slice A, tee correctness** (landed 2026-11-17): lock scope, atomic isolated
   copies, the drainable read-error and fatal fan-out latches, prompt cleanup and
   close, and the late-branch/reentrancy rules (fanout-topology § 7, § 7.1). It flipped
-  four tests in `tests/internal/test_io.py`: `TestTee`/`TestAsyncTee`
+  four tests in `tests/internal/test_tee.py`: `TestTee`/`TestAsyncTee`
   `::test_max_lag_overflow_discards_every_buffer_and_keeps_raising` and
   `::test_closing_branches_frees_buffers_then_closes_source_once`.
 - **Slice B, managed-execution settings** (next):
