@@ -71,7 +71,7 @@ def parser(
     return takewhile(bool, repeat(dict(FOREVER_ITEM)))
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, bool]]:
     """
     Asynchronously yields a placeholder item endlessly.

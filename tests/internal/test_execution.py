@@ -69,7 +69,7 @@ from riko.types.modules import (
     SortConfRule,
     TruncateConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_issync
+from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
@@ -277,7 +277,7 @@ class TestSyncExecution:
         assert execution.close() is False
         assert calls == ["cleanup"]
 
-    @skipif_issync
+    @skipif_sync
     def test_sync_portal_bridges_to_async(self) -> None:
         result = None
 
@@ -828,7 +828,7 @@ class TestResourceAcquisition:
         assert isinstance(first, error)
         assert second is first
 
-    @skipif_issync
+    @skipif_sync
     def test_awaitable_from_sync_factory_is_awaited(self) -> None:
         resource = Resource.from_factory(_build_awaitable, cleanup=False)
         assert _acquire_twice(resource) == ["value", "value"]
@@ -910,7 +910,7 @@ class TestResourceAcquisition:
 
         assert cleanup.events == ["value"]
 
-    @skipif_issync
+    @skipif_sync
     def test_sync_acquire_async_value_factory_bridges(self) -> None:
         acquired = None
 
@@ -1036,7 +1036,7 @@ class TestResourceAcquisition:
 
         assert events == []
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize("build", SYNC_BRIDGED_CLEANUPS)
     def test_sync_bridges_the_cleanup_of_an_async_produced_value(self, build) -> None:
         events: list[str] = []
@@ -1049,7 +1049,7 @@ class TestResourceAcquisition:
         assert acquired == "value"
         assert events == ["cleanup"]
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.simulated_network
     def test_sync_external_async_http_client_bridged(self) -> None:
         events: list[str] = []
@@ -1070,7 +1070,7 @@ class TestResourceAcquisition:
         with pytest.raises(RuntimeError, match="cleanup failed"):
             execution.close()
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
     def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
         settings = ExecutionSettings(shutdown_timeout=0.05)

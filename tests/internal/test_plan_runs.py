@@ -33,7 +33,7 @@ from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_wo
 from riko.runtime._workflow_stores import MappingStore
 from riko.types._workflow import Endpoint
 from riko.types.modules import ItemBuilderConf
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
     agen_source,
@@ -388,9 +388,9 @@ async def _awaitable_none() -> None:
 # ``None`` feeds nothing, as a missing seed does.
 SEEDS = [
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
-    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
-    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
-    pytest.param(_awaitable_none, [], id="awaitable-none", marks=skipif_issync),
+    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_sync),
+    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_sync),
+    pytest.param(_awaitable_none, [], id="awaitable-none", marks=skipif_sync),
     pytest.param(_DualSeed, [{"x": 2}], id="dual-iterable"),
 ]
 ASYNC_SEEDS = [
@@ -908,7 +908,7 @@ class TestPlanRun:
         ) == [{"x": 1}]
         assert ran == ["a"]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_drives_async_only_module_via_portal(self) -> None:
         @tag_source
         async def src(_items=None, **_):
@@ -924,7 +924,7 @@ class TestPlanRun:
             {"x": 2},
         ]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_chains_async_only_node_after_sync_node(self) -> None:
         @tag_source
         def src(_items=None, **_):

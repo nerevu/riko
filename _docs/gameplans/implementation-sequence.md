@@ -983,13 +983,13 @@ adaptation helpers live in `riko/execution/_adapt.py` (regressions in
    per the four native-wins quadrants, and a loop node's embed is resolved at
    build into a nested `PreparedNode.embed`. Both executions now re-select that embed
    against the **host pipe's actual mode**
-   (`select_embed(embed, host_isasync=, to_async=, to_sync=)` in
+   (`select_embed(embed, host_is_async=, to_async=, to_sync=)` in
    `riko/execution/_adapt.py`, called once by the shared base execution's
    `_select_embed` with each execution's own async-to-sync drain) and,
    when the embed is adapted, forward a synthesized host-mode wrapper instead of the raw
    other-mode one. `adapt_embed(embed, to_sync)` and
    `async_adapt_embed(embed, to_async)` copy the wrapper's discovery metadata (`name`,
-   `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `isasync` to the host
+   `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `is_async` to the host
    mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
    `is_subpipe`, and `bind_subpipe` treat the adapter as a native embed. An async-only
    embed under a sync host is drained per item (through the portal on the main thread,
@@ -1103,7 +1103,7 @@ Deliver:
   ([callable-pipes.md](callable-pipes.md) § Existing decorator model), so a module
   author never needs empty parentheses. The async case is
   `@processor async def async_pipe`; a single async implementation named `pipe` keeps
-  raising until R4E classifies interfaces by `isasync`;
+  raising until R4E classifies interfaces by `is_async`;
 - **shipped 2026-10-24:** `Pipeline.open()`: a fresh single-use run handle per call that
   is a sync and async context manager (`closing(iter(pipeline))` /
   `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration whose semantics
@@ -1314,7 +1314,7 @@ Deliver:
 - **DELETE:** no runtime path interprets business data as typed configuration; any
   legacy typed-value compatibility is bounded to the v1 migration ingress.
 
-### R4E — Module configuration contracts, strict conf validation, and `isasync` interface classification
+### R4E — Module configuration contracts, strict conf validation, and `is_async` interface classification
 
 Scheduled 2026-10-04 **after M1 and before M2**. [extensibility.md](extensibility.md) E1
 owns the module contract ("generate configuration JSON Schema from typed configs";
@@ -1389,11 +1389,11 @@ Deliver:
   inside (widening alone gives 15 pyright errors in `config.py`), and settle whether a
   scalar item can reach it: `resolve_conf` tests `if item` for truthiness before
   `DotDict.dictize`.
-- interface classification by `isasync` rather than by attribute name, so a single async
-  implementation named `pipe` (`@processor async def pipe`) wraps as the async interface
-  instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
-  [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns the
-  semantics,
+- interface classification by `is_async` rather than by attribute name, so a single
+  async implementation named `pipe` (`@processor async def pipe`) wraps as the async
+  interface instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out
+  of R4C; [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns
+  the semantics,
   [release-readiness.md § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)
   makes it a 1.0 requirement). It touches the decorator wrapper builder,
   `ModuleDefinition`'s interface slots, and codegen, beside the plain-callable slot
@@ -1430,7 +1430,7 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   or neither;
 - `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
   `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
-  favor of `interfaces` when classification moves to `isasync`, updating the
+  favor of `interfaces` when classification moves to `is_async`, updating the
   [module-documentation.md](module-documentation.md) generator inputs;
 - legacy conf keys declared in the raw conf types but read by no module:
   `FetchRawConf.offline`, `CsvRawConf.other_sep`, and `InputRawConf.debug`/`param`/
@@ -1438,18 +1438,19 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   `tests/workflows/pipe_UuvYtuMe3hGDsmRgPm7D0g.json` set `offline`/`other_sep`).
   Since the contract derives from these types, decide whether these legacy keys are
   accepted and ignored or rejected as unknown before the strict check lands;
-- the spelling of the color flag (2026-11-17 naming audit): `isasync`/`issync` (the
-  STABLE `riko.isasync`/`riko.issync` pair, the `processor`/`operator`/`splitter`/
-  `workflow` decorator option, the `WRAPPER_META` member, `host_isasync`,
-  `skipif_issync`) and `is_async` (the resolver/`get_pipe`/`compile_workflow`/
-  `resolve_closer`/`register_owned` parameters, `ValueFactoryPlan.is_async`,
-  `Execution.is_async`) name the same boolean with no rule splitting them. Merge to
-  `is_async`/`is_sync` in this slice, which already rewrites the decorator and
-  resolver overloads carrying the flag; the public rename (`riko.isasync`/`issync`,
-  the decorator option, the wrapper metadata attribute extension authors read) is one
-  entry in the `docs/CHANGES.rst` rename list, with `docs/COOKBOOK.rst`/
-  `docs/FAQ.rst`, the ~40 built-in `isasync=True` decorations, and the
-  `skipif_issync` marker following.
+- ~~the spelling of the color flag~~ (done 2026-11-17 by triage, ahead of this slice;
+  every tier now says `is_async`/`is_sync`) (2026-11-17 naming audit):
+  `isasync`/`issync` (the STABLE `riko.isasync`/`riko.issync` pair, the
+  `processor`/`operator`/`splitter`/ `workflow` decorator option, the `WRAPPER_META`
+  member, `host_isasync`, `skipif_issync`) and `is_async` (the
+  resolver/`get_pipe`/`compile_workflow`/ `resolve_closer`/`register_owned` parameters,
+  `ValueFactoryPlan.is_async`, `Execution.is_async`) name the same boolean with no rule
+  splitting them. Merge to `is_async`/`is_sync` in this slice, which already rewrites
+  the decorator and resolver overloads carrying the flag; the public rename
+  (`riko.isasync`/`issync`, the decorator option, the wrapper metadata attribute
+  extension authors read) is one entry in the `docs/CHANGES.rst` rename list, with
+  `docs/COOKBOOK.rst`/ `docs/FAQ.rst`, the ~40 built-in `isasync=True` decorations, and
+  the `skipif_issync` marker following.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a
 parser's `objconf` annotation and returns the generated `<Name>Objconf`, but no runtime
@@ -1569,9 +1570,9 @@ always a plain `DynamicConf`), but the user kept it here (2026-10-27 triage) so 
 stubs are rewritten once, with the conf contract. The last three
 (`aggregate`/`receive`/`write` `async_pipe`) also need their async parsers annotated
 `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
-sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2
+sync/async output unions picked by the runtime `is_async` flag (plus 3 `wraps` and 2
 `embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`isasync` interface classification here should type that split instead; the cast on the
+`is_async` interface classification here should type that split instead; the cast on the
 worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial` because the
 process executor pickles it) and on `build_item_call`'s return in
 `riko/execution/_concurrency.py` narrows the same `NodeCall` output union and goes with
@@ -1805,7 +1806,7 @@ Decided design (2026-11-11):
 Positional embed call (triage 2026-11-12; landed 2026-11-14): the loop
 embedder (`bind_subpipe`, `riko/modules/_assignment.py`) binds a `RunsItems` call's
 `run_item`/`arun_item` positionally, as `build_item_call` does; the async loop awaits
-`arun_item`'s coroutine through `maybe_async`. Its keyword-only `host_isasync` is the
+`arun_item`'s coroutine through `maybe_async`. Its keyword-only `host_is_async` is the
 loop's color: an async embed in a sync loop (and any non-`RunsItems` call, such as a
 stored workflow) keeps the keyword-bound `__call__`, so the lazy dual-protocol stream
 never starts a coroutine nobody awaits (the strict xfail

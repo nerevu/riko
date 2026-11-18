@@ -140,7 +140,7 @@ def parser(
     return require_value(func(item), msg)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     Asynchronously applies an arbitrary (user-defined) function to each item.

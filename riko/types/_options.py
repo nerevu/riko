@@ -122,7 +122,7 @@ class SharedDecorationOptions(TypedDict, total=False):
     """Decoration options every pipe decorator reads."""
 
     defaults: Defaults | None
-    isasync: bool
+    is_async: bool
     ftype: BasicCastType
     ptype: BasicCastType
     assign: str

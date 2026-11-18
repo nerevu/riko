@@ -73,7 +73,7 @@ def parser(
     return "".join(gen_non_null(extraction, str))
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously concatenates strings into an item field.

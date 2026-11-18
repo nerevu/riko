@@ -9,7 +9,7 @@ from logging import getLogger
 
 import pytest
 
-from riko.bado._backend import issync
+from riko.bado._backend import is_sync
 from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._logging import LOGGER_NAME
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
@@ -110,9 +110,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         if any(map(item.path.is_relative_to, _EXAMPLE_DIRS)):
             item.add_marker(QUIET_LEAKS)
 
-        if issync and any(marker in name for marker in ASYNC_DOCTEST_MARKERS):
+        if is_sync and any(marker in name for marker in ASYNC_DOCTEST_MARKERS):
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
-        elif issync:
+        elif is_sync:
             _skip_coroutine_runs(item)

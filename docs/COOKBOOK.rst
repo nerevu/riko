@@ -748,7 +748,7 @@ too if the module has one.
 
 The wrapped function can be a plain ``def`` that returns a synchronous result (as built-in
 ``count``/``reverse``/``sort`` do) *or* an ``async def`` that awaits real I/O (as
-``strreplace``/``timeout`` and `register_module.py`_ do). Pass ``isasync=True`` to the
+``strreplace``/``timeout`` and `register_module.py`_ do). Pass ``is_async=True`` to the
 decorator to wrap a sync function that should be used for async runs. At runtime this is
 only required when the function isn't named ``async_pipe``. A type checker needs it
 whenever you assign the result to a typed ``async_pipe`` slot (as `register_module.py`_

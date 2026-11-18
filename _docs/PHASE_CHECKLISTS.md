@@ -47,8 +47,8 @@ separate from the forward architecture dependency graph in
 request). **P8 landed** (the M2 seam). **P9A is complete**, targeted for release
 v0.76.0: the generated `Modules` tree + `ModuleMetadata.category` taxonomy +
 `riko.ext.codegen`/`gen-names` + `list_modules`/`describe_module` (on top of the v0.75.0
-prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `isasync` inference). The
-remaining non-P9A P9 work is the installed-environment aggregate
+prerequisites — value-taking `|`/`.pipe()`, `ModuleName` base, `is_async` inference).
+The remaining non-P9A P9 work is the installed-environment aggregate
 `riko.generated.Modules` (covering entry-point extensions) and `.pyi` fluent stubs; its
 domain plan is [gameplans/module-enums.md](gameplans/module-enums.md). This is the next
 unfinished **P-track** work, not a claim that it precedes the cross-cutting R0–R12
@@ -109,7 +109,7 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is st
 | **R5A** FeedResult, Metadata, private per-item provenance | ✅ done | M1 core: private `_ItemEnvelope` envelope, identity propagation (roots, preserve/derive/combine, pass-through identity table), and `map`'s `identity=` taking effect; fingerprints and `version=` re-homed to R2B (2026-11-11); owner `gameplans/implementation-sequence.md` § R5A; strict xfail `TestCallableNodes::test_map_rejects_combine_identity` flipped (`map(identity="combine")` raises); implemented in the uncommitted phase-14 tree 2026-11-12 ([IMPLEMENTED § Per-item provenance](IMPLEMENTED.md#per-item-provenance--_itemenvelope-r5a-in-progress)); landed and pushed 2026-11-14; the close tests split out of `tests/internal/test_plan_runs.py` into `tests/internal/test_plan_closes.py` 2026-11-14; loop-embedder positional switch landed 2026-11-14 (implementation-sequence § R5A) |
 | **M1** v1-parity merge (`next` → `features`) | 🎯 milestone | order: close R4B → R4C → R4D → R5A → R7 → merge; R5B/R5C/R6+ follow (implementation-sequence § 4 "M1") |
 | **R4L** DotDict literal access | ⏳ pending | slot added 2026-11-05, after M1 and before R4E; owner `gameplans/dotdict-parsing.md`; flips the `TestDotDict` literal-access tripwires in `tests/internal/test_values.py` and `TestCount::test_count_key_values_containing_dots_stay_literal` in `tests/public/test_modules.py` (GitHub issue #60) |
-| **R4E** module config contracts + strict conf validation + `isasync` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
+| **R4E** module config contracts + strict conf validation + `is_async` interface classification | ⏳ pending | slot added 2026-10-04, after M1 and R4L; owner `gameplans/extensibility.md` E1/E3.9; flips the conf tripwire table (`TestValidate::test_invalid_conf_rejected_before_the_source_is_read`) in `tests/public/test_workflow.py`; classification added 2026-10-22 (owner `gameplans/callable-pipes.md`), replaces `TestProcessor::test_async_named_pipe_raises`; 2026-10-27: flips `TestCallableNodes::test_map_ignores_a_replaced_udf_module` (callable nodes without a donor `udf`) |
 | **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4L → R4E → merge → publish; acceptance = every announcement-post sample runs on the released wheel; not the 1.0 gate (implementation-sequence § 4 "M2") |
 | **M3** monthly-invoicing release | 🎯 milestone | M2 → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R5C/R6 (implementation-sequence § 4 "M3") |
 | **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R5B → R5C → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
@@ -374,14 +374,15 @@ widened (it only stamps metadata). Speculative `ModuleDefinition` discovery fiel
 (`provider`/`enum_name`/`category`/`docs_url`) dropped until P9A needs them. Entry-point
 group name: `riko.modules`.
 
-**Pipe-authoring ergonomics (landed alongside).** The decorators now **infer `isasync`**
-(`_resolve_isasync`) from an `async def` or the conventional `async_pipe` name, so it's
-rarely passed; explicit `isasync=True` remains only for the cases the name signal can't
-type — a sync async-interface callable not named `async_pipe` (a lambda), or a sync
-`def async_pipe` handed to `ModuleDefinition(async_pipe=…)`. A `pipe`-named async
-function raises `TypeError`; typed `__call__` overloads make `@operator()` on a
-coroutine statically async. Also on this branch: `pool_scope`'s `"stage"` value renamed
-to `"pipe"` (vs `"pipeline"`). Tests: `tests/internal/test_modules.py`.
+**Pipe-authoring ergonomics (landed alongside).** The decorators now
+**infer `is_async`** (`_resolve_is_async`) from an `async def` or the conventional
+`async_pipe` name, so it's rarely passed; explicit `is_async=True` remains only for the
+cases the name signal can't type — a sync async-interface callable not named
+`async_pipe` (a lambda), or a sync `def async_pipe` handed to
+`ModuleDefinition(async_pipe=…)`. A `pipe`-named async function raises `TypeError`;
+typed `__call__` overloads make `@operator()` on a coroutine statically async. Also on
+this branch: `pool_scope`'s `"stage"` value renamed to `"pipe"` (vs `"pipeline"`).
+Tests: `tests/internal/test_modules.py`.
 
 **Carryover:** none. Unblocks **P9A** (the generated flat `Modules` namespace +
 `Sources`/`Transforms`/`Sinks` bucket tree reads the registry/catalog). Tests:

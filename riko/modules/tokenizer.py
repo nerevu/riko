@@ -85,7 +85,7 @@ def parser(
     return ({token_key: chunk} for chunk in chunks)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     Asynchronously splits a string into tokens.

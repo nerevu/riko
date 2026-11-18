@@ -71,8 +71,8 @@ def tag_source[F: Func[object]](fn: F) -> F:
         subtypes={"source"},
         pollable=getattr(fn, "pollable", False),
         loopable=getattr(fn, "loopable", False),
-        isasync=getattr(
-            fn, "isasync", iscoroutinefunction(fn) or isasyncgenfunction(fn)
+        is_async=getattr(
+            fn, "is_async", iscoroutinefunction(fn) or isasyncgenfunction(fn)
         ),
         sequential_inputs=getattr(fn, "sequential_inputs", False),
         prepare=getattr(fn, "prepare", None),

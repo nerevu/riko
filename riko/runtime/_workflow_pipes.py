@@ -112,7 +112,7 @@ def workflow(  # pyright: ignore[reportOverlappingOverload]
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    isasync: Literal[True],
+    is_async: Literal[True],
     input_schemas: InputSchemasLike | None = ...,
     dependencies: Iterable[str] | None = ...,
 ) -> Callable[[Func[object]], AsyncSubPipe]: ...
@@ -121,7 +121,7 @@ def workflow(
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    isasync: bool | None = ...,
+    is_async: bool | None = ...,
     input_schemas: InputSchemasLike | None = ...,
     dependencies: Iterable[str] | None = ...,
 ) -> _WorkflowTagger: ...
@@ -129,7 +129,7 @@ def workflow(
     *args: object,
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,
-    isasync: bool | None = None,
+    is_async: bool | None = None,
     input_schemas: InputSchemasLike | None = None,
     dependencies: Iterable[str] | None = None,
 ) -> Callable[[Func[object]], SubPipe]:
@@ -155,7 +155,7 @@ def workflow(
         loopable: The pipe's ``loopable`` discovery flag. ``loop`` embeds a tagged pipe
             either way.
 
-        isasync: Whether the pipe is an ``async_pipe``. Defaults to ``True`` for an
+        is_async: Whether the pipe is an ``async_pipe``. Defaults to ``True`` for an
             async function or an async generator function.
 
         input_schemas: The input schemas the workflow reads (each a type name or JSON
@@ -181,7 +181,7 @@ def workflow(
         ... def pipe(item=None, **kwargs):
         ...     return iter([])
         >>>
-        >>> pipe.type, pipe.subtype, pipe.isasync
+        >>> pipe.type, pipe.subtype, pipe.is_async
         ('pipe', 'source', False)
         >>> pipe.dependencies
         ('count', 'fetch')
@@ -203,10 +203,10 @@ def workflow(
         tagged = partial(pipe)
         update_wrapper(tagged, pipe)
 
-        if isasync is None:
+        if is_async is None:
             resolved = is_async_callable(pipe) or isasyncgenfunction(pipe)
         else:
-            resolved = isasync
+            resolved = is_async
 
         stamp_wrapper_meta(
             tagged,
@@ -216,7 +216,7 @@ def workflow(
             subtypes={subtype},
             pollable=False,
             loopable=loopable,
-            isasync=resolved,
+            is_async=resolved,
             input_schemas=schemas,
             dependencies=names,
         )
@@ -291,9 +291,9 @@ def build_workflow_pipes(
 
     schemas, names = flow.input_schemas, flow.dependencies
     sync_tag = workflow(
-        subtype=subtype, isasync=False, input_schemas=schemas, dependencies=names
+        subtype=subtype, is_async=False, input_schemas=schemas, dependencies=names
     )
     async_tag = workflow(
-        subtype=subtype, isasync=True, input_schemas=schemas, dependencies=names
+        subtype=subtype, is_async=True, input_schemas=schemas, dependencies=names
     )
     return SubPipes(sync_tag(pipe), async_tag(async_pipe))

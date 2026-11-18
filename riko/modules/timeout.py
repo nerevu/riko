@@ -207,7 +207,7 @@ def parser(
     return TimeoutIterator(stream, time_ms)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Streams items until the timeout expires.

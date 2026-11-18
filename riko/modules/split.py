@@ -138,7 +138,7 @@ def parser(
     return iter(tuple(tee.branch() for _ in range(int(objconf.splits))))
 
 
-@splitter(DEFAULTS, isasync=True, **OPTS)
+@splitter(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> AsyncCascade:
     """
     Asynchronously splits a stream into branches that each yield every item.

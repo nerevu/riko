@@ -45,7 +45,7 @@ from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types._enums import BasicCastType, IdentityMode
 from riko.types._options import CallOptions
 from riko.types._workflow import Endpoint, InputRef, WorkflowIndex
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
     OUTPUT_A,
@@ -128,7 +128,7 @@ _HASH_AB = {"a": _HASH, "b": _HASH}
 _SYNC, _ASYNC = "sync_interface", "async_interface"
 
 
-def _stamp_embed(up, *, isasync: bool) -> None:
+def _stamp_embed(up, *, is_async: bool) -> None:
     stamp_wrapper_meta(
         up,
         name="up",
@@ -137,7 +137,7 @@ def _stamp_embed(up, *, isasync: bool) -> None:
         subtypes={"transformer"},
         pollable=False,
         loopable=True,
-        isasync=isasync,
+        is_async=is_async,
     )
 
 
@@ -465,7 +465,7 @@ class _EmbedStub:
     subtypes = frozenset({"transformer"})
     pollable = False
     loopable = True
-    isasync = True
+    is_async = True
     sequential_inputs = False
 
     def __call__(self, item=None, **kwargs):
@@ -509,7 +509,7 @@ def _build_async_embed():
         return {"up": str(item["t"]).upper()}
 
     return cast(
-        "AsyncModuleWrapper", processor(isasync=True, ptype=BasicCastType.NONE)(shout)
+        "AsyncModuleWrapper", processor(is_async=True, ptype=BasicCastType.NONE)(shout)
     )
 
 
@@ -544,10 +544,10 @@ def _sync_child(produced: list[int], closed: list[str]):
 
 
 class TestAdaptEmbed:
-    @pytest.mark.parametrize(("adapt", "isasync"), ADAPTERS)
-    def test_adapt_embed_copies_metadata(self, adapt, isasync: bool) -> None:
+    @pytest.mark.parametrize(("adapt", "is_async"), ADAPTERS)
+    def test_adapt_embed_copies_metadata(self, adapt, is_async: bool) -> None:
         stub = _EmbedStub()
-        stub.isasync = isasync
+        stub.is_async = is_async
         adapted = adapt(stub)
 
         assert adapted.name == "up"
@@ -556,7 +556,7 @@ class TestAdaptEmbed:
         assert adapted.subtypes == frozenset({"transformer"})
         assert adapted.pollable is False
         assert adapted.loopable is True
-        assert adapted.isasync is not isasync
+        assert adapted.is_async is not is_async
         assert not hasattr(adapted, "__wrapped__")
 
     def test_build_resolves_nested_embed(self) -> None:
@@ -574,7 +574,7 @@ class TestAdaptEmbed:
         assert node.module.name == "fakeloop"
         assert node.options.kwargs == {"emit": True, "count": "first"}
 
-    @skipif_issync
+    @skipif_sync
     def test_run_adapts_async_only_embed_under_sync(self) -> None:
         async def up(item, **_):
             yield {"up": item["t"].upper()}
@@ -583,7 +583,7 @@ class TestAdaptEmbed:
             for row in items:
                 yield from embed(row)
 
-        _stamp_embed(up, isasync=True)
+        _stamp_embed(up, is_async=True)
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
             ModuleDefinition(
@@ -594,7 +594,7 @@ class TestAdaptEmbed:
 
         assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_runs_sync_only_embed_off_an_async_only_loop(self) -> None:
         threads: list[int] = []
 
@@ -609,7 +609,7 @@ class TestAdaptEmbed:
                 for value in await maybe_async(embed, row):
                     yield value
 
-        _stamp_embed(up, isasync=False)
+        _stamp_embed(up, is_async=False)
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
             ModuleDefinition(
@@ -646,7 +646,7 @@ class TestAdaptEmbed:
         assert seen["embed"] is up
         assert seen["options"] == {"emit": True, "count": "first"}
 
-    @skipif_issync
+    @skipif_sync
     def test_run_loops_async_only_embed_through_the_real_loop(self) -> None:
         embed = _build_async_embed()
         dispatcher = build_dispatcher(
@@ -657,7 +657,7 @@ class TestAdaptEmbed:
         flow = _loop(loop_name="loop", embed_name=embed.name)
         assert run_plan(flow, dispatcher=dispatcher) == [{"up": "X"}]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_count_first_stays_lazy_for_an_async_only_embed(self) -> None:
         produced: list[int] = []
         closed: list[str] = []
@@ -688,7 +688,7 @@ class TestAsyncAdaptEmbed:
                 for value in await maybe_async(embed, row):
                     yield value
 
-        _stamp_embed(up, isasync=False)
+        _stamp_embed(up, is_async=False)
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
             ModuleDefinition(
@@ -721,7 +721,7 @@ class TestAsyncAdaptEmbed:
             for row in items:
                 yield from embed(row)
 
-        _stamp_embed(up, isasync=True)
+        _stamp_embed(up, is_async=True)
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
             ModuleDefinition(

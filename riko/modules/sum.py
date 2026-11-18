@@ -107,7 +107,7 @@ def parser(
     return summed
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Decimal]]:
     """
     Asynchronously sums fields of the items in a stream.

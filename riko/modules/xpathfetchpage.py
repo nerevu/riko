@@ -166,7 +166,7 @@ def parser(
         yield from any2dict(f, ext, objconf.html5, path=objconf.xpath)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously fetches a web page and yields the nodes at an XPath.

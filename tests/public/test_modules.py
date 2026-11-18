@@ -1270,7 +1270,7 @@ class TestModuleMetadata:
         assert metadata.subtypes == {"source"}
 
 
-def _create_wrapper(name: str, *, iscoro: bool, isasync: bool):
+def _create_wrapper(name: str, *, iscoro: bool, is_async: bool):
     """Decorate a fresh function with the given name/awaitability/explicit flag."""
 
     async def _coro(item, extraction, objconf, **kwargs) -> str:
@@ -1281,7 +1281,7 @@ def _create_wrapper(name: str, *, iscoro: bool, isasync: bool):
 
     fn = _coro if iscoro else _sync
     fn.__name__ = name
-    decorate = processor(isasync=True) if isasync else processor()
+    decorate = processor(is_async=True) if is_async else processor()
     return decorate(fn)
 
 
@@ -1297,7 +1297,7 @@ def _skip_marked(item: Item, *args, **kwargs) -> str:
     return "processed"
 
 
-ISASYNC_CASES = [
+IS_ASYNC_CASES = [
     pytest.param("pipe", False, False, False, id="sync-pipe"),
     pytest.param("async_pipe", False, False, True, id="sync-async_pipe-name"),
     pytest.param("async_pipe", True, False, True, id="async_def-async_pipe"),
@@ -1311,8 +1311,8 @@ ISASYNC_CASES = [
 
 ASYNC_NAMED_PIPES = [
     pytest.param(True, False, "an async def", id="async_def"),
-    pytest.param(False, True, "marked isasync=True", id="isasync=True"),
-    pytest.param(True, True, "an async def", id="async_def+isasync=True"),
+    pytest.param(False, True, "marked is_async=True", id="is_async=True"),
+    pytest.param(True, True, "an async def", id="async_def+is_async=True"),
 ]
 
 
@@ -1385,16 +1385,18 @@ IMPLICIT_FOLD_CASES = [
 class TestProcessor:
     """A ``processor`` resolves its interface, keeps call flags, and skips items."""
 
-    @pytest.mark.parametrize(("name", "iscoro", "isasync", "expected"), ISASYNC_CASES)
-    def test_resolved_isasync(self, name, iscoro, isasync, expected):
+    @pytest.mark.parametrize(("name", "iscoro", "is_async", "expected"), IS_ASYNC_CASES)
+    def test_resolved_is_async(self, name, iscoro, is_async, expected):
         """
-        Resolve ``isasync`` from the explicit flag, ``async def``, or the name.
+        Resolve ``is_async`` from the explicit flag, ``async def``, or the name.
 
-        ``isasync`` marks which callable a pipe is (``pipe`` or ``async_pipe``),
+        ``is_async`` marks which callable a pipe is (``pipe`` or ``async_pipe``),
         not whether the function is a coroutine, so it is only needed explicitly
         for a sync callable that serves as the ``async_pipe`` under another name.
         """
-        assert _create_wrapper(name, iscoro=iscoro, isasync=isasync).isasync is expected
+        assert (
+            _create_wrapper(name, iscoro=iscoro, is_async=is_async).is_async is expected
+        )
 
     def test_sync_list(self):
         seen: list[object] = []
@@ -1447,11 +1449,11 @@ class TestProcessor:
         with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):
             list(hash_pipe([{"x": 1}], mode="describe"))
 
-    @pytest.mark.parametrize(("iscoro", "isasync", "reason"), ASYNC_NAMED_PIPES)
-    def test_async_named_pipe_raises(self, iscoro, isasync, reason):
+    @pytest.mark.parametrize(("iscoro", "is_async", "reason"), ASYNC_NAMED_PIPES)
+    def test_async_named_pipe_raises(self, iscoro, is_async, reason):
         """A function named ``pipe`` that resolves async is a contradiction."""
         with pytest.raises(TypeError) as excinfo:
-            _create_wrapper("pipe", iscoro=iscoro, isasync=isasync)
+            _create_wrapper("pipe", iscoro=iscoro, is_async=is_async)
 
         message = str(excinfo.value)
         assert "'pipe' must be synchronous" in message
@@ -1475,7 +1477,7 @@ class TestAsyncProcessor:
     @async_test
     async def test_async_list(self):
         seen: list[object] = []
-        async_pipe = processor(isasync=True)(_record_test_flag(seen))
+        async_pipe = processor(is_async=True)(_record_test_flag(seen))
         _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
         assert seen == [True, True]
 
@@ -1490,14 +1492,14 @@ class TestAsyncProcessor:
 
                 yield {"a": index}
 
-        async_pipe = processor(isasync=True)(_record_test_flag([]))
+        async_pipe = processor(is_async=True)(_record_test_flag([]))
 
         async with maybe_aclosing(async_pipe(unbounded(), test=True)) as stream:
             assert await anext(stream)
 
     @async_test
     async def test_async(self):
-        async_pipe = processor(isasync=True, skip_if=lambda item: "x" in item)(
+        async_pipe = processor(is_async=True, skip_if=lambda item: "x" in item)(
             _skip_marked
         )
         stream = async_pipe([{"x": 1}, {"y": 2}], assign="y")
@@ -1527,7 +1529,7 @@ class TestAsyncOperator:
     async def test_feed_reaches_parser_as_async_iterator(self):
         received = {}
 
-        @operator(isasync=True)
+        @operator(is_async=True)
         async def async_pipe(stream, objconf, tuples, **kwargs):
             received["is_async"] = isinstance(stream, AsyncIterator)
             collected = [item async for item in stream]
@@ -1546,7 +1548,7 @@ class TestAsyncOperator:
     async def test_sync_parser_operator_returns_async_iterator(self):
         items = [{"content": "a"}, {"content": "b"}]
 
-        @operator(isasync=True)
+        @operator(is_async=True)
         def async_pipe(stream, objconf, tuples, **kwargs):
             yield from stream
 
@@ -1559,7 +1561,7 @@ class TestAsyncOperator:
     async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):
         items = [{"content": "a"}, {"content": "b"}]
 
-        @operator(isasync=True)
+        @operator(is_async=True)
         async def async_pipe(stream, objconf, tuples, **kwargs):
             return iter(items)
 

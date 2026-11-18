@@ -108,7 +108,7 @@ def parser(
     return gen_items(content, key, yield_if_none=element is not MISSING)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: RikoValue) -> Stream:
     """
     Asynchronously extracts sub-elements from an item.

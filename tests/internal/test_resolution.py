@@ -100,7 +100,7 @@ _META = {
     "subtypes": {"composer"},
     "pollable": False,
     "loopable": False,
-    "isasync": False,
+    "is_async": False,
 }
 
 MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
@@ -809,8 +809,8 @@ class TestWorkflowResolver:
         resolver = _demo_resolver(
             pipe=lambda item=None, **kwargs: iter([]), async_pipe=gen_items
         )
-        assert resolver.require("pipe:demo", is_async=True).isasync
-        assert not resolver.require("pipe:demo").isasync
+        assert resolver.require("pipe:demo", is_async=True).is_async
+        assert not resolver.require("pipe:demo").is_async
 
     def test_load_workflow_accepts_the_colon_alias(self):
         directory = TESTS_DIR / "workflows"

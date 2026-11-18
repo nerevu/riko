@@ -136,7 +136,7 @@ async def _arun_loop(
     count: CountValues | None,
 ) -> AsyncStream:
     args = embed, context, embedded_kwargs
-    embedder = bind_subpipe(*args, field=field, host_isasync=True)
+    embedder = bind_subpipe(*args, field=field, host_is_async=True)
 
     async for parent in as_async(source):
         items = await maybe_async(embedder, parent)

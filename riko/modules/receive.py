@@ -241,7 +241,7 @@ def parser(
             yield StatefulItem(state=StreamState.PENDING)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously receives items pushed by the send module.

@@ -109,7 +109,7 @@ def pull_stream[T](func: WorkerCall, stream: Iterator[T]) -> AsyncIterator[T]:
 
 
 def _copy_wrapper_meta(
-    target: Func[object], source: ModuleWrapper, *, isasync: bool
+    target: Func[object], source: ModuleWrapper, *, is_async: bool
 ) -> None:
     """
     Stamps ``source``'s discovery metadata onto ``target`` as sync or async.
@@ -125,7 +125,7 @@ def _copy_wrapper_meta(
 
     Kwargs:
 
-        isasync: Whether the adapter is an ``async_pipe``.
+        is_async: Whether the adapter is an ``async_pipe``.
 
     """
     stamp_wrapper_meta(
@@ -136,7 +136,7 @@ def _copy_wrapper_meta(
         subtypes=source.subtypes,
         pollable=source.pollable,
         loopable=source.loopable,
-        isasync=isasync,
+        is_async=is_async,
         sequential_inputs=source.sequential_inputs,
         input_schemas=getattr(source, "input_schemas", None),
         dependencies=getattr(source, "dependencies", None),
@@ -176,7 +176,7 @@ def adapt_embed(embed: AsyncModuleWrapper, to_sync: Drain[object]) -> SyncModule
     def wrapper(item: object = None, **kwargs: object) -> Iterator[object]:
         return to_sync(aiter(embed(item, **kwargs)))
 
-    _copy_wrapper_meta(wrapper, embed, isasync=False)
+    _copy_wrapper_meta(wrapper, embed, is_async=False)
     return require_sync_wrapper(wrapper)
 
 
@@ -205,14 +205,14 @@ def async_adapt_embed(
     async def wrapper(item: Item | None = None, **kwargs: object) -> list[object]:
         return await to_async(_materialize, embed, item, kwargs)
 
-    _copy_wrapper_meta(wrapper, embed, isasync=True)
+    _copy_wrapper_meta(wrapper, embed, is_async=True)
     return require_async_wrapper(wrapper)
 
 
 def select_embed(
     embed: ResolvedModule,
     *,
-    host_isasync: bool,
+    host_is_async: bool,
     to_async: WorkerCall,
     to_sync: Drain[object],
 ) -> AnyModuleWrapper:
@@ -225,7 +225,7 @@ def select_embed(
 
     Kwargs:
 
-        host_isasync: Whether the loop pipe runs asynchronously.
+        host_is_async: Whether the loop pipe runs asynchronously.
         to_async: Runs a sync-only embed off the event loop under an async host.
         to_sync: Pulls an async-only embed's output stream under a sync host.
 
@@ -239,7 +239,7 @@ def select_embed(
         InvalidPipelineError: If the embed has neither a sync nor an async callable.
 
     """
-    if host_isasync:
+    if host_is_async:
         if (async_pipe := embed.async_pipe) is not None:
             result: AnyModuleWrapper = async_pipe
         elif (sync_pipe := embed.sync_pipe) is not None:

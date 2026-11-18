@@ -153,7 +153,7 @@ def parser(
     return auto_close(_gen_stripped_lines(f, objconf.strip_bom), f)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     Asynchronously fetches a text file and yields lines.

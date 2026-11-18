@@ -18,7 +18,7 @@ from riko.runtime._pipeline import Pipeline
 from riko.types._enums import IdentityMode
 from riko.types._streams import Item
 from riko.types.modules import StrReplaceConf, StrReplaceConfRule
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import registered_modules
 from tests._lifecycle import VALUE, tokenized
 
@@ -266,7 +266,7 @@ class TestCallableNodes:
         assert_type(strings.pipe("count"), Pipeline[Item])
         assert_type(strings.count(), Pipeline[Item])
 
-    @skipif_issync
+    @skipif_sync
     def test_sync_iteration_bridges_an_async_callable(self):
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
@@ -347,7 +347,7 @@ class TestCallableNodes:
             "are not yet implemented"
         ),
     )
-    @skipif_issync
+    @skipif_sync
     def test_map_ignores_a_replaced_udf_module(self):
         sync_pipe = cast("SyncModuleWrapper", list)
         definition = ModuleDefinition(name="udf", sync_pipe=sync_pipe)

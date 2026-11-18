@@ -173,7 +173,7 @@ def parser(
         yield item
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously pushes items to named receivers.

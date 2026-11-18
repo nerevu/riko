@@ -77,7 +77,7 @@ def parser(word: str, _: object, objconf: SubstrObjconf, **kwargs: object) -> st
     return word[objconf.start : end]
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously returns a substring of an item field.

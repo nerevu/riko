@@ -10,7 +10,7 @@ from time import sleep, time
 from timeit import repeat
 from typing import TYPE_CHECKING, cast
 
-from riko.bado._backend import async_sleep, isasync
+from riko.bado._backend import async_sleep, is_async
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist, async_map
 from riko.base._config import get_worker_cnt, settings
@@ -256,7 +256,7 @@ def main() -> None:
         "sync_workflow",
     ]
 
-    if isasync:
+    if is_async:
         async_tests = [baseline_async, async_module, async_pipeline, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
@@ -270,7 +270,7 @@ def main() -> None:
         run_time, units = summarize_results(results)
         print_time(test, max_chars, run_time, units)
 
-    if isasync:
+    if is_async:
         async_run(run_async, async_tests, max_chars)
 
 

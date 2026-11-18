@@ -175,7 +175,7 @@ def parser(
     return iter(listize(result))
 
 
-@operator(DEFAULTS, isasync=True)
+@operator(DEFAULTS, is_async=True)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously applies an arbitrary (user-defined) function to a stream.

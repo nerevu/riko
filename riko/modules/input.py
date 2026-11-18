@@ -113,7 +113,7 @@ def parser(
     return cast_value(value, CastType(objconf.type)) if objconf.type else value
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     Asynchronously prompts for text and casts it into another type.

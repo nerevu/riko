@@ -87,7 +87,7 @@ def parser(
     return chain(stream, chain.from_iterable(others))
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously merges multiple input streams together.

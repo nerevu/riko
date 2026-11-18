@@ -542,7 +542,7 @@ class WorkflowResolver:
             tag = workflow(
                 subtype=subtype,
                 loopable=loopable,
-                isasync=is_async,
+                is_async=is_async,
                 input_schemas=getattr(pipe, "input_schemas", None),
                 dependencies=getattr(pipe, "dependencies", None),
             )

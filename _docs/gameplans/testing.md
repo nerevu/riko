@@ -304,7 +304,7 @@ adds only what that rule does not say:
   basic chaining" installation smoke test.
 - In sync-only environments `conftest.py` skips Async/Bado doctest items whole and skips
   the individual `run(...)` examples of every other doctest (`.rst` files included). Do
-  not add `issync` branches solely as doctest fallbacks; write the real async example
+  not add `is_sync` branches solely as doctest fallbacks; write the real async example
   and let collection policy handle unavailable optional support.
 - `>>>` in `examples/**`, `_docs/**`, and `CLAUDE.md` are **not** collected today —
   which is exactly why `functional/test_script.py`'s `TestExamplePipelines` matters: it

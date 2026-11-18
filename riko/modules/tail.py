@@ -86,7 +86,7 @@ def parser(
     yield from deque(stream, int(objconf.count))
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously truncates a stream to the last N items.

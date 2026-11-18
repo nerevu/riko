@@ -94,7 +94,7 @@ from riko.types.modules import (
     SendConf,
     StrconcatRawConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_issync
+from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
 from tests._streams import Closeable
@@ -197,7 +197,7 @@ BARE_FORMS = [
     pytest.param(splitter, _async_twice, {}, id="splitter-async"),
 ]
 BARE_AND_OPTIONS = [
-    pytest.param(processor, (), {"isasync": True}, id="processor+isasync"),
+    pytest.param(processor, (), {"is_async": True}, id="processor+is_async"),
     pytest.param(operator, ({},), {}, id="operator+defaults"),
     pytest.param(splitter, (), {"objectify": False}, id="splitter+objectify"),
 ]
@@ -411,7 +411,7 @@ class TestSplitter:
         def tee_twice(stream: Stream, *args, **kwargs) -> Cascade:
             return iter(itertools.tee(stream, 2))
 
-        pipe = splitter(isasync=True)(tee_twice)
+        pipe = splitter(is_async=True)(tee_twice)
         first, second = [branch async for branch in pipe(source())]
         assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
         assert len(pulled) < 10
@@ -431,7 +431,7 @@ class TestSplitter:
             keys = [{"key": conf.default} async for _, conf in items]
             return as_async(iter([as_async(iter(keys))]))
 
-        pipe = splitter({"default": "fallback"}, isasync=True)(parser)
+        pipe = splitter({"default": "fallback"}, is_async=True)(parser)
         conf = cast("Conf", {"default": {"subkey": "x"}})
         source = as_async(iter([{"x": 1}, {"x": 2}]))
         branch = await anext(pipe(source, conf=conf))
@@ -871,7 +871,7 @@ class TestWrapperMeta:
             subtypes={"transformer"},
             pollable=False,
             loopable=True,
-            isasync=False,
+            is_async=False,
         )
         assert _carries_wrapper_meta(pipe)
         assert isinstance(cast("SyncModuleWrapper", pipe).subtypes, frozenset)
@@ -891,16 +891,16 @@ class TestWrapperMeta:
 
         assert _carries_wrapper_meta(sync_subpipe)
         assert _carries_wrapper_meta(async_subpipe)
-        assert not sync_subpipe.isasync
-        assert async_subpipe.isasync
-        assert workflow(isasync=True)(other).isasync
+        assert not sync_subpipe.is_async
+        assert async_subpipe.is_async
+        assert workflow(is_async=True)(other).is_async
 
     def test_decorated_wrappers_carry_wrapper_meta(self):
         def total(*args: Any, **kwargs: object) -> int:
             return 1
 
         assert _carries_wrapper_meta(processor()(shout))
-        assert _carries_wrapper_meta(processor(isasync=True)(shout))
+        assert _carries_wrapper_meta(processor(is_async=True)(shout))
         assert _carries_wrapper_meta(operator()(total))
 
     @pytest.mark.parametrize(("require", "match"), WRAPPER_REQUIRES)
@@ -1079,7 +1079,7 @@ class TestLoop:
         assert any(message in r.message for r in caplog.records)
 
 
-@skipif_issync
+@skipif_sync
 class TestAsyncLoop:
     """Async loop preserves the sync per-parent fold and laziness contract."""
 
@@ -1243,14 +1243,14 @@ class TestAsyncProcessor:
 
     @async_test
     async def test_call_is_async_iterable_without_outer_await(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(is_async=True)(shout)
         stream = async_shout({"content": "hi"}, assign="content")
         assert isinstance(stream, AsyncIterator)
         assert [item async for item in stream] == [{"content": "HI"}]
 
     @async_test
     async def test_awaiting_the_call_returns_the_whole_stream(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(is_async=True)(shout)
         result = async_shout({"content": "hi"}, assign="content")
         assert isinstance(result, Awaitable)
         assert list(await result) == [{"content": "HI"}]
@@ -1263,7 +1263,7 @@ class TestAsyncProcessor:
             calls.append(item)
             return "x"
 
-        stream = processor(isasync=True)(counting)([{"a": 1}], assign="a")
+        stream = processor(is_async=True)(counting)([{"a": 1}], assign="a")
 
         async with maybe_aclosing(stream):
             pass
@@ -1280,7 +1280,7 @@ class TestAsyncProcessor:
             streams.append(auto_close(iter(["a", "b"]), Closeable("file", closes)))
             return streams[-1]
 
-        stream = processor(isasync=True)(lines)({"x": 1}, emit=True)
+        stream = processor(is_async=True)(lines)({"x": 1}, emit=True)
         async with maybe_aclosing(stream):
             await anext(stream)
 
@@ -1310,7 +1310,7 @@ class TestAsyncProcessor:
             calls.append(item)
             return "x"
 
-        async_count = processor(isasync=True)(counting)
+        async_count = processor(is_async=True)(counting)
         result = async_count({"content": "hi"}, assign="content")
         await result
         await result
@@ -1328,7 +1328,7 @@ class TestAsyncOperator:
             streams.append(auto_close(rows, Closeable("file", closes)))
             return streams[-1]
 
-        stream = operator(isasync=True)(lines)([{"x": 0}], emit=True)
+        stream = operator(is_async=True)(lines)([{"x": 0}], emit=True)
         async with maybe_aclosing(stream):
             await anext(stream)
 
@@ -1628,17 +1628,17 @@ class TestExchangeRate:
         [({"verbose": True}, True), ({"verbose": False}, False), ({}, False)],
         ids=["verbose", "quiet", "default"],
     )
-    @pytest.mark.parametrize("isasync", [False, True], ids=["sync", "async"])
+    @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
     @async_test
     async def test_an_unparseable_rate_warns_only_when_verbose(
-        self, extra, warns, isasync, tmp_path, caplog
+        self, extra, warns, is_async, tmp_path, caplog
     ):
         """A bad rate elsewhere in the response warns only with ``verbose`` set."""
         rates_path = tmp_path / "rates.json"
         rates_path.write_text('{"rates": {"USD": 1, "GBP": 2, "XYZ": "bad"}}')
         conf = {"url": str(rates_path), "currency": "USD", "precision": 1}
         objconf = ExchangeRateObjconf({**conf, **extra})
-        if isasync:
+        if is_async:
             rate = await exchangerate_module.async_parser("GBP", None, objconf)
         else:
             rate = exchangerate_module.parser("GBP", None, objconf)

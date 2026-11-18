@@ -21,7 +21,7 @@ from riko.base._paths import ROOT_DIR
 from riko.cli import build_workflow, runpipe
 from riko.cli import compile as compile_workflow
 from riko.definitions._workflow_definition import Workflow
-from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_issync
+from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_sync
 from tests._workflows import DAG, DAG_PATH, EXAMPLES_DIR, run_document
 
 COMMANDS = {
@@ -70,7 +70,7 @@ DEMO_RUNS = [
         "'farechart'\n",
         ["-a"],
         "in-process",
-        marks=skipif_issync,
+        marks=skipif_sync,
         id="simple1-async",
     ),
     pytest.param(FARECHART_DOCUMENT, FARECHART_TEXT, [], "in-process", id="document"),
@@ -182,7 +182,7 @@ class TestRunPipe:
         assert ran.returncode == 0
         assert ran.stdout == "{'forever': True}\n" * 3
 
-    @skipif_issync
+    @skipif_sync
     def test_run_pipe_workflow_document_async(self, tmp_path):
         """
         The async run of a workflow document produces the same items as the sync one.

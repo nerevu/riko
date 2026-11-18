@@ -85,7 +85,7 @@ def parser(
     return islice(stream, start, stop)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously returns a specified number of items from a stream.

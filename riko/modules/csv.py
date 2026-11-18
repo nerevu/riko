@@ -155,7 +155,7 @@ def parser(
     return auto_close(content, source, f)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously fetches a csv file and yields one item per row.

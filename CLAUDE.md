@@ -330,7 +330,7 @@ a `normalize`; substituting a default the caller supplies or chooses
   before adding any pytest test, search every tier and the doctests for the behavior
   it asserts (the overlap rule in `tests/__init__.py`).
   When async support is unavailable, Async/Bado doctests are skipped whole and any
-  other doctest's `run(...)` examples are skipped individually, so do not add `issync`
+  other doctest's `run(...)` examples are skipped individually, so do not add `is_sync`
   fallback branches solely for doctest collection.
 - **`manage`** — `riko.cli.manage:manager` is the Click entry point. `manage.py`
   composes private command modules by reason to change. It collides with

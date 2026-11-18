@@ -92,7 +92,7 @@ def parser(
     return cast("RikoDict", DotDict(item).asdict())
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> RikoDict:
     """
     Asynchronously builds a single item from assigned fields.
