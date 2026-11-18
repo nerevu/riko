@@ -597,6 +597,30 @@ class TestPlanRun:
 
         assert run_plan(flow, dispatcher=dispatcher) == [{"t": "a"}, {"t": "side"}]
 
+    @pytest.mark.parametrize("port", ["options", "wrapper"])
+    def test_run_wires_an_input_port_named_like_a_call_parameter(self, port) -> None:
+        def joiner(items, **kwargs):
+            yield from items
+            yield from kwargs.get(port) or ()
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="a", sync_pipe=tagged_source("a")),
+            ModuleDefinition(name="side", sync_pipe=tagged_source("side")),
+            ModuleDefinition(
+                name="joiner", sync_pipe=cast("SyncModuleWrapper", joiner)
+            ),
+        )
+        a = ModuleNode(id="a", name="a")
+        s = ModuleNode(id="s", name="side")
+        j = ModuleNode(id="j", name="joiner")
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("j", "in")),
+            StreamEdge(Endpoint("s", "out"), Endpoint("j", f"in:{port}")),
+        )
+        flow = build_workflow([a, s, j], edges=edges)
+
+        assert run_plan(flow, dispatcher=dispatcher) == [{"t": "a"}, {"t": "side"}]
+
     def test_run_leaves_the_default_input_empty_when_only_indexed_ports_are_wired(
         self,
     ) -> None:

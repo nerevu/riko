@@ -51,6 +51,7 @@ def _call_plain(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
     conf: PrepareConf | None,
     options: RawCallOptions,
+    /,
     item: object = None,
     context: Context | None = None,
     **extra: object,

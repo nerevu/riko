@@ -85,6 +85,7 @@ type RunnableNode = ModuleNode | CallableNode[object]
 
 _FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
+_RESERVED_KWARGS = frozenset({"item", "context", "resources", "version", "identity"})
 NO_OPTIONS = CallOptions()
 EMPTY_BINDINGS: FrozenDict[str, ResourceName] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
@@ -306,9 +307,14 @@ class CallableNode[T](RikoNode):
 
     Raises:
 
-        InvalidPipelineError: If a resource alias is not a Python identifier, a keyword
-            argument shares a name with a resource alias, ``kwargs`` is not JSON-native,
-            or ``identity`` is not an ``IdentityMode``.
+        InvalidPipelineError: If any of these hold:
+
+            - A resource alias is not a Python identifier.
+            - A keyword argument shares a name with a resource alias, ``fn``'s item
+              parameter, or a reserved name (``item``, ``context``, ``resources``,
+              ``version``, ``identity``).
+            - ``kwargs`` is not JSON-native.
+            - ``identity`` is not an ``IdentityMode``.
 
         TypeError: If ``fn`` is not callable or ``version`` is ``None`` or unhashable.
 
@@ -333,12 +339,17 @@ class CallableNode[T](RikoNode):
     kwargs: FrozenKwargs = field(default=_FROZEN_PARAMS, converter=_kw_converter)
 
     def __attrs_post_init__(self) -> None:
+        params, kwargs = gen_positional_names(self.fn), self.kwargs
+
         if invalid := sorted(filterfalse(_is_alias, self.resources)):
             msg = f"CallableNode resource aliases must be Python identifiers: {invalid}"
             raise InvalidPipelineError(msg)
         elif shared := sorted(set(self.resources).intersection(self.kwargs)):
             msg = "CallableNode keyword arguments share names with resource aliases: "
             msg += f"{shared}"
+            raise InvalidPipelineError(msg)
+        elif reserved := sorted(_RESERVED_KWARGS.union(params).intersection(kwargs)):
+            msg = f"CallableNode keyword arguments use reserved names: {reserved}"
             raise InvalidPipelineError(msg)
 
     @property
