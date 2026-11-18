@@ -444,7 +444,10 @@ INPUT_SOURCES = [
     pytest.param(None, {"q": 5}, 5, id="planned"),
     pytest.param(Context(inputs={"q": 2}), {"q": 5}, 5, id="planned-over-context"),
 ]
-SPLITTERS = [pytest.param(False, id="sync-split"), pytest.param(True, id="async-split")]
+SPLITTERS = [
+    pytest.param(False, id="sync-split"),
+    pytest.param(True, id="async-split", marks=skipif_sync),
+]
 _PENDING_ADAPTED_BRANCH_CLOSE = pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
@@ -459,7 +462,9 @@ BRANCH_COUNTS = [
 ]
 SYNC_BRANCH_CLOSES = [
     pytest.param(False, id="sync-split"),
-    pytest.param(True, id="async-split", marks=_PENDING_ADAPTED_BRANCH_CLOSE),
+    pytest.param(
+        True, id="async-split", marks=[skipif_sync, _PENDING_ADAPTED_BRANCH_CLOSE]
+    ),
 ]
 
 
