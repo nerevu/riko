@@ -125,6 +125,8 @@ EXT_MODULES = frozenset(
         "SyncOperatorWrapper",
         "SyncProcessorWrapper",
         "SyncSplitterWrapper",
+        "aauto_close",
+        "auto_close",
         "get_conf_type",
         "normalize_module_name",
         "operator",

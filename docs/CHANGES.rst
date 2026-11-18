@@ -46,6 +46,8 @@ New
   - the ``workflow`` decorator and ``resolve_inputs``
   - the ``Dispatcher``, ``SupportsRead``, ``SupportsWrite``, and ``SupportsActions``
     protocols, ``WriteCapabilities``, and ``TargetRegistry``
+  - ``auto_close``/``aauto_close``, which close a stream's backing values when iteration
+    ends, for modules that return a lazy iterator over an open handle
 
 - ``riko.types``: ``RawWorkflow``, ``PipelineStream``, ``CallOptions``, ``InputSchema``,
   ``InputSchemaLike``, ``RawInputSchema``, ``Limit``, ``CustomUserAgent``, ``Embed``,
