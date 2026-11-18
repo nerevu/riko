@@ -1147,7 +1147,7 @@ another task) would cancel the caller's scope. Task hosting for fan-out belongs 
 `riko/execution/_adapt.py` holds what the two executions share across the sync/async
 boundary: `require_stream`/`require_async_stream` (the one boundary that narrows a
 resolved pipe's raw output to an item stream, earned by the `is_splitter` guard on the
-pipe's declared type rather than by reading its output), `async_drain(call, stream)` (an
+pipe's declared type rather than by reading its output), `to_sync(call, stream)` (an
 async stream re-exposed as a lazy sync iterator; the sync execution's portal drain and
 the worker-side upstream reader are the same function with a different `call`),
 `pull_stream(...)` (a sync iterator re-exposed as a lazy async stream), and the
@@ -1215,7 +1215,7 @@ is read (`ASYNC_CLEANUP_MSG`/ `ASYNC_CLOSE_MSG` name the fix). Under `AsyncExecu
 every async close is awaited, and blocking sync work is offloaded to a worker thread: a
 sync value factory, a resource's sync cleanup callback, and its owned sync `close()` run
 on a worker through `asyncify` (`riko/bado/_util.py`, the unguarded worker seam, because
-cleanup runs while the execution is closing, when the guarded `run_sync` would refuse;
+cleanup runs while the execution is closing, when the guarded `to_async` would refuse;
 an awaitable the sync close returns is then awaited on the loop), a seed's sync close
 runs inline, a sync node's stream and raw return close on a worker, and a sync
 context-manager lifecycle is entered through a `_WorkerLifecycle` async wrapper so both
@@ -1330,7 +1330,7 @@ run:
   seed"). Every module node's `options` are applied as call options when the node is
   prepared, and a loop node's pipe receives its embed's `conf`
   (`PreparedNode.embed_or_self_conf`). An adapted node (async-only pipe under sync
-  execution) runs through the execution's blocking portal: `_async_drain` pulls the
+  execution) runs through the execution's blocking portal: `_to_sync` pulls the
   async stream one `__anext__` at a time on the portal loop and re-exposes it as a lazy
   sync `Stream`. A reachable non-`out` source port or a selected non-`out` output fails
   closed with `InvalidPipelineError` (executable port-keyed delivery is R7).
@@ -1338,7 +1338,7 @@ run:
   `AsyncStream`. Native async nodes chain natively; an adapted node (sync-only pipe
   under async execution) runs off the event loop through the bridge and nothing is
   materialized. `_run_sync_node` starts the sync pipe on a worker thread through
-  `run_sync` (asyncer's `asyncify`) and returns `pull_stream(...)`, which pulls one item
+  `to_async` (asyncer's `asyncify`) and returns `pull_stream(...)`, which pulls one item
   per `__anext__` as the consumer demands it; the pipe reads its async primary source
   and every async secondary input (named ports and `others`, both through
   `ExecutionExtras.map_kwargs`) lazily from the worker through `anyio.from_thread.run`
