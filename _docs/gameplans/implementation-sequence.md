@@ -2265,6 +2265,8 @@ interface into sync and async variants (a tagged union that `isinstance` narrows
 with a color-typed call protocol) in the same rewrite of node dispatch. `_run_sync_node`
 (`riko/execution/_async_execution.py`) then takes the sync variant by type rather than
 by docstring.
+Done 2026-11-14 (slice 1): `SyncInterface[O]`/`AsyncInterface[O]` replaced
+`PreparedInterface`, and `_run_sync_node` takes `SyncInterface[Iterator[object]]`.
 The same rewrite also extracts the sync execution's twin of `_run_sync_node` (today the
 inline async-interface branches of `SyncExecution._build_whole_stream`/
 `_build_item_stream`) with a matching name and argument order (TODO triage 2026-11-16).
