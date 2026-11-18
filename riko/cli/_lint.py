@@ -69,7 +69,7 @@ def _lint_types(where: str | None = None) -> int:
         raise RuntimeError("pyright not found")
 
     paths = where.split(" ") if where else []
-    return call([_pyright, "-p", "pyproject.toml", *paths])
+    return call([_pyright, "--threads", "-p", "pyproject.toml", *paths])
 
 
 def _verify_types(where: str | None = None) -> int:
