@@ -102,7 +102,7 @@ async def async_parser(
 
         rules: The item independent sort rules.
 
-        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+        tuples: Iterable of tuples of (item, objconf): `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
@@ -146,7 +146,7 @@ def parser(
 
         rules: The item independent sort rules.
 
-        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+        tuples: Iterable of tuples of (item, objconf): `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
@@ -180,7 +180,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
 
         conf (dict): The module configuration.
 

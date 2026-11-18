@@ -9,6 +9,8 @@ Examples:
         >>> from riko import Context
         >>>
         >>> base = Context({"count": 2}, test=True)
+        >>> base
+        Context(inputs={'count': 2}, test=True)
         >>> derived = base.replace(inputs={"limit": 5})
         >>> base.inputs["count"]
         2

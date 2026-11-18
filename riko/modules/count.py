@@ -100,7 +100,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
 
         conf (dict): The module configuration.
 

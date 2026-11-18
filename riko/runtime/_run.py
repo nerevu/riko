@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Runs a pipeline definition in a fresh one-shot execution, sync or async."""
+"""Runs a pipeline definition in a fresh one-shot sync or async execution."""
 
 from __future__ import annotations
 

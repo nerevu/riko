@@ -113,12 +113,12 @@ class Executor(StrEnum):
     """
     Where a run executes per-item work.
 
-    ``AUTO`` lets the run pick: items run sequentially inline unless a
-    concurrency limit above one (or ``"auto"``) is set, in which case
-    synchronous iteration uses a thread pool. Under asynchronous iteration,
-    native async work runs inline and synchronous work runs on worker threads.
-    ``INLINE`` never uses workers, while ``THREAD`` and ``PROCESS`` use a pool of
-    threads or worker processes.
+    - ``AUTO`` lets the run pick: items run sequentially inline unless a
+      concurrency limit above one (or ``"auto"``) is set, in which case
+      synchronous iteration uses a thread pool. Under asynchronous iteration,
+      native async work runs inline and synchronous work runs on worker threads.
+    - ``INLINE`` never uses workers.
+    - ``THREAD`` and ``PROCESS`` use a pool of threads or worker processes.
 
     """
 
@@ -132,10 +132,11 @@ class IdentityMode(StrEnum):
     """
     How a callable node's results relate to the identity of the items it receives.
 
-    ``PRESERVE`` keeps each input item's identity on its one result. ``DERIVE`` gives
-    each result a child identity derived from its input item. ``COMBINE`` builds a
-    result's identity from every item that contributed to it. A run carries each
-    item's identity through the node according to its mode.
+    - ``PRESERVE`` keeps each input item's identity on its one result.
+    - ``DERIVE`` gives each result a child identity derived from its input item.
+    - ``COMBINE`` builds a result's identity from every item that contributed to it.
+
+    A run carries each item's identity through the node according to its mode.
 
     """
 
@@ -148,9 +149,9 @@ class DocumentShape(StrEnum):
     """
     The three JSON shapes a workflow input may take.
 
-    ``DAG`` is a bare-bones DAG (``PipeDag``), ``V1`` a serialized pipe definition
-    (``PipeDef``), and ``V2`` a workflow document (``WorkflowDocument``, a serialized
-    ``Workflow``).
+    - ``DAG`` is a bare-bones DAG (``PipeDag``).
+    - ``V1`` is a serialized pipe definition (``PipeDef``).
+    - ``V2`` is a workflow document (``WorkflowDocument``, a serialized ``Workflow``).
 
     """
 
@@ -163,11 +164,14 @@ class UserAgent(StrEnum):
     """
     A built-in choice of the HTTP ``User-Agent`` a fetch sends.
 
-    ``DEFAULT`` sends riko's own ``riko/<version>`` agent, the same as leaving the
-    choice unset. The others select a fresh agent for every request: ``DESKTOP`` from
-    desktop browsers, ``MOBILE`` from phone browsers, and ``RANDOM`` from either. Any
-    other non-empty string of printable ASCII with no leading or trailing whitespace (a
-    ``CustomUserAgent``) is sent as is.
+    - ``DEFAULT`` sends riko's own ``riko/<version>`` agent, the same as leaving the
+      option unset. The others select a fresh agent for every request.
+    - ``DESKTOP`` sends a random agent from desktop browsers
+    - ``MOBILE`` sends a random agent from phone browsers
+    -  ``RANDOM`` sends a random agent from either.
+
+    Any other non-empty string of printable ASCII with no leading or trailing whitespace
+    (a ``CustomUserAgent``) is sent as is.
 
     """
 

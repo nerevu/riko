@@ -115,7 +115,7 @@ and ``PipeState`` with ``Pipeline``, one class for sync and async runs:
   ``Pipeline.from_module('fetch', conf=…)``.
 - ``pipe | ('sort', conf)`` → ``pipeline.sort(conf=…)`` or
   ``pipeline.pipe('sort', conf=…)``.
-- A ``Transforms.UDF`` step → ``pipeline.map(func)``.
+- ``Transforms.UDF`` → ``pipeline.map(func)``.
 - ``pipe.export(…)`` → ``export(pipeline, …)``.
 - ``SyncCollection``/``AsyncCollection`` multi-source fetching → a ``union`` of
   ``fetch`` pipelines (the Cookbook's "Fetch several sources" recipe).

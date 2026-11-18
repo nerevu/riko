@@ -886,7 +886,7 @@ subscription's ``func`` will see each ``item`` as it is published.
 
 ``publish`` is designed to compose in a ``Pipeline`` chain via ``.publish(...)``.
 The ``stream`` will continue down the main ``pipeline`` while a copy flows to each
-subscription. A subscription's ``func`` will run as each ``item`` is received; its
+subscription. A subscription's ``func`` will run as each ``item`` is received. Its
 return value is discarded and the ``item`` passes through unchanged. ``isolate`` will
 keep a subscriber's failures out of the main ``pipeline``:
 

@@ -245,8 +245,8 @@ class ModuleNode(RikoNode):
         options: the call options forwarded to the module callable itself, such as
             ``emit``, ``assign``, ``field``, and ``count``.
 
-        embed: names the module a ``loop`` runs once per item, together with that
-            module's own configuration.
+        embed: the module a ``loop`` runs once per item, with its own configuration. The
+            plan resolves it and the run hands it to ``loop``.
 
     """
 

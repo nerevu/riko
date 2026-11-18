@@ -250,7 +250,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream. Unused.
+        items (Feed): The input stream. Unused.
 
         conf (dict): The module configuration.
 

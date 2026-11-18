@@ -70,7 +70,7 @@ async def async_parser(
 
     Args:
 
-        stream: The input stream, sync or async. Note: this shares the `tuples`
+        stream: The sync or async input stream. Note: this shares the `tuples`
             iterator, so consuming it will consume `tuples` as well.
 
         objconf: The module configuration: `max_wait`.
@@ -185,7 +185,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Feed): The input stream, sync or async.
+        items (Feed): The sync or async input stream.
 
         conf (dict): The module configuration.
 

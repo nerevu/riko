@@ -147,7 +147,7 @@ class ModuleDefinition:
         cls, pipe: WrapperMeta, *, description: str | None = None
     ) -> ModuleDefinition:
         """
-        Builds a definition from one pipe callable, sync or async.
+        Builds a definition from one sync or async pipe callable.
 
         The definition is named after the module name stamped on the pipe, so a
         stored workflow's generic ``pipe``/``async_pipe`` leaves ``name`` empty.
