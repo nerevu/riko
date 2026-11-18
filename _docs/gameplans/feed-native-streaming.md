@@ -343,7 +343,11 @@ Tripwire for S1/S7:
 (strict xfail) probes the seam at `riko/modules/_decorators.py` where an operator
 without an `async def` parser materializes its whole async input; today async `truncate`
 pulls its whole (finite, counted) source before yielding its first item, while the sync
-run is lazy. It flips when `truncate` migrates or the seam goes.
+run is lazy. It flips when `truncate` migrates or the seam goes. The splitter wrapper's
+`_arun` has the twin seam (`await materialize(items)` for a plain-`def` parser), pinned
+by
+`tests/internal/test_modules.py::TestSplitter::test_async_splitter_with_a_sync_parser_streams_a_long_feed`
+(strict xfail), which flips when that seam goes.
 
 Closing a bare `truncate`, `uniq`, or `filter` pipe early never closes a source the
 caller still holds, sync and async alike: the operator wrapper closes only the parser's
