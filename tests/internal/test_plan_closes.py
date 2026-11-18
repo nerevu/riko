@@ -15,6 +15,7 @@ from riko.bado._backend import fail_after
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
+from riko.definitions._settings import ExecutionSettings
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
@@ -86,7 +87,7 @@ class ClosingIterator(_TwoItems):
 
 
 class _CursorHandle:
-    """A sync iterable, without a close of its own, over a fresh closeable cursor."""
+    """A sync iterable, without a close of its own, over a fresh closable cursor."""
 
     def __init__(self, closed: list[str]) -> None:
         self.closed = closed
@@ -95,8 +96,15 @@ class _CursorHandle:
         return ClosingIterator(self.closed)
 
 
+class _ClosingCursorHandle(_CursorHandle):
+    """A closable sync iterable over a fresh closable cursor."""
+
+    def close(self) -> None:
+        self.closed.append("handle")
+
+
 class _AsyncCursorHandle:
-    """An async iterable, without a close of its own, over a fresh closeable cursor."""
+    """An async iterable, without a close of its own, over a fresh closable cursor."""
 
     def __init__(self, closed: list[str]) -> None:
         self.closed = closed
@@ -105,11 +113,19 @@ class _AsyncCursorHandle:
         return ClosingAsyncIterator(self.closed)
 
 
+class _ClosingAsyncCursorHandle(_AsyncCursorHandle):
+    """An ``aclose``-able async iterable over a fresh closable async cursor."""
+
+    async def aclose(self) -> None:
+        self.closed.append("handle")
+
+
 # A sync root reads the seed on a worker thread, and the caller may close the output
-# stream before the execution exits.
+# stream, or drain it, before the execution exits.
 SEED_READERS = [
-    pytest.param(False, id="sync-root"),
-    pytest.param(True, id="sync-root-closed-early"),
+    pytest.param(False, False, id="sync-root"),
+    pytest.param(True, False, id="sync-root-closed-early"),
+    pytest.param(False, True, id="sync-root-drained"),
 ]
 
 
@@ -126,15 +142,22 @@ class ClosingAsyncHandle:
         self.closed.append("closed")
 
 
+_BOTH = ["closed", "handle"]
+_CLOSED = ["closed"]
+_SKIP = skipif_issync
 CLOSING_SEEDS = [
-    pytest.param(gen_closing_seed, id="generator"),
-    pytest.param(_CursorHandle, id="cursor-handle"),
-    pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
-    pytest.param(ClosingAsyncIterator, id="async-iterator", marks=skipif_issync),
-    pytest.param(_AsyncCursorHandle, id="async-cursor-handle", marks=skipif_issync),
-    pytest.param(ClosingAsyncHandle, id="async-handle", marks=skipif_issync),
+    pytest.param(gen_closing_seed, _CLOSED, id="generator"),
+    pytest.param(_CursorHandle, _CLOSED, id="cursor-handle"),
+    pytest.param(_ClosingCursorHandle, _BOTH, id="closing-cursor-handle"),
+    pytest.param(_agen_closing_seed, _CLOSED, id="async-generator", marks=_SKIP),
+    pytest.param(ClosingAsyncIterator, _CLOSED, id="async-iterator", marks=_SKIP),
+    pytest.param(_AsyncCursorHandle, _CLOSED, id="async-cursor-handle", marks=_SKIP),
+    pytest.param(ClosingAsyncHandle, _CLOSED, id="async-handle", marks=_SKIP),
     pytest.param(
-        AsyncCloseAsyncIterator, id="async-close-iterator", marks=skipif_issync
+        _ClosingAsyncCursorHandle, _BOTH, id="closing-async-cursor-handle", marks=_SKIP
+    ),
+    pytest.param(
+        AsyncCloseAsyncIterator, _CLOSED, id="async-close-iterator", marks=_SKIP
     ),
 ]
 
@@ -151,7 +174,7 @@ def _gen_counting(closed: list[bool]) -> Iterator[Item]:
 
 
 class _CountingIterator:
-    """An endless closeable item iterator that is not a generator."""
+    """An endless closable item iterator that is not a generator."""
 
     def __init__(self, closed: list[bool]) -> None:
         self.closed, self.index = closed, -1
@@ -168,7 +191,7 @@ class _CountingIterator:
 
 
 class _CountingHandle:
-    """A closeable handle that hands out a fresh endless item iterator."""
+    """A closable handle that hands out a fresh endless item iterator."""
 
     def __init__(self, closed: list[bool]) -> None:
         self.closed = closed
@@ -215,7 +238,7 @@ class FailingAcloseIterator(_TwoItems):
 
 COUNTING_SOURCES = [
     pytest.param(_gen_counting, id="generator"),
-    pytest.param(_CountingIterator, id="closeable-iterator"),
+    pytest.param(_CountingIterator, id="closable-iterator"),
     pytest.param(_CountingHandle, id="fresh-iterator"),
 ]
 
@@ -361,8 +384,8 @@ SOURCE_TAGS = [
 
 
 class TestPlanClose:
-    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
-    def test_run_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
+    @pytest.mark.parametrize(("make_seed", "expected"), CLOSING_SEEDS)
+    def test_run_closes_a_seed_once_on_exit(self, make_seed, expected) -> None:
         closed: list[str] = []
         plan = build_doubler_plan("double")
 
@@ -371,7 +394,7 @@ class TestPlanClose:
             assert next(stream) == {"x": 2}
             assert closed == []
 
-        assert closed == ["closed"]
+        assert closed == expected
 
     @pytest.mark.parametrize("tag", SOURCE_TAGS)
     @pytest.mark.parametrize("build", COUNTING_SOURCES)
@@ -386,7 +409,8 @@ class TestPlanClose:
         plan = ExecutionPlan.from_workflow(build_chain(a, b), dispatcher)
 
         with SyncExecution() as execution:
-            assert next(execution.run(plan)) == {"x": 0}
+            stream = execution.run(plan)
+            assert next(stream) == {"x": 0}
             assert closed == []
 
         assert closed == [True]
@@ -449,6 +473,18 @@ class TestPlanClose:
             stream.close()
             assert closed == ["closed"]
 
+    @skipif_issync
+    def test_run_closes_a_drained_async_only_item_result_on_the_portal(self) -> None:
+        # Not an async generator, so only an explicit aclose can end it.
+        closed: list[str] = []
+        pipe = mark_async_loopable(lambda _item, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(ModuleDefinition(name="m", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("m"), dispatcher)
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan, seed={"x": 0})) == [{"x": 1}, {"x": 2}]
+            assert closed == ["closed"]
+
     def test_run_closes_built_streams_when_a_later_node_fails(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: ClosingIterator(closed))
@@ -476,11 +512,6 @@ class TestPlanClose:
         ):
             execution.run(plan, seed=seed)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="per-run stream ownership under sync execution is not yet implemented",
-    )
     def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
         closed: list[bool] = []
         src = tag_source(lambda _items=None, **_: _gen_counting(closed))
@@ -500,11 +531,11 @@ class TestPlanClose:
 
 
 class TestAsyncPlanClose:
-    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
-    @pytest.mark.parametrize("early", SEED_READERS)
+    @pytest.mark.parametrize(("make_seed", "expected"), CLOSING_SEEDS)
+    @pytest.mark.parametrize(("early", "drain"), SEED_READERS)
     @async_test
-    async def test_arun_closes_an_unfinished_seed_on_exit(
-        self, make_seed, early
+    async def test_arun_closes_a_seed_once_on_exit(
+        self, make_seed, expected, early, drain
     ) -> None:
         closed: list[str] = []
         plan = build_doubler_plan("double")
@@ -517,8 +548,10 @@ class TestAsyncPlanClose:
 
             if early:
                 await stream.aclose()
+            elif drain:
+                assert [item async for item in stream]
 
-        assert closed == ["closed"]
+        assert closed == expected
 
     @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
     @async_test
@@ -773,10 +806,11 @@ class TestAsyncPlanClose:
             def close(self) -> None:
                 release.wait(1)
 
+        settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()
 
         with suppress(TimeoutError):
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 run = await execution.arun(
                     build_doubler_plan("double"), seed=BlockingSeed()
                 )

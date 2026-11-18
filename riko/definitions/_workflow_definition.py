@@ -65,6 +65,7 @@ from riko.types._frozendict import (
 )
 from riko.types._pipedef import Embed, PipeDag
 from riko.types._workflow import (
+    OUT,
     WORKFLOW_VERSION,
     Endpoint,
     NodeId,
@@ -665,7 +666,7 @@ class Workflow:
         return evolve(
             self,
             nodes=[*self.nodes.values(), node],
-            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, "out")},
+            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, OUT)},
             edges=edges,
             resources=unique_everseen(chain(self.resources, node.resources.values())),
         )
@@ -870,21 +871,6 @@ class Workflow:
         if callables := sorted(self.callable_nodes):
             msg = "a Python callable has no workflow document form"
             raise InvalidPipelineError(f"callable node(s) {callables}: {msg}")
-
-    def require_executable(self) -> None:
-        """
-        Requires a topology the current executor can run.
-
-        Raises:
-
-            InvalidPipelineError: If a source port feeds more than one stream edge.
-
-        """
-        family_sources = self.get_family_sources().items()
-
-        if fan_out := sorted(source for source, count in family_sources if count > 1):
-            msg = f"un-supported fan-out from source(s): {fan_out}"
-            raise InvalidPipelineError(msg)
 
     def require_runnable_only(self, what: str) -> None:
         """

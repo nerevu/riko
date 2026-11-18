@@ -550,6 +550,14 @@ def _thread_probe():
     )
 
 
+# A mappable node, one that reads its whole input in one call, and no nodes.
+PROCESS_REFUSED_PLANS = [
+    pytest.param(_thread_probe, id="mappable"),
+    pytest.param(lambda: ([], build_chain_plan("reverse")), id="whole-input"),
+    pytest.param(lambda: ([], build_chain_plan()), id="empty"),
+]
+
+
 class TestAsyncPolicy:
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
     def test_async_policy_table(self, kwargs, expected) -> None:
@@ -620,9 +628,10 @@ class TestAsyncPolicy:
         assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
         assert set(threads) == {get_ident()}
 
+    @pytest.mark.parametrize("build", PROCESS_REFUSED_PLANS)
     @async_test
-    async def test_async_run_refuses_the_process_executor(self) -> None:
-        threads, plan = _thread_probe()
+    async def test_async_run_refuses_the_process_executor(self, build) -> None:
+        threads, plan = build()
         settings = ExecutionSettings(executor="process", concurrency=2)
 
         async with AsyncExecution(settings=settings) as execution:

@@ -27,7 +27,6 @@ from typing import (
 from typing_extensions import TypeIs, TypeVar
 
 from riko.base._config import SUBPIPE_TYPE
-from riko.base._exceptions import InvalidPipelineError
 
 from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
@@ -120,11 +119,6 @@ type AsyncSplitterWrapperOutput = AsyncWrapperStream[AsyncStream, AsyncCascade]
 type AsyncSplitterWrapperInput = Feed
 type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
 
-type AsyncModuleWrapperOutput[T] = (
-    AsyncWrapperStream[T, Iterator[T]]
-    | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
-)
-
 type AsyncProcessorParser[I, E, O: ItemOrValue] = (
     SyncProcessorParser[I, E, O] | AwaitableProcessorParser[I, E, O]
 )
@@ -162,6 +156,7 @@ type ModuleParser = (
     | SplitterParser[Never]
 )
 
+PARSER_POSITIONALS = 3
 WRAPPER_META: tuple[str, ...] = (
     "name",
     "type",
@@ -240,7 +235,15 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
-class PreparedCall(Protocol):
+class NodeCall[O](Protocol):
+    """A node's call that is prepared once with its configuration and call options."""
+
+    def __call__(
+        self, item: Any = None, context: Context | None = None, **extra: object
+    ) -> O: ...
+
+
+class PreparedCall(NodeCall[WrapperOutput | SplitterWrapperOutput], Protocol):
     """
     A module call with its configuration and call options already applied.
 
@@ -248,10 +251,6 @@ class PreparedCall(Protocol):
     whole stream. Each call supplies the ``context`` and any secondary input
     streams, resources, or embed.
     """
-
-    def __call__(
-        self, item: Any = None, context: Context | None = None, **extra: object
-    ) -> WrapperOutput | SplitterWrapperOutput: ...
 
 
 @runtime_checkable
@@ -757,36 +756,6 @@ def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
 
     """
     return getattr(pipe, "type", None) == "splitter"
-
-
-def require_single_output(
-    value: ModuleWrapper, what: str | None = "pipe", **_
-) -> ModuleWrapper:
-    """
-    Rejects a splitter until port-keyed fan-out delivery is executable.
-
-    Args:
-
-        value: A resolved pipe wrapper.
-
-    Kwargs:
-
-        what: How to name the pipe's holder in the error.
-
-    Returns:
-
-        ``value`` unchanged.
-
-    Raises:
-
-        InvalidPipelineError: If ``value`` is a splitter.
-
-    """
-    if is_splitter(value):
-        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
-        raise InvalidPipelineError(msg)
-
-    return value
 
 
 class Resolver(Protocol):

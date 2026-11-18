@@ -26,8 +26,8 @@ Index (file, then the subjects it owns, in file order):
                               ResolveFormat, ValidateTargetMode, BuildWrite
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView,
                               ResultEnvelopes, NodeProvenance, RunEnvelopes
-    test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, RequireStream,
-                              PreparedCall, PreparedNode
+    test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, PreparedCall,
+                              PreparedNode
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
                               AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
                               AsyncMap, AutoClose, RequireCloser, AsyncMapStream,

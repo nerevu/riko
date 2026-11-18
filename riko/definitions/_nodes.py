@@ -27,7 +27,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from functools import partial
-from itertools import chain, filterfalse
+from inspect import Parameter, signature
+from itertools import chain, filterfalse, islice
 from keyword import iskeyword
 from typing import TYPE_CHECKING, ClassVar, Self
 
@@ -157,6 +158,20 @@ def require_binding(
         raise error(f"{what} must not repeat an alias, got {value!r}")
 
     return FrozenDict(named)
+
+
+def gen_positional_names(func: Func[object] | None, count: int = 1) -> Iterator[str]:
+    """Generates the parameter names ``func`` fills by position."""
+    try:
+        params = iter(() if func is None else signature(func).parameters.values())
+    except (TypeError, ValueError):
+        params = iter(())
+
+    positional = Parameter.POSITIONAL_OR_KEYWORD
+
+    for param in islice(params, count):
+        if param.kind is positional:
+            yield param.name
 
 
 optional_str = narrow_def_from_require(require_str)

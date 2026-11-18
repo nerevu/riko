@@ -67,6 +67,7 @@ from riko.types._options import (
     ContextOverrides,
     DecorationOptions,
     Defaults,
+    ItemDispatch,
     OperatorDecorationOptions,
     ProcessorDecorationOptions,
     RawCallOptions,
@@ -98,6 +99,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
+    from riko.types._streams import AsyncCascade, Cascade
     from riko.types._values import RikoValue
     from riko.types._wrappers import (
         AsyncFunc,
@@ -743,6 +745,48 @@ def _wrap_item(item: ItemOrValue, copy: bool = True) -> Item:
     return wrapped
 
 
+def _build_dispatcher[T, E](
+    prepared: PreparedModule[T, E],
+    defaults: Defaults,
+    field: str | None,
+    module: str = "",
+) -> ItemDispatcher[T, E]:
+    """
+    Builds a dispatcher that resolves and casts one item's field and conf.
+
+    Args:
+
+        prepared: The immutable per-call state from ``prepare``.
+        defaults: The module's default conf.
+        field: Optional field whose value replaces each item.
+
+    Kwargs:
+
+        module: The module name, used in error messages (default: "").
+
+    Returns:
+
+        A callable taking an item, its options, and extra parser keyword arguments.
+
+    """
+
+    def dispatch(
+        item: Item, opts: DecorationOptions, **kwargs: object
+    ) -> ItemDispatch[ItemOrValue, E]:
+        return resolve_and_cast(
+            item,
+            opts,
+            parsers=prepared.parsers,
+            casters=prepared.casters,
+            defaults=defaults,
+            field=field,
+            module=module,
+            **kwargs,
+        )
+
+    return cast("ItemDispatcher[T, E]", dispatch)
+
+
 # Declared covariant: inferred variance turns invariant on Python 3.13+, where the
 # frozen record gains a ``__replace__`` that takes ``module``.
 M_co = TypeVar("M_co", bound=Module[bool], covariant=True)
@@ -1084,40 +1128,56 @@ class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
         context: Context | None = None,
         **extra: object,
     ) -> SplitterWrapperOutput:
-        kwargs = extra if context is None else {**extra, "context": context}
+        resolved = _resolve_context(context)
+        kwargs = {"inputs": resolved.inputs, "test": resolved.test, **extra}
 
         if self.wrapper.isasync:
             stream = _AsyncWrapperStream(partial(self._arun, item, kwargs))
             result = cast("AsyncSplitterWrapperOutput", stream)
+        elif isinstance(item, AsyncIterable):
+            msg = f"the sync {self.prepared.name!r} pipe cannot read an async stream"
+            raise TypeError(msg)
         else:
             result = self._run(item, kwargs)
 
         return result
 
-    def _parse(
-        self, items: SplitterWrapperInput | None, kwargs: dict[str, object]
-    ) -> object:
-        """Runs the parser over the prepared input stream."""
-        field = self.field
-        input_ = self.module.normalize_input(items)
-        prepared = self.prepared
-        args = (prepared, input_)
-        tuples, orig_stream, casted = self.module.setup(*args, field=field, **kwargs)
-        return self.parser(orig_stream, casted.extraction, tuples, **kwargs)
-
     def _run(
-        self, items: SplitterWrapperInput | None, kwargs: dict[str, object]
+        self, items: Iterable[Item] | None, kwargs: dict[str, object]
     ) -> SyncSplitterWrapperOutput:
-        yield from cast("SyncSplitterWrapperOutput", self._parse(items, kwargs))
+        parser, field = self.parser, self.field
+        input_ = self.module.normalize_input(items)
+        args = (self.prepared, input_)
+        tuples, orig_stream, casted = self.module.setup(*args, field=field, **kwargs)
+        cascade: Cascade = parser(orig_stream, casted.extraction, tuples, **kwargs)
+        yield from cascade
 
     async def _arun(
         self, items: SplitterWrapperInput | None, kwargs: dict[str, object]
-    ) -> SyncSplitterWrapperOutput:
-        parsed = cast(
-            "Awaitable[SyncSplitterWrapperOutput] | SyncSplitterWrapperOutput",
-            self._parse(items, kwargs),
-        )
-        return await as_awaitable(parsed)
+    ) -> AsyncCascade:
+        parser, field = self.parser, self.field
+
+        if isinstance(items, AsyncIterable) and is_async_callable(parser):
+            input_ = self.module.anormalize_input(items)
+        elif isinstance(items, AsyncIterable):
+            # TODO: stream an async input into a sync parser instead of materializing it
+            # (owned by the planned removal of whole-source materialization).
+            input_ = self.module.normalize_input(await materialize(items))
+        else:
+            input_ = self.module.normalize_input(items)
+
+        args = (self.prepared, input_)
+        tuples, orig_stream, casted = self.module.setup(*args, field=field, **kwargs)
+        parsed: Cascade | AsyncCascade | Awaitable[Cascade | AsyncCascade]
+        parsed = parser(orig_stream, casted.extraction, tuples, **kwargs)
+        result = await as_awaitable(parsed)
+
+        if isinstance(result, AsyncIterator):
+            cascade = result
+        else:
+            cascade = as_async(map(as_async, result))
+
+        return cascade
 
 
 class processor[B: bool](Module[B]):  # noqa: N801
@@ -1624,8 +1684,8 @@ class operator[B: bool](Module[B]):  # noqa: N801
         """
         Normalizes an async input stream into ``DotDict`` items.
 
-        The async counterpart of ``normalize_input``; a lazy pass-through that never
-        drains the input stream, so composer operators can bound an infinite ``Feed``.
+        The async counterpart of ``normalize_input``. A missing input takes the sync
+        path, so this never receives ``None``.
 
         Args:
 
@@ -1706,16 +1766,10 @@ class operator[B: bool](Module[B]):  # noqa: N801
             else:
                 tuples = ((item, objconf) for item in input_)
         else:
-            _disp = partial(
-                resolve_and_cast,
-                parsers=prepared.parsers,
-                casters=prepared.casters,
-                defaults=self.defaults,
-                field=field,
-                module=prepared.name,
-            )
             # Parses conf that can vary per item. Can't handle secondary input streams
-            dispatcher = cast("ItemDispatcher[T, E]", _disp)
+            dispatcher = _build_dispatcher(
+                prepared, self.defaults, field, module=prepared.name
+            )
 
             # - operators can't skip items
             # - purposely setting both tuples and orig_stream to maps of the same
@@ -1886,7 +1940,6 @@ class splitter[B: bool](Module[B]):  # noqa: N801
     module_type: ClassVar[ModuleType] = "splitter"
     decoration_options: ClassVar[frozenset[str]] = _SPLITTER_OPTS
     call_options: ClassVar[frozenset[str]] = _SPLITTER_CALL_OPTS
-    context_options: ClassVar[frozenset[str]] = frozenset()
     call_record: ClassVar[type[_PreparedCall[Module[bool]]]] = _PreparedSplitter
 
     @overload
@@ -1984,12 +2037,12 @@ class splitter[B: bool](Module[B]):  # noqa: N801
         _validate_opts(self.module_type, self.decoration_options, kwargs)
         super().__init__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
 
-    def normalize_input(self, items: SplitterWrapperInput | None = None) -> Stream:
+    def normalize_input(self, items: Iterable[Item] | None = None) -> Stream:
         """
         Normalizes an input stream into ``DotDict`` items.
 
-        Non-mapping elements are placed under ``"content"``; an empty or ``None``
-        input yields nothing.
+        Non-mapping elements are placed under ``"content"``. an empty or ``None`` input
+        yields nothing.
 
         Kwargs:
 
@@ -2002,29 +2055,74 @@ class splitter[B: bool](Module[B]):  # noqa: N801
         """
         if items is not None:
             for item in items:
-                data = item if is_mapping(item) else {"content": item}
-                yield DotDict(data)
+                yield _wrap_item(item)
 
+    async def anormalize_input(self, items: AsyncIterable[Item]) -> AsyncStream:
+        """
+        Normalizes an async input stream into ``DotDict`` items.
+
+        The async counterpart of ``normalize_input``. A missing input takes the sync
+        path, so this never receives ``None``.
+
+        Args:
+
+            items: The async input items.
+
+        Yields:
+
+            Each input element as a ``DotDict``.
+
+        """
+        async for item in items:
+            yield _wrap_item(item)
+
+    @overload
     def setup[T, E](
         self,
         prepared: PreparedModule[T, E],
-        input_: Stream | SplitterWrapperInput,
+        input_: Stream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[SyncPipeTuples, Stream, Casted[T, E]]: ...
+    @overload
+    def setup[T, E](
+        self,
+        prepared: PreparedModule[T, E],
+        input_: AsyncStream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[AsyncPipeTuples, AsyncStream, Casted[T, E]]: ...
+    @overload
+    def setup[T, E](
+        self,
+        prepared: PreparedModule[T, E],
+        input_: Stream | AsyncStream,
+        field: str | None = ...,
+        **kwargs: object,
+    ) -> tuple[PipeTuples, Stream | AsyncStream, Casted[T, E]]: ...
+    def setup[T, E](
+        self,
+        prepared: PreparedModule[T, E],
+        input_: Stream | AsyncStream,
         field: str | None = None,
         **kwargs: object,
-    ) -> tuple[SyncPipeTuples, Stream, Casted[T, E]]:
+    ) -> tuple[PipeTuples, Stream | AsyncStream, Casted[T, E]]:
         """
         Builds the per-item tuples and original stream for a splitter call.
 
         The two returned iterators are lazy views over one shared input: a parser reads
         whichever it needs, never both. ``tuples`` pairs each item with its own config
-        (``(item, objconf)``) and serves a parser that reads config per item;
-        ``orig_stream`` is just the items and serves a parser that applies one config
+        (``(item, objconf)``) and serves a parser that reads config per item.
+        ``orig_stream`` is just the items, and serves a parser that applies one config
         to the whole stream.
+
+        Async input streams are not yet dispatched per item: each pairs with the static
+        conf, so per-item conf and ``field`` are not resolved.
 
         Args:
 
             prepared: The immutable per-call state from ``prepare``.
-            input_: The input stream.
+            input_: The sync or async input stream.
 
         Kwargs:
 
@@ -2036,18 +2134,19 @@ class splitter[B: bool](Module[B]):  # noqa: N801
             The per-item tuples, the original stream, and the cast extraction/conf.
 
         """
-        _dispatcher = partial(
-            resolve_and_cast,
-            parsers=prepared.parsers,
-            casters=prepared.casters,
-            defaults=self.defaults,
-            field=field,
-        )
-        dispatcher = cast("ItemDispatcher[T, E]", _dispatcher)
-        dispatches = (dispatcher(item, prepared.opts) for item in input_)
-        tuples = ((d.item, d.casted.conf) for d in dispatches)
-        orig_stream = (d.item for d in dispatches)
+        dispatcher = _build_dispatcher(prepared, self.defaults, field)
         casted = dispatcher(DotDict(), prepared.opts, **kwargs).casted
+
+        if isinstance(input_, AsyncIterator):
+            # TODO: dispatch each async item like the sync branch (owned by the planned
+            # shared operator/splitter input views).
+            tuples = ((item, casted.conf) async for item in input_)
+            orig_stream = input_
+        else:
+            dispatches = (dispatcher(item, prepared.opts) for item in input_)
+            tuples = ((d.item, d.casted.conf) for d in dispatches)
+            orig_stream = (d.item for d in dispatches)
+
         return (tuples, orig_stream, casted)
 
     @overload

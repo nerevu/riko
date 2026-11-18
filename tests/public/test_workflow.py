@@ -57,15 +57,6 @@ _MERGE = {
     "edges": [StreamEdge(_A_OUT, _C_IN), StreamEdge(_B_OUT, _C_IN)],
     "outputs": {"default": Endpoint("c", "out")},
 }
-_SPLIT_PAST_COUNT = {
-    "nodes": [_A, ModuleNode(id="s", name="split", conf={"splits": 2}), _B],
-    "edges": [
-        StreamEdge(_A_OUT, Endpoint("s", "in")),
-        StreamEdge(Endpoint("s", "out:2"), _B_IN),
-    ],
-    "outputs": {"default": _B_OUT},
-}
-
 _CONF_PENDING = "module configuration is not validated against its contract yet"
 
 NODE_FAMILIES = (
@@ -181,8 +172,8 @@ class TestWorkflow:
         assert set(index.leaves) == {"b", "c"}
         assert index.upstream["b"] == frozenset({"a"})
         assert index.downstream["a"] == frozenset({"b"})
-        assert index.incoming["b"][0].source == "a"
-        assert index.outgoing["a"][0].target == "b"
+        assert index.incoming["b"][0].source_id == "a"
+        assert index.outgoing["a"][0].target_id == "b"
         assert set(index.outputs) == {"default", "extra"}
         assert index.required == {"default": ("a", "b"), "extra": ("c",)}
         assert index.edges == index.incoming["b"]
@@ -521,17 +512,6 @@ INVALID_WORKFLOWS = [
         {"nodes": [_ASKS_Q], "outputs": {"default": _A_OUT}},
         r"unresolved input reference\(s\): \['q'\]",
         id="unresolved-input",
-    ),
-    pytest.param(
-        _SPLIT_PAST_COUNT,
-        "out:2",
-        id="split-port-past-its-count",
-        marks=pytest.mark.xfail(
-            strict=True,
-            raises=pytest.fail.Exception,
-            reason="rejecting a split output port beyond the configured split count "
-            "is not yet implemented",
-        ),
     ),
 ]
 INVALID_EDGES = [

@@ -39,7 +39,8 @@ from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
-from riko.execution._async_execution import AsyncExecution
+from riko.execution._async_execution import AsyncExecution, _ThreadBudget
+from riko.execution._async_execution import _RunStream as _AsyncRunStream
 from riko.execution._execution import _NullEventSink
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._provenance import (
@@ -52,7 +53,7 @@ from riko.execution._provenance import (
     run_tracked_item,
 )
 from riko.execution._resource_view import ResourceView
-from riko.execution._sync_execution import SyncExecution
+from riko.execution._sync_execution import SyncExecution, _RunStream
 from riko.io import async_url_open
 from riko.parsing._dotdict import DotDict
 from riko.runtime._pipeline import Pipeline
@@ -194,6 +195,13 @@ def _check_closed(resource, acquired: object) -> None:
 
 
 class TestSyncExecution:
+    def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
+        run: _RunStream[object] = _RunStream(None)
+        run.add(object())
+
+        with pytest.raises(TypeError, match="must be an iterator"):
+            next(run)
+
     def test_sync_exit_stack_unwinds_on_error(self) -> None:
         events: list[str] = []
 
@@ -309,12 +317,11 @@ class TestSyncExecution:
 
         assert (first.events, second.events) == (["one", "three"], ["two"])
 
-    def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
+    def test_settings_supply_the_event_sink(self) -> None:
         sink, explicit = RecordingSink(), RecordingSink()
-        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
+        settings = ExecutionSettings(event_sink=sink)
         assert SyncExecution(settings=settings).events is sink
         assert SyncExecution(events=explicit, settings=settings).events is explicit
-        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
 
     def test_sync_enter_after_close_raises(self) -> None:
         execution = SyncExecution()
@@ -365,6 +372,17 @@ class TestSyncExecution:
 
 
 class TestAsyncExecution:
+    @async_test
+    async def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
+        reservation = await _ThreadBudget(1).reserve(1)
+        run: _AsyncRunStream[object] = _AsyncRunStream(reservation, None)
+        run.add(object())
+
+        with pytest.raises(TypeError, match="must be an async iterator"):
+            await anext(run)
+
+        assert not reservation.held
+
     @async_test
     async def test_async_exit_stack_unwinds_lifo(self) -> None:
         events: list[str] = []
@@ -443,8 +461,10 @@ class TestAsyncExecution:
             await async_sleep(0.1)
             done.append(True)
 
+        settings = ExecutionSettings(shutdown_timeout=inf)
+
         with fail_after(1):
-            async with AsyncExecution(shutdown_timeout=inf) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 execution.queue_async_callback(slow)
 
         assert done == [True]
@@ -460,10 +480,11 @@ class TestAsyncExecution:
             release.wait(1)
             raise ValueError("late")
 
+        settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()
 
         with caplog.at_level(WARNING, logger="riko"), pytest.raises(TimeoutError):
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 execution.register_owned(object(), fail_late, inline=False)
 
         assert perf_counter() - start < 1
@@ -480,7 +501,7 @@ class TestAsyncExecution:
         result = None
 
         async with AsyncExecution() as execution:
-            result = await execution.run_sync(pow, 2, 10)
+            result = await execution.to_async(pow, 2, 10)
 
         assert result == 1024
 
@@ -546,7 +567,9 @@ class TestAsyncExecution:
             await async_sleep(1)
 
         async def run() -> None:
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            settings = ExecutionSettings(shutdown_timeout=0.05)
+
+            async with AsyncExecution(settings=settings) as execution:
                 execution.queue_async_callback(slow)
                 raise ValueError("primary")
 
@@ -1143,7 +1166,7 @@ class TestAsyncResourceAcquisition:
 
         assert client.closed is False
 
-    # Sync twin: test_owned_and_external_resources_wrap_a_value[closeable]
+    # Sync twin: test_owned_and_external_resources_wrap_a_value[closable]
     @async_test
     async def test_async_acquire_owned_value_closes(self) -> None:
         client = _AsyncClient()

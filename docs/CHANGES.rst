@@ -81,6 +81,7 @@ Changes
     finite positive number
   - a destination/writer/converter option with ``export(items, "list")`` or ``"tuple"``
   - an invalid ``@processor``/``@operator``/``@splitter`` option, at decoration time
+  - a workflow that reads a non-existing output port
 
 - Module changes:
 
