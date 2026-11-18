@@ -123,39 +123,43 @@ class Settings:
     return_kinds_cache_size: int = 256
     benchmark_delay: float = 0.1
     benchmark_workers: int = 0
+    branch_buffer: int | float = 1024
 
 
-def _env_int(
-    env: Mapping[str, str], key: str, default: int, *, minimum: int | None = None
-) -> int:
+def _env_int[D: int | None](
+    env: Mapping[str, str], key: str, default: D, *, minimum: int | None = None
+) -> int | D:
     """
     Reads an integer ``RIKO_*`` override.
 
     A malformed value, or one below ``minimum``, logs a warning and keeps ``default``.
     """
     raw = env.get(key)
+    value: int | D = default
 
-    if raw is None:
-        value = default
-    else:
+    if raw is not None:
         try:
-            value = int(raw)
+            parsed = int(raw)
         except ValueError:
             logger.warning("ignoring %s=%r: expected an integer", key, raw)
-            value = default
-
-        if minimum is not None and value < minimum:
-            logger.warning("ignoring %s=%r: expected at least %d", key, raw, minimum)
-            value = default
+        else:
+            if minimum is not None and parsed < minimum:
+                msg = "ignoring %s=%r: expected at least %d"
+                logger.warning(msg, key, raw, minimum)
+            else:
+                value = parsed
 
     return value
 
 
-def _env_float(env: Mapping[str, str], key: str, default: float) -> float:
+def _env_float(
+    env: Mapping[str, str], key: str, default: float, *, minimum: float | None = None
+) -> float:
     """
     Reads a non-negative number ``RIKO_*`` override; ``inf`` means no bound.
 
-    A malformed, negative, or NaN value logs a warning and keeps ``default``.
+    A malformed, negative, or NaN value, or one below ``minimum``, logs a warning and
+    keeps ``default``.
     """
     raw = env.get(key)
 
@@ -170,6 +174,9 @@ def _env_float(env: Mapping[str, str], key: str, default: float) -> float:
 
         if isnan(value) or value < 0:
             logger.warning("ignoring %s=%r: expected a non-negative number", key, raw)
+            value = default
+        elif minimum is not None and value < minimum:
+            logger.warning("ignoring %s=%r: expected at least %s", key, raw, minimum)
             value = default
 
     return value
@@ -270,6 +277,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         ),
         benchmark_workers=_env_int(
             source, "RIKO_BENCHMARK_WORKERS", defaults.benchmark_workers, minimum=0
+        ),
+        branch_buffer=_env_float(
+            source, "RIKO_BRANCH_BUFFER", defaults.branch_buffer, minimum=1
         ),
     )
 

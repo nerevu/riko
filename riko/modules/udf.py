@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.bado._util import maybe_async, require_value
+from riko.bado._util import maybe_async
+from riko.base._guards import require_value
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_arg
 

@@ -344,8 +344,8 @@ def async_url_open(
     with ``async with`` to auto-close it on exit. Use ``async with`` only when the
     buffer is consumed inside the block. When returning a lazy iterator that outlives
     the block, keep the ``await`` form and release the handle on iteration end with
-    :class:`riko.bado.itertools.auto_close` (an ``async with`` would close it before the
-    caller ever reads it).
+    :class:`riko.base._iterutils.auto_close` (an ``async with`` would close it before
+    the caller ever reads it).
 
     Args:
 

@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from ._frozendict import FrozenInputSchemas
     from ._options import RawCallOptions
     from ._scalars import PrimitiveValue
-    from ._streams import Cascade, Feed, Item, Items
+    from ._streams import AsyncCascade, Cascade, Feed, Item, Items
     from .modules import (
         AnyModuleConf,
         Conf,
@@ -116,8 +116,8 @@ type AsyncProcessorWrapperInternalOutput = (
 )
 
 type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
-type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
-type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
+type AsyncSplitterWrapperOutput = AsyncWrapperStream[AsyncStream, AsyncCascade]
+type AsyncSplitterWrapperInput = Feed
 type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
 
 type AsyncModuleWrapperOutput[T] = (
@@ -502,8 +502,8 @@ class AwaitableSplitterParser[E](Protocol):
     """
 
     def __call__(
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
-    ) -> Awaitable[SplitterParserOutput]: ...
+        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: object
+    ) -> Awaitable[Cascade | AsyncCascade]: ...
 
 
 class AsyncModuleWrapper(ModuleWrapper, Protocol):

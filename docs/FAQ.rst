@@ -453,8 +453,8 @@ An ``operator`` works on a whole ``stream``. A ``composer`` returns a
 that the wrapper emits as one or more ``items``. Some ``operators`` support both
 behaviors depending on options, so use ``subtype`` metadata when classification matters.
 
-A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
-eagerly materializes its ``source`` before creating copies.
+A ``splitter`` returns multiple ``streams``. The built-in ``split`` module reads its
+``source`` once and streams each ``item`` to every branch.
 
 How does a processor map over items?
 ------------------------------------
@@ -674,6 +674,8 @@ logs a warning and keeps the default. Defaults are shown in parentheses.
 - ``RIKO_DISCOVERY_TIMEOUT``: seconds to wait for a feed discovery fetch (``10``).
 - ``RIKO_SHUTDOWN_TIMEOUT``: seconds a run's cleanup, and its stopped worker processes,
   get before being killed (``30``).
+- ``RIKO_BRANCH_BUFFER``: the most items one ``split`` branch may fall behind its
+  siblings before the run fails (1024; ``inf`` for no limit).
 - ``RIKO_EXCHANGE_API``: the ``exchangerate`` module's rates API URL.
 - ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
   processes (``32``).
@@ -741,7 +743,8 @@ module       retains           why
 ``write``    whole ``stream``  Serializing needs every ``item``, so the source is
                                materialized before the write; the items it passes
                                through are replayed from that list.
-``split``    whole ``stream``  Copies a materialized finite ``stream`` to each branch.
+``split``    branch lag        Buffers the ``items`` a branch has not read yet while a
+                               sibling reads ahead. ``RIKO_BRANCH_BUFFER`` caps it.
 ``sort``     whole ``stream``  ``sorted()`` cannot rank a partial ``stream``.
 ``reverse``  whole ``stream``  The last ``item`` must be known before the first is
                                emitted.

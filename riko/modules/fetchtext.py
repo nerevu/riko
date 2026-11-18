@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.io._async import async_url_open

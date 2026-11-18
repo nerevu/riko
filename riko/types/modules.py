@@ -531,6 +531,7 @@ class SlugifyRawConf(TypedDict, total=False):
 
 class SplitRawConf(TypedDict, total=False):
     splits: ConfArg
+    isolate: ConfArg
 
 
 class StrconcatRawConf(TypedDict):
@@ -888,6 +889,7 @@ class SlugifyConf(TypedDict, total=False):
 
 class SplitConf(TypedDict, total=False):
     splits: int
+    isolate: bool
 
 
 class StrconcatConf(TypedDict):

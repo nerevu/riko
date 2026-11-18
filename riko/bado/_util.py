@@ -18,23 +18,22 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
-from inspect import iscoroutine
 from math import inf
 from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import define, field
 
 from riko.base._config import settings
-from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_async_callable, is_awaitable
-from riko.base._logging import get_logger
-from riko.base._sentinels import MISSING, MissingType
-from riko.types._io import (
+from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
     get_sync_closer,
-    resolve_closer,
-    resolve_user_agent,
+    is_async_callable,
+    is_awaitable,
+    require_value,
 )
+from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING, MissingType
+from riko.types._io import resolve_closer, resolve_user_agent
 
 from ._backend import (
     AsyncClient,
@@ -189,45 +188,6 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
     return [r for r in results if not isinstance(r, MissingType)]
 
 
-def require_value[T](result: T | Awaitable[T], msg: str) -> T:
-    """
-    Requires ``result`` not to be awaitable.
-
-    A rejected coroutine is closed before the error is raised. It is never left
-    unawaited.
-
-    Args:
-
-        result: The call's result.
-        msg: The error message for an awaitable result.
-
-    Returns:
-
-        ``result``.
-
-    Raises:
-
-        InvalidPipelineError: If ``result`` is awaitable.
-
-    Examples:
-
-        >>> require_value(3, "unused")
-        3
-        >>> require_value(async_return(3), "use `async for`")
-        Traceback (most recent call last):
-        ...
-        riko.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
-
-    """
-    if is_awaitable(result):
-        if iscoroutine(result):
-            result.close()
-
-        raise InvalidPipelineError(msg)
-
-    return result
-
-
 async def as_awaitable[T](value: T | Awaitable[T]) -> T:
     return (await value) if is_awaitable(value) else value
 
@@ -357,13 +317,13 @@ async def maybe_async[T](
     inline: bool = True,
     limiter: CapacityLimiter | None = None,
     abandon_on_cancel: bool = False,
-    **kwargs: object,
 ) -> T:
     """
     Calls ``func`` and awaits its result only when it is awaitable.
 
     With ``inline`` unset, a blocking ``func`` runs on a worker thread instead of the
-    event loop. An async ``func`` is awaited either way.
+    event loop. An async ``func`` is awaited either way. Bind ``func``'s keyword
+    arguments with ``functools.partial`` (or ``async_partial``) first.
 
     Args:
 
@@ -375,7 +335,6 @@ async def maybe_async[T](
         inline: Whether a blocking ``func`` runs on the event loop.
         limiter: Caps the worker threads a non-inline call may hold.
         abandon_on_cancel: Whether cancellation stops the wait for a non-inline call.
-        kwargs: Keyword arguments forwarded to ``func``.
 
     Returns:
 
@@ -383,10 +342,10 @@ async def maybe_async[T](
 
     """
     if inline:
-        result = await as_awaitable(func(*args, **kwargs))
+        result = await as_awaitable(func(*args))
     else:
         result = await asyncify(
-            func, *args, limiter=limiter, abandon_on_cancel=abandon_on_cancel, **kwargs
+            func, *args, limiter=limiter, abandon_on_cancel=abandon_on_cancel
         )
 
     return result

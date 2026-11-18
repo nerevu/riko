@@ -1,16 +1,22 @@
-"""Path, closeable, and HTTP I/O typing contracts and their getters and resolvers."""
+"""Path, closable, and HTTP I/O typing contracts and their getters and resolvers."""
 
 from __future__ import annotations
 
-from functools import lru_cache, partial
+from functools import partial
 from pathlib import Path
 from random import choice
-from typing import TYPE_CHECKING, Literal, Protocol, TypeGuard, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from riko._package import default_user_agent
-from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_async_callable, is_type_bound, isinstance_strict
+from riko.base._guards import (
+    ASYNC_CLEANUP_MSG,
+    SyncCloseable,
+    _is_async_close,
+    get_sync_closer,
+    is_async_callable,
+    isinstance_strict,
+)
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
 
 from ._enums import UserAgent, require_custom_user_agent
@@ -35,15 +41,6 @@ ASYNC_CLOSE_MSG = (
     "a value whose only close is async cannot be closed under `for`; produce it "
     "with an async resource factory or lifecycle, or iterate with `async for`"
 )
-ASYNC_CLEANUP_MSG = (
-    "an async resource cleanup runs under `for` only for a value an async factory "
-    "produced; make the factory async, or iterate with `async for`"
-)
-
-
-@runtime_checkable
-class SyncCloseable(Protocol):
-    def close(self) -> object | None: ...
 
 
 @runtime_checkable
@@ -52,56 +49,6 @@ class AsyncCloseable(Protocol):
 
 
 PathLikeType: tuple[type[str], type[Path]] = (str, Path)
-
-
-@lru_cache(maxsize=settings.strict_check_cache_size)
-def _has_async_close(cls: type) -> bool:
-    """Whether instances of ``cls`` close asynchronously through their type."""
-    return is_async_callable(getattr(cls, "close", None))
-
-
-def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
-    """Whether ``owner``'s ``close`` is async."""
-    if is_type_bound(owner, "close"):
-        result = _has_async_close(type(owner))
-    else:
-        result = is_async_callable(close)
-
-    return result
-
-
-def get_sync_closer(value: object) -> Func[object] | None:
-    """
-    Gets the method that closes ``value`` without an event loop.
-
-    An async def ``close`` is rejected.
-
-    Args:
-
-        value: The value to inspect.
-
-    Returns:
-
-        The value's synchronous ``close``, or ``None`` when it has none.
-
-    Examples:
-
-        >>> from io import StringIO
-        >>>
-        >>> f = StringIO()
-        >>> get_sync_closer(f)()
-        >>> f.closed, get_sync_closer(1)
-        (True, None)
-
-    """
-    closer = None
-
-    if isinstance_strict(value, SyncCloseable) and not _is_async_close(
-        value.close, value
-    ):
-        closer = value.close
-
-    return closer
 
 
 def get_async_closer(value: object) -> AsyncFunc[object] | None:
@@ -162,12 +109,13 @@ def resolve_closer[T](
 
         cleanup: The cleanup to call with ``value``, ``False`` to leave it open, or
             ``None`` for the value's own close.
+
         is_async: Whether the owner closes on an event loop, or ``None`` for either.
 
     Returns:
 
-        The closer to call, or ``None`` when ``cleanup`` is ``False`` or the value
-        has no close.
+        The closer to call, or ``None`` when ``cleanup`` is ``False`` or the value has
+        no close.
 
     Raises:
 

@@ -1,8 +1,7 @@
 """
 Split one date input into long-form and year streams.
 
-Fanning a stream out into independently consumable branches is not available yet,
-so running this raises until that lands. The code shows the form it will take.
+Each branch reads the same input. One value feeds two different formats.
 
 Examples:
 

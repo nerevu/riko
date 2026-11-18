@@ -33,6 +33,7 @@ except ImportError:
     Event: type | None = None
     HTTPStatusError: type[Exception] | None = None
     HTTPXResponse: object = None
+    Lock: type | None = None
     MemoryObjectReceiveStream: object = None
     MemoryObjectSendStream: object = None
     NamedTemporaryFile: object = None
@@ -66,6 +67,7 @@ else:
         CancelScope,
         CapacityLimiter,
         Event,
+        Lock,
         NamedTemporaryFile,
         Path,
         Semaphore,
@@ -97,6 +99,7 @@ __all__ = [
     "Event",
     "HTTPStatusError",
     "HTTPXResponse",
+    "Lock",
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",
     "NamedTemporaryFile",

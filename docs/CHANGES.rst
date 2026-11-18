@@ -82,39 +82,25 @@ Changes
   - a destination/writer/converter option with ``export(items, "list")`` or ``"tuple"``
   - an invalid ``@processor``/``@operator``/``@splitter`` option, at decoration time
 
-- The ``datebuilder`` module emits a JSON-friendly date dict instead of ``struct_time``.
+- Module changes:
 
-- A module that assigns a stream of results (e.g., ``tokenizer`` with ``emit=False``)
-  now always assigns a list. Pass ``count="first"`` to assign only the first result.
-
-- A ``PipeDef`` no longer requires ``wires`` or a wire/endpoint ``id``.
-
-- ``Context`` and its ``inputs`` are now immutable. In a workflow run, the ``input``
-  module reads each input named in ``input_schemas`` from ``inputs``, else from the
-  schema's ``default``, instead of prompting. The run raises when neither is present.
-
-- With the ``perf`` extra, ``fetchdata`` matches JSON ``path`` keys case-insensitively.
-
-- Fetching a URL (including async ``exchangerate``) now times out after
-  ``RIKO_FETCH_TIMEOUT`` seconds.
-
-- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``
-  and is keyword-only, as in ``async_map_stream``.
-
-- ``riko.PipelineStateError`` now requires a ``subject`` and names the errant object
-  (e.g., a write session) instead of "pipe".
-
-- Renamed ``convert-dag`` to ``build-workflow`` (it emits a ``WorkflowDocument``).
-  ``compile-workflow``, ``run-pipe``, and workflow stores take a ``WorkflowDocument``.
-  Convert a ``PipeDef`` with ``build-workflow`` first.
-
-- A stored workflow's pipe is tagged ``"source"`` when it runs without a seed, else
-  ``"transformer"``.
-
-- ``UnsupportedWorkflowError`` and ``UnsupportedModuleError`` gain ``reason``, and
-  ``pipe_id`` is always ``pipe_<id>``.
-
-- ``run-pipe`` prints riko errors as one line and exits 1 instead of a traceback.
+  - ``write``'s ``url``/``target`` options are now ``dest``/``fmt``.
+  - ``sort`` groups items missing the field.
+  - ``split`` streams instead of materializing its source. A branch may read up to
+    ``RIKO_BRANCH_BUFFER`` items (1024 by default) behind its siblings, and a run that
+    falls further behind fails.
+  - ``hash`` now gives the same value in every process, whatever ``PYTHONHASHSEED`` is.
+  - ``fetchtext`` drops byte order markers (BOM). Unset ``strip_bom`` to keep them.
+  - ``rename`` with an empty ``newval`` renames the field instead of deleting it.
+  - ``regex`` applies consecutive ``seriesmatch=False`` rules in one pass.
+  - ``subelement`` yields a ``None`` token for a path whose value is ``None``. A missing
+    path still yields nothing.
+  - ``fetchpage`` with ``detag`` decodes character references (``&amp;`` becomes ``&``),
+    so a word containing one is no longer split in two.
+  - ``datebuilder`` emits a JSON-friendly date dict instead of ``struct_time``.
+  - Ones that assign a stream of results (e.g., ``tokenizer`` with ``emit=False``) now
+    always assign a list. Pass ``count="first"`` to assign only the first result.
+  - URL fetchers like ``exchangerate`` time out after ``RIKO_FETCH_TIMEOUT`` seconds.
 
 - Module authoring:
 
@@ -147,6 +133,32 @@ Changes
   - the ``urlparse`` module's ``parse_key`` option → ``normalize_key`` (``parse_key``
     is now ignored)
 
+- A ``PipeDef`` no longer requires ``wires`` or a wire/endpoint ``id``.
+
+- ``Context`` and its ``inputs`` are now immutable. In a workflow run, the ``input``
+  module reads each input named in ``input_schemas`` from ``inputs``, else from the
+  schema's ``default``, instead of prompting. The run raises when neither is present.
+
+- With the ``perf`` extra, ``fetchdata`` matches JSON ``path`` keys case-insensitively.
+
+- ``riko.async_map``'s concurrent call ``limit`` defaults to ``RIKO_CONCURRENCY_LIMIT``
+  and is keyword-only, as in ``async_map_stream``.
+
+- ``riko.PipelineStateError`` now requires a ``subject`` and names the errant object
+  (e.g., a write session) instead of "pipe".
+
+- Renamed ``convert-dag`` to ``build-workflow`` (it emits a ``WorkflowDocument``).
+  ``compile-workflow``, ``run-pipe``, and workflow stores take a ``WorkflowDocument``.
+  Convert a ``PipeDef`` with ``build-workflow`` first.
+
+- A stored workflow's pipe is tagged ``"source"`` when it runs without a seed, else
+  ``"transformer"``.
+
+- ``UnsupportedWorkflowError`` and ``UnsupportedModuleError`` gain ``reason``, and
+  ``pipe_id`` is always ``pipe_<id>``.
+
+- ``run-pipe`` prints riko errors as one line and exits 1 instead of a traceback.
+
 - An async operator's ``async_pipe`` now returns an async iterator. Drop the ``await``.
   Async processor and splitter results can now also be used with ``async for``.
 
@@ -155,27 +167,8 @@ Changes
 - ``riko.types.Feed`` is now ``Items | AsyncItems``, ``PipeTuples`` is
   ``SyncPipeTuples | AsyncPipeTuples``, and ``Item`` accepts nested list/mapping values.
 
-- The ``write`` module's ``url``/``target`` options are now ``dest``/``fmt``. ``url``
-  alone writes nothing and warns.
-
-- ``sort`` groups items missing the field.
-
-- ``hash`` now gives the same value in every process, whatever ``PYTHONHASHSEED`` is.
-
-- ``fetchtext`` drops byte order markers (BOM). Unset ``strip_bom`` to keep them.
-
-- ``rename`` with an empty ``newval`` renames the field instead of deleting it.
-
-- The ``regex`` module applies consecutive ``seriesmatch=False`` rules in one pass.
-
 - ``cast_datetime`` always returns a ``datetime`` and no longer takes ``as_date`` or
   ``as_datedict``. Use ``cast_date`` for a ``date``.
-
-- ``subelement`` yields a ``None`` token for a path whose value is ``None``. A missing
-  path still yields nothing.
-
-- ``fetchpage`` with ``detag`` decodes character references (``&amp;`` becomes ``&``),
-  so a word containing one is no longer split in two.
 
 Removed
 ~~~~~~~

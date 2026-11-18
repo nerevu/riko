@@ -56,7 +56,7 @@ type ItemGenerator = Generator[Item, None]
 
 # Async
 type AsyncStream = AsyncIterator[Item]
-type AsyncCascade = AsyncIterator[Stream]
+type AsyncCascade = AsyncIterator[AsyncStream]
 type AsyncItems = AsyncIterable[Item]
 type AsyncStreams = AsyncIterable[Stream]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]

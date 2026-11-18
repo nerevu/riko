@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.io import read_csv
 
-from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
