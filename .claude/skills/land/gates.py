@@ -105,7 +105,12 @@ GATE_SEQUENCE = (
 
 def _git(*args: str, env: dict[str, str] | None = None) -> str:
     return subprocess.run(
-        [GIT, *args], check=True, capture_output=True, text=True, env=env
+        [GIT, *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        env=env,
     ).stdout.strip()
 
 

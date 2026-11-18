@@ -174,6 +174,10 @@ neighborhood it affects:
    release, run a probe with `python .claude/skills/tidy/release_probe.py VERSION
    PROBE.py --root SCRATCHPAD`, passing the session's scratchpad directory (pre-2026
    releases: `--python 3.8 --build-pin 'setuptools<58' --build-pin 'cython<3'`).
+   When the scope touches `docs/CHANGES.rst`, run `python
+   .claude/skills/tidy/changelog_widows.py` (advisory): it lists unreleased bullets
+   that spill a word or two onto an extra line; reword one only when a word can go
+   without losing a backticked name.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define
