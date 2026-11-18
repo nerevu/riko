@@ -379,7 +379,7 @@ arrive in a later slice with the execution-scoped task group.
   `Tee._advance` publishes in a `finally` from an empty default read (user
   2026-11-17), so a second interrupt (Ctrl-C) landing inside its `except BaseException`
   arm still releases `_advancer` and sibling waiters never hang; they may then end
-  without an error instead (`tests/internal/test_io.py`
+  without an error instead (`tests/internal/test_tee.py`
   `TestTee::test_second_interrupt_while_handling_the_first_releases_the_read`).
 - Cleanup failures beside a primary error keep the primary type, attach via
   `Exception.add_note`, and log the traceback; there is no tee-specific
