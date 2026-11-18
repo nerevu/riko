@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from riko.definitions._resource_definition import Values
-    from riko.types._io import Closeable
+    from riko.types._io import Closable
 
 
 class ResourceView(Mapping[str, object]):
@@ -62,14 +62,14 @@ class ResourceView(Mapping[str, object]):
     def __len__(self) -> int:
         return len(self._values)
 
-    def __getattr__(self, name: str) -> object | Closeable:
+    def __getattr__(self, name: str) -> object | Closable:
         # copy/pickle probe attributes before ``_values`` is set
         if name == "_values" or name not in self._values:
             raise AttributeError(name)
 
         return self._values[name]
 
-    def __getitem__(self, name: str) -> object | Closeable:
+    def __getitem__(self, name: str) -> object | Closable:
         return self._values[name]
 
     def __contains__(self, name: object) -> bool:

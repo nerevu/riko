@@ -55,7 +55,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | `async_flatten` | `itertools.py` | **Keep** | — | Flattens a concurrent mapper's batches and closes the mapper with it. `anyio.itertools.chain` takes the iterables as arguments, not as a stream of them. Backs `_amap_stream` and `_aprocess_stream`. |
 | `alist`, `materialize` | `itertools.py` | **Keep** | — | Drain a sync **or** async iterable (to a list / a sync iterator). AnyIO has no collector. |
 | `aiter_sentinel` | `itertools.py` | **Keep** | — | Two-argument `iter` for an async `func`, sentinel matched by type. No AnyIO counterpart. |
-| `auto_close`, `aauto_close` | `riko/base/_iterutils.py`, `itertools.py` | **Keep** | — | Deferred-consumption close of a stream plus extra closeables, close-once, `ResourceWarning` on a leaked resource (not a generator). AnyIO's `aclosing` only covers scoped use. |
+| `auto_close`, `aauto_close` | `riko/base/_iterutils.py`, `itertools.py` | **Keep** | — | Deferred-consumption close of a stream plus extra closables, close-once, `ResourceWarning` on a leaked resource (not a generator). AnyIO's `aclosing` only covers scoped use. |
 
 Already-AnyIO, no action: `Path`, `async_sleep`, task groups, memory streams,
 `CapacityLimiter`, `Semaphore`.

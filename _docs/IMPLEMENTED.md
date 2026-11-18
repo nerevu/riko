@@ -743,7 +743,7 @@ carry the `TypeRequire`/`InstanceRequire` narrowing while its body calls
 apart at runtime). `isinstance_strict` returns `TypeIs[P]`; a built-in method descriptor
 is bound before its signature is compared (Python 3.13+ gives a generator's
 `close`/`aclose` a `(self, /)` signature; 3.12 gives none), and a callable method whose
-signature `inspect` cannot read counts as compatible, so the closeable guards in
+signature `inspect` cannot read counts as compatible, so the closable guards in
 `riko/types/_io.py` accept generators. When a value's protocol methods come from its
 type alone (`is_type_bound`: no instance `__dict__`, no `__getattr__`, none of the names
 a slot), the verdict and the type-level half of that test are cached per type, so a
@@ -1167,7 +1167,7 @@ the worker-side upstream reader are the same function with a different `call`),
   cleanup the unwind runs on a worker thread is abandoned at expiry
   (`asyncify(..., abandon_on_cancel=True)` in `riko/bado/_util.py`): the unwind records
   the `TimeoutError` and returns, the call finishes on its thread, and an error it
-  raises afterwards is logged as a warning. A sync-closeable seed closes inline on the
+  raises afterwards is logged as a warning. A sync-closable seed closes inline on the
   event loop and is not bounded (strict xfail, owned by R11).
 - Shutdown order is explicit (stop accepting work → shielded unwind), not generic
   exit-stack LIFO. The primary execution error is threaded into the exit stack's
@@ -1554,7 +1554,7 @@ module call already takes (the `ExecutionExtras` fields `others`/`resources`/`em
 keep `count` as a port because stored workflows wire a count stream into
 `truncate`/`tail`, while a processor reserves it because its parser receives the `count`
 option); `ExecutionPlan.validate` rejects them rather than letting one argument
-overwrite the other. A pipe's closeable return value that is not its own iterator is
+overwrite the other. A pipe's closable return value that is not its own iterator is
 closed once, after the node stream, in both modes. Duplicate-port and fan-out checks
 count `Endpoint.port_key` (the node plus the port's canonical spelling), so `in:1` and
 `in:01` are one port.

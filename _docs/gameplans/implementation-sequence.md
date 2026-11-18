@@ -2247,12 +2247,12 @@ generic `_acquire_entry_once[R]` can carry. One typing unsoundness rides on this
 `DEFAULT_ENVELOPES` (the placeholder envelope in a tuple) to `as_stream` as
 `V = Iterator[T]` for an unbounded `T`; retyping the router on `Stream`/`AsyncStream`
 port streams removes it. The second one, acquisition entries holding
-`Acquisition[R | Closeable]` while `acquire`/`aacquire` return `R`, closed on
+`Acquisition[R | Closable]` while `acquire`/`aacquire` return `R`, closed on
 2026-11-02: the `ResolvedValue` alias is gone, `OwnedPlan[T]`/`ExternalPlan[T]` hold a
 plain `T`, and `register_owned` (sync and async executions) types its `cleanup` as
 `Cleanup[R]` for the registered value (it was `Cleanup[Never]` while the plan paired a
-`T | Closeable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closeable)`
-overload leaves `T` unbound (a method-scoped `[C: Closeable]` with
+`T | Closable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closable)`
+overload leaves `T` unbound (a method-scoped `[C: Closable]` with
 `cls: type[Resource[C]]` is inconsistent with the `__new__` implementation under
 pyright), so `Resource(client)` with no cleanup types as `OneShotResource[Unknown]`.
 
@@ -2431,8 +2431,8 @@ sync/async bodies (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_
 `_run_loop`/`_arun_loop`) and one copy has already drifted (`module_name` vs
 `op_module_name`); `_take_first` re-implements the owned-value close now in
 `run_bridged` (`riko/bado/_util.py`) and closes only a `Generator` result while
-`_atake_first` closes anything async-closeable (audit 2026-11-01; no built-in embed
-returns a closeable non-generator, so no tripwire). Consolidate the pure logic into one
+`_atake_first` closes anything async-closable (audit 2026-11-01; no built-in embed
+returns a closable non-generator, so no tripwire). Consolidate the pure logic into one
 body behind an iterator adapter (as the execution split did for `_resolve_inputs`) when
 this phase settles the embed shape, since the names change then anyway.
 

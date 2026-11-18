@@ -222,7 +222,7 @@ CONTEXT_FACTORY_REJECTIONS = [
 
 
 RESOLVED_VALUE_REJECTIONS = [
-    pytest.param("scalar", "Must provide a Closeable value", id="scalar"),
+    pytest.param("scalar", "Must provide a Closable value", id="scalar"),
     pytest.param("sync_contextmanager", _RESOLVED, id="sync-context-manager"),
     pytest.param("async_contextmanager", _RESOLVED, id="async-context-manager"),
     pytest.param("one_shot_resource", _RESOLVED, id="one-shot"),
@@ -405,7 +405,7 @@ class TestResource:
                 factory,  # pyright: ignore[reportArgumentType]
             )
 
-        with pytest.raises(TypeError, match="Must provide a Closeable value"):
+        with pytest.raises(TypeError, match="Must provide a Closable value"):
             Resource(factory)
 
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):

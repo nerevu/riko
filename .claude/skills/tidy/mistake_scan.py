@@ -712,7 +712,7 @@ class Scanner(ast.NodeVisitor):
                 "RM404",
                 "close",
                 f"`{label(call.func.value)}.close()` result discarded on a generic "
-                "closeable; an async close never runs (use resolve_closer)",
+                "closable; an async close never runs (use resolve_closer)",
             )
 
         self.generic_visit(node)

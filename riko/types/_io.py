@@ -11,7 +11,7 @@ from riko._package import default_user_agent
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
-    SyncCloseable,
+    SyncClosable,
     _is_async_close,
     get_sync_closer,
     is_async_callable,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from ._wrappers import AsyncFunc, Func
 
 type PathLike = str | Path
-type Closeable = SyncCloseable | AsyncCloseable
+type Closable = SyncClosable | AsyncClosable
 type Closer = Func[object | Awaitable[object]]
 
 _USER_AGENT_POOLS: dict[str, tuple[str, ...]] = {
@@ -44,7 +44,7 @@ ASYNC_CLOSE_MSG = (
 
 
 @runtime_checkable
-class AsyncCloseable(Protocol):
+class AsyncClosable(Protocol):
     async def aclose(self) -> object | None: ...
 
 
@@ -77,11 +77,9 @@ def get_async_closer(value: object) -> AsyncFunc[object] | None:
     """
     closer = None
 
-    if isinstance_strict(value, AsyncCloseable):
+    if isinstance_strict(value, AsyncClosable):
         closer = value.aclose
-    elif isinstance_strict(value, SyncCloseable) and _is_async_close(
-        value.close, value
-    ):
+    elif isinstance_strict(value, SyncClosable) and _is_async_close(value.close, value):
         closer = value.close
 
     return closer
@@ -203,13 +201,13 @@ def require_closer[T](
         >>> require_closer(1)
         Traceback (most recent call last):
         ...
-        TypeError: Must provide a Closeable value or cleanup function ...
+        TypeError: Must provide a Closable value or cleanup function ...
 
     """
     closer = resolve_closer(value, cleanup, is_async=is_async)
 
     if cleanup is not False and closer is None:
-        msg = "Must provide a Closeable value or cleanup function for riko owned "
+        msg = "Must provide a Closable value or cleanup function for riko owned "
         msg += f"resources. Not a {type(value).__name__}. If this value's lifecycle is "
         msg += "externally managed, use Resource.from_external(...) instead."
         raise TypeError(msg)
