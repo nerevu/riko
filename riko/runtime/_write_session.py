@@ -520,7 +520,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import async_get_temp_path, issync, run
+            >>> from riko import async_get_temp_path, is_sync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():
@@ -577,7 +577,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
 
         Examples:
 
-            >>> from riko import async_get_temp_path, issync, run
+            >>> from riko import async_get_temp_path, is_sync, run
             >>> from riko.definitions._targets import build_write
             >>>
             >>> async def main():

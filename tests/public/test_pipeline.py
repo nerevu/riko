@@ -54,7 +54,7 @@ from riko.types.modules import (
     StrReplaceConfRule,
     TokenizerRawConf,
 )
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
@@ -565,7 +565,7 @@ PARITY_CASES = [
 ]
 
 
-@skipif_issync
+@skipif_sync
 class TestOutputParity:
     @pytest.mark.parametrize(("build", "expected"), PARITY_CASES)
     def test_sync_matches_async(self, build: methodcaller, expected: Items):
@@ -737,7 +737,7 @@ class TestClose:
 
         assert probe_log == ["closed"]
 
-    @skipif_issync
+    @skipif_sync
     def test_leaving_open_closes_an_async_generator_seed(self):
         closed: list[bool] = []
 
@@ -754,7 +754,7 @@ class TestClose:
 
         assert closed == [True]
 
-    @skipif_issync
+    @skipif_sync
     def test_leaving_open_closes_a_closable_async_iterator_seed(self):
         closed: list[str] = []
 
@@ -1240,7 +1240,7 @@ class TestExecutionSettings:
 
 
 @pytest.mark.slow
-@skipif_issync
+@skipif_sync
 class TestAsyncBoundedParallel:
     @pytest.mark.anyio
     async def test_parallel_matches_sequential_as_multiset(self):
@@ -1343,7 +1343,7 @@ def branch_log():
 
 
 @pytest.mark.slow
-@skipif_issync
+@skipif_sync
 class TestAsyncFanInParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio

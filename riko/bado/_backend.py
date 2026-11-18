@@ -88,8 +88,8 @@ else:
     backend = "anyio"
     run: Run = anyio.run
 
-issync: bool = backend == "empty"
-isasync: bool = not issync
+is_sync: bool = backend == "empty"
+is_async: bool = not is_sync
 
 __all__ = [
     "AsyncClient",
@@ -116,8 +116,8 @@ __all__ = [
     "create_task_group",
     "fail_after",
     "gather_results",
-    "isasync",
-    "issync",
+    "is_async",
+    "is_sync",
     "lowlevel",
     "run",
     "run_from_thread",

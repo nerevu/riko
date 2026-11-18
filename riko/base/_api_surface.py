@@ -12,8 +12,8 @@ BADO = frozenset(
         "async_return",
         "async_sleep",
         "backend",
-        "isasync",
-        "issync",
+        "is_async",
+        "is_sync",
         "materialize",
         "run",
     }

@@ -164,7 +164,7 @@ WRAPPER_META: tuple[str, ...] = (
     "subtypes",
     "pollable",
     "loopable",
-    "isasync",
+    "is_async",
 )
 
 
@@ -322,7 +322,7 @@ class WrapperMeta(Protocol):
     subtypes: ModuleSubtypes
     pollable: bool
     loopable: bool
-    isasync: bool
+    is_async: bool
     sequential_inputs: bool
     input_schemas: FrozenInputSchemas | None
     dependencies: tuple[str, ...] | None
@@ -397,7 +397,7 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
 
 
 class SyncModuleWrapper(ModuleWrapper, Protocol):
-    isasync = False
+    is_async = False
 
     def __call__(
         self, *args: Any, **kwargs: Any
@@ -506,7 +506,7 @@ class AwaitableSplitterParser[E](Protocol):
 
 
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
-    isasync = True
+    is_async = True
 
     def __call__(
         self, *args: Any, **kwargs: Any
@@ -638,7 +638,7 @@ def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
         (True, False, False)
 
     """
-    return is_wrapper_meta(value) and not value.isasync and hasattr(value, "prepare")
+    return is_wrapper_meta(value) and not value.is_async and hasattr(value, "prepare")
 
 
 def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
@@ -661,7 +661,7 @@ def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
         (True, False, False)
 
     """
-    return is_wrapper_meta(value) and value.isasync and hasattr(value, "prepare")
+    return is_wrapper_meta(value) and value.is_async and hasattr(value, "prepare")
 
 
 def require_sync_wrapper(value: object) -> SyncModuleWrapper:

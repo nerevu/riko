@@ -170,7 +170,7 @@ def parser(
     return reduce(reducer, list(reversed(rules)), stream)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously sorts a stream according to specified fields.

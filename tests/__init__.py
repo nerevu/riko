@@ -88,7 +88,7 @@ from typing import Any
 
 import pytest
 
-from riko.bado._backend import issync
+from riko.bado._backend import is_sync
 from riko.base._funcutils import resolve_default
 from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
@@ -107,13 +107,13 @@ ROUND_TRIPS = [
 ]
 
 
-skipif_issync = pytest.mark.skipif(issync, reason="async support not available")
+skipif_sync = pytest.mark.skipif(is_sync, reason="async support not available")
 
 
 def async_test(f):
     """Shortcut to apply multiple pytest markers at once."""
     f = pytest.mark.anyio(f)
-    f = skipif_issync(f)
+    f = skipif_sync(f)
     return f
 
 

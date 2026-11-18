@@ -77,7 +77,7 @@ def parser(
     return int(digest(content, IdentityDomain.FINGERPRINT)[:8], 16)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> int:
     """
     Asynchronously hashes an item field.

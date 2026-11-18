@@ -135,7 +135,7 @@ def parser(
     return stream
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously discovers RSS/Atom feed links on a page.

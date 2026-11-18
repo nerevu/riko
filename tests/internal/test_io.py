@@ -91,7 +91,7 @@ from riko.runtime._write_session import (
 )
 from riko.types._enums import Formats, UserAgent
 from riko.types._io import require_closer
-from tests import async_test, is_installed, run_python, skipif_issync
+from tests import async_test, is_installed, run_python, skipif_sync
 from tests._lifecycle import ITEMS
 from tests._loopback import ForwardOnly, loopback_url
 from tests._resources import AsyncConnection, Connection
@@ -403,17 +403,17 @@ def _capturing_urlopen(responses: list[addinfourl]) -> Func[addinfourl]:
 
 HTTP_READERS = [
     pytest.param(_read_sync, id="sync"),
-    pytest.param(_read_async, id="async", marks=skipif_issync),
+    pytest.param(_read_async, id="async", marks=skipif_sync),
 ]
 
 HTTP_STATUS_READERS = [
     pytest.param(_read_sync, HTTPError, id="sync"),
-    pytest.param(_read_async, HTTPStatusError, id="async-get", marks=skipif_issync),
+    pytest.param(_read_async, HTTPStatusError, id="async-get", marks=skipif_sync),
     pytest.param(
-        _read_async_url, HTTPStatusError, id="async-url-read", marks=skipif_issync
+        _read_async_url, HTTPStatusError, id="async-url-read", marks=skipif_sync
     ),
     pytest.param(
-        _open_async_url, HTTPStatusError, id="async-url-open", marks=skipif_issync
+        _open_async_url, HTTPStatusError, id="async-url-open", marks=skipif_sync
     ),
 ]
 
@@ -696,7 +696,7 @@ class TestAsyncUrlOpen:
         assert seen["timeout"] == settings.fetch_timeout
 
     @pytest.mark.simulated_network
-    @skipif_issync
+    @skipif_sync
     def test_async_get_waits_the_configured_fetch_timeout(self):
         """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
         env = environ | {"RIKO_FETCH_TIMEOUT": "0.2"}
@@ -1141,25 +1141,25 @@ def _drop_async_streams(closes: list[str]) -> None:
 
 AUTO_CLOSERS = [
     pytest.param(_close_sync, id="sync"),
-    pytest.param(_close_async, id="async", marks=skipif_issync),
+    pytest.param(_close_async, id="async", marks=skipif_sync),
 ]
 AUTO_CLOSE_STARTERS = [
     pytest.param(_start_sync, "auto_close", id="sync"),
-    pytest.param(_start_async, "aauto_close", id="async", marks=skipif_issync),
+    pytest.param(_start_async, "aauto_close", id="async", marks=skipif_sync),
 ]
 AUTO_CLOSE_UNCLOSED = [
     pytest.param(_start_sync, "auto_close", ["a"], id="sync-closes"),
-    pytest.param(_start_async, "aauto_close", [], id="async", marks=skipif_issync),
+    pytest.param(_start_async, "aauto_close", [], id="async", marks=skipif_sync),
 ]
 
 AUTO_CLOSE_STREAMS_ONLY = [
     pytest.param(_drop_sync_streams, ["gen"], id="sync"),
-    pytest.param(_drop_async_streams, ["agen"], id="async", marks=skipif_issync),
+    pytest.param(_drop_async_streams, ["agen"], id="async", marks=skipif_sync),
 ]
 
 AUTO_CLOSE_DRAINS = [
     pytest.param(_drain_sync, id="sync"),
-    pytest.param(_drain_async, id="async", marks=skipif_issync),
+    pytest.param(_drain_async, id="async", marks=skipif_sync),
 ]
 
 
@@ -1300,7 +1300,7 @@ class TestAsyncMapStream:
     ``async_map_ordered_stream`` keeps the same bound while preserving source order.
     """
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize(
         "stream",
         [
@@ -1311,7 +1311,7 @@ class TestAsyncMapStream:
     def test_empty_source_yields_nothing(self, stream):
         assert run(alist, stream(_double, [], limit=4)) == []
 
-    @skipif_issync
+    @skipif_sync
     def test_accepts_async_source(self):
         async def gen():
             for i in range(5):
@@ -1348,7 +1348,7 @@ class TestAsyncMapStream:
 
         assert produced == total == seen
 
-    @skipif_issync
+    @skipif_sync
     def test_ordered_preserves_source_order_under_skew(self):
         """The slowest item is first, so an unordered map would reorder it."""
 
@@ -1423,7 +1423,7 @@ class TestAsyncMapStream:
         assert first in firsts
         assert closed == [True]
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize(
         "build", [_MAP, _ORDERED, _MERGE], ids=["map", "ordered", "merge"]
     )
@@ -1473,7 +1473,7 @@ class TestAsyncMerge:
         await merged.aclose()
         assert closed == [True, True]
 
-    @skipif_issync
+    @skipif_sync
     def test_async_merge_yields_every_value(self):
         """More iterables than ``limit`` still merge in full."""
         iterables = [_gen_items([1, 2]), _gen_items([3, 4]), _gen_items([5])]
@@ -2896,7 +2896,7 @@ class TestWriteExecution:
         assert path.read_bytes() == original
 
 
-@skipif_issync
+@skipif_sync
 class TestAsyncWriteExecution:
     @async_test
     async def test_passthrough_preserves_stream(self, tmp_path):

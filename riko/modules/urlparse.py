@@ -77,7 +77,7 @@ def parser(
     return ({"component": k, key: v} for k, v in items)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Iterator[dict[str, str]]:
     """
     Asynchronously parses a url into its components.

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from riko import Pipeline, issync, run
+from riko import Pipeline, is_sync, run
 from riko.ext import ModuleDefinition, operator, register_module
 
 if TYPE_CHECKING:
@@ -36,13 +36,13 @@ def parser(
     return map(_shout, stream)
 
 
-@operator(isasync=True)
+@operator(is_async=True)
 def async_pipe(*args: Any, **kwargs: Any) -> Stream:
     """
     Uppercases each item's ``content`` field.
 
-    ``isasync=True`` is a static-typing requirement, not a runtime one. At runtime the
-    ``async_pipe`` name alone sets ``isasync=True``, but pyright rejects assigning it
+    ``is_async=True`` is a static-typing requirement, not a runtime one. At runtime the
+    ``async_pipe`` name alone sets ``is_async=True``, but pyright rejects assigning it
     to ``ModuleDefinition``'s ``async_pipe, because it sees ``SyncOperatorWrapper``.
 
     Yields:
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     items = [{"content": "hi"}]
     name = "example.shout"
 
-    if issync:
+    if is_sync:
 
         def main() -> None:
             print(list(Pipeline.from_module(name)(items)))

@@ -167,7 +167,7 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   the sync execution portal. AnyIO/portal implementation details remain private.
 - **Decorator DX is owned by [callable-pipes.md](callable-pipes.md).**
   `@processor async def pipe` works for single-implementation async modules;
-  `isasync=`/`async_pipe` remain for the cases where they are structurally needed.
+  `is_async=`/`async_pipe` remain for the cases where they are structurally needed.
 - **`Context` becomes the immutable environment.** Resolved resource values do not live
   on it. Resource definitions, optional `state_store`, Context-local module definitions,
   and identity-encoder selection are resolved during execution preparation.

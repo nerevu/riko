@@ -748,7 +748,7 @@ Use idiomatic Python 3.12+:
 **There is no Twisted anywhere.** The optional async backend is AnyIO. Document
 the async contract, not the machinery. When async support is unavailable,
 `conftest.py` skips Async/Bado doctest items whole and, everywhere else (including
-`.rst` files), skips just the examples that call `run(...)`. So do not add `issync`
+`.rst` files), skips just the examples that call `run(...)`. So do not add `is_sync`
 fallback branches merely to make an async doctest pass in a sync-only environment.
 The canonical async doctest form is:
 
@@ -885,6 +885,7 @@ reader to the wrong place.
 | **`WorkflowModule`** | Python source defining `pipe`/`async_pipe` over an item, a stream, or nothing, plus a `context` — what `compile_workflow` returns, or the same shape written by hand; "workflow module" on first use; never a loaded module | not "generated module", "pipeline module", "compiled pipeline", or "pipe module" |
 | **stored workflow** | a workflow looked up by its `pipe_<id>` name, found by `WorkflowResolver` in a workflow store; defined on first use | not "named workflow", "registered workflow", "named/composed pipeline", or "sub-pipeline" |
 | **resolved workflow** | `ResolvedWorkflow`: the `types.ModuleType` a stored workflow resolves to, imported as is or built from a `WorkflowDocument` | not `WorkflowModule`, "workflow module", or "imported workflow" |
+| **isasync** / **issync** | the old spellings of the `is_async` decorator option, pipe attribute, and the `riko.is_async`/`riko.is_sync` backend flags | say `is_async`/`is_sync` |
 | **pipe script** | a hand-written Python file defining `pipe(test=False)` that `run-pipe` executes | not "pipe file" or "pipe module" |
 | **resource binding** | a node's `resources=` mapping of local alias (the slot a module reads) to Context resource name; the verb *bind* means only this ("the Context names a node binds") | never for adding a definition to a `Context`: a Context *provides* a resource (`with_resource`); never for fixing a call's arguments (*prepare*/*apply*) or attaching callables (*attach*); a Python name binding (`flow = ...`, `manage lint --bindings`) keeps its language meaning |
 | **prepare** | fix a module call's configuration and call options once for reuse over many items (a pipe callable's `prepare`, the `Preparer`/`PreparedCall` protocols, `prepare_call`, `Module.prepare`); the result is a *prepared* call or pipe | never "bind" (*bind* is reserved for resource binding) or "bound keywords" (say "keyword arguments"); "apply" for keyword arguments fixed on a plain callable |

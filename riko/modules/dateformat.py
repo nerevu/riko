@@ -78,7 +78,7 @@ def parser(
     return formatted
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously formats a date field as text.

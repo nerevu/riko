@@ -112,6 +112,8 @@ RUN_SCOPING = BannedTerm(
 )
 
 UPSTREAM_NOUN = BannedTerm("upstream as a noun", "input stream or node stream")
+RETIRED_IS_ASYNC = BannedTerm("isasync", "is_async")
+RETIRED_IS_SYNC = BannedTerm("issync", "is_sync")
 
 REMOVED_EXT_PATH = BannedTerm(
     "removed riko.ext submodule path", "`riko.ext` or one of its submodules"
@@ -149,6 +151,8 @@ _RETIRED_PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
         re.compile(r"\briko\.ext\.(?:config|decorators|names|protocols|registry)\b"),
     ),
     (RETIRED_DESCRIBE, re.compile(r"\bExecutionMode\b|\b(?i:describe[\s-]+modes?)\b")),
+    (RETIRED_IS_ASYNC, re.compile(r"\bisasync\b")),
+    (RETIRED_IS_SYNC, re.compile(r"\bissync\b")),
 )
 
 
@@ -210,8 +214,8 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
         roots: Files or directories to scan. Skips the migration guide because it quotes
             released wording. Skips the banned list and its tests because they spell out
             every phrase. The changelog may still name the removed ``riko.ext``
-            submodules and the retired describe modes, since released entries keep
-            the names they shipped with.
+            submodules, the retired describe modes, and the old color-flag spellings,
+            since released entries keep the names they shipped with.
 
     Yields:
 

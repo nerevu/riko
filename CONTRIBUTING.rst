@@ -474,7 +474,7 @@ A built-in module change commonly requires work in several places:
    whose row in that tier's index names the test's subject, and put the test in
    that subject's ``Test<Subject>`` class. An asynchronous test is a native ``async def`` decorated with ``async_test``
    from ``tests/__init__.py``. Never wrap a coroutine in a synchronous test
-   body. A test stays a plain ``def`` under ``skipif_issync`` only when the
+   body. A test stays a plain ``def`` under ``skipif_sync`` only when the
    synchronous path is deliberately what it exercises (for example, the
    synchronous execution driving an async-only module). If the synchronous
    runner is incidental, drop it and write the test as a native ``async def``.

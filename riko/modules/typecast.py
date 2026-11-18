@@ -72,7 +72,7 @@ def parser(
     return cast_value(content, CastType(objconf.type)) if objconf.type else content
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> PrimitiveValue:
     """
     Asynchronously casts an item field into another type.

@@ -209,7 +209,7 @@ def stamp_wrapper_meta(
     subtypes: Iterable[ModuleSubtype],
     pollable: bool,
     loopable: bool,
-    isasync: bool,
+    is_async: bool,
     sequential_inputs: bool = False,
     prepare: Preparer | None = None,
     input_schemas: FrozenInputSchemas | None = EMPTY_INPUT_SCHEMAS,
@@ -233,7 +233,7 @@ def stamp_wrapper_meta(
         subtypes: Every subtype the module supports.
         pollable: Whether the module can be polled.
         loopable: Whether ``loop`` can embed the module.
-        isasync: Whether ``target`` is an ``async_pipe``.
+        is_async: Whether ``target`` is an ``async_pipe``.
 
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
@@ -259,9 +259,9 @@ def stamp_wrapper_meta(
         ...     subtypes=("transformer",),
         ...     pollable=False,
         ...     loopable=True,
-        ...     isasync=False,
+        ...     is_async=False,
         ... )
-        >>> pipe.type, pipe.isasync
+        >>> pipe.type, pipe.is_async
         ('processor', False)
         >>> pipe.dependencies
         ()
@@ -275,7 +275,7 @@ def stamp_wrapper_meta(
     setattr(target, "subtypes", frozenset(subtypes))  # noqa: B010
     setattr(target, "pollable", pollable)  # noqa: B010
     setattr(target, "loopable", loopable)  # noqa: B010
-    setattr(target, "isasync", isasync)  # noqa: B010
+    setattr(target, "is_async", is_async)  # noqa: B010
     setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
     setattr(target, "input_schemas", input_schemas)  # noqa: B010
     setattr(target, "dependencies", dependencies)  # noqa: B010

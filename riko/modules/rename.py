@@ -134,7 +134,7 @@ def parser(
     return reduce(reducer, rules, item)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     Asynchronously renames, copies, or deletes item fields.

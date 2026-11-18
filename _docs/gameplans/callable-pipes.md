@@ -236,7 +236,7 @@ type parameter); keyword-taking callables type-check through
 **Not in this slice.** `@processor async def pipe` (a single async implementation named
 `pipe`) keeps raising `TypeError`: the registry finds interfaces by attribute name, so
 an async wrapper in the `pipe` slot would run as sync. Lifting it means classifying by
-`isasync` instead of name across the import utilities, `ModuleDefinition`, and codegen;
+`is_async` instead of name across the import utilities, `ModuleDefinition`, and codegen;
 it stays a target of this gameplan (§ Sync and async implementations) and is scheduled
 in R4E, not R4C.
 
@@ -259,12 +259,12 @@ async def pipe(item, **kwargs): ...
 **Deferred past R4C (decided 2026-10-16):** the R4C bare form wraps
 `@processor def pipe` and `@processor async def async_pipe`, but
 `@processor async def pipe` keeps raising `TypeError` until interfaces are classified by
-`isasync` rather than by attribute name. That change is scheduled in R4E
+`is_async` rather than by attribute name. That change is scheduled in R4E
 ([implementation-sequence.md](implementation-sequence.md), 2026-10-22 triage);
 `tests/public/test_modules.py::TestProcessor::test_async_named_pipe_raises` pins the
 current `TypeError` until then.
 
-A single async implementation need not be renamed `async_pipe`. `isasync=True` remains
+A single async implementation need not be renamed `async_pipe`. `is_async=True` remains
 the explicit escape hatch when Python cannot classify the callable reliably. Dual
 implementations may still use `pipe` + `async_pipe` so both forms can coexist in one
 module.

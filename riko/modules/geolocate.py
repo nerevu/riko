@@ -83,7 +83,7 @@ def parser(
     return cast_value(address, CastType.LOCATION, loc_type=objconf.type)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> AnyLocation:
     """
     Asynchronously resolves an item field to a location.

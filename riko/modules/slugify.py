@@ -80,7 +80,7 @@ def parser(
     return slugify(word.strip(), separator=sep)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously slugifies the text in an item field.

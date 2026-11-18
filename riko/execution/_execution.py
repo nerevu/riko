@@ -244,7 +244,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
             embed = select_embed(
                 node.embed,
-                host_isasync=is_async or module.sync_pipe is None,
+                host_is_async=is_async or module.sync_pipe is None,
                 to_async=self.to_async,
                 to_sync=to_sync,
             )

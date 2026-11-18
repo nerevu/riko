@@ -284,7 +284,7 @@ def parser(
     return rate
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Decimal:
     """
     Asynchronously retrieves the exchange rate for a currency pair.

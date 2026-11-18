@@ -91,7 +91,7 @@ def parser(
             yield item
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously filters out non unique items according to a specified field.

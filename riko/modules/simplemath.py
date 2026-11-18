@@ -112,7 +112,7 @@ def parser(
     return operation(num, other)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> NumLike:
     """
     Asynchronously performs basic arithmetic on an item field.

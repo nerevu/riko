@@ -605,9 +605,9 @@ see §24 above. Remaining P9 (non-P9A): the installed-env aggregate
 `riko.generated.Modules` + `.pyi` stubs →
 [module-enums.md](gameplans/module-enums.md).
 
-**Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `isasync`
-(`riko/modules/_decorators.py::_resolve_isasync`) — from an `async def` or the
-conventional `async_pipe` name — so authors rarely pass it. Explicit `isasync=True` is
+**Pipe authoring:** the `processor`/`operator`/`splitter` decorators infer `is_async`
+(`riko/modules/_decorators.py::_resolve_is_async`) — from an `async def` or the
+conventional `async_pipe` name — so authors rarely pass it. Explicit `is_async=True` is
 needed only where the name signal can't reach the type checker: a sync async-interface
 callable not named `async_pipe` (e.g. a lambda), or a sync `def async_pipe` handed to a
 typed API such as `ModuleDefinition(async_pipe=…)`. A function named `pipe` that
@@ -1304,9 +1304,9 @@ run:
   `type`, `subtype`, or `identity` raises `InvalidPipelineError` (`_is_consistent`),
   so either slot answers for the module.
   Reading the slot rather than the callable needs no cast and works for undecorated
-  callables (documented `ModuleDefinition(sync_pipe=plain)` carries no `isasync`).
+  callables (documented `ModuleDefinition(sync_pipe=plain)` carries no `is_async`).
   `WorkflowResolver.require` tags a stored workflow's interface
-  with the `isasync` of the slot it loaded rather than guessing from the callable; the
+  with the `is_async` of the slot it loaded rather than guessing from the callable; the
   `workflow` decorator (`riko/runtime/_workflow_pipes.py`), which tags a copy of a
   hand-written workflow module's pipe and leaves the original untouched, alone defaults
   it from `is_async_callable`/`isasyncgenfunction`. A callable filling both slots is
@@ -1367,13 +1367,13 @@ run:
   the loop wrapper is prepared with the node's `options` and the runner forwards
   `embed=<callable>` with each call. The embed is re-selected against
   **whether the host pipe actually runs sync or async**
-  (`select_embed(embed, host_isasync=, to_async=, to_sync=)` in `_adapt.py`, which the
+  (`select_embed(embed, host_is_async=, to_async=, to_sync=)` in `_adapt.py`, which the
   shared base execution's `_select_embed` calls once, with each execution's own
   async-to-sync drain), so an adapted loop node gets an embed matching
   how it really runs. On adaptation the runner forwards a synthesized wrapper matching
   the host: `adapt_embed(embed, to_sync)` / `async_adapt_embed(embed, to_async)` copy
   the wrapper's discovery metadata (`name`, `type`, `subtype`, `subtypes`, `pollable`,
-  `loopable`) and set `isasync` to match the host, leaving `__wrapped__` unset, so
+  `loopable`) and set `is_async` to match the host, leaving `__wrapped__` unset, so
   `loop_embed_sync`/`loop_embed_async`, `is_subpipe`, and `bind_subpipe` treat the
   adapter as a native embed. An async-only embed under a sync host is drained per item —
   through the portal on the main thread, or through `run_from_thread` when the host pipe
@@ -1616,7 +1616,7 @@ and call options through `build_call` and calls the prepared call per parent ite
 the embed is no longer re-prepared per parent (2026-10-20; conf-parse memoization in
 `riko/parsing/config.py` went with it). Since 2026-11-14 it binds a `RunsItems` call's
 `run_item`/`arun_item` positionally when the embed's color fits the loop's
-(`host_isasync`), and keeps the keyword-bound call otherwise.
+(`host_is_async`), and keeps the keyword-bound call otherwise.
 
 ## Callable nodes — `Pipeline.map` (R4C, shipped)
 

@@ -148,7 +148,7 @@ def parser(
         yield from any2dict(f, ext, objconf.html5, path=path)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously fetches an XML or JSON source and yields its records.

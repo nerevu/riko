@@ -90,7 +90,7 @@ def parser(
     return datetime_to_datedict(new_date)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> DateDict:
     """
     Asynchronously converts a text string into a date dict.

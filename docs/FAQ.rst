@@ -85,7 +85,7 @@ Which imports are public?
     ``get_module_metadata``, and ``list_formats``
   - the typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/
     ``Formats`` bucket enums)
-  - the async backend: ``backend``, ``isasync``, ``issync``, and ``run``
+  - the async backend: ``backend``, ``is_async``, ``is_sync``, and ``run``
   - ``get_path``
   - the pipeline exceptions
 
