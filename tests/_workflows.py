@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -34,18 +33,6 @@ if TYPE_CHECKING:
 
 
 EXAMPLES_DIR = ROOT_DIR / "examples"
-
-SPLIT_PENDING = pytest.mark.xfail(
-    strict=True,
-    raises=InvalidPipelineError,
-    reason="the execution refuses split nodes until streaming fan-out lands",
-)
-
-SPLIT_METHOD_PENDING = pytest.mark.xfail(
-    strict=True,
-    raises=NotImplementedError,
-    reason="Pipeline.split() is not available yet",
-)
 
 DAG_DIR = TESTS_DIR / "dags"
 DAG_PATH = DAG_DIR / "pipe_forever.json"

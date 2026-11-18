@@ -15,6 +15,7 @@ New
   - configure a run with ``with_context``, ``with_resource``, ``with_input_schemas``,
     and ``with_execution``
   - run it by calling it with items, iterating it, or opening it as a context manager
+  - fan it out into branches with ``pipeline.split(splits, *, isolate=True)``
 
 - Added ``riko.Resource`` to inject values via ``pipeline.with_resource``/``Context``.
 
@@ -177,7 +178,7 @@ Removed
 - Removed ``SyncPipe``, ``AsyncPipe``, ``SyncCollection``, ``AsyncCollection``,
   ``PipeState``, and their ``parallel``/``workers``/``threads``/``pool`` arguments. Use
   ``Pipeline``; the migration guide maps each old call to its replacement.
-  ``subscribe``/``publish``/``split`` have no replacement.
+  ``subscribe``/``publish`` have no replacement.
 
 - Passing a decoration option (e.g., ``skip_if``, ``ftype``, ``ptype``) to a module call
   now raises ``TypeError``. Set it in the decorator instead.

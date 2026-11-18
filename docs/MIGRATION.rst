@@ -121,7 +121,8 @@ and ``PipeState`` with ``Pipeline``, one class for sync and async runs:
   ``fetch`` pipelines (the Cookbook's "Fetch several sources" recipe).
 - ``parallel``/``workers``/``threads``/``pool`` arguments →
   ``pipeline.with_execution(concurrency=…)``.
-- ``PipeState`` and ``subscribe``/``publish``/``split`` have no replacement.
+- ``split`` → ``pipeline.split(n)``.
+- ``PipeState`` and ``subscribe``/``publish`` have no replacement.
 
 .. _CHANGES: CHANGES.rst
 .. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

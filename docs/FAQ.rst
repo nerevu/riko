@@ -593,14 +593,16 @@ The ways to consume one ``Pipeline``:
 +---------------------------------------+----------------------------------------+------------------------------------------------+
 | ``pipeline.with_execution(...)``      | thread/process executor                | ``concurrency`` limit; optionally ordered      |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
-| ``pipeline.split(n)`` / ``publish``   | streaming fan-out (pending)            | branches and local subscriptions               |
+| ``pipeline.split(n)``                 | streaming fan-out                      | one ``pipeline`` per branch                    |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.publish(...)``             | local subscriptions (pending)          | the main stream continues while a copy flows   |
+|                                       |                                        | to each subscription                           |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
 
 .. note::
 
     Pending. The row marked pending describes calls that exist but raise
-    ``NotImplementedError`` until streaming fan-out, local subscriptions, and publishing
-    land.
+    ``NotImplementedError`` until local subscriptions and publishing land.
 
 How do I run a pipeline in parallel?
 ------------------------------------
@@ -772,27 +774,35 @@ See the `Cookbook`_'s performance and memory section for practical guidance.
 How do I send one stream to multiple consumers?
 -----------------------------------------------
 
-Two forms are planned. ``split(n)`` fans a ``pipeline`` out into ``n`` independently
-consumable branches, and ``subscribe``/``publish`` route a copy of each ``item`` to a
+``split(n)`` fans a ``pipeline`` out into ``n`` independently consumable branches. Each
+branch yields every ``item``. Unless you pass ``isolate=False``, every reader except the
+first gets a deep copy of the ``item``:
+
+.. code-block:: python
+
+    >>> from riko import get_path, Pipeline, Sources
+    >>>
+    >>> url = get_path("feed.xml")
+    >>> left, right = Pipeline.from_module(Sources.FETCH, conf={"url": url}).split(2)
+    >>> len(list(left)), len(list(right))
+    (7, 7)
+
+Running the branches separately runs the ``pipeline`` once per branch. Inside one run,
+``split`` reads its ``source`` once.
+
+A second form is planned. ``subscribe``/``publish`` route a copy of each ``item`` to a
 locally declared subscription while the main ``stream`` continues.
 
 .. note::
 
-    Pending. ``Pipeline.split``, ``Pipeline.subscribe``, and ``Pipeline.publish``
-    exist but raise ``NotImplementedError`` until streaming fan-out and local
-    subscriptions and publishing land. A ``pipeline`` that chains the ``split``
-    module is likewise refused before it runs. In the meantime, run the
-    ``pipeline`` once into a list and feed that list to each consumer.
+    Pending. ``Pipeline.subscribe`` and ``Pipeline.publish`` exist but raise
+    ``NotImplementedError`` until local subscriptions and publishing land.
 
 .. code-block:: python
 
-    from riko import get_path, Pipeline, Sources
+    from riko import Pipeline
 
-    url = get_path("feed.xml")
     items = [{"title": "quiet"}, {"title": "loud"}]
-
-    # streaming fan-out into two branches
-    left, right = Pipeline.from_module(Sources.FETCH, conf={"url": url}).split(2)
 
     # local subscription: the main stream continues while a copy flows to it
     alerts = Pipeline.subscribe("alerts")
