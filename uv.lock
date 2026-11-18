@@ -1801,6 +1801,7 @@ dev = [
     { name = "twine" },
     { name = "types-lxml" },
     { name = "types-networkx" },
+    { name = "types-python-dateutil" },
 ]
 lint = [
     { name = "deptry" },
@@ -1813,6 +1814,7 @@ lint = [
     { name = "rumdl" },
     { name = "types-lxml" },
     { name = "types-networkx" },
+    { name = "types-python-dateutil" },
 ]
 test = [
     { name = "coverage" },
@@ -1871,6 +1873,7 @@ dev = [
     { name = "twine", specifier = ">=6.0.0" },
     { name = "types-lxml", specifier = ">=2026.2.16" },
     { name = "types-networkx", specifier = ">=3.4.2" },
+    { name = "types-python-dateutil", specifier = ">=2.9.0.20261104" },
 ]
 lint = [
     { name = "deptry", specifier = ">=0.25.1" },
@@ -1883,6 +1886,7 @@ lint = [
     { name = "rumdl", specifier = ">=0.3.2,<0.4.0" },
     { name = "types-lxml", specifier = ">=2026.2.16" },
     { name = "types-networkx", specifier = ">=3.4.2" },
+    { name = "types-python-dateutil", specifier = ">=2.9.0.20261104" },
 ]
 test = [
     { name = "coverage", specifier = ">=4.3.4,<8.0.0" },
@@ -2130,6 +2134,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/45/f7/b33661a0e91a47c19ba667d4610518f0117d8631ba68ee06b26fa3b0ff92/types_networkx-3.6.1.20261108.tar.gz", hash = "sha256:673f5d2e181749a39d3ef4c4dd045d47ad1a132b8a732748d44c753d2ae42c16", size = 77223, upload-time = "2026-11-08T08:12:50.198Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/52/f2/644357ef6e7333c4aba0c9ba733f885a18518790bdace45beae219578bbd/types_networkx-3.6.1.20261108-py3-none-any.whl", hash = "sha256:6a1c168c311e0bb17033302aca3ce1ac280b41198e1532a591091b74513dc2b5", size = 167590, upload-time = "2026-11-08T08:12:49.206Z" },
+]
+
+[[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20261104"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/da/aaf5b20ea6c9e714fae9fdc611b68bde4edcba0aa4b1b853fc157d3d7b37/types_python_dateutil-2.9.0.20261104.tar.gz", hash = "sha256:5d0495702a5f7343741f5d842c531bcd1c941da8b4a85307d52ef43ba80252db", size = 17861, upload-time = "2026-11-04T08:14:27.977Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/4d/f9beea6da46a838025209b06d91374c8af9fbb82c599167ae99ee59cfb7a/types_python_dateutil-2.9.0.20261104-py3-none-any.whl", hash = "sha256:f6ee76c91c547716b4795373a53d4c07e8e06cf98384ecb89fcf134d212de2ad", size = 18509, upload-time = "2026-11-04T08:14:26.989Z" },
 ]
 
 [[package]]

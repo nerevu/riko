@@ -85,6 +85,7 @@ lint = [
     "rumdl>=0.3.2,<0.4.0",
     "types-lxml>=2026.2.16",
     "types-networkx>=3.4.2",
+    "types-python-dateutil>=2.9.0.20261104",
 ]
 
 dev = [
