@@ -3,9 +3,9 @@
 Provides module authoring for extension authors.
 
 This namespace contains pipe decorators, module definitions, module registration, module
-metadata and naming types, wrapper protocols, and configuration helpers. It is part of
-the SemVer-guaranteed ``riko.ext`` surface. Every name here is also re-exported from
-``riko.ext``.
+metadata and naming types, wrapper protocols, configuration helpers, and stream-close
+helpers. It is part of the SemVer-guaranteed ``riko.ext`` surface. Every name here is
+also re-exported from ``riko.ext``.
 
 Examples:
 
@@ -26,6 +26,8 @@ Examples:
 from inspect import unwrap
 from types import SimpleNamespace
 
+from riko.bado.itertools import aauto_close
+from riko.base._iterutils import auto_close
 from riko.base._typing import resolve_type_hints
 from riko.coercion import _configs
 from riko.coercion._dynamic_conf import DynamicConf
@@ -129,6 +131,8 @@ __all__ = [
     "SyncOperatorWrapper",
     "SyncProcessorWrapper",
     "SyncSplitterWrapper",
+    "aauto_close",
+    "auto_close",
     "get_conf_type",
     "normalize_module_name",
     "operator",

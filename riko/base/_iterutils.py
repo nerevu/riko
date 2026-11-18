@@ -1,4 +1,19 @@
-"""General iterable composition, fan-out, interleaving, and deduplication helpers."""
+"""
+General iterable composition, fan-out, interleaving, and deduplication helpers.
+
+Examples:
+
+    Basic usage::
+
+        >>> from io import StringIO
+        >>> from riko.ext import auto_close
+        >>>
+        >>> f = StringIO("hi")
+        >>> stream = auto_close((line.upper() for line in f), f)
+        >>> list(stream), f.closed
+        (['HI'], True)
+
+"""
 
 from __future__ import annotations
 
