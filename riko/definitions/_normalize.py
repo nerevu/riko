@@ -31,6 +31,7 @@ from riko.base._require_guards import (
     require_str,
 )
 from riko.types._workflow import (
+    OUT,
     PORT_DIRECTIONS,
     EdgeFamily,
     Endpoint,
@@ -113,12 +114,12 @@ def _normalize_port(port: Port, direction: PortDirection) -> Port:
     elif port == INPUT_PORT:
         result = "in"
     elif port == OUTPUT_PORT:
-        result = "out"
+        result = OUT
     elif _is_legacy_port(port, OTHER_PORT):
         result = f"in:{_get_legacy_index(port, OTHER_PORT, 1)}"
     elif _is_legacy_port(port, OUTPUT_PORT):
         index = _get_legacy_index(port, OUTPUT_PORT, 1) - 1
-        result = "out" if index < 1 else f"out:{index}"
+        result = OUT if index < 1 else f"{OUT}:{index}"
     elif port.isidentifier():
         result = f"{direction}:{port}"
     else:
@@ -409,7 +410,7 @@ def normalize_outputs(
     if raw is None:
         pairs = ((e.source.node, e.target.node) for e in get_family_edges(edges))
         ends = leaves(edges_to_graph(pairs, *node_ids))
-        result = {DEFAULT_OUTPUT: Endpoint(ends[0], "out")} if len(ends) == 1 else {}
+        result = {DEFAULT_OUTPUT: Endpoint(ends[0], OUT)} if len(ends) == 1 else {}
     else:
         outputs = require_mapping(raw, "outputs")
         normalize = partial(_normalize_endpoint, "out")
