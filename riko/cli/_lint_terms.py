@@ -92,6 +92,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
     BannedTerm("tear down", "clean up or close"),
     BannedTerm("tears down", "cleans up or closes"),
     BannedTerm("torn down", "cleaned up or closed"),
+    BannedTerm("closeable", "closable"),
 )
 
 

@@ -40,7 +40,7 @@ RULE_CASES = [
         id="no-aclosing",
     ),
     pytest.param(
-        "def f(value):\n    cast('SyncCloseable', value).close()\n",
+        "def f(value):\n    cast('SyncClosable', value).close()\n",
         "RM404",
         id="cast-close",
     ),

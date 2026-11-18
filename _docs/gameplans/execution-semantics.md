@@ -234,7 +234,7 @@ thread-affine clients such as `sqlite3` connections work under async execution. 
 entry and exit may land on different worker threads; R11 (provider sessions) owns the
 fix, and a strict xfail,
 `tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`,
-marks it. The same thread rule keeps a sync-closeable seed's `close()` on the event loop
+marks it. The same thread rule keeps a sync-closable seed's `close()` on the event loop
 (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
 seed close that blocks; R11 owns that bound with the entry-thread exit (triage
 2026-11-03; tripwire
@@ -273,7 +273,7 @@ table (seed, native return, node stream, raw return × sync/async) for values wh
 close is async, which leaked a never-awaited coroutine before it; under sync execution a
 sync-iterable seed whose only close is `aclose()` was silently never closed (verified
 2026-10-31) and is now rejected; a seed whose `__iter__`/`__aiter__` hands out a
-separate closeable iterator had only the seed closed (verified 2026-11-13), so both seed
+separate closable iterator had only the seed closed (verified 2026-11-13), so both seed
 openers now own that iterator beside the seed (`CLOSING_SEEDS` rows `cursor-handle` /
 `async-cursor-handle` in `tests/internal/test_plan_closes.py`). Stage 2 decisions
 (2026-10-31): under async execution a sync close keeps its per-kind threading (resource
@@ -282,7 +282,7 @@ their worker); under sync execution `shutdown_timeout` bounds every portal close
 existing async-stream closes included. There is no stage 3. Close-once invariant: a
 value is close-once or has one closer, with dedupe state in the value, never a registry.
 Riko-made async generators close idempotently; a foreign value closable from two places
-(async seed, sync node raw return and stream, native closeable non-generator output)
+(async seed, sync node raw return and stream, native closable non-generator output)
 enters through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a run's
 streams, close-once. `aauto_close` (`riko/bado/itertools.py`) and
 `maybe_closing`/`maybe_aclosing` use `run_bridged`/`maybe_async`/`asyncify`
@@ -520,14 +520,14 @@ values are not rejected on that basis alone.
 
 For `Resource.from_factory(...)`, explicit `cleanup=` is authoritative: the resolved
 factory result is `T` directly and Riko does not additionally interpret it as a context
-manager or closeable object. Without explicit cleanup, lifecycle interpretation follows
+manager or closable object. Without explicit cleanup, lifecycle interpretation follows
 this order:
 
 ```text
 context manager / async context manager
     -> enter it; the entered value is T
 
-otherwise Closeable / AsyncCloseable
+otherwise SyncClosable / AsyncClosable
     -> the factory result itself is T
 
 otherwise
@@ -541,15 +541,15 @@ matching sync or async execution wins; bridging is used only when the matching n
 protocol is unavailable. The same native-mode preference applies to close/aclose
 capability fallback.
 
-Closeability is a runtime capability, not a bound on `T`. Internal structural protocols
+Closability is a runtime capability, not a bound on `T`. Internal structural protocols
 may be modeled permissively because Riko ignores their return values:
 
 ```python
-class Closeable(Protocol):
+class SyncClosable(Protocol):
     def close(self) -> object: ...
 
 
-class AsyncCloseable(Protocol):
+class AsyncClosable(Protocol):
     def aclose(self) -> Awaitable[object]: ...
 ```
 

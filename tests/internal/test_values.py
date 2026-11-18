@@ -55,7 +55,7 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import (
-    SyncCloseable,
+    SyncClosable,
     _check_strict_protocol,
     isinstance_strict,
     require_listlike,
@@ -118,7 +118,7 @@ from riko.types._feed import (
     _ItemEnvelope,
 )
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import AsyncCloseable, get_async_closer
+from riko.types._io import AsyncClosable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
@@ -1537,13 +1537,13 @@ class _SlottedStaticClose:
 
 # Values whose protocol verdict is remembered per type, or checked in full each time.
 STRICT_CHECKS = [
-    pytest.param(_gen_one, SyncCloseable, id="generator"),
-    pytest.param(_gen_one, AsyncCloseable, id="generator-async"),
-    pytest.param(_SlottedClose, SyncCloseable, id="slotted"),
-    pytest.param(_SlottedNeedsArg, SyncCloseable, id="slotted-wrong-signature"),
-    pytest.param(_SlottedStaticClose, SyncCloseable, id="slotted-static"),
-    pytest.param(_with_close, SyncCloseable, id="instance-close"),
-    pytest.param(_Plain, SyncCloseable, id="plain"),
+    pytest.param(_gen_one, SyncClosable, id="generator"),
+    pytest.param(_gen_one, AsyncClosable, id="generator-async"),
+    pytest.param(_SlottedClose, SyncClosable, id="slotted"),
+    pytest.param(_SlottedNeedsArg, SyncClosable, id="slotted-wrong-signature"),
+    pytest.param(_SlottedStaticClose, SyncClosable, id="slotted-static"),
+    pytest.param(_with_close, SyncClosable, id="instance-close"),
+    pytest.param(_Plain, SyncClosable, id="plain"),
 ]
 
 
@@ -1559,9 +1559,9 @@ class TestRequireGuards:
 
     def test_an_instance_level_close_is_checked_on_each_instance(self) -> None:
         plain, closing = _Plain(), _with_close()
-        verdicts = [isinstance_strict(v, SyncCloseable) for v in (plain, closing)]
+        verdicts = [isinstance_strict(v, SyncClosable) for v in (plain, closing)]
         reversed_verdicts = [
-            isinstance_strict(v, SyncCloseable) for v in (closing, plain)
+            isinstance_strict(v, SyncClosable) for v in (closing, plain)
         ]
         assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
 

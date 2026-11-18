@@ -499,7 +499,7 @@ def require_value[T](result: T | Awaitable[T], msg: str) -> T:
 
 
 @runtime_checkable
-class SyncCloseable(Protocol):
+class SyncClosable(Protocol):
     def close(self) -> object | None: ...
 
 
@@ -544,7 +544,7 @@ def get_sync_closer(value: object) -> Func[object] | None:
 
     """
     closer = None
-    is_sync_closable = isinstance_strict(value, SyncCloseable)
+    is_sync_closable = isinstance_strict(value, SyncClosable)
 
     if is_sync_closable and not _is_async_close(value.close, value):
         closer = value.close
