@@ -88,6 +88,7 @@ type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]
 
+OUT: Port = "out"
 PORT_DIRECTIONS: Final[frozenset[PortDirection]] = frozenset({"in", "out"})
 WORKFLOW_VERSION = "2"
 

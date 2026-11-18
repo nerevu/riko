@@ -43,6 +43,7 @@ from riko.types._pipedef import (
     WireEndpoint,
 )
 from riko.types._workflow import (
+    OUT,
     WORKFLOW_VERSION,
     RawEdge,
     RawEndpoint,
@@ -470,7 +471,7 @@ def _raw_edge(*wire: str) -> RawEdge:
     source = require_str(wire[0], "wire source id")
     target = require_str(wire[1], "wire target id")
     port = "in" if len(wire) == 2 else require_str(wire[2], "wire target port")
-    source_endpoint = RawEndpoint({"node": source, "port": "out"})
+    source_endpoint = RawEndpoint({"node": source, "port": OUT})
     target_endpoint = RawEndpoint({"node": target, "port": port})
     return RawEdge({"source": source_endpoint, "target": target_endpoint})
 

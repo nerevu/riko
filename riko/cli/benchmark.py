@@ -20,6 +20,7 @@ from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.modules.regex import pipe as regex
 from riko.runtime._pipeline import Pipeline
+from riko.types._workflow import OUT
 from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ def build_fanin() -> Workflow:
     ]
     edges: list[RawEdge] = [
         {
-            "source": {"node": f"fetch-{pos}", "port": "out"},
+            "source": {"node": f"fetch-{pos}", "port": OUT},
             "target": {"node": UNION_ID, "port": "in" if pos == 0 else f"in:{pos}"},
         }
         for pos in range(length)
@@ -94,7 +95,7 @@ def build_fanin() -> Workflow:
     raw: RawWorkflow = {
         "nodes": nodes,
         "edges": edges,
-        "outputs": {"default": {"node": UNION_ID, "port": "out"}},
+        "outputs": {"default": {"node": UNION_ID, "port": OUT}},
     }
     return Workflow.from_raw(raw)
 
