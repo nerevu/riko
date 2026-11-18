@@ -12,6 +12,7 @@ import pickle  # noqa: S403
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, cast
 
+from riko.base._config import as_maxsize
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._nodes import CallableNode
@@ -36,16 +37,16 @@ __all__ = [
     "build_item_call",
     "build_tracked_call",
     "require_process_safe",
-    "run_shipped_item",
+    "run_pickled_item",
 ]
 
 
-@lru_cache(maxsize=config.shipped_call_cache_size)
+@lru_cache(maxsize=as_maxsize(config.pickled_call_cache_size))
 def _load_call(payload: bytes) -> Func[Iterator[object]]:
     return pickle.loads(payload)  # noqa: S301
 
 
-def run_shipped_item[T](
+def run_pickled_item[T](
     payload: bytes,
     node_id: NodeId,
     identity: IdentityMode | None,
@@ -68,12 +69,12 @@ def run_shipped_item[T](
     Examples:
 
         >>> import pickle
-        >>> from riko.execution._concurrency import run_shipped_item
+        >>> from riko.execution._concurrency import run_pickled_item
         >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope("ab", generation=("s", 0))
         >>> payload = pickle.dumps(iter)
-        >>> [r.value for r in run_shipped_item(payload, "n", None, envelope)]
+        >>> [r.value for r in run_pickled_item(payload, "n", None, envelope)]
         ['a', 'b']
 
     """
@@ -179,7 +180,7 @@ def build_tracked_call[T](
 
     """
     if executor is Executor.PROCESS:
-        func = partial(run_shipped_item, pickle.dumps(call), node_id, identity)
+        func = partial(run_pickled_item, pickle.dumps(call), node_id, identity)
     else:
         func = partial(run_tracked_item, call, node_id, identity)
 

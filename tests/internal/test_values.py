@@ -42,7 +42,6 @@ from urllib3.response import HTTPResponse
 
 from riko.base import _exceptions as errors
 from riko.base._config import STREAMING_THRESHOLD, load_settings
-from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import (
     CyclicIdentityError,
@@ -744,11 +743,13 @@ class TestFromdict:
 class TestParseDateString:
     def test_parsed_date_cache_is_bounded(self):
         _parse_date_cached.cache_clear()
+        maxsize = _parse_date_cached.cache_info().maxsize
+        assert maxsize is not None
 
-        for second in range(config.parsed_date_cache_size + 1):
+        for second in range(maxsize + 1):
             parse_date_string(f"2015-02-01T00:00:00.{second:06d}+00:00")
 
-        assert _parse_date_cached.cache_info().currsize == config.parsed_date_cache_size
+        assert _parse_date_cached.cache_info().currsize == maxsize
 
     def test_ambiguous_cst_resolves_to_us_central(self):
         """
@@ -1429,16 +1430,35 @@ ENV_OVERRIDES = [
     ),
     pytest.param("RIKO_FETCH_TIMEOUT", "2.5", "fetch_timeout", 2.5, id="fetch"),
     pytest.param("RIKO_FETCH_TIMEOUT", "-1", "fetch_timeout", 30.0, id="fetch-neg"),
+    pytest.param("RIKO_FETCH_TIMEOUT", "0", "fetch_timeout", 30.0, id="fetch-0"),
     pytest.param("RIKO_BENCHMARK_DELAY", "0", "benchmark_delay", 0.0, id="delay-0"),
     pytest.param("RIKO_BENCHMARK_WORKERS", "2", "benchmark_workers", 2, id="workers"),
     pytest.param(
-        "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
+        "RIKO_PARSED_DATE_CACHE_SIZE",
+        "0",
+        "parsed_date_cache_size",
+        1024,
+        id="int-zero",
+    ),
+    pytest.param(
+        "RIKO_PARSED_DATE_CACHE_SIZE",
+        "inf",
+        "parsed_date_cache_size",
+        inf,
+        id="cache-inf",
+    ),
+    pytest.param(
+        "RIKO_STRICT_CHECK_CACHE_SIZE",
+        "2.5",
+        "strict_check_cache_size",
+        512,
+        id="cache-fraction",
     ),
     pytest.param(
         "RIKO_RETURN_KINDS_CACHE_SIZE",
         "0",
         "return_kinds_cache_size",
-        0,
+        256,
         id="return-kinds-zero",
     ),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "inf", "shutdown_timeout", inf, id="inf"),
@@ -1448,20 +1468,18 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_ENCODING", "bogus", "encoding", "utf-8", id="encoding-unknown"),
     pytest.param("RIKO_ENCODING", "latin-1", "encoding", "latin-1", id="encoding"),
     pytest.param("RIKO_BRANCH_BUFFER", "64", "branch_buffer", 64, id="branch-buffer"),
-    pytest.param(
-        "RIKO_BRANCH_BUFFER", "0", "branch_buffer", 1024, id="branch-buffer-0"
-    ),
+    pytest.param("RIKO_BRANCH_BUFFER", "0", "branch_buffer", 1024, id="branch-0"),
     pytest.param("RIKO_BRANCH_BUFFER", "x", "branch_buffer", 1024, id="branch-bad"),
-    pytest.param(
-        "RIKO_BRANCH_BUFFER", "inf", "branch_buffer", inf, id="branch-buffer-inf"
-    ),
+    pytest.param("RIKO_BRANCH_BUFFER", "2.5", "branch_buffer", 1024, id="branch-2.5"),
+    pytest.param("RIKO_BRANCH_BUFFER", "inf", "branch_buffer", inf, id="branch-inf"),
 ]
 
 
 class TestLoadSettings:
     @pytest.mark.parametrize(("key", "raw", "name", "expected"), ENV_OVERRIDES)
     def test_env_override_or_default(self, key, raw, name, expected) -> None:
-        assert getattr(load_settings({key: raw}), name) == expected
+        value = getattr(load_settings({key: raw}), name)
+        assert (value, type(value)) == (expected, type(expected))
 
 
 class _SlottedClose:

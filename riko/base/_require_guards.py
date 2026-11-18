@@ -1130,6 +1130,73 @@ def require_finite(
     return value
 
 
+def require_timeout(value: float, what: str = "timeout") -> float:
+    """
+    Requires ``value`` to be greater than 0, or ``inf`` for no timeout.
+
+    Args:
+
+        value: The timeout to check.
+
+    Kwargs:
+
+        what: The name used in the error message (default: "timeout").
+
+    Returns:
+
+        ``value`` unchanged.
+
+    Raises:
+
+        TypeError: If ``value`` is a bool or not a number.
+        ValueError: If ``value`` is 0, negative, or NaN.
+
+    Examples:
+
+        >>> require_timeout(2.5), require_timeout(float("inf"))
+        (2.5, inf)
+        >>> require_timeout(0)
+        Traceback (most recent call last):
+            ...
+        ValueError: timeout must be positive seconds or inf, got 0
+        >>> require_timeout(None)
+        Traceback (most recent call last):
+            ...
+        TypeError: timeout must be a number, got None
+
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{what} must be a number, got {value!r}")
+    elif isnan(value) or value <= 0:
+        raise ValueError(f"{what} must be positive seconds or inf, got {value!r}")
+
+    return value
+
+
+def as_timeout(seconds: float) -> float | None:
+    """
+    Gets the timeout HTTP clients take (``inf`` means no timeout).
+
+    Args:
+
+        seconds: A timeout that ``require_timeout`` accepts.
+
+    Returns:
+
+        ``seconds``, or ``None`` when it is infinite.
+
+    Examples:
+
+        >>> from math import inf
+        >>>
+        >>> as_timeout(2.5)
+        2.5
+        >>> as_timeout(inf)
+
+    """
+    return None if isinf(seconds) else seconds
+
+
 def require_arg[T](value: T | None, name: str, module: str, strict: bool = False) -> T:
     """
     Narrows a module's required keyword argument to ``T`` and raises when it is omitted.

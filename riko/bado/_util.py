@@ -18,7 +18,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
-from math import inf
 from typing import TYPE_CHECKING, Literal, overload
 
 from attrs import define, field
@@ -32,6 +31,7 @@ from riko.base._guards import (
     require_value,
 )
 from riko.base._logging import get_logger
+from riko.base._require_guards import as_timeout, require_timeout
 from riko.base._sentinels import MISSING, MissingType
 from riko.types._io import resolve_closer, resolve_user_agent
 
@@ -101,7 +101,7 @@ async def async_get(
     url: str,
     *,
     params: Mapping[str, str] | None = None,
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     user_agent: UserAgentLike | None = None,
 ) -> HTTPXResponse:
     """
@@ -116,7 +116,7 @@ async def async_get(
         params: Query parameters added to ``url``.
 
         timeout: Seconds to wait before giving up (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0``, ``inf``, or ``None`` waits forever.
+            30 seconds). ``inf`` waits forever.
 
         user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
             agent of that kind (default: "riko/<version>").
@@ -127,11 +127,13 @@ async def async_get(
 
     Raises:
 
+        ValueError: If ``timeout`` is 0, negative, or NaN.
+
         httpx.HTTPStatusError: If the final response reports a client or server error (a
             4xx or 5xx status).
 
     """
-    resolved = None if timeout in {0, inf} else timeout
+    resolved = as_timeout(require_timeout(timeout))
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     async with AsyncClient(follow_redirects=True, headers=headers) as client:

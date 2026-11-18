@@ -641,6 +641,10 @@ class TestFetch:
         with stalled_url() as url, pytest.raises(Timeout):
             Fetch(url, timeout=0.2)
 
+    def test_zero_timeout_is_rejected(self):
+        with pytest.raises(ValueError, match="positive seconds"):
+            Fetch("http://example.com", timeout=0)
+
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
@@ -762,6 +766,11 @@ class TestAsyncUrlOpen:
     async def test_timeout_stops_a_stalled_read(self):
         with stalled_url() as url, pytest.raises(TimeoutException):
             await async_url_open(url, timeout=0.2)
+
+    @async_test
+    async def test_zero_timeout_is_rejected(self):
+        with pytest.raises(ValueError, match="positive seconds"):
+            await async_url_open("http://example.com", timeout=0)
 
     @pytest.mark.simulated_network
     @pytest.mark.xfail(
@@ -1662,6 +1671,10 @@ _ADEFERRED_CLOSES = [
     pytest.param(lambda tee, _: tee.aclose(), id="tee"),
     pytest.param(lambda _, branches: _aclose_each(branches), id="last"),
 ]
+_BAD_LAGS = [
+    pytest.param(0, ValueError, "at least 1", id="zero"),
+    pytest.param(2.5, TypeError, "an integer or math.inf", id="fraction"),
+]
 
 
 class TestTee:
@@ -1686,6 +1699,11 @@ class TestTee:
         assert duplicate is not original
         assert original == {"n": [1]}
         tee.close()
+
+    @pytest.mark.parametrize(("max_lag", "error", "message"), _BAD_LAGS)
+    def test_rejects_an_invalid_max_lag(self, max_lag, error, message):
+        with pytest.raises(error, match=f"max_lag must be {message}"):
+            Tee([], max_lag=max_lag)
 
     def test_max_lag_overflow_discards_every_buffer_and_keeps_raising(self):
         """An overflow empties every queue, closes the source, and fails each read."""
@@ -2083,6 +2101,12 @@ class TestAsyncTee:
         assert duplicate is not original
         assert original == {"n": [1]}
         await tee.aclose()
+
+    @skipif_sync
+    @pytest.mark.parametrize(("max_lag", "error", "message"), _BAD_LAGS)
+    def test_rejects_an_invalid_max_lag(self, max_lag, error, message):
+        with pytest.raises(error, match=f"max_lag must be {message}"):
+            AsyncTee(_ASource([], []), max_lag=max_lag)
 
     @async_test
     async def test_max_lag_overflow_discards_every_buffer_and_keeps_raising(self):

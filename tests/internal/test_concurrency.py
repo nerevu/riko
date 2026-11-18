@@ -32,7 +32,7 @@ from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import AsyncPolicy, ExecutionSettings, SyncPolicy
 from riko.execution import _async_execution, _sync_execution
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._concurrency import _load_call, build_tracked_call, run_shipped_item
+from riko.execution._concurrency import _load_call, build_tracked_call, run_pickled_item
 from riko.execution._pools import _PoolLifetime
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._provenance import PLACEHOLDER, run_tracked_item
@@ -83,7 +83,7 @@ def _pair(item: str) -> Iterator[str]:
 
 ITEM_CALLS = [
     pytest.param(THREAD, run_tracked_item, _pair, id="thread"),
-    pytest.param(PROCESS, run_shipped_item, pickle.dumps(_pair), id="process"),
+    pytest.param(PROCESS, run_pickled_item, pickle.dumps(_pair), id="process"),
 ]
 
 
@@ -100,7 +100,7 @@ class TestBuildTrackedCall:
         envelope = _ItemEnvelope.from_parent(PLACEHOLDER, "s", "a")
         assert _values(call(envelope)) == ["a", "a"]
 
-    def test_shipped_call_is_unpickled_once_per_worker(self) -> None:
+    def test_pickled_call_is_unpickled_once_per_worker(self) -> None:
         _load_call.cache_clear()
         func = build_tracked_call(_pair, node_id="n")
         chars = enumerate("ab")

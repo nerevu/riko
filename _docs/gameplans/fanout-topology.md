@@ -325,8 +325,8 @@ Semantics:
 - only reachable/used outputs become active;
 - unused outputs allocate no queue and exert no backpressure;
 - a branch read behind its siblings holds a lossless lag buffer of the items it has
-  not read yet (`itertools.tee` semantics), unbounded by default;
-  `Settings.branch_buffer` (`RIKO_BRANCH_BUFFER`, default `inf`) caps it, and a branch
+  not read yet (`itertools.tee` semantics), unbounded in the low-level tee;
+  `Settings.branch_buffer` (`RIKO_BRANCH_BUFFER`, default 1024) caps it, and a branch
   exceeding the cap fails the run;
 - split is lossless and has **no** drop overflow mode;
 - per-branch ordering follows upstream order;
@@ -364,8 +364,8 @@ arrive in a later slice with the execution-scoped task group.
   settings; managed execution passes its effective `branch_buffer` explicitly at every
   tee site (explicit splitters, implicit shared-port fan-out, and the async splitter
   input tee); direct `riko.modules.split` calls keep the process default (Slice B).
-  Unlimited stays `inf`: `RIKO_BRANCH_BUFFER` accepts positive numbers or `inf`, `0`
-  keeps being rejected with a warning, and there is no `None` normalization.
+  Unlimited stays `inf`: `RIKO_BRANCH_BUFFER` accepts whole numbers of at least 1 or
+  `inf`, `0` keeps being rejected with a warning, and there is no `None` normalization.
 - Close: natural exhaustion closes the source promptly and buffered values still drain
   (a cleanup failure is reported after the drain). Closing the last branch while an
   upstream advance is in flight defers the source close to the advancer and returns

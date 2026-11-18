@@ -199,6 +199,7 @@ TYPES = frozenset(
         "InputSchemaLike",
         "Item",
         "Items",
+        "Limit",
         "PipelineRun",
         "PipelineStream",
         "RawEdge",

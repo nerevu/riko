@@ -178,12 +178,14 @@ data order).
 
 `RIKO_*` overrides are read once by `load_settings` (`riko/base/_config.py`) into the
 frozen `Settings`. `_env_int` takes an optional `minimum` (`RIKO_CONCURRENCY_LIMIT` and
-`RIKO_DISCOVERY_TIMEOUT` ≥ 1; `RIKO_NODE_THREADS`, `RIKO_STREAMING_THRESHOLD`,
-`RIKO_SHIPPED_CALL_CACHE_SIZE`, and `RIKO_PARSED_DATE_CACHE_SIZE` ≥ 0) and `_env_float`
-rejects negative and NaN values and takes the same optional `minimum`
-(`RIKO_BRANCH_BUFFER` ≥ 1, `inf` for no bound); `_env_encoding` rejects an encoding
-`codecs.lookup` does not know. A malformed or out-of-range value logs a warning and
-keeps the default, so a bad environment never fails a later run.
+`RIKO_DISCOVERY_TIMEOUT` ≥ 1; `RIKO_NODE_THREADS` and `RIKO_STREAMING_THRESHOLD` ≥ 0);
+`_env_bound` reads a whole number or `inf` (no bound) with a required `minimum`
+(`RIKO_BRANCH_BUFFER`, default 1024, and the four `*_CACHE_SIZE` bounds ≥ 1 or `inf`;
+`0` is never an alias for unbounded, and `as_maxsize` turns `inf` into the `lru_cache`
+`maxsize=None`); `_env_float` rejects negative and NaN values, and with `positive` also
+rejects `0` (`RIKO_FETCH_TIMEOUT`); `_env_encoding`
+rejects an encoding `codecs.lookup` does not know. A malformed or out-of-range value
+logs a warning and keeps the default, so a bad environment never fails a later run.
 
 Temporary paths: `get_temp_path` (`riko/io/_sync.py`) is a context manager yielding a
 `Path` that does not exist yet inside a fresh temporary directory, removed on exit
@@ -1558,9 +1560,9 @@ count `Endpoint.port_key` (the node plus the port's canonical spelling), so `in:
 
 **Process executor ships each call once** (2026-10-16). `build_tracked_call`
 (`riko/execution/_concurrency.py`) pickles a mapped node's prepared call once on first
-pull; each task carries those bytes and `run_shipped_item` unpickles them through a
-per-worker `lru_cache` (`settings.shipped_call_cache_size`,
-`RIKO_SHIPPED_CALL_CACHE_SIZE`), so a call is rebuilt once per worker rather than once
+pull; each task carries those bytes and `run_pickled_item` unpickles them through a
+per-worker `lru_cache` (`settings.pickled_call_cache_size`,
+`RIKO_PICKLED_CALL_CACHE_SIZE`), so a call is rebuilt once per worker rather than once
 per item (measured ~22–30% faster per item on a four-worker pool). The thread executor
 maps the call directly.
 
@@ -1729,7 +1731,7 @@ Implemented in the uncommitted phase-14 tree (2026-11-12); owner
   (processor return-kind inference + `emit`, operator subtype), or `None`.
 - **Seams.** `SyncExecution.run_envelopes`/`AsyncExecution.arun_envelopes` yield
   envelopes (the seam R7 transports); `run`/`arun` strip them. The process pool ships
-  one positional `partial` over `run_tracked_item`/`run_shipped_item`, and the async
+  one positional `partial` over `run_tracked_item`/`run_pickled_item`, and the async
   execution binds its twin `arun_tracked_item` the same way; `build_item_call`
   binds a mappable native node's context and extras once, positionally through
   `run_item` when the prepared call is a `RunsItems`. `PreparedCall`/`NodeCall` take
