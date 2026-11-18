@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal, Self, overload
 
 import attrs
 
+from ._config import Limit, require_limit
 from ._exceptions import PipelineError, PipelineStateError
 from ._guards import (
     ASYNC_CLEANUP_MSG,
@@ -796,7 +797,7 @@ class TeeRead[T]:
     done: bool = False
 
     @classmethod
-    def from_lag(cls, max_lag: float) -> Self:
+    def from_lag(cls, max_lag: Limit) -> Self:
         """
         Builds the read that fails every branch once one falls too far behind.
 
@@ -911,7 +912,7 @@ def require_idle(state: _TeeState) -> None:
         raise PipelineStateError(state.value, "branch", subject="tee")
 
 
-def is_lagging[T](buffers: Mapping[int, deque[T]], key: int, max_lag: float) -> bool:
+def is_lagging[T](buffers: Mapping[int, deque[T]], key: int, max_lag: Limit) -> bool:
     """
     Checks whether any of ``key``'s siblings has ``max_lag`` items queued.
 
@@ -1004,6 +1005,9 @@ class Tee[T]:
         PipelineStateError: If a branch is created after the first read or after
             close, or the source reads a branch that has nothing queued.
 
+        TypeError: If ``max_lag`` is neither an integer nor ``math.inf``.
+        ValueError: If ``max_lag`` is 0 or negative.
+
     Examples:
 
         >>> tee = Tee([{"n": 1}, {"n": 2}], isolate=True)
@@ -1031,11 +1035,11 @@ class Tee[T]:
     )
 
     def __init__(
-        self, source: Iterable[T], *, isolate: bool = False, max_lag: float = inf
+        self, source: Iterable[T], *, isolate: bool = False, max_lag: Limit = inf
     ) -> None:
+        self._max_lag = require_limit(max_lag, "max_lag")
         self._source: auto_close[T] = auto_close(source)
         self._isolate = isolate
-        self._max_lag = max_lag
         self._buffers: dict[int, deque[T]] = {}
         self._keys = count()
         self._lock = Lock()

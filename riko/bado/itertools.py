@@ -38,11 +38,11 @@ from collections import deque
 from collections.abc import AsyncIterable
 from contextlib import aclosing
 from itertools import count
-from math import inf
+from math import inf, isinf
 from types import AsyncGeneratorType, GeneratorType
 from typing import TYPE_CHECKING, Self, cast, overload
 
-from riko.base._config import DEF_CONCURRENCY_LIMIT
+from riko.base._config import DEF_CONCURRENCY_LIMIT, Limit, require_limit
 from riko.base._exceptions import PipelineStateError
 from riko.base._iterutils import (
     TeeRead,
@@ -607,7 +607,7 @@ async def async_map[T, S](
     func: Callable[[T], Awaitable[S]],
     source: Iterable[T],
     *,
-    limit: int = DEF_CONCURRENCY_LIMIT,
+    limit: Limit = DEF_CONCURRENCY_LIMIT,
     budget: Semaphore | None = None,
     **kwargs: object,
 ) -> list[S]:
@@ -625,20 +625,25 @@ async def async_map[T, S](
 
     Kwargs:
 
-        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``,
-            16). ``0`` runs them all at once.
+        limit: Maximum number of concurrent calls: an integer greater than 0, or
+            ``math.inf`` for no limit (default: ``DEF_CONCURRENCY_LIMIT``, 16).
 
-        budget: A limit shared across maps that caps how many calls run at once in
-            total. Never share it with an outer map whose *func* starts an inner map.
-            Once the outer calls fill every slot, the inner calls they await never get
-            one and may deadlock. Give it only to the innermost maps. A call holds a
-            slot only while *func* runs (default: None).
+        budget: A shared cap on simultaneous calls (semaphore), or ``None`` to cap each
+            map by its own ``limit``. Never share it with an outer map whose *func*
+            starts an inner map. Once the outer calls fill every slot, the inner calls
+            they await never get one and may deadlock. A call holds a slot only while
+            *func* runs (default: None).
 
         **kwargs: Extra keyword arguments forwarded to *func*.
 
     Returns:
 
         The results, in source order.
+
+    Raises:
+
+        TypeError: If ``limit`` is neither an integer nor ``math.inf``.
+        ValueError: If ``limit`` is 0 or negative.
 
     Examples:
 
@@ -654,8 +659,7 @@ async def async_map[T, S](
         [0, 3, 6, 9, 12]
 
     """
-    if limit < 0:
-        raise ValueError("limit cannot be negative")
+    limit = require_limit(limit)
 
     async def call(item: T) -> S:
         return await func(item, **kwargs)
@@ -663,7 +667,7 @@ async def async_map[T, S](
     _func = _cap(call if kwargs else func, budget)
     items = list(source)
     results: dict[int, S] = {}
-    limiter = CapacityLimiter(limit) if limit else None
+    limiter = None if isinf(limit) else CapacityLimiter(limit)
 
     async def work(pos: int, item: T) -> None:
         if limiter is None:
@@ -781,11 +785,11 @@ def async_map_stream[T, S](
 
         buffer: Size of the completed-results queue (default: 0).
 
-        budget: A limit shared across maps that caps how many calls run at once in
-            total. Never share it with an outer map whose *func* starts an inner map.
-            Once the outer calls fill every slot, the inner calls they await never get
-            one and may deadlock. Give it only to the innermost maps. A call holds a
-            slot only while *func* runs (default: None).
+        budget: A shared cap on simultaneous calls (semaphore), or ``None`` to cap each
+            map by its own ``limit``. Never share it with an outer map whose *func*
+            starts an inner map. Once the outer calls fill every slot, the inner calls
+            they await never get one and may deadlock. A call holds a slot only while
+            *func* runs (default: None).
 
     Returns:
 
@@ -839,11 +843,11 @@ async def async_map_ordered_stream[T, S](
 
         buffer: Extra items per window beyond *limit* (default: 0).
 
-        budget: A limit shared across maps that caps how many calls run at once in
-            total. Never share it with an outer map whose *func* starts an inner map.
-            Once the outer calls fill every slot, the inner calls they await never get
-            one and may deadlock. Give it only to the innermost maps. A call holds a
-            slot only while *func* runs (default: None).
+        budget: A shared cap on simultaneous calls (semaphore), or ``None`` to cap each
+            map by its own ``limit``. Never share it with an outer map whose *func*
+            starts an inner map. Once the outer calls fill every slot, the inner calls
+            they await never get one and may deadlock. A call holds a slot only while
+            *func* runs (default: None).
 
     Yields:
 
@@ -1009,6 +1013,9 @@ class AsyncTee[T]:
         PipelineStateError: If a branch is created after the first read or after
             close, or the source reads a branch that has nothing queued.
 
+        TypeError: If ``max_lag`` is neither an integer nor ``math.inf``.
+        ValueError: If ``max_lag`` is 0 or negative.
+
     Examples:
 
         >>> from riko import alist, run
@@ -1041,11 +1048,11 @@ class AsyncTee[T]:
     )
 
     def __init__(
-        self, source: AsyncIterable[T], *, isolate: bool = False, max_lag: float = inf
+        self, source: AsyncIterable[T], *, isolate: bool = False, max_lag: Limit = inf
     ) -> None:
+        self._max_lag = require_limit(max_lag, "max_lag")
         self._source: aauto_close[T] = aauto_close(source)
         self._isolate = isolate
-        self._max_lag = max_lag
         self._buffers: dict[int, deque[T]] = {}
         self._keys = count()
         self._lock = Lock()

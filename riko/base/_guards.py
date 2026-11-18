@@ -33,7 +33,7 @@ import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs, TypeVar
 
-from ._config import settings
+from ._config import as_maxsize, settings
 from ._exceptions import InvalidPipelineError
 from ._sentinels import MISSING
 from ._typing import BasicValueType, PrimitiveValueType
@@ -95,12 +95,12 @@ def _is_public_function(value: object) -> bool:
     return isfunction(value) and not value.__name__.startswith("_")
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _get_protocol_members(protocol: type) -> tuple[tuple[str, Func[object]], ...]:
     return tuple(getmembers_static(protocol, _is_public_function))
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _is_type_bound_static(cls: type, *names: str) -> bool:
     """Whether ``cls`` has no ``__getattr__`` and none of ``names`` is a slot."""
     get_cls_attr_static = partial(getattr_static, cls)
@@ -193,7 +193,7 @@ def _check_strict_protocol(obj: object, protocol: type, *methods: str) -> bool:
     return _check_strict(isinstance(obj, protocol), protocol, get_method, *methods)
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _check_strict_type(cls: type, protocol: type, *methods: str) -> bool:
     get_method = partial(_get_bound_method, cls)
     return _check_strict(issubclass(cls, protocol), protocol, get_method, *methods)
@@ -503,7 +503,7 @@ class SyncCloseable(Protocol):
     def close(self) -> object | None: ...
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _has_async_close(cls: type) -> bool:
     """Whether instances of ``cls`` close asynchronously through their type."""
     return is_async_callable(getattr(cls, "close", None))

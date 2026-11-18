@@ -10,6 +10,7 @@ import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
 from functools import partial
+from math import inf
 from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
@@ -931,7 +932,12 @@ async def _fail(value):
 
 IN_FLIGHT_LIMITS = [
     pytest.param(None, DEF_CONCURRENCY_LIMIT, id="default"),
-    pytest.param(0, _IN_FLIGHT, id="unbounded"),
+    pytest.param(inf, _IN_FLIGHT, id="unbounded"),
+]
+BAD_LIMITS = [
+    pytest.param(-1, ValueError, "at least 1", id="negative"),
+    pytest.param(0, ValueError, "at least 1", id="zero"),
+    pytest.param(2.5, TypeError, "an integer or math.inf", id="fraction"),
 ]
 
 
@@ -939,7 +945,7 @@ class TestAsyncMap:
     @pytest.mark.parametrize(("limit", "expected"), IN_FLIGHT_LIMITS)
     @async_test
     async def test_limit_bounds_in_flight_calls(self, limit, expected):
-        """The default limit caps calls in flight; ``limit=0`` runs them all at once."""
+        """The default limit caps calls in flight; ``limit=inf`` runs them all."""
         active = peak = 0
 
         async def track(value):
@@ -968,10 +974,11 @@ class TestAsyncMap:
 
         assert len(caught.value.exceptions) == 2
 
+    @pytest.mark.parametrize(("limit", "error", "message"), BAD_LIMITS)
     @async_test
-    async def test_async_map_rejects_negative_limit(self):
-        with pytest.raises(ValueError, match="limit cannot be negative"):
-            await async_map(_fail, range(3), limit=-1)
+    async def test_async_map_rejects_an_invalid_limit(self, limit, error, message):
+        with pytest.raises(error, match=f"limit must be {message}"):
+            await async_map(_fail, range(3), limit=limit)
 
 
 class TestFanIn:

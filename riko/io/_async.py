@@ -354,7 +354,7 @@ def async_url_open(
     Kwargs:
 
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0`` or ``inf`` waits forever.
+            30 seconds). ``inf`` waits forever; ``0`` raises ``ValueError``.
 
         encoding: The text decoding used when ``binary`` is False.
 
@@ -421,7 +421,7 @@ async def async_url_read(
     Kwargs:
 
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0`` or ``inf`` waits forever.
+            30 seconds). ``inf`` waits forever; ``0`` raises ``ValueError``.
 
         encoding: The text decoding used for local reads.
 

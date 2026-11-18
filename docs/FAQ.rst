@@ -662,24 +662,28 @@ Which environment variables tune riko?
 --------------------------------------
 
 ``RIKO_*`` environment variables override riko's runtime defaults. A malformed value
-logs a warning and keeps the default. Defaults are shown in parentheses.
+logs a warning and keeps the default. Defaults are shown in parentheses. A bound accepts
+``inf`` for no limit (``0`` is never an alias for it). The cache sizes take values >= 1
+or ``inf``.
 
-- ``RIKO_CONCURRENCY_LIMIT``: ``riko.async_map``'s default concurrent call ``limit``;
-  pass ``limit=0`` to ``async_map`` for unlimited (``16``).
+- ``RIKO_CONCURRENCY_LIMIT``: the default number of concurrent calls in async mapping
+  and async runs (``16``). It takes a whole number, never ``inf``, because streaming
+  maps need a finite worker count. Pass ``limit=inf`` to ``riko.async_map`` to lift
+  the cap for one call.
 - ``RIKO_NODE_THREADS``: the threads that sync-only modules share in async runs on
   one event loop (``40``).
 - ``RIKO_STREAMING_THRESHOLD``: the response size, in bytes, above which fetched
   content is streamed instead of buffered (``1048576``).
 - ``RIKO_ENCODING``: the default text encoding (``utf-8``).
-- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; pass ``inf`` or ``0`` for no
-  limit (``30``).
+- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; ``inf`` for no limit
+  (``30``).
 - ``RIKO_DISCOVERY_TIMEOUT``: seconds to wait for a feed discovery fetch (``10``).
 - ``RIKO_SHUTDOWN_TIMEOUT``: seconds a run's cleanup, and its stopped worker processes,
   get before being killed (``30``).
 - ``RIKO_BRANCH_BUFFER``: the most items one ``split`` branch may fall behind its
   siblings before the run fails (1024; ``inf`` for no limit).
 - ``RIKO_EXCHANGE_API``: the ``exchangerate`` module's rates API URL.
-- ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
+- ``RIKO_PICKLED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
   processes (``32``).
 - ``RIKO_PARSED_DATE_CACHE_SIZE``: how many parsed date strings are cached (``1024``).
 - ``RIKO_STRICT_CHECK_CACHE_SIZE``: how many protocol checks are remembered per object

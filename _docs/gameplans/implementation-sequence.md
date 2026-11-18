@@ -2075,6 +2075,12 @@ detailed in its topical owner:
 - **Slice C**: the task group and driver task, `Pipeline.union`, and concurrent fan-in.
 - **Slice D**: object-first publish/subscribe, with the event-sink failure rule
   (events § 6) and subscriber offload (execution-semantics, Subscriber scheduling).
+  Queue bounds follow the shipped bounds rule (user, 2026-11-17): a bound is a
+  `Limit` (whole number of at least 1, or `math.inf`), never `None` or `0` for
+  unbounded. The shipped generator-coroutine decorator and `receive`'s
+  `register_receiver` still take `maxlen=None` for an unbounded `deque`; the rewrite
+  replaces that with `inf` (a `docs/CHANGES.rst` rename-of-meaning line, since it
+  shipped in v0.77.3).
 
 **Slice 1 (done 2026-11-14).** Port-keyed dispatch (executions keyed by
 `(node_id, port)`; one source port may feed several edges, each a teed, isolated copy),
