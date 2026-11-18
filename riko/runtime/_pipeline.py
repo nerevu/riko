@@ -344,7 +344,8 @@ class Pipeline(PipelineDefinition[T_co]):
 
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
-            embed: The module a loop runs per item, with its configuration, if any.
+            embed: The configured module a loop runs per item. It is resolved when the
+                pipeline runs.
 
         Returns:
 

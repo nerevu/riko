@@ -118,7 +118,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Decimal | Iterator[dict[str, Dec
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
 
         conf (dict): The module configuration.
 

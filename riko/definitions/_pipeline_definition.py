@@ -192,7 +192,7 @@ class PipelineDefinition(Generic[T_co]):
 
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
-            embed: The module a loop runs per item, with its configuration, if any.
+            embed: The configured module a loop runs per item.
 
         Returns:
 
@@ -259,7 +259,7 @@ class PipelineDefinition(Generic[T_co]):
 
             conf: The module's configuration, if any.
             options: The call options forwarded to the module, if any.
-            embed: The module a loop runs per item, with its configuration, if any.
+            embed: The configured module a loop runs per item.
 
         Returns:
 
@@ -334,7 +334,7 @@ class PipelineDefinition(Generic[T_co]):
             keys: The match keys a keyed destination needs.
             conf: The ``write`` module's configuration, if any.
             options: The call options forwarded to the ``write`` module, if any.
-            embed: The module a loop runs per item, with its configuration, if any.
+            embed: The configured module a loop runs per item.
 
         Returns:
 

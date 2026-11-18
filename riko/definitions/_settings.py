@@ -129,7 +129,7 @@ class ExecutionSettings:
         shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
             iteration, and on how long stopped worker processes get, together, before
             any still running are killed under synchronous iteration. ``math.inf`` means
-            no bound. The default is 30 seconds, or ``RIKO_SHUTDOWN_TIMEOUT`` when set.
+            no bound. Default: 30 seconds, or ``RIKO_SHUTDOWN_TIMEOUT`` when set.
 
     Raises:
 

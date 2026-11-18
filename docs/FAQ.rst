@@ -278,8 +278,8 @@ as the ``options`` mapping.
     >>> pipeline.first(items)
     {'title': 'riko pt. 1', 'slugify': 'riko-pt-1'}
 
-A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
-example is ``split``.
+A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in example is
+``split``.
 
 Keyword arguments
 ^^^^^^^^^^^^^^^^^

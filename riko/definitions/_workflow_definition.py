@@ -424,8 +424,7 @@ class Workflow:
 
         Map keys are sorted at every level and node/edge fields use a fixed shape, so
         the same workflow always yields identical bytes. Edge order follows the
-        workflow. The default is the readable indented form committed files are
-        stored in.
+        workflow. Default: the readable indented form committed files are stored in.
 
         Kwargs:
 

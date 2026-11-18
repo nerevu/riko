@@ -96,7 +96,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
         context (Context): the run environment
 
     Kwargs:
