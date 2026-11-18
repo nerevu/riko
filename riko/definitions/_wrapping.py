@@ -9,25 +9,31 @@ plain wrappers.
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Unpack
+from typing import TYPE_CHECKING, Unpack, overload
 
 from riko.base._exceptions import RemovedOptionError
 from riko.types._frozendict import EMPTY_INPUT_SCHEMAS
 from riko.types._wrappers import is_wrapper_meta
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import AsyncIterator, Iterable, Iterator
 
     from riko.types._frozendict import FrozenInputSchemas
     from riko.types._options import RawCallOptions
+    from riko.types._streams import AsyncCascade, Cascade
     from riko.types._wrappers import (
+        AsyncModuleWrapper,
+        AsyncSplitterWrapper,
         ExtraName,
         Func,
         ModuleWrapper,
+        NodeCall,
         PrepareConf,
         PreparedCall,
         Preparer,
         SplitterWrapperOutput,
+        SyncModuleWrapper,
+        SyncSplitterWrapper,
         WrapperOutput,
     )
     from riko.types.modules import ModuleSubtype, ModuleType
@@ -105,12 +111,40 @@ def prepare_call(
     return partial(_call_plain, wrapper, conf, options)
 
 
+@overload
+def build_call(
+    pipe: SyncSplitterWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[Cascade]: ...
+@overload
+def build_call(
+    pipe: AsyncSplitterWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[AsyncCascade]: ...
+@overload
+def build_call(
+    pipe: SyncModuleWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[Iterator[object]]: ...
+@overload
+def build_call(
+    pipe: AsyncModuleWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[AsyncIterator[object]]: ...
 def build_call(
     pipe: ModuleWrapper,
     *extras: ExtraName,
     conf: PrepareConf | None = None,
     **options: Unpack[RawCallOptions],
-) -> PreparedCall:
+) -> NodeCall[object]:
     """
     Prepares ``pipe``'s configuration and call options once for reuse over many items.
 

@@ -90,7 +90,7 @@ from riko.types.modules import (
     SortRawRule,
 )
 from tests import TESTS_DIR, async_test, is_installed
-from tests._workflows import EXAMPLES_DIR, SPLIT_PENDING, run_document, run_workflow
+from tests._workflows import EXAMPLES_DIR, run_document, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -140,10 +140,7 @@ UNRUNNABLE = frozenset(
     }
 )
 
-FIXTURE_MARKS = {
-    "pipe_QMrlL_FS3BGlpwryODY80A": (SPLIT_PENDING,),
-    "pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,),
-}
+FIXTURE_MARKS: dict[str, tuple[pytest.MarkDecorator, ...]] = {}
 
 ASYNC_FIXTURES = ("pipe_gigs", "pipe_loop_assign", "pipe_loop_subpipe")
 FIXTURE_DIRS = (TESTS_DIR / "workflows", EXAMPLES_DIR / "workflows")
@@ -160,7 +157,7 @@ PROBE_PACKAGES = {
 
 # A stored-workflow fixture: it is only meaningful when another workflow embeds it.
 SUBPIPE_ONLY = frozenset({"pipe_bd0834cfe6cdacb0bea5569505d330b8"})
-PROBE_MARKS = {"pipe_zKJifuNS3BGLRQK_GsevXg": (SPLIT_PENDING,)}
+PROBE_MARKS: dict[str, tuple[pytest.MarkDecorator, ...]] = {}
 
 SURFACE_MODULES = (
     riko.bado,

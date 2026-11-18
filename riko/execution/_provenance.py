@@ -491,7 +491,7 @@ class NodeProvenance[T](ABC):
 
         Args:
 
-            results: The node's results, sync or async.
+            results: The node's sync or async results.
 
         Yields:
 

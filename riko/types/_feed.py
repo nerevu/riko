@@ -19,6 +19,7 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
+from copy import deepcopy
 from typing import TYPE_CHECKING, Generic, NamedTuple, TypeVar
 
 from attrs import define
@@ -30,7 +31,7 @@ from ._frozendict import FrozenDict
 if TYPE_CHECKING:
     from ._scalars import Hashable
     from ._streams import AnyIterable
-    from ._workflow import NodeId
+    from ._workflow import NodeId, Port, PortName
 
 type Generation = tuple[NodeId, int] | tuple[NodeId, Generation | str, int]
 type Identity = Hashable | MissingType
@@ -42,6 +43,8 @@ type EnvelopeGenerator[T] = Generator[_ItemEnvelope[T], None]
 type EnvelopeList[T] = list[_ItemEnvelope[T]]
 type TrackedCall[T] = Callable[[_ItemEnvelope[T]], EnvelopeList[T]]
 type ItemCall[T] = Callable[[T], Iterator[T]]
+type PortMap[T] = dict[PortName, EnvelopeStream[T]]
+type OutputPorts[T] = dict[Port, EnvelopeStream[T]]
 
 type AsyncFeedResult[T] = FeedResult[AsyncIterable[T]]
 type AsyncEnvelopes[T] = AsyncIterable[_ItemEnvelope[T]]
@@ -49,6 +52,8 @@ type AsyncEnvelopeStream[T] = AsyncIterator[_ItemEnvelope[T]]
 type AsyncEnvelopeGenerator[T] = AsyncGenerator[_ItemEnvelope[T], None]
 type AsyncTrackedCall[T] = Callable[[_ItemEnvelope[T]], Awaitable[EnvelopeList[T]]]
 type AsyncItemCall[T] = Callable[[T], AsyncIterator[T]]
+type AsyncPortMap[T] = dict[PortName, AsyncEnvelopeStream[T]]
+type AsyncOutputPorts[T] = dict[Port, AsyncEnvelopeStream[T]]
 
 type AnyEnvelopes[T] = AnyIterable[_ItemEnvelope[T]]
 
@@ -277,3 +282,30 @@ class _ItemEnvelope(NamedTuple, Generic[T_co]):  # noqa: UP046
 
         """
         return _ItemEnvelope(value, self.item_key, self.generation, self.observation)
+
+    def __deepcopy__(self, memo: dict[int, object]) -> _ItemEnvelope[T_co]:
+        """
+        Builds an envelope whose value is a deep copy of this one's.
+
+        The copy retains this item's identity. A branch that mutates its value leaves
+        every other branch's value untouched.
+
+        Args:
+
+            memo: The ids of the objects already copied, mapped to their copies.
+
+        Returns:
+
+            A copy of this envelope holding a deep copy of its value.
+
+        Examples:
+
+            >>> envelope = _ItemEnvelope({"x": 1}, generation=("n", 0))
+            >>> copied = deepcopy(envelope)
+            >>> copied == envelope, copied.value is envelope.value
+            (True, False)
+            >>> copied.generation is envelope.generation
+            True
+
+        """
+        return self.with_value(deepcopy(self.value, memo))

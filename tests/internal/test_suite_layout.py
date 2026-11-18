@@ -267,7 +267,9 @@ BOUND_CASES = [
 
 CLEAN_BOUND_CASES = [
     pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
-    pytest.param(_case("AsyncExecution(shutdown_timeout=0.05)"), id="subject-timeout"),
+    pytest.param(
+        _case("ExecutionSettings(shutdown_timeout=0.05)"), id="subject-timeout"
+    ),
     pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
     pytest.param(_case("event.wait()"), id="no-argument"),
     pytest.param(_case("thread.join(x)"), id="non-literal-positional"),

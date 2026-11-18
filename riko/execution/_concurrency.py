@@ -18,6 +18,7 @@ from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
 from riko.types._wrappers import RunsItems
 
+from ._prepared import PreparedNode
 from ._provenance import run_tracked_item
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
     from riko.types._workflow import NodeId, OutputName
     from riko.types._wrappers import Func
 
-    from ._prepared import ExecutionPlan, PreparedNode
+    from ._prepared import ExecutionPlan, SyncInterface
 
 __all__ = [
     "build_item_call",
@@ -81,19 +82,24 @@ def run_shipped_item[T](
 
 
 def build_item_call[T](
-    context: Context | None, node: PreparedNode, **extra: object
+    context: Context | None,
+    node: PreparedNode,
+    interface: SyncInterface[Iterator[object]],
+    /,
+    **extra: object,
 ) -> ItemCall[T]:
     """
     Builds a mappable node's synchronous per-item call with a run's inputs applied.
 
-    ``node`` must be sync native. Each call returns the node's per-item results as a
-    synchronous stream. The built call runs under the run's ``context``. Since callable
-    nodes don't read ``context``, they get ``None`` instead.
+    Each call returns the node's per-item results as a synchronous stream. The built
+    call runs under the run's ``context``. Callable nodes get ``None`` since they don't
+    read ``context``.
 
     Args:
 
         context: The run's context.
         node: The mappable node.
+        interface: The node's synchronous pipe, with its call.
 
     Kwargs:
 
@@ -115,12 +121,13 @@ def build_item_call[T](
         >>> node = ModuleNode(id="u", name="strtransform", conf=conf)
         >>> flow = Workflow().with_node(node)
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        >>> call = build_item_call(None, plan.nodes["u"])
+        >>> prepared = plan.nodes["u"]
+        >>> call = build_item_call(None, prepared, prepared.sync_interface)
         >>> list(call({"content": "hi"}))
         [{'content': 'hi', 'strtransform': 'HI'}]
 
     """
-    item_call = node.sync_interface.item_call
+    item_call = interface.item_call
 
     if isinstance(item_call, RunsItems):
         call = partial(item_call.run_item, context, extra)
@@ -180,7 +187,9 @@ def build_tracked_call[T](
 
 
 def _get_process_unsafe_reason(
-    context: Context | None, node: PreparedNode
+    context: Context | None,
+    node: PreparedNode,
+    interface: SyncInterface[Iterator[object]],
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
     embed_pipe = None if embed is None else embed.sync_pipe
@@ -193,10 +202,10 @@ def _get_process_unsafe_reason(
         reason = "its embedded module has no synchronous implementation"
     else:
         extra = {} if embed_pipe is None else {"embed": embed_pipe}
-        identity = node.sync_interface.identity
+        identity = interface.identity
 
         try:
-            args = (context, node)
+            args = (context, node, interface)
             call: ItemCall[object] = build_item_call(*args, **extra)
             build_tracked_call(call, node_id=node.node.id, identity=identity)
         except Exception as error:  # noqa: BLE001
@@ -243,11 +252,12 @@ def require_process_safe(
     """
     for node_id in plan.index.required[output]:
         node = plan.nodes[node_id]
-        reason, cause = (
-            _get_process_unsafe_reason(context, node)
-            if node.is_sync_mappable
-            else (None, None)
-        )
+        is_node = isinstance(node, PreparedNode)
+
+        if is_node and (interface := node.sync_map_interface) is not None:
+            reason, cause = _get_process_unsafe_reason(context, node, interface)
+        else:
+            reason, cause = (None, None)
 
         if reason is not None:
             msg = f"node {node_id!r} cannot run on the process executor: {reason}"

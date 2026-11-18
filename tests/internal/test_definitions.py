@@ -12,6 +12,7 @@ import pytest
 from attrs import fields_dict
 
 from riko.base._exceptions import ResourceInterpretationWarning
+from riko.base._guards import get_sync_closer
 from riko.base._require_guards import typed_dict_keys
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -48,7 +49,7 @@ from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.types._enums import Formats
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import get_async_closer, get_sync_closer
+from riko.types._io import get_async_closer
 from riko.types._options import CallOptions, RawCallOptions
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -64,6 +65,7 @@ from riko.types._workflow import (
     DocumentNodeFamily,
     Endpoint,
     ParsedPort,
+    PortName,
     RawEdge,
     RawEndpoint,
     RawNode,
@@ -603,8 +605,8 @@ class TestParsePort:
             ("out", ParsedPort("out", None, None)),
             ("in:1", ParsedPort("in", 1, None)),
             ("out:2", ParsedPort("out", 2, None)),
-            ("out:matched", ParsedPort("out", None, "matched")),
-            ("in:count", ParsedPort("in", None, "count")),
+            ("out:matched", ParsedPort("out", None, PortName("matched"))),
+            ("in:count", ParsedPort("in", None, PortName("count"))),
         ],
     )
     def test_parse_port_grammar(self, port, expected):

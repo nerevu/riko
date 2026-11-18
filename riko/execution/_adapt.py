@@ -2,37 +2,36 @@
 """
 Adapts streams and callables across the synchronous/asynchronous boundary.
 
-Both the sync and the async execution share these helpers to type a pipe callable's raw
-return value as the item stream the execution plan guarantees it to be and to
-re-expose one side's stream to the other without materializing it. They are
-private to the runtime and belong to no supported surface.
+Both the sync and the async execution share these helpers. They re-expose one side's
+stream or loop embed to the other without materializing it.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 from functools import partial
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 from riko.bado.itertools import aiter_sentinel
+from riko.base._exceptions import InvalidPipelineError
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.types._wrappers import (
     AsyncFunc,
     Func,
     require_async_wrapper,
-    require_single_output,
     require_sync_wrapper,
 )
+
+from ._prepared import NO_PIPE_MSG
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from riko.types._streams import Item, Items
+    from riko.types._streams import Item
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
-        AsyncModuleWrapperOutput,
         ModuleWrapper,
         SyncModuleWrapper,
     )
@@ -58,62 +57,7 @@ class WorkerCall(Protocol):
     ) -> Awaitable[R]: ...
 
 
-def require_stream[T](
-    value: Iterator[T] | Iterator[Iterator[T]], pipe: ModuleWrapper
-) -> Iterator[T]:
-    """
-    Narrows a synchronous pipe's raw return value to its item stream.
-
-    A pipe's call signature admits a stream of streams, so the narrowing is
-    earned by checking the pipe's declared module type rather than by reading
-    what it yields; nothing is consumed here.
-
-    Args:
-
-        value: The raw return value of ``pipe``.
-        pipe: The wrapper that produced ``value``.
-
-    Returns:
-
-        ``value`` as a lazy item stream.
-
-    Raises:
-
-        InvalidPipelineError: If ``pipe`` is a splitter.
-
-    """
-    require_single_output(pipe)
-    return cast("Iterator[T]", iter(value))
-
-
-def require_async_stream[T](
-    value: AsyncModuleWrapperOutput[T], pipe: ModuleWrapper
-) -> AsyncIterator[T]:
-    """
-    Narrows an asynchronous pipe's raw return value to its async item stream.
-
-    The async counterpart of ``require_stream``: the pipe's declared module type
-    earns the narrowing, and nothing is consumed here.
-
-    Args:
-
-        value: The raw return value of ``pipe``.
-        pipe: The wrapper that produced ``value``.
-
-    Returns:
-
-        ``value`` as a lazy async item stream.
-
-    Raises:
-
-        InvalidPipelineError: If ``pipe`` is a splitter.
-
-    """
-    require_single_output(pipe)
-    return cast("AsyncIterator[T]", aiter(value))
-
-
-def async_drain[T](call: LoopCall, stream: AsyncIterator[T]) -> Iterator[T]:
+def to_sync[T](call: LoopCall, stream: AsyncIterator[T]) -> Iterator[T]:
     """
     Re-exposes an async stream as a lazy synchronous item stream.
 
@@ -205,12 +149,12 @@ def _copy_wrapper_meta(
 
 def _materialize(
     embed: SyncModuleWrapper, item: Item | None, kwargs: dict[str, object]
-) -> list[Item]:
+) -> list[object]:
     """Runs a blocking embed for one parent item and collects everything it yields."""
-    return list(require_stream(embed(item, **kwargs), embed))
+    return list(embed(item, **kwargs))
 
 
-def adapt_embed[T](embed: AsyncModuleWrapper, drain: Drain[T]) -> SyncModuleWrapper:
+def adapt_embed(embed: AsyncModuleWrapper, to_sync: Drain[object]) -> SyncModuleWrapper:
     """
     Wraps an async-only loop embed as a synchronous one.
 
@@ -221,25 +165,23 @@ def adapt_embed[T](embed: AsyncModuleWrapper, drain: Drain[T]) -> SyncModuleWrap
     Args:
 
         embed: The asynchronous pipe to run per parent item.
-        drain: Consumes an async stream from the thread the loop pipe runs on.
+        to_sync: Consumes an async stream from the thread the loop pipe runs on.
 
     Returns:
 
-        A synchronous embed whose per-item stream is drained through ``drain``.
+        A synchronous embed whose per-item stream is drained through ``to_sync``.
 
     """
 
-    def wrapper(item: T | None = None, **kwargs: object) -> Iterator[T]:
-        output = cast("AsyncModuleWrapperOutput[T]", embed(item, **kwargs))
-        stream = require_async_stream(output, embed)
-        return drain(stream)
+    def wrapper(item: object = None, **kwargs: object) -> Iterator[object]:
+        return to_sync(aiter(embed(item, **kwargs)))
 
     _copy_wrapper_meta(wrapper, embed, isasync=False)
     return require_sync_wrapper(wrapper)
 
 
 def async_adapt_embed(
-    embed: SyncModuleWrapper, run_sync: WorkerCall
+    embed: SyncModuleWrapper, to_async: WorkerCall
 ) -> AsyncModuleWrapper:
     """
     Wraps a sync-only loop embed as an asynchronous one.
@@ -252,7 +194,7 @@ def async_adapt_embed(
     Args:
 
         embed: The blocking pipe to run per parent item.
-        run_sync: Runs a blocking callable off the event loop.
+        to_async: Runs a blocking callable off the event loop.
 
     Returns:
 
@@ -260,60 +202,58 @@ def async_adapt_embed(
 
     """
 
-    async def wrapper(item: Item | None = None, **kwargs: object) -> Items:
-        materialized: list[Item] = await run_sync(_materialize, embed, item, kwargs)
-        return materialized
+    async def wrapper(item: Item | None = None, **kwargs: object) -> list[object]:
+        return await to_async(_materialize, embed, item, kwargs)
 
     _copy_wrapper_meta(wrapper, embed, isasync=True)
     return require_async_wrapper(wrapper)
 
 
-def select_embed[T](
-    embed: ResolvedModule, *, host_isasync: bool, run_sync: WorkerCall, drain: Drain[T]
+def select_embed(
+    embed: ResolvedModule,
+    *,
+    host_isasync: bool,
+    to_async: WorkerCall,
+    to_sync: Drain[object],
 ) -> AnyModuleWrapper:
     """
     Chooses a loop embed's callable to match whether its host pipe runs sync or async.
 
     Args:
 
-        embed: The embed module resolved alongside the loop node.
+        embed: The resolved embed module, with its sync and async callables.
 
     Kwargs:
 
         host_isasync: Whether the loop pipe runs asynchronously.
-        run_sync: Runs a sync-only embed off the event loop under an async host.
-        drain: Pulls an async-only embed's output stream under a sync host.
+        to_async: Runs a sync-only embed off the event loop under an async host.
+        to_sync: Pulls an async-only embed's output stream under a sync host.
 
     Returns:
 
-        The embed's native callable for the host (sync or async), or a wrapper
-        adapting its callable from the sync or async counterpart.
+        The embed's callable for the host's mode, else a wrapper adapting its other
+        callable.
+
+    Raises:
+
+        InvalidPipelineError: If the embed has neither a sync nor an async callable.
 
     """
     if host_isasync:
-        pipe = embed.select_async()
-
-        if embed.is_async_pipe(pipe):
-            result = pipe
+        if (async_pipe := embed.async_pipe) is not None:
+            result: AnyModuleWrapper = async_pipe
+        elif (sync_pipe := embed.sync_pipe) is not None:
+            result = async_adapt_embed(sync_pipe, to_async)
         else:
-            result = async_adapt_embed(pipe, run_sync)
+            raise InvalidPipelineError(NO_PIPE_MSG.format(embed.name))
+    elif (sync_pipe := embed.sync_pipe) is not None:
+        result = sync_pipe
+    elif (async_pipe := embed.async_pipe) is not None:
+        result = adapt_embed(async_pipe, to_sync)
     else:
-        sync_pipe = embed.select_sync()
-
-        if embed.is_async_pipe(sync_pipe):
-            result = adapt_embed(sync_pipe, drain)
-        else:
-            result = sync_pipe
+        raise InvalidPipelineError(NO_PIPE_MSG.format(embed.name))
 
     return result
 
 
-__all__ = [
-    "adapt_embed",
-    "async_adapt_embed",
-    "async_drain",
-    "pull_stream",
-    "require_async_stream",
-    "require_stream",
-    "select_embed",
-]
+__all__ = ["adapt_embed", "async_adapt_embed", "pull_stream", "select_embed", "to_sync"]

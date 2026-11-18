@@ -15,7 +15,7 @@ from collections.abc import (
 )
 from decimal import Decimal
 from functools import wraps
-from inspect import isawaitable, iscoroutinefunction
+from inspect import Parameter, isawaitable, iscoroutinefunction, signature
 from json import loads
 from time import monotonic
 from types import ModuleType, SimpleNamespace
@@ -26,9 +26,10 @@ import pytest
 
 from riko.bado._backend import Event, async_sleep, create_task_group
 from riko.bado._util import maybe_aclosing, maybe_closing
-from riko.bado.itertools import as_async, auto_close
+from riko.bado.itertools import AsyncTeeBranch, as_async
 from riko.base import _paths as paths_module
-from riko.base._exceptions import ReceiverUnavailableError
+from riko.base._exceptions import InvalidPipelineError, ReceiverUnavailableError
+from riko.base._iterutils import auto_close
 from riko.base._paths import PACKAGE_DIR, get_path
 from riko.base._sentinels import MISSING
 from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
@@ -69,12 +70,19 @@ from riko.runtime._pubsub import async_hub
 from riko.runtime._workflow_pipes import workflow
 from riko.types._options import ItemDispatch, ValueDispatch
 from riko.types._wrappers import (
+    PARSER_POSITIONALS,
     WRAPPER_META,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
     AsyncSubPipe,
+    AwaitableOperatorParser,
+    AwaitableProcessorParser,
+    AwaitableSplitterParser,
     DeclaresIdentity,
+    SyncOperatorParser,
+    SyncProcessorParser,
     SyncProcessorWrapper,
+    SyncSplitterParser,
     require_async_wrapper,
     require_sync_wrapper,
 )
@@ -93,8 +101,20 @@ from tests._streams import Closeable
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
-    from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
+    from riko.types._streams import (
+        AsyncCascade,
+        AsyncStream,
+        Cascade,
+        Feed,
+        Item,
+        ItemOrValue,
+        Stream,
+    )
+    from riko.types._wrappers import (
+        PipeTuples,
+        SyncModuleWrapper,
+        SyncOperatorWrapperOutput,
+    )
 
 type _AliasStream = Iterator[int]
 type _UnavailableAlias = DynamicConf | int
@@ -233,6 +253,14 @@ FIXED_ARITY = [
         FIXED_SPLITTER, _fixed_splitter, FIXED_ROWS, FIXED_CONTEXT, id="splitter"
     ),
 ]
+PARSER_PROTOCOLS = [
+    pytest.param(SyncProcessorParser, id="sync-processor"),
+    pytest.param(SyncOperatorParser, id="sync-operator"),
+    pytest.param(SyncSplitterParser, id="sync-splitter"),
+    pytest.param(AwaitableProcessorParser, id="awaitable-processor"),
+    pytest.param(AwaitableOperatorParser, id="awaitable-operator"),
+    pytest.param(AwaitableSplitterParser, id="awaitable-splitter"),
+]
 
 
 class TestParserSignature:
@@ -249,6 +277,12 @@ class TestParserSignature:
 
         pipe = processor()(parser)
         assert next(pipe({"content": "hi"}, assign="content")) == {"content": "HI"}
+
+    @pytest.mark.parametrize("protocol", PARSER_PROTOCOLS)
+    def test_parser_protocol_takes_the_positional_count(self, protocol) -> None:
+        _, *params = signature(protocol.__call__).parameters.values()
+        kinds = [p.kind for p in params]
+        assert kinds.count(Parameter.POSITIONAL_ONLY) == PARSER_POSITIONALS
 
     def test_fixed_arity_parser_is_a_type_error(self) -> None:
         pipes = [
@@ -311,27 +345,35 @@ class TestSplitter:
         assert isinstance(prepared, DeclaresIdentity)
         assert prepared.identity is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=TypeError,
-        reason="execution-owned split fan-out is not yet implemented: the async "
-        "splitter wrapper reads its input synchronously, so handing it an async "
-        "stream raises TypeError instead of yielding the branches",
-    )
     @async_test
     async def test_async_splitter_accepts_an_async_input_stream(self) -> None:
         source = as_async(iter([{"x": 1}]))
-        branches = async_split(source)  # pyright: ignore[reportArgumentType]
+        branches = async_split(source)
         first = await anext(branches)
-        assert next(first) == {"x": 1}
+        assert await anext(first) == {"x": 1}
+        second = await anext(branches)
+        assert isinstance(first, AsyncTeeBranch)
+        assert isinstance(second, AsyncTeeBranch)
+        await first.aclose()
+        await second.aclose()
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="execution-owned split fan-out is not yet implemented: the splitter "
-        "wrapper does not resolve its context, so its parser receives the raw "
-        "context object instead of the context's inputs",
-    )
+    @async_test
+    async def test_async_splitter_streams_a_long_feed(self) -> None:
+        pulled: list[int] = []
+
+        async def source() -> AsyncIterator[Item]:
+            for i in range(10_000):
+                pulled.append(i)
+                yield {"i": i}
+
+        first, second = [branch async for branch in async_split(source())]
+        assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
+        assert pulled == [0]
+        assert isinstance(first, AsyncTeeBranch)
+        assert isinstance(second, AsyncTeeBranch)
+        await first.aclose()
+        await second.aclose()
+
     def test_splitter_resolves_the_context_for_its_parser(self) -> None:
         seen: dict[str, object] = {}
 
@@ -344,6 +386,67 @@ class TestSplitter:
         list(pipe(iter([{"x": 1}]), context=context))
         assert "context" not in seen
         assert seen.get("inputs") == {"name": "riko"}
+
+    def test_sync_splitter_rejects_an_async_input_stream(self) -> None:
+        source = cast("Any", as_async(iter([{"x": 1}])))
+
+        with pytest.raises(TypeError, match="cannot read an async stream"):
+            next(split(source))
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a lazy async feed into a splitter with a synchronous parser is not "
+        "yet implemented",
+    )
+    @async_test
+    async def test_async_splitter_with_a_sync_parser_streams_a_long_feed(self) -> None:
+        pulled: list[int] = []
+
+        async def source() -> AsyncIterator[Item]:
+            for i in range(10_000):
+                pulled.append(i)
+                yield {"i": i}
+
+        def tee_twice(stream: Stream, *args, **kwargs) -> Cascade:
+            return iter(itertools.tee(stream, 2))
+
+        pipe = splitter(isasync=True)(tee_twice)
+        first, second = [branch async for branch in pipe(source())]
+        assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
+        assert len(pulled) < 10
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="resolving per-item conf for an async splitter input is not yet "
+        "implemented",
+    )
+    @async_test
+    async def test_async_splitter_resolves_conf_per_item(self) -> None:
+        async def parser(
+            stream: Feed, objconf: object, tuples: PipeTuples, /, **kwargs: object
+        ) -> AsyncCascade:
+            items = as_async(tuples) if isinstance(tuples, Iterator) else tuples
+            keys = [{"key": conf.default} async for _, conf in items]
+            return as_async(iter([as_async(iter(keys))]))
+
+        pipe = splitter({"default": "fallback"}, isasync=True)(parser)
+        conf = cast("Conf", {"default": {"subkey": "x"}})
+        source = as_async(iter([{"x": 1}, {"x": 2}]))
+        branch = await anext(pipe(source, conf=conf))
+        assert [item async for item in branch] == [{"key": 1}, {"key": 2}]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="rejecting a wrongly typed conf value on a direct pipe call is not yet "
+        "implemented",
+    )
+    def test_a_direct_call_rejects_a_string_isolate(self) -> None:
+        """A direct call reads it as true."""
+        with pytest.raises(InvalidPipelineError):
+            list(split(iter([{"n": 1}]), conf={"isolate": "false"}))  # pyright: ignore[reportArgumentType]
 
 
 class TestAsyncOperatorLaziness:
@@ -1431,6 +1534,21 @@ class TestCsvParser:
 
         list(csv.parser({}, None, conf))
         assert closed
+
+    @pytest.mark.parametrize("module", [csv, fetchtable], ids=["csv", "fetchtable"])
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="rejecting a wrongly typed conf value on a direct pipe call is not yet "
+        "implemented",
+    )
+    def test_a_direct_call_rejects_a_string_has_header(self, tmp_path, module) -> None:
+        """A bare ``"false"`` is read as true, so the first row becomes the header."""
+        path = tmp_path / "rows.csv"
+        path.write_text("a,b\n1,2\n")
+        conf = CsvConf(url=str(path), has_header="false")  # pyright: ignore[reportArgumentType]
+        with pytest.raises(InvalidPipelineError):
+            list(module.pipe(conf=conf))
 
 
 # Each row: a rates response document, and the error message it raises.

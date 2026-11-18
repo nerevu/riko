@@ -22,7 +22,7 @@ from riko.types._streams import AsyncStream, StatefulItem
 from riko.types._wrappers import ParserMaterializedOutput, ParserOutput, is_subpipe
 from riko.types.modules import ItemBuilderConf
 from tests import TESTS_DIR, async_test
-from tests._workflows import SPLIT_PENDING, register_documents, run_workflow
+from tests._workflows import register_documents, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -207,7 +207,6 @@ FIRST_ITEM_FIELDS = [
         "title",
         "Open researcher open course",
         id="simplemath",
-        marks=SPLIT_PENDING,
     ),
 ]
 FIRST_TITLE_PREFIXES = [
@@ -225,7 +224,6 @@ FIRST_TITLE_PREFIXES = [
         7,
         "[Weight] More parents think their overweight",
         id="split",
-        marks=SPLIT_PENDING,
     ),
     pytest.param(
         "pipe_06c4c44316efb0f5f16e4e7fa4589ba2",

@@ -135,7 +135,7 @@ scalar = pytest.fixture(lambda: SCALAR)
 
 WRAPPED_VALUES = [
     pytest.param("scalar", {"cleanup": lambda _: None}, id="scalar-with-cleanup"),
-    pytest.param("connection", {}, id="closeable"),
+    pytest.param("connection", {}, id="closable"),
 ]
 
 

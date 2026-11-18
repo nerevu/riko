@@ -455,17 +455,16 @@ class TestPipelineIteration:
     def test_first_reads_a_self_starting_pipeline_unseeded(self):
         assert tokenized(VALUE).first(default=None) == EXPECTED[0]
 
-    def test_iterating_a_split_pipeline_raises_before_running(self):
+    def test_iterating_a_split_pipeline_reads_its_first_branch(self):
         consumed = []
 
         def source():
             consumed.append(1)
             yield {"x": 1}
 
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            list(source() | Pipeline.from_module("split"))
-
-        assert consumed == []
+        pipeline = source() | Pipeline.from_module("split")
+        assert list(pipeline) == [{"x": 1}]
+        assert consumed == [1]
 
     def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
         pipeline = tokenized()
@@ -539,17 +538,16 @@ class TestAsyncPipelineIteration:
         assert await pipeline.afirst([{"x": 1}]) == {"x": 1}
 
     @async_test
-    async def test_async_iterating_a_split_pipeline_raises_before_running(self):
+    async def test_async_iterating_a_split_pipeline_reads_its_first_branch(self):
         consumed = []
 
         def source():
             consumed.append(1)
             yield {"x": 1}
 
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            _ = [item async for item in source() | Pipeline.from_module("split")]
-
-        assert consumed == []
+        pipeline = source() | Pipeline.from_module("split")
+        assert [item async for item in pipeline] == [{"x": 1}]
+        assert consumed == [1]
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
@@ -757,7 +755,7 @@ class TestClose:
         assert closed == [True]
 
     @skipif_issync
-    def test_leaving_open_closes_a_closeable_async_iterator_seed(self):
+    def test_leaving_open_closes_a_closable_async_iterator_seed(self):
         closed: list[str] = []
 
         with Pipeline.from_module("hash").open(ClosingAsyncIterator(closed)) as stream:
