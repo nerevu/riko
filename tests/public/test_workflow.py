@@ -459,6 +459,15 @@ _CALLABLE_NODE_ERRORS = [
     pytest.param({"resources": "def"}, _INVALID, "identifiers", id="keyword"),
     pytest.param({"identity": "bogus"}, _INVALID, "'identity'", id="identity"),
     pytest.param({"fn": "len"}, TypeError, "callable", id="uncallable"),
+    pytest.param({"kwargs": {"resources": 1}}, _INVALID, "reserved", id="resources-kw"),
+    pytest.param({"kwargs": {"version": 1}}, _INVALID, "reserved", id="version-kw"),
+    pytest.param({"kwargs": {"identity": 1}}, _INVALID, "reserved", id="identity-kw"),
+    pytest.param(
+        {"fn": lambda _, **kwargs: kwargs, "kwargs": {"_": 1}},
+        _INVALID,
+        "reserved",
+        id="item-parameter-kw",
+    ),
 ]
 
 

@@ -12,6 +12,7 @@ from riko.bado.itertools import alist
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._context import Context
 from riko.definitions._nodes import CallableNode
+from riko.definitions._workflow_definition import Workflow
 from riko.ext import ModuleDefinition
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import IdentityMode
@@ -116,6 +117,8 @@ _PASSTHROUGH_CASES = [
 _MAP_ERRORS = [
     pytest.param({"resources": "db", "db": 1}, "share names", id="alias-collision"),
     pytest.param({"obj": object()}, "JSON", id="non-json-kwarg"),
+    pytest.param({"context": 1}, "reserved names", id="context-kwarg"),
+    pytest.param({"item": 1}, "reserved names", id="item-kwarg"),
 ]
 
 
@@ -290,6 +293,14 @@ class TestCallableNodes:
         )
         assert pipeline.first() == {"content": 3944515045}
         assert len(runs) == 1
+
+    def test_a_callable_node_delivers_a_keyword_named_fn(self):
+        def bound(_: object, **kwargs: object) -> dict[str, object]:
+            return kwargs
+
+        node = CallableNode(id="c", name="c", fn=bound, kwargs={"fn": 1})
+        pipeline = Pipeline(Workflow().with_node(node))
+        assert list(pipeline([{"x": 1}])) == [{"fn": 1}]
 
     def test_map_propagates_exceptions(self):
         with pytest.raises(ValueError, match="'x': 1"):
