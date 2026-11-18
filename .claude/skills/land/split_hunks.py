@@ -39,6 +39,7 @@ HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 NO_EOL = "\\ No newline at end of file"
 NULL_SHA = "0" * 40
 GIT = shutil.which("git") or "git"
+BASE = "HEAD"
 
 
 @dataclass
@@ -124,8 +125,8 @@ def parse_diff(text: str) -> list[FileChange]:
 
 
 def load_change(context: int = 0) -> list[FileChange]:
-    """Loads ``git diff HEAD`` plus untracked files as selectable changes."""
-    files = parse_diff(git("diff", "--no-renames", f"-U{context}", "HEAD"))
+    """Loads ``git diff BASE`` plus untracked files as selectable changes."""
+    files = parse_diff(git("diff", "--no-renames", f"-U{context}", BASE))
     untracked = git("ls-files", "--others", "--exclude-standard", "-z").split("\0")
     files.extend(FileChange(path, "?") for path in untracked if path)
     return files
@@ -194,7 +195,7 @@ def file_mode(path: str) -> str:
 
 
 class TreeBuilder:
-    """Builds ``HEAD`` plus a selection of hunks as a tree, in a private index."""
+    """Builds ``BASE`` plus a selection of hunks as a tree, in a private index."""
 
     def __init__(self, files: list[FileChange]) -> None:
         self.files = {f.path: f for f in files}
@@ -221,28 +222,34 @@ class TreeBuilder:
                 )
                 self._blobs[key] = f"{file_mode(path)} {self._blob(data)}\t{path}"
             else:
-                head = git("show", f"HEAD:{path}").splitlines(keepends=True)
+                head = git("show", f"{BASE}:{path}").splitlines(keepends=True)
                 hunks = [h for h in change.hunks if h.id in chosen]
-                mode = git("ls-tree", "HEAD", "--", path).split()[0]
+                mode = git("ls-tree", BASE, "--", path).split()[0]
                 blob = self._blob(splice(head, hunks).encode())
                 self._blobs[key] = f"{mode} {blob}\t{path}"
 
         return self._blobs[key]
 
     def tree(self, selected: set[str]) -> str:
-        """Writes the tree for ``HEAD`` plus the selected ids and returns its sha."""
+        """Writes the tree for ``BASE`` plus the selected ids and returns its sha."""
         by_path: dict[str, set[str]] = {}
 
         for hid in selected:
             item = self.ids[hid]
             by_path.setdefault(item.path, set()).add(hid)
 
-        git("read-tree", "HEAD", env=self.env)
+        git("read-tree", BASE, env=self.env)
         lines = [self._entry(p, frozenset(ids)) for p, ids in sorted(by_path.items())]
         git(
             "update-index", "--index-info", data="\n".join(lines).encode(), env=self.env
         )
         return git("write-tree", env=self.env).strip()
+
+
+def set_base(ref: str) -> None:
+    """Sets the commit the change is diffed against (``HEAD`` unless un-committing)."""
+    global BASE
+    BASE = git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
 
 
 def working_tree() -> str:
@@ -260,7 +267,9 @@ def main() -> None:
     parser.add_argument("selection", nargs="?", type=Path, help="file of ids for emit")
     parser.add_argument("-U", type=int, default=0, dest="context", help="diff context")
     parser.add_argument("--body", type=int, default=0, help="hunk lines to show (list)")
+    parser.add_argument("--base", default="HEAD", help="ref the hunks apply to")
     args = parser.parse_args()
+    set_base(args.base)
     files = load_change(args.context)
 
     if args.command == "list":
@@ -283,7 +292,7 @@ def main() -> None:
     else:
         ids = {i for e in read_selection(args.selection) for i in expand(e, files)}
         tree = TreeBuilder(files).tree(ids)
-        sys.stdout.write(git("diff", "--binary", "HEAD", tree))
+        sys.stdout.write(git("diff", "--binary", BASE, tree))
 
 
 if __name__ == "__main__":

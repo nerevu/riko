@@ -30,6 +30,10 @@ Rules (code, class, what it flags):
                       no ``converter=``
     RM801 parity      sync/async twins (``x``/``ax``, ``_x``/``_ax``) passing
                       different I/O keywords (``timeout``, ``encoding``, ...)
+    RM802 colors      an ``async def`` method of ``AsyncX`` named exactly like a plain
+                      ``def`` method of its twin ``X``/``SyncX`` (same file first,
+                      else anywhere under ``riko/``); prefix it ``a``. Dunders and an
+                      ``AsyncX`` subclassing its twin are skipped
     RM901 multi-return  a function with more than one ``return`` (the house style is
                       a single return at the end); each ``return`` is a lead, so a
                       change to any of them is in scope
@@ -92,11 +96,14 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+type _Methods = dict[str, ast.FunctionDef | ast.AsyncFunctionDef]
 
 GIT = shutil.which("git") or "git"
 ROOT = Path(__file__).resolve().parents[3]
@@ -217,12 +224,19 @@ CLASS_HISTORY = {
             "11-04 docstring sections"
         ),
     ),
-    "frozen": (3, "1906d375; 10-05 deep-frozen definitions; 10-31 WriteCapabilities"),
+    "frozen": (
+        4,
+        (
+            "1906d375; 10-05 deep-frozen definitions; 10-31 WriteCapabilities; "
+            "11-17 Tee _Read"
+        ),
+    ),
     "unbounded": (
         3,
         "737f19d6 fetch timeout, 998daf8b async_map limit; 10-31 async fetch timeout",
     ),
     "find-slice": (1, "10-31 fetchpage.get_string"),
+    "colors": (1, "11-17 AsyncTee _advance/_close_source/_drop/_pull"),
     "multi-return": (0, "house style: one return per function"),
 }
 
@@ -843,6 +857,68 @@ def _check_parity(tree: ast.Module, path: Path) -> Iterator[Lead]:
                 )
 
 
+def _get_methods(cls: ast.ClassDef) -> _Methods:
+    kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
+    return {f.name: f for f in cls.body if isinstance(f, kinds)}
+
+
+def _get_classes(tree: ast.Module) -> dict[str, ast.ClassDef]:
+    classes: dict[str, ast.ClassDef] = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            classes.setdefault(node.name, node)
+
+    return classes
+
+
+@cache
+def _index_classes(root: Path) -> dict[str, _Methods]:
+    index: dict[str, _Methods] = {}
+
+    for path in sorted((root / "riko").rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except (OSError, SyntaxError):
+            continue
+
+        for name, cls in _get_classes(tree).items():
+            index.setdefault(name, _get_methods(cls))
+
+    return index
+
+
+def _check_colors(tree: ast.Module, path: Path) -> Iterator[Lead]:
+    classes = _get_classes(tree)
+
+    for name, cls in classes.items():
+        base = name.removeprefix("Async")
+
+        if base == name or not base:
+            continue
+
+        bases = {label(b).removesuffix("[]") for b in cls.bases}
+        twins = [t for t in (base, f"Sync{base}") if t not in bases]
+        local = [_get_methods(classes[t]) for t in twins if t in classes]
+        index = _index_classes(ROOT)
+        sync = (local or [index[t] for t in twins if t in index] or [{}])[0]
+
+        for method, func in _get_methods(cls).items():
+            if (
+                isinstance(func, ast.AsyncFunctionDef)
+                and isinstance(sync.get(method), ast.FunctionDef)
+                and not method.startswith("__")
+            ):
+                yield Lead(
+                    path,
+                    func.lineno,
+                    "RM802",
+                    "colors",
+                    f"async `{name}.{method}` shares its sync twin's plain "
+                    "method name; prefix it `a`",
+                )
+
+
 def _gen_returns(node: ast.AST) -> Iterator[ast.Return]:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, ast.Return):
@@ -882,7 +958,12 @@ def scan_file(path: Path) -> list[Lead]:
     _annotate_parents(tree)
     scanner = Scanner(path, source)
     scanner.visit(tree)
-    leads = [*scanner.leads, *_check_parity(tree, path), *_check_returns(tree, path)]
+    leads = [
+        *scanner.leads,
+        *_check_parity(tree, path),
+        *_check_colors(tree, path),
+        *_check_returns(tree, path),
+    ]
     lines = scanner.lines
     kept = []
 

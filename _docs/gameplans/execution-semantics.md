@@ -262,11 +262,11 @@ Open (backburner): an awaitable seed is also resolved on the portal, so its valu
 qualify for a bridged close; it stays rejected until decided.
 
 Delivery is staged over one close landscape (2026-10-31 triage). Stage 1 (landed):
-`get_sync_closer`/`get_async_closer` in `riko/types/_io.py` classify how a value closes
-(replacing `_has_async_close`), and `require_value` in `riko/bado/_util.py` is the one
-awaitable-rejection helper. Stage 2 (landed): one `run_bridged`/`maybe_async`/`asyncify`
-pair plus a per-execution `register_owned` replace
-`close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
+`get_sync_closer` (`riko/base/_guards.py`)/`get_async_closer` (`riko/types/_io.py`)
+classify how a value closes (replacing `_has_async_close`), and `require_value` in
+`riko/base/_guards.py` is the one awaitable-rejection helper. Stage 2 (landed): one
+`run_bridged`/`maybe_async`/`asyncify` pair plus a per-execution `register_owned`
+replace `close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
 `_adapt._maybe_close`/`_close_returned`, and the inline
 `queue_callback(x.close)`/`x.aclose` sites; it carries the rule above and a regression
 table (seed, native return, node stream, raw return × sync/async) for values whose only
@@ -287,19 +287,21 @@ enters through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a
 streams, close-once. `aauto_close` (`riko/bado/itertools.py`) and
 `maybe_closing`/`maybe_aclosing` use `run_bridged`/`maybe_async`/`asyncify`
 (`riko/bado/_util.py`); closers come only from `get_sync_closer`/`get_async_closer`.
-Follow-up, owned by R7 fan-out (assigned 2026-11-12, recorded 2026-11-02): sync
-execution still registers each non-endpoint node stream on its exit stack with no run
-object, so an upstream sync generator closes at execution exit, not when its downstream
-node finishes or the output stream closes; a sync twin of `_RunStream`/`_Owned` retires
-`_close_tracked` and the context parameter of the sync `_build_stream`. Tripwire:
-`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`.
-`Workflow.require_executable` refuses fan-out, so each node stream has one consumer;
-when fan-out lands, a sync node's early input close must become per-consumer. Bare
+Follow-up, owned by R7 fan-out (assigned 2026-11-12, recorded 2026-11-02, narrowed
+2026-11-17): sync execution has its own `_RunStream`/`_Owned`, so a sync node stream
+closes when the run's output closes
+(`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`)
+and a native sync splitter branch closes once its reader finishes. The remaining gap is
+async-only components under `SyncExecution`: an async-only node's stream and an adapted
+async splitter branch are registered on the execution (`register_owned`/`_drain_owned`),
+so they close at execution exit, not when their sync consumer finishes. Tripwire:
+`tests/internal/test_plan_runs.py::TestPlanRun::test_run_closes_each_split_branch_once_its_reader_finishes[async-split]`.
+A port with several readers is teed, so each reader closes only its own branch. Bare
 operator wrappers never close their input either (triage 2026-11-14): the wrapper closes
 only the parser's result, so closing a direct `truncate`, `uniq`, or `filter` call early
 leaves a source the caller still holds open; that module-level contract is S1's
 ([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)),
-and this run-object follow-up owns the execution-level close.
+and this follow-up owns the execution-level close.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module,
 parser, factory, and extension code never creates event loops, portals, executors,
@@ -825,6 +827,10 @@ When multiple publishers target one subscription, the subscription completes onl
 all attached publishers complete. Concurrent publishers preserve actual delivery order;
 no artificial global ordering is imposed.
 
+Decided 2026-11-16 (user), R7: under async execution a sync subscriber callback runs on
+a bounded AnyIO worker and a native async one on the loop; callbacks within one
+subscription run sequentially.
+
 ### `split()`
 
 `split()` is streaming fan-out, not whole-source `deepcopy`:
@@ -833,7 +839,8 @@ no artificial global ordering is imposed.
 - only reachable/used outputs become active branches;
 - active branches receive items incrementally;
 - unused outputs allocate no queue and exert no backpressure;
-- per-branch buffers are bounded and default to zero-buffer/rendezvous semantics;
+- a branch read behind its siblings holds a lossless lag buffer, unbounded by default
+  and capped by `branch_buffer` (fanout-topology § 7);
 - split is never lossy and has no drop overflow mode.
 
 Branch isolation is observable, but the runtime chooses the cheapest safe copy/share
@@ -1546,6 +1553,24 @@ Regression:
 must not be entered in the consumer's task across a `yield` — host it in a dedicated
 execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this
 regression trips.
+
+**Fan-out execution rules (decided 2026-11-16 (user), R7).**
+
+- Slice A: closing a run's last branch returns promptly even while an upstream advance
+  is in flight (the advancer finishes the source close), and execution cancellation is
+  prompt the same way (fanout-topology § 7).
+- Slice B: `Pipeline.with_execution` gains `strict: bool = False` and
+  `overrides: Mapping[str, object] | None`. Override keys are `Settings` attribute
+  names (not env names) with native values, validated at definition time; unknown keys
+  are rejected, and only `branch_buffer` is supported in R7. Successive calls merge,
+  `overrides=None` clears them all, and `{"branch_buffer": None}` removes that one
+  override (falling back to process settings). Right-hand composition operands keep
+  the default-execution-settings rule. `strict` checks splitter cardinality only
+  (fanout-topology § 7).
+- Under `AsyncExecution`, a sync-only splitter branch runs each `next()` as its own
+  worker call: no indefinitely held per-branch thread and no same-thread affinity.
+  Cleanup gets bounded worker capacity separate from read/compute workers and reuses
+  `shutdown_timeout`.
 
 Execution resource cleanup follows the resource rules above. If both execution and
 cleanup fail, cleanup is still attempted comprehensively; multiple independent failures

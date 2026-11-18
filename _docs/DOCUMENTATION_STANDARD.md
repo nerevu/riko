@@ -67,7 +67,7 @@ The source parameter differs by wrapper type:
 
 | Wrapper | Label | Because |
 |---|---|---|
-| `operator` / `splitter` | `items (Items)` | the input *is* the stream |
+| `operator` / `splitter` | `items (Items)` on `pipe`; `items (Feed)` on `async_pipe` | the input *is* the stream (sync, or sync or async for `async_pipe`) |
 | `processor` | `item (Item \| Items)` | one item, or an iterable mapped element-by-element |
 
 A processor's first argument is overloaded — one item, or many — and the wrapper

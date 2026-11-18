@@ -64,6 +64,12 @@ RULE_CASES = [
         id="twin-keywords",
     ),
     pytest.param(
+        "class Tee:\n    def close(self):\n        pass\n\n"
+        "class AsyncTee:\n    async def close(self):\n        pass\n",
+        "RM802",
+        id="twin-colors",
+    ),
+    pytest.param(
         "def f(x):\n    if x is None:\n        return 0\n    return x\n",
         "RM901",
         id="early-return",
@@ -98,6 +104,15 @@ CLEAN_CASES = [
     pytest.param(
         "def f(x):\n    def g():\n        return 1\n\n    return g\n",
         id="nested-return",
+    ),
+    pytest.param(
+        "class Tee:\n    def close(self):\n        pass\n\n"
+        "    def __call__(self):\n        pass\n\n"
+        "class AsyncTee:\n    async def aclose(self):\n        pass\n\n"
+        "    async def __call__(self):\n        pass\n\n"
+        "class AsyncSub(Sub):\n    async def close(self):\n        pass\n\n"
+        "class Sub:\n    def close(self):\n        pass\n",
+        id="prefixed-twin",
     ),
 ]
 
