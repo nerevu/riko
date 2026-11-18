@@ -114,18 +114,20 @@ which claims its close with one atomic pop of a one-item list, and share one lif
 state (`_TeeState`: idle, reading, done, closed). Every upstream read publishes one
 `TeeRead` (`from_lag` for an overflow, `from_interrupt` for a read cut short,
 `from_item` for an item, copied per sibling when isolating) that `deliver` applies to
-the branch buffers;
-the reader re-reads the live sibling set after the read, so a branch closed mid-read
-gets no copy, and publishes before closing the source. `require_idle`, `is_lagging`,
-and `log_cleanup_failure` are plain helpers both tees call (no base class). Each tee
-ends a branch from `_require_buffer` (`StopIteration` / `StopAsyncIteration`) and
-claims the reading branch where it takes its lock (`Tee._pull`,
-`AsyncTee._apull_locked`), computing the lag there. `Tee` defers a close to its
-advancer (`_advancer` is set) and the advancer closes in `_advance`; `AsyncTee` defers
-while its anyio lock is held, which also covers a lock handoff and a cancelled acquire,
-so the owed close runs in `_apull`'s `finally`. A started, unclosed tee of either color
-closes its source when collected and warns `ResourceWarning` only when that source holds
-a resource (see `auto_close` below).
+the branch buffers; the reader re-reads the live sibling set after the read, so a branch
+closed mid-read gets no copy, and publishes before closing the source. The wrapper
+closes the source on any failed or cancelled read (shielded under `aauto_close`), so the
+tee's own close after a read that carries an error repeats it harmlessly there and is
+the real close only for an overflow or a failed copy; `AsyncTee._aclose_source`'s shield
+backs the deferred close a lock handoff owes. `require_idle`, `is_lagging`, and
+`log_cleanup_failure` are plain helpers both tees call (no base class). Each tee ends a
+branch from `_require_buffer` (`StopIteration` / `StopAsyncIteration`) and claims the
+reading branch where it takes its lock (`Tee._pull`, `AsyncTee._apull_locked`),
+computing the lag there. `Tee` defers a close to its advancer (`_advancer` is set) and
+the advancer closes in `_advance`; `AsyncTee` defers while its anyio lock is held, which
+also covers a lock handoff and a cancelled acquire, so the owed close runs in `_apull`'s
+`finally`. A started, unclosed tee of either color closes its source when collected and
+warns `ResourceWarning` only when that source holds a resource (see `auto_close` below).
 
 Per-fetch source bodies are **eager-read, lazy-parse** under async iteration:
 `async_url_open` buffers the full response (`response.content` / `Path.read_bytes`) into
@@ -1145,9 +1147,7 @@ the run path spawns tasks, and a group entered in the consumer's task would sit 
 across every `yield` of `Pipeline.__aiter__`, so a bare `break` (finalized later from
 another task) would cancel the caller's scope. Task hosting for fan-out belongs to R7.
 `riko/execution/_adapt.py` holds what the two executions share across the sync/async
-boundary: `require_stream`/`require_async_stream` (the one boundary that narrows a
-resolved pipe's raw output to an item stream, earned by the `is_splitter` guard on the
-pipe's declared type rather than by reading its output), `to_sync(call, stream)` (an
+boundary: `to_sync(call, stream)` (an
 async stream re-exposed as a lazy sync iterator; the sync execution's portal drain and
 the worker-side upstream reader are the same function with a different `call`),
 `pull_stream(...)` (a sync iterator re-exposed as a lazy async stream), and the
@@ -1502,9 +1502,8 @@ run:
   in `riko/modules/_decorators.py`, a bounded ordered window) instead of treating the
   stream object as one item. Closing the node's stream (`_AsyncWrapperStream.aclose`)
   closes that window and its source at once, not at garbage collection.
-  `ExecutionPlan.from_workflow` also refuses, before any node runs, a source port
-  feeding more than one stream edge (`Workflow.require_executable()`), the fail-closed
-  companion of the non-`out` port guard until R7's port-keyed delivery; the shape stays
+  Since R7 slice 1 a source port feeding more than one stream edge runs: each reader
+  gets its own isolated tee branch (`ExecutionPlan.get_port_demand`), and the shape is
   valid canonical structure under `validate()`. Sparse positional inputs (`in` + `in:2`,
   legacy `_OTHER2`) execute as an ordered `others` list, `in:0`/`out:0` are grammar
   errors in `parse_port`, and per-module fan-in arity waits on the module port
@@ -1635,11 +1634,11 @@ arrives as a tuple and a dict as a `FrozenDict`.
 
 - **Resolution.** `ExecutionPlan.from_workflow` resolves every callable node to the
   built-in `udf` module through the dispatcher (`_resolve_callable` in
-  `riko/execution/_prepared.py`), so the node's flags (`loopable`), wrapper identity
-  (`require_stream`/`require_async_stream`), and interface selection are `udf`'s. Plan
-  validation and `PreparedNode` use `Workflow.runnable_nodes` and
-  `require_runnable_only("execution")`; code generation refuses callable nodes through
-  `normalize_workflow`, which has no document form for them.
+  `riko/execution/_prepared.py`), so the node's flags (`loopable`) and interface
+  selection (`SyncInterface`/`AsyncInterface`) are `udf`'s. Plan validation and
+  `PreparedNode` use `Workflow.runnable_nodes` and `require_runnable_only("execution")`;
+  code generation refuses callable nodes through `normalize_workflow`, which has no
+  document form for them.
 - **Adapter preparation.** `udf`'s parser is not called. `PreparedNode._build_native`
   builds two prepared calls:
   `call = partial(_gen_stream_results | _agen_stream_results, fn, kwargs)` for the
