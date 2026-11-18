@@ -213,6 +213,7 @@ class SlugifyObjconf(DynamicConf):
 
 class SplitObjconf(DynamicConf):
     splits: int
+    isolate: bool
 
 
 class StrconcatObjconf(DynamicConf):

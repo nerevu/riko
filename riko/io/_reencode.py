@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from typing import Self
 
-    from riko.types._io import SyncCloseable
+    from riko.base._guards import SyncCloseable
 
     from ._filelike import FileLike
 

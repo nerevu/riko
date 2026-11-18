@@ -56,6 +56,7 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import (
+    SyncCloseable,
     _check_strict_protocol,
     isinstance_strict,
     require_listlike,
@@ -118,7 +119,7 @@ from riko.types._feed import (
     _ItemEnvelope,
 )
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import AsyncCloseable, SyncCloseable, get_async_closer
+from riko.types._io import AsyncCloseable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
@@ -1446,6 +1447,14 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="bad"),
     pytest.param("RIKO_ENCODING", "bogus", "encoding", "utf-8", id="encoding-unknown"),
     pytest.param("RIKO_ENCODING", "latin-1", "encoding", "latin-1", id="encoding"),
+    pytest.param("RIKO_BRANCH_BUFFER", "64", "branch_buffer", 64, id="branch-buffer"),
+    pytest.param(
+        "RIKO_BRANCH_BUFFER", "0", "branch_buffer", 1024, id="branch-buffer-0"
+    ),
+    pytest.param("RIKO_BRANCH_BUFFER", "x", "branch_buffer", 1024, id="branch-bad"),
+    pytest.param(
+        "RIKO_BRANCH_BUFFER", "inf", "branch_buffer", inf, id="branch-buffer-inf"
+    ),
 ]
 
 

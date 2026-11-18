@@ -922,7 +922,7 @@ def require_from_form[T](
     def is_member(value: object) -> bool:
         return any(type(value) is type(arg) and value == arg for arg in literals)
 
-    if _aliases := [leaf for leaf in leaves if isinstance(leaf, TypeAliasType)]:
+    if _aliases := tuple(gen_instances(leaves, TypeAliasType)):
         aliases = ", ".join(map(repr, _aliases))
         msg = f"alias {aliases} refers to a name that is not available at runtime, "
         raise TypeError(msg + "such as one imported only for type checking")
@@ -1141,9 +1141,7 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     Args:
 
         value: The supplied argument value, or ``None`` when omitted.
-
         name: The argument being validated, used in the error message.
-
         module: The module name, used in the error message.
 
     Kwargs:
@@ -1185,6 +1183,46 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     return value
 
 
+def require_non_null[T](
+    value: T | None, msg: str, *args: object, **kwargs: object
+) -> T:
+    """
+    Requires ``value`` not to be ``None``.
+
+    Args:
+
+        value: The value to check.
+        msg: The ``str.format`` error message template for a ``None`` value.
+        args: Positional arguments that fill ``msg``.
+
+    Kwargs:
+
+        kwargs: Keyword arguments that fill ``msg``.
+
+    Returns:
+
+        The value, narrowed to ``T``.
+
+    Raises:
+
+        InvalidPipelineError: If ``value`` is ``None``.
+
+    Examples:
+
+        >>> require_non_null(0, "unused")
+        0
+        >>> require_non_null(None, "{!r} has no callable", "hash")
+        Traceback (most recent call last):
+            ...
+        riko.exceptions.InvalidPipelineError: Invalid pipeline: 'hash' has no callable
+
+    """
+    if value is None:
+        raise InvalidPipelineError(msg.format(*args, **kwargs))
+
+    return value
+
+
 def require_conf_key[T](
     objconf: DynamicConf, key: str, module: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
@@ -1197,9 +1235,7 @@ def require_conf_key[T](
     Args:
 
         objconf: The parsed module configuration.
-
         key: The conf key that must be set.
-
         module: The module name, used in the error message.
 
     Kwargs:

@@ -24,3 +24,11 @@ class Closeable:
 
     def close(self) -> None:
         self.closes.append(self.name)
+
+
+class BrokenClose(Closeable):
+    """Stands in for a value whose close records itself, then fails."""
+
+    def close(self) -> None:
+        super().close()
+        raise OSError(f"{self.name} close failed")

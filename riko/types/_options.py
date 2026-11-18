@@ -62,6 +62,7 @@ class Defaults(TypedDict, total=False):
     detag: bool
     encoding: str
     input_key: str
+    isolate: bool
     format: str
     fmt: FmtLike | None
     group_key: str | None

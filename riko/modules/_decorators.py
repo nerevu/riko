@@ -44,7 +44,6 @@ from riko.bado.itertools import (
     async_flatten,
     async_iter,
     async_map_ordered_stream,
-    auto_close,
     materialize,
 )
 from riko.base._guards import (
@@ -54,6 +53,7 @@ from riko.base._guards import (
     is_mapping,
     is_streamlike,
 )
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_from_typed_dict, typed_dict_keys
 from riko.definitions._context import Context

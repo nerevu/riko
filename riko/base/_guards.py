@@ -20,13 +20,14 @@ from inspect import (
     getattr_static,
     getmembers_static,
     isawaitable,
+    iscoroutine,
     iscoroutinefunction,
     isfunction,
     signature,
 )
 from itertools import filterfalse, repeat
 from types import MemberDescriptorType, MethodDescriptorType, MethodType
-from typing import TYPE_CHECKING, TypeGuard, overload
+from typing import TYPE_CHECKING, Protocol, TypeGuard, overload, runtime_checkable
 
 import attrs
 from requests.structures import CaseInsensitiveDict
@@ -49,6 +50,11 @@ if TYPE_CHECKING:
 _KT = TypeVar("_KT", default=str)
 _VT = TypeVar("_VT", default=object)
 
+ASYNC_CLEANUP_MSG = (
+    "an async resource cleanup runs under `for` only for a value an async factory "
+    "produced. Make the factory async, or iterate with `async for`"
+)
+
 
 def _protocol_signature(method: Func[object]) -> Signature:
     sig = signature(method)
@@ -58,10 +64,10 @@ def _protocol_signature(method: Func[object]) -> Signature:
         raise TypeError("protocol methods must be instance methods")
 
     params = params[1:]
+    msg = "protocol methods may only use positional-or-keyword parameters"
 
     for param in params:
         if param.kind is not Parameter.POSITIONAL_OR_KEYWORD:
-            msg = "protocol methods may only use positional-or-keyword parameters"
             raise TypeError(msg)
 
     return sig.replace(parameters=params)
@@ -448,3 +454,99 @@ def is_callable[T](val: Func[T] | None) -> TypeGuard[Func[T]]: ...
 def is_callable(val: object) -> TypeGuard[Func[object]]: ...
 def is_callable(val: object) -> bool:
     return callable(val)
+
+
+def require_value[T](result: T | Awaitable[T], msg: str) -> T:
+    """
+    Requires ``result`` not to be awaitable.
+
+    A rejected coroutine is closed before the error is raised. It is never left
+    unawaited.
+
+    Args:
+
+        result: The call's result.
+        msg: The error message for an awaitable result.
+
+    Returns:
+
+        ``result``.
+
+    Raises:
+
+        InvalidPipelineError: If ``result`` is awaitable.
+
+    Examples:
+
+        >>> async def coro():
+        ...     return 3
+        >>>
+        >>> require_value(3, "unused")
+        3
+        >>> require_value(coro(), "use `async for`")
+        Traceback (most recent call last):
+        ...
+        riko.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
+
+    """
+    if is_awaitable(result):
+        if iscoroutine(result):
+            result.close()
+
+        raise InvalidPipelineError(msg)
+
+    return result
+
+
+@runtime_checkable
+class SyncCloseable(Protocol):
+    def close(self) -> object | None: ...
+
+
+@lru_cache(maxsize=settings.strict_check_cache_size)
+def _has_async_close(cls: type) -> bool:
+    """Whether instances of ``cls`` close asynchronously through their type."""
+    return is_async_callable(getattr(cls, "close", None))
+
+
+def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
+    """Whether ``owner``'s ``close`` is async."""
+    if is_type_bound(owner, "close"):
+        result = _has_async_close(type(owner))
+    else:
+        result = is_async_callable(close)
+
+    return result
+
+
+def get_sync_closer(value: object) -> Func[object] | None:
+    """
+    Gets the method that closes ``value`` without an event loop.
+
+    An async def ``close`` is rejected.
+
+    Args:
+
+        value: The value to inspect.
+
+    Returns:
+
+        The value's synchronous ``close``, or ``None`` when it has none.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO()
+        >>> get_sync_closer(f)()
+        >>> f.closed, get_sync_closer(1)
+        (True, None)
+
+    """
+    closer = None
+    is_sync_closable = isinstance_strict(value, SyncCloseable)
+
+    if is_sync_closable and not _is_async_close(value.close, value):
+        closer = value.close
+
+    return closer
