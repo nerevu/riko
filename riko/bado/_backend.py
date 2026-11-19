@@ -53,7 +53,7 @@ except ImportError:
     run_from_thread: Func[object] = lambda *_, **_kw: None
     start_blocking_portal: Func[object] = lambda *_, **_kw: None
 
-    async def checkpoint() -> None:
+    async def checkpoint() -> None:  # noqa: RUF029 (sync fallback stays awaitable)
         return None
 
     def _run[*PosArgsT, T](

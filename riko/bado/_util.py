@@ -159,12 +159,12 @@ async def async_read(
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
-async def async_json(response: HTTPXResponse) -> dict[str, object]:
+async def async_json(response: HTTPXResponse) -> dict[str, object]:  # noqa: RUF029 (async by contract)
     """Parses the JSON body of ``response``."""
     return response.json()
 
 
-async def async_return[T](value: T, **_: object) -> T:
+async def async_return[T](value: T, **_: object) -> T:  # noqa: RUF029 (async by contract)
     """Wraps ``value`` in an awaitable, for uniform ``await`` call sites."""
     return value
 

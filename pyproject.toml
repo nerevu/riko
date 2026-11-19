@@ -155,6 +155,7 @@ extend-select = [
     "PT",   # flake8-pytest-style
     "PLC0415", # Import not at top of file
     "ERA",  # eradicate: commented-out code (tests only; see per-file ignores)
+    "RUF029",  # unused-async
 ]
 
 ignore = [
@@ -201,6 +202,7 @@ split-on-trailing-comma = false
 "tests/**/*" = [
     "S101",   # Use of `assert` detected
     "S102",   # Use of `exec` detected
+    "RUF029",  # unused-async
 ]
 
 "riko/**/*" = [

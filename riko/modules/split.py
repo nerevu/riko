@@ -50,7 +50,7 @@ OPTS: DecorationOptions = DecorationOptions()
 DEFAULTS: Defaults = {"splits": 2, "isolate": True}
 
 
-async def async_parser(
+async def async_parser(  # noqa: RUF029 (async pipe contract)
     stream: Feed, objconf: SplitObjconf, tuples: PipeTuples, **kwargs: object
 ) -> AsyncCascade:
     """
