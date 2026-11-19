@@ -1309,7 +1309,7 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
 
         """
         self._require_open("run")
-        _ = self.settings.async_policy  # validates the executor mode
+        self.settings.validate_async()
         resolved, context = self._resolve_plan(plan)
 
         if resolved.workflow.is_empty:
