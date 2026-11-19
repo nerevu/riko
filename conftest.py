@@ -85,6 +85,8 @@ def pytest_runtest_teardown(item: pytest.Item) -> None:
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     skip_async = pytest.mark.skip(reason="async support not available")
     skip_lxml = pytest.mark.skip(reason="lxml not installed")
+    skip_docutils = pytest.mark.skip(reason="docutils not installed")
+    docutils_missing = _extra_missing("docutils")
 
     perf_missing = _extra_missing("lxml", "ijson", "fastfeedparser")
     finance_missing = _extra_missing("csv2ofx")
@@ -114,5 +116,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
+        elif docutils_missing and "_lint_rst" in name:
+            item.add_marker(skip_docutils)
         elif is_sync:
             _skip_coroutine_runs(item)

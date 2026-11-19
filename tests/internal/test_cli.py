@@ -57,7 +57,7 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_rst import gen_plain_block_lines
+from riko.cli._lint_rst import gen_plain_block_lines, gen_unrendered_literal_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -1169,16 +1169,36 @@ PLAIN_BLOCK_CASES = [
         id="only-unmarked-blocks-with-their-lines",
     ),
 ]
+UNRENDERED_LITERAL_CASES = [
+    pytest.param(
+        "Intro.\n\n*Use ``map`` lazily*\n", [(3, "Use ``map`` lazily")], id="emphasis"
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    # filter by ``loopable``\n    x = 1\n",
+        [],
+        id="code-block-comment",
+    ),
+    pytest.param("Use ``map`` lazily.\n", [], id="plain-literal"),
+    pytest.param("Use ``a``X`` here.\n", [], id="glued-literal"),
+]
 
 
 class TestRstLint:
-    """The plain Python code-block marker check."""
+    """The plain Python code-block marker and nested inline literal checks."""
 
     @pytest.mark.parametrize(("text", "expected"), PLAIN_BLOCK_CASES)
     def test_plain_python_blocks_need_a_marker(
         self, text: str, expected: list[int]
     ) -> None:
         assert list(gen_plain_block_lines(text)) == expected
+
+    @pytest.mark.parametrize(("text", "expected"), UNRENDERED_LITERAL_CASES)
+    def test_nested_literals_do_not_render(
+        self, text: str, expected: list[tuple[int, str]]
+    ) -> None:
+        core = pytest.importorskip("docutils.core")
+        doctree = core.publish_doctree(text, settings_overrides={"report_level": 5})
+        assert list(gen_unrendered_literal_lines(doctree)) == expected
 
 
 BINDING_CASES = [
