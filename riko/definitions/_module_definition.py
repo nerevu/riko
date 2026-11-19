@@ -100,7 +100,8 @@ class ModuleDefinition:
 
         Args:
 
-            module: Object having ``pipe``/``async_pipe``, e.g., a Python module import.
+            module: Object having ``pipe``/``async_pipe``, e.g., a ``ModuleType`` or
+                ``ResolvedWorkflow``.
 
         Kwargs:
 

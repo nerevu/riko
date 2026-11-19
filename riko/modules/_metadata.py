@@ -388,10 +388,12 @@ def describe_module(
         if definition is None and module is not None:
             definition = ModuleDefinition.from_module(module, name=canonical)
 
-        is_stored = definition is None and workflow_resolver.is_compatible(canonical)
-
-        if is_stored and (stored := workflow_resolver.load(canonical)) is not None:
-            definition = ModuleDefinition.from_module(stored)  # stored workflow
+        if (
+            definition is None
+            and workflow_resolver.is_compatible(canonical)
+            and (resolved_flow := workflow_resolver.load(canonical)) is not None
+        ):
+            definition = ModuleDefinition.from_module(resolved_flow)
     else:
         definition = None
 
