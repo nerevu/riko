@@ -728,26 +728,26 @@ Changes
 ~~~~~~~
 
 - **Removed the legacy nested-loop JSON shape** (a ``loop`` module carrying its
-  submodule under ``conf["embed"]["value"]``) and its input converter. The
-  canonical forms are the compact loop (top-level ``embed``) and, for processor
-  loops, a direct node. The terminal ``output`` node marker is retained; only its
-  treatment as a resolvable virtual module was removed.
+  submodule under ``conf["embed"]["value"]``) and its input converter. The canonical
+  forms are the compact loop (top-level ``embed``) and, for processor loops, a direct
+  node. The terminal ``output`` node marker is retained; only its treatment as a
+  resolvable virtual module was removed.
 
-- **Removed the legacy ``Context`` describe keyword arguments** (``describe_input=`` /
-  ``describe_dependencies=`` and the ``_mode_from_kwargs`` translation). The old keyword
-  arguments now fall through ``**kwargs`` and are silently ignored, leaving
-  ``mode=ExecutionMode.RUN``. Pass ``mode=ExecutionMode.DESCRIBE_INPUTS`` /
-  ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE`` instead; the derived read-only properties are
-  kept.
+- **Removed the legacy** ``Context`` **describe keyword arguments**
+  (``describe_input=`` / ``describe_dependencies=`` and the ``_mode_from_kwargs``
+  translation). The old keyword arguments now fall through ``**kwargs`` and are silently
+  ignored, leaving ``mode=ExecutionMode.RUN``. Instead, pass
+  ``mode=ExecutionMode.DESCRIBE_INPUTS`` / ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE``; the
+  derived read-only properties are kept.
 
-- **Removed ``Objconf`` entirely** (it was a deprecated factory in ``v0.72.0``).
+- **Removed** ``Objconf`` **entirely** (it was a deprecated factory in ``v0.72.0``).
   Import ``DynamicConf`` from the supported ``riko.ext`` surface.
 
 - Promoted ``get_path`` into the stable surface (``riko.__all__``); cleaned up the
   public API surface.
 
-- Completed async parity: added lazy async streams and structured pool execution;
-  split ``helpers.py`` / ``utils.py`` into focused private Python modules.
+- Completed async parity: added lazy async streams and structured pool execution; split
+  ``helpers.py`` / ``utils.py`` into focused private Python modules.
 
 Removed
 ~~~~~~~
@@ -878,9 +878,9 @@ v0.71.0 (2026-07-21)
 Changes
 ~~~~~~~
 
-- **Replaced ``Objconf`` with ``DynamicConf``.** ``Objconf(…)`` becomes a compatibility
-  factory (emits ``DeprecationWarning``). Import ``DynamicConf`` from ``riko.ext``
-  instead (or ``riko.ext.config``, beside ``get_conf_type``).
+- **Replaced** ``Objconf`` **with** ``DynamicConf``. ``Objconf(…)`` becomes a
+  compatibility factory (emits ``DeprecationWarning``). Import ``DynamicConf`` from
+  ``riko.ext`` instead (or ``riko.ext.config``, beside ``get_conf_type``).
 
 - Completed the async lifecycle and source parity; achieved sync/async chaining parity.
 
@@ -923,7 +923,7 @@ Changes
   ``PipeState`` enum, read-only ``state`` / ``closed`` / ``exhausted`` / ``failed``
   state, sync ``close`` / ``terminate``, async ``aclose``, and context-manager cleanup.
 
-- **Converted the ``Context`` describe booleans to an ``ExecutionMode`` enum**
+- **Converted the** ``Context`` **describe booleans to an** ``ExecutionMode`` **enum**
   (``RUN`` / ``DESCRIBE_INPUTS`` / ``DESCRIBE_DEPENDENCIES`` / ``DESCRIBE``);
   ``describe_input`` / ``describe_dependencies`` are now read-only properties derived
   from ``mode``.

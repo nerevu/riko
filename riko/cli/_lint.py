@@ -342,7 +342,10 @@ def _check_command() -> None:
 @click.option(
     "-r",
     "--rst",
-    help="Validate RST rendering, internal links, and plain Python code-block markers",
+    help=(
+        "Validate RST rendering, internal links, plain Python code-block markers, "
+        "and nested inline literals"
+    ),
     is_flag=True,
 )
 @click.option("--docs", help="Validate internal documentation policy", is_flag=True)

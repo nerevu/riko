@@ -51,7 +51,7 @@ The examples use the following functions and values:
 
 ``kw_func()`` and ``runner.run()`` require ``kwarg`` to be passed by keyword;
 ``arg_func()`` does not. ``tuple(...)`` is used to force evaluation for benchmarking.
-**Keep the ``map`` or generator lazy** in streaming code unless materialization is
+**Keep the** ``map`` **or generator lazy** in streaming code unless materialization is
 required.
 
 Quick selection rules

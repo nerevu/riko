@@ -25,7 +25,7 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from docutils.nodes import document
+    from docutils.nodes import Node, document
 
 _TARGET_RE = re.compile(r"^\.\. _(?P<name>.+?): (?P<uri>\S.*)$", re.MULTILINE)
 _LINE_ANCHOR_RE = re.compile(r"^L\d")
@@ -36,6 +36,9 @@ _PROMPT = ">>>"
 PLAIN_BLOCK_MESSAGE = (
     "Python code block without '>>>' prompts needs a leading '#' comment or an "
     f"adjacent '{_PENDING_NOTE}' note"
+)
+UNRENDERED_LITERAL_MESSAGE = (
+    "inline literal nested in **bold**/*emphasis* renders as raw backticks"
 )
 
 
@@ -121,6 +124,66 @@ def gen_plain_block_lines(text: str) -> Iterator[int]:
 
             if not (runs or commented or noted):
                 yield index + 1
+
+
+def _gen_ancestors(node: Node) -> Iterator[Node]:
+    """Walks up from a node's parent to the document root."""
+    current = node.parent
+
+    while current is not None:
+        yield current
+        current = current.parent
+
+
+def _get_node_line(node: Node) -> int:
+    """Gets the source line of the nearest ancestor that records one."""
+    current: Node | None = node
+    line = None
+
+    while current is not None and line is None:
+        line, current = current.line, current.parent
+
+    return 0 if line is None else line
+
+
+def gen_unrendered_literal_lines(doctree: document) -> Iterator[tuple[int, str]]:
+    """
+    Finds the inline literals in ``doctree`` that render as raw backticks.
+
+    RST does not nest inline markup, so a double-backtick literal inside ``**bold**``
+    or ``*emphasis*`` shows its backticks verbatim. Backticks inside code blocks,
+    comments, and raw directives are their own content and pass.
+
+    Args:
+
+        doctree: The parsed RST document.
+
+    Yields:
+
+        tuple[int, str]: The source line and text of each offending node.
+
+    Examples:
+
+        >>> from docutils.core import publish_doctree
+        >>> quiet = {"report_level": 5}
+        >>> nested = publish_doctree("**Drop ``x`` now**", settings_overrides=quiet)
+        >>> list(gen_unrendered_literal_lines(nested))
+        [(1, 'Drop ``x`` now')]
+        >>> split = publish_doctree("**Drop** ``x`` **now**", settings_overrides=quiet)
+        >>> list(gen_unrendered_literal_lines(split))
+        []
+
+    """
+    if nodes is None:
+        raise RuntimeError("docutils not found")
+    else:
+        for text in doctree.findall(nodes.Text):
+            in_literal = isinstance(text.parent, nodes.literal)
+            ancestors = _gen_ancestors(text)
+            fixed = any(isinstance(node, nodes.FixedTextElement) for node in ancestors)
+
+            if "``" in text and not (in_literal or fixed):
+                yield _get_node_line(text), str(text)
 
 
 def get_anchor(text: str) -> str:
@@ -235,7 +298,7 @@ def _get_link_errors(path: str, text: str, cache: dict[str, set[str]]) -> list[s
 
 
 def lint_rst(where: str | None = None) -> int:
-    """Validates RST rendering, internal links, and plain Python code-block markers."""
+    """Validates RST rendering, links, plain code-block markers, and nested literals."""
     if publish_doctree is None:
         raise RuntimeError("docutils not found")
 
@@ -245,11 +308,16 @@ def lint_rst(where: str | None = None) -> int:
     for path in _gen_doc_files(where):
         text, doctree = _render_rst(path)
         cache[path] = _get_doc_anchors(doctree)
+        lines = gen_unrendered_literal_lines(doctree)
         problems.extend(_render_errors(path, doctree))
         problems.extend(_get_link_errors(path, text, cache))
         problems.extend(
             f"{path}:{lineno}: {PLAIN_BLOCK_MESSAGE}"
             for lineno in gen_plain_block_lines(text)
+        )
+        problems.extend(
+            f"{path}:{lineno}: {UNRENDERED_LITERAL_MESSAGE}: {found[:80]!r}"
+            for lineno, found in lines
         )
 
     for problem in problems:

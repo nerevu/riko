@@ -638,6 +638,10 @@ field name needs ``content``.
 `(default: word)` whose parameter defaults to the string ``"word"``. Value vs. name
 vs. label is a judgment call no lint makes.
 
+RST does not nest inline markup: a ``literal`` inside `**bold**` or `*emphasis*`
+renders as raw backticks, so write the bold around it
+(`**Removed** ``Objconf`` **entirely**`); `manage lint --rst` flags the nested form.
+
 ```rst
 Value:  ``executor`` accepts ``"thread"``.
 Name:   Splits ``content`` on the delimiter.
