@@ -241,20 +241,26 @@ to an agent, which repeats their work by hand for many minutes.
    behavior). Read a hunk with `git diff` only when its excerpt does not settle its
    concept.
 3. **Write the plan**: the `split_hunks.py list --body 12` output from step 2's call
-   lists the change's hunks by id
-   (`-U0` by default, so mixed-concept regions split finely; `path:N` is the hunk
-   starting on new-side line `N`; new, deleted, untracked, and binary files are
-   whole-file ids; `--body N` prints up to `N` of each hunk's lines under it, for
-   sorting many hunks without a `git diff` per file). Write a plan file in the
-   scratchpad: a `fixup <sha>` or `commit <msg-file>` header per step, oldest fixup
+   lists the change's hunks by id (`-U0` by default, so mixed-concept regions split
+   finely; `path:N` is the hunk starting on new-side line `N`; new, deleted, untracked,
+   and binary files are whole-file ids; `--body N` prints up to `N` of each hunk's lines
+   under it, for sorting many hunks without a `git diff` per file). Write a plan file in
+   the scratchpad: a `fixup <sha>` or `commit <msg-file>` header per step, oldest fixup
    target first and then the new commits in dependency order, each followed by its ids
    (`path` takes every hunk of a file, `path:N-M` a range, `*` the rest, `skip` a step
-   of ids left uncommitted such as untracked scratch docs). Group by file first and
-   split a file only when its hunks are different concepts. A file that one branch
-   commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame hunks
-   included. A hunk that names something another hunk introduces goes in or after that
-   hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go with
-   the step whose source change regenerates them. The coverage-ratchet line in
+   of ids left uncommitted such as untracked scratch docs). For a change of more than a
+   few dozen hunks, write a TOML rules file in the scratchpad instead (buckets in plan
+   order, each a `message`, a `fixup` sha, or `skip`; ordered
+   `ids`/`path`/`body`/`swaps` rules; a `default` bucket; the script's docstring has an
+   example) and let
+   `python .claude/skills/land/bucket_plan.py <rules> --out <scratchpad>/plan` write
+   `plan.txt` and the message files; it takes `--base REF` like `split_hunks.py`. Refine
+   the rules and rerun rather than hand-editing `plan.txt`. Either way, group by file
+   first and split a file only when its hunks are different concepts. A file that one
+   branch commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame
+   hunks included. A hunk that names something another hunk introduces goes in or after
+   that hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go
+   with the step whose source change regenerates them. The coverage-ratchet line in
    `pyproject.toml` goes with the step whose tests or code moved it:
    `diff_uncovered.py --baseline-ref HEAD` names each file whose missing count changed.
    Put it elsewhere only for a stated reason, such as a later branch commit that also
