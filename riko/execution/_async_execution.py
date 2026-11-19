@@ -727,19 +727,19 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
                 read asynchronously. The execution closes the seed when it exits.
 
         """
-        resolved = await as_awaitable(seed)
+        _input = await as_awaitable(seed)
 
-        if isinstance(resolved, AsyncIterable):
-            iterator = aiter(resolved)
+        if isinstance(_input, AsyncIterable):
+            iterator = aiter(_input)
             closer = get_async_closer(iterator)
             owned = iterator if closer is None else _Owned(iterator)
             stream: AsyncIterator[object] = owned
         else:
-            value: object = resolved
+            value: object = _input
             iterator = owned = iter(listize(value))
             stream = pull_stream(maybe_async, iterator)
 
-        call_if_distinct(self.register_owned, resolved, iterator)
+        call_if_distinct(self.register_owned, _input, iterator)
         self.register_owned(owned)
         return stream
 

@@ -548,16 +548,16 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 synchronously only has an async close.
 
         """
-        resolved = self.run_async(seed) if is_awaitable(seed) else seed
+        _input = self.run_async(seed) if is_awaitable(seed) else seed
 
-        if isinstance(resolved, Iterable) or not isinstance(resolved, AsyncIterable):
+        if isinstance(_input, Iterable) or not isinstance(_input, AsyncIterable):
             # an unbound T | Iterable[T] defeats listize's overloads
-            iterator = stream = iter(cast("Iterable[T]", listize(resolved)))
-            call_if_distinct(self.register_owned, resolved, iterator)
+            iterator = stream = iter(cast("Iterable[T]", listize(_input)))
+            call_if_distinct(self.register_owned, _input, iterator)
             self.register_owned(iterator)
         else:
-            iterator = aiter(resolved)
-            call_if_distinct(self.register_owned, resolved, iterator, is_async=True)
+            iterator = aiter(_input)
+            call_if_distinct(self.register_owned, _input, iterator, is_async=True)
             stream = self._drain_owned(iterator)
 
         return stream

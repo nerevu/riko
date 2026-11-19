@@ -176,14 +176,14 @@ async def _async_twice(stream: Stream, *args, **kwargs) -> Cascade:
 
 
 async def _drain(value: object) -> object:
-    resolved = await value if isawaitable(value) else value
+    _value = await value if isawaitable(value) else value
 
-    if isinstance(resolved, AsyncIterable):
-        result = [await _drain(part) async for part in resolved]
-    elif isinstance(resolved, Iterator):
-        result = [await _drain(part) for part in resolved]
+    if isinstance(_value, AsyncIterable):
+        result = [await _drain(part) async for part in _value]
+    elif isinstance(_value, Iterator):
+        result = [await _drain(part) for part in _value]
     else:
-        result = resolved
+        result = _value
 
     return result
 

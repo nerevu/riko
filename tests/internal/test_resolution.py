@@ -605,9 +605,9 @@ class TestEntryPointModules:
         ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN, replace=True)
-        resolved = fixed_registry.require(_NAME)
-        assert resolved is _MARKER
-        assert resolved is not ep_marker
+        pipe = fixed_registry.require(_NAME)
+        assert pipe is _MARKER
+        assert pipe is not ep_marker
 
     def test_an_entry_point_listed_twice_resolves(self, monkeypatch, fixed_registry):
         twice = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")

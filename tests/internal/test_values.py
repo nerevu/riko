@@ -665,9 +665,9 @@ class TestOverloadTypes:
 class TestResolveCastType:
     def test_unknown_name_warns_once_and_passes(self, caplog):
         with caplog.at_level(WARNING, logger="riko"):
-            resolved = resolve_cast_type("unknown")
+            cast_type = resolve_cast_type("unknown")
 
-        assert resolved == CastType.PASS
+        assert cast_type == CastType.PASS
         assert [r.levelno for r in caplog.records] == [WARNING]
 
 
@@ -1312,9 +1312,9 @@ class TestResolveDate:
         assert [r.getMessage() for r in caplog.records] == [
             "skipping unparseable published date 'not a date'"
         ]
-        resolved = resolve_date(raw, *keys, "created")
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2021, 3, 4)
+        stamp = resolve_date(raw, *keys, "created")
+        assert isinstance(stamp, struct_time)
+        assert stamp[:3] == (2021, 3, 4)
 
     @pytest.mark.filterwarnings("error::DeprecationWarning")
     def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
@@ -1322,11 +1322,11 @@ class TestResolveDate:
         raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
         entry = cast("ParserRSSEntry", raw)
         keys = ("updated_parsed", "updated", "published_parsed", "published")
-        resolved = resolve_date(entry, *keys)
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2020, 1, 2)
+        stamp = resolve_date(entry, *keys)
+        assert isinstance(stamp, struct_time)
+        assert stamp[:3] == (2020, 1, 2)
         item = dict(next(augment_entries([entry])))
-        assert item["updated_parsed"] == resolved
+        assert item["updated_parsed"] == stamp
 
 
 # Each row: the items, the position options, and the option the error names.

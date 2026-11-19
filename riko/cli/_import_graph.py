@@ -83,7 +83,7 @@ def load_modules(root: Path) -> tuple[ModuleInfo, ...]:
 def resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> str:
     """Resolves the absolute module a ``from`` import names."""
     if level == 0:
-        resolved = module or ""
+        name = module or ""
     else:
         parts = current.package.split(".") if current.package else []
         keep = max(0, len(parts) - level + 1)
@@ -92,9 +92,9 @@ def resolve_from_module(current: ModuleInfo, module: str | None, level: int) -> 
         if module:
             base.extend(module.split("."))
 
-        resolved = ".".join(base)
+        name = ".".join(base)
 
-    return resolved
+    return name
 
 
 def is_type_checking(test: ast.expr) -> bool:

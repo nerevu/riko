@@ -610,9 +610,9 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
 
 def _get_module_name(path: Path) -> str:
     """Gets the dotted module name pytest gives a file's doctests."""
-    resolved = path.resolve()
-    inside = resolved.is_relative_to(ROOT_DIR)
-    parts = resolved.relative_to(ROOT_DIR).with_suffix("").parts if inside else ()
+    _path = path.resolve()
+    inside = _path.is_relative_to(ROOT_DIR)
+    parts = _path.relative_to(ROOT_DIR).with_suffix("").parts if inside else ()
     return ".".join(part for part in parts or (path.stem,) if part != "__init__")
 
 
