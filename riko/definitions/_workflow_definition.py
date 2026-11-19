@@ -82,7 +82,7 @@ from riko.types._workflow import (
     parse_port,
 )
 
-from ._inputs import compile_input_schema
+from ._inputs import CompiledInputSchemas
 from ._nodes import (
     CallableNode,
     ModuleNode,
@@ -124,7 +124,7 @@ type RikoNodeCollection = Mapping[NodeId, RikoNode]
 type RikoNodes = Sequence[RikoNode]
 type PortEdges = Sequence[PortEdge]
 type RawPortEdges = Sequence[RawEdge]
-type RawInputs = Mapping[str, object]
+type RawValues = Mapping[str, object]
 type Inputs = Mapping[str, JSONValue]
 type RawOutputs = Mapping[OutputName, RawEndpoint]
 type Outputs = Mapping[OutputName, Endpoint]
@@ -367,16 +367,16 @@ class Workflow:
             Workflow(sw-1 -> sw-2; outputs: default)
 
         """
-        resolved = (
+        doc_shape = (
             None if shape is None else require_enum(DocumentShape, shape, "shape")
         )
 
         if not isinstance(document, Workflow):
-            raw = parse_document(document, shape=resolved)
-        elif resolved is None or resolved is DocumentShape.V2:
+            raw = parse_document(document, shape=doc_shape)
+        elif doc_shape is None or doc_shape is DocumentShape.V2:
             raw = build_raw_workflow(document)
         else:
-            msg = f"a Workflow can only be read as shape 'v2', not {resolved.value!r}"
+            msg = f"a Workflow can only be read as shape 'v2', not {doc_shape.value!r}"
             raise InvalidPipelineError(msg)
 
         flow = cls.from_raw(raw)
@@ -565,8 +565,13 @@ class Workflow:
         return sort_stably({*names, *embeds})
 
     @cached_property
+    def _compiled_input_schemas(self) -> CompiledInputSchemas:
+        """Holds the compiled input schemas."""
+        return CompiledInputSchemas(self.input_schemas)
+
+    @cached_property
     def index(self) -> WorkflowIndex:
-        """Interprets the topology once; edges and outputs name declared nodes."""
+        """Holds the workflow's topology index."""
         return WorkflowIndex(self.nodes, self.graph_edges, self.outputs)
 
     @property
@@ -576,19 +581,19 @@ class Workflow:
 
     @property
     def endpoints(self) -> list[Endpoint]:
-        """Collect every endpoint referenced by an edge or named output."""
+        """Holds every endpoint referenced by an edge or named output."""
         ends = chain.from_iterable((edge.source, edge.target) for edge in self.edges)
         return list(chain(ends, self.outputs.values()))
 
     @property
     def referenced_resources(self) -> set[ResourceName]:
-        """Collects the Context resource names the workflow's nodes bind."""
+        """Holds the Context resource names the workflow's nodes bind."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_resources for node in nodes))
 
     @property
     def referenced_inputs(self) -> set[str]:
-        """Collects the input names the workflow's node configurations refer to."""
+        """Holds the input names the workflow's node configurations refer to."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_inputs for node in nodes))
 
@@ -793,8 +798,38 @@ class Workflow:
             riko.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
 
         """
-        for name, schema in self.input_schemas.items():
-            compile_input_schema(name, schema)
+        self._compiled_input_schemas.validate()
+
+    def resolve_inputs(self, given: RawValues | None) -> Inputs | None:
+        """
+        Resolves the inputs a run uses from its input schemas and given values.
+
+        A given value wins over the schema's default. A given value for an input with no
+        schema passes through untouched.
+
+        Args:
+
+            given: Raw values keyed by input name, or ``None``.
+
+        Returns:
+
+            Inputs keyed by input name, or ``None`` when there are either no input
+            schemas or no given values.
+
+        Raises:
+
+            InvalidPipelineError: If an input has neither a given value nor a default,
+                a value does not match its input's schema, or an input's schema is
+                malformed.
+
+        Examples:
+
+            >>> flow = Workflow(input_schemas={"limit": {"type": "integer"}})
+            >>> dict(flow.resolve_inputs({"limit": 10}))
+            {'limit': 10}
+
+        """
+        return self._compiled_input_schemas.resolve(given)
 
     def validate(self) -> None:
         """
@@ -812,6 +847,18 @@ class Workflow:
                 - A cycle or an unresolved resource.
                 - A reference to an input with no schema, or an invalid input schema.
                 - No workflow output.
+
+        """
+        if not self.is_valid:
+            self._validate_graph()
+
+    def _validate_graph(self) -> None:
+        """
+        Validates the graph against every check ``validate`` lists.
+
+        Raises:
+
+            InvalidPipelineError: If the graph fails a check ``validate`` lists.
 
         """
         self.validate_input_schemas()
@@ -901,11 +948,11 @@ class Workflow:
             msg = f"{', '.join(stray)} node {what} is not yet supported"
             raise InvalidPipelineError(msg)
 
-    @property
+    @cached_property
     def is_valid(self) -> bool:
         """Confirms whether the workflow validates."""
         try:
-            self.validate()
+            self._validate_graph()
         except InvalidPipelineError:
             result = False
         else:

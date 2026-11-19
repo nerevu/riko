@@ -453,9 +453,10 @@ A hand-written workflow module declares the same facts on its pipe (shipped 2026
 JSON Schema, normalized as a `Workflow` normalizes them) and its dependencies (sorted,
 duplicate-free). `describe_module()` reports what the decorator received, and `None` for
 either when omitted; a generated or document-backed workflow's pipe carries its
-`Workflow`'s own. `riko.ext.resolve_inputs` gives the pipe the run's input values, each
-schema's default filled and the values validated, so a hand-written pipe resolves inputs
-exactly as a `Workflow` run does.
+`Workflow`'s own. A `riko.ext.CompiledInputSchemas` record, built once from the schemas,
+gives the pipe the run's input values through `resolve`, each schema's default filled
+and the values validated, so a hand-written pipe resolves inputs exactly as a
+`Workflow` run does.
 
 ### E3.7 Targets and Formats
 

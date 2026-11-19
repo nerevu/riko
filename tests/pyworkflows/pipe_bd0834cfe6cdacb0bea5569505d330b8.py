@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.ext import resolve_inputs, workflow
+from riko.ext import CompiledInputSchemas, workflow
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.input import pipe as _input
 from riko.modules.urlbuilder import pipe as urlbuilder
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 INPUT_SCHEMAS = {
     "gid": {"default": "1276", "description": "MP Guardian ID", "type": "string"}
 }
+COMPILED_INPUT_SCHEMAS = CompiledInputSchemas(INPUT_SCHEMAS)
 
 
 @workflow(
@@ -28,7 +29,7 @@ INPUT_SCHEMAS = {
     dependencies=["fetchdata", "input", "urlbuilder"],
 )
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    inputs = COMPILED_INPUT_SCHEMAS.resolve(None if context is None else context.inputs)
     sw_606 = _input(
         item,
         conf=InputRawConf({"input_key": {"type": "text", "value": "gid"}}),

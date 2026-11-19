@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pickle  # noqa: S403
 from functools import partial
+from itertools import pairwise
 from threading import get_ident
 from types import NoneType
 from typing import TYPE_CHECKING, Any, cast
@@ -15,11 +16,14 @@ from attrs import evolve
 from riko.bado._util import maybe_async, syncify
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
+from riko.definitions import _inputs as inputs_module
 from riko.definitions import _workflow_definition as workflow_definitions
+from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge, WriteNode
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.execution import _prepared as prepared_module
 from riko.execution._adapt import adapt_embed, async_adapt_embed, to_sync
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import (
@@ -42,9 +46,11 @@ from riko.runtime._module_registry import ModuleRegistry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_pipes import workflow
 from riko.runtime._workflow_resolver import workflow_resolver
+from riko.types import _frozendict as frozendict_module
 from riko.types._enums import BasicCastType, IdentityMode
 from riko.types._options import CallOptions
 from riko.types._workflow import Endpoint, InputRef, WorkflowIndex
+from riko.types.modules import RenameRawConf
 from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
@@ -202,6 +208,12 @@ CONSTRUCTION_REJECTIONS = [
 ]
 
 
+# A truncate count, its input schemas and given inputs, and how many modules rebuild.
+INPUT_REBUILDS = [
+    pytest.param(2, {}, None, 0, id="none"),
+    pytest.param({"input": "n"}, {"n": {"type": "integer"}}, {"n": 2}, 1, id="one"),
+]
+
 NON_SPLITTERS = [
     pytest.param({"sync_pipe": passthrough_pipe}, _SYNC, id="sync"),
     pytest.param({"async_pipe": _ASYNC_PIPE}, _ASYNC, id="async"),
@@ -306,16 +318,143 @@ class TestExecutionPlan:
         node = ModuleNode(id="b", name="itembuilder", conf=conf)
         flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        resolved = plan.with_inputs({"q": 5})
+        planned = plan.with_inputs({"q": 5})
 
-        assert resolved.inputs == {"q": 5}
-        assert resolved.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
+        assert planned.inputs == {"q": 5}
+        assert planned.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
 
         with pytest.raises(TypeError, match="inputs"):
             evolve(plan, inputs={"q": 5})
 
         with pytest.raises(InvalidPipelineError, match="already built"):
-            resolved.with_inputs({"q": 6})
+            planned.with_inputs({"q": 6})
+
+    def test_a_run_compiles_each_input_schema_once(self, monkeypatch) -> None:
+        compiled = []
+        fjs_compile = inputs_module.fjs_compile
+
+        def counted(schema, **kwargs):
+            compiled.append(schema)
+            return fjs_compile(schema, **kwargs)
+
+        monkeypatch.setattr(inputs_module, "fjs_compile", counted)
+        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
+        node = ModuleNode(id="b", name="itembuilder", conf=conf)
+        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        with SyncExecution(context=Context(inputs={"q": 5})) as execution:
+            assert list(execution.run(plan)) == [{"q": 5}]
+
+        assert compiled == [{"type": "integer"}]
+
+    @pytest.mark.parametrize(("count", "schemas", "given", "rebuilt"), INPUT_REBUILDS)
+    def test_a_run_rebuilds_only_the_modules_that_read_an_input(
+        self, monkeypatch, count, schemas, given, rebuilt
+    ) -> None:
+        nodes = [
+            ModuleNode(id="a", name="hash"),
+            ModuleNode(id="b", name="truncate", conf={"count": count}),
+            ModuleNode(id="c", name="hash"),
+        ]
+        edges = [
+            StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("c", "in")),
+        ]
+        outputs = {"default": Endpoint("c", "out")}
+        flow = Workflow(nodes, outputs, schemas, edges)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+        validated, positional = [], []
+        validate = ExecutionPlan.validate
+        gen_positional_names = prepared_module.gen_positional_names
+
+        def counted_validate(self: ExecutionPlan) -> None:
+            validated.append(self)
+            validate(self)
+
+        def counted_names(*args: Any) -> Any:
+            positional.append(args)
+            return gen_positional_names(*args)
+
+        monkeypatch.setattr(ExecutionPlan, "validate", counted_validate)
+        monkeypatch.setattr(prepared_module, "gen_positional_names", counted_names)
+        seed = [{"x": 1}, {"x": 2}, {"x": 3}]
+
+        with SyncExecution(context=Context(inputs=given)) as execution:
+            assert len(list(execution.run(plan, seed=seed))) == 2
+
+        # Each rebuilt module reads the names its sync and async pipes fill by position.
+        assert (len(validated), len(positional)) == (rebuilt, 2 * rebuilt)
+
+    def test_each_module_name_resolves_once_per_plan(self, monkeypatch) -> None:
+        names = ["hash", "truncate", "hash", "truncate"]
+        ids = "abcd"
+        nodes = [ModuleNode(id=i, name=n) for i, n in zip(ids, names, strict=True)]
+        edges = [
+            StreamEdge(Endpoint(source, "out"), Endpoint(target, "in"))
+            for source, target in pairwise(ids)
+        ]
+        flow = Workflow(nodes, {"default": Endpoint("d", "out")}, edges=edges)
+        validated, lookups = [], []
+        validate, resolve = ResolverDispatcher.validate, ResolverDispatcher.resolve
+
+        def counted_validate(self: ResolverDispatcher, name: str) -> None:
+            validated.append(name)
+            validate(self, name)
+
+        def counted_resolve(
+            self: ResolverDispatcher, name: str, is_async: bool = False
+        ) -> Any:
+            lookups.append((name, is_async))
+            return resolve(self, name, is_async)
+
+        monkeypatch.setattr(ResolverDispatcher, "validate", counted_validate)
+        monkeypatch.setattr(ResolverDispatcher, "resolve", counted_resolve)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+        expected = [("hash", False), ("hash", True), ("truncate", False)]
+        expected.append(("truncate", True))
+
+        assert plan.modules["c"].sync_pipe is plan.modules["a"].sync_pipe
+        assert (sorted(validated), sorted(lookups)) == (["hash", "truncate"], expected)
+
+    def test_a_plan_never_refreezes_a_frozen_conf(self, monkeypatch) -> None:
+        nodes = [
+            ModuleNode(id="a", name="truncate", conf={"count": 2}),
+            ModuleNode(
+                id="b",
+                name="rename",
+                conf=RenameRawConf(
+                    {
+                        "rule": [
+                            {
+                                "field": {"type": "text", "value": "x"},
+                                "newval": {"type": "text", "value": "y"},
+                            }
+                        ]
+                    }
+                ),
+            ),
+        ]
+        edges = [StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))]
+        flow = Workflow(nodes, {"default": Endpoint("b", "out")}, edges=edges)
+        kept, refrozen = [], []
+        freeze_value = frozendict_module._freeze_value
+
+        def counted(value: Any, *args: Any, **kwargs: Any) -> Any:
+            result = freeze_value(value, *args, **kwargs)
+
+            if isinstance(value, frozendict_module.FrozenDict):
+                (kept if result is value else refrozen).append(value)
+
+            return result
+
+        monkeypatch.setattr(frozendict_module, "_freeze_value", counted)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        with SyncExecution() as execution:
+            assert len(list(execution.run(plan, seed=[{"x": 1}] * 3))) == 2
+
+        assert (bool(kept), refrozen) == (True, [])
 
     @pytest.mark.parametrize(("flow", "match"), BUILD_REJECTIONS)
     def test_build_rejects_an_invalid_graph(self, flow, match) -> None:

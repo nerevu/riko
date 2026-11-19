@@ -93,7 +93,7 @@ def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
     Args:
 
         pipe: The target's ``pipe`` or ``async_pipe``.
-        test: Whether to use default input values instead of prompting.
+        test: Whether to use default inputs instead of prompting.
 
     Returns:
 
@@ -142,7 +142,7 @@ def run_document(path: PathLike, is_async: bool = False, test: bool = False) -> 
     Kwargs:
 
         is_async: Whether to iterate the pipeline asynchronously.
-        test: Whether to use default input values instead of prompting.
+        test: Whether to use default inputs instead of prompting.
 
     """
     document, _ = read_document(path)
@@ -254,8 +254,7 @@ def run_target(
     Kwargs:
 
         is_async: Whether to run the async pipe when the target has one.
-
-        test: Whether to use default input values instead of prompting.
+        test: Whether to use default inputs instead of prompting.
 
     """
     if isinstance(target, Path):

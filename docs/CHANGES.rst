@@ -43,7 +43,7 @@ New
   - the node, edge, and write-target classes (e.g., ``ModuleNode``, ``FileTarget``)
   - ``register_workflow_store``, ``register_target``, and ``temporary_registrations()``
   - ``prepare`` on module pipe callables, returning a ``PreparedCall``
-  - the ``workflow`` decorator and ``resolve_inputs``
+  - the ``workflow`` decorator and ``CompiledInputSchemas``
   - the ``Dispatcher``, ``SupportsRead``, ``SupportsWrite``, and ``SupportsActions``
     protocols, ``WriteCapabilities``, and ``TargetRegistry``
   - ``auto_close``/``aauto_close``, which close a stream's backing values when iteration

@@ -156,6 +156,7 @@ EXT_WORKFLOWS = frozenset(
         "ActionNode",
         "CacheNode",
         "CallableNode",
+        "CompiledInputSchemas",
         "Dispatcher",
         "ModuleNode",
         "PublishEdge",
@@ -164,7 +165,6 @@ EXT_WORKFLOWS = frozenset(
         "SubscribeNode",
         "WriteNode",
         "register_workflow_store",
-        "resolve_inputs",
         "temporary_registrations",
         "workflow",
     }

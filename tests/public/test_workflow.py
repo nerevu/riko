@@ -682,6 +682,32 @@ class TestValidate:
         with pytest.raises(InvalidPipelineError, match=match):
             flow.validate()
 
+    def test_validate_runs_its_checks_once_per_workflow(self, monkeypatch):
+        calls = []
+        validate_input_schemas = Workflow.validate_input_schemas
+
+        def counted(flow):
+            calls.append(flow)
+            validate_input_schemas(flow)
+
+        monkeypatch.setattr(Workflow, "validate_input_schemas", counted)
+        outputs = {"default": Endpoint("a", "out")}
+        flow = _workflow([_A], outputs=outputs, input_schemas={"q": {"type": "string"}})
+        flow.validate()
+        flow.validate()
+
+        assert flow.is_valid
+        assert calls == [flow]
+
+    def test_validate_raises_on_every_call_to_an_invalid_workflow(self):
+        flow = _workflow([_A], input_schemas={"q": {"type": "strng"}})
+
+        for _ in range(2):
+            assert not flow.is_valid
+
+            with pytest.raises(InvalidPipelineError, match="invalid schema"):
+                flow.validate()
+
 
 def _loop_workflow() -> Workflow:
     """Parses the committed loop fixture whose embed carries a typed config."""

@@ -38,7 +38,11 @@ from riko.base._require_guards import (
 from riko.base._sentinels import SentinelValue
 from riko.base._strutils import replacer
 from riko.base._typing import require_enum
-from riko.definitions._inputs import freeze_inputs, resolve_input_references
+from riko.definitions._inputs import (
+    freeze_inputs,
+    gen_input_references,
+    resolve_input_references,
+)
 from riko.definitions._nodes import (
     FROZEN_CONF,
     NO_OPTIONS,
@@ -440,7 +444,7 @@ class ResolvedModule:
         return getattr(self._metadata_pipe, "subtype", None) == "source"
 
 
-def _gen_references(value: FrozenJSON) -> Iterator[tuple[str, str]]:
+def _gen_references(value: FrozenJSON | FrozenConf) -> Iterator[tuple[str, str]]:
     """``subkey``/``terminal`` references."""
     for mapping in gen_nested_mappings(value):
         pairs = ((key, mapping.get(key)) for key in _REFERENCE_KEYS)
@@ -1052,6 +1056,9 @@ class ExecutionPlan:
         """
         Builds an executable snapshot of ``flow`` with every node resolved once.
 
+        Each distinct module name is looked up once. Nodes that share a name reuse its
+        callables with their own conf.
+
         Args:
 
             flow: The ``Workflow`` to prepare.
@@ -1093,7 +1100,17 @@ class ExecutionPlan:
             ['count-1']
 
         """
-        resolve = partial(ResolvedModule.from_dispatcher, dispatcher)
+        by_name: dict[str, ResolvedModule] = {}
+
+        def resolve(name: str, conf: ConfInput) -> ResolvedModule:
+            if (module := by_name.get(name)) is None:
+                result = ResolvedModule.from_dispatcher(dispatcher, name, conf)
+                by_name[name] = result
+            else:
+                result = evolve(module, conf=conf)
+
+            return result
+
         resolve_callable = partial(_resolve_callable, dispatcher)
         modules = {k: resolve(n.name, n.conf) for k, n in flow.module_nodes.items()}
         embeds = {k: resolve(e["name"], e["conf"]) for k, e in flow.embeds.items()}
@@ -1410,26 +1427,27 @@ class ExecutionPlan:
         for node_id in self.index.required[output]:
             yield node_id, seed if node_id == seed_target else None
 
-    def with_inputs(self, values: Inputs | None) -> Self:
+    def with_inputs(self, inputs: Inputs | None) -> Self:
         """
         Builds the plan whose nodes run with the given ``Inputs``.
 
         Each ``{"input": name}`` mapping in a module node's conf, a loop's embed conf,
-        or a callable node's keyword arguments is replaced by ``values[name]``.
+        or a callable node's keyword arguments is replaced by ``inputs[name]``. A
+        resolved module whose conf refers to no input is used as is.
 
         Args:
 
-            values: The input values keyed by input name.
+            inputs: The inputs keyed by input name.
 
         Returns:
 
-            A new plan whose ``inputs`` hold the input values its nodes' configurations
-            were built from.
+            A new plan whose ``inputs`` hold the inputs its nodes' configurations were
+            built from.
 
         Raises:
 
             InvalidPipelineError: If the plan's configurations were already built from
-                input values.
+                inputs.
 
         Examples:
 
@@ -1441,30 +1459,35 @@ class ExecutionPlan:
             >>> node = ModuleNode(id="b", name="itembuilder", conf=conf)
             >>> schemas = {"q": {"type": "integer"}}
             >>> flow = Workflow(input_schemas=schemas).with_node(node)
-            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-            >>> resolved = plan.with_inputs({"q": 2})
-            >>> dict(resolved.inputs)
+            >>> plan_a = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan_b = plan_a.with_inputs({"q": 2})
+            >>> dict(plan_b.inputs)
             {'q': 2}
-            >>> dict(resolved.modules["b"].conf["attrs"])
+            >>> dict(plan_b.modules["b"].conf["attrs"])
             {'key': 'q', 'value': 2}
 
         """
         if self.inputs is not None:
-            msg = "The plan's configurations were already built from input values."
+            msg = "The plan's configurations were already built from inputs."
             raise InvalidPipelineError(msg)
 
-        inputs: Inputs = resolve_default(values, _NO_INPUTS)
+        _inputs: Inputs = resolve_default(inputs, _NO_INPUTS)
 
         def substitute(value: JSONValue) -> FrozenJSON:
-            resolved = resolve_input_references(value, inputs)
-            return json_freeze(resolved)
+            json_value = resolve_input_references(value, _inputs)
+            return json_freeze(json_value)
 
         def resolve(module: ResolvedModule) -> ResolvedModule:
-            return evolve(module, conf=substitute(module.conf))
+            if next(gen_input_references(module.conf), None) is None:
+                result = module
+            else:
+                result = evolve(module, conf=substitute(module.conf))
+
+            return result
 
         modules = map_values(resolve, self.modules)
         embeds = map_values(resolve, self.embeds)
-        return evolve(self, modules=modules, embeds=embeds, _inputs=values)
+        return evolve(self, modules=modules, embeds=embeds, _inputs=inputs)
 
     def _is_reserved_input(self, target: tuple[NodeId, Port]) -> bool:
         node_id, port = target

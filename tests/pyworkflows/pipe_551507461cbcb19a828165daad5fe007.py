@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.ext import resolve_inputs, workflow
+from riko.ext import CompiledInputSchemas, workflow
 from riko.modules.fetchsitefeed import pipe as fetchsitefeed
 from riko.modules.input import pipe as _input
 from riko.modules.truncate import pipe as truncate
@@ -24,6 +24,7 @@ INPUT_SCHEMAS = {
         "type": "string",
     }
 }
+COMPILED_INPUT_SCHEMAS = CompiledInputSchemas(INPUT_SCHEMAS)
 
 
 @workflow(
@@ -32,7 +33,7 @@ INPUT_SCHEMAS = {
     dependencies=["fetchsitefeed", "input", "truncate"],
 )
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    inputs = COMPILED_INPUT_SCHEMAS.resolve(None if context is None else context.inputs)
     sw_242 = _input(
         item,
         conf=InputRawConf({"input_key": {"type": "text", "value": "urlinput1"}}),

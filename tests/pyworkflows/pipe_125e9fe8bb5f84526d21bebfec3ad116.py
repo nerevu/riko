@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.ext import resolve_inputs, workflow
+from riko.ext import CompiledInputSchemas, workflow
 from riko.modules.fetchdata import pipe as fetchdata
 from riko.modules.input import pipe as _input
 from riko.modules.itembuilder import pipe as itembuilder
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 INPUT_SCHEMAS = {
     "textinput1": {"default": "defunkt", "description": "Enter Text", "type": "string"}
 }
+COMPILED_INPUT_SCHEMAS = CompiledInputSchemas(INPUT_SCHEMAS)
 
 
 @workflow(
@@ -37,7 +38,7 @@ INPUT_SCHEMAS = {
     dependencies=["fetchdata", "input", "itembuilder", "loop", "rename", "urlbuilder"],
 )
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    inputs = COMPILED_INPUT_SCHEMAS.resolve(None if context is None else context.inputs)
     sw_479 = _input(
         item,
         conf=InputRawConf({"input_key": {"type": "text", "value": "textinput1"}}),
