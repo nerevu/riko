@@ -42,6 +42,7 @@ from riko.types._workflow import (
     RawEdge,
     RawEndpoint,
     RawNode,
+    RawPort,
     RawWorkflow,
     parse_port,
 )
@@ -95,19 +96,19 @@ require_raw_edge = require_from_typed_dict(RawEdge, "PortEdge")
 require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 
 
-def _get_legacy_index(port: Port, prefix: str, default: int) -> int:
+def _get_legacy_index(port: RawPort, prefix: str, default: int) -> int:
     """Reads the trailing number off a legacy ``_OTHER``/``_OUTPUT`` port suffix."""
     suffix = port.removeprefix(prefix)
     return int(suffix) if suffix.isdigit() else default
 
 
-def _is_legacy_port(port: Port, prefix: str) -> bool:
+def _is_legacy_port(port: RawPort, prefix: str) -> bool:
     """Confirms a legacy port suffix is empty or a bare series number."""
     suffix = port.removeprefix(prefix)
     return not suffix or suffix.isdigit()
 
 
-def _normalize_port(port: Port, direction: PortDirection) -> Port:
+def _normalize_port(port: RawPort, direction: PortDirection) -> Port:
     """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
     if not port or port in PORT_DIRECTIONS:
         result = port
@@ -293,7 +294,7 @@ def build_nodes(raw_nodes: NodesLike) -> RikoNodeCollection:
     return result
 
 
-def resolve_port(port: Port | None, default: Port) -> Port:
+def resolve_port(port: RawPort | None, default: RawPort) -> RawPort:
     """Resolves an authored endpoint port."""
     return default if port is None else str(port)
 
@@ -305,8 +306,8 @@ def _normalize_endpoint(default_port: PortDirection, raw: EndpointLike) -> Endpo
     else:
         endpoint = require_raw_endpoint(require_mapping(raw, "endpoint"))
         node = require_str(endpoint.get("node"), "edge endpoint 'node'")
-        _port = resolve_port(endpoint.get("port"), default_port)
-        port = _normalize_port(_port, default_port)
+        raw_port = resolve_port(endpoint.get("port"), default_port)
+        port = _normalize_port(raw_port, default_port)
         _validate_port(port)
         result = Endpoint(node, port)
 
