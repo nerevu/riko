@@ -525,6 +525,11 @@ ABSOLUTE_DATES = [
     pytest.param("10/21/1958", (1958, 10, 21), id="slashed"),
     pytest.param("15 JUN 06", (2006, 6, 15), id="day-month-year"),
 ]
+OUT_OF_RANGE_DATES = [
+    pytest.param(10**19, id="epoch-overflow"),
+    pytest.param(99999999999999999, id="epoch-past-time-t"),
+    pytest.param("99999999999999999999", id="digit-string"),
+]
 
 
 class TestCastDatetime:
@@ -573,6 +578,20 @@ class TestCastDatetime:
             offset = None
 
         assert offset == timedelta(hours=9)
+
+    @pytest.mark.parametrize("value", OUT_OF_RANGE_DATES)
+    def test_out_of_range_date_raises_value_error(self, value):
+        with pytest.raises(ValueError, match="out of range"):
+            cast_datetime(value)
+
+    def test_other_os_errors_propagate(self, monkeypatch):
+        def gmtime(_):
+            raise PermissionError(13, "denied")
+
+        monkeypatch.setattr(cast_module, "gmtime", gmtime)
+
+        with pytest.raises(PermissionError, match="denied"):
+            cast_datetime(1)
 
     def test_rejects_non_date_values(self):
         with pytest.raises(TypeError, match="not date-like"):

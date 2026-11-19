@@ -28,6 +28,7 @@ from ast import literal_eval
 from datetime import UTC, date, timedelta
 from datetime import datetime as dt
 from decimal import Decimal, InvalidOperation
+from errno import EOVERFLOW
 from json import loads
 from operator import add, sub
 from time import gmtime, struct_time
@@ -346,6 +347,7 @@ def cast_datetime(value: DateLike, *, try_local_tz: bool = False) -> dt | None:
     Raises:
 
         TypeError: If ``value`` is not date-like.
+        ValueError: If ``value`` names a date out of the platform's range.
 
     Examples:
 
@@ -361,44 +363,52 @@ def cast_datetime(value: DateLike, *, try_local_tz: bool = False) -> dt | None:
         True
 
     """
-    if isinstance(value, date):
-        _date = value
-    elif isinstance(value, int):
-        _date = tt_to_datetime(gmtime(value))
-    elif isinstance(value, struct_time):
-        _date = tt_to_datetime(value)
-    elif isinstance(value, str):
-        words = value.split(" ")
-        count = words[0].lstrip("+-")
-        unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
-        textish = set(words).intersection(TEXT_WORDS)
+    try:
+        if isinstance(value, date):
+            _date = value
+        elif isinstance(value, int):
+            _date = tt_to_datetime(gmtime(value))
+        elif isinstance(value, struct_time):
+            _date = tt_to_datetime(value)
+        elif isinstance(value, str):
+            words = value.split(" ")
+            count = words[0].lstrip("+-")
+            unit = f"{words[-1].rstrip('s')}s" if len(words) == 2 else ""
+            textish = set(words).intersection(TEXT_WORDS)
 
-        if unit in MATH_WORDS and count.isdigit():
-            op = sub if value.startswith("-") else add
-            _date = get_relative_date(unit, int(count), op, dt.now(UTC))
-        elif len(textish) == 2:
-            op = sub if words[0] == "last" else add
-            _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
-        elif value in NAMED_DAYS:
-            now = dt.now(load_local_tz(try_local_tz=try_local_tz))
-            today = now.date()
-            _date = None
+            if unit in MATH_WORDS and count.isdigit():
+                op = sub if value.startswith("-") else add
+                _date = get_relative_date(unit, int(count), op, dt.now(UTC))
+            elif len(textish) == 2:
+                op = sub if words[0] == "last" else add
+                _date = get_relative_date(f"{words[1]}s", 1, op, dt.now(UTC))
+            elif value in NAMED_DAYS:
+                now = dt.now(load_local_tz(try_local_tz=try_local_tz))
+                today = now.date()
+                _date = None
 
-            match value:
-                case "today":
-                    _date = today
-                case "now":
-                    _date = now
-                case "tomorrow":
-                    _date = today + timedelta(days=1)
-                case "yesterday":
-                    _date = today - timedelta(days=1)
+                match value:
+                    case "today":
+                        _date = today
+                    case "now":
+                        _date = now
+                    case "tomorrow":
+                        _date = today + timedelta(days=1)
+                    case "yesterday":
+                        _date = today - timedelta(days=1)
+            else:
+                _date = parse_date_string(value)
+        elif is_datedict(value):
+            _date = datedict_to_datetime(value)
         else:
-            _date = parse_date_string(value)
-    elif is_datedict(value):
-        _date = datedict_to_datetime(value)
-    else:
-        raise TypeError(f"cast_datetime got a value that is not date-like: {value!r}")
+            msg = f"cast_datetime got a value that is not date-like: {value!r}"
+            raise TypeError(msg)
+    except (OverflowError, OSError) as err:
+        if isinstance(err, OSError) and err.errno != EOVERFLOW:
+            raise
+
+        msg = f"cast_datetime got a date out of range: {value!r}"
+        raise ValueError(msg) from err
 
     if _date is None:
         result = None

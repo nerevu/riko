@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from functools import partial
 from inspect import isawaitable
 from itertools import count
+from logging import WARNING
 from time import struct_time
 from typing import TYPE_CHECKING, Any
 
@@ -42,6 +43,7 @@ from riko.modules._metadata import (
 from riko.modules.aggregate import async_pipe as async_aggregate_pipe
 from riko.modules.aggregate import pipe as aggregate_pipe
 from riko.modules.count import pipe as count_pipe
+from riko.modules.datebuilder import pipe as datebuilder_pipe
 from riko.modules.fetchdata import async_pipe as async_fetchdata_pipe
 from riko.modules.fetchdata import pipe as fetchdata_pipe
 from riko.modules.fetchtext import async_pipe as async_fetchtext_pipe
@@ -580,6 +582,16 @@ class TestFilter:
         monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: behind)
         assert _values(filter_pipe(items, conf=conf), "x") == []
 
+    def test_filter_warns_and_ignores_an_out_of_range_date(self, caplog):
+        items = [{"x": 10**19}, {"y": 1}, {"x": None}, {"x": "2020-01-01"}]
+        rule = FilterConfRule(field="x", op="after", value="2019-01-01")
+        conf = FilterConf({"rule": rule})
+
+        with caplog.at_level(WARNING, logger="riko"):
+            assert _values(filter_pipe(items, conf=conf), "x") == ["2020-01-01"]
+
+        assert ["out of range" in r.getMessage() for r in caplog.records] == [True]
+
     def test_filter_allow_inf_flag(self, monkeypatch):
         """Compare infinities numerically when ``ALLOW_INF`` is enabled."""
         items = [{"x": "-inf"}]
@@ -591,6 +603,15 @@ class TestFilter:
         nan_rule = FilterConfRule(field="x", op="greater", value="9")
         nan_conf = FilterConf({"rule": nan_rule})
         assert _values(filter_pipe([{"x": "nan"}], conf=nan_conf), "x") == ["nan"]
+
+
+class TestDatebuilder:
+    @pytest.mark.parametrize(
+        "content", [10**19, "99999999999999999999"], ids=["epoch", "digits"]
+    )
+    def test_datebuilder_rejects_an_out_of_range_date(self, content):
+        with pytest.raises(ValueError, match="got an unrecognized date"):
+            next(datebuilder_pipe({"content": content}))
 
 
 _NESTED = {"a": {"b": 1, "c": 2}}
