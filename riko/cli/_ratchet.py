@@ -186,7 +186,8 @@ def ratchet_ceiling(
     Checks ``count`` against its recorded ceiling, lowering the ceiling on a gain.
 
     The first measurement records the ceiling. Recording or lowering a ceiling also
-    records the day, which starts its staleness clock.
+    records the day, which starts its staleness clock; a ceiling of 0 never goes
+    stale.
 
     Args:
 
@@ -229,7 +230,7 @@ def ratchet_ceiling(
             message += " run the ratchet locally and commit pyproject.toml."
 
         warn = ci
-    elif stale_days is not None and (day - lowered).days > stale_days:
+    elif ceiling > 0 and stale_days is not None and (day - lowered).days > stale_days:
         message = (
             f"{count} {noun} have held the ceiling of {ceiling} since {lowered}, "
             f"over {stale_days} days; lower it."

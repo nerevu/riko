@@ -227,9 +227,9 @@ sync when source is moved between package groups.
 - **Ratchet staleness.** Recording or lowering a ceiling also records the day as
   `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
   holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that
-  key there is no check. Exit codes never change. Under GitHub Actions the warning, and
-  any `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
-  annotations.
+  key there is no check. A ceiling of 0 never goes stale. Exit codes never change.
+  Under GitHub Actions the warning, and any `pyproject.toml` change the run makes (CI
+  discards it), print as `::warning::` annotations.
 - **Docstring parameter-section lint.** `manage lint --docstrings` flags a parameter
   with a default under `Args:`, one without under `Kwargs:`, and a `**kwargs` bag
   under `Args:` (`gen_misplaced_params`); `Args:`/`Kwargs:` entries out of signature
