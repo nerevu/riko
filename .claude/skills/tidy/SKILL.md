@@ -110,14 +110,16 @@ parallel tool calls, or in one chained Bash command — never one grep per turn 
 The `mistake_scan` section (already in `--leads` output) scans the added lines for
 the defect classes past fix sessions kept repairing (closing, last-wins, truthiness,
 sync/async drift, chunk decoding, `next()` without a default, hash-seed order,
-frozen-record mutability, unbounded timeouts, `find()` slicing) and for a second
+frozen-record mutability, unbounded timeouts, `find()` slicing, keywords
+shadowing `partial`-bound parameters, unguarded settings casts) and for a second
 `return`. Its leads come most-often-fixed class first. They are leads, not findings:
 verify each against check 4's bar (truthiness is a finding only when a falsy
 value is realistic for that field; a `0` the docstring names as a sentinel is
 not) and the rule's own message, then sort into §4's buckets. A lead you rule
 safe gets a trailing `# mistake-ok: RMnnn` only when it would recur on every
-edit of that line; otherwise just drop it. When a fix lands for a class, bump
-its `CLASS_HISTORY` count and refs in the script.
+edit of that line; otherwise just drop it. `mistake_scan.py --classes` prints
+each class's rules or audit probe and the shapes ruled safe; /triage adds a
+fix's ref to its class when it lands (the count is derived from the refs).
 
 For each file in scope, and only the lines the change introduced or the
 neighborhood it affects:

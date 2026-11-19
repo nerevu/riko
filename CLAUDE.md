@@ -376,6 +376,9 @@ a `normalize`; substituting a default the caller supplies or chooses
 - **meza resolves from PyPI releases only** (a `meza>=` floor, no git source);
   lower-level conversion ownership remains with meza where the runtime contract says
   so. Workarounds for meza defects are tracked in `_docs/gameplans/upstream-fixes.md`.
+- **Bug-class table** — `python .claude/skills/tidy/mistake_scan.py --classes` ranks the
+  defect classes past fixes repaired, with each class's scanner rule or audit probe;
+  audits rank risk areas from it, fixes record their class in it.
 - **Tunable knobs live in `riko/base/_config.py`** — static project policy
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the
   import linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens

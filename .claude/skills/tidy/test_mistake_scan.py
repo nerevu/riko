@@ -22,6 +22,17 @@ RULE_CASES = [
     pytest.param(
         "def f(newval):\n    if newval:\n        pass\n", "RM102", id="if-value"
     ),
+    pytest.param(
+        "def f(item, field, rule):\n    value = item.get(field)\n"
+        "    return bool(value) if rule.get('include') else not value\n",
+        "RM102",
+        id="bool-value",
+    ),
+    pytest.param(
+        "SWITCH = {'contains': lambda x, y: x and y.lower() in x.lower()}\n",
+        "RM101",
+        id="lambda-and-guard",
+    ),
     pytest.param("def f(it):\n    yield next(it)\n", "RM103", id="bare-next"),
     pytest.param("def f(s):\n    return list(set(s))\n", "RM201", id="set-order"),
     pytest.param("def f(a, b):\n    g(*a.difference(b))\n", "RM201", id="set-splat"),
@@ -51,6 +62,11 @@ RULE_CASES = [
     pytest.param(
         "def f(s, m):\n    i = s.find(m)\n    return s[i:]\n", "RM502", id="find-slice"
     ),
+    pytest.param(
+        "def f(s, m):\n    i = s.find(m) if m else 0\n    return s[i:]\n",
+        "RM502",
+        id="find-slice-ifexp",
+    ),
     pytest.param("def f(timeout=0):\n    pass\n", "RM601", id="timeout-zero"),
     pytest.param(
         "@define(frozen=True)\nclass C:\n    modes: frozenset[str]\n",
@@ -73,6 +89,28 @@ RULE_CASES = [
         "def f(x):\n    if x is None:\n        return 0\n    return x\n",
         "RM901",
         id="early-return",
+    ),
+    pytest.param(
+        "def call(wrapper, conf, options, item=None, context=None, **extra):\n"
+        "    pass\n\n"
+        "def build(wrapper, conf, options):\n"
+        "    return partial(call, wrapper, conf, options)\n",
+        "RM1001",
+        id="partial-kwarg-shadow",
+    ),
+    pytest.param(
+        "def f(caster, content, default):\n    try:\n"
+        "        value = caster(content)\n"
+        "    except (TypeError, InvalidOperation, ValueError):\n"
+        "        value = default\n    return value\n",
+        "RM1101",
+        id="cast-overflow",
+    ),
+    pytest.param(
+        "def load(source, defaults):\n"
+        "    return _env_int(source, 'RIKO_CONCURRENCY_LIMIT', defaults.limit)\n",
+        "RM1102",
+        id="env-int-unbounded",
     ),
 ]
 CLEAN_CASES = [
@@ -114,6 +152,47 @@ CLEAN_CASES = [
         "class Sub:\n    def close(self):\n        pass\n",
         id="prefixed-twin",
     ),
+    pytest.param(
+        "def f(limit, other):\n    return limit and other\n", id="and-no-reuse"
+    ),
+    pytest.param(
+        "def call(wrapper, conf, options, /, item=None, **extra):\n    pass\n\n"
+        "def build(wrapper, conf, options):\n"
+        "    return partial(call, wrapper, conf, options)\n",
+        id="positional-only-partial",
+    ),
+    pytest.param(
+        "def f(caster, content, default):\n    try:\n"
+        "        value = caster(content)\n"
+        "    except (TypeError, InvalidOperation, ValueError, OverflowError):\n"
+        "        value = default\n    return value\n",
+        id="cast-overflow-caught",
+    ),
+    pytest.param(
+        "def f(value, default):\n    try:\n"
+        "        result = Decimal(str(value))\n"
+        "    except (TypeError, InvalidOperation, ValueError):\n"
+        "        result = default\n    return result\n",
+        id="decimal-only-cast",
+    ),
+    pytest.param(
+        "def cast_arg(value):\n    return value\n\n"
+        "def f(value, default):\n    try:\n"
+        "        result = cast_arg(value)\n"
+        "    except (TypeError, InvalidOperation, ValueError):\n"
+        "        result = default\n    return result\n",
+        id="named-function-cast",
+    ),
+    pytest.param(
+        "def require(cls, /, value, **_):\n    pass\n\n"
+        "require_str = partial(require, str)\n",
+        id="module-function-cls",
+    ),
+    pytest.param(
+        "def load(source, defaults):\n    return _env_int(\n"
+        "        source, 'RIKO_CONCURRENCY_LIMIT', defaults.limit, minimum=1\n    )\n",
+        id="env-int-bounded",
+    ),
 ]
 
 
@@ -151,3 +230,40 @@ def test_diff_scope_reports_only_added_lines(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "riko/a.py:6: RM101" in out
     assert "riko/a.py:2:" not in out
+
+
+def test_class_history_source_is_what_rewrap_builds():
+    source = Path(mistake_scan.__file__).read_text()
+    assert mistake_scan.build_class_history_source() in source
+
+
+def test_class_table_lists_every_class_with_rules_or_probe(capsys):
+    assert mistake_scan.main(["--classes"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("\n## ") + out.startswith("## ") == len(mistake_scan.CLASS_HISTORY)
+    assert "## kwarg-shadow: RM1001; fixed " in out
+    assert "## races: probe-only; fixed " in out
+
+
+@pytest.mark.parametrize(
+    ("cited", "expected"),
+    [
+        pytest.param(("abc12345",), 0, id="all-cited"),
+        pytest.param((), 1, id="one-uncited"),
+    ],
+)
+def test_unclassified_lists_fixes_no_class_cites(monkeypatch, capsys, cited, expected):
+    def fake_git(*args: str) -> str:
+        replies = {
+            "describe": "v1.0.0\n",
+            "log": "abc123456 [FIX] Cited fix\ndef987654 [FIX] Typo fix\n",
+        }
+        return replies[args[0]]
+
+    history = {"close": mistake_scan.BugClass(" ".join(cited), "", "")}
+    monkeypatch.setattr(mistake_scan, "git", fake_git)
+    monkeypatch.setattr(mistake_scan, "CLASS_HISTORY", history)
+    monkeypatch.setattr(mistake_scan, "NON_BEHAVIORAL", ("def98765",))
+    assert mistake_scan.main(["--unclassified"]) == expected
+    out = capsys.readouterr().out
+    assert out == ("" if cited else "abc123456 [FIX] Cited fix\n")
