@@ -75,6 +75,7 @@ if TYPE_CHECKING:
 
 type NodeId = str
 type Port = str
+type RawPort = str
 type PortKey = tuple[NodeId, Port]
 type OutputName = str
 type ResourceName = str
@@ -134,7 +135,7 @@ class RawEndpoint(TypedDict, total=False):
     """Shorthand for an edge or output endpoint; ``node`` is required."""
 
     node: Required[NodeId]
-    port: Port
+    port: RawPort
 
 
 class RawEdge(TypedDict, total=False):
@@ -495,6 +496,7 @@ __all__ = [
     "PortDirection",
     "PortKey",
     "PortName",
+    "RawPort",
     "ResourceName",
     "WorkflowEdge",
     "WorkflowIndex",
