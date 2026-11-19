@@ -59,7 +59,16 @@ ships with an entry there plus a strict-xfail canary in
   <test files> -k <selectors>` (it never touches the working tree); a test that
   passes there either guards something else or does not probe the bug. When the fix
   is uncommitted, pass `--old <path>=<pre-fix copy>` per fixed file instead of
-  `--ref`: it snapshots the working tree with those files swapped back.
+  `--ref`: it snapshots the working tree with those files swapped back. Name the
+  fix's class from `python .claude/skills/tidy/mistake_scan.py --classes`, add the fix's
+  ref to that class's `CLASS_HISTORY` refs (or add the class with a probe line), then
+  run `mistake_scan.py --rewrap` and `ruff format` on it; the
+  count is derived from the refs, where each item before a `;` in a dated group
+  counts, so a note goes after the `;`. An
+  uncommitted fix's ref reads `uncommitted (MM-DD <what>)`, and /wrapup swaps in the
+  hash once the user commits; never ask the user to. And when
+  the scanner has a rule for the class, add the pre-fix line as a row in
+  `.claude/skills/tidy/test_mistake_scan.py`.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.

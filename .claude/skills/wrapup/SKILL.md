@@ -74,6 +74,14 @@ current, run both as one call in the turn after the setup call.
 
 - After tidy: `git status --short` and `git diff --stat` (staged and unstaged).
 - Beside the launch: `git log --oneline -8`.
+- Beside the launch: the scanner's recall on this release's fixes,
+  `bash .claude/skills/tidy/replay_fixes.sh $(git log --format=%h
+  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix with
+  0 leads as a scanner miss: a candidate rule, or a probe line for its class in
+  `mistake_scan.py`'s `CLASS_HISTORY`. Run `python .claude/skills/tidy/mistake_scan.py
+  --unclassified` beside it and cite each listed fix in a class or `NON_BEHAVIORAL`.
+  A listed fix that an `uncommitted (MM-DD <what>)` ref already describes gets its
+  hash written over `uncommitted` in that ref, with no new ref and no count bump.
 - Beside the launch: pending fixups,
   `git log --format='%h %s' HEAD --not --remotes`. Each
   `fixup! <subject>` line names its target by subject. A target may already be
