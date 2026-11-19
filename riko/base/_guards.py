@@ -26,6 +26,7 @@ from inspect import (
     signature,
 )
 from itertools import filterfalse, repeat
+from operator import contains
 from types import MemberDescriptorType, MethodDescriptorType, MethodType
 from typing import TYPE_CHECKING, Protocol, TypeGuard, overload, runtime_checkable
 
@@ -119,6 +120,24 @@ def is_type_bound(obj: object, *names: str) -> bool:
     return not hasattr(obj, "__dict__") and _is_type_bound_static(type(obj), *names)
 
 
+def _is_statically_absent(obj: object, name: str) -> bool:
+    """
+    Whether neither ``obj``'s type nor its instance ``__dict__`` defines ``name``.
+
+    A class is never reported absent since its attributes also come from its own MRO.
+    Mirrors ``getattr_static``, which runtime protocol checks use. An absent member can
+    never match a protocol.
+    """
+    try:
+        instance = object.__getattribute__(obj, "__dict__")  # noqa: PLC2801
+    except AttributeError:
+        instance = {}
+
+    defined = map(vars, type(obj).__mro__)
+    in_type = any(map(contains, defined, repeat(name)))
+    return not (isinstance(obj, type) or in_type or name in instance)
+
+
 def _get_bound_method(cls: type, name: str) -> object:
     """Gets ``cls``'s method ``name`` as an instance of ``cls`` would see it."""
     attr = getattr(cls, name, None)
@@ -206,11 +225,13 @@ def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeI
     A built-in method is compared as its instances see it. One whose signature
     ``inspect`` cannot read counts as compatible.
     """
-    names = (name for name, _ in _get_protocol_members(protocol))
+    names = tuple(name for name, _ in _get_protocol_members(protocol))
     by_type = not getattr(protocol, "__non_callable_proto_members__", None)
 
     if by_type and is_type_bound(obj, *names):
         match = _check_strict_type(type(obj), protocol, *methods)
+    elif any(map(_is_statically_absent, repeat(obj), names)):
+        match = False
     else:
         match = _check_strict_protocol(obj, protocol, *methods)
 

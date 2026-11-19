@@ -41,6 +41,7 @@ from feedparser import FeedParserDict
 from urllib3.response import HTTPResponse
 
 from riko.base import _exceptions as errors
+from riko.base import _guards as guards
 from riko.base._config import STREAMING_THRESHOLD, load_settings
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import (
@@ -57,6 +58,7 @@ from riko.base._graph import (
 from riko.base._guards import (
     SyncClosable,
     _check_strict_protocol,
+    get_sync_closer,
     isinstance_strict,
     require_listlike,
     require_mapping,
@@ -1544,6 +1546,14 @@ STRICT_CHECKS = [
     pytest.param(_SlottedStaticClose, SyncClosable, id="slotted-static"),
     pytest.param(_with_close, SyncClosable, id="instance-close"),
     pytest.param(_Plain, SyncClosable, id="plain"),
+    pytest.param(DotDict, SyncClosable, id="dotdict"),
+]
+
+# Whether a value has a sync closer; only a value that defines ``close`` is checked.
+STATIC_CLOSERS = [
+    pytest.param(DotDict, False, id="dotdict"),
+    pytest.param(_Plain, False, id="plain"),
+    pytest.param(_with_close, True, id="instance-close"),
 ]
 
 
@@ -1564,6 +1574,20 @@ class TestRequireGuards:
             isinstance_strict(v, SyncClosable) for v in (closing, plain)
         ]
         assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
+
+    @pytest.mark.parametrize(("make", "closes"), STATIC_CLOSERS)
+    def test_a_close_neither_type_nor_instance_defines_skips_the_protocol_check(
+        self, monkeypatch, make, closes
+    ) -> None:
+        checked = []
+
+        def spy(obj: object, protocol: type, *methods: str) -> bool:
+            checked.append(obj)
+            return _check_strict_protocol(obj, protocol, *methods)
+
+        monkeypatch.setattr(guards, "_check_strict_protocol", spy)
+        closer = get_sync_closer(make())
+        assert (closer is not None, bool(checked)) == (closes, closes)
 
     def test_an_async_close_is_found_per_type_and_per_instance(self) -> None:
         closers = (
