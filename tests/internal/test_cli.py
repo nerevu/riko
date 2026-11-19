@@ -78,11 +78,13 @@ _TODAY = date(2026, 10, 27)
 _WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
 _FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
 _STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_STALE_ZERO = f"any = 0\nany-lowered = 2026-10-19\n{_WINDOW}"
 _DATED = "any = 8\nany-lowered = 2026-10-27\n"
 _LOWERED = f"{_DATED}{_WINDOW}"
 _DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
 _UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
 _HOLDS = "9 uses hold the ceiling of 9."
+_HOLDS_ZERO = "0 uses hold the ceiling of 0."
 _HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
 _RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
 
@@ -635,6 +637,7 @@ STALE_CASES = [
     pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
     pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
     pytest.param(_STALE, 9, True, _STALE, f"::warning::{_HELD}", id="stale-ci"),
+    pytest.param(_STALE_ZERO, 0, False, _STALE_ZERO, _HOLDS_ZERO, id="stale-at-zero"),
     pytest.param(_STALE, 8, False, _LOWERED, _RECORDED, id="lowering-resets"),
     pytest.param(_STALE, 8, True, _LOWERED, _CI_DISCARDS, id="ci-discards"),
     pytest.param("any = 8\n", 8, False, _DATED, _RECORDED, id="undated-starts-clock"),
