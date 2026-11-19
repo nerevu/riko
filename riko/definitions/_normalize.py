@@ -103,9 +103,9 @@ def _get_legacy_index(port: RawPort, prefix: str, default: int) -> int:
 
 
 def _is_legacy_port(port: RawPort, prefix: str) -> bool:
-    """Confirms a legacy port suffix is empty or a bare series number."""
+    """Confirms a port has a legacy prefix and an empty or numeric series suffix."""
     suffix = port.removeprefix(prefix)
-    return not suffix or suffix.isdigit()
+    return port.startswith(prefix) and (suffix == "" or suffix.isdigit())
 
 
 def _normalize_port(port: RawPort, direction: PortDirection) -> Port:
@@ -142,13 +142,13 @@ def _resolve_aliases[T](raw: Mapping[str, T], kind: str) -> dict[str, T]:
     aliases = dict(raw)
 
     for alias, name in _ALIASES[kind].items():
-        primary, value = aliases.get(name), aliases.pop(alias, None)
+        if alias in aliases:
+            value = aliases.pop(alias)
 
-        if primary is None and value is not None:
-            aliases[name] = value
-        elif value is not None and value != primary:
-            what = f"{kind} {name!r}/{alias!r}"
-            raise InvalidPipelineError(f"conflicting {what}: {primary!r} and {value!r}")
+            if value != (primary := aliases.setdefault(name, value)):
+                what = f"{kind} {name!r}/{alias!r}"
+                msg = f"conflicting {what}: {primary!r} and {value!r}"
+                raise InvalidPipelineError(msg)
 
     return aliases
 

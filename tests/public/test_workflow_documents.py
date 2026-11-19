@@ -504,6 +504,14 @@ NODE_IDS = [
 ]
 
 
+INVALID_PORTS = [
+    pytest.param("out:", id="empty-index"),
+    pytest.param("1", id="bare-1"),
+    pytest.param("2", id="bare-2"),
+    pytest.param("12", id="bare-12"),
+]
+
+
 class TestNormalizeWorkflow:
     @pytest.mark.parametrize(("nodes", "expected"), NODE_IDS)
     def test_node_ids(self, nodes, expected):
@@ -949,16 +957,27 @@ class TestNormalizeWorkflow:
                 )
                 for alias in ("src", "tgt", "from", "to")
             ),
+            pytest.param(
+                {"nodes": [{**_READ_NODE, "fmt": None, "format": "csv"}]},
+                "conflicting node 'fmt'/'format'",
+                id="conflicting-null-fmt",
+            ),
+            pytest.param(
+                {"nodes": [{**_READ_NODE, "fmt": "csv", "format": None}]},
+                "conflicting node 'fmt'/'format'",
+                id="conflicting-null-format",
+            ),
         ],
     )
     def test_malformed_graphs_raise_invalid_pipeline(self, raw, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.from_raw(raw)
 
-    def test_invalid_port_rejected(self):
-        edge = {"source": {"node": "a"}, "target": {"node": "b", "port": "out:"}}
+    @pytest.mark.parametrize("port", INVALID_PORTS)
+    def test_invalid_port_rejected(self, port):
+        edge = {"source": {"node": "a"}, "target": {"node": "b", "port": port}}
 
-        with pytest.raises(InvalidPipelineError, match="invalid port: 'out:'"):
+        with pytest.raises(InvalidPipelineError, match=f"invalid port: {port!r}"):
             Workflow.from_raw({"nodes": _TWO_NODES, "edges": [edge]})
 
     @pytest.mark.parametrize(("raw_schema", "match"), BAD_INPUT_SCHEMAS)
