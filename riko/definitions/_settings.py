@@ -201,6 +201,29 @@ class ExecutionSettings:
 
         return policy
 
+    def validate_async(self) -> None:
+        """
+        Validates that asynchronous execution can run with these settings.
+
+        Raises:
+
+            InvalidPipelineError: If the settings name the process executor, which
+                asynchronous iteration cannot use.
+
+        Examples:
+
+            >>> from riko import ExecutionSettings
+            >>>
+            >>> ExecutionSettings(concurrency=4).validate_async()
+            >>> ExecutionSettings(executor="process").validate_async()
+            Traceback (most recent call last):
+            riko.exceptions.InvalidPipelineError: ...requires synchronous execution
+
+        """
+        if self.executor is Executor.PROCESS:
+            msg = "the process executor requires synchronous execution"
+            raise InvalidPipelineError(msg)
+
     @cached_property
     def async_policy(self) -> AsyncPolicy:
         """
@@ -230,22 +253,17 @@ class ExecutionSettings:
             riko.exceptions.InvalidPipelineError: ...requires synchronous execution
 
         """
+        self.validate_async()
         executor, concurrency = self.executor, self.concurrency
 
-        if executor is Executor.PROCESS:
-            msg = "the process executor requires synchronous execution"
-            raise InvalidPipelineError(msg)
+        if concurrency == "auto":
+            limit = config.concurrency_limit
+        elif isinstance(concurrency, int) or executor is Executor.AUTO:
+            limit = concurrency
         else:
-            if concurrency == "auto":
-                limit = config.concurrency_limit
-            elif isinstance(concurrency, int) or executor is Executor.AUTO:
-                limit = concurrency
-            else:
-                limit = 1
+            limit = 1
 
-            policy = AsyncPolicy(limit, executor is Executor.INLINE)
-
-        return policy
+        return AsyncPolicy(limit, executor is Executor.INLINE)
 
 
 DEF_EXECUTION_SETTINGS = ExecutionSettings()
