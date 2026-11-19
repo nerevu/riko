@@ -998,6 +998,12 @@ TERM_PATTERNS = [
         [(1, "ExecutionMode"), (2, "Describe-Mode")],
         id="retired-describe",
     ),
+    pytest.param(
+        "class Resolver: ...\nclass TestPipelineResolver: ...\n"
+        "class InputResolver: ...\n",
+        [(3, "InputResolver")],
+        id="resolver-class",
+    ),
 ]
 
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from itertools import chain
 from typing import TYPE_CHECKING, NamedTuple
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
 
 _EXCLUDED_NAMES = frozenset({"MIGRATION.rst", "_lint_terms.py", "test_cli.py"})
 _HISTORY_NAMES = frozenset({*_EXCLUDED_NAMES, "CHANGES.rst"})
+_RESOLVER_CLASS = re.compile(r"(?:Test)?(\w*)Resolver")
+_RESOLVER_STEMS = frozenset({"", "Workflow", "Pipeline"})
 
 
 class BannedTerm(NamedTuple):
@@ -124,6 +127,11 @@ RETIRED_DESCRIBE = BannedTerm(
     "retired describe mode", "`describe_module`, or `input_schemas`/`dependencies`"
 )
 
+RESOLVER_CLASS = BannedTerm(
+    "new *Resolver class",
+    "a name for what the record holds ('resolver' means module-name lookup)",
+)
+
 _PATTERNS: tuple[tuple[BannedTerm, re.Pattern[str]], ...] = (
     *_PHRASE_PATTERNS,
     (PHASE_CODE, re.compile(r"\b[RP](?:1[0-2]|[0-9])[A-E]?(?:\.\d+)?\b")),
@@ -206,16 +214,35 @@ def _gen_issues(
                     yield TermIssue(path, lineno, match.group(0), term)
 
 
+def _gen_resolver_issues(*roots: Path) -> Iterator[TermIssue]:
+    """Walks ``roots`` for classes named ``*Resolver`` beyond the reserved three."""
+    for root in roots:
+        for path in gen_files(root, _EXCLUDED_NAMES):
+            if path.suffix == ".py":
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                nodes = ast.walk(tree)
+                classes = (node for node in nodes if isinstance(node, ast.ClassDef))
+
+                for node in classes:
+                    match = _RESOLVER_CLASS.fullmatch(node.name)
+
+                    if match and match.group(1) not in _RESOLVER_STEMS:
+                        yield TermIssue(path, node.lineno, node.name, RESOLVER_CLASS)
+
+
 def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
     """
     Walks ``roots`` for banned phrases in Python strings/comments and prose files.
+
+    Also tags classes named ``*Resolver`` other than ``Resolver``, ``WorkflowResolver``,
+    and ``PipelineResolver`` (or their test classes).
 
     Args:
 
         roots: Files or directories to scan. Skips the migration guide because it quotes
             released wording. Skips the banned list and its tests because they spell out
             every phrase. The changelog may still name the removed ``riko.ext``
-            submodules, the retired describe modes, and the old color-flag spellings,
+            submodules, the retired describe modes, and the old color-flag spellings
             since released entries keep the names they shipped with.
 
     Yields:
@@ -225,7 +252,9 @@ def gen_term_issues(*roots: Path) -> Iterator[TermIssue]:
     """
     shipped = _gen_issues(_PATTERNS, *roots)
     retired = _gen_issues(_RETIRED_PATTERNS, *roots, excluded=_HISTORY_NAMES)
-    yield from sorted(chain(shipped, retired), key=lambda issue: issue[:2])
+    resolvers = _gen_resolver_issues(*roots)
+    issues = chain(shipped, retired, resolvers)
+    yield from sorted(issues, key=lambda issue: issue[:2])
 
 
 def gen_phrase_issues(*roots: Path) -> Iterator[TermIssue]:
@@ -251,6 +280,7 @@ __all__ = [
     "BANNED_TERMS",
     "PHASE_CODE",
     "REMOVED_EXT_PATH",
+    "RESOLVER_CLASS",
     "RETIRED_DESCRIBE",
     "RUN_SCOPING",
     "UPSTREAM_NOUN",
