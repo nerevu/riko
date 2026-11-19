@@ -911,10 +911,13 @@ kind). Canonical `conf`/`options`/`policy`/`params`/`embed`/`input_schemas` valu
 JSON-native by construction: their field converters freeze them through `json_freeze`
 (`riko/types/_frozendict.py`), which rejects `Decimal`, `date`, `set`, `bytes`,
 non-finite floats, non-string keys, and any other object, turns lists into tuples, and
-builds every mapping as a `FrozenDict` (re-walking a `FrozenDict` so permissively frozen
-values are still checked). The permissive `freeze` (definitions' `inputs`, factory
-arguments, plans) freezes only built-in containers and keeps a `FrozenDict`, named
-tuple, or any other object as is; `thaw` reverses it. `FrozenDict` is the one
+builds every mapping as a `FrozenJSONDict`, a `FrozenDict` marker subclass it passes
+through untouched (a plain `FrozenDict` is re-walked so permissively frozen values are
+still checked); the marker compares, hashes, and canonically encodes like an equal
+`FrozenDict`, and only its constructor or the freezer's private `_from_frozen` (a static
+check, no runtime one) makes one. The permissive `freeze` (definitions' `inputs`,
+factory arguments, plans) freezes only built-in containers and keeps a `FrozenDict`,
+named tuple, or any other object as is; `thaw` reverses it. `FrozenDict` is the one
 frozen-mapping type for definitions, workflows, plans, and `Context`/`Resource`; as a
 frozen slotted attrs class it pickles natively, so process-pool workers receive conf
 with no `copyreg` hook. Because it is also an attrs class, structural dispatch tests
