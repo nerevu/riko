@@ -1368,7 +1368,12 @@ Deliver:
   The derived schema must resolve through to the objconf type: `CsvConf`
   (`riko/types/modules.py`) types `has_header` as `NotRequired[Value]` while
   `CsvObjconf` types it `bool`, so a schema taken from the `TypedDict` alone would still
-  admit the string;
+  admit the string. A filter date operator (`after`/`before`) whose literal rule `value`
+  does not parse as a date is invalid conf (today the rule silently matches no item); a
+  `value` that references the item (a subkey or terminal reference) cannot be checked
+  statically and is exempt — strict xfail
+  `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read[unparseable-date]`
+  (triage 2026-11-19);
 - the same check for built-in and entry-point modules;
 - the describe modes retired (ruled 2026-11-09, [release-readiness.md
   § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work);

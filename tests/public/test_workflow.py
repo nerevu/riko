@@ -593,6 +593,13 @@ INVALID_CONFS = [
     pytest.param(
         "strconcat", {}, "part", id="missing-key", marks=_conf_pending(TypeError)
     ),
+    pytest.param(
+        "filter",
+        {"rule": {"field": "x", "op": "after", "value": "foo"}},
+        "value",
+        id="unparseable-date",
+        marks=_conf_pending(pytest.fail.Exception),
+    ),
 ]
 
 
