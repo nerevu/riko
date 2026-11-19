@@ -1508,6 +1508,10 @@ encoder lands, and a conf-identity key goes stale under mutation). `pipe.prepare
 the supported way to amortize repeated calls meanwhile. No tripwire: only a timing test
 could probe it.
 
+Measured 2026-11-18 (repeated-work audit triage): `regex` rebuilds its compiled rules
+per item (`riko/modules/regex.py:67`, `_process_rules`), 7.5 µs per item with one rule
+and 20.1 µs with three. The once-parsed typed config is the fix here too.
+
 Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not
 describe their callables. `_build_caster` (`riko/modules/_prepare.py`) hides behind
 `cast("SyncConfCastFunc", ...)` that its `cast_pass` branch returns the conf unchanged
@@ -2482,7 +2486,10 @@ R10 therefore owns:
   design note, no tripwire). An async splitter input currently skips per-item dispatch
   (static conf only; strict-xfail tripwire
   `tests/internal/test_modules.py::TestSplitter::test_async_splitter_resolves_conf_per_item`,
-  TODO triage 2026-11-16).
+  TODO triage 2026-11-16). Measured 2026-11-18 (repeated-work audit triage): the sync
+  splitter `setup` (`riko/modules/_decorators.py:2137-2146`) dispatches every item even
+  with a static conf, unlike the operator's `static_casted` path (`:1758`), which is 9.5
+  of 30 µs per item for `split`; the shared view-building should carry the static path.
 - a sync-only loop embed under an async host honors `count="first"` lazily instead of
   running the child to completion on its worker (strict-xfail tripwire
   `tests/internal/test_execution_plan.py::TestAsyncAdaptEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
