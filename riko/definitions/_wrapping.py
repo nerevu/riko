@@ -62,6 +62,7 @@ def _call_plain(
 
 def prepare_call(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
+    /,
     *_: ExtraName,
     conf: PrepareConf | None = None,
     **options: Unpack[RawCallOptions],

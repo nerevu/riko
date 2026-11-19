@@ -1348,6 +1348,15 @@ PICKLED_CONFS = [
 ]
 
 
+PER_ITEM_ARGUMENTS = [
+    pytest.param("embed", ("embed",), id="declared-embed"),
+    pytest.param("others", ("others",), id="declared-others"),
+    pytest.param("label", ("label",), id="declared-label"),
+    pytest.param("embed", (), id="undeclared-embed"),
+    pytest.param("resources", (), id="undeclared-resources"),
+]
+
+
 class TestPrepare:
     @pytest.mark.parametrize(
         ("item", "kind"), [({"content": "a"}, ItemDispatch), ("a", ValueDispatch)]
@@ -1406,6 +1415,19 @@ class TestPrepare:
         list(pipe([{"a": 1}], resources=view))
         assert captured["view"] is view
 
+    @pytest.mark.parametrize("name", ["wrapper", "items"])
+    def test_a_direct_call_passes_an_unknown_keyword_to_the_pipe(self, name):
+        captured = {}
+
+        @processor()
+        def pipe(item: Item, objconf, tuples, **kwargs) -> Item:
+            captured.update(kwargs)
+            return item
+
+        kwargs: dict[str, Any] = {name: "value"}
+        assert list(pipe([{"a": 1}], **kwargs)) == [{"a": 1}]
+        assert captured[name] == "value"
+
     def test_prepared_module_is_frozen(self):
         conf = cast("Conf", {"x": {"subkey": "y"}})
         prepared = processor(ftype="text").prepare("m", conf=conf)
@@ -1427,12 +1449,21 @@ class TestPrepare:
         with pytest.raises(TypeError, match=f"module fixes '{option}' when it is"):
             list(pipe([{"x": 1}], conf={}, **kwargs))
 
-    @pytest.mark.parametrize("extra", ["embed", "others", "label"])
-    def test_prepare_rejects_a_per_item_argument(self, extra):
+    @pytest.mark.parametrize(("extra", "extras"), PER_ITEM_ARGUMENTS)
+    def test_prepare_rejects_a_per_item_argument(self, extra, extras):
         kwargs: dict[str, Any] = {extra: None}
 
         with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
-            strconcat.prepare(extra, conf={}, **kwargs)
+            strconcat.prepare(*extras, conf={}, **kwargs)
+
+    @pytest.mark.parametrize("option", ["bogus", "wrapper"])
+    def test_prepare_rejects_an_unknown_option(self, option):
+        kwargs: dict[str, Any] = {option: None}
+
+        with pytest.raises(
+            TypeError, match=rf"unknown call options key\(s\): \['{option}'\]"
+        ):
+            strconcat.prepare(conf={}, **kwargs)
 
     @pytest.mark.xfail(
         strict=True,
