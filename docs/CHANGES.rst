@@ -237,6 +237,8 @@ Fixes
   - Now parses feed entry dates ``feedparser`` can't, e.g., ``May 1, 2012 9:01:00 EST``.
   - Timezone abbreviations cover standard and daylight names, and prefer US zones when
     ambiguous (e.g., ``CST`` is Central Standard Time).
+  - ``filter``'s ``after``/``before`` rules now warn and ignore out-of-range timestamps.
+    ``datebuilder`` and ``cast_datetime`` now raise ``ValueError`` for them.
 
 - Fetching:
 

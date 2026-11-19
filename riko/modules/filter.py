@@ -162,11 +162,19 @@ def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     has_value = _y is not None
     result = False
 
-    if has_value and not truthiness:
+    if has_value and not truthiness and _x is not None:
         try:
             x = cast_arg(_x, rule.op)
             y = cast_arg(_y, rule.op)
-        except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
+        except (
+            AttributeError,
+            TypeError,
+            ValueError,
+            InvalidOperation,
+            ParserError,
+        ) as err:
+            msg = f"the 'filter' module ignored its {rule.op!r} rule on "
+            logger.warning(msg + f"{rule.field!r}: {err}")
             x = y = None
     else:
         x, y = _x, _y
