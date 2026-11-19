@@ -130,6 +130,11 @@ level). A dynamic conf pays it per item (198 µs per item through `regex`), and 
 larger share of a per-call direct `pipe()` (R4E note in implementation-sequence).
 Folding the wrap into one pass is the lever for every path at once.
 
+Measured 2026-11-18 (repeated-work audit triage): `itembuilder`'s
+`DotDict(item).asdict()` (`riko/modules/itembuilder.py:93`) is 21.6 of 44.7 µs per item.
+A "no dotted keys" fast path that skips it is rejected: `asdict` also collapses
+`{"value", "type"}` pairs, so the fold above is the fix.
+
 Naming (2026-11-13 misnomer audit): `gen_dict` yields key/value tuples, one `dict`, a
 `list`, or a bare value depending on which of its seven overloads applies, and its
 summary says "Generates a data tuple". The name is chosen against the shape this phase

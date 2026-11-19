@@ -1473,6 +1473,23 @@ it, but a registry `register`/`reset` must then invalidate the cached plan (a ge
 counter on the dispatcher is the likely shape). Decide alongside the per-run seed and
 `Pipeline.open()` work, which reshapes the same entry points.
 
+Measured 2026-11-18 (repeated-work audit triage), beside plan reuse:
+
+- A stored workflow's pipe rebuilds and re-prepares its plan on every call
+  (`riko/runtime/_workflow_pipes.py:274-290`, `riko/runtime/_run.py:73`), so as a
+  `loop` embed it pays that per parent item: 876 µs per item on a two-node flow, about
+  48% of it repeated. The plan `build_workflow_pipes` builds for the subtype check is
+  discarded.
+- Rebuilding a plan re-runs every plan check through `__attrs_post_init__`, though only
+  `_validate_port_wiring` (26 µs at 20 nodes) depends on input values; the other ~40 µs
+  and ~160 µs of prepared-node building repeat. Validate-on-construct is deliberate, and
+  a run with no inputs no longer rebuilds the plan, so only input-carrying runs pay it.
+- Unowned: processors rebuild the `Context` per item through `_resolve_context`
+  (`riko/modules/_decorators.py:194-198`, call sites `:893`/`:1032`/`:1086`/`:1131`;
+  the sibling at `:611` already skips the rebuild when there are no overrides). That
+  costs 7.1 µs per item with no context and 3.9 µs with one, 22% of a three-node
+  pipeline (141.6 → 110.1 µs per item when skipped). Deferred by the user.
+
 ### 6.2 Ordering
 
 ```python
