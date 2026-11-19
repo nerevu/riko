@@ -14,7 +14,7 @@ names for plugins.
 from riko.bado.itertools import aauto_close
 from riko.base._iterutils import auto_close
 from riko.coercion._dynamic_conf import DynamicConf
-from riko.definitions._inputs import resolve_inputs
+from riko.definitions._inputs import CompiledInputSchemas
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.definitions._nodes import (
     ActionNode,
@@ -64,6 +64,7 @@ __all__ = [
     "AsyncSplitterWrapper",
     "CacheNode",
     "CallableNode",
+    "CompiledInputSchemas",
     "Dispatcher",
     "DynamicConf",
     "FileTarget",
@@ -100,7 +101,6 @@ __all__ = [
     "register_module",
     "register_target",
     "register_workflow_store",
-    "resolve_inputs",
     "splitter",
     "temporary_registrations",
     "workflow",

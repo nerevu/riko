@@ -696,11 +696,14 @@ most cached calls do), bypassing values that cannot be encoded, so the reversibl
 `_from_hashable` reconstruction machinery is gone. `_parse_date_cached`
 (`riko/coercion/_dates.py`) is bounded by `settings.parsed_date_cache_size`
 (`RIKO_PARSED_DATE_CACHE_SIZE`): it is fed one entry per distinct item date, so an
-unbounded cache grew with the stream. `NonNullHashable`/`Hashable`
-(`riko/types/_scalars.py`) are the aligned static contracts.
-`Context(identity_encoder=...)` backend selection is deferred (R3-adjacent); the stdlib
-encoder is the reference. Tests: `tests/internal/test_values.py` (golden canonical
-bytes + golden digests + rule matrix) plus module doctests.
+unbounded cache grew with the stream. A `Workflow` compiles each input schema once per
+instance (its `_compiled_input_schemas` view, a `CompiledInputSchemas` record, public
+via `riko.ext`) and runs its validation once per instance (the cached `is_valid`), so a
+plan's build, input resolution, and `with_inputs` revalidation compile each schema once.
+`NonNullHashable`/`Hashable` (`riko/types/_scalars.py`) are the aligned static
+contracts. `Context(identity_encoder=...)` backend selection is deferred (R3-adjacent);
+the stdlib encoder is the reference. Tests: `tests/internal/test_values.py` (golden
+canonical bytes + golden digests + rule matrix) plus module doctests.
 
 ## `Workflow` v2 model (R4A.1, shipped)
 
@@ -792,19 +795,20 @@ init and `nodes` (the `PreparedNode` views) as a `cached_property`;
 `InvalidPipelineError` at construction for a non-module node or when either key set does
 not match the workflow. `ModuleNode.embed` still uses a converter list until R9 settles
 its value type. `ExecutionPlan.inputs` is set only by `plan.with_inputs(values)`, which
-substitutes each `{"input": name}` reference in the module and embed confs and records
-the values it used; the execution resolves and validates those values from its `Context`
-first, and a plan already built from values keeps them over the `Context`'s. Field
-introspection uses `riko.base._recordutils.field_names` (attrs-or-dataclass field names
-*including* `ClassVar` discriminants like `family`, which
-`attrs.fields`/`dataclasses.fields` both drop), never `dataclasses.*`; derive variants
-with `attrs.evolve`. `PipelineDefinition` (and so `Pipeline`) is an
-`attrs @define(frozen, slots)` class like the rest of the model — generic
-`PipelineDefinition[T_co]` via a defaulted covariant `TypeVar` (type-parameter defaults
-need Python 3.13; the floor is 3.12), with its `workflow` field normalizing
-`None`/omitted to the empty `Workflow` through the shared `_optional_workflow`
-converter, so `Pipeline()` is a valid empty pipeline to compose onto. The
-node/edge/`Workflow`/`Endpoint` model is EXTENSION (`riko.ext`). Tests:
+substitutes each `{"input": name}` reference in the module and embed confs (reusing
+each resolved module whose conf refers to no input) and records the values it used; a
+run whose resolved inputs are `None` keeps the plan as built; the execution resolves
+and validates those values from its `Context` first, and a plan already built from
+values keeps them over the `Context`'s. Field introspection uses
+`riko.base._recordutils.field_names` (attrs-or-dataclass field names *including*
+`ClassVar` discriminants like `family`, which `attrs.fields`/`dataclasses.fields` both
+drop), never `dataclasses.*`; derive variants with `attrs.evolve`. `PipelineDefinition`
+(and so `Pipeline`) is an `attrs @define(frozen, slots)` class like the rest of the
+model — generic `PipelineDefinition[T_co]` via a defaulted covariant `TypeVar`
+(type-parameter defaults need Python 3.13; the floor is 3.12), with its `workflow` field
+normalizing `None`/omitted to the empty `Workflow` through the shared
+`_optional_workflow` converter, so `Pipeline()` is a valid empty pipeline to compose
+onto. The node/edge/`Workflow`/`Endpoint` model is EXTENSION (`riko.ext`). Tests:
 `tests/public/test_workflow.py` plus module doctests. Forward order and the clean-break
 deletion ledger: [implementation-sequence.md](gameplans/implementation-sequence.md) R4A.
 
@@ -860,7 +864,8 @@ doctests.
 
 Strict structural validation is a **method on the model**, not a standalone function:
 `Workflow` owns `validate()` (raises `InvalidPipelineError` on the first violation) and
-an `is_valid` property (the boolean wrapper), backed by the
+an `is_valid` cached property (the boolean verdict, so the checks run once; `validate()`
+reruns them only to raise for an invalid workflow), backed by the
 `ports()`/`endpoints`/`referenced_resources` helpers on the same class. The earlier
 standalone `riko/runtime/_validate.py` / `riko.ext.validate_workflow` was removed in the
 refactor that moved validation onto the model — there is no separate validation module
@@ -1097,15 +1102,15 @@ deferred.
 
 > **Shipped.** The private execution package, its lifetime primitives, execution-local
 > resource acquisition, the `EventSink` transport, canonical-workflow preparation
-> (`ExecutionPlan.from_workflow` resolves each node's callables once into a
-> `PreparedNode`), and both the **sync** `iter(pipeline)` and **async**
-> `aiter(pipeline)` runners — with multi-input port wiring, execution-owned resource
-> injection, and node-level sync/async adaptation (async-only under sync via the portal,
-> sync-only under async on a worker) — ship now. The plan is a resolution snapshot: it
-> carries no dispatcher and each execution picks native-vs-adapter from the pre-resolved
-> callables (`PreparedNode.sync_interface`/`async_interface`, each `None` when the
-> mode has no native pipe, in which case the execution adapts the other) without
-> re-inspecting the registry. Non-default output ports fail closed (a reachable
+> (`ExecutionPlan.from_workflow` resolves each distinct module name's callables once
+> into the `PreparedNode`s that run it), and both the **sync** `iter(pipeline)` and
+> **async** `aiter(pipeline)` runners — with multi-input port wiring, execution-owned
+> resource injection, and node-level sync/async adaptation (async-only under sync via
+> the portal, sync-only under async on a worker) — ship now. The plan is a resolution
+> snapshot: it carries no dispatcher and each execution picks native-vs-adapter from the
+> pre-resolved callables (`PreparedNode.sync_interface`/`async_interface`, each `None`
+> when the mode has no native pipe, in which case the execution adapts the other)
+> without re-inspecting the registry. Non-default output ports fail closed (a reachable
 > non-`out` source port or a
 > selected non-`out` output raises), and a multi-output splitter node is refused when
 > the plan is built, by its declared module type, before any node runs. Sync-under-async

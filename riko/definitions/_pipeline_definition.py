@@ -454,8 +454,8 @@ class PipelineDefinition(Generic[T_co]):
         """
         Derives a pipeline whose runs use ``context``.
 
-        The context supplies the run's input values and resources, and
-        replaces any context this pipeline already carries.
+        The context supplies the run's inputs and resources, and replaces any context
+        this pipeline already carries.
 
         Args:
 

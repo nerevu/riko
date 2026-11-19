@@ -14,10 +14,10 @@ Examples:
 
     Basic usage::
 
-        >>> from riko.ext import resolve_inputs
+        >>> from riko.ext import CompiledInputSchemas
         >>>
         >>> schemas = {"q": {"type": "string", "default": "riko"}}
-        >>> dict(resolve_inputs(schemas, {}))
+        >>> dict(CompiledInputSchemas(schemas).resolve({}))
         {'q': 'riko'}
 
 """
@@ -25,9 +25,11 @@ Examples:
 from __future__ import annotations
 
 import re
+from functools import cached_property
 from itertools import islice
 from typing import TYPE_CHECKING
 
+from attrs import define
 from fastjsonschema import JsonSchemaDefinitionException, JsonSchemaValueException
 from fastjsonschema import compile as fjs_compile
 
@@ -36,6 +38,7 @@ from riko.base._funcutils import map_values
 from riko.base._guards import is_known_sequence, is_mapping, require_mapping
 from riko.base._iterutils import gen_nested_mappings
 from riko.types._frozendict import (
+    FrozenDict,
     FrozenInputs,
     FrozenInputSchema,
     JSONValue,
@@ -44,15 +47,17 @@ from riko.types._frozendict import (
     thaw,
 )
 from riko.types._workflow import is_input_ref
+from riko.types._wrappers import Func
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from riko.types._frozendict import InputSchema, InputSchemaLike, InputSchemas
-    from riko.types._wrappers import Func
     from riko.types.modules import MaybeFrozenConf
 
-    from ._workflow_definition import Inputs, RawInputs
+    from ._workflow_definition import Inputs, RawValues
+
+type CompiledSchema = Func[object]
 
 _JSON_TYPE_NAMES: frozenset[str] = frozenset(
     {"array", "boolean", "integer", "null", "number", "object", "string"}
@@ -91,7 +96,7 @@ def _admit_null(raw: object) -> object:
     return result
 
 
-def compile_input_schema(name: str, schema: InputSchema) -> Func[object]:
+def compile_input_schema(name: str, schema: InputSchema) -> CompiledSchema:
     """
     Compiles an input's schema into a validator for the input's values.
 
@@ -136,15 +141,119 @@ def compile_input_schema(name: str, schema: InputSchema) -> Func[object]:
     return validator
 
 
-def _validate_input(name: str, schema: InputSchema, value: JSONValue) -> None:
-    """Validates one input value against the input's schema."""
-    validator = compile_input_schema(name, schema)
-
+def _validate_input(
+    name: str, compiled_schema: CompiledSchema, value: JSONValue
+) -> None:
+    """Validates one input value with the input's compiled schema."""
     try:
-        validator(thaw(value))
+        compiled_schema(thaw(value))
     except JsonSchemaValueException as err:
         msg = f"workflow input {name!r} is invalid: {err.message}"
         raise InvalidPipelineError(msg) from err
+
+
+@define(frozen=True, slots=True)
+class CompiledInputSchemas:
+    """
+    Compiles a workflow's input schemas and resolves run values against them.
+
+    A hand-written workflow module builds one at import and resolves each call's
+    ``context.inputs`` with it. Each schema compiles once rather than per call.
+
+    Attributes:
+
+        schemas: Each input's schema, keyed by input name.
+        compiled: Each input's compiled schema, keyed by input name.
+
+    Examples:
+
+        >>> schemas = CompiledInputSchemas({"limit": {"type": "integer", "default": 5}})
+        >>> dict(schemas.resolve(None))
+        {'limit': 5}
+        >>> dict(schemas.resolve({"limit": 10}))
+        {'limit': 10}
+        >>> schemas.resolve({"limit": "x"})
+        Traceback (most recent call last):
+        ...
+        riko.exceptions.InvalidPipelineError: ...is invalid: data must be integer
+
+    """
+
+    schemas: InputSchemas
+
+    @cached_property
+    def compiled(self) -> FrozenDict[str, CompiledSchema]:
+        """
+        Compiles each input's schema and keys it by input name.
+
+        Raises:
+
+            InvalidPipelineError: If an input's schema is not a valid JSON Schema.
+
+        """
+        schemas = self.schemas.items()
+        compiled = {name: compile_input_schema(name, s) for name, s in schemas}
+        return FrozenDict.from_frozen(compiled)
+
+    def validate(self) -> None:
+        """
+        Validates each input's schema.
+
+        Raises:
+
+            InvalidPipelineError: If an input's schema is not a valid JSON Schema.
+
+        Examples:
+
+            >>> CompiledInputSchemas({"limit": {"type": "integer"}}).validate()
+            >>> CompiledInputSchemas({"q": {"type": "strng"}}).validate()
+            Traceback (most recent call last):
+            ...
+            riko.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
+
+        """
+        _ = self.compiled
+
+    def resolve(self, given: RawValues | None) -> Inputs | None:
+        """
+        Resolves the inputs a run uses from its schemas and given values.
+
+        A given value wins over the schema's default. A given value for an input with no
+        schema passes through untouched.
+
+        Args:
+
+            given: Raw inputs keyed by input name, or ``None``.
+
+        Returns:
+
+            Inputs keyed by input name, or ``None`` when there are either no input
+            schemas or no given values.
+
+        Raises:
+
+            InvalidPipelineError: If an input has neither a given value nor a default,
+                a value does not match its input's schema, or an input's schema is
+                malformed.
+
+        """
+        if given is None and not self.schemas:
+            result = None
+        else:
+            schemas = self.schemas.items()
+            defaults = {k: s["default"] for k, s in schemas if "default" in s}
+            inputs = {**defaults, **normalize_mapping(given)}
+
+            if missing := set(self.schemas).difference(inputs):
+                msg = f"missing required workflow input(s): {sorted(missing)}"
+                raise InvalidPipelineError(msg)
+
+            for name, compiled_schema in self.compiled.items():
+                _validate_input(name, compiled_schema, inputs[name])
+
+            result = inputs
+
+        return result
 
 
 def normalize_input_schema(
@@ -197,15 +306,15 @@ def normalize_input_schema(
 
 def freeze_inputs(value: Inputs | None) -> FrozenInputs | None:
     """
-    Freezes the input values a ``Context`` carries.
+    Freezes the inputs a ``Context`` carries.
 
     Args:
 
-        value: The input values keyed by input name, or ``None`` when none are given.
+        value: The inputs keyed by input name, or ``None`` when none are given.
 
     Returns:
 
-        The frozen input values, or ``None`` when none are given.
+        The frozen inputs, or ``None`` when none are given.
 
     Raises:
 
@@ -263,7 +372,7 @@ def resolve_input_references(value: JSONValue, inputs: Inputs) -> JSONValue:
     Args:
 
         value: A node configuration or keyword arguments.
-        inputs: The resolved input values keyed by input name.
+        inputs: The resolved inputs keyed by input name.
 
     Returns:
 
@@ -278,6 +387,8 @@ def resolve_input_references(value: JSONValue, inputs: Inputs) -> JSONValue:
         >>> rules = {"rules": [{"input": "q"}, {"field": "title"}]}
         >>> dict(resolve_input_references(rules, {"q": 5}))
         {'rules': [5, {'field': 'title'}]}
+        >>> resolve_input_references(({"input": "q"}, 1), {"q": 5})
+        (5, 1)
 
     """
 
@@ -301,63 +412,11 @@ def resolve_input_references(value: JSONValue, inputs: Inputs) -> JSONValue:
     return result
 
 
-def resolve_inputs(schemas: InputSchemas, given: RawInputs | None) -> Inputs | None:
-    """
-    Resolves the input values a run uses from the inputs' schemas and given values.
-
-    A given value wins over its schema's default. A given value for an input with no
-    schema passes through untouched.
-
-    Args:
-
-        schemas: Each input's schema, keyed by input name.
-        given: The given input values keyed by input name, or ``None``.
-
-    Returns:
-
-        The input values keyed by input name, or ``None`` when there are no input
-        schemas or given values.
-
-    Raises:
-
-        InvalidPipelineError: If an input with a schema has neither a given value nor a
-            default, a value does not match its input's schema, or an input's schema is
-            malformed.
-
-    Examples:
-
-        >>> schemas = {"limit": {"type": "integer", "default": 5}}
-        >>> dict(resolve_inputs(schemas, None))
-        {'limit': 5}
-        >>> resolve_inputs(schemas, {"limit": "x"})
-        Traceback (most recent call last):
-        ...
-        riko.exceptions.InvalidPipelineError: ...is invalid: data must be integer
-
-    """
-    if given is None and not schemas:
-        result = None
-    else:
-        defaults = {k: s["default"] for k, s in schemas.items() if "default" in s}
-        resolved = {**defaults, **normalize_mapping(given)}
-
-        if missing := set(schemas).difference(resolved):
-            msg = f"missing required workflow input(s): {sorted(missing)}"
-            raise InvalidPipelineError(msg)
-
-        for name, schema in schemas.items():
-            _validate_input(name, schema, resolved[name])
-
-        result = resolved
-
-    return result
-
-
 __all__ = [
+    "CompiledInputSchemas",
     "compile_input_schema",
     "freeze_inputs",
     "gen_input_references",
     "normalize_input_schema",
     "resolve_input_references",
-    "resolve_inputs",
 ]

@@ -19,7 +19,6 @@ from riko.bado._util import maybe_async
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._context import Context
-from riko.definitions._inputs import resolve_inputs
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._workflow import parse_port
 
@@ -160,7 +159,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self, plan: ExecutionPlan
     ) -> tuple[ExecutionPlan, Context | None]:
         """
-        Resolves the plan's input values and the context its nodes run under.
+        Resolves the inputs and context a plan's nodes run under.
 
         The run's context is derived from the execution's. The execution's own context
         stays as given, so a later run of another plan resolves that plan's defaults
@@ -168,18 +167,18 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         """
         if plan.inputs is None:
             given = None if self.context is None else self.context.inputs
-            values = resolve_inputs(plan.workflow.input_schemas, given)
-            resolved = plan.with_inputs(values)
+            _inputs = plan.workflow.resolve_inputs(given)
+            _plan = plan if _inputs is None else plan.with_inputs(_inputs)
         else:
-            resolved = plan
+            _plan = plan
 
-        if resolved.inputs is None:
+        if _plan.inputs is None:
             context = self.context
         else:
             given_context = resolve_default(self.context, Context())
-            context = given_context.replace(inputs=resolved.inputs)
+            context = given_context.replace(inputs=_plan.inputs)
 
-        return resolved, context
+        return _plan, context
 
     def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
         """Runs a cleanup callback and saves its failure for the shutdown report."""
