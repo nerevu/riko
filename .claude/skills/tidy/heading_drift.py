@@ -15,6 +15,7 @@ Origin: 2026-11-05 gameplan audit triage, where `rumdl fmt` demoted 18 headings 
 implementation-sequence.md and the restore was done by hand.
 """
 
+import argparse
 import re
 import shutil
 import subprocess
@@ -23,6 +24,7 @@ import sys
 GIT = shutil.which("git") or "git"
 _HEADING = re.compile(r"^(?P<hashes>#{1,6}) (?P<text>.*)$")
 _ISSUE_LIKE = re.compile(r"^\d+:")
+DESCRIPTION = "Flag Markdown headings a working-tree change added, removed, or moved."
 
 
 def _gen_heading_changes(base: str, paths: list[str]):
@@ -46,9 +48,16 @@ def _gen_heading_changes(base: str, paths: list[str]):
             yield path, line[0], len(match["hashes"]), match["text"]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """Prints touched headings and returns 1 on a relevel or issue-like heading."""
-    args = sys.argv[1:]
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument(
+        "args",
+        nargs="*",
+        metavar="BASE|PATH",
+        help="an optional git base (default HEAD), then Markdown paths (default all)",
+    )
+    args = parser.parse_args(argv).args
     base = args.pop(0) if args and not args[0].endswith(".md") else "HEAD"
     changes = list(_gen_heading_changes(base, args))
     removed = {

@@ -172,6 +172,30 @@ def test_scope_falls_back_to_the_head_and_reports_an_empty_scope(tmp_path, capsy
     assert "+a = 2" in target.read_text()
 
 
+@pytest.mark.usefixtures("repo")
+def test_scope_leads_prints_each_lead_after_the_scope(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    stub = tmp_path / ".claude" / "lead.py"
+    stub.parent.mkdir()
+    stub.write_text("import sys\nprint(' '.join(sys.argv[1:]))\n")
+    prefixes = {name: [sys.executable, str(stub)] for name in gates.LEAD_NAMES}
+    (tmp_path / "a.py").write_text("a = 2\n")
+    (tmp_path / "tests" / "unit").mkdir(parents=True)
+    (tmp_path / "tests" / "unit" / "test_a.py").write_text("x = 1\n")
+
+    assert gates.scope(path, "tidy", leads=prefixes) == 1
+    out = capsys.readouterr().out
+    leads = out.split("\n--- lint\n", 1)[1]
+    assert "+a = 2" in out.split("--- lint")[0]
+    assert "lint --terms --literals --docstrings --bindings --tests" in leads
+    assert "--- neighborhood\n" in leads
+    assert "--context 2" in leads.split("--- neighborhood\n")[1]
+    assert "--- mistake_scan\n" in leads
+    assert "--files tests/unit/test_a.py" in leads.split("--- overlap_scan\n")[1]
+    assert "--- heading_drift" not in leads
+    assert "+a = 2" in path.with_name("tidy-scope.diff").read_text()
+
+
 def test_gen_edits_drops_lines_a_hunk_only_moved():
     diff = (
         "--- a/t.py\n+++ b/t.py\n@@ -1,2 +1,3 @@\n-def kept():\n+x = 1\n"

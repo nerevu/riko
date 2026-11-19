@@ -15,9 +15,12 @@ without writing.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
+
+DESCRIPTION = "Apply checked exact-text replacements to one file."
 
 
 def apply_replacements(text: str, spec: list[list[object]]) -> tuple[str, list[str]]:
@@ -36,8 +39,17 @@ def apply_replacements(text: str, spec: list[list[object]]) -> tuple[str, list[s
 
 
 def main(argv: list[str]) -> int:
-    path, spec_path = Path(argv[0]), Path(argv[1])
-    dry_run = "--dry-run" in argv[2:]
+    """Parses the command line and applies the replacements, or checks them."""
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("file", type=Path, help="the file to edit")
+    parser.add_argument(
+        "spec", type=Path, help="JSON list of [old, new, expected_count] triples"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="check the counts without writing"
+    )
+    args = parser.parse_args(argv)
+    path, spec_path, dry_run = args.file, args.spec, args.dry_run
     spec = json.loads(spec_path.read_text())
     text, errors = apply_replacements(path.read_text(), spec)
 

@@ -5,6 +5,7 @@ Usage:
     gates.py scope tidy | python .claude/skills/tidy/neighborhood.py
     python .claude/skills/tidy/neighborhood.py --diff-file .claude/tidy-scope.diff
     python .claude/skills/tidy/neighborhood.py --base <tree-ish> [--roots riko tests]
+    python .claude/skills/tidy/neighborhood.py --diff-file FILE --context 2
 
 Reads a unified diff and collects, per file, the module- or class-level
 definitions it removed, re-signed (the ``def``/``class`` line changed but the name
@@ -13,7 +14,9 @@ survived), and added. Each removed or re-signed name is then looked up with
 callers and doc mentions tidy must check arrive in one call instead of one grep
 per symbol. A name removed in one file and added in another is
 reported as a move, not grepped; added names are listed so a same-file removal
-plus addition reads as the rename it usually is.
+plus addition reads as the rename it usually is. ``--context N`` prints the N lines
+around each surviving reference beneath it, the reference line marked ``>``, for the
+first 20 references of each name; later ones print bare.
 
 Only lines the diff touched are read; a def line is matched at any indentation
 and a constant only at column zero. The scan is static and takes about a second.
@@ -29,6 +32,10 @@ import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 GIT = shutil.which("git") or "git"
 DESCRIPTION = "List the references that outlive a diff's definition changes."
@@ -37,6 +44,7 @@ FILE_HEADER = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
 DEF_LINE = re.compile(r"^[-+](\s*)(?:async\s+)?(?:def|class)\s+(\w+)")
 CONSTANT_LINE = re.compile(r"^[-+]([A-Za-z_]\w*)\s*(?::[^=]*)?=")
 MAX_HITS = 25
+MAX_CONTEXT_HITS = 20
 SAVED_DIFF = re.compile(r"written to (\S+);")
 
 
@@ -128,7 +136,27 @@ def is_definition_of(name: str, hit: str) -> bool:
     )
 
 
-def report(changes: dict[str, FileChange], roots: tuple[str, ...]) -> str:
+def gen_context(hit: str, context: int) -> Iterator[str]:
+    """Generates the ``context`` lines around a ``path:line:text`` hit, indented."""
+    name, lineno, _ = hit.split(":", 2)
+
+    try:
+        with open(name, errors="replace") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        lines = []
+
+    row = int(lineno) - 1
+    start, stop = max(row - context, 0), min(row + context + 1, len(lines))
+
+    for index in range(start, stop):
+        mark = ">" if index == row else " "
+        yield f"      {mark}{index + 1:>5}| {lines[index]}".rstrip()
+
+
+def report(
+    changes: dict[str, FileChange], roots: tuple[str, ...], context: int = 0
+) -> str:
     """Builds the neighborhood report for the parsed changes."""
     lines = []
     homes = {name: path for path, change in changes.items() for name in change.new}
@@ -147,7 +175,19 @@ def report(changes: dict[str, FileChange], roots: tuple[str, ...]) -> str:
                     if not is_definition_of(name, hit)
                 ]
                 lines.append(f"  {label} {name} ({len(hits)} references)")
-                lines.extend(f"    {hit}" for hit in hits[:MAX_HITS])
+                shown = hits[:MAX_HITS]
+                bare = shown[MAX_CONTEXT_HITS:] if context > 0 else []
+
+                for hit in shown[: len(shown) - len(bare)]:
+                    lines.append(f"    {hit}")
+
+                    if context > 0:
+                        lines.extend(gen_context(hit, context))
+
+                lines.extend(f"    {hit}" for hit in bare)
+
+                if bare:
+                    lines.append(f"    (… {len(bare)} more without context)")
 
                 if len(hits) > MAX_HITS:
                     lines.append(f"    ... {len(hits) - MAX_HITS} more")
@@ -186,9 +226,16 @@ def main(argv: list[str] | None = None) -> int:
         "--diff-file", help="read a saved unified diff instead of stdin"
     )
     parser.add_argument("--roots", nargs="*", default=list(ROOTS), help="paths to grep")
+    parser.add_argument(
+        "--context",
+        type=int,
+        default=0,
+        metavar="N",
+        help="print N lines around each surviving reference",
+    )
     args = parser.parse_args(argv)
     changes = parse_diff(load_diff(args.base, args.diff_file))
-    print(report(changes, tuple(args.roots)))
+    print(report(changes, tuple(args.roots), args.context))
     return 0
 
 

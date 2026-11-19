@@ -5,6 +5,7 @@ Usage:
     python .claude/skills/land/gates.py fingerprint
     python .claude/skills/land/gates.py check GATE
     python .claude/skills/land/gates.py scope GATE [--max-inline BYTES] [--edits-only]
+    python .claude/skills/land/gates.py scope tidy --leads [--manage CMD]
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
@@ -52,6 +53,17 @@ when the gate already passed on this tree, 2 when the scope is empty, 1 otherwis
 line carries (``path:line: text``): a change that mostly moves code shrinks to its
 real edits.
 
+``scope tidy --leads`` adds tidy's opening checks to the same call. It saves the
+raw diff to ``.claude/tidy-scope.diff`` and runs, side by side, the tidy lint
+selectors (``--manage`` plus ``lint --terms --literals --docstrings --bindings
+--tests``), ``neighborhood.py --context 2``, and ``mistake_scan.py`` over that diff,
+plus ``heading_drift.py`` when a ``*.md`` file is touched, ``changelog_widows.py``
+when ``docs/CHANGES.rst`` is, and ``overlap_scan.py --files`` over each touched
+``tests/<tier>/test_*.py``. Each prints whole under its own ``--- <name>`` header
+(with its exit code when non-zero), in that order, after the scope. A diff over
+``--max-inline`` bytes first gets a hint to read ``--edits-only``. The exit code
+stays the scope's.
+
 ``run`` echoes the command's output and keeps its last pytest summary line
 (``1851 passed, 62 xfailed in 70s``) in the marker; ``summary`` prints it with
 whether the tree has changed since, so a later session can report the suite count
@@ -94,7 +106,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, TextIO
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
 DESCRIPTION = "Skip gates that already passed on the current tree."
 GIT = shutil.which("git") or "git"
@@ -360,15 +372,106 @@ def gen_edits(diff: str) -> Iterator[str]:
                 yield f"{current}:{lineno}: {line[1:]}"
 
 
+def build_lead_prefixes(manage: list[str]) -> dict[str, list[str]]:
+    """Builds the default command prefix of each ``--leads`` check."""
+    python = [sys.executable]
+    return {
+        "lint": manage,
+        "neighborhood": python,
+        "mistake_scan": ["uv", "run", "--active", "--no-sync", "python"],
+        "heading_drift": python,
+        "changelog_widows": python,
+        "overlap_scan": python,
+    }
+
+
+def build_lead_commands(
+    prefixes: Mapping[str, list[str]], diff_file: Path, base: str, touched: list[str]
+) -> dict[str, list[str]]:
+    """Builds the command of each lead that applies to the ``touched`` paths."""
+    tests = [name for name in touched if TEST_FILE.match(name)]
+    script = {name: str(TIDY_DIR / f"{name}.py") for name in LEAD_NAMES}
+    commands = {
+        "lint": [*prefixes["lint"], *TIDY_LINT],
+        "neighborhood": [
+            *prefixes["neighborhood"],
+            script["neighborhood"],
+            "--diff-file",
+            str(diff_file),
+            "--context",
+            "2",
+        ],
+        "mistake_scan": [
+            *prefixes["mistake_scan"],
+            script["mistake_scan"],
+            "--diff-file",
+            str(diff_file),
+        ],
+    }
+
+    if any(name.endswith(".md") for name in touched):
+        commands["heading_drift"] = [
+            *prefixes["heading_drift"],
+            script["heading_drift"],
+            base,
+        ]
+
+    if CHANGELOG in touched:
+        commands["changelog_widows"] = [
+            *prefixes["changelog_widows"],
+            script["changelog_widows"],
+        ]
+
+    if tests:
+        commands["overlap_scan"] = [
+            *prefixes["overlap_scan"],
+            script["overlap_scan"],
+            "--files",
+            *tests,
+        ]
+
+    return commands
+
+
+def _run_captured(command: list[str]) -> tuple[int, str]:
+    found = subprocess.run(
+        command, capture_output=True, text=True, errors="replace", check=False
+    )
+    return found.returncode, found.stdout + found.stderr
+
+
+def run_leads(commands: Mapping[str, list[str]]) -> None:
+    """Runs the lead ``commands`` side by side, printing each whole in table order."""
+    with ThreadPoolExecutor(max(len(commands), 1)) as pool:
+        futures = {
+            name: pool.submit(_run_captured, command)
+            for name, command in commands.items()
+        }
+
+    for name in LEAD_NAMES:
+        if name in futures:
+            code, output = futures[name].result()
+            status = f" (exit {code})" if code else ""
+            text = output.rstrip("\n") or "(no output)"
+            print(f"--- {name}{status}\n{text}", flush=True)
+
+
 def scope(
-    path: Path, gate: str, max_inline: int = MAX_INLINE, *, edits_only: bool = False
+    path: Path,
+    gate: str,
+    max_inline: int = MAX_INLINE,
+    *,
+    edits_only: bool = False,
+    leads: Mapping[str, list[str]] | None = None,
 ) -> int:
     """
     Prints everything ``gate`` still has to look at; exit 0 skips, 2 means empty.
 
     The diff runs from the resolved base to the current content tree, so untracked
     files are part of it; a diff over ``max_inline`` bytes is written to
-    ``.claude/<gate>-scope.diff`` instead of printed.
+    ``.claude/<gate>-scope.diff`` instead of printed. With ``leads`` (each lead's
+    command prefix), a non-empty scope also runs tidy's opening checks over the
+    diff and prints each one's output after it.
     """
     tree = get_tree_id(gate)
     marker = get_passed(path, gate, tree)
@@ -387,6 +490,13 @@ def scope(
         label = "edits" if edits_only else "diff"
         print(f"scope {gate}: {case}")
         print(f"base: {base}")
+
+        if leads is not None and not edits_only and len(diff) > max_inline:
+            print(
+                f"diff of {len(diff.splitlines())} lines is over {max_inline} bytes: "
+                f"read `gates.py scope {gate} --edits-only` first"
+            )
+
         print(f"--- stat\n{stat or '(none)'}")
         print(f"--- untracked\n{untracked or '(none)'}")
 
@@ -405,6 +515,13 @@ def scope(
         else:
             print(f"--- {label} ({len(shown)} bytes)\n{shown}")
             code = 1
+
+        if leads is not None and diff:
+            diff_file = path.with_name(f"{gate}-scope.diff")
+            diff_file.parent.mkdir(exist_ok=True)
+            diff_file.write_text(diff + "\n")
+            touched = _git("diff", "--name-only", base, tree, *pathspec).splitlines()
+            run_leads(build_lead_commands(leads, diff_file, base, touched))
 
     return code
 
@@ -654,6 +771,16 @@ def main(argv: list[str] | None = None) -> int:
     scope_parser.add_argument("gate")
     scope_parser.add_argument("--max-inline", type=int, default=MAX_INLINE)
     scope_parser.add_argument("--edits-only", action="store_true")
+    scope_parser.add_argument(
+        "--leads",
+        action="store_true",
+        help="also run tidy's opening checks over the diff (tidy only)",
+    )
+    scope_parser.add_argument(
+        "--manage",
+        default=MANAGE,
+        help=f"the manage command the lint lead runs (default: {MANAGE})",
+    )
     run_parser = sub.add_parser("run")
     run_parser.add_argument("gate")
     run_parser.add_argument("--mutates", action="store_true")
@@ -685,8 +812,17 @@ def main(argv: list[str] | None = None) -> int:
         code = 0
     elif args.action == "check":
         code = check(path, args.gate)
+    elif args.action == "scope" and args.leads and args.gate != "tidy":
+        parser.error("--leads applies to the tidy gate only")
     elif args.action == "scope":
-        code = scope(path, args.gate, args.max_inline, edits_only=args.edits_only)
+        prefixes = build_lead_prefixes(shlex.split(args.manage))
+        code = scope(
+            path,
+            args.gate,
+            args.max_inline,
+            edits_only=args.edits_only,
+            leads=prefixes if args.leads else None,
+        )
     elif args.action == "summary":
         code = print_summary(path, args.gate)
     elif args.action == "record":
