@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from enum import StrEnum
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -34,14 +33,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from pathlib import Path
 
+_FORBIDDEN_LAYER = "imports forbidden layer"
+_PUBLIC_SAME_LAYER = "imports public same-layer module"
 _LAYER_DEPENDENCIES: FrozenGraph[str] = freeze(
     _RAW_LAYER_DEPENDENCIES, mapping_value_func=frozenset
 )
-
-
-class ViolationCodes(StrEnum):
-    FORBIDDEN_LAYER_DEPENDENCY = "forbidden_layer_dependency"
-    FORBIDDEN_SAME_LAYER_PUBLIC_IMPORT = "forbidden_same_layer_public_import"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,16 +48,7 @@ class ArchitectureViolation:
     target_name: str
     source_label: str
     target_label: str
-    code: ViolationCodes
-
-    @property
-    def reason(self):
-        if self.code == ViolationCodes.FORBIDDEN_SAME_LAYER_PUBLIC_IMPORT:
-            reason = "imports public same-layer module"
-        else:
-            reason = "imports forbidden layer"
-
-        return reason
+    reason: str
 
     @property
     def detail(self) -> str:
@@ -120,7 +107,7 @@ def _issue_sort_key(issue: ArchitectureViolation) -> tuple[str, int, str, str, s
         issue.line,
         issue.source_name,
         issue.target_name,
-        issue.code,
+        issue.reason,
     )
 
 
@@ -260,8 +247,7 @@ def load_architecture_report(
                     is_private_target = _is_private_module(target)
 
                     if ref.kind != "type" and not (is_private_target or is_init_source):
-                        code = ViolationCodes.FORBIDDEN_SAME_LAYER_PUBLIC_IMPORT
-                        issues.append(violation(code=code))
+                        issues.append(violation(reason=_PUBLIC_SAME_LAYER))
                 elif ref.kind == "type":
                     type_only[source_layer].add(target_layer)
                     nodes = type_only[source_layer]
@@ -276,8 +262,7 @@ def load_architecture_report(
                     reachable = descendants(dependencies, source_layer)
 
                     if target_layer not in reachable:
-                        code = ViolationCodes.FORBIDDEN_LAYER_DEPENDENCY
-                        issues.append(violation(code=code))
+                        issues.append(violation(reason=_FORBIDDEN_LAYER))
 
     return ArchitectureReport(
         declared=dependencies,
