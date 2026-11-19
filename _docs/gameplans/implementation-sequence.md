@@ -2153,7 +2153,10 @@ Deliver:
   item; the migrated subscriber resolves `func`'s accepted keyword names once at
   subscription (the legacy `_apply` in `riko/modules/receive.py` calls
   `inspect.signature(func)` per received item; left alone because this phase deletes
-  the module, 2026-11-09 triage);
+  the module, 2026-11-09 triage), and binds the received item positionally (or
+  positional-only) so a forwarded keyword named `item`/`func` cannot collide (the legacy
+  `_apply(func, item, **fkwargs)` raises "multiple values for argument 'item'" when
+  `func_kwargs` holds `item`; triage 2026-11-19);
 - an explicit disposition for bounded waiting (GitHub issue #82): the tripwire
   `TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait` in
   `tests/public/test_modules.py` exercises the legacy `receive` module this phase
@@ -2195,7 +2198,17 @@ Deliver:
   branches (today `AsyncWrapperStream[Stream, Cascade]` yields sync streams); the unused
   `AsyncCascade` alias (`riko/types/_streams.py`) is either that type or deleted (audit
   triage 2026-10-05);
-- branch/route port behavior from the R4A contract;
+- branch/route port behavior from the R4A contract. In the execution layer a generic
+  splitter's output is a `Cascade` of `Stream`s, one per output port, not tee branches:
+  `_gen_branches`/`_agen_branches`/`_aadapt_branches` and
+  `PreparedSplitter.validate_branches` (`riko/execution/`) borrow the tee term, which
+  belongs to `Tee`/`AsyncTee`, the `split` module, `Pipeline.split`, and
+  `RIKO_BRANCH_BUFFER`. The sync side also conflates three shapes: native streams
+  are `_Owned`, the adapted async-only splitter yields `(stream, closer)` pairs, and
+  `_build_cascade` branches on a `native` flag, so only native streams close with
+  their port; the async side yields self-closing streams in both cases. Target: one
+  self-closing owned stream per port in both colors, named as streams of the cascade
+  (triage 2026-11-19);
 - **done 2026-11-14** (slice 1):
   one input router: both executions already share `_BaseExecution._resolve_node_inputs`
   (`riko/execution/_execution.py`, extracted 2026-10-13), which runs
