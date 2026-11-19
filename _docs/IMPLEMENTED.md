@@ -588,7 +588,8 @@ builds the document's `pipe`/`async_pipe` with `build_workflow_pipes`, after the
 store. `WorkflowResolver.load` then refuses a stored workflow that reaches itself:
 starting from the loaded module, it walks the `pipe_<id>` names in each reachable module
 pipe's declared `dependencies` into a local graph (re-derived per load; only built
-document modules are cached) and raises `InvalidPipelineError` naming the cycle from
+document modules are cached, a cached one answers its own dependencies, and a cache hit
+is served without rechecking it) and raises `InvalidPipelineError` naming the cycle from
 `get_cycle` (`riko/base/_graph.py`, `nx.find_cycle`). The target registry stores target
 classes keyed by `backend` and resolves a `Backends` to its target class. The target
 vocabulary (base `Target` + `SupportsRead`/`SupportsWrite`/`SupportsActions`,

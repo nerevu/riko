@@ -978,6 +978,27 @@ class TestResolvedDocuments:
         assert len(loads) == seen
         assert resolver.require_interfaces("pipe_gigs") == {"pipe", "async_pipe"}
 
+    def test_a_warm_plan_build_rereads_no_stored_document(self, monkeypatch, tmp_path):
+        """A planned dependency's own dependencies come from its resolved workflow."""
+        documents: dict[str, list[str | dict[str, str]]] = {
+            "pipe_a": ["pipe_b"],
+            "pipe_b": ["hash"],
+        }
+        resolver = _stored_resolver(documents, tmp_path)
+        resolver_dispatcher = ResolverDispatcher(module_registry, resolver)
+        flow = module_workflow("pipe_a")
+        build_workflow_pipes(flow, resolver_dispatcher)
+        read, loads = DirectoryStore.load, []
+
+        def counting(self, name):
+            loads.append(name)
+            return read(self, name)
+
+        monkeypatch.setattr(DirectoryStore, "load", counting)
+        build_workflow_pipes(flow, resolver_dispatcher)
+
+        assert loads == []
+
     def test_reset_forgets_resolved_documents(self):
         resolver = _document_resolver(self.workflows)
         assert resolver.load("pipe_gigs") is not None
