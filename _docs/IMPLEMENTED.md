@@ -746,10 +746,12 @@ apart at runtime). `isinstance_strict` returns `TypeIs[P]`; a built-in method de
 is bound before its signature is compared (Python 3.13+ gives a generator's
 `close`/`aclose` a `(self, /)` signature; 3.12 gives none), and a callable method whose
 signature `inspect` cannot read counts as compatible, so the closable guards in
-`riko/types/_io.py` accept generators. When a value's protocol methods come from its
-type alone (`is_type_bound`: no instance `__dict__`, no `__getattr__`, none of the names
-a slot), the verdict and the type-level half of that test are cached per type, so a
-per-item `maybe_closing` check costs about 1 µs. An owned `Resource` still refuses a
+`riko/types/_io.py` accept generators. A value whose type and instance `__dict__` lack a
+protocol member is refused before the runtime protocol check, as `getattr_static`
+would. When a value's protocol methods come from its type alone (`is_type_bound`: no
+instance `__dict__`, no `__getattr__`, none of the names a slot), the verdict and the
+type-level half of that test are cached per type, so a per-item `maybe_closing` check
+costs about 1 µs. An owned `Resource` still refuses a
 generator object given without `cleanup`, with an error pointing to
 `Resource.from_lifecycle`. `require_from_form(form)` builds a guard for any type form:
 it flattens aliases, unions, and `Annotated` with `gen_union_members`
