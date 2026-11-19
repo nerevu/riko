@@ -36,7 +36,7 @@ from typing import (
     overload,
 )
 
-from attrs import define
+from attrs import define, fields_dict
 
 from riko.bado._util import as_awaitable, maybe_aclosing, maybe_closing
 from riko.bado.itertools import (
@@ -58,6 +58,7 @@ from riko.base._logging import get_logger
 from riko.base._require_guards import require_from_typed_dict, typed_dict_keys
 from riko.definitions._context import Context
 from riko.definitions._wrapping import stamp_wrapper_meta, validate_call_keywords
+from riko.execution._prepared import ExecutionExtras
 from riko.parsing._dotdict import DotDict
 from riko.parsing.config import get_field, get_skip
 from riko.types._enums import BasicCastType, IdentityMode
@@ -183,6 +184,7 @@ _PROCESSOR_OPTS: frozenset[str] = frozenset(
 _CALL_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(RawCallOptions))
 _CONTEXT_OPTS: frozenset[str] = frozenset().union(*typed_dict_keys(ContextOverrides))
 _SPLITTER_CALL_OPTS: frozenset[str] = _CALL_OPTS - {"count"}
+_PER_ITEM_NAMES: frozenset[str] = frozenset(fields_dict(ExecutionExtras))
 
 _require_call_options = build_require_raw_call_options(error=TypeError)
 _require_overrides = require_from_typed_dict(ContextOverrides, error=TypeError)
@@ -518,6 +520,7 @@ class Module[B: bool]:
     def prepare_call(
         self,
         wrapper: ModuleWrapper,
+        /,
         *extras: ExtraName,
         conf: PrepareConf | None = None,
         **options: Unpack[RawCallOptions],
@@ -560,9 +563,10 @@ class Module[B: bool]:
         Raises:
 
             TypeError: If ``options`` holds a keyword argument that is not a call
-                option: a decoration option such as ``skip_if`` or ``ftype``, which is
-                fixed when the module is decorated, or a per-item argument such as
-                ``resources``, ``embed``, or a secondary input stream.
+                option: a decoration option such as ``skip_if`` or ``ftype`` (which is
+                fixed when the module is decorated); a per-item argument such as
+                ``others``, ``resources``, ``embed``; a secondary input stream named in
+                ``extras``; or any other unknown name.
 
         Examples:
 
@@ -575,12 +579,14 @@ class Module[B: bool]:
 
         """
         self._validate_call_keywords(wrapper, options)
+        invalid = set(options).difference(self.call_options)
+        unknown = invalid.difference(extras, _PER_ITEM_NAMES)
+        _require_call_options({k: options[k] for k in unknown})
 
-        if invalid := sorted(set(options).difference(self.call_options)):
-            named = ", ".join(repr(key) for key in invalid)
+        if per_item := sorted(invalid):
+            named = ", ".join(map(repr, per_item))
             msg = f"the {wrapper.name!r} module takes {named} with each item call, "
-            msg += "not as a call option"
-            raise TypeError(msg)
+            raise TypeError(msg + "not as a call option")
 
         prepared = self.prepare(wrapper.name, *extras, conf=conf, **options)
         return self.call_record(self, wrapper, prepared, options)
@@ -589,6 +595,7 @@ class Module[B: bool]:
         self,
         wrapper: ModuleWrapper,
         items: object,
+        /,
         *,
         conf: Conf | DynamicConf | None,
         context: Context | None,
