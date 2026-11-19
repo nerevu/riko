@@ -1931,7 +1931,7 @@ a `cached_property` (the async one is a `property` returning a coroutine),
 `needs_newline`/`skip_header` and their `a*` twins are properties that change state when
 read, `ends_with_newline`/`aends_with_newline` are zero-argument methods beside those
 properties, `_framed_content`/`_aframed_content` build the framed document behind a noun
-name, and the `input_shape` setter performs a one-shot state transition that can raise.
+name, and the `is_stream` setter performs a one-shot state transition that can raise.
 Whichever shape this phase picks replaces them (explicit state-transition methods, a
 cached size, a `_build_framed_content`), so they were left as they are rather than
 reshaped ahead of it. Atomic publication (shutdown-timeout triage 2026-10-29): a replace

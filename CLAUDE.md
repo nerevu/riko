@@ -255,7 +255,9 @@ new permanent bullet here.
   as `list_modules(...)` args — their canonical form is the bare metadata string; the
   discovery *tree* is the enum layer. A lone sentinel option beside another type
   (`concurrency: int | Literal["auto"]`) is also `Literal` — a one-member enum buys no
-  choice, only a public name; promote it to a `StrEnum` when a second member arrives.
+  choice, only a public name; promote it to a `StrEnum` when a third member arrives:
+  an enum earns its keep at three or more members; with one or two, use a bool, a
+  `Literal`, a raise, or move the decision into the caller.
 - **Callable parameter names.** `fn` is a callable the user supplies
   (`Pipeline.map(fn)`, `CallableNode.fn`); `call` is a pipe's or node's prepared call,
   its configuration and context already bound (`NodeCall`, `ItemCall`, `LoopCall`,

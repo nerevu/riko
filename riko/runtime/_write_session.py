@@ -56,13 +56,6 @@ class _SessionState(Enum):
     CLOSED = auto()
 
 
-class _InputShape(Enum):
-    """How a session's items arrive: repeated singletons or one whole stream."""
-
-    ITEM = auto()
-    STREAM = auto()
-
-
 def _cast_text(content: str | ConversionOutput) -> str:
     """Coalesces converter output (a string, ``StringIO``, or chunks) into text."""
     if isinstance(content, StringIO):
@@ -111,24 +104,24 @@ class _FileWriteSession:
 
         self._fields: tuple[str, ...] | None = None
         self._initial_file_size: int | None = None
-        self._input_shape: _InputShape | None = None
+        self._is_stream: bool | None = None
         self._needs_newline: bool | None = None
         self._skip_header: bool | None = None
         self._staged: ConversionOutput | str | None = None
 
     @property
-    def input_shape(self):
-        return self._input_shape
+    def is_stream(self) -> bool | None:
+        return self._is_stream
 
-    @input_shape.setter
-    def input_shape(self, value: _InputShape):
-        if self._input_shape is None:
-            self._input_shape = value
-        elif self._input_shape is not value:
-            state = f"{self._input_shape.name.lower()} delivery"
+    @is_stream.setter
+    def is_stream(self, value: bool) -> None:
+        if self._is_stream is None:
+            self._is_stream = value
+        elif self._is_stream is not value:
+            state = f"{'stream' if self._is_stream else 'item'} delivery"
             msg = "mix item and stream delivery in"
             raise PipelineStateError(state, msg, subject="write session")
-        elif self._input_shape is _InputShape.STREAM:
+        elif self._is_stream:
             action = "attempt multiple stream deliveries in"
             raise PipelineStateError("stream delivery", action, subject="write session")
 
@@ -276,7 +269,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             self._written += self._handle.write(_cast_bytes(content))
 
     def _write_items(self, items: Items) -> None:
-        self.input_shape = _InputShape.STREAM
+        self.is_stream = True
         content = self._serialize(items)
 
         if self._incremental:
@@ -285,7 +278,7 @@ class _SyncFileWriteSession(_FileWriteSession):
             self._staged = content
 
     def _write_item(self, item: Item) -> None:
-        self.input_shape = _InputShape.ITEM
+        self.is_stream = False
 
         if self._incremental:
             content = self._serialize([item], validate=True)
@@ -490,7 +483,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._written += await self._ahandle.write(_cast_bytes(content))
 
     async def _awrite_items(self, items: Feed) -> None:
-        self.input_shape = _InputShape.STREAM
+        self.is_stream = True
         content = await self._aserialize(items)
 
         if self._incremental:
@@ -499,7 +492,7 @@ class _AsyncFileWriteSession(_FileWriteSession):
             self._staged = content
 
     async def _awrite_item(self, item: Item) -> None:
-        self.input_shape = _InputShape.ITEM
+        self.is_stream = False
 
         if self._incremental:
             content = await self._aserialize([item], validate=True)
