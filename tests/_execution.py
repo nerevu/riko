@@ -194,10 +194,10 @@ def run_plan(
     output: str = "default",
 ) -> list:
     """Runs a plan, or plans and runs a workflow, to a list synchronously."""
-    resolved = DEF_EXECUTION_SETTINGS if settings is None else settings
+    _settings = DEF_EXECUTION_SETTINGS if settings is None else settings
     result: list = []
 
-    with SyncExecution(settings=resolved) as execution:
+    with SyncExecution(settings=_settings) as execution:
         stream = execution.run(_build_plan(plan, dispatcher), output, seed=seed)
         result = list(stream)
 
@@ -213,10 +213,10 @@ async def arun_plan(
     output: str = "default",
 ) -> list:
     """Runs a plan, or plans and runs a workflow, to a list asynchronously."""
-    resolved = DEF_EXECUTION_SETTINGS if settings is None else settings
+    _settings = DEF_EXECUTION_SETTINGS if settings is None else settings
     result: list = []
 
-    async with AsyncExecution(settings=resolved) as execution:
+    async with AsyncExecution(settings=_settings) as execution:
         stream = await execution.arun(_build_plan(plan, dispatcher), output, seed=seed)
         result = [item async for item in stream]
 

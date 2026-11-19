@@ -133,11 +133,11 @@ async def async_get(
             4xx or 5xx status).
 
     """
-    resolved = as_timeout(require_timeout(timeout))
+    _timeout = as_timeout(require_timeout(timeout))
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     async with AsyncClient(follow_redirects=True, headers=headers) as client:
-        response = await client.get(url, params=params, timeout=resolved)
+        response = await client.get(url, params=params, timeout=_timeout)
         response.raise_for_status()
 
     return response

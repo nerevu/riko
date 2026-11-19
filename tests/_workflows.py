@@ -61,9 +61,9 @@ CALLABLE_FLOW = Workflow().with_node(CallableNode(id="len-1", name="len", fn=len
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:
     """Runs ``flow`` through a synchronous execution (default: a test ``Context``)."""
     items: list[Item] = []
-    resolved = Context(test=True) if context is None else context
+    _context = Context(test=True) if context is None else context
 
-    with SyncExecution(context=resolved) as execution:
+    with SyncExecution(context=_context) as execution:
         items = list(execution.run(ExecutionPlan.from_workflow(flow, dispatcher)))
 
     return items

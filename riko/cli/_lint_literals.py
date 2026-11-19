@@ -91,6 +91,7 @@ def _get_string_defaults(node: FunctionNode) -> dict[str, str]:
 def _gen_bare_default_issues(path: Path) -> Iterator[LiteralIssue]:
     """Flags a docstring ``(default: word)`` whose parameter defaults to ``"word"``."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
+
     nodes = (
         node
         for node in ast.walk(tree)

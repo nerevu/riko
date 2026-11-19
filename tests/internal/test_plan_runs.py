@@ -1000,10 +1000,8 @@ class TestPlanRun:
     def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
         schemas = '{"q": {"type": "string", "default": "x"}}'
         raw = f'{{"input_schemas": {schemas}, "nodes": [{{"name": "forever"}}]}}'
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
-        )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        module = _build_resolved_workflow("pipe_demo", Workflow.parse(raw), dispatcher)
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         stored = ResolverDispatcher(module_registry, resolver)
         plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
 
@@ -1033,10 +1031,8 @@ class TestPlanRun:
             "input_schemas": {"q": {"type": "string", "default": "x"}},
             "nodes": [{"name": "itembuilder", "conf": conf}],
         }
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
-        )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        module = _build_resolved_workflow("pipe_demo", Workflow.parse(raw), dispatcher)
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         stored = ResolverDispatcher(module_registry, resolver)
         plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
         context = Context(inputs={"q": "y", "other": 1})

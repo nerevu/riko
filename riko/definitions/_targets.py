@@ -111,11 +111,11 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
 
     """
     if fmt is None:
-        resolved = Path(str(dest)).suffix.lstrip(".").lower() or None
+        _fmt = Path(str(dest)).suffix.lstrip(".").lower() or None
     else:
-        resolved = fmt
+        _fmt = fmt
 
-    return resolve_enum(Formats, resolved, Formats.JSON, error=ValueError)
+    return resolve_enum(Formats, _fmt, Formats.JSON, error=ValueError)
 
 
 @dataclass(frozen=True, slots=True)

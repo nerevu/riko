@@ -247,10 +247,10 @@ def resolve_user_agent(user_agent: UserAgentLike | None = None) -> str:
 
     """
     if user_agent is None or user_agent == UserAgent.DEFAULT:
-        resolved = default_user_agent()
+        _user_agent = default_user_agent()
     elif pool := _USER_AGENT_POOLS.get(user_agent):
-        resolved = choice(pool)  # noqa: S311 (not security-sensitive)
+        _user_agent = choice(pool)  # noqa: S311 (not security-sensitive)
     else:
-        resolved = require_custom_user_agent(user_agent)
+        _user_agent = require_custom_user_agent(user_agent)
 
-    return resolved
+    return _user_agent

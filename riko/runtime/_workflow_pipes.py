@@ -204,9 +204,9 @@ def workflow(
         update_wrapper(tagged, pipe)
 
         if is_async is None:
-            resolved = is_async_callable(pipe) or isasyncgenfunction(pipe)
+            _is_async = is_async_callable(pipe) or isasyncgenfunction(pipe)
         else:
-            resolved = is_async
+            _is_async = is_async
 
         stamp_wrapper_meta(
             tagged,
@@ -216,7 +216,7 @@ def workflow(
             subtypes={subtype},
             pollable=False,
             loopable=loopable,
-            is_async=resolved,
+            is_async=_is_async,
             input_schemas=schemas,
             dependencies=names,
         )

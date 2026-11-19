@@ -503,7 +503,7 @@ def opener(
 
     params = params or {}
     url = normalize_url(url, offline=offline)
-    resolved = as_timeout(require_timeout(timeout))
+    _timeout = as_timeout(require_timeout(timeout))
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     with ExitStack() as stack:
@@ -513,7 +513,7 @@ def opener(
                 params=params,
                 headers=headers,
                 stream=not memoize,
-                timeout=resolved,
+                timeout=_timeout,
             )
             stack.callback(r.close)
             r.raise_for_status()
@@ -530,7 +530,7 @@ def opener(
                 response = TextReencoder(r.raw, encoding, owner=r)
         else:
             req = Request(url, headers=headers)  # noqa: S310
-            r = urlopen(req, timeout=resolved)  # noqa: S310
+            r = urlopen(req, timeout=_timeout)  # noqa: S310
             stack.callback(r.close)
 
             if binary and memoize:

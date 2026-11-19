@@ -138,18 +138,18 @@ def _validate_port(port: Port) -> None:
 
 def _resolve_aliases[T](raw: Mapping[str, T], kind: str) -> dict[str, T]:
     """Folds each aliased field onto its name and accepts both only when they agree."""
-    resolved = dict(raw)
+    aliases = dict(raw)
 
     for alias, name in _ALIASES[kind].items():
-        primary, value = resolved.get(name), resolved.pop(alias, None)
+        primary, value = aliases.get(name), aliases.pop(alias, None)
 
         if primary is None and value is not None:
-            resolved[name] = value
+            aliases[name] = value
         elif value is not None and value != primary:
             what = f"{kind} {name!r}/{alias!r}"
             raise InvalidPipelineError(f"conflicting {what}: {primary!r} and {value!r}")
 
-    return resolved
+    return aliases
 
 
 def _build_node(raw: NodeLike) -> RikoNode:
@@ -161,8 +161,8 @@ def _build_node(raw: NodeLike) -> RikoNode:
         msg = f"unknown node key 'type': {hint}"
         raise InvalidPipelineError(msg)
     else:
-        resolved = _resolve_aliases(raw, "node")
-        _family = resolved.pop("family", None)
+        aliases = _resolve_aliases(raw, "node")
+        _family = aliases.pop("family", None)
         family = "module" if _family is None else str(_family)
 
         if family == CallableNode.family:
@@ -172,8 +172,8 @@ def _build_node(raw: NodeLike) -> RikoNode:
         elif (builder := _NODE_BUILDERS.get(family)) is None:
             raise InvalidPipelineError(f"unknown node family: {family!r}")
 
-        require_from_attrs(builder)(resolved)
-        node = builder(**cast("dict[str, Any]", resolved))
+        require_from_attrs(builder)(aliases)
+        node = builder(**cast("dict[str, Any]", aliases))
 
     return node
 
@@ -305,8 +305,8 @@ def _normalize_endpoint(default_port: PortDirection, raw: EndpointLike) -> Endpo
     else:
         endpoint = require_raw_endpoint(require_mapping(raw, "endpoint"))
         node = require_str(endpoint.get("node"), "edge endpoint 'node'")
-        resolved = resolve_port(endpoint.get("port"), default_port)
-        port = _normalize_port(resolved, default_port)
+        _port = resolve_port(endpoint.get("port"), default_port)
+        port = _normalize_port(_port, default_port)
         _validate_port(port)
         result = Endpoint(node, port)
 

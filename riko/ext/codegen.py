@@ -159,20 +159,20 @@ def _order_groups(*names: str) -> list[str]:
 
 
 def _get_members(*entries: NameEntry) -> dict[str, str]:
-    resolved: dict[str, str] = {}
+    members: dict[str, str] = {}
 
     for entry in sorted(entries, key=lambda e: e.name):
         member = entry.member
 
-        if member in resolved:
+        if member in members:
             raise ValueError(
-                f"module ids {resolved[member]!r} and {entry.name!r} both map to "
+                f"module ids {members[member]!r} and {entry.name!r} both map to "
                 f"enum member {member!r}; give one an explicit enum_name"
             )
 
-        resolved[member] = entry.name
+        members[member] = entry.name
 
-    return resolved
+    return members
 
 
 def _gen_class_blocks(groups: Mapping[str, Iterable[NameEntry]]) -> Iterator[str]:
@@ -192,20 +192,20 @@ def _gen_aliases(
 
 
 def _generate_module_block(groups: Mapping[str, Iterable[NameEntry]]) -> str:
-    resolved: dict[str, str] = {}
+    alias_ids: dict[str, str] = {}
     aliases: list[tuple[str, str]] = []
 
     for class_name in _order_groups(*groups):
         entries = groups.get(class_name, [])
 
         for mid, line, alias in _gen_aliases(class_name, *entries):
-            if alias in resolved:
+            if alias in alias_ids:
                 raise ValueError(
-                    f"module ids {resolved[alias]!r} and {mid!r} both map to "
+                    f"module ids {alias_ids[alias]!r} and {mid!r} both map to "
                     f"enum member {alias!r}; give one an explicit enum_name"
                 )
 
-            resolved[alias] = mid
+            alias_ids[alias] = mid
             aliases.append((mid, line))
 
     body = [line for _mid, line in sorted(aliases)] or ["    pass"]

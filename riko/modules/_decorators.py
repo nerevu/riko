@@ -608,9 +608,9 @@ class Module[B: bool]:
         overrides = _require_overrides(_overrides)
         extra = {key: value for key, value in kwargs.items() if key not in named}
         options = _require_call_options(call_options)
-        resolved = _resolve_context(context, **overrides) if overrides else context
+        _context = _resolve_context(context, **overrides) if overrides else context
         call = wrapper.prepare(*kwargs, conf=conf, **options)
-        return call(items, context=resolved, **extra)
+        return call(items, context=_context, **extra)
 
 
 @overload
@@ -890,9 +890,9 @@ class _PreparedProcessor(_PreparedCall["processor[bool]"]):
             args = (input_, orig_item, prepared.assign)
             built = module.process(*args, emit=True, skip=True)
         else:
-            resolved = _resolve_context(context)
-            pkwargs = {"inputs": resolved.inputs, "count": count, **extra}
-            pkwargs["test"] = resolved.test
+            _context = _resolve_context(context)
+            pkwargs = {"inputs": _context.inputs, "count": count, **extra}
+            pkwargs["test"] = _context.test
             built = _ProcessorCall(input_, casted, pkwargs, count)
 
         return built
@@ -1029,14 +1029,14 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         prepared = self.prepared
         field, count = self.field, self.count
         input_ = self.module.normalize_input(items)
-        resolved = _resolve_context(context)
-        pkwargs = {"inputs": resolved.inputs, "count": count, **kwargs}
+        _context = _resolve_context(context)
+        pkwargs = {"inputs": _context.inputs, "count": count, **kwargs}
         args = (prepared, input_)
         tuples, orig_stream, casted = self.module.setup(*args, field=field, **pkwargs)
         handled, looped, embed_stream = loop_embed_sync(
             embed,
             self.embedded_kwargs,
-            resolved,
+            _context,
             input_,
             prepared.name,
             field=field,
@@ -1083,14 +1083,14 @@ class _PreparedOperator(_PreparedCall["operator[bool]"]):
         kwargs = await _materialize_terminals(**kwargs)
         prepared = self.prepared
         field, count = self.field, self.count
-        resolved = _resolve_context(context)
-        pkwargs = {"inputs": resolved.inputs, "count": count, **kwargs}
+        _context = _resolve_context(context)
+        pkwargs = {"inputs": _context.inputs, "count": count, **kwargs}
         args = (prepared, input_)
         tuples, orig_stream, casted = self.module.setup(*args, field=field, **pkwargs)
         handled, looped, embed_stream = loop_embed_async(
             embed,
             self.embedded_kwargs,
-            resolved,
+            _context,
             input_,
             prepared.name,
             field=field,
@@ -1128,8 +1128,8 @@ class _PreparedSplitter(_PreparedCall["splitter[bool]"]):
         context: Context | None = None,
         **extra: object,
     ) -> SplitterWrapperOutput:
-        resolved = _resolve_context(context)
-        kwargs = {"inputs": resolved.inputs, "test": resolved.test, **extra}
+        _context = _resolve_context(context)
+        kwargs = {"inputs": _context.inputs, "test": _context.test, **extra}
 
         if self.wrapper.is_async:
             stream = _AsyncWrapperStream(partial(self._arun, item, kwargs))
