@@ -215,6 +215,46 @@ def test_scope_edits_only_prints_the_new_lines(tmp_path, capsys):
     assert "a.py:1: a = 2" in out
 
 
+def test_gen_new_sites_keeps_lint_lines_on_added_lines(tmp_path):
+    diff = (
+        "--- a/t.py\n+++ b/t.py\n@@ -1,2 +1,3 @@\n old\n-gone\n+new\n context\n"
+        "--- /dev/null\n+++ b/u.py\n@@ -0,0 +1 @@\n+u = 1\n"
+    )
+    lint = (
+        "t.py:1:1: E1 old line\n"
+        "t.py:2:5: E2 new line\n"
+        f"{tmp_path}/u.py:1: absolute path\n"
+        "./t.py:2: dotted path\n"
+        "./t.py:3: context line\n"
+        "Found 5 errors.\n"
+    )
+    assert list(gates.gen_new_sites(diff, lint, tmp_path)) == [
+        "t.py:2:5: E2 new line",
+        f"{tmp_path}/u.py:1: absolute path",
+        "./t.py:2: dotted path",
+    ]
+
+
+@pytest.mark.usefixtures("repo")
+def test_scope_new_sites_prints_only_lint_lines_since_the_pass(tmp_path, capsys):
+    path = gates.get_state_dir() / "gate-markers.json"
+    gates.run(path, "lint", ["true"], mutates=False, lock=False)
+    (tmp_path / "a.py").write_text("a = 1\nb = 2\n")
+    lint = "a.py:1:1: E1 old\na.py:2:1: E2 new\n"
+    capsys.readouterr()
+
+    assert gates.scope(path, "lint", lint=lint) == 1
+    out = capsys.readouterr().out
+    assert out.endswith("--- new sites (1)\na.py:2:1: E2 new\n")
+    assert "--- stat" not in out
+    assert gates.scope(path, "lint", lint="a.py:1:1: E1 old\n") == gates.EMPTY
+
+
+def test_scope_new_sites_rejects_the_diff_modes():
+    with pytest.raises(SystemExit):
+        gates.main(["scope", "tidy", "--new-sites", "-", "--edits-only"])
+
+
 @pytest.mark.usefixtures("repo")
 def test_mutating_gate_records_the_tree_it_left(tmp_path):
     path = gates.get_state_dir() / "gate-markers.json"

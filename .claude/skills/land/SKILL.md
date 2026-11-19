@@ -158,7 +158,10 @@ for iterating on one gate alone.
    terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and
    every import contract, so do not rerun `--docs`, `--docstrings`, `--terms`,
    `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes`
-   separately. It does **not** run the type gate.
+   separately. It does **not** run the type gate. When a ratcheted check that prints
+   its sites as `path:line:` (the `--tests` ceilings) trips, pipe that check's output
+   to `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
+   lint last passed, separating the change's new violations from existing ones.
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
    suite, in the gate sequence or alone with
    `python $G run test --lock -- <manage> test --ratchet --quiet --parallel`, before

@@ -6,6 +6,7 @@ Usage:
     python .claude/skills/land/gates.py check GATE
     python .claude/skills/land/gates.py scope GATE [--max-inline BYTES] [--edits-only]
     python .claude/skills/land/gates.py scope tidy --leads [--manage CMD]
+    python .claude/skills/land/gates.py scope GATE --new-sites LINT_OUTPUT
     python .claude/skills/land/gates.py record GATE
     python .claude/skills/land/gates.py run GATE [--mutates] [--lock] -- CMD...
     python .claude/skills/land/gates.py summary GATE
@@ -52,6 +53,11 @@ when the gate already passed on this tree, 2 when the scope is empty, 1 otherwis
 ``--edits-only`` prints, in place of the diff, each added line whose text no removed
 line carries (``path:line: text``): a change that mostly moves code shrinks to its
 real edits.
+
+``--new-sites LINT_OUTPUT`` (a file of lint output, ``-`` for stdin) prints, after
+the base, only the lint lines whose ``path:line`` falls on a line added since that
+base, so a tripped ratchet separates its new violations from existing ones; it exits
+2 when none does. A path may be relative to the repository root or absolute.
 
 ``scope tidy --leads`` adds tidy's opening checks to the same call. It saves the
 raw diff to ``.claude/tidy-scope.diff`` and runs, side by side, the tidy lint
@@ -116,6 +122,7 @@ EMPTY = 2
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
 HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
+LINT_SITE = re.compile(r"^(?P<path>[^:\s][^:]*):(?P<line>\d+):")
 RATCHET_LINE = re.compile(r"^([-+])uncovered(-lowered)? = (\d+|\d{4}-\d{2}-\d{2})\s*$")
 RATCHET_FILE = "pyproject.toml"
 MARKER_LOCK = threading.Lock()
@@ -344,32 +351,60 @@ def resolve_base(marker: dict[str, str] | None) -> tuple[str, str]:
     return base, case
 
 
-def gen_edits(diff: str) -> Iterator[str]:
-    """Generates each added line no removed line carries, as ``path:line: text``."""
-    lines = diff.splitlines()
-    removed = Counter(
-        line[1:].strip()
-        for line in lines
-        if line.startswith("-") and not line.startswith("---")
-    )
+def gen_added(diff: str) -> Iterator[tuple[str, int, str]]:
+    """Generates each added line of ``diff`` as ``(path, line number, text)``."""
     current, lineno = None, 0
 
-    for line in lines:
+    for line in diff.splitlines():
         if line.startswith("+++ "):
             current = line[6:] if line.startswith("+++ b/") else None
         elif line.startswith("@@"):
             start = HUNK_START.search(line)
             lineno = 0 if start is None else int(start[1]) - 1
-        elif not line.startswith("-"):
+        elif not line.startswith(("-", "\\")):
             lineno += 1
-            text = line[1:].strip()
 
-            if not line.startswith("+") or current is None or not text:
-                pass
-            elif removed[text] > 0:
-                removed[text] -= 1
-            else:
-                yield f"{current}:{lineno}: {line[1:]}"
+            if line.startswith("+") and current is not None:
+                yield current, lineno, line[1:]
+
+
+def gen_edits(diff: str) -> Iterator[str]:
+    """Generates each added line no removed line carries, as ``path:line: text``."""
+    removed = Counter(
+        line[1:].strip()
+        for line in diff.splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    )
+
+    for current, lineno, text in gen_added(diff):
+        if not text.strip():
+            pass
+        elif removed[text.strip()] > 0:
+            removed[text.strip()] -= 1
+        else:
+            yield f"{current}:{lineno}: {text}"
+
+
+def resolve_site_path(path: str, root: Path) -> str:
+    """Resolves a lint site's path relative to the repository ``root``."""
+    site, base = Path(path), root.resolve()
+    resolved = site.resolve() if site.is_absolute() else base / site
+    return resolved.relative_to(base, walk_up=True).as_posix()
+
+
+def gen_new_sites(diff: str, lint: str, root: Path) -> Iterator[str]:
+    """Generates each ``lint`` line whose ``path:line`` is a line ``diff`` added."""
+    added: dict[str, set[int]] = {}
+
+    for current, lineno, _ in gen_added(diff):
+        added.setdefault(current, set()).add(lineno)
+
+    for line in lint.splitlines():
+        site = LINT_SITE.match(line)
+        path = None if site is None else resolve_site_path(site["path"], root)
+
+        if site is not None and int(site["line"]) in added.get(path, ()):
+            yield line
 
 
 def build_lead_prefixes(manage: list[str]) -> dict[str, list[str]]:
@@ -456,6 +491,14 @@ def run_leads(commands: Mapping[str, list[str]]) -> None:
             print(f"--- {name}{status}\n{text}", flush=True)
 
 
+def print_new_sites(diff: str, lint: str) -> int:
+    """Prints the ``lint`` lines on lines ``diff`` added; exit 2 means none."""
+    root = Path(_git("rev-parse", "--show-toplevel"))
+    sites = list(gen_new_sites(diff, lint, root))
+    print(f"--- new sites ({len(sites)})\n" + ("\n".join(sites) or "(none)"))
+    return 1 if sites else EMPTY
+
+
 def scope(
     path: Path,
     gate: str,
@@ -463,6 +506,7 @@ def scope(
     *,
     edits_only: bool = False,
     leads: Mapping[str, list[str]] | None = None,
+    lint: str | None = None,
 ) -> int:
     """
     Prints everything ``gate`` still has to look at; exit 0 skips, 2 means empty.
@@ -471,7 +515,8 @@ def scope(
     files are part of it; a diff over ``max_inline`` bytes is written to
     ``.claude/<gate>-scope.diff`` instead of printed. With ``leads`` (each lead's
     command prefix), a non-empty scope also runs tidy's opening checks over the
-    diff and prints each one's output after it.
+    diff and prints each one's output after it. With ``lint`` (lint output), it
+    prints only the lint lines on added lines in place of the diff; exit 2 means none.
     """
     tree = get_tree_id(gate)
     marker = get_passed(path, gate, tree)
@@ -483,47 +528,58 @@ def scope(
     else:
         base, case = resolve_base(last)
         pathspec = ["--", ".", *(f":!{exclude}" for exclude in SCOPE_EXCLUDES)]
-        stat = _git("diff", "--stat", base, tree, *pathspec)
         diff = _git("diff", base, tree, *pathspec)
-        untracked = _git("ls-files", "--others", "--exclude-standard")
-        shown = "\n".join(gen_edits(diff)) if edits_only else diff
-        label = "edits" if edits_only else "diff"
         print(f"scope {gate}: {case}")
         print(f"base: {base}")
 
-        if leads is not None and not edits_only and len(diff) > max_inline:
-            print(
-                f"diff of {len(diff.splitlines())} lines is over {max_inline} bytes: "
-                f"read `gates.py scope {gate} --edits-only` first"
-            )
-
-        print(f"--- stat\n{stat or '(none)'}")
-        print(f"--- untracked\n{untracked or '(none)'}")
-
-        if not diff:
-            print(f"--- diff\n(empty: record {gate} and stop)")
-            code = EMPTY
-        elif len(shown) > max_inline:
-            target = path.with_name(f"{gate}-scope.{label}")
-            target.parent.mkdir(exist_ok=True)
-            target.write_text(shown + "\n")
-            print(
-                f"--- {label} ({len(shown)} bytes) written to {target}; "
-                "read it in slices"
-            )
-            code = 1
+        if lint is not None:
+            code = print_new_sites(diff, lint)
         else:
-            print(f"--- {label} ({len(shown)} bytes)\n{shown}")
-            code = 1
+            stat = _git("diff", "--stat", base, tree, *pathspec)
+            untracked = _git("ls-files", "--others", "--exclude-standard")
+            shown = "\n".join(gen_edits(diff)) if edits_only else diff
+            label = "edits" if edits_only else "diff"
 
-        if leads is not None and diff:
-            diff_file = path.with_name(f"{gate}-scope.diff")
-            diff_file.parent.mkdir(exist_ok=True)
-            diff_file.write_text(diff + "\n")
-            touched = _git("diff", "--name-only", base, tree, *pathspec).splitlines()
-            run_leads(build_lead_commands(leads, diff_file, base, touched))
+            if leads is not None and not edits_only and len(diff) > max_inline:
+                print(
+                    f"diff of {len(diff.splitlines())} lines is over {max_inline} "
+                    f"bytes: read `gates.py scope {gate} --edits-only` first"
+                )
+
+            print(f"--- stat\n{stat or '(none)'}")
+            print(f"--- untracked\n{untracked or '(none)'}")
+
+            if not diff:
+                print(f"--- diff\n(empty: record {gate} and stop)")
+                code = EMPTY
+            elif len(shown) > max_inline:
+                target = path.with_name(f"{gate}-scope.{label}")
+                target.parent.mkdir(exist_ok=True)
+                target.write_text(shown + "\n")
+                print(
+                    f"--- {label} ({len(shown)} bytes) written to {target}; "
+                    "read it in slices"
+                )
+                code = 1
+            else:
+                print(f"--- {label} ({len(shown)} bytes)\n{shown}")
+                code = 1
+
+            if leads is not None and diff:
+                diff_file = path.with_name(f"{gate}-scope.diff")
+                diff_file.parent.mkdir(exist_ok=True)
+                diff_file.write_text(diff + "\n")
+                touched = _git(
+                    "diff", "--name-only", base, tree, *pathspec
+                ).splitlines()
+                run_leads(build_lead_commands(leads, diff_file, base, touched))
 
     return code
+
+
+def read_lint(source: str) -> str:
+    """Reads saved lint output from the ``source`` file, or stdin for ``-``."""
+    return sys.stdin.read() if source == "-" else Path(source).read_text()
 
 
 def print_summary(path: Path, gate: str) -> int:
@@ -777,6 +833,11 @@ def main(argv: list[str] | None = None) -> int:
         help="also run tidy's opening checks over the diff (tidy only)",
     )
     scope_parser.add_argument(
+        "--new-sites",
+        metavar="LINT_OUTPUT",
+        help="print only the lint lines on lines added since the base (- is stdin)",
+    )
+    scope_parser.add_argument(
         "--manage",
         default=MANAGE,
         help=f"the manage command the lint lead runs (default: {MANAGE})",
@@ -814,7 +875,12 @@ def main(argv: list[str] | None = None) -> int:
         code = check(path, args.gate)
     elif args.action == "scope" and args.leads and args.gate != "tidy":
         parser.error("--leads applies to the tidy gate only")
+    elif args.action == "scope" and args.new_sites and (args.leads or args.edits_only):
+        parser.error(
+            "--new-sites replaces the diff, so it takes no --leads or --edits-only"
+        )
     elif args.action == "scope":
+        lint = None if args.new_sites is None else read_lint(args.new_sites)
         prefixes = build_lead_prefixes(shlex.split(args.manage))
         code = scope(
             path,
@@ -822,6 +888,7 @@ def main(argv: list[str] | None = None) -> int:
             args.max_inline,
             edits_only=args.edits_only,
             leads=prefixes if args.leads else None,
+            lint=lint,
         )
     elif args.action == "summary":
         code = print_summary(path, args.gate)
