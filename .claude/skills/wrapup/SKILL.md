@@ -79,9 +79,10 @@ current, run both as one call in the turn after the setup call.
   $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix with
   0 leads as a scanner miss: a candidate rule, or a probe line for its class in
   `mistake_scan.py`'s `CLASS_HISTORY`. Run `python .claude/skills/tidy/mistake_scan.py
-  --unclassified` beside it and cite each listed fix in a class or `NON_BEHAVIORAL`.
-  A listed fix that an `uncommitted (MM-DD <what>)` ref already describes gets its
-  hash written over `uncommitted` in that ref, with no new ref and no count bump.
+  --remap` beside it: it repoints refs a rebase or fold rewrote and writes each listed
+  fix's hash over the `uncommitted (MM-DD <what>)` ref that describes it. Place each
+  ref it prints by hand (a fix folded into a non-`[FIX]` commit), then run
+  `--unclassified` and cite each fix it still lists in a class or `NON_BEHAVIORAL`.
 - Beside the launch: pending fixups,
   `git log --format='%h %s' HEAD --not --remotes`. Each
   `fixup! <subject>` line names its target by subject. A target may already be

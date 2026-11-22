@@ -267,3 +267,56 @@ def test_unclassified_lists_fixes_no_class_cites(monkeypatch, capsys, cited, exp
     assert mistake_scan.main(["--unclassified"]) == expected
     out = capsys.readouterr().out
     assert out == ("" if cited else "abc123456 [FIX] Cited fix\n")
+
+
+@pytest.mark.parametrize(
+    ("refs", "expected", "code"),
+    [
+        pytest.param("aaaa1111 (11-17 a)", "bbbb2222 (11-17 a)", 0, id="rewritten"),
+        pytest.param(
+            "uncommitted (11-19 `fmt` alias)",
+            "cccc3333 (11-19 `fmt` alias)",
+            0,
+            id="fix",
+        ),
+        pytest.param(
+            "uncommitted (11-19 `fmt_name` alias)",
+            "uncommitted (11-19 `fmt_name` alias)",
+            1,
+            id="no-match",
+        ),
+        pytest.param(
+            "uncommitted (11-18 `fmt` alias)",
+            "uncommitted (11-18 `fmt` alias)",
+            1,
+            id="other-day",
+        ),
+    ],
+)
+def test_remap_rewrites_stale_and_uncommitted_refs(
+    tmp_path, monkeypatch, capsys, refs, expected, code
+):
+    def fake_git(*args: str, check: bool = True) -> str:
+        new, fix = f"{'bbbb2222':0<40}", f"{'cccc3333':0<40}"
+        replies = {
+            "rev-list": f"{new}\n{fix}\n",
+            "-1": "[FIX] Old\n",
+            "merge-base": "dddd4444\n",
+            "--format=%H %s": f"{new} [FIX] Old\n{fix} [FIX] New\n",
+            "describe": "v1.0.0\n",
+            "--format=%h %s": "cccc3333 [FIX] New\n",
+            "--format=%ad": "11-19\n+    fmt = None\n",
+        }
+        return replies.get(args[1], replies.get(args[0], ""))
+
+    path = tmp_path / "scan.py"
+    path.write_text('NON_BEHAVIORAL = (\n    "aaaa1111",\n)\nCLASS_HISTORY = {\n}\n')
+    history = {"close": mistake_scan.BugClass(refs, "p", "s")}
+    monkeypatch.setattr(mistake_scan, "git", fake_git)
+    monkeypatch.setattr(mistake_scan, "CLASS_HISTORY", history)
+    monkeypatch.setattr(mistake_scan, "NON_BEHAVIORAL", ("aaaa1111",))
+    assert mistake_scan.remap_class_history(path) == code
+    source = path.read_text()
+    assert f'BugClass("{expected}", "p", "s")' in source
+    assert '    "bbbb2222",\n)' in source
+    assert ("uncommitted" in capsys.readouterr().out) == bool(code)

@@ -96,6 +96,13 @@ Inputs:
     --rewrap       rewrite this file's ``CLASS_HISTORY`` source with every string
                    re-wrapped to 88 columns (run after adding a ref; then
                    ``ruff format``)
+    --remap        repair refs after a rebase: a cited sha HEAD no longer reaches
+                   becomes the one same-subject commit since it forked, and an
+                   ``uncommitted (MM-DD note)`` ref takes the sha of the
+                   ``--unclassified`` fix (or ``--since REF``) authored that day whose
+                   patch holds the most of the note's identifiers (backticked words,
+                   ``snake_case`` names, ``name()`` calls); prints each ref it could not
+                   place and exits 1 when any is left
     paths          restrict to these files/directories
 
 RM901 is a style rule, not a mined defect class: it has no fix history and sorts
@@ -121,6 +128,7 @@ Run:
     python .claude/skills/tidy/mistake_scan.py --since main
     python .claude/skills/tidy/mistake_scan.py --classes
     python .claude/skills/tidy/mistake_scan.py --unclassified
+    python .claude/skills/tidy/mistake_scan.py --remap
 
 Smoke tests: uv run --active pytest .claude/skills/tidy/test_mistake_scan.py --no-cov
 """
@@ -147,6 +155,10 @@ _NONE_RECORDED = "none recorded yet"
 _REF_GROUP = re.compile(r"\(\d\d-\d\d ([^()]*(?:\([^()]*\)[^()]*)*)\)")
 _RULE_ROW = re.compile(r"^ {4}(RM\d+) (\S+) ", re.MULTILINE)
 _SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
+_NOTE_TOKEN = re.compile(r"`(\w+)`|(\b\w*_\w+)|(\w+)\(\)")
+_UNCOMMITTED = re.compile(
+    r"uncommitted (\((\d\d-\d\d) ([^()]*(?:\([^()]*\)[^()]*)*)\))"
+)
 GIT = shutil.which("git") or "git"
 ROOT = Path(__file__).resolve().parents[3]
 GENERATED = {"_configs.py", "_names.py", "_module_ids.py"}
@@ -268,7 +280,11 @@ CLASS_HISTORY = {
             "once); 7ee178c7 (10-31 loop aclosing, async_merge aclosing); c6a3838c "
             "(11-01 owned values by type, raw return, async close()); d229b9b9 (11-03 "
             "unify closers); d7528227 (11-05 fetch responses; missing ExitStack); "
-            "ef55b123 (11-13 async processor streams; missing early close)"
+            "ef55b123 (11-13 async processor streams; missing early close); 9586f846 "
+            "(11-19 adapted async-only streams, worker-thread embed drain; closer "
+            "pairs); 97918624 (11-19 loop embed results; bare fold); 9586f846 (11-20 "
+            "raw outputs at node start, run-owned async raw, portal-built async "
+            "stream, splitter cascade at node start; cancellation window, failed iter)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -303,7 +319,7 @@ CLASS_HISTORY = {
             "cb4ab17d (10-28 async_write iterables); 0cfbfc62 (10-29 lazy async "
             "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
             "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
-            "async HTTP status); 28104531 (11-17 split branches in both colors); none "
+            "async HTTP status); 24a19342 (11-17 split branches in both colors); none "
             "RM801-shaped (source shape, status handling, not keyword drift)"
         ),
         (
@@ -317,7 +333,7 @@ CLASS_HISTORY = {
             "e937e766 (10-05 parse_dag keys, alias collisions, id collisions, registry "
             "shadow); 39b93e99 (10-29 duplicate entry points; no JSON load); 05fd5672 "
             "(10-29 entry-point keys; no JSON load); 7ee178c7 (10-31 dup JSON keys, "
-            "migrate keys, target shadow, codegen names); uncommitted (11-19 `format` "
+            "migrate keys, target shadow, codegen names); 6f8fe7ef (11-19 `format` "
             "alias over an explicit null `fmt`; not a JSON key)"
         ),
         (
@@ -371,7 +387,7 @@ CLASS_HISTORY = {
         (
             "e937e766 (10-05 deep-frozen definitions); fe0ef32a (10-14 DotDict nested "
             "writes; not a record field); 1906d375 (10-21 definition snapshots; no "
-            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 28104531 "
+            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 24a19342 "
             "(11-17 Tee _Read; introduced in the same commit)"
         ),
         "mutate the list/dict/set a caller passed in and check the record is unchanged",
@@ -381,8 +397,8 @@ CLASS_HISTORY = {
         (
             "df5b36fd (10-29 fetch timeout); f3f371ad (10-29 async_map limit); "
             "7ee178c7 (10-31 async fetch timeout; not a default); c6a3838c (11-01 "
-            "async cleanup under for; missing bound); 28104531 (11-17 branch lag; "
-            "missing bound); uncommitted (11-19 splitter branches collected before the "
+            "async cleanup under for; missing bound); 24a19342 (11-17 branch lag; "
+            "missing bound); 7527ea4f (11-19 splitter branches collected before the "
             "count check; missing bound)"
         ),
         "run each wait, read, and pool against a source that never answers",
@@ -446,8 +462,8 @@ CLASS_HISTORY = {
     "bad-config": BugClass(
         (
             "fb7ea681 (10-29 out-of-range settings); 597a0181 (11-03 int cast "
-            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); "
-            "uncommitted (11-19 cast_datetime timestamp overflow)"
+            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); 9d8be68b "
+            "(11-19 cast_datetime timestamp overflow)"
         ),
         (
             "set each RIKO_* variable and conf number to malformed, out-of-range, inf, "
@@ -502,7 +518,7 @@ CLASS_HISTORY = {
     ),
     "colors": BugClass(
         (
-            "28104531 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
+            "24a19342 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
             "in the same commit)"
         ),
         "compare method names across each sync/async class pair",
@@ -510,7 +526,7 @@ CLASS_HISTORY = {
     ),
     "find-slice": BugClass(
         (
-            "7ee178c7 (10-31 fetchpage.get_string); uncommitted (11-19 legacy port "
+            "7ee178c7 (10-31 fetchpage.get_string); 6f8fe7ef (11-19 legacy port "
             "suffix; removeprefix() not find())"
         ),
         (
@@ -522,7 +538,7 @@ CLASS_HISTORY = {
     ),
     "kwarg-shadow": BugClass(
         (
-            "8f261670 (11-17 call keywords; a missing `/`); uncommitted (11-19 "
+            "9ad10899 (11-17 call keywords; a missing `/`); 4e5212c2 (11-19 "
             "prepare_call wrapper, _call_direct wrapper/items)"
         ),
         (
@@ -540,7 +556,9 @@ CLASS_HISTORY = {
             "remap); ff6a6030 (09-12 autorss Attributes guard); 8b95ee51 (10-28 "
             "http-prefixed file names); 186f976d (10-29 Context shipped to workers); "
             "bffd2dc0 (10-29 self-embedding workflow); 46d7c568 (10-31 half-applied "
-            "register); 263fffe7 (11-03 registry-unaware metadata)"
+            "register); 263fffe7 (11-03 registry-unaware metadata); 958e4640 (11-19 "
+            "subscripted generic alias inference); 00281e2e (11-20 is_async_callable "
+            "through partial)"
         ),
         (
             "no shared cause: reread the cited fix and its regression test when a "
@@ -1476,9 +1494,9 @@ def scan_file(path: Path) -> list[Lead]:
     return kept
 
 
-def git(*args: str) -> str:
+def git(*args: str, check: bool = True) -> str:
     return subprocess.run(
-        [GIT, *args], cwd=ROOT, capture_output=True, text=True, check=True
+        [GIT, *args], cwd=ROOT, capture_output=True, text=True, check=check
     ).stdout
 
 
@@ -1594,10 +1612,10 @@ def _build_field(text: str) -> str:
     return field
 
 
-def build_class_history_source() -> str:
+def build_class_history_source(history: dict[str, BugClass] | None = None) -> str:
     lines = ["CLASS_HISTORY = {"]
 
-    for name, entry in CLASS_HISTORY.items():
+    for name, entry in (CLASS_HISTORY if history is None else history).items():
         fields = [_build_field(text) for text in (entry.refs, entry.probe, entry.safe)]
         joined = ", ".join(f.strip().removesuffix(",") for f in fields)
         flat = all("\n" not in f for f in fields)
@@ -1620,9 +1638,17 @@ def rewrap_class_history(path: Path = Path(__file__)) -> int:
     return 0
 
 
-def gen_unclassified(since: str | None = None) -> Iterator[str]:
+def _get_texts(
+    history: dict[str, BugClass], non_behavioral: tuple[str, ...]
+) -> list[str]:
+    return [*(entry.refs for entry in history.values()), *non_behavioral]
+
+
+def gen_unclassified(
+    since: str | None = None, texts: list[str] | None = None
+) -> Iterator[str]:
     base = since or git("describe", "--tags", "--abbrev=0").strip()
-    texts = [*(entry.refs for entry in CLASS_HISTORY.values()), *NON_BEHAVIORAL]
+    texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL) if texts is None else texts
     cited = {sha for text in texts for sha in _SHA.findall(text)}
     log = git("log", "--format=%h %s", f"{base}..HEAD", r"--grep=^\[FIX\]")
 
@@ -1642,6 +1668,117 @@ def report_unclassified(since: str | None = None) -> int:
     return int(bool(lines))
 
 
+def resolve_successor(sha: str) -> str | None:
+    """
+    Resolves a cited sha HEAD no longer reaches to its rewritten commit.
+
+    The successor is the one commit since ``sha`` forked from HEAD with its subject,
+    abbreviated to the cited length; none when no commit or several match.
+    """
+    subject = git("log", "-1", "--format=%s", sha, check=False).strip()
+    base = git("merge-base", sha, "HEAD", check=False).strip()
+    log = git("log", "--format=%H %s", f"{base}..HEAD") if subject and base else ""
+    matches = [line[: len(sha)] for line in log.splitlines() if line[41:] == subject]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _load_fix(sha: str) -> tuple[str, str]:
+    day, _, patch = git("show", "--format=%ad", "--date=format:%m-%d", sha).partition(
+        "\n"
+    )
+    return day, patch
+
+
+def _place_uncommitted(match: re.Match[str], fixes: dict[str, tuple[str, str]]) -> str:
+    _, day, note = match.groups()
+    tokens = {
+        token for groups in _NOTE_TOKEN.findall(note) for token in groups if token
+    }
+    scores = Counter(
+        {
+            sha: sum(bool(re.search(rf"\b{re.escape(t)}\b", patch)) for t in tokens)
+            for sha, (fixed, patch) in fixes.items()
+            if fixed == day
+        }
+    ).most_common(2)
+    leads = (
+        scores and scores[0][1] and (len(scores) == 1 or scores[1][1] < scores[0][1])
+    )
+    return f"{scores[0][0][:8]} {match.group(1)}" if leads else match.group()
+
+
+def _replace_span(source: str, start: str, end: str, text: str) -> str:
+    head = source.index(start)
+    tail = source.index(end, head) + len(end)
+    return source[:head] + text + source[tail:]
+
+
+def remap_class_history(path: Path = Path(__file__), since: str | None = None) -> int:
+    """
+    Remaps this file's refs to the commits HEAD reaches after a rebase or fold.
+
+    Rewrites ``CLASS_HISTORY`` (re-wrapped as ``--rewrap`` builds it) and
+    ``NON_BEHAVIORAL`` in place, then prints each ref left unplaced and returns 1
+    when any is.
+    """
+    reachable = git("rev-list", "HEAD").split()
+    texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL)
+    cited = sorted({sha for text in texts for sha in _SHA.findall(text)})
+    stale = [sha for sha in cited if not any(h.startswith(sha) for h in reachable)]
+    successors = {sha: s for sha in stale if (s := resolve_successor(sha)) is not None}
+
+    def rename(match: re.Match[str]) -> str:
+        return successors.get(match.group(), match.group())
+
+    non_behavioral = tuple(successors.get(sha, sha) for sha in NON_BEHAVIORAL)
+    renamed = {
+        name: entry._replace(refs=_SHA.sub(rename, entry.refs))
+        for name, entry in CLASS_HISTORY.items()
+    }
+    unclassified = gen_unclassified(since, _get_texts(renamed, non_behavioral))
+    fixes = {
+        line.split(" ", 1)[0]: _load_fix(line.split(" ", 1)[0]) for line in unclassified
+    }
+    history = {
+        name: entry._replace(
+            refs=_UNCOMMITTED.sub(lambda m: _place_uncommitted(m, fixes), entry.refs)
+        )
+        for name, entry in renamed.items()
+    }
+    source = _replace_span(
+        path.read_text(),
+        "CLASS_HISTORY = {",
+        "\n}\n",
+        f"{build_class_history_source(history)}\n",
+    )
+    source = _replace_span(
+        source,
+        "NON_BEHAVIORAL = (",
+        "\n)\n",
+        "\n".join(
+            ["NON_BEHAVIORAL = (", *(f'    "{sha}",' for sha in non_behavioral), ")\n"]
+        ),
+    )
+    path.write_text(source)
+    unplaced = [
+        *(
+            f"{sha}: no single same-subject commit"
+            for sha in stale
+            if sha not in successors
+        ),
+        *(
+            f"{name}: uncommitted {group}"
+            for name, entry in history.items()
+            for group, *_ in _UNCOMMITTED.findall(entry.refs)
+        ),
+    ]
+
+    for line in unplaced:
+        print(line)
+
+    return int(bool(unplaced))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(__doc__ or "").split("\n\n")[0].strip(),
@@ -1658,6 +1795,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--classes", action="store_true")
     parser.add_argument("--unclassified", action="store_true")
     parser.add_argument("--rewrap", action="store_true")
+    parser.add_argument("--remap", action="store_true")
     args = parser.parse_args(argv)
 
     if args.classes:
@@ -1667,6 +1805,8 @@ def main(argv: list[str] | None = None) -> int:
         result = report_unclassified(args.since)
     elif args.rewrap:
         result = rewrap_class_history()
+    elif args.remap:
+        result = remap_class_history(since=args.since)
     else:
         result = scan(args)
 
