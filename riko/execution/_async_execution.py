@@ -1306,12 +1306,14 @@ class AsyncExecution[T](_BaseExecution[AsyncExitStack]):
         """
         Closes a run whose build failed, even when the failure is a cancellation.
 
-        The close runs behind a cancellation shield within the shutdown timeout.
+        The close runs behind a cancellation shield within the shutdown timeout. A
+        close that fails or times out is recorded as a cleanup error, so the build
+        error stays primary.
         """
         try:
             with CancelScope(shield=True), fail_after(self.settings.shutdown_timeout):
                 await run.aclose()
-        except TimeoutError as error:
+        except Exception as error:  # noqa: BLE001
             self._cleanup_errors.append(error)
 
     async def _abuild_run(

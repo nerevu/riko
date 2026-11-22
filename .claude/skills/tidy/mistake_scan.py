@@ -427,7 +427,8 @@ CLASS_HISTORY = {
     "failure-propagation": BugClass(
         (
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
-            "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors)"
+            "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
+            "fd3cee61 (11-21 failed close on a failed build)"
         ),
         (
             "make a worker, task, or cleanup step die or raise, once and twice, and "

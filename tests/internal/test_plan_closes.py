@@ -320,6 +320,14 @@ class FailingAcloseIterator(_TwoItems):
         raise RuntimeError("close failed")
 
 
+class FailingAsyncCloseIterator(ClosingAsyncIterator):
+    """A two-item async iterator whose ``aclose`` records itself then fails."""
+
+    async def aclose(self) -> None:
+        await super().aclose()
+        raise RuntimeError("close failed")
+
+
 COUNTING_SOURCES = [
     pytest.param(_gen_counting, id="generator"),
     pytest.param(_CountingIterator, id="closable-iterator"),
@@ -878,6 +886,25 @@ class TestAsyncPlanClose:
             async with AsyncExecution() as execution:
                 await execution.arun(plan)
 
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_reports_a_failed_close_beside_the_build_error(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: FailingAsyncCloseIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with pytest.raises(ExceptionGroup) as info:
+            async with AsyncExecution() as execution:
+                await execution.arun(plan)
+
+        primary, cleanup = info.value.exceptions
+        assert isinstance(primary, InvalidPipelineError)
+        assert isinstance(cleanup, RuntimeError)
         assert closed == ["closed"]
 
     @async_test
