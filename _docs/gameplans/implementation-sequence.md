@@ -2566,7 +2566,10 @@ R10 therefore owns:
   without the sync round trip, as part of the laziness/materialization-seam audit
   (strict-xfail tripwire
   `tests/internal/test_plan_runs.py::TestPlanRun::test_run_passes_an_async_only_stream_to_an_adjacent_async_only_node`,
-  2026-11-20 triage).
+  2026-11-20 triage). The failed close leaves the async source unfinalized, so the
+  tripwire collects it under a warnings filter; until this lands, a user hitting this
+  path also gets a "coroutine method 'aclose' … was never awaited" warning (2026-11-22
+  tox triage).
 - a sync run under `with_execution(concurrency>1)`, and an async run under any item
   limit (an explicit `concurrency`, `1` included, or an explicit `thread`/`inline`
   executor), stream a mapped node's per-item output instead of collecting it first
