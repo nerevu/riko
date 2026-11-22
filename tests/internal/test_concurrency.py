@@ -30,6 +30,7 @@ from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import AsyncPolicy, ExecutionSettings, SyncPolicy
+from riko.definitions._workflow_definition import Workflow
 from riko.execution import _async_execution, _sync_execution
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._concurrency import _load_call, build_tracked_call, run_pickled_item
@@ -46,7 +47,6 @@ from riko.types._workflow import Endpoint
 from tests import async_test
 from tests._execution import (
     arun_plan,
-    build_chain,
     build_chain_plan,
     build_dispatcher,
     build_workflow,
@@ -186,8 +186,9 @@ PROCESS_REFUSALS = [
 class TestRequireProcessSafe:
     @pytest.mark.parametrize(("build", "node", "cause"), PROCESS_REFUSALS)
     def test_process_executor_refuses_an_unsafe_node(
-        self, opened, build, node, cause
+        self, monkeypatch, opened, build, node, cause
     ) -> None:
+        monkeypatch.setattr(_sync_execution, "start_blocking_portal", lambda: None)
         plan, context = build()
         settings = ExecutionSettings(executor="process", concurrency=2)
         execution = SyncExecution(context, settings=settings)
@@ -592,12 +593,12 @@ class TestAsyncPolicy:
             peak = max(peak, active)
             await async_sleep(0.01)
             active -= 1
-            return [item]
+            return iter([item])
 
         definition = ModuleDefinition(name="slow", async_pipe=mark_async_loopable(slow))
         nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
         plan = ExecutionPlan.from_workflow(
-            build_chain(*nodes), dispatcher=build_dispatcher(definition)
+            Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
         )
         result = await arun_plan(
             plan, settings=ExecutionSettings(concurrency=3), seed=ITEMS
@@ -722,7 +723,7 @@ def _gauged_plan(gauge: _ThreadGauge, depth: int) -> ExecutionPlan:
     definition = ModuleDefinition(name="gauged", sync_pipe=cast("Any", gauged))
     nodes = [ModuleNode(id=f"n{i}", name="gauged") for i in range(depth)]
     return ExecutionPlan.from_workflow(
-        build_chain(*nodes), dispatcher=build_dispatcher(definition)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
     )
 
 
@@ -731,7 +732,7 @@ def _passthru_plan(depth: int) -> ExecutionPlan:
     definition = ModuleDefinition(name="passthru", sync_pipe=pipe)
     nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(depth)]
     return ExecutionPlan.from_workflow(
-        build_chain(*nodes), dispatcher=build_dispatcher(definition)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
     )
 
 
@@ -739,14 +740,14 @@ def _nested_plan() -> ExecutionPlan:
     """Plans a stored workflow of one sync-only node, read by a sync-only node."""
     pipe = cast("SyncModuleWrapper", _passthru)
     passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
-    inner = build_chain(ModuleNode(id="i", name="passthru"))
+    inner = Workflow().with_nodes(ModuleNode(id="i", name="passthru"))
     pipes = build_workflow_pipes(inner, build_dispatcher(passthru))
     stored = ModuleDefinition(
         name="stored", sync_pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
     )
     nodes = (ModuleNode(id="s", name="stored"), ModuleNode(id="p", name="passthru"))
     return ExecutionPlan.from_workflow(
-        build_chain(*nodes), dispatcher=build_dispatcher(passthru, stored)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(passthru, stored)
     )
 
 
@@ -797,7 +798,7 @@ class TestThreadBudget:
         definition = ModuleDefinition(name="echo", sync_pipe=echo_pipe)
         nodes = [ModuleNode(id=f"n{i}", name="echo") for i in range(3)]
         plan = ExecutionPlan.from_workflow(
-            build_chain(*nodes), dispatcher=build_dispatcher(definition)
+            Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
         )
 
         with fail_after(1):

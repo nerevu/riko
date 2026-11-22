@@ -71,7 +71,7 @@ _HINT_NAMESPACES = (_rss_module, _scalars_module, _values_module, _streams_modul
 _ITEM_ALIASES = frozenset({Item, ItemOrValue, RikoDict})
 
 _FIX_HINT = (
-    "add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream "
+    "add an explicit return annotation, e.g. `-> Stream` for a stream "
     "or `-> int` for a single value"
 )
 
@@ -96,7 +96,7 @@ class AnnotationMember(NamedTuple):
     """
     An annotation arm paired with the type used to classify it.
 
-    ``candidate`` is the arm's ``get_origin`` (``Iterator`` for ``Iterator[Item]``)
+    ``candidate`` is the arm's ``get_origin`` (``Iterator`` for ``Stream``)
     or the arm itself when it has none, so it can be tested against an ABC directly.
     """
 

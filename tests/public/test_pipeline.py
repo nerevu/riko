@@ -78,10 +78,10 @@ from tests._resources import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from riko.types._pipedef import DagModule
-    from riko.types._streams import Item, Items
+    from riko.types._streams import Item, Items, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 _FEED = get_path("feed.xml")
@@ -305,7 +305,7 @@ class TestPipelineChaining:
 
     def test_or_keeps_node_resources_and_label(self):
         node = ModuleNode(id="hash-1", name="hash", resources="db", label="L")
-        hashed = Pipeline(Workflow().with_node(node))
+        hashed = Pipeline(Workflow().with_nodes(node))
         pipeline = Pipeline.from_module("fetch") | hashed
         chained = pipeline.workflow.nodes["hash-1"]
         assert (dict(chained.resources), chained.label) == ({"db": "db"}, "L")
@@ -703,7 +703,7 @@ class TestClose:
         # The source stays referenced, and the relay reads it with a plain ``for``
         # loop, so only the run's own close can end it.
         closed: list[bool] = []
-        sources: list[Iterator[Item]] = []
+        sources: list[Stream] = []
 
         def gen():
             try:

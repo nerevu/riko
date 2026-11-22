@@ -44,12 +44,12 @@ from riko.types._wrappers import require_subpipe
 from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import Callable, Iterator
 
     from riko.definitions._context import Context
     from riko.definitions._workflow_definition import Workflow
     from riko.types._frozendict import FrozenInputSchemas, InputSchemasLike
-    from riko.types._streams import InputLike
+    from riko.types._streams import AsyncStreamOf, InputLike
     from riko.types._wrappers import (
         AsyncFunc,
         AsyncSubPipe,
@@ -284,7 +284,7 @@ def build_workflow_pipes(
 
     def async_pipe(
         item: InputLike | None = None, context: Context | None = None, **kwargs: object
-    ) -> AsyncIterator[object]:
+    ) -> AsyncStreamOf[object]:
         validate_call_keywords(name, kwargs)
         definition = PipelineDefinition(flow, context=context)
         return arun_pipeline(definition, dispatcher, seed=item)

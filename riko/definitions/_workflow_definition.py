@@ -613,7 +613,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow(nodes=[ModuleNode(id="fetch-1", name="fetch")])
+            >>> flow = Workflow([ModuleNode(id="fetch-1", name="fetch")])
             >>> flow.get_node_id("fetch"), flow.get_node_id("sort")
             ('fetch-2', 'sort-1')
 
@@ -624,15 +624,15 @@ class Workflow:
         """Requires a default output to chain through, unless the workflow is empty."""
         if (default := self.outputs.get(DEFAULT_OUTPUT)) is None and self.nodes:
             msg = f"{what} has nodes but no default output. Build it with "
-            msg += "Workflow().with_node(node), or declare "
+            msg += "Workflow().with_nodes(node), or declare "
             msg += "outputs={'default': Endpoint(id, 'out')}"
             raise InvalidPipelineError(msg)
 
         return default
 
-    def with_node(self, node: RikoNode) -> Self:
+    def with_nodes(self, *nodes: RikoNode) -> Self:
         """
-        Builds a workflow with ``node`` appended to its end.
+        Builds a workflow with ``nodes`` appended in order.
 
         The previous default output streams into ``node``, and the workflow appends any
         new resources the ``node`` binds at the end.
@@ -656,24 +656,34 @@ class Workflow:
             >>>
             >>> fetch = ModuleNode(id="fetch-1", name="fetch")
             >>> sort = ModuleNode(id="sort-1", name="sort", resources="db")
-            >>> flow = Workflow().with_node(fetch).with_node(sort)
+            >>> flow = Workflow().with_nodes(fetch, sort)
             >>> flow.summary
             'fetch-1 -> sort-1; outputs: default'
             >>> flow.resources
             ('db',)
 
         """
-        if (tail := self._require_default_output("this workflow")) is None:
-            edges = self.edges
-        else:
-            edges = (*self.edges, StreamEdge(tail, Endpoint(node.id, "in")))
+        tail = self._require_default_output("this workflow") if nodes else None
+        edges = list(self.edges)
+        outputs = dict(self.outputs)
+
+        for node in nodes:
+            if tail is not None:
+                edges.append(StreamEdge(tail, Endpoint(node.id, "in")))
+
+            tail = Endpoint(node.id, OUT)
+
+        if tail is not None:
+            outputs[DEFAULT_OUTPUT] = tail
+
+        resources = chain(self.resources, *(node.resources.values() for node in nodes))
 
         return evolve(
             self,
-            nodes=[*self.nodes.values(), node],
-            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, OUT)},
+            nodes=(*self.nodes.values(), *nodes),
             edges=edges,
-            resources=unique_everseen(chain(self.resources, node.resources.values())),
+            outputs=outputs,
+            resources=unique_everseen(resources),
         )
 
     def _get_free_ids(self, other: Workflow) -> dict[NodeId, NodeId]:
@@ -726,9 +736,9 @@ class Workflow:
             >>> from riko.ext import ModuleNode
             >>>
             >>> node = ModuleNode(id="fetch-1", name="fetch")
-            >>> fetch = Workflow().with_node(node)
-            >>> sort = Workflow().with_node(ModuleNode(id="sort-1", name="sort"))
-            >>> fetch.with_workflow(sort.with_node(node)).summary
+            >>> fetch = Workflow().with_nodes(node)
+            >>> sort = Workflow().with_nodes(ModuleNode(id="sort-1", name="sort"))
+            >>> fetch.with_workflow(sort.with_nodes(node)).summary
             'fetch-1 -> sort-1 -> fetch-2; outputs: default'
 
         """
@@ -906,10 +916,10 @@ class Workflow:
 
             >>> from riko.ext import CallableNode, ModuleNode
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
             >>> flow.validate_document_nodes()
             >>> node = CallableNode(id="len-1", name="len", fn=len)
-            >>> flow.with_node(node).validate_document_nodes()
+            >>> flow.with_nodes(node).validate_document_nodes()
             Traceback (most recent call last):
                 ...
             riko.exceptions.InvalidPipelineError: ...callable node(s) ['len-1']...
@@ -937,7 +947,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
             >>> flow.require_runnable_only("execution")
 
         """

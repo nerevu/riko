@@ -28,6 +28,7 @@ from riko.bado._backend import (
     async_sleep,
     create_task_group,
     fail_after,
+    lowlevel,
 )
 from riko.bado._util import asyncify
 from riko.bado.itertools import as_async
@@ -53,7 +54,7 @@ from riko.execution._provenance import (
     run_tracked_item,
 )
 from riko.execution._resource_view import ResourceView
-from riko.execution._sync_execution import SyncExecution, _RunStream
+from riko.execution._sync_execution import SyncExecution, _Owned, _RunStream
 from riko.io import async_url_open
 from riko.parsing._dotdict import DotDict
 from riko.runtime._pipeline import Pipeline
@@ -194,6 +195,44 @@ def _check_closed(resource, acquired: object) -> None:
         acquired.opened = True  # reopen so the same value can be acquired again
 
 
+async def _double(value: int) -> int:
+    return value * 2
+
+
+def _double_on_loop(value: int) -> int:
+    lowlevel.current_token()
+    return value * 2
+
+
+def _double_later(value: int) -> Awaitable[int]:
+    return _double(value)
+
+
+def _scale(value: int, *, factor: int) -> int:
+    lowlevel.current_token()
+    return value * factor
+
+
+def _double_if_bounded(value: int, *, bounded: bool) -> int:
+    return value * 2 if bounded else value
+
+
+# Portal work: an async callable, a sync callable, a sync callable returning an
+# awaitable, a bare awaitable, and sync callables given keywords, one named like the
+# bare awaitable's option.
+PORTAL_WORK = [
+    pytest.param(lambda ex: ex.run_async(_double, 21), id="async"),
+    pytest.param(lambda ex: ex.run_async(_double_on_loop, 21), id="sync"),
+    pytest.param(lambda ex: ex.run_async(_double_later, 21), id="returns-awaitable"),
+    pytest.param(lambda ex: ex.run_async(_double(21)), id="awaitable"),
+    pytest.param(lambda ex: ex.run_async(_scale, 21, factor=2), id="keyword"),
+    pytest.param(
+        lambda ex: ex.run_async(_double_if_bounded, 21, bounded=True),
+        id="callee-bounded-keyword",
+    ),
+]
+
+
 class TestSyncExecution:
     def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
         run: _RunStream[object] = _RunStream(None)
@@ -201,6 +240,10 @@ class TestSyncExecution:
 
         with pytest.raises(TypeError, match="must be an iterator"):
             next(run)
+
+    def test_an_owned_value_that_is_not_an_iterator_cannot_be_read(self) -> None:
+        with pytest.raises(TypeError, match="only an iterator"):
+            next(_Owned(object()))
 
     def test_sync_exit_stack_unwinds_on_error(self) -> None:
         events: list[str] = []
@@ -278,16 +321,51 @@ class TestSyncExecution:
         assert calls == ["cleanup"]
 
     @skipif_sync
-    def test_sync_portal_bridges_to_async(self) -> None:
+    @pytest.mark.parametrize("build", PORTAL_WORK)
+    def test_sync_portal_runs_work_on_its_loop(self, build) -> None:
         result = None
 
-        async def double(value: int) -> int:
-            return value * 2
-
         with SyncExecution() as execution:
-            result = execution.run_async(double, 21)
+            result = build(execution)
 
         assert result == 42
+
+    @skipif_sync
+    @pytest.mark.filterwarnings("error::pytest.PytestUnraisableExceptionWarning")
+    def test_sync_portal_work_refused_on_its_loop_leaves_no_coroutine(self) -> None:
+        with SyncExecution() as execution:
+
+            async def call_from_loop() -> None:
+                execution.run_async(_double, 21)
+
+            with pytest.raises(RuntimeError, match="event loop thread"):
+                execution.run_async(call_from_loop)
+
+        gc.collect()
+
+    @skipif_sync
+    def test_sync_bounded_portal_work_runs_while_closing(self) -> None:
+        results: list[int] = []
+
+        with SyncExecution() as execution:
+            execution.run_async(_double, 0)
+
+            def cleanup() -> None:
+                with pytest.raises(PipelineStateError, match="closing"):
+                    execution.run_async(_double, 1)
+
+                results.append(execution.run_async(_double(21), bounded=True))
+
+            execution.queue_callback(cleanup)
+
+        assert results == [42]
+
+    @skipif_sync
+    def test_sync_bounded_portal_work_expires_at_the_shutdown_timeout(self) -> None:
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        with SyncExecution(settings=settings) as execution, pytest.raises(TimeoutError):
+            execution.run_async(async_sleep(10), bounded=True)
 
     def test_sync_default_event_sink_is_noop(self) -> None:
         with SyncExecution() as execution:
@@ -501,7 +579,7 @@ class TestAsyncExecution:
         result = None
 
         async with AsyncExecution() as execution:
-            result = await execution.to_async(pow, 2, 10)
+            result = await execution.run_sync(pow, 2, 10)
 
         assert result == 1024
 
@@ -1560,7 +1638,7 @@ class TestResultEnvelopes:
     ):
         parent = PLACEHOLDER if placeholder else _root()
         expected = list(gen_result_envelopes("n", values, parent, identity))
-        envelopes = agen_result_envelopes("n", values, parent, identity)
+        envelopes = agen_result_envelopes("n", as_async(values), parent, identity)
         assert [env async for env in envelopes] == expected
 
     @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
@@ -1602,7 +1680,7 @@ class TestNodeProvenance:
         ]
         provenance = NodeProvenance.from_identity("filter", IdentityMode.PRESERVE)
         values = list(provenance.gen_values(envelopes))
-        results = list(provenance.gen_envelopes(values))
+        results = list(provenance.gen_envelopes(iter(values)))
         assert [env.generation for env in results] == [
             env.generation for env in envelopes
         ]
@@ -1612,7 +1690,7 @@ class TestNodeProvenance:
         provenance = NodeProvenance.from_identity("join", IdentityMode.PRESERVE)
         values = list(provenance.gen_values(envelopes))
         copies = [DotDict(v) for v in values if isinstance(v, DotDict)]
-        results = list(provenance.gen_envelopes(copies))
+        results = list(provenance.gen_envelopes(iter(copies)))
         last = envelopes[-1].generation
         assert [env.generation for env in results] == [
             ("join", last, 0),
@@ -1621,7 +1699,7 @@ class TestNodeProvenance:
 
     def test_new_values_before_any_input_are_roots(self):
         provenance = NodeProvenance.from_identity("join", None)
-        [result] = provenance.gen_envelopes([DotDict()])
+        [result] = provenance.gen_envelopes(iter([DotDict()]))
         assert result.generation == ("join", 0)
 
     def test_unreferenceable_values_derive_from_their_input(self):
@@ -1644,7 +1722,7 @@ class TestNodeProvenance:
         provenance = _TableProvenance("filter")
         envelopes = _dotdicts(3)
         values = list(provenance.gen_values(envelopes))
-        results = provenance.gen_envelopes(values)
+        results = provenance.gen_envelopes(iter(values))
         next(results)
         results.close()
         assert not provenance._table
@@ -1653,7 +1731,7 @@ class TestNodeProvenance:
         envelopes = _dotdicts(2)
         provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
         values = list(provenance.gen_values(envelopes))
-        results = list(provenance.gen_envelopes(values))
+        results = list(provenance.gen_envelopes(iter(values)))
         assert {env.generation for env in results}.isdisjoint(
             env.generation for env in envelopes
         )
@@ -1662,7 +1740,7 @@ class TestNodeProvenance:
         def combine(envelopes):
             provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             values = list(provenance.gen_values(envelopes))
-            return next(provenance.gen_envelopes([len(values)])).generation
+            return next(provenance.gen_envelopes(iter([len(values)]))).generation
 
         contributors = IdentityAccumulator(IdentityDomain.GENERATION)
 
@@ -1710,7 +1788,8 @@ class TestNodeProvenance:
         envelopes = _dotdicts(3)
         provenance = NodeProvenance.from_identity("reverse", IdentityMode.PRESERVE)
         values = [value async for value in provenance.agen_values(envelopes)]
-        results = [env async for env in provenance.agen_envelopes(values[::-1])]
+        reversed_values = as_async(values[::-1])
+        results = [env async for env in provenance.agen_envelopes(reversed_values)]
         assert results == envelopes[::-1]
 
 

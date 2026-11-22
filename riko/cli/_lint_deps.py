@@ -140,7 +140,7 @@ def _gen_imports(
     node: ast.AST, typing_only: bool = False, guarded: bool = False
 ) -> Iterator[RuntimeImport]:
     """Walks a tree for the run-time imports outside typing-only branches."""
-    if isinstance(node, ast.Import | ast.ImportFrom):
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
         if not typing_only:
             for name in _gen_top_level_names(node):
                 yield RuntimeImport(name, node.lineno, guarded)
@@ -153,7 +153,7 @@ def _gen_imports(
 
         for child in node.orelse:
             yield from _gen_imports(child, orelse_only, guarded)
-    elif isinstance(node, ast.Try | ast.TryStar):
+    elif isinstance(node, (ast.Try, ast.TryStar)):
         body_guarded = guarded or any(map(_catches_import_error, node.handlers))
         proven: set[str] = set()
 

@@ -8,11 +8,12 @@ import threading
 import warnings
 from contextlib import contextmanager, suppress
 from functools import partial
+from inspect import iscoroutinefunction
 from io import BytesIO, StringIO
 from os import environ, linesep
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
-from unittest.mock import Mock, PropertyMock, patch
+from unittest.mock import ANY, Mock, PropertyMock, patch
 from urllib.request import urlopen
 from urllib.response import addinfourl
 
@@ -23,13 +24,22 @@ from requests.exceptions import ChunkedEncodingError, HTTPError, Timeout
 from riko._package import __version__
 from riko.bado import as_async, run
 from riko.bado._backend import (
+    CapacityLimiter,
     HTTPStatusError,
     Semaphore,
     TimeoutException,
     async_sleep,
     lowlevel,
 )
-from riko.bado._util import async_get, async_return, gather_results, maybe_async
+from riko.bado._backend import asyncify as backend_asyncify
+from riko.bado._util import (
+    async_get,
+    async_partial,
+    async_return,
+    asyncify,
+    gather_results,
+    maybe_async,
+)
 from riko.bado.itertools import (
     aauto_close,
     alist,
@@ -40,6 +50,7 @@ from riko.bado.itertools import (
 )
 from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
+from riko.base._guards import is_async_callable
 from riko.base._iterutils import auto_close
 from riko.base._sentinels import MISSING
 from riko.base._user_agents import DESKTOP_USER_AGENTS, MOBILE_USER_AGENTS
@@ -89,7 +100,7 @@ if TYPE_CHECKING:
     from riko.types._enums import UserAgentLike
     from riko.types._io import PathLike
     from riko.types._streams import Feed, Items
-    from riko.types._wrappers import Func
+    from riko.types._wrappers import AsyncFunc, Func
 
 _LOOPBACK_BODY = "".join(f"line {index} ünïcode\n" for index in range(2000))
 
@@ -1273,7 +1284,7 @@ class TestRequireCloser:
         client = client_class()
         closer = require_closer(client, cleanup, is_async=True)
         assert closer is not None
-        await maybe_async(closer, inline=inline)
+        await maybe_async.using(inline=inline)(closer)
         assert client.closed is True
 
 
@@ -1503,6 +1514,111 @@ class TestGatherResults:
         awaitables = [async_return(None), async_return(1), async_return(None)]
         result = await gather_results(awaitables)
         assert result == [None, 1, None]
+
+
+def _echo(value: int, **options: object) -> tuple[int, dict[str, object], int]:
+    return value, options, threading.get_ident()
+
+
+async def _aecho(value: int, **options: object) -> tuple[int, dict[str, object], int]:
+    return _echo(value, **options)
+
+
+def _echo_later(value: int, **options: object) -> Awaitable[tuple]:
+    return _aecho(value, **options)
+
+
+class _AsyncEcho:
+    async def __call__(
+        self, value: int, **options: object
+    ) -> tuple[int, dict[str, object], int]:
+        return _echo(value, **options)
+
+
+RUNNER_CALLABLES = [
+    pytest.param(_echo, id="sync"),
+    pytest.param(_aecho, id="async"),
+    pytest.param(_echo_later, id="sync-returns-awaitable"),
+]
+RUNNERS = [
+    pytest.param(maybe_async, id="inline"),
+    pytest.param(asyncify, id="worker"),
+    pytest.param(asyncify.using(abandon_on_cancel=True), id="abandoning-worker"),
+]
+RUNNER_THREADS = [
+    pytest.param(maybe_async, True, id="inline"),
+    pytest.param(maybe_async.using(inline=False), False, id="inline-using-worker"),
+    pytest.param(asyncify, False, id="worker"),
+    pytest.param(asyncify.using(inline=True), True, id="worker-using-inline"),
+]
+ASYNC_CALLABLES = [
+    pytest.param(maybe_async, id="inline-runner"),
+    pytest.param(asyncify, id="worker-runner"),
+    pytest.param(partial(_AsyncEcho()), id="partial-of-async-instance"),
+    pytest.param(partial(partial(_aecho)), id="nested-partial"),
+    pytest.param(partial(partial(_AsyncEcho())), id="nested-partial-of-async-instance"),
+]
+RUNNER_PARTIALS = [
+    pytest.param(async_partial, id="async_partial"),
+    pytest.param(asyncify.partial, id="worker-partial"),
+]
+
+
+class TestAsyncRunner:
+    """Test the runner that awaits a sync or async callable's result."""
+
+    @pytest.mark.parametrize("runner", RUNNERS)
+    @pytest.mark.parametrize("func", RUNNER_CALLABLES)
+    @async_test
+    async def test_runner_forwards_every_argument_to_the_callee(
+        self, func, runner
+    ) -> None:
+        options = {"inline": 0, "limiter": 1, "abandon_on_cancel": 2, "mode": "fast"}
+        value, received, _ = await runner(func, 1, **options)
+        assert (value, received) == (1, options)
+
+    @pytest.mark.parametrize(("runner", "on_loop"), RUNNER_THREADS)
+    @async_test
+    async def test_runner_runs_a_blocking_call_inline_or_on_a_worker(
+        self, runner, on_loop
+    ) -> None:
+        _, _, ident = await runner(_echo, 1)
+        assert (ident == threading.get_ident()) is on_loop
+
+    @async_test
+    async def test_using_keeps_the_settings_it_does_not_change(self) -> None:
+        limiter = CapacityLimiter(1)
+        limited = asyncify.using(abandon_on_cancel=True).using(limiter=limiter)
+        cleared = limited.using(limiter=None)
+        expected = [(False, limiter, True), (False, None, True), (False, None, False)]
+        runners = [limited, cleared, asyncify]
+        settings = [(r.inline, r.limiter, r.abandon_on_cancel) for r in runners]
+        assert settings == expected
+        assert await limited(_echo, 1, limiter=2) == (1, {"limiter": 2}, ANY)
+
+    @pytest.mark.parametrize("build", RUNNER_PARTIALS)
+    @async_test
+    async def test_partial_binds_arguments_for_repeated_calls(self, build) -> None:
+        call = build(_echo, mode="fast")
+        assert is_async_callable(call)
+        assert iscoroutinefunction(call)
+        results = [(await call(value))[:2] for value in (1, 2)]
+        assert results == [(1, {"mode": "fast"}), (2, {"mode": "fast"})]
+
+    @async_test
+    async def test_partial_awaits_an_async_instance_without_a_worker(self) -> None:
+        call: AsyncFunc[tuple[int, dict[str, object], int]] = asyncify.partial(
+            _AsyncEcho(), mode="fast"
+        )
+
+        with patch("riko.bado._util._asyncify", wraps=backend_asyncify) as worker:
+            value, received, _ = await call(1)
+
+        assert (value, received, worker.call_count) == (1, {"mode": "fast"}, 0)
+
+    @pytest.mark.parametrize("func", ASYNC_CALLABLES)
+    def test_is_async_callable_sees_through_runners_and_partials(self, func) -> None:
+        assert is_async_callable(func)
 
 
 class TestCapabilityFlags:

@@ -55,8 +55,8 @@ from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
     OUTPUT_A,
+    ClosingAsyncIterator,
     arun_plan,
-    build_chain,
     build_chain_plan,
     build_dispatcher,
     build_workflow,
@@ -69,9 +69,9 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import AsyncGenerator, Callable, Generator
 
-    from riko.types._streams import Item
+    from riko.types._streams import Item, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import Conf
 
@@ -155,7 +155,7 @@ def _loop(loop_name="fakeloop", embed_name="up"):
         embed={"name": embed_name, "conf": {}},
         options={"emit": True, "count": "first"},
     )
-    return build_chain(src, loop)
+    return Workflow().with_nodes(src, loop)
 
 
 @tag_source
@@ -220,7 +220,39 @@ NON_SPLITTERS = [
 ]
 
 
+def _two_output_plan() -> ExecutionPlan:
+    """Builds a sync-only ``a`` on ``default`` and an async-only ``b`` on ``other``."""
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="s", sync_pipe=passthrough_pipe),
+        ModuleDefinition(name="m", async_pipe=_ASYNC_PIPE),
+    )
+    nodes = [ModuleNode(id="a", name="s"), ModuleNode(id="b", name="m")]
+    outputs = {"default": Endpoint("a", "out"), "other": Endpoint("b", "out")}
+    return ExecutionPlan.from_workflow(
+        Workflow(nodes=nodes, outputs=outputs), dispatcher
+    )
+
+
+# Whether a sync run of the output reads anything through the portal.
+PORTAL_USES = [
+    pytest.param(_two_output_plan, "default", False, id="sync-only"),
+    pytest.param(_two_output_plan, "other", True, id="async-only"),
+    pytest.param(
+        lambda: _closing_embed_plan(_gen_closing_rows, []),
+        "default",
+        True,
+        id="async-only-embed",
+    ),
+]
+
+
 class TestExecutionPlan:
+    @pytest.mark.parametrize(("build", "output", "expected"), PORTAL_USES)
+    def test_uses_portal_sees_async_only_nodes_and_embeds(
+        self, build, output, expected
+    ) -> None:
+        assert build().uses_portal(output) is expected
+
     @pytest.mark.parametrize(("pipes", "attr", "kind", "expected"), SELECTIONS)
     def test_build_selects_the_pipe_for_each_mode(
         self, pipes, attr, kind, expected
@@ -316,7 +348,7 @@ class TestExecutionPlan:
     def test_inputs_are_only_set_with_the_confs_built_from_them(self):
         conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
         node = ModuleNode(id="b", name="itembuilder", conf=conf)
-        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
+        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_nodes(node)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
         planned = plan.with_inputs({"q": 5})
 
@@ -340,7 +372,7 @@ class TestExecutionPlan:
         monkeypatch.setattr(inputs_module, "fjs_compile", counted)
         conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
         node = ModuleNode(id="b", name="itembuilder", conf=conf)
-        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_node(node)
+        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_nodes(node)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with SyncExecution(context=Context(inputs={"q": 5})) as execution:
@@ -611,8 +643,10 @@ class _EmbedStub:
         return iter(())
 
 
-async def _unused_worker[R, *Ts](func: Callable[[*Ts], R], /, *args: *Ts) -> R:
-    return func(*args)
+async def _unused_worker[R, **P](
+    func: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs
+) -> R:
+    return func(*args, **kwargs)
 
 
 ADAPTERS = [
@@ -680,6 +714,38 @@ def _sync_child(produced: list[int], closed: list[str]):
         return child(str(item["title"]))
 
     return workflow()(_sub)
+
+
+def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
+    """Builds a sync-only ``loop`` over an async-only embed that ``build`` makes."""
+    child = workflow()(lambda _item, context=None, **_: build(closed))
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
+        ModuleDefinition(name="loop", sync_pipe=loop_pipe),
+        ModuleDefinition(name="child", async_pipe=cast("AsyncModuleWrapper", child)),
+    )
+    loop = ModuleNode(
+        id="loop",
+        name="loop",
+        embed={"name": "child", "conf": {}},
+        options={"emit": True, "count": "all"},
+    )
+    flow = Workflow().with_nodes(ModuleNode(id="s", name="src"), loop)
+    return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
+async def _gen_closing_rows(closed: list[str]):
+    try:
+        while True:
+            yield {"x": 1}
+    finally:
+        closed.append("closed")
+
+
+EMBED_STREAMS = [
+    pytest.param(_gen_closing_rows, id="async-generator"),
+    pytest.param(ClosingAsyncIterator, id="aclose-only"),
+]
 
 
 class TestAdaptEmbed:
@@ -797,6 +863,20 @@ class TestAdaptEmbed:
         assert run_plan(flow, dispatcher=dispatcher) == [{"up": "X"}]
 
     @skipif_sync
+    @pytest.mark.parametrize("build", EMBED_STREAMS)
+    def test_run_closes_an_async_only_embed_stream_once_the_loop_closes(
+        self, build
+    ) -> None:
+        closed: list[str] = []
+        plan = _closing_embed_plan(build, closed)
+
+        with SyncExecution() as execution:
+            stream = cast("Generator[Item]", execution.run(plan))
+            assert next(stream) == {"x": 1}
+            stream.close()
+            assert closed == ["closed"]
+
+    @skipif_sync
     def test_run_count_first_stays_lazy_for_an_async_only_embed(self) -> None:
         produced: list[int] = []
         closed: list[str] = []
@@ -814,6 +894,20 @@ class TestAdaptEmbed:
 
 
 class TestAsyncAdaptEmbed:
+    @pytest.mark.parametrize("build", EMBED_STREAMS)
+    @async_test
+    async def test_arun_closes_an_async_only_embed_stream_once_the_loop_closes(
+        self, build
+    ) -> None:
+        closed: list[str] = []
+        plan = _closing_embed_plan(build, closed)
+
+        async with AsyncExecution() as execution:
+            stream = cast("AsyncGenerator[Item]", await execution.arun(plan))
+            assert await anext(stream) == {"x": 1}
+            await stream.aclose()
+            assert closed == ["closed"]
+
     @async_test
     async def test_arun_runs_sync_only_embed_off_the_event_loop(self) -> None:
         threads: list[int] = []
@@ -987,8 +1081,8 @@ class TestPreparedCall:
         call = interface.call
         restored = pickle.loads(pickle.dumps(call))  # noqa: S301
 
-        restored_items = cast("Iterator[Item]", restored(_REPLACE_ITEMS))
-        call_items = cast("Iterator[Item]", call(_REPLACE_ITEMS))
+        restored_items = cast("Stream", restored(_REPLACE_ITEMS))
+        call_items = cast("Stream", call(_REPLACE_ITEMS))
 
         assert list(restored_items) == list(call_items)
 

@@ -32,6 +32,7 @@ from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
     AsyncItems,
     AsyncStream,
+    AsyncStreamOf,
     AsyncStreamOrValueStream,
     ItemOrValue,
     ItemsOrValues,
@@ -464,7 +465,7 @@ class AsyncWrapperStream[Y, A](Protocol):
     """
 
     def __await__(self) -> Generator[object, None, A]: ...
-    def __aiter__(self) -> AsyncIterator[Y]: ...
+    def __aiter__(self) -> AsyncStreamOf[Y]: ...
     def __anext__(self) -> Awaitable[Y]: ...
 
 
@@ -575,8 +576,8 @@ def is_subpipe(value: _SubPipeT | object) -> TypeIs[_SubPipeT]:
 
     Examples:
 
-        >>> from riko.modules.hash import pipe
         >>> from riko.ext import workflow
+        >>> from riko.modules.hash import pipe
         >>>
         >>> def flow_pipe(item=None, **kwargs):
         ...     return iter(())

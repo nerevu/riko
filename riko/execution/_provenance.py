@@ -44,7 +44,7 @@ from riko.types._feed import (
 from riko.types._frozendict import FrozenDict
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
     from riko.types._feed import (
         AnyEnvelopes,
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
         ItemCall,
         Metadata,
     )
-    from riko.types._streams import AnyIterable
+    from riko.types._streams import AsyncStreamOf
     from riko.types._workflow import NodeId
     from riko.types._wrappers import Func
 
@@ -143,14 +143,14 @@ def gen_result_envelopes[T](
 
 async def agen_result_envelopes[T](
     node_id: NodeId,
-    results: AnyIterable[T],
+    results: AsyncStreamOf[T],
     parent: _ItemEnvelope[object] = PLACEHOLDER,
     identity: IdentityMode | None = None,
 ) -> AsyncEnvelopeStream[T]:
     """
     Wraps each of a node's per-item results in an envelope.
 
-    Applies the same rule as ``gen_result_envelopes`` to a sync or async iterable.
+    Applies the same rule as ``gen_result_envelopes`` to an async iterator.
 
     Args:
 
@@ -178,11 +178,12 @@ async def agen_result_envelopes[T](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import alist, as_async, run
         >>>
         >>> parent = _ItemEnvelope("a", generation=("fetch", 0))
         >>> identity = IdentityMode.PRESERVE
-        >>> envelopes = agen_result_envelopes("upper", ["A"], parent, identity)
+        >>> results = as_async(["A"])
+        >>> envelopes = agen_result_envelopes("upper", results, parent, identity)
         >>> [envelope.value for envelope in run(alist, envelopes)]
         ['A']
 
@@ -190,7 +191,7 @@ async def agen_result_envelopes[T](
     preserves = _is_preserving(parent, identity)
     index = 0
 
-    async for result in as_async(results):
+    async for result in results:
         if preserves:
             yield parent.with_value(result)
         else:
@@ -412,7 +413,7 @@ class NodeProvenance[T](ABC):
 
     def agen_values(
         self, envelopes: AnyEnvelopes[T], item_normalizer: Func[object] | None = None
-    ) -> AsyncIterator[object]:
+    ) -> AsyncStreamOf[object]:
         """
         Unwraps each async input envelope and tracks each value's source envelope.
 
@@ -447,7 +448,7 @@ class NodeProvenance[T](ABC):
         """
         return amap(self._resolve_unwrap(item_normalizer), as_async(envelopes))
 
-    def gen_envelopes(self, results: Iterable[T]) -> EnvelopeGenerator[T]:
+    def gen_envelopes(self, results: Iterator[T]) -> EnvelopeGenerator[T]:
         """
         Wraps a sync node's results in envelopes.
 
@@ -467,19 +468,19 @@ class NodeProvenance[T](ABC):
         Examples:
 
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
-            >>> total = next(provenance.gen_envelopes([3]))
+            >>> total = next(provenance.gen_envelopes(iter([3])))
             >>> total.value, total.generation[0], len(total.generation[1])
             (3, 'count', 32)
 
         """
         try:
-            with maybe_closing(iter(results)) as stream:
+            with maybe_closing(results) as stream:
                 yield from map(self._wrap, stream, count())
         finally:
             self._release()
 
     async def agen_envelopes(
-        self, results: AnyIterable[T]
+        self, results: AsyncStreamOf[T]
     ) -> AsyncEnvelopeGenerator[T]:
         """
         Wraps an async node's results in envelopes.
@@ -491,7 +492,7 @@ class NodeProvenance[T](ABC):
 
         Args:
 
-            results: The node's sync or async results.
+            results: The node's async results.
 
         Yields:
 
@@ -499,10 +500,10 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
-            >>> from riko import run
+            >>> from riko import as_async, run
             >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
-            >>> run(anext, provenance.agen_envelopes([3])).value
+            >>> run(anext, provenance.agen_envelopes(as_async([3]))).value
             3
 
         """
@@ -510,7 +511,7 @@ class NodeProvenance[T](ABC):
         index = 0
 
         try:
-            async with maybe_aclosing(as_async(results)) as stream:
+            async with maybe_aclosing(results) as stream:
                 async for result in stream:
                     yield wrap(result, index)
                     index += 1

@@ -711,7 +711,7 @@ def require_instance[T](
 
     Returns:
 
-        ``value``, typed as ``cls``.
+        ``value`` typed as ``cls``.
 
     Raises:
 
@@ -831,7 +831,7 @@ def require_nonblank_str(
 
     Returns:
 
-        ``value``, typed as ``str``.
+        ``value`` typed as ``str``.
 
     Raises:
 

@@ -55,7 +55,7 @@ PIPE_DEF = {
 
 RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}
 CALLABLE_MATCH = r"callable node\(s\) \['len-1'\]"
-CALLABLE_FLOW = Workflow().with_node(CallableNode(id="len-1", name="len", fn=len))
+CALLABLE_FLOW = Workflow().with_nodes(CallableNode(id="len-1", name="len", fn=len))
 
 
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:

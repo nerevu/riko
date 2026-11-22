@@ -357,7 +357,7 @@ uncovered-lowered = 2026-11-19
 # day as `<key>-lowered`.
 any = 122
 any-lowered = 2026-11-14
-cast = 73
+cast = 74
 cast-lowered = 2026-11-16
 
 [tool.riko.tests]

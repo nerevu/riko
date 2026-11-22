@@ -31,8 +31,9 @@ Index (file, then the subjects it owns, in file order):
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
                               AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
                               AsyncMap, AutoClose, RequireCloser, AsyncMapStream,
-                              AsyncMerge, GatherResults, CapabilityFlags, ConverterPath,
-                              Csv, Jsonl, Framed, SessionLifecycle, WriteExecution, Sink
+                              AsyncMerge, GatherResults, AsyncRunner, CapabilityFlags,
+                              ConverterPath, Csv, Jsonl, Framed, SessionLifecycle,
+                              WriteExecution, Sink
     test_modules.py           BareDecorator, ParserSignature, NormalizeInput, Splitter,
                               AsyncOperatorLaziness, OperatorInputClose,
                               SyncPipeAsyncInput, ReturnInference, ModuleMetadata,

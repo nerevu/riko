@@ -17,7 +17,7 @@ Examples:
         >>> fetch = ModuleNode(id="fetch-1", name="fetch")
         >>> count = ModuleNode(id="count-1", name="count")
         >>> edge = StreamEdge(Endpoint("fetch-1", "out"), Endpoint("count-1", "in"))
-        >>> flow = Workflow(nodes=[fetch, count], edges=[edge])
+        >>> flow = Workflow([fetch, count], edges=[edge])
         >>> flow
         Workflow(fetch-1 -> count-1)
         >>> flow.dependencies

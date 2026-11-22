@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable
     from pathlib import Path
 
-    from riko.types._streams import Item
+    from riko.types._streams import AsyncStream, Item
     from riko.types.modules import Conf
 
 _OMITTED = object()
@@ -1110,7 +1110,7 @@ class TestSend:
         assert isinstance(ids.get("id-target"), int)
 
 
-async def _agen_xs() -> AsyncIterator[Item]:
+async def _agen_xs() -> AsyncStream:
     for x in range(2):
         yield {"x": x}
 

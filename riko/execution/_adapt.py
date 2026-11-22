@@ -16,6 +16,7 @@ from riko.bado.itertools import aiter_sentinel
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.types._streams import require_async_stream
 from riko.types._wrappers import (
     AsyncFunc,
     Func,
@@ -28,7 +29,7 @@ from ._prepared import NO_PIPE_MSG
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from riko.types._streams import Item
+    from riko.types._streams import AsyncStreamOf, Item
     from riko.types._wrappers import (
         AnyModuleWrapper,
         AsyncModuleWrapper,
@@ -52,8 +53,8 @@ class LoopCall(Protocol):
 class WorkerCall(Protocol):
     """Runs a blocking callable off the event loop and awaits its result."""
 
-    def __call__[R, *Ts](
-        self, func: Callable[[*Ts], R], /, *args: *Ts
+    def __call__[R, **P](
+        self, func: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs
     ) -> Awaitable[R]: ...
 
 
@@ -89,7 +90,7 @@ def _next_or_missing[T](stream: Iterator[T]) -> T | MissingType:
     return next(stream, MISSING)
 
 
-def pull_stream[T](func: WorkerCall, stream: Iterator[T]) -> AsyncIterator[T]:
+def to_async[T](func: WorkerCall, stream: Iterator[T]) -> AsyncStreamOf[T]:
     """
     Re-exposes a blocking item stream as a lazy async item stream.
 
@@ -174,14 +175,14 @@ def adapt_embed(embed: AsyncModuleWrapper, to_sync: Drain[object]) -> SyncModule
     """
 
     def wrapper(item: object = None, **kwargs: object) -> Iterator[object]:
-        return to_sync(aiter(embed(item, **kwargs)))
+        return to_sync(require_async_stream(embed(item, **kwargs), embed.name))
 
     _copy_wrapper_meta(wrapper, embed, is_async=False)
     return require_sync_wrapper(wrapper)
 
 
 def async_adapt_embed(
-    embed: SyncModuleWrapper, to_async: WorkerCall
+    embed: SyncModuleWrapper, run_sync: WorkerCall
 ) -> AsyncModuleWrapper:
     """
     Wraps a sync-only loop embed as an asynchronous one.
@@ -194,7 +195,7 @@ def async_adapt_embed(
     Args:
 
         embed: The blocking pipe to run per parent item.
-        to_async: Runs a blocking callable off the event loop.
+        run_sync: Runs a blocking callable off the event loop.
 
     Returns:
 
@@ -203,7 +204,7 @@ def async_adapt_embed(
     """
 
     async def wrapper(item: Item | None = None, **kwargs: object) -> list[object]:
-        return await to_async(_materialize, embed, item, kwargs)
+        return await run_sync(_materialize, embed, item, kwargs)
 
     _copy_wrapper_meta(wrapper, embed, is_async=True)
     return require_async_wrapper(wrapper)
@@ -213,7 +214,7 @@ def select_embed(
     embed: ResolvedModule,
     *,
     host_is_async: bool,
-    to_async: WorkerCall,
+    run_sync: WorkerCall,
     to_sync: Drain[object],
 ) -> AnyModuleWrapper:
     """
@@ -226,7 +227,7 @@ def select_embed(
     Kwargs:
 
         host_is_async: Whether the loop pipe runs asynchronously.
-        to_async: Runs a sync-only embed off the event loop under an async host.
+        run_sync: Runs a sync-only embed off the event loop under an async host.
         to_sync: Pulls an async-only embed's output stream under a sync host.
 
     Returns:
@@ -243,7 +244,7 @@ def select_embed(
         if (async_pipe := embed.async_pipe) is not None:
             result: AnyModuleWrapper = async_pipe
         elif (sync_pipe := embed.sync_pipe) is not None:
-            result = async_adapt_embed(sync_pipe, to_async)
+            result = async_adapt_embed(sync_pipe, run_sync)
         else:
             raise InvalidPipelineError(NO_PIPE_MSG.format(embed.name))
     elif (sync_pipe := embed.sync_pipe) is not None:
@@ -256,4 +257,4 @@ def select_embed(
     return result
 
 
-__all__ = ["adapt_embed", "async_adapt_embed", "pull_stream", "select_embed", "to_sync"]
+__all__ = ["adapt_embed", "async_adapt_embed", "select_embed", "to_async", "to_sync"]

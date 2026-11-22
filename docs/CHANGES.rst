@@ -99,21 +99,6 @@ Changes
   - ``UnsupportedWorkflowError`` and ``UnsupportedModuleError`` gain ``reason``.
   - An unknown module's ``UnsupportedModuleError`` suggests ``matches``.
 
-- Module authoring:
-
-  - Registering a module under a built-in or entry-point name requires ``replace=True``.
-  - ``ModuleDefinition(module=…)`` → ``ModuleDefinition.from_module(module, name=…)``
-  - the ``ModuleDefinition.module`` attribute is gone.
-  - ``ModuleDefinition.name`` falls back to the pipe's name
-  - Pass ``from_module(name=…)`` when an entry point key differs from its module's name
-  - ``get_module_metadata(…)`` returns ``None`` for an unknown module instead of raising
-  - ``ModuleMetadata.subtypes`` and a pipe's ``subtypes`` are immutable ``frozenset``\s
-  - ``@processor``, ``@operator``, and ``@splitter`` work without parentheses
-  - An async operator's ``async_pipe`` returns an async iterator: drop the ``await``.
-  - Async processor and splitter results also work with ``async for``.
-  - An async processor reads a sync iterable lazily, so unbounded inputs don't hang.
-  - Pipes now parse ``conf`` on every call. Use ``pipe.prepare(conf=…)`` to parse once.
-
 - Renamed (old → new):
 
   - ``convert-dag`` → ``build-workflow``
@@ -130,11 +115,11 @@ Changes
   - ``ModuleRegistry.resolve(name, interface)`` → ``require(name, is_async=False)``
   - ``ModuleRegistry.definition`` → ``load_definition``
   - ``ModuleDefinition.get_pipe(interface)`` → ``get_pipe(is_async=False)``
-  - the ``processor``/``operator``/``splitter`` decorators' ``parse`` method →
+  - The ``processor``/``operator``/``splitter`` decorators' ``parse`` method →
     ``normalize_input`` (``operator.aparse`` → ``anormalize_input``)
   - ``urlparse``'s ``parse_key`` option → ``normalize_key`` (``parse_key`` is ignored)
   - ``riko.isasync``/``issync`` → ``is_async``/``is_sync``
-  - the ``processor``/``operator``/``splitter`` decorators' ``isasync`` option and pipe
+  - The ``processor``/``operator``/``splitter`` decorators' ``isasync`` option and pipe
     attribute → ``is_async``
 
 - Modules:
@@ -163,6 +148,9 @@ Changes
     non-positive rate instead of emitting ``0``, NaN, or a negative value.
   - URL fetchers like ``exchangerate`` time out after ``RIKO_FETCH_TIMEOUT`` seconds.
   - ``fetchdata`` yields nothing for an empty HTML file.
+  - An async operator's ``async_pipe`` returns an async iterator: drop the ``await``.
+  - Async processor and splitter results also work with ``async for``.
+  - An async processor reads a sync iterable lazily, so unbounded inputs don't hang.
 
 - Types:
 
@@ -176,6 +164,20 @@ Changes
   - ``riko.async_url_open`` times out after ``RIKO_FETCH_TIMEOUT`` seconds by default
   - ``async_map``'s ``limit`` option and ``async_url_open``'s ``timeout`` option now
     take ``inf``, not ``0``, for no limit/timeout.
+
+- Module authoring:
+
+  - Registering a module under a built-in or entry-point name requires ``replace=True``.
+  - ``ModuleDefinition(module=…)`` → ``ModuleDefinition.from_module(module, name=…)``
+  - The ``ModuleDefinition.module`` attribute is gone.
+  - ``ModuleDefinition.name`` falls back to the pipe's name
+  - Pass ``from_module(name=…)`` when an entry point key differs from its module's name
+  - ``get_module_metadata(…)`` returns ``None`` for an unknown module instead of raising
+  - ``ModuleMetadata.subtypes`` and a pipe's ``subtypes`` are immutable ``frozenset``\s
+  - ``@processor``, ``@operator``, and ``@splitter`` work without parentheses
+  - All ``pipe``\s must return an iterator (``iter(…)``) and ``async_pipe``\s an async
+    iterator (``async def`` generator). A run raises ``TypeError`` otherwise.
+  - Pipes now parse ``conf`` on every call. Use ``pipe.prepare(conf=…)`` to parse once.
 
 Removed
 ~~~~~~~

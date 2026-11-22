@@ -79,7 +79,7 @@ if TYPE_CHECKING:
     )
     from logging import Logger
 
-    from riko.types._streams import AnyIterable
+    from riko.types._streams import AnyIterable, AsyncStreamOf
 
     from ._backend import MemoryObjectReceiveStream
 
@@ -119,15 +119,15 @@ async def async_iter[T](
         [0, 1, 2]
 
     """
-    with maybe_closing(iter(source)) as items:
-        for item in items:
+    with maybe_closing(iter(source)) as stream:
+        for item in stream:
             if cooperative:
                 await async_sleep(0)
 
             yield item
 
 
-def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncIterator[T]:
+def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncStreamOf[T]:
     """
     Adapts *source* to an ``AsyncIterator``.
 
@@ -291,7 +291,7 @@ async def aiter_sentinel[T, R, S](
     func: Callable[[Iterator[T]], Awaitable[R | S]],
     source: Iterable[T],
     sentinel_type: type[S],
-) -> AsyncIterator[R]:
+) -> AsyncStreamOf[R]:
     """
     Streams each ``func`` result from ``source`` until ``func`` returns a sentinel.
 
@@ -456,10 +456,12 @@ class aauto_close[T]:  # noqa: N801
         except IndexError:
             pass
         else:
+            runner = maybe_async.using(inline=self.inline)
+
             for value in (self.source, *self.closables):
                 if (closer := resolve_closer(value, is_async=True)) is not None:
                     try:
-                        await maybe_async(closer, inline=self.inline)
+                        await runner(closer)
                     except Exception as error:  # noqa: BLE001 (raised after the loop)
                         failures.append(error)
 
@@ -518,6 +520,16 @@ async def coop_reduce[T, S](  # pyright: ignore[reportInconsistentOverload]
     return value
 
 
+async def _reduce_seeded[T, S](
+    func: Callable[[T, S], T | Awaitable[T]], items: Iterator[S], value: T
+) -> T:
+    """Reduces the remaining ``items`` onto ``value``, awaiting each awaitable step."""
+    for item in items:
+        value = await maybe_async(func, value, item)
+
+    return value
+
+
 @overload
 def async_reduce[T, S](
     func: Callable[[T, S], T | Awaitable[T]], source: Iterable[S], initial: T
@@ -526,11 +538,9 @@ def async_reduce[T, S](
 def async_reduce[T](
     func: Callable[[T, T], T | Awaitable[T]], source: Iterable[T], initial: None = ...
 ) -> Awaitable[T]: ...
-def async_reduce[T, S](
-    func: Callable[[T, S], T | Awaitable[T]],
-    source: Iterable[S],
-    initial: T | None = None,
-) -> Awaitable[T | S]:
+def async_reduce(
+    func: Callable[..., object], source: Iterable[object], initial: object = None
+) -> Awaitable[object]:
     """
     Reduces *source* with *func* and awaits each awaitable result.
 
@@ -564,16 +574,7 @@ def async_reduce[T, S](
     """
     items = iter(source)
     value = next(items) if initial is None else initial
-
-    async def work(
-        async_func: Callable[[T, S], T | Awaitable[T]], items: Iterator[S], value: T | S
-    ) -> T | S:
-        for item in items:
-            value = await maybe_async(async_func, value, item)
-
-        return value
-
-    return work(func, items, value)
+    return _reduce_seeded(func, items, value)
 
 
 def _cap[T, S](

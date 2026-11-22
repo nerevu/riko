@@ -168,8 +168,9 @@ class ModuleDefinition:
 
         Examples:
 
-            >>> from riko.modules.hash import async_pipe
+            >>> from riko.runtime._resolver import dispatcher
             >>>
+            >>> async_pipe = dispatcher.require("hash", is_async=True)
             >>> definition = ModuleDefinition.from_pipe(async_pipe)
             >>> definition.name, definition.async_pipe is async_pipe
             ('hash', True)

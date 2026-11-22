@@ -305,7 +305,7 @@ class PipelineDefinition(Generic[T_co]):
         node = ModuleNode(
             id=node_id, name=module, conf=conf, options=options, embed=embed
         )
-        return flow.with_node(node)
+        return flow.with_nodes(node)
 
     def write(
         self,
@@ -370,7 +370,7 @@ class PipelineDefinition(Generic[T_co]):
             prepared = build_write(dest, mode, fmt=fmt, keys=keys)
             node_id = self.workflow.get_node_id("write")
             node = WriteNode.from_prepared(prepared, id=node_id)
-            written = self.replace(workflow=self.workflow.with_node(node))
+            written = self.replace(workflow=self.workflow.with_nodes(node))
 
         return written
 
@@ -670,7 +670,7 @@ class PipelineDefinition(Generic[T_co]):
 
         node_id = self.workflow.get_node_id("split")
         conf: Conf = {"splits": splits, "isolate": isolate}
-        flow = self.workflow.with_node(ModuleNode(id=node_id, name="split", conf=conf))
+        flow = self.workflow.with_nodes(ModuleNode(id=node_id, name="split", conf=conf))
         ports = chain([OUT], (f"{OUT}:{k}" for k in range(1, splits)))
         outputs = (
             {**flow.outputs, DEFAULT_OUTPUT: Endpoint(node_id, p)} for p in ports
@@ -730,7 +730,7 @@ class PipelineDefinition(Generic[T_co]):
             msg = "map calls fn with one item at a time, so identity='combine' does "
             raise InvalidPipelineError(msg + "not apply. Use 'preserve' or 'derive'.")
 
-        return flow.with_node(node)
+        return flow.with_nodes(node)
 
     def __getattr__(self, name: str) -> Func[PipelineDefinition[Item]]:
         """

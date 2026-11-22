@@ -92,7 +92,13 @@ if TYPE_CHECKING:
     from riko.definitions._nodes import ConfInput, RunnableNode
     from riko.types._frozendict import FrozenJSON, FrozenWorkflowEdges
     from riko.types._options import CallOptions
-    from riko.types._streams import AnyIterable, AsyncCascade, Cascade
+    from riko.types._streams import (
+        AnyIterable,
+        AsyncCascade,
+        AsyncStreamOf,
+        Cascade,
+        StreamOf,
+    )
     from riko.types._workflow import (
         Endpoint,
         NodeId,
@@ -316,8 +322,9 @@ class ResolvedModule:
 
     Examples:
 
-        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
+        >>> pipe = dispatcher.require("hash")
         >>> module = ResolvedModule("hash", {}, sync_pipe=pipe)
         >>> module.sync_pipe is pipe
         True
@@ -358,7 +365,6 @@ class ResolvedModule:
         Raises:
 
             UnsupportedModuleError: If no module has the name.
-
             UnsupportedWorkflowError: If no stored workflow has the ``pipe_<id>`` name.
 
         Examples:
@@ -431,7 +437,7 @@ class ResolvedModule:
 
     @property
     def is_splitter(self) -> bool:
-        """Whether the module splits its input stream into branches (a splitter)."""
+        """Whether the module splits its input into several streams (a splitter)."""
         return is_splitter(self._metadata_pipe)
 
     @property
@@ -481,7 +487,7 @@ async def _agen_item_result[T](
     *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
-) -> AsyncIterator[T]:
+) -> AsyncStreamOf[T]:
     """The async twin of ``_gen_item_result``: an async ``fn`` is awaited."""
     call = async_partial(fn, **kwargs, **normalize_mapping(resources))
     yield await call(item)
@@ -509,7 +515,7 @@ async def _agen_stream_results[T](
     *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
-) -> AsyncIterator[T]:
+) -> AsyncStreamOf[T]:
     """
     Applies a callable node's ``fn`` to each item of a stream, awaiting an async ``fn``.
 
@@ -524,7 +530,7 @@ async def _agen_stream_results[T](
 @define(frozen=True, slots=True)
 class SyncInterface[O]:
     """
-    The synchronous pipe an execution runs for a node, with its call prepared once.
+    The synchronous pipe an execution runs for a node and its prepared call.
 
     A synchronous execution runs it natively, and an asynchronous execution adapts it.
 
@@ -539,12 +545,12 @@ class SyncInterface[O]:
     Examples:
 
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
+        >>> pipe = dispatcher.require("hash")
         >>> module = ResolvedModule("hash", sync_pipe=pipe)
         >>> prepared = PreparedNode(ModuleNode(id="h", name="hash"), module)
-        >>> interface = prepared.sync_interface
-        >>> isinstance(interface, SyncInterface)
+        >>> isinstance(prepared.sync_interface, SyncInterface)
         True
 
     """
@@ -559,7 +565,7 @@ class SyncInterface[O]:
 @define(frozen=True, slots=True)
 class AsyncInterface[O]:
     """
-    The asynchronous pipe an execution runs for a node, with its call prepared once.
+    The asynchronous pipe an execution runs for a node and its prepared call.
 
     An asynchronous execution runs it natively, and a synchronous execution adapts it.
 
@@ -574,8 +580,9 @@ class AsyncInterface[O]:
     Examples:
 
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.hash import async_pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
+        >>> async_pipe = dispatcher.require("hash", is_async=True)
         >>> module = ResolvedModule("hash", async_pipe=async_pipe)
         >>> prepared = PreparedNode(ModuleNode(id="h", name="hash"), module)
         >>> interface = prepared.async_interface
@@ -747,12 +754,14 @@ class PreparedNode(_PreparedBase):
     Examples:
 
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.strconcat import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>> from riko.types._workflow import WorkflowEdge
         >>>
         >>> node = ModuleNode(id="n", name="strconcat", resources="db")
         >>> named = WorkflowEdge("a", "n", "out", "in:part")
         >>> positional = WorkflowEdge("b", "n", "out", "in:1")
+        >>> pipe = dispatcher.require("strconcat")
+        >>>
         >>> module = ResolvedModule("strconcat", sync_pipe=pipe)
         >>> prepared = PreparedNode(node, module, incoming=(named, positional))
         >>> prepared.node.id
@@ -832,7 +841,7 @@ class PreparedNode(_PreparedBase):
 
     @cached_property
     def sync_interface(self) -> SyncInterface[Iterator[object]] | None:
-        """The synchronous pipe, with its call prepared once."""
+        """The synchronous pipe with its prepared call."""
         pipe = self.module.sync_pipe
         return None if pipe is None else self._build_sync_interface(pipe)
 
@@ -864,7 +873,7 @@ class PreparedNode(_PreparedBase):
 
     @cached_property
     def async_interface(self) -> AsyncInterface[AsyncIterator[object]] | None:
-        """The asynchronous pipe, with its call prepared once."""
+        """The asynchronous pipe with its prepared call."""
         pipe = self.module.async_pipe
         return None if pipe is None else self._build_async_interface(pipe)
 
@@ -882,18 +891,18 @@ class PreparedNode(_PreparedBase):
 @define(frozen=True, slots=True)
 class PreparedSplitter(_PreparedBase):
     """
-    One splitter node ready to run: it splits its input stream into branches.
+    One splitter node ready to run: it splits its input stream into several streams.
 
-    Each branch is one output port: ``out`` for the first, then ``out:1``, ``out:2``,
-    and so on. Each branch item keeps its input item's identity.
+    Each stream is one output port: ``out`` for the first, then ``out:1``, ``out:2``,
+    and so on. Each stream item keeps its input item's identity.
 
     Attributes:
 
         node: The ``Workflow`` module node this was resolved from.
         module: The node's resolved splitter.
         incoming: The stream edges that target the node.
-        splits: The number of branches declared in the module's ``splits`` conf.
-        output_ports: The branches' output ports.
+        splits: The number of streams declared in the module's ``splits`` conf.
+        output_ports: The output port of each stream.
         sync_interface: The synchronous splitter with its call.
         async_interface: The asynchronous splitter with its call.
 
@@ -904,8 +913,9 @@ class PreparedSplitter(_PreparedBase):
     Examples:
 
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.split import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
+        >>> pipe = dispatcher.require("split")
         >>> module = ResolvedModule("split", {"splits": 3}, sync_pipe=pipe)
         >>> prepared = PreparedSplitter(ModuleNode(id="s", name="split"), module)
         >>> prepared.splits
@@ -928,23 +938,26 @@ class PreparedSplitter(_PreparedBase):
     def output_ports(self) -> tuple[Port, ...]:
         return (OUT, *(f"{OUT}:{k}" for k in range(1, self.splits)))
 
-    def validate_branches(self, *branches: object) -> None:
+    def validate_streams(
+        self, *owned: StreamOf[object] | AsyncStreamOf[object]
+    ) -> None:
         """
-        Validates that the splitter yielded one branch per declared split.
+        Validates that the splitter yielded one stream per declared split.
 
         Args:
 
-            branches: Branches the splitter yielded, read up to one past ``splits``.
+            owned: The owned streams the splitter yielded, read up to one past
+                ``splits``.
 
         Raises:
 
-            InvalidPipelineError: If the number of ``branches`` differs from
+            InvalidPipelineError: If the number of ``owned`` streams differs from
                 ``splits``.
 
         """
-        if (count := len(branches)) != self.splits:
+        if (count := len(owned)) != self.splits:
             yielded = f"more than {self.splits}" if count > self.splits else count
-            msg = f"splitter node {self.node.id!r} yielded {yielded} branches but "
+            msg = f"splitter node {self.node.id!r} yielded {yielded} streams but "
             raise InvalidPipelineError(msg + f"declares {self.splits}")
 
     @property
@@ -954,7 +967,7 @@ class PreparedSplitter(_PreparedBase):
 
     @cached_property
     def sync_interface(self) -> SyncInterface[Cascade] | None:
-        """The synchronous splitter, with its call prepared once."""
+        """The synchronous splitter with its prepared call."""
         if (pipe := self.module.sync_pipe) is None:
             interface = None
         elif is_splitter(pipe):
@@ -968,7 +981,7 @@ class PreparedSplitter(_PreparedBase):
 
     @cached_property
     def async_interface(self) -> AsyncInterface[AsyncCascade] | None:
-        """The asynchronous splitter, with its call prepared once."""
+        """The asynchronous splitter with its prepared call."""
         if (pipe := self.module.async_pipe) is None:
             interface = None
         elif is_splitter(pipe):
@@ -991,6 +1004,13 @@ _embeds_converter = optional_mapping_converter(
 _require_workflow = narrow_from_require(
     require_instance, Workflow, what="ExecutionPlan 'workflow'"
 )
+
+
+def _is_async_only(node: AnyPreparedNode) -> bool:
+    """Whether a sync run reads the node or its embed through the portal."""
+    embed = node.embed if isinstance(node, PreparedNode) else None
+    isnt_sync = node.sync_interface is None
+    return isnt_sync or (embed is not None and embed.sync_pipe is None)
 
 
 @define(frozen=True, slots=True)
@@ -1029,11 +1049,10 @@ class ExecutionPlan:
 
         >>> from riko import Workflow
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
-        >>> modules = {"a": ResolvedModule("hash", sync_pipe=pipe)}
-        >>> plan = ExecutionPlan(workflow=flow, modules=modules)
+        >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
+        >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> plan.nodes["a"].node
         ModuleNode(id='a', name='hash', resources=FrozenDict({})...)
         >>> plan.index.order
@@ -1094,7 +1113,7 @@ class ExecutionPlan:
             >>> from riko.ext import ModuleNode
             >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="count-1", name="count"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="count-1", name="count"))
             >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.nodes)
             ['count-1']
@@ -1190,7 +1209,7 @@ class ExecutionPlan:
             >>> first = ModuleNode(id="a", name="uniq")
             >>> second = ModuleNode(id="b", name="uniq")
             >>>
-            >>> flow = Workflow().with_node(first).with_node(second)
+            >>> flow = Workflow().with_nodes(first, second)
             >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.get_port_demand("default").items())
             [(('a', 'out'), 1), (('b', 'out'), 1)]
@@ -1228,18 +1247,18 @@ class ExecutionPlan:
 
             >>> from riko import Workflow
             >>> from riko.ext import ModuleNode
-            >>> from riko.modules import hash, uniq
+            >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> def plan(name, pipe):
-            ...     a, b = ModuleNode(id="a", name=name), ModuleNode(id="b", name=name)
-            ...     flow = Workflow().with_node(a).with_node(b)
-            ...     modules = dict.fromkeys("ab", ResolvedModule(name, sync_pipe=pipe))
-            ...     return ExecutionPlan(workflow=flow, modules=modules)
-            >>>
-            >>> plan("uniq", uniq.pipe).get_thread_demand("default")
-            2
-            >>> plan("hash", hash.pipe).get_thread_demand("default")
+            >>> nodes = (ModuleNode(id=_id, name="uniq") for _id in "ab")
+            >>> flow = Workflow().with_nodes(*nodes)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan.get_thread_demand("default")
             0
+            >>> pipe = dispatcher.require("uniq")
+            >>> modules = dict.fromkeys("ab", ResolvedModule("uniq", sync_pipe=pipe))
+            >>> sync_plan = ExecutionPlan(flow, modules=modules)
+            >>> sync_plan.get_thread_demand("default")
+            2
 
         """
         demand: dict[NodeId, int] = {}
@@ -1257,6 +1276,40 @@ class ExecutionPlan:
                 demand[node_id] = sum(upstream_demand)
 
         return max(demand.values(), default=0)
+
+    def uses_portal(self, output: OutputName = DEFAULT_OUTPUT) -> bool:
+        """
+        Whether a sync run of ``output`` reads a node or an embed through the portal.
+
+        Kwargs:
+
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            ``True`` when a node that ``output`` runs, or its host embed, has only an
+            async pipe.
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
+            >>> from riko.runtime._resolver import dispatcher
+            >>>
+            >>> node = ModuleNode(id="a", name="hash")
+            >>> flow = Workflow().with_nodes(node)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan.uses_portal()
+            False
+            >>> async_pipe = dispatcher.require("hash", is_async=True)
+            >>> module = ResolvedModule("hash", async_pipe=async_pipe)
+            >>> async_plan = ExecutionPlan(flow, modules={"a": module})
+            >>> async_plan.uses_portal()
+            True
+
+        """
+        nodes = (self.nodes[node_id] for node_id in self.index.required[output])
+        return any(map(_is_async_only, nodes))
 
     def _gen_seed_takers(self, output: OutputName) -> Iterator[NodeId]:
         """Ids of ``output``'s nodes that take a default seed and can't self start."""
@@ -1290,7 +1343,7 @@ class ExecutionPlan:
             >>> from riko.runtime._resolver import dispatcher
             >>>
             >>> def plan(name):
-            ...     flow = Workflow().with_node(ModuleNode(id="n", name=name))
+            ...     flow = Workflow().with_nodes(ModuleNode(id="n", name=name))
             ...     return ExecutionPlan.from_workflow(flow, dispatcher)
             >>>
             >>> plan("forever").is_self_starting_output()
@@ -1458,7 +1511,8 @@ class ExecutionPlan:
             >>> conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
             >>> node = ModuleNode(id="b", name="itembuilder", conf=conf)
             >>> schemas = {"q": {"type": "integer"}}
-            >>> flow = Workflow(input_schemas=schemas).with_node(node)
+            >>> flow = Workflow(input_schemas=schemas).with_nodes(node)
+            >>>
             >>> plan_a = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> plan_b = plan_a.with_inputs({"q": 2})
             >>> dict(plan_b.inputs)

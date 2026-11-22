@@ -1029,7 +1029,7 @@ Other ways in and out of a ``Workflow``:
   creates, ``flow.validate_input_schemas()`` checks them, and
   ``pipeline.with_input_schemas(…)`` overrides them for a run
 
-A ``Workflow`` composes like a ``Pipeline``: ``flow.with_node(node)`` appends a node
+A ``Workflow`` composes like a ``Pipeline``: ``flow.with_nodes(node)`` appends a node
 after the default output, and ``flow.with_workflow(other)`` appends a whole workflow.
 
 .. code-block:: python
@@ -1039,7 +1039,7 @@ after the default output, and ``flow.with_workflow(other)`` appends a whole work
     >>>
     >>> conf = {'attrs': {'key': 'greeting', 'value': 'hello'}}
     >>> flow = Workflow.parse({'modules': [{'name': 'itembuilder', 'conf': conf}]})
-    >>> counted = flow.with_node(ModuleNode(id='count', name='count'))
+    >>> counted = flow.with_nodes(ModuleNode(id='count', name='count'))
     >>> list(Pipeline(counted))
     [{'count': 1}]
     >>> hashed = flow.with_workflow(Pipeline.from_module('hash').workflow)

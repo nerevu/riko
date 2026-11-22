@@ -88,7 +88,7 @@ def _require_concurrency(
 
 
 def _require_timeout(value: object, what: str | None = "value", **_) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{what} must be a number")
     elif isnan(value) or value < 0:
         raise ValueError(f"{what} must not be negative or NaN, got {value}")

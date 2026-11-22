@@ -306,7 +306,7 @@ class TestParserSignature:
 class _FalsyRows:
     """An iterable of rows whose truth value is ``False``."""
 
-    def __iter__(self) -> Iterator[Item]:
+    def __iter__(self) -> Stream:
         return iter(FIXED_ROWS)
 
     def __bool__(self) -> bool:
@@ -362,7 +362,7 @@ class TestSplitter:
     async def test_async_splitter_streams_a_long_feed(self) -> None:
         pulled: list[int] = []
 
-        async def source() -> AsyncIterator[Item]:
+        async def source() -> AsyncStream:
             for i in range(10_000):
                 pulled.append(i)
                 yield {"i": i}
@@ -404,7 +404,7 @@ class TestSplitter:
     async def test_async_splitter_with_a_sync_parser_streams_a_long_feed(self) -> None:
         pulled: list[int] = []
 
-        async def source() -> AsyncIterator[Item]:
+        async def source() -> AsyncStream:
             for i in range(10_000):
                 pulled.append(i)
                 yield {"i": i}
@@ -471,7 +471,7 @@ class TestAsyncOperatorLaziness:
         """
         pulled: list[int] = []
 
-        def source() -> Iterator[Item]:
+        def source() -> Stream:
             for i in range(10_000):
                 pulled.append(i)
                 yield {"i": i}
@@ -502,7 +502,7 @@ class TestAsyncOperatorLaziness:
         async def tick() -> None:
             ran.set()
 
-        def source() -> Iterator[Item]:
+        def source() -> Stream:
             for i in range(2000):
                 saw_loop.append(ran.is_set())
                 yield {"i": i}
@@ -531,7 +531,7 @@ class TestAsyncOperatorLaziness:
         """
         pulled: list[int] = []
 
-        def secondary() -> Iterator[Item]:
+        def secondary() -> Stream:
             for i in range(10_000):
                 if len(pulled) >= 100:
                     raise RuntimeError("the secondary input was read past its guard")
@@ -545,7 +545,7 @@ class TestAsyncOperatorLaziness:
         assert len(pulled) <= 1
 
 
-def _gen_held(closed: list[bool]) -> Iterator[Item]:
+def _gen_held(closed: list[bool]) -> Stream:
     try:
         for i in range(100):
             yield {"i": i}

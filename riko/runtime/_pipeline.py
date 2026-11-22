@@ -58,13 +58,13 @@ from riko.base._exceptions import EmptyPipelineError
 from riko.base._guards import is_mapping, is_streamlike
 from riko.base._sentinels import MISSING, MissingType
 from riko.definitions._pipeline_definition import PipelineDefinition
-from riko.types._streams import Item
+from riko.types._streams import AsyncStreamOf, Item
 
 from ._resolver import dispatcher
 from ._run import _PipelineRun, _PipelineStream
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import Callable, Iterator
 
     from riko.definitions._nodes import CallableVersion
     from riko.definitions._resource_definition import ResourcesLike
@@ -163,7 +163,7 @@ class Pipeline(PipelineDefinition[T_co]):
         """
         return iter(self())
 
-    def __aiter__(self) -> AsyncIterator[T_co]:
+    def __aiter__(self) -> AsyncStreamOf[T_co]:
         """
         Asynchronously runs a pipeline.
 

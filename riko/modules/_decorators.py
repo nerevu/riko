@@ -100,7 +100,7 @@ if TYPE_CHECKING:
     from logging import Logger
 
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import AsyncCascade, Cascade
+    from riko.types._streams import AsyncCascade, AsyncStreamOf, Cascade
     from riko.types._values import RikoValue
     from riko.types._wrappers import (
         AsyncFunc,
@@ -227,7 +227,7 @@ class _AsyncWrapperStream[T]:
     def __await__(self) -> Generator[object, None, AnyIterable[T]]:
         return self._make().__await__()
 
-    def __aiter__(self) -> AsyncIterator[T]:
+    def __aiter__(self) -> AsyncStreamOf[T]:
         return self
 
     async def __anext__(self) -> T:
@@ -802,7 +802,7 @@ M_co = TypeVar("M_co", bound=Module[bool], covariant=True)
 @define(frozen=True, slots=True)
 class _PreparedCall(PreparedCall, Generic[M_co]):  # noqa: UP046
     """
-    A module call prepared once, holding what every prepared call kind shares.
+    A prepared module call.
 
     Attributes:
 

@@ -70,12 +70,12 @@ NODE_FAMILIES = (
 
 
 def _fetch_workflow() -> Workflow:
-    return Workflow().with_node(ModuleNode(id="fetch-1", name="fetch"))
+    return Workflow().with_nodes(ModuleNode(id="fetch-1", name="fetch"))
 
 
 APPENDS = [
-    pytest.param(lambda flow: flow.with_node(_B), id="node"),
-    pytest.param(lambda flow: flow.with_workflow(Workflow().with_node(_B)), id="flow"),
+    pytest.param(lambda flow: flow.with_nodes(_B), id="node"),
+    pytest.param(lambda flow: flow.with_workflow(Workflow().with_nodes(_B)), id="flow"),
 ]
 
 
@@ -205,7 +205,7 @@ class TestWorkflow:
     def test_appending_a_node_declares_its_resources(self):
         flow = Workflow(resources=("cache",))
         node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
-        assert flow.with_node(node).resources == ("cache", "db")
+        assert flow.with_nodes(node).resources == ("cache", "db")
 
     def test_omitted_fields_are_empty(self):
         """Every omitted field defaults to its empty form."""

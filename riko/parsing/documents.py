@@ -391,10 +391,11 @@ def xpath(
     namespaces = {ns_prefix: namespace}
     ns_path = "/".join(f"{ns_prefix}:{tag}" for tag in tags[pos:]) if namespace else ""
 
-    if isinstance(tree, ElementTree | Element) and namespace:
-        elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
-    elif isinstance(tree, ElementTree | Element):
-        elements = tree.findall(".//" + "/".join(tags[pos:]))
+    if isinstance(tree, (ElementTree, Element)):
+        if namespace:
+            elements = tree.findall(f".//{ns_path}", namespaces=namespaces)
+        else:
+            elements = tree.findall(".//" + "/".join(tags[pos:]))
     elif namespace:
         elements = tree.xpath(ns_path, namespaces=namespaces)
     else:
@@ -502,7 +503,7 @@ def element2dict(element: AnyElement) -> StringyDict:
 
 
 def _is_json_records(value: object) -> TypeIs[RikoDict | list[RikoDict | None] | str]:
-    return is_mapping(value) or isinstance(value, list | str)
+    return is_mapping(value) or isinstance(value, (list, str))
 
 
 def _gen_json_records(value: object, path: str) -> Stream:

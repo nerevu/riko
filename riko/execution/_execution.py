@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Never, overload
 
 from attrs import Factory, define, field
 
-from riko.bado._util import maybe_async
+from riko.bado._util import asyncify
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._context import Context
@@ -26,7 +26,7 @@ from ._adapt import select_embed
 from ._provenance import PLACEHOLDER
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from contextlib import AbstractContextManager
 
     from anyio.from_thread import BlockingPortal
@@ -127,7 +127,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
     That covers the context and settings, the closed-state guard, synchronous
     exit-stack entry, cleanup-error reporting, the resolved-resource cache,
-    resource-binding checks, input wiring, and ``to_async``, which runs a blocking
+    resource-binding checks, input wiring, and ``run_sync``, which runs a blocking
     callable on a worker thread from whichever event loop is running.
     """
 
@@ -200,7 +200,9 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._require_open("add a callback to")
         self._stack.callback(self._record_cleanup_error, func, *args)
 
-    async def to_async[R](self, func: Func[R], *args: object) -> R:
+    async def run_sync[R, **P](
+        self, func: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs
+    ) -> R:
         """
         Runs a blocking sync callable on a worker thread from the running event loop.
 
@@ -209,13 +211,17 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             func: A synchronous callable to run off the event loop.
             args: Positional arguments forwarded to ``func``.
 
+        Kwargs:
+
+            kwargs: Keyword arguments forwarded to ``func``.
+
         Returns:
 
             The value ``func`` returns.
 
         """
         self._require_open("run work in")
-        return await maybe_async(func, *args, inline=False)
+        return await asyncify(func, *args, **kwargs)
 
     def _select_embed(
         self, node: PreparedNode, to_sync: Drain[object]
@@ -244,7 +250,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             embed = select_embed(
                 node.embed,
                 host_is_async=is_async or module.sync_pipe is None,
-                to_async=self.to_async,
+                run_sync=self.run_sync,
                 to_sync=to_sync,
             )
 

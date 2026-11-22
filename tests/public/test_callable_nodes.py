@@ -299,7 +299,7 @@ class TestCallableNodes:
             return kwargs
 
         node = CallableNode(id="c", name="c", fn=bound, kwargs={"fn": 1})
-        pipeline = Pipeline(Workflow().with_node(node))
+        pipeline = Pipeline(Workflow().with_nodes(node))
         assert list(pipeline([{"x": 1}])) == [{"fn": 1}]
 
     def test_map_propagates_exceptions(self):

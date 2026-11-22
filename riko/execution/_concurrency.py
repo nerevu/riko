@@ -15,8 +15,10 @@ from typing import TYPE_CHECKING, cast
 from riko.base._config import as_maxsize
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import compose
 from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
+from riko.types._streams import require_stream
 from riko.types._wrappers import RunsItems
 
 from ._prepared import PreparedNode
@@ -120,7 +122,7 @@ def build_item_call[T](
         >>>
         >>> conf = {"rule": {"transform": "upper"}}
         >>> node = ModuleNode(id="u", name="strtransform", conf=conf)
-        >>> flow = Workflow().with_node(node)
+        >>> flow = Workflow().with_nodes(node)
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> prepared = plan.nodes["u"]
         >>> call = build_item_call(None, prepared, prepared.sync_interface)
@@ -131,12 +133,13 @@ def build_item_call[T](
     item_call = interface.item_call
 
     if isinstance(item_call, RunsItems):
-        call = partial(item_call.run_item, context, extra)
+        _call = partial(item_call.run_item, context, extra)
     else:
         # partial because build_tracked_call pickles for the process pool
         _context = None if isinstance(node.node, CallableNode) else context
-        call = partial(item_call, context=_context, **extra)
+        _call = partial(item_call, context=_context, **extra)
 
+    call = compose(require_stream, _call, node.module.name)
     return cast("ItemCall[T]", call)
 
 
@@ -246,7 +249,7 @@ def require_process_safe(
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow().with_node(ModuleNode(id="h", name="hash"))
+        >>> flow = Workflow().with_nodes(ModuleNode(id="h", name="hash"))
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> require_process_safe(plan, "default", None)
 

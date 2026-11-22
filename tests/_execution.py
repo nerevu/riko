@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from functools import reduce
 from inspect import isasyncgenfunction, iscoroutinefunction
 from typing import TYPE_CHECKING, Self, cast
 
@@ -102,10 +101,6 @@ def build_workflow(
     return Workflow(nodes=nodes, outputs=outputs, edges=edges, resources=resources)
 
 
-def build_chain(*nodes: ModuleNode) -> Workflow:
-    return reduce(Workflow.with_node, nodes, Workflow())
-
-
 def module_workflow(name: str = "m") -> Workflow:
     return build_workflow([ModuleNode(id="n", name=name)])
 
@@ -146,7 +141,7 @@ echo_pipe = mark_loopable(_echo)
 def build_chain_plan(*names: str) -> ExecutionPlan:
     """Build a plan chaining one built-in module node per name."""
     nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+    return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
 
 def build_doubler_plan(name: str) -> ExecutionPlan:
