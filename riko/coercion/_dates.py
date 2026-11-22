@@ -287,7 +287,7 @@ def get_relative_date(unit: str, count: int, op: Func[date], now: dt) -> date | 
 
     Examples:
 
-        >>> from datetime import datetime
+        >>> from datetime import UTC, datetime
         >>> from operator import add, sub
         >>>
         >>> now = datetime(2024, 1, 31, 12, tzinfo=UTC)

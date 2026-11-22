@@ -12,12 +12,9 @@ Examples:
     Basic usage::
 
         >>> from riko import Endpoint
-        >>> from riko.types._workflow import parse_port
         >>>
         >>> Endpoint("normalize-1", "out")
         Endpoint(node='normalize-1', port='out')
-        >>> parse_port("out:errors")
-        ParsedPort(direction='out', index=None, name='errors')
 
 """
 
@@ -269,6 +266,8 @@ def parse_port(port: Port) -> ParsedPort:
 
         >>> parse_port("out:1")
         ParsedPort(direction='out', index=1, name=None)
+        >>> parse_port("out:errors")
+        ParsedPort(direction='out', index=None, name='errors')
         >>> parse_port("in:0")
         Traceback (most recent call last):
         ValueError: invalid port: 'in:0'

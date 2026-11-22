@@ -328,8 +328,6 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko import Resource
-            >>>
             >>> class Client:
             ...     closed = False
             ...     def close(self):
@@ -381,8 +379,6 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko import OneShotResource, Resource
-            >>>
             >>> def db():
             ...     yield object()
             >>>

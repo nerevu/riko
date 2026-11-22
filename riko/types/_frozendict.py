@@ -549,8 +549,6 @@ def mapping_converter[FV](
 
     Examples:
 
-        >>> from riko.types._frozendict import json_freeze
-        >>>
         >>> converter = mapping_converter(json_freeze, what="inputs")
         >>> converter({"ids": [1]})
         FrozenDict({'ids': (1,)})
@@ -636,8 +634,6 @@ def optional_mapping_converter[FV](
 
     Examples:
 
-        >>> from riko.types._frozendict import json_freeze
-        >>>
         >>> converter = optional_mapping_converter(json_freeze)
         >>> converter(None)
         FrozenDict({})

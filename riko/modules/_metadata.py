@@ -230,8 +230,6 @@ def list_module_metadata(
 
     Examples:
 
-        >>> from riko import list_module_metadata
-        >>>
         >>> aggregators = list_module_metadata(subtype="aggregator", primary=True)
         >>> [(metadata.name, metadata.type) for metadata in aggregators]
         [('count', 'operator'), ('sum', 'operator')]

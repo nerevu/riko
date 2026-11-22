@@ -222,6 +222,7 @@ class Workflow:
 
     Examples:
 
+        >>> from riko import Endpoint
         >>> from riko.ext import ModuleNode
         >>>
         >>> flow = Workflow(
@@ -275,8 +276,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.from_raw({"nodes": [{"name": "fetch"}]})
             >>> flow
             Workflow(fetch-1; outputs: default)
@@ -355,8 +354,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.parse('{"nodes": [{"name": "fetch"}]}')
             >>> flow
             Workflow(fetch-1; outputs: default)
@@ -407,7 +404,7 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow, get_temp_path
+            >>> from riko import get_temp_path
             >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>>
@@ -438,8 +435,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>> flow.serialize().decode("utf-8").splitlines()[1]
             '    "edges": [],'

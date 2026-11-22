@@ -6,11 +6,13 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_path
+        >>> from riko import get_temp_file
         >>>
-        >>> with Fetch(get_path("spreadsheet.csv")) as f:
-        ...     print(f.readline())
-        Member,Name,...
+        >>> with get_temp_file() as fp:
+        ...     _ = fp.write(b"hello")
+        ...     _ = fp.seek(0)
+        ...     fp.read()
+        b'hello'
 
 Attributes:
 
@@ -605,6 +607,8 @@ def get_temp_file() -> IO[bytes]:
 
     Examples:
 
+        >>> from pathlib import Path
+        >>>
         >>> with get_temp_file() as fp:
         ...     Path(fp.name).exists()
         True
@@ -665,6 +669,14 @@ class Fetch[B: (Literal[True], Literal[False])]:
     Raises:
 
         TypeError: If ``url`` is empty.
+
+    Examples:
+
+        >>> from riko import get_path
+        >>>
+        >>> with Fetch(get_path("spreadsheet.csv")) as f:
+        ...     print(f.readline())
+        Member,Name,...
 
     """
 

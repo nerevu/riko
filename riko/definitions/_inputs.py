@@ -350,6 +350,8 @@ def gen_input_references(value: MaybeFrozenConf) -> Iterator[str]:
 
     Examples:
 
+        >>> from riko.types._frozendict import json_freeze
+        >>>
         >>> conf = json_freeze({"url": {"input": "feed"}, "rule": [{"input": "q"}]})
         >>> list(gen_input_references(conf))
         ['feed', 'q']

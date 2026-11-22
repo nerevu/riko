@@ -67,7 +67,7 @@ def get_conf_type(parser: object) -> type[DynamicConf]:
 
     Examples:
 
-        >>> from riko.ext import DynamicConf, get_conf_type
+        >>> from riko.ext import DynamicConf
         >>> from riko.modules.fetch import parser as fetch_parser
         >>>
         >>> def parser(objconf: DynamicConf):

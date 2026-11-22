@@ -244,6 +244,8 @@ def require_unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
     Examples:
 
+        >>> import json
+        >>>
         >>> json.loads('{"a": 1}', object_pairs_hook=require_unique_keys)
         {'a': 1}
 

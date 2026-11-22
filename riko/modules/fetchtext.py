@@ -92,6 +92,7 @@ async def async_parser(
     Examples:
 
         >>> from riko import get_path, run
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -138,6 +139,7 @@ def parser(
     Examples:
 
         >>> from riko import get_path
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path("lorem.txt")

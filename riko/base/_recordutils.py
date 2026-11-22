@@ -105,6 +105,8 @@ def serialize_attrs(
 
     Examples:
 
+        >>> import attrs
+        >>>
         >>> @attrs.define
         ... class Point:
         ...     x: int
@@ -171,7 +173,6 @@ def field_names(cls: type) -> frozenset[str]:
 
         >>> from dataclasses import dataclass
         >>> from typing import ClassVar
-        >>> from riko.base._recordutils import field_names
         >>>
         >>> @dataclass
         ... class Point:
@@ -211,6 +212,8 @@ def required_attrs_keys(cls: type[AttrsInstance]) -> frozenset[str]:
 
     Examples:
 
+        >>> import attrs
+        >>>
         >>> @attrs.define
         ... class Point:
         ...     x: int

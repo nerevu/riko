@@ -307,7 +307,6 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
     Examples:
 
         >>> from contextlib import contextmanager
-        >>> from riko.execution._sync_execution import SyncExecution
         >>>
         >>> events = []
         >>> @contextmanager

@@ -579,6 +579,8 @@ def cast_value[T](
 
     Examples:
 
+        >>> from decimal import Decimal
+        >>>
         >>> content = '12.25'
         >>> cast_value(content, 'float')
         12.25

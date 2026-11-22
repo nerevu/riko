@@ -8,6 +8,7 @@ Examples:
 
         >>> from riko import describe_module
         >>> from riko.ext import ModuleDefinition, register_module
+        >>> from riko.ext import temporary_registrations
         >>>
         >>> definition = ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
         >>> with temporary_registrations():

@@ -102,8 +102,6 @@ def resolve_format(dest: PathLike | None, fmt: FmtLike | None) -> Formats:
 
     Examples:
 
-        >>> from riko.definitions._targets import resolve_format
-        >>>
         >>> resolve_format("out.jsonl", None)
         <Formats.JSONL: 'jsonl'>
         >>> resolve_format("out", None)
@@ -138,8 +136,6 @@ class FileTarget:
 
     Examples:
 
-        >>> from riko.ext import FileTarget
-        >>>
         >>> FileTarget("out.jsonl").get_capabilities().incremental
         True
 
@@ -168,7 +164,6 @@ class FileTarget:
 
         Examples:
 
-            >>> from riko.ext import FileTarget
             >>> from riko import WriteMode
             >>>
             >>> capabilities = FileTarget("out.jsonl").get_capabilities()
@@ -217,8 +212,6 @@ def normalize_target(dest: Destination, **kwargs: str) -> SupportsWrite:
 
     Examples:
 
-        >>> from riko.definitions._targets import normalize_target
-        >>>
         >>> normalize_target("out.csv")
         FileTarget(dest='out.csv', fmt=None)
 
@@ -269,9 +262,6 @@ def build_write(
 
     Examples:
 
-        >>> from riko.definitions._targets import build_write
-        >>> from riko.ext import FileTarget
-        >>>
         >>> prepared = build_write(FileTarget("out.csv"), "append")
         >>> prepared.operation.mode
         <WriteMode.APPEND: 'append'>

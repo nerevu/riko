@@ -69,6 +69,8 @@ def set_log_level(level: int) -> None:
 
     Examples:
 
+        >>> from logging import WARNING
+        >>>
         >>> set_log_level(WARNING)
 
     """

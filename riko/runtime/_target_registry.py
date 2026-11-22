@@ -139,7 +139,7 @@ def register_target[T: Target](target: type[T], *, replace: bool = False) -> typ
     Examples:
 
         >>> from riko import Backends
-        >>> from riko.ext import register_target, temporary_registrations
+        >>> from riko.ext import temporary_registrations
         >>>
         >>> with temporary_registrations():
         ...     @register_target

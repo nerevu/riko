@@ -320,8 +320,6 @@ class CallableNode[T](RikoNode):
 
     Examples:
 
-        >>> from riko.ext import CallableNode
-        >>>
         >>> node = CallableNode(id="len-1", name="len", fn=len, resources="db")
         >>> node.family, dict(node.resources)
         ('callable', {'db': 'db'})

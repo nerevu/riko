@@ -483,7 +483,7 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import async_get_temp_file, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     async with async_get_temp_file() as fp:

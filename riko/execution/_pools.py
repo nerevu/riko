@@ -77,7 +77,6 @@ class _PoolLifetime:
     Examples:
 
         >>> from concurrent.futures import ThreadPoolExecutor
-        >>> from riko.execution._pools import _PoolLifetime
         >>>
         >>> with _PoolLifetime(ThreadPoolExecutor(2), 2) as lifetime:
         ...     list(lifetime.flat_map(lambda x: [x, x], [1, 2], ordered=True))

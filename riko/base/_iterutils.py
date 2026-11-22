@@ -650,6 +650,7 @@ def has_open_resource(values: Iterable[object], *ignored: type) -> bool:
     Examples:
 
         >>> from io import StringIO
+        >>> from types import GeneratorType
         >>>
         >>> has_open_resource([(x for x in "ab"), None], GeneratorType)
         False
@@ -796,6 +797,8 @@ class TeeRead[T]:
 
     Examples:
 
+        >>> from collections import deque
+        >>>
         >>> buffers = {0: deque(), 1: deque()}
         >>> read = TeeRead.from_item([1], 0, 1, isolate=True)
         >>> read.deliver(buffers)
@@ -943,6 +946,8 @@ def is_lagging[T](buffers: Mapping[int, deque[T]], key: int, max_lag: Limit) -> 
 
     Examples:
 
+        >>> from collections import deque
+        >>>
         >>> is_lagging({0: deque(), 1: deque([1, 2])}, 0, 2)
         True
 

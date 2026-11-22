@@ -113,7 +113,7 @@ async def async_iter[T](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> run(alist, async_iter(range(3)))
         [0, 1, 2]
@@ -149,7 +149,7 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncStrea
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> stream = as_async([1, 2])
         >>> run(alist, stream)
@@ -187,7 +187,7 @@ async def amap[T, S](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> run(alist, amap(str, as_async([1, 2])))
         ['1', '2']
@@ -219,7 +219,7 @@ async def async_flatten[T](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def pairs():
         ...     yield (1, 2)
@@ -253,7 +253,7 @@ async def alist[T](source: AnyIterable[T]) -> list[T]:
 
     Examples:
 
-        >>> from riko import alist, as_async, run
+        >>> from riko import run
         >>>
         >>> run(alist, as_async([1, 2]))
         [1, 2]
@@ -278,7 +278,7 @@ async def materialize[T](source: AnyIterable[T]) -> Iterator[T]:
 
     Examples:
 
-        >>> from riko import as_async, run
+        >>> from riko import run
         >>>
         >>> next(run(materialize, as_async([1, 2])))
         1
@@ -313,7 +313,7 @@ async def aiter_sentinel[T, R, S](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def pull(items):
         ...     return next(items, None)
@@ -798,7 +798,7 @@ def async_map_stream[T, S](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -856,7 +856,7 @@ async def async_map_ordered_stream[T, S](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def double(x):
         ...     return x * 2
@@ -920,7 +920,7 @@ def async_merge[S](
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def gen_items(*items):
         ...     for item in items:
@@ -1019,7 +1019,7 @@ class AsyncTee[T]:
 
     Examples:
 
-        >>> from riko import alist, run
+        >>> from riko import run
         >>>
         >>> async def gen_items():
         ...     yield {"n": 1}

@@ -176,6 +176,8 @@ def build_generation(
 
     Examples:
 
+        >>> from riko.base._sentinels import MISSING
+        >>>
         >>> root = build_generation("fetch", MISSING, 0)
         >>> root
         ('fetch', 0)
@@ -300,6 +302,8 @@ class _ItemEnvelope(NamedTuple, Generic[T_co]):  # noqa: UP046
 
         Examples:
 
+            >>> from copy import deepcopy
+            >>>
             >>> envelope = _ItemEnvelope({"x": 1}, generation=("n", 0))
             >>> copied = deepcopy(envelope)
             >>> copied == envelope, copied.value is envelope.value

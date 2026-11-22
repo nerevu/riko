@@ -126,6 +126,9 @@ def gen_result_envelopes[T](
 
     Examples:
 
+        >>> from riko import IdentityMode
+        >>> from riko.types._feed import _ItemEnvelope
+        >>>
         >>> parent = _ItemEnvelope("a b", generation=("fetch", 0))
         >>> identity = IdentityMode.PRESERVE
         >>> kept = gen_result_envelopes("upper", ["A B"], parent, identity)
@@ -178,7 +181,8 @@ async def agen_result_envelopes[T](
 
     Examples:
 
-        >>> from riko import alist, as_async, run
+        >>> from riko import IdentityMode, alist, as_async, run
+        >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> parent = _ItemEnvelope("a", generation=("fetch", 0))
         >>> identity = IdentityMode.PRESERVE
@@ -224,6 +228,8 @@ def run_tracked_item[T](
 
     Examples:
 
+        >>> from riko.types._feed import _ItemEnvelope
+        >>>
         >>> parent = _ItemEnvelope(2, generation=("fetch", 0))
         >>> call = lambda x: iter((x, x))
         >>> envelopes = run_tracked_item(call, "double", None, parent)
@@ -261,6 +267,7 @@ async def arun_tracked_item[T](
     Examples:
 
         >>> from riko import as_async, run
+        >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> parent = _ItemEnvelope(2, generation=("fetch", 0))
         >>> args = (lambda x: as_async((x, x)), "double", None, parent)
@@ -304,7 +311,9 @@ class NodeProvenance[T](ABC):
 
     Examples:
 
+        >>> from riko import IdentityMode
         >>> from riko.parsing._dotdict import DotDict
+        >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope(DotDict({"x": 1}), generation=("fetch", 0))
         >>> provenance = NodeProvenance.from_identity("filter", IdentityMode.PRESERVE)
@@ -338,6 +347,8 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
+            >>> from riko import IdentityMode
+            >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             >>> provenance.node_id
             'count'
@@ -404,6 +415,9 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
+            >>> from riko import IdentityMode
+            >>> from riko.types._feed import _ItemEnvelope
+            >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             >>> list(provenance.gen_values([_ItemEnvelope(1, generation=("a", 0))]))
             [1]
@@ -438,7 +452,8 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
-            >>> from riko import alist, run
+            >>> from riko import IdentityMode, alist, run
+            >>> from riko.types._feed import _ItemEnvelope
             >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             >>> envelopes = [_ItemEnvelope(1, generation=("a", 0))]
@@ -467,6 +482,8 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
+            >>> from riko import IdentityMode
+            >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             >>> total = next(provenance.gen_envelopes(iter([3])))
             >>> total.value, total.generation[0], len(total.generation[1])
@@ -500,7 +517,7 @@ class NodeProvenance[T](ABC):
 
         Examples:
 
-            >>> from riko import as_async, run
+            >>> from riko import IdentityMode, as_async, run
             >>>
             >>> provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             >>> run(anext, provenance.agen_envelopes(as_async([3]))).value

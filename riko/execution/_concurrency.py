@@ -71,7 +71,6 @@ def run_pickled_item[T](
     Examples:
 
         >>> import pickle
-        >>> from riko.execution._concurrency import run_pickled_item
         >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope("ab", generation=("s", 0))
@@ -115,7 +114,6 @@ def build_item_call[T](
     Examples:
 
         >>> from riko import Workflow
-        >>> from riko.execution._concurrency import build_item_call
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
@@ -173,7 +171,6 @@ def build_tracked_call[T](
     Examples:
 
         >>> from riko import Executor
-        >>> from riko.execution._concurrency import build_tracked_call
         >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope("ab", generation=("s", 0))
@@ -244,7 +241,6 @@ def require_process_safe(
     Examples:
 
         >>> from riko import Workflow
-        >>> from riko.execution._concurrency import require_process_safe
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher

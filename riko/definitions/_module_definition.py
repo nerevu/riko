@@ -73,8 +73,6 @@ class ModuleDefinition:
 
     Examples:
 
-        >>> from riko.ext import ModuleDefinition
-        >>>
         >>> def pipe(*args, **kwargs):
         ...     return []
         >>>

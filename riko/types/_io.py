@@ -237,6 +237,7 @@ def resolve_user_agent(user_agent: UserAgentLike | None = None) -> str:
     Examples:
 
         >>> from riko import UserAgent
+        >>> from riko.base._user_agents import MOBILE_USER_AGENTS
         >>>
         >>> resolve_user_agent() == resolve_user_agent(UserAgent.DEFAULT)
         True

@@ -341,8 +341,6 @@ def gen_stale_test_citations(
 
     Examples:
 
-        >>> from riko.cli._docs import gen_stale_test_citations
-        >>>
         >>> known = ("tests/public/test_pipeline.py",)
         >>> text = "See `public/test_pipeline.py` and `public/test_gone.py`."
         >>> list(gen_stale_test_citations(text, known))
@@ -387,8 +385,6 @@ def gen_stale_test_symbol_citations(
 
     Examples:
 
-        >>> from riko.cli._docs import gen_stale_test_symbol_citations
-        >>>
         >>> path = "tests/public/test_pipeline.py"
         >>> known = (path, f"{path}::TestClose", "TestClose::test_twice")
         >>> text = "`public/test_pipeline.py::TestClose` and `TestClose::test_once`"
@@ -464,8 +460,6 @@ def gen_stale_path_citations(
 
     Examples:
 
-        >>> from riko.cli._docs import gen_stale_path_citations
-        >>>
         >>> known = ("riko/runtime/_export.py",)
         >>> text = "See `riko/runtime/_export.py` and `riko/runtime/collections.py`."
         >>> list(gen_stale_path_citations(text, known))
@@ -506,8 +500,6 @@ def gen_stale_source_symbol_citations(
 
     Examples:
 
-        >>> from riko.cli._docs import gen_stale_source_symbol_citations
-        >>>
         >>> path = "riko/runtime/_export.py"
         >>> known = (path, f"{path}::export", f"{path}::Formats.JSON")
         >>> text = f"`export(...)` (`{path}`) and `list_formats` (`{path}`)"
@@ -606,8 +598,6 @@ def gen_todo_lines(text: str) -> Iterator[int]:
 
     Examples:
 
-        >>> from riko.cli._docs import gen_todo_lines
-        >>>
         >>> text = "Intro.\\n\\nTODO: add seeding\\nA mid-line TODO is fine"
         >>> list(gen_todo_lines(text))
         [3]

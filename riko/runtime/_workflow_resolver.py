@@ -58,16 +58,16 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_temp_path
-        >>> from riko.ext import temporary_registrations
+        >>> from riko import Pipeline, get_temp_path
+        >>> from riko.ext import register_workflow_store, temporary_registrations
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
         >>>
         >>> with get_temp_path("pipe_demo.json") as path, temporary_registrations():
         ...     _ = path.write_text(document)
         ...     register_workflow_store(directory=path.parent, replace=True)
-        ...     pipe = workflow_resolver.require("pipe:demo")
-        ...     next(iter(pipe()))
+        ...     with Pipeline.from_module("pipe:demo").open() as stream:
+        ...         next(stream)
         {'forever': True}
 
 """

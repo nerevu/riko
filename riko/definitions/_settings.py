@@ -141,8 +141,6 @@ class ExecutionSettings:
 
     Examples:
 
-        >>> from riko import ExecutionSettings
-        >>>
         >>> settings = ExecutionSettings(executor="thread", concurrency=4)
         >>> settings.executor, settings.concurrency
         (<Executor.THREAD: 'thread'>, 4)
@@ -171,8 +169,6 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko import ExecutionSettings
-            >>>
             >>> ExecutionSettings().sync_policy
             SyncPolicy(executor=<Executor.INLINE: 'inline'>, workers=None)
             >>> ExecutionSettings(concurrency=4).sync_policy
@@ -212,8 +208,6 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko import ExecutionSettings
-            >>>
             >>> ExecutionSettings(concurrency=4).validate_async()
             >>> ExecutionSettings(executor="process").validate_async()
             Traceback (most recent call last):
@@ -242,8 +236,6 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko import ExecutionSettings
-            >>>
             >>> ExecutionSettings(concurrency=4).async_policy
             AsyncPolicy(limit=4, inline=False)
             >>> ExecutionSettings(concurrency="auto").async_policy.limit > 1

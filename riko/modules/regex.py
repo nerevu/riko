@@ -91,6 +91,7 @@ async def async_parser(
     Examples:
 
         >>> from riko import run
+        >>> from riko.parsing._dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
@@ -151,6 +152,7 @@ def parser(
 
     Examples:
 
+        >>> from riko.parsing._dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({"content": "hello world", "title": "greeting"})

@@ -437,6 +437,8 @@ def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
 
     Examples:
 
+        >>> import ast
+        >>>
         >>> source = "class TestA:\\n    def test_one(self):\\n        t.join(1)\\n"
         >>> [(owner, bound.text) for owner, bound, _ in gen_bounds(ast.parse(source))]
         [('TestA::test_one', 'join(1)')]

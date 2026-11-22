@@ -112,6 +112,8 @@ def is_datedict(value: object) -> TypeIs[DateDict]:
 
     Examples:
 
+        >>> from riko.base._require_guards import typed_dict_keys
+        >>>
         >>> is_datedict({"utime": 0})
         False
         >>> moment = dict.fromkeys(typed_dict_keys(DateDict)[0], 0)

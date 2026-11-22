@@ -223,6 +223,8 @@ def require_enum[E: StrEnum](
 
     Examples:
 
+        >>> from enum import StrEnum
+        >>>
         >>> class Color(StrEnum):
         ...     RED = "red"
         ...     BLUE = "blue"
@@ -282,6 +284,8 @@ def resolve_enum[E: StrEnum](
 
     Examples:
 
+        >>> from enum import StrEnum
+        >>>
         >>> class Color(StrEnum):
         ...     RED = "red"
         ...     BLUE = "blue"

@@ -35,8 +35,6 @@ class ResourceView(Mapping[str, object]):
 
     Examples:
 
-        >>> from riko.execution._resource_view import ResourceView
-        >>>
         >>> view = ResourceView({"db": object()})
         >>> view.db is view["db"]
         True

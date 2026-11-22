@@ -80,7 +80,7 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
     Examples:
 
-        >>> from riko.ext import ModuleDefinition, ModuleRegistry
+        >>> from riko.ext import ModuleDefinition
         >>>
         >>> def pipe(*args, **kwargs):
         ...     return []
@@ -157,6 +157,8 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         Examples:
 
+            >>> from riko.ext import ModuleDefinition
+            >>>
             >>> def pipe(*args, **kwargs):
             ...     return []
             >>>
@@ -195,6 +197,8 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         Examples:
 
+            >>> from riko.ext import ModuleDefinition
+            >>>
             >>> registry = ModuleRegistry()
             >>> sync_pipe = lambda s, **_: s
             >>> registry.register(ModuleDefinition(name="example", sync_pipe=sync_pipe))
@@ -226,6 +230,8 @@ class ModuleRegistry(Registry[ModuleDefinition]):
 
         Examples:
 
+            >>> from riko.ext import ModuleDefinition
+            >>>
             >>> registry = ModuleRegistry()
             >>> definition = ModuleDefinition(name="example", sync_pipe=lambda: [])
             >>> registry.register(definition)
@@ -259,7 +265,7 @@ def register_module(definition: ModuleDefinition, *, replace: bool = False) -> N
 
     Examples:
 
-        >>> from riko.ext import ModuleDefinition, register_module
+        >>> from riko.ext import ModuleDefinition
         >>> from riko.ext import temporary_registrations
         >>>
         >>> definition = ModuleDefinition(name="__doctest__", sync_pipe=lambda: [])
