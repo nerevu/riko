@@ -2,14 +2,19 @@
 Scan riko for the defect classes past bug-fix sessions kept repairing.
 
 Purpose: catch a new instance of a mistake class this repo has already paid to fix,
-before it lands. The classes were mined from the 39 ``[FIX]`` commits (and fixups)
-since v0.77.3 and the triage notes of 2026-10-05, 10-28/29, 10-30, and 10-31.
+before it lands. The classes were mined from the 79 ``[FIX]`` commits (and fixups)
+since v0.77.3 and the triage notes of 2026-10-05, 10-28/29, 10-30, and 10-31. Each
+class's refs cite its fixes by short sha; ``NON_BEHAVIORAL`` lists the fixes that
+changed no behavior (typos, type errors, line length, tool config, script restores).
 
 Rules (code, class, what it flags):
 
-    RM101 truthiness  ``x or default`` where ``x`` is a value (``0``/``""`` valid)
+    RM101 truthiness  ``x or default`` where ``x`` is a value (``0``/``""`` valid);
+                      ``x and f(x)`` that guards a value (or a lambda parameter)
+                      and then reuses it
     RM102 truthiness  ``if x:`` / ``if not x:`` / a comprehension ``if x`` on a
-                      value-like name
+                      value-like name; ``bool(x)`` or ``not x`` on one inside an
+                      expression
     RM103 stopiter    one-argument ``next(it)`` in a generator, outside ``try``
     RM201 hash-order  builtin ``hash()``; iterating, materializing, or splatting a
                       set without ``sorted``
@@ -30,9 +35,26 @@ Rules (code, class, what it flags):
                       no ``converter=``
     RM801 parity      sync/async twins (``x``/``ax``, ``_x``/``_ax``) passing
                       different I/O keywords (``timeout``, ``encoding``, ...)
+    RM802 colors      an ``async def`` method of ``AsyncX`` named exactly like a plain
+                      ``def`` method of its twin ``X``/``SyncX`` (same file first,
+                      else anywhere under ``riko/``); prefix it ``a``. Dunders and an
+                      ``AsyncX`` subclassing its twin are skipped
+    RM1001 kwarg-shadow  a ``**kwargs`` function whose parameters a same-file
+                      ``partial``/``async_partial`` binds by position but a forwarded
+                      keyword could also name (make them positional-only, ``/``)
+    RM1101 bad-config  a decimal-domain handler (naming ``InvalidOperation``) that
+                      catches ``ValueError`` but not ``OverflowError`` around a
+                      callable chosen at runtime (it may ``int()`` an infinite value)
+    RM1102 bad-config  an ``_env_int``/``_env_bound`` ``RIKO_*`` read with no
+                      ``minimum=`` (an out-of-range value is kept)
     RM901 multi-return  a function with more than one ``return`` (the house style is
                       a single return at the end); each ``return`` is a lead, so a
                       change to any of them is in scope
+
+Classes with no rule (``equivalent-spellings``, ``races``, ``mixed-input``, and the
+other probe-only classes ``--classes`` lists) carry only an audit probe in
+``CLASS_HISTORY``: their pre-fix lines show no shape a line scan can tell from correct
+code. ``--classes`` lists every class with its rules or probe.
 
 Known gaps, found by running the rules on the pre-fix files: RM404 sees only a
 receiver typed in the same function, so a generic value reached through an attribute
@@ -41,7 +63,16 @@ or a local slips past; an empty CSV fails inside meza; the exchangerate timeout 
 covers it). RM301 covers only the JSON-document surface of "last-wins"; most of that
 class's history is registry and id collisions, now guarded by ``Registry`` and tests.
 ``--since`` merges ``REF...HEAD`` with the working-tree diff, so line numbers can drift
-when uncommitted edits sit above a committed hunk.
+when uncommitted edits sit above a committed hunk. RM1001 sees only partials in the same
+file, and its lead sits on the ``def`` line, so a fix that only adds ``/`` replays with
+no lead (``replay_fixes.sh`` scans the pre-fix lines). RM1101 fires only when the
+guarded call is chosen at runtime (a parameter, a local, or a subscripted lookup): a
+named function's errors are its documented contract, so it raises its own ``ValueError``
+rather than every caller catching ``OverflowError``.
+The ``RIKO_ENCODING`` fix (an ``_env_str`` read never validated) has no shape distinct
+from a free-text setting, so it is a probe, not a rule. RM502 sees only
+``find()``/``rfind()``: an unchecked ``removeprefix()`` (the legacy-port fix) is legal
+on its own, so it is a probe, not a rule.
 
 Out of scope (needs a type checker or a run): lying overloads and guards that narrow
 to ``Unknown`` (``reveal_types.py``); sync/async output parity (a harness run); a fix
@@ -56,6 +87,22 @@ Inputs:
     --all          every line (expect already-triaged leads; use ``--rule``)
     --rule CODE    only these rule codes or prefixes (repeatable: ``--rule RM1``)
     --tests        also scan ``tests/``
+    --classes      print the class table instead of scanning: per class, ranked by fix
+                   count, its rule codes (or ``probe-only``), count, refs, an audit
+                   ``probe:`` and the ``safe:`` shapes ruled not to be defects
+    --unclassified lists the ``[FIX]`` commits since the last tag (or ``--since REF``)
+                   that no class's refs and no ``NON_BEHAVIORAL`` entry cite, one
+                   ``sha subject`` per line; exits 1 when any is listed
+    --rewrap       rewrite this file's ``CLASS_HISTORY`` source with every string
+                   re-wrapped to 88 columns (run after adding a ref; then
+                   ``ruff format``)
+    --remap        repair refs after a rebase: a cited sha HEAD no longer reaches
+                   becomes the one same-subject commit since it forked, and an
+                   ``uncommitted (MM-DD note)`` ref takes the sha of the
+                   ``--unclassified`` fix (or ``--since REF``) authored that day whose
+                   patch holds the most of the note's identifiers (backticked words,
+                   ``snake_case`` names, ``name()`` calls); prints each ref it could not
+                   place and exits 1 when any is left
     paths          restrict to these files/directories
 
 RM901 is a style rule, not a mined defect class: it has no fix history and sorts
@@ -65,10 +112,10 @@ Truthiness and frozen-record rules skip ``riko/cli`` (flags and argv, not data).
 Suppress a reviewed site with a trailing ``# mistake-ok: RM101`` comment, not
 ``noqa``: ``ruff --fix`` strips unknown ``noqa`` codes.
 
-Outputs: leads grouped by class, most-often-fixed class first (``CLASS_HISTORY`` holds
-each class's fix count and the fixes behind it; bump it when a new fix lands), one
-``path:line: CODE: message | source`` per lead, then per-class counts on stderr. Exits
-1 when any lead is reported.
+Outputs: leads grouped by class, most-often-fixed class first (``CLASS_HISTORY`` cites
+each class's fixes, and its fix count is derived from them; /triage adds a ref when a
+fix lands), one ``path:line: CODE: message | source`` per lead, then per-class counts on
+stderr. Exits 1 when any lead is reported.
 
 Origin: /audit of the bug-fix sessions on 2026-11-01 (58bc2070 sibling re-audit,
 84c7f004 close landscape, 05a01114 ijson, f5eeae62 meza), promoted to /tidy the same
@@ -79,6 +126,9 @@ Run:
     python .claude/skills/land/gates.py scope tidy \\
         | python .claude/skills/tidy/mistake_scan.py --diff-file -
     python .claude/skills/tidy/mistake_scan.py --since main
+    python .claude/skills/tidy/mistake_scan.py --classes
+    python .claude/skills/tidy/mistake_scan.py --unclassified
+    python .claude/skills/tidy/mistake_scan.py --remap
 
 Smoke tests: uv run --active pytest .claude/skills/tidy/test_mistake_scan.py --no-cov
 """
@@ -92,12 +142,23 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+type _Methods = dict[str, ast.FunctionDef | ast.AsyncFunctionDef]
+
+_NONE_RECORDED = "none recorded yet"
+_REF_GROUP = re.compile(r"\(\d\d-\d\d ([^()]*(?:\([^()]*\)[^()]*)*)\)")
+_RULE_ROW = re.compile(r"^ {4}(RM\d+) (\S+) ", re.MULTILINE)
+_SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
+_NOTE_TOKEN = re.compile(r"`(\w+)`|(\b\w*_\w+)|(\w+)\(\)")
+_UNCOMMITTED = re.compile(
+    r"uncommitted (\((\d\d-\d\d) ([^()]*(?:\([^()]*\)[^()]*)*)\))"
+)
 GIT = shutil.which("git") or "git"
 ROOT = Path(__file__).resolve().parents[3]
 GENERATED = {"_configs.py", "_names.py", "_module_ids.py"}
@@ -172,58 +233,344 @@ FROZEN_TYPES = {
     "Sequence",
 }
 SET_OPS = (ast.BitOr, ast.BitAnd, ast.Sub, ast.BitXor)
+OVERFLOW_CATCHES = {"OverflowError", "ArithmeticError", "Exception", "BaseException"}
+BOUNDED_ENV_READERS = {"_env_int", "_env_bound"}
+TEST_PARENTS = (ast.If, ast.While, ast.IfExp, ast.Assert)
 SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+NON_BEHAVIORAL = (
+    "9e0c0fbf",
+    "ac572190",
+    "501f0505",
+    "98480a20",
+    "6195a481",
+    "6287676b",
+    "c854d14b",
+    "2ee7e72b",
+    "a4f277be",
+    "9a4d290f",
+)
+
+
+class BugClass(NamedTuple):
+    refs: str
+    probe: str
+    safe: str
+
+    @property
+    def count(self) -> int:
+        """
+        Counts the fixes ``refs`` cites.
+
+        Each fix is a comma-separated item inside a date-prefixed parenthetical
+        (``(10-31 regex, falsy func)`` cites two), up to the first ``;``, which starts
+        a note on the group rather than another fix. Undated parentheticals (``none
+        RM801-shaped (...)``) cite none.
+        """
+        groups = _REF_GROUP.findall(self.refs)
+        return sum(len(group.split(";")[0].split(", ")) for group in groups)
+
+
 CLASS_HISTORY = {
-    "close": (
-        12,
+    "close": BugClass(
         (
-            "64f59e8f 0e46faa0 c1bfb665 e91f15d4 2f7aed5b 8cbe9be8 bac81221 "
-            "bb14c8f9; 10-31 raw return, async close(), loop aclosing; "
-            "11-01 async_merge aclosing"
+            "0e46faa0 (09-30 async pipeline iteration; collected not streamed); "
+            "abd4816b (10-28 async_url_open reentry; missing guard); 9e22c64c (10-29 "
+            "sync pipe returns); 3361786b (10-29 node streams on early close; missing "
+            "closes); 72a1b096 (10-30 async seed once); 47bf1190 (10-31 node streams "
+            "once); 7ee178c7 (10-31 loop aclosing, async_merge aclosing); c6a3838c "
+            "(11-01 owned values by type, raw return, async close()); d229b9b9 (11-03 "
+            "unify closers); d7528227 (11-05 fetch responses; missing ExitStack); "
+            "ef55b123 (11-13 async processor streams; missing early close); 2d9d3306 "
+            "(11-19 adapted async-only streams, worker-thread embed drain; closer "
+            "pairs); a2009845 (11-19 loop embed results; bare fold); 2d9d3306 (11-20 "
+            "raw outputs at node start, run-owned async raw, portal-built async "
+            "stream, splitter cascade at node start; cancellation window, failed iter)"
+        ),
+        (
+            "end every value a function opens or receives on each exit path, error "
+            "paths included; abandon an async iterator mid-stream and check its source "
+            "closes"
+        ),
+        (
+            "a `with`-managed value; a riko exception type as the closer's raises; "
+            "`async_drain` leaving its source open (the exit stack owns seeds); an "
+            "owned async stream's `aclose` bridged through the already-live portal; a "
+            "real context manager's `__exit__` keeping its Python semantics"
         ),
     ),
-    "last-wins": (
-        11,
+    "truthiness": BugClass(
         (
-            "83687951 57ab5eea 8bb1e03a; 10-05 parse_dag keys, alias/id collisions, "
-            "registry shadow; 10-31 dup JSON keys, migrate keys, target shadow, "
-            "codegen names"
+            "098f7aa8 (09-01 skip text, gather None, listize falsy); 78952d53 (10-04 "
+            "is-None fallbacks); e937e766 (10-05 port null); 0705f0cd (10-29 falsy "
+            "input iterables); 7ee178c7 (10-31 regex, falsy func, rename '', DotDict "
+            "''); 2bdc13e6 (11-11 skip_if presence); da63a1a3 (11-14 filter missing "
+            "fields)"
+        ),
+        'feed `0`, `False`, and `""` to every optional field and check each is kept',
+        (
+            "a `0` the docstring names as a sentinel; CLI flags/argv (`riko/cli` is "
+            "skipped); `False` as the only opt-out of factory cleanup"
         ),
     ),
-    "truthiness": (
-        7,
+    "parity": BugClass(
         (
-            "78952d53 db3fc807; 10-05 port null; "
-            "10-31 regex, falsy func, rename '', DotDict ''"
+            "072730e2 (09-12 async kwargs drained); ef566c5e (09-30 async and "
+            "awaitable sources); 85e25563 (10-28 async write/aggregate sources); "
+            "cb4ab17d (10-28 async_write iterables); 0cfbfc62 (10-29 lazy async "
+            "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
+            "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
+            "async HTTP status); 24a19342 (11-17 split branches in both colors); none "
+            "RM801-shaped (source shape, status handling, not keyword drift); daa41ecf "
+            "(11-21 twin type/subtype/identity)"
+        ),
+        (
+            "run each sync/async twin on the same input, an error status and a bad "
+            "encoding included, and diff outputs and raises"
+        ),
+        "raw entry keys that differ between feedparser and fastfeedparser",
+    ),
+    "last-wins": BugClass(
+        (
+            "e937e766 (10-05 parse_dag keys, alias collisions, id collisions, registry "
+            "shadow); 39b93e99 (10-29 duplicate entry points; no JSON load); 05fd5672 "
+            "(10-29 entry-point keys; no JSON load); 7ee178c7 (10-31 dup JSON keys, "
+            "migrate keys, target shadow, codegen names); 5f64f9f9 (11-19 `format` "
+            "alias over an explicit null `fmt`; not a JSON key)"
+        ),
+        (
+            "register, alias, or key two things under one name and check the second "
+            "raises instead of replacing the first"
+        ),
+        (
+            "duplicate keys in fetched JSON data keep the last value (workflow "
+            "documents reject them); identical (name, value) entry-point pairs dedupe; "
+            "a runtime `register` shadows an entry point, and `replace=True` is the "
+            "explicit override; `CompositeStore` returns its first hit; a wired "
+            "`in:count` on an operator (only processors reserve it)"
         ),
     ),
-    "parity": (
-        7,
+    "mixed-input": BugClass(
         (
-            "79cf0381 5e14b54d 9e98699c; "
-            "10-31 exchangerate timeout, ijson shape, async_write; "
-            "11-01 async fetchpage/exchangerate encoding"
+            "47c409b5 (09-03 numeric strings); 9f1af91c (10-28 text-only XML root); "
+            "682124d4 (10-28 DotDict non-str keys); 3a177544 (11-03 sort untyped "
+            "values); e0f6e05b (11-03 empty CSV export); f82af774 (11-14 unindexable "
+            "pairs); 0361ec29 (11-21 split count guard)"
+        ),
+        (
+            "feed mixed-type, empty, and wrong-shape values to every sort, export, and "
+            "pair input; each must give a defined result or a TypeError"
+        ),
+        (
+            "a mixed str/int sort raising `TypeError`; DotDict `[]`/`in` one level "
+            "past a scalar (pending its literal-access boundary); an unparseable date "
+            "in an item's field fails a date rule silently (an out-of-range one warns)"
         ),
     ),
-    "decode": (4, "4013ebf1 09819f69; 10-31 async_write multibyte, fetchtext BOM"),
-    "stopiter": (
-        4,
-        "4013ebf1 empty source; 10-31 empty CSV, regex zero-width; 11-01 regex $N",
-    ),
-    "hash-order": (
-        4,
+    "decode": BugClass(
         (
-            "10-05 graph order; 10-31 tz abbreviations, hash module; "
-            "11-04 docstring sections"
+            "dc2d8917 (09-02 Reencoder read/readlines; no decode call); 4013ebf1 "
+            "(10-04 text source splitting; no decode call); beee7028 (10-28 decoded "
+            "reads after read(n); buffer state); 7ee178c7 (10-31 async_write "
+            "multibyte, fetchtext BOM)"
+        ),
+        "split a multibyte character and a BOM across chunk boundaries",
+        "`fetchtext` stripping a BOM by default (`strip_bom` opts out)",
+    ),
+    "stopiter": BugClass(
+        (
+            "654e3649 (09-30 splitter value peek); 4013ebf1 (10-04 empty source; no "
+            "bare next); 7ee178c7 (10-31 empty CSV, regex zero-width, regex $N)"
+        ),
+        "feed an empty source and a zero-width match to every generator",
+        _NONE_RECORDED,
+    ),
+    "frozen": BugClass(
+        (
+            "e937e766 (10-05 deep-frozen definitions); fe0ef32a (10-14 DotDict nested "
+            "writes; not a record field); 1906d375 (10-21 definition snapshots; no "
+            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 24a19342 "
+            "(11-17 Tee _Read; introduced in the same commit)"
+        ),
+        "mutate the list/dict/set a caller passed in and check the record is unchanged",
+        "the shared `objconf`'s mutability (pending its configuration redesign)",
+    ),
+    "unbounded": BugClass(
+        (
+            "df5b36fd (10-29 fetch timeout); f3f371ad (10-29 async_map limit); "
+            "7ee178c7 (10-31 async fetch timeout; not a default); c6a3838c (11-01 "
+            "async cleanup under for; missing bound); 24a19342 (11-17 branch lag; "
+            "missing bound); e5448a49 (11-19 splitter branches collected before the "
+            "count check; missing bound)"
+        ),
+        "run each wait, read, and pool against a source that never answers",
+        (
+            "a `timeout(1)` mark replaced by an in-body `fail_after(1)` is not a "
+            "dropped bound; a caller-supplied `0`/`inf` fetch timeout disables the "
+            "bound by ruling"
         ),
     ),
-    "frozen": (3, "1906d375; 10-05 deep-frozen definitions; 10-31 WriteCapabilities"),
-    "unbounded": (
-        3,
-        "737f19d6 fetch timeout, 998daf8b async_map limit; 10-31 async fetch timeout",
+    "equivalent-spellings": BugClass(
+        (
+            "cdbeda1a (10-31 port spellings); ededc9ce (11-03 regex field case); "
+            "83630c28 (11-03 dotted/case rename fields); 9bbcf0ab (11-14 ModuleName "
+            "resolvers)"
+        ),
+        (
+            "try a case variant, dotted form, zero-padded index, or NewType/str twin "
+            "of every key lookup, group, or count, and check both spellings land on "
+            "one entry"
+        ),
+        (
+            "`.lower()` rather than `casefold` (it matches DotDict); numeric-string "
+            "DotDict keys read as indexes (pending its literal-access boundary)"
+        ),
     ),
-    "find-slice": (1, "10-31 fetchpage.get_string"),
-    "multi-return": (0, "house style: one return per function"),
+    "failure-propagation": BugClass(
+        (
+            "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
+            "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
+            "5052114a (11-21 failed close on a failed build)"
+        ),
+        (
+            "make a worker, task, or cleanup step die or raise, once and twice, and "
+            "check the run raises the original error intact instead of hanging or "
+            "replacing it"
+        ),
+        _NONE_RECORDED,
+    ),
+    "hash-order": BugClass(
+        (
+            "e937e766 (10-05 graph order); 7ee178c7 (10-31 tz abbreviations, hash "
+            "module); 6395987b (11-04 docstring sections)"
+        ),
+        "rerun under two PYTHONHASHSEED values and diff the output order",
+        "tz-abbreviation collisions resolved by sorted order (deterministic)",
+    ),
+    "option-forwarding": BugClass(
+        (
+            "274265b1 (10-21 run-pipe -t); e13819c4 (10-28 export writer/converter "
+            "options); 516ee2ab (11-05 user agent over HTTP)"
+        ),
+        (
+            "trace each caller-supplied option (keyword, flag, header, conf key) from "
+            "the entry point to the call that consumes it and check it arrives "
+            "unchanged and only there"
+        ),
+        (
+            "unknown keywords on a direct module call reach the parser (they may be "
+            "named inputs)"
+        ),
+    ),
+    "bad-config": BugClass(
+        (
+            "fb7ea681 (10-29 out-of-range settings); 597a0181 (11-03 int cast "
+            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); 34fe7bf7 "
+            "(11-19 cast_datetime timestamp overflow)"
+        ),
+        (
+            "set each RIKO_* variable and conf number to malformed, out-of-range, inf, "
+            "and unknown values; each must warn and keep the default"
+        ),
+        (
+            "a `try` that only builds a `Decimal` (construction never overflows); "
+            "filter's `SWITCH` operations (comparisons never overflow)"
+        ),
+    ),
+    "races": BugClass(
+        (
+            "cb586961 (11-03 racing plugin loads); acfd24be (11-03 nested node-thread "
+            "waits); e01c4a58 (11-03 blocking cleanup bound)"
+        ),
+        (
+            "run two loads/registers concurrently and check one instance is published; "
+            "look for waits taken on a node thread"
+        ),
+        (
+            "a `setdefault` publish whose racing factory may run twice (no lock held "
+            "across imports); `temporary_registrations` not thread-safe, like "
+            "`warnings.catch_warnings`"
+        ),
+    ),
+    "timezones": BugClass(
+        (
+            "098f7aa8 (09-01 offset-aware utime); 3642b77f (09-03 tzinfo "
+            "abbreviations); 7476dd9c (09-13 aware struct_times)"
+        ),
+        (
+            "run each date conversion under two `TZ` values, across a DST change, and "
+            "with an ambiguous abbreviation, and check the instant and zone name"
+        ),
+        _NONE_RECORDED,
+    ),
+    "packaging": BugClass(
+        "6c6c6031 (09-12 missing async imports); e1e1ce0f (11-14 tzdata)",
+        (
+            "install without each optional extra and on a host with no system zone "
+            "data, then import and run every module that needs it"
+        ),
+        _NONE_RECORDED,
+    ),
+    "serializer-framing": BugClass(
+        "4e4a8f1c (09-09 double headers); b347201e (11-14 JSONL newline)",
+        (
+            "write zero, one, and several records in each format, appending too, and "
+            "check headers, separators, and terminators appear once where required"
+        ),
+        "an empty csv/jsonl/json export writing its empty document",
+    ),
+    "colors": BugClass(
+        (
+            "24a19342 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
+            "in the same commit)"
+        ),
+        "compare method names across each sync/async class pair",
+        _NONE_RECORDED,
+    ),
+    "find-slice": BugClass(
+        (
+            "7ee178c7 (10-31 fetchpage.get_string); 5f64f9f9 (11-19 legacy port "
+            "suffix; removeprefix() not find())"
+        ),
+        (
+            "search for an absent marker in every find()-then-slice path and every "
+            "removeprefix()/removesuffix() whose result is read without a "
+            "startswith()/endswith() check"
+        ),
+        _NONE_RECORDED,
+    ),
+    "kwarg-shadow": BugClass(
+        (
+            "b0f523b7 (11-17 call keywords; a missing `/`); 8837d68b (11-19 "
+            "prepare_call wrapper, _call_direct wrapper/items)"
+        ),
+        (
+            "pass a keyword named like each bound parameter through every `**kwargs` "
+            "call path"
+        ),
+        (
+            "a public first parameter passed twice (`pipe(items, item=x)`): Python's "
+            "error is accurate and `item` is a reserved keyword"
+        ),
+    ),
+    "other": BugClass(
+        (
+            "5196ad3a (09-09 default sink mode); ae33e7ba (09-09 FeedParserDict key "
+            "remap); ff6a6030 (09-12 autorss Attributes guard); 8b95ee51 (10-28 "
+            "http-prefixed file names); 186f976d (10-29 Context shipped to workers); "
+            "bffd2dc0 (10-29 self-embedding workflow); 46d7c568 (10-31 half-applied "
+            "register); 263fffe7 (11-03 registry-unaware metadata); d3c2d047 (11-19 "
+            "subscripted generic alias inference); de16d9dc (11-20 is_async_callable "
+            "through partial)"
+        ),
+        (
+            "no shared cause: reread the cited fix and its regression test when a "
+            "change touches the same code"
+        ),
+        "a self-embedding stored workflow rejected statically, with no depth limit",
+    ),
+    "multi-return": BugClass(
+        "house style: one return per function", "none (a style rule)", _NONE_RECORDED
+    ),
 }
 
 
@@ -372,6 +719,42 @@ def _field_has_converter(value: ast.AST | None) -> bool:
     )
 
 
+def _is_in_test(node: ast.AST) -> bool:
+    child, parent = node, getattr(node, "_rm_parent", None)
+
+    while isinstance(parent, (ast.BoolOp, ast.UnaryOp)):
+        child, parent = parent, getattr(parent, "_rm_parent", None)
+
+    return (isinstance(parent, TEST_PARENTS) and parent.test is child) or (
+        isinstance(parent, ast.comprehension) and child in parent.ifs
+    )
+
+
+def _is_lambda_param(node: ast.AST) -> bool:
+    parent = getattr(node, "_rm_parent", None)
+
+    while parent is not None and not isinstance(parent, ast.Lambda):
+        parent = getattr(parent, "_rm_parent", None)
+
+    return (
+        isinstance(parent, ast.Lambda)
+        and isinstance(node, ast.Name)
+        and node.id in {a.arg for a in parent.args.args}
+    )
+
+
+def _is_reused_guard(node: ast.BoolOp) -> bool:
+    first = node.values[0]
+    text = ast.unparse(first)
+    reused = isinstance(first, (ast.Name, ast.Attribute)) and any(
+        ast.unparse(sub) == text
+        for value in node.values[1:]
+        for sub in ast.walk(value)
+        if isinstance(sub, (ast.Name, ast.Attribute))
+    )
+    return reused and (is_value_like(first) or _is_lambda_param(first))
+
+
 class Scanner(ast.NodeVisitor):
     def __init__(self, path: Path, source: str) -> None:
         self.path = path
@@ -397,6 +780,23 @@ class Scanner(ast.NodeVisitor):
             for n in ast.walk(func)
             if self._owner(n, func)
         )
+
+    def _local_names(self, func: ast.AST | None) -> set[str]:
+        """Gets the parameter and local names a function binds at runtime."""
+        names: set[str] = set()
+
+        if isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            params = func.args
+            every = [*params.posonlyargs, *params.args, *params.kwonlyargs]
+            every += [a for a in (params.vararg, params.kwarg) if a is not None]
+            names = {a.arg for a in every}
+            names |= {
+                n.id
+                for n in ast.walk(func)
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+            }
+
+        return names
 
     def _owner(self, node: ast.AST, func: ast.AST) -> bool:
         return getattr(node, "_rm_func", None) is func
@@ -429,6 +829,31 @@ class Scanner(ast.NodeVisitor):
             for h in node.handlers
         )
         self.try_depth += catches
+        local_names = self._local_names(self.function)
+        dynamic = any(
+            isinstance(sub.func, ast.Subscript)
+            or (isinstance(sub.func, ast.Name) and sub.func.id in local_names)
+            for stmt in node.body
+            for sub in ast.walk(stmt)
+            if isinstance(sub, ast.Call)
+        )
+
+        for handler in node.handlers:
+            names = _annotation_names(handler.type)
+
+            if (
+                "ValueError" in names
+                and not names & OVERFLOW_CATCHES
+                and "InvalidOperation" in names
+                and dynamic
+            ):
+                self.add(
+                    handler,
+                    "RM1101",
+                    "bad-config",
+                    "a decimal cast catches ValueError but not OverflowError; "
+                    "int() of an infinite value escapes the default",
+                )
 
         for stmt in node.body:
             self.visit(stmt)
@@ -472,6 +897,37 @@ class Scanner(ast.NodeVisitor):
                 "truthiness",
                 f"`{label(node.values[0])} or ...` replaces a falsy value; "
                 "test `is None`",
+            )
+        elif (
+            isinstance(node.op, ast.And)
+            and not self.tooling
+            and not _is_in_test(node)
+            and _is_reused_guard(node)
+        ):
+            self.add(
+                node,
+                "RM101",
+                "truthiness",
+                f"`{label(node.values[0])} and ...` returns a falsy value as is; "
+                "test `is None`",
+            )
+
+        self.generic_visit(node)
+
+    def visit_UnaryOp(self, node: ast.UnaryOp) -> None:
+        if (
+            isinstance(node.op, ast.Not)
+            and is_value_like(node.operand)
+            and not isinstance(node.operand, ast.Call)
+            and not self.tooling
+            and not _is_in_test(node)
+        ):
+            self.add(
+                node,
+                "RM102",
+                "truthiness",
+                f'`not {label(node.operand)}` in an expression; `0`/`""`/`False` '
+                "may be valid",
             )
 
         self.generic_visit(node)
@@ -620,6 +1076,29 @@ class Scanner(ast.NodeVisitor):
                     "pass object_pairs_hook",
                 )
         elif (
+            name == "bool"
+            and len(node.args) == 1
+            and is_value_like(node.args[0])
+            and not isinstance(node.args[0], ast.Call)
+            and not self.tooling
+        ):
+            self.add(
+                node,
+                "RM102",
+                "truthiness",
+                f'`bool({label(node.args[0])})`; `0`/`""`/`False` may be valid',
+            )
+        elif last in BOUNDED_ENV_READERS and not any(
+            kw.arg == "minimum" for kw in node.keywords
+        ):
+            key = node.args[1] if len(node.args) > 1 else node
+            self.add(
+                key,
+                "RM1102",
+                "bad-config",
+                f"`{last}` read has no `minimum=`; an out-of-range value is kept",
+            )
+        elif (
             name == "next"
             and len(node.args) == 1
             and not self.try_depth
@@ -698,7 +1177,7 @@ class Scanner(ast.NodeVisitor):
                 "RM404",
                 "close",
                 f"`{label(call.func.value)}.close()` result discarded on a generic "
-                "closeable; an async close never runs (use resolve_closer)",
+                "closable; an async close never runs (use resolve_closer)",
             )
 
         self.generic_visit(node)
@@ -772,7 +1251,7 @@ class Scanner(ast.NodeVisitor):
                 isinstance(sub, ast.Assign)
                 and len(sub.targets) == 1
                 and isinstance(sub.targets[0], ast.Name)
-                and isinstance(sub.value, (ast.Call, ast.BinOp))
+                and isinstance(sub.value, (ast.Call, ast.BinOp, ast.IfExp))
                 and any(
                     isinstance(c, ast.Call)
                     and label(c.func).split(".")[-1].rstrip("()") in {"find", "rfind"}
@@ -843,6 +1322,117 @@ def _check_parity(tree: ast.Module, path: Path) -> Iterator[Lead]:
                 )
 
 
+def _get_partial_bounds(tree: ast.Module) -> dict[str, int]:
+    bounds: dict[str, int] = {}
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and label(node.func).split(".")[-1] in {"partial", "async_partial"}
+            and node.args
+            and not any(isinstance(a, ast.Starred) for a in node.args)
+        ):
+            target = label(node.args[0]).split(".")[-1]
+            bounds[target] = max(bounds.get(target, 0), len(node.args) - 1)
+
+    return bounds
+
+
+def _check_kwarg_shadow(tree: ast.Module, path: Path) -> Iterator[Lead]:
+    bounds = _get_partial_bounds(tree)
+    methods = {
+        id(func)
+        for cls in ast.walk(tree)
+        if isinstance(cls, ast.ClassDef)
+        for func in cls.body
+    }
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.args.kwarg is not None
+            and bounds.get(node.name)
+        ):
+            params = [*node.args.posonlyargs, *node.args.args]
+            receiver = bool(params) and params[0].arg in {"self", "cls"}
+            skip = int(receiver and id(node) in methods)
+            bound = params[skip : skip + bounds[node.name]]
+            exposed = [a.arg for a in bound if a in node.args.args]
+
+            if exposed:
+                yield Lead(
+                    path,
+                    node.lineno,
+                    "RM1001",
+                    "kwarg-shadow",
+                    f"`{node.name}` forwards **{node.args.kwarg.arg} but a partial "
+                    f"binds {exposed} by position; a forwarded keyword of the same "
+                    "name raises (make them positional-only)",
+                )
+
+
+def _get_methods(cls: ast.ClassDef) -> _Methods:
+    kinds = (ast.FunctionDef, ast.AsyncFunctionDef)
+    return {f.name: f for f in cls.body if isinstance(f, kinds)}
+
+
+def _get_classes(tree: ast.Module) -> dict[str, ast.ClassDef]:
+    classes: dict[str, ast.ClassDef] = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            classes.setdefault(node.name, node)
+
+    return classes
+
+
+@cache
+def _index_classes(root: Path) -> dict[str, _Methods]:
+    index: dict[str, _Methods] = {}
+
+    for path in sorted((root / "riko").rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except (OSError, SyntaxError):
+            continue
+
+        for name, cls in _get_classes(tree).items():
+            index.setdefault(name, _get_methods(cls))
+
+    return index
+
+
+def _check_colors(tree: ast.Module, path: Path) -> Iterator[Lead]:
+    classes = _get_classes(tree)
+
+    for name, cls in classes.items():
+        base = name.removeprefix("Async")
+
+        if base == name or not base:
+            continue
+
+        bases = {label(b).removesuffix("[]") for b in cls.bases}
+        twins = [t for t in (base, f"Sync{base}") if t not in bases]
+        local = [_get_methods(classes[t]) for t in twins if t in classes]
+        index = _index_classes(ROOT)
+        sync = (local or [index[t] for t in twins if t in index] or [{}])[0]
+
+        for method, func in _get_methods(cls).items():
+            if (
+                isinstance(func, ast.AsyncFunctionDef)
+                and isinstance(sync.get(method), ast.FunctionDef)
+                and not method.startswith("__")
+            ):
+                yield Lead(
+                    path,
+                    func.lineno,
+                    "RM802",
+                    "colors",
+                    f"async `{name}.{method}` shares its sync twin's plain "
+                    "method name; prefix it `a`",
+                )
+
+
 def _gen_returns(node: ast.AST) -> Iterator[ast.Return]:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, ast.Return):
@@ -882,7 +1472,13 @@ def scan_file(path: Path) -> list[Lead]:
     _annotate_parents(tree)
     scanner = Scanner(path, source)
     scanner.visit(tree)
-    leads = [*scanner.leads, *_check_parity(tree, path), *_check_returns(tree, path)]
+    leads = [
+        *scanner.leads,
+        *_check_parity(tree, path),
+        *_check_colors(tree, path),
+        *_check_returns(tree, path),
+        *_check_kwarg_shadow(tree, path),
+    ]
     lines = scanner.lines
     kept = []
 
@@ -900,9 +1496,9 @@ def scan_file(path: Path) -> list[Lead]:
     return kept
 
 
-def git(*args: str) -> str:
+def git(*args: str, check: bool = True) -> str:
     return subprocess.run(
-        [GIT, *args], cwd=ROOT, capture_output=True, text=True, check=True
+        [GIT, *args], cwd=ROOT, capture_output=True, text=True, check=check
     ).stdout
 
 
@@ -973,6 +1569,218 @@ def gen_files(args: argparse.Namespace) -> Iterator[Path]:
                 yield path
 
 
+def gen_class_table() -> Iterator[str]:
+    codes: dict[str, list[str]] = {}
+
+    for code, kind in _RULE_ROW.findall(__doc__ or ""):
+        codes.setdefault(kind, []).append(code)
+
+    for kind, entry in sorted(CLASS_HISTORY.items(), key=lambda x: (-x[1].count, x[0])):
+        rules = " ".join(codes.get(kind, [])) or "probe-only"
+        yield f"## {kind}: {rules}; fixed {entry.count}x"
+        yield f"refs: {entry.refs}"
+        yield f"probe: {entry.probe}"
+        yield f"safe: {entry.safe}\n"
+
+
+def _quote(text: str) -> str:
+    return f"'{text}'" if '"' in text else f'"{text}"'
+
+
+def _gen_wrapped(text: str, width: int = 74) -> Iterator[str]:
+    line = ""
+
+    for word in text.split(" "):
+        candidate = f"{line} {word}" if line else word
+
+        if len(candidate) + 1 > width and line:
+            yield f"{line} "
+            line = word
+        else:
+            line = candidate
+
+    yield line
+
+
+def _build_field(text: str) -> str:
+    if text == _NONE_RECORDED:
+        field = "        _NONE_RECORDED,"
+    elif len(f"        {_quote(text)},") <= 88:
+        field = f"        {_quote(text)},"
+    else:
+        body = "\n".join(f"            {_quote(c)}" for c in _gen_wrapped(text))
+        field = f"        (\n{body}\n        ),"
+
+    return field
+
+
+def build_class_history_source(history: dict[str, BugClass] | None = None) -> str:
+    lines = ["CLASS_HISTORY = {"]
+
+    for name, entry in (CLASS_HISTORY if history is None else history).items():
+        fields = [_build_field(text) for text in (entry.refs, entry.probe, entry.safe)]
+        joined = ", ".join(f.strip().removesuffix(",") for f in fields)
+        flat = all("\n" not in f for f in fields)
+
+        if flat and len(head := f'    "{name}": BugClass({joined}),') <= 88:
+            lines.append(head)
+        elif flat and len(f"        {joined}") <= 88:
+            lines += [f'    "{name}": BugClass(', f"        {joined}", "    ),"]
+        else:
+            lines += [f'    "{name}": BugClass(', *fields, "    ),"]
+
+    return "\n".join([*lines, "}"])
+
+
+def rewrap_class_history(path: Path = Path(__file__)) -> int:
+    source = path.read_text()
+    start = source.index("CLASS_HISTORY = {")
+    end = source.index("\n}\n", start) + 2
+    path.write_text(source[:start] + build_class_history_source() + source[end:])
+    return 0
+
+
+def _get_texts(
+    history: dict[str, BugClass], non_behavioral: tuple[str, ...]
+) -> list[str]:
+    return [*(entry.refs for entry in history.values()), *non_behavioral]
+
+
+def gen_unclassified(
+    since: str | None = None, texts: list[str] | None = None
+) -> Iterator[str]:
+    base = since or git("describe", "--tags", "--abbrev=0").strip()
+    texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL) if texts is None else texts
+    cited = {sha for text in texts for sha in _SHA.findall(text)}
+    log = git("log", "--format=%h %s", f"{base}..HEAD", r"--grep=^\[FIX\]")
+
+    for line in log.splitlines():
+        sha = line.split(" ", 1)[0]
+
+        if not any(sha.startswith(c) or c.startswith(sha) for c in cited):
+            yield line
+
+
+def report_unclassified(since: str | None = None) -> int:
+    lines = list(gen_unclassified(since))
+
+    for line in lines:
+        print(line)
+
+    return int(bool(lines))
+
+
+def resolve_successor(sha: str) -> str | None:
+    """
+    Resolves a cited sha HEAD no longer reaches to its rewritten commit.
+
+    The successor is the one commit since ``sha`` forked from HEAD with its subject,
+    abbreviated to the cited length; none when no commit or several match.
+    """
+    subject = git("log", "-1", "--format=%s", sha, check=False).strip()
+    base = git("merge-base", sha, "HEAD", check=False).strip()
+    log = git("log", "--format=%H %s", f"{base}..HEAD") if subject and base else ""
+    matches = [line[: len(sha)] for line in log.splitlines() if line[41:] == subject]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _load_fix(sha: str) -> tuple[str, str]:
+    day, _, patch = git("show", "--format=%ad", "--date=format:%m-%d", sha).partition(
+        "\n"
+    )
+    return day, patch
+
+
+def _place_uncommitted(match: re.Match[str], fixes: dict[str, tuple[str, str]]) -> str:
+    _, day, note = match.groups()
+    tokens = {
+        token for groups in _NOTE_TOKEN.findall(note) for token in groups if token
+    }
+    scores = Counter(
+        {
+            sha: sum(bool(re.search(rf"\b{re.escape(t)}\b", patch)) for t in tokens)
+            for sha, (fixed, patch) in fixes.items()
+            if fixed == day
+        }
+    ).most_common(2)
+    leads = (
+        scores and scores[0][1] and (len(scores) == 1 or scores[1][1] < scores[0][1])
+    )
+    return f"{scores[0][0][:8]} {match.group(1)}" if leads else match.group()
+
+
+def _replace_span(source: str, start: str, end: str, text: str) -> str:
+    head = source.index(start)
+    tail = source.index(end, head) + len(end)
+    return source[:head] + text + source[tail:]
+
+
+def remap_class_history(path: Path = Path(__file__), since: str | None = None) -> int:
+    """
+    Remaps this file's refs to the commits HEAD reaches after a rebase or fold.
+
+    Rewrites ``CLASS_HISTORY`` (re-wrapped as ``--rewrap`` builds it) and
+    ``NON_BEHAVIORAL`` in place, then prints each ref left unplaced and returns 1
+    when any is.
+    """
+    reachable = git("rev-list", "HEAD").split()
+    texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL)
+    cited = sorted({sha for text in texts for sha in _SHA.findall(text)})
+    stale = [sha for sha in cited if not any(h.startswith(sha) for h in reachable)]
+    successors = {sha: s for sha in stale if (s := resolve_successor(sha)) is not None}
+
+    def rename(match: re.Match[str]) -> str:
+        return successors.get(match.group(), match.group())
+
+    non_behavioral = tuple(successors.get(sha, sha) for sha in NON_BEHAVIORAL)
+    renamed = {
+        name: entry._replace(refs=_SHA.sub(rename, entry.refs))
+        for name, entry in CLASS_HISTORY.items()
+    }
+    unclassified = gen_unclassified(since, _get_texts(renamed, non_behavioral))
+    fixes = {
+        line.split(" ", 1)[0]: _load_fix(line.split(" ", 1)[0]) for line in unclassified
+    }
+    history = {
+        name: entry._replace(
+            refs=_UNCOMMITTED.sub(lambda m: _place_uncommitted(m, fixes), entry.refs)
+        )
+        for name, entry in renamed.items()
+    }
+    source = _replace_span(
+        path.read_text(),
+        "CLASS_HISTORY = {",
+        "\n}\n",
+        f"{build_class_history_source(history)}\n",
+    )
+    source = _replace_span(
+        source,
+        "NON_BEHAVIORAL = (",
+        "\n)\n",
+        "\n".join(
+            ["NON_BEHAVIORAL = (", *(f'    "{sha}",' for sha in non_behavioral), ")\n"]
+        ),
+    )
+    path.write_text(source)
+    unplaced = [
+        *(
+            f"{sha}: no single same-subject commit"
+            for sha in stale
+            if sha not in successors
+        ),
+        *(
+            f"{name}: uncommitted {group}"
+            for name, entry in history.items()
+            for group, *_ in _UNCOMMITTED.findall(entry.refs)
+        ),
+    ]
+
+    for line in unplaced:
+        print(line)
+
+    return int(bool(unplaced))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(__doc__ or "").split("\n\n")[0].strip(),
@@ -986,7 +1794,28 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--diff-file")
     parser.add_argument("--rule", action="append", default=[])
     parser.add_argument("--tests", action="store_true")
+    parser.add_argument("--classes", action="store_true")
+    parser.add_argument("--unclassified", action="store_true")
+    parser.add_argument("--rewrap", action="store_true")
+    parser.add_argument("--remap", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.classes:
+        print("\n".join(gen_class_table()).rstrip())
+        result = 0
+    elif args.unclassified:
+        result = report_unclassified(args.since)
+    elif args.rewrap:
+        result = rewrap_class_history()
+    elif args.remap:
+        result = remap_class_history(since=args.since)
+    else:
+        result = scan(args)
+
+    return result
+
+
+def scan(args: argparse.Namespace) -> int:
     scope = resolve_scope(args)
     found: list[tuple[Lead, str]] = []
 
@@ -1007,7 +1836,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def rank(entry: tuple[Lead, str]) -> tuple[int, str, str, int]:
         lead = entry[0]
-        return (-CLASS_HISTORY[lead.kind][0], lead.code, str(lead.path), lead.line)
+        return (-CLASS_HISTORY[lead.kind].count, lead.code, str(lead.path), lead.line)
 
     counts = Counter(lead.kind for lead, _ in found)
     kind = None
@@ -1015,8 +1844,11 @@ def main(argv: list[str] | None = None) -> int:
     for lead, text in sorted(found, key=rank):
         if lead.kind != kind:
             kind = lead.kind
-            fixes, refs = CLASS_HISTORY[kind]
-            print(f"\n## {kind}: fixed {fixes}x before ({refs}); {counts[kind]} leads")
+            entry = CLASS_HISTORY[kind]
+            print(
+                f"\n## {kind}: fixed {entry.count}x before ({entry.refs}); "
+                f"{counts[kind]} leads"
+            )
 
         inside = lead.path.is_relative_to(ROOT)
         where = lead.path.relative_to(ROOT) if inside else lead.path
@@ -1026,7 +1858,7 @@ def main(argv: list[str] | None = None) -> int:
         f"\n{len(found)} leads "
         + " ".join(
             f"{k}={counts[k]}"
-            for k in sorted(counts, key=lambda k: -CLASS_HISTORY[k][0])
+            for k in sorted(counts, key=lambda k: -CLASS_HISTORY[k].count)
         ),
         file=sys.stderr,
     )

@@ -57,15 +57,6 @@ _MERGE = {
     "edges": [StreamEdge(_A_OUT, _C_IN), StreamEdge(_B_OUT, _C_IN)],
     "outputs": {"default": Endpoint("c", "out")},
 }
-_SPLIT_PAST_COUNT = {
-    "nodes": [_A, ModuleNode(id="s", name="split", conf={"splits": 2}), _B],
-    "edges": [
-        StreamEdge(_A_OUT, Endpoint("s", "in")),
-        StreamEdge(Endpoint("s", "out:2"), _B_IN),
-    ],
-    "outputs": {"default": _B_OUT},
-}
-
 _CONF_PENDING = "module configuration is not validated against its contract yet"
 
 NODE_FAMILIES = (
@@ -79,12 +70,12 @@ NODE_FAMILIES = (
 
 
 def _fetch_workflow() -> Workflow:
-    return Workflow().with_node(ModuleNode(id="fetch-1", name="fetch"))
+    return Workflow().with_nodes(ModuleNode(id="fetch-1", name="fetch"))
 
 
 APPENDS = [
-    pytest.param(lambda flow: flow.with_node(_B), id="node"),
-    pytest.param(lambda flow: flow.with_workflow(Workflow().with_node(_B)), id="flow"),
+    pytest.param(lambda flow: flow.with_nodes(_B), id="node"),
+    pytest.param(lambda flow: flow.with_workflow(Workflow().with_nodes(_B)), id="flow"),
 ]
 
 
@@ -181,8 +172,8 @@ class TestWorkflow:
         assert set(index.leaves) == {"b", "c"}
         assert index.upstream["b"] == frozenset({"a"})
         assert index.downstream["a"] == frozenset({"b"})
-        assert index.incoming["b"][0].source == "a"
-        assert index.outgoing["a"][0].target == "b"
+        assert index.incoming["b"][0].source_id == "a"
+        assert index.outgoing["a"][0].target_id == "b"
         assert set(index.outputs) == {"default", "extra"}
         assert index.required == {"default": ("a", "b"), "extra": ("c",)}
         assert index.edges == index.incoming["b"]
@@ -214,7 +205,7 @@ class TestWorkflow:
     def test_appending_a_node_declares_its_resources(self):
         flow = Workflow(resources=("cache",))
         node = ModuleNode(id="a", name="hash", resources={"x": "db", "y": "cache"})
-        assert flow.with_node(node).resources == ("cache", "db")
+        assert flow.with_nodes(node).resources == ("cache", "db")
 
     def test_omitted_fields_are_empty(self):
         """Every omitted field defaults to its empty form."""
@@ -468,6 +459,15 @@ _CALLABLE_NODE_ERRORS = [
     pytest.param({"resources": "def"}, _INVALID, "identifiers", id="keyword"),
     pytest.param({"identity": "bogus"}, _INVALID, "'identity'", id="identity"),
     pytest.param({"fn": "len"}, TypeError, "callable", id="uncallable"),
+    pytest.param({"kwargs": {"resources": 1}}, _INVALID, "reserved", id="resources-kw"),
+    pytest.param({"kwargs": {"version": 1}}, _INVALID, "reserved", id="version-kw"),
+    pytest.param({"kwargs": {"identity": 1}}, _INVALID, "reserved", id="identity-kw"),
+    pytest.param(
+        {"fn": lambda _, **kwargs: kwargs, "kwargs": {"_": 1}},
+        _INVALID,
+        "reserved",
+        id="item-parameter-kw",
+    ),
 ]
 
 
@@ -521,17 +521,6 @@ INVALID_WORKFLOWS = [
         {"nodes": [_ASKS_Q], "outputs": {"default": _A_OUT}},
         r"unresolved input reference\(s\): \['q'\]",
         id="unresolved-input",
-    ),
-    pytest.param(
-        _SPLIT_PAST_COUNT,
-        "out:2",
-        id="split-port-past-its-count",
-        marks=pytest.mark.xfail(
-            strict=True,
-            raises=pytest.fail.Exception,
-            reason="rejecting a split output port beyond the configured split count "
-            "is not yet implemented",
-        ),
     ),
 ]
 INVALID_EDGES = [
@@ -603,6 +592,13 @@ INVALID_CONFS = [
     ),
     pytest.param(
         "strconcat", {}, "part", id="missing-key", marks=_conf_pending(TypeError)
+    ),
+    pytest.param(
+        "filter",
+        {"rule": {"field": "x", "op": "after", "value": "foo"}},
+        "value",
+        id="unparseable-date",
+        marks=_conf_pending(pytest.fail.Exception),
     ),
 ]
 
@@ -692,6 +688,32 @@ class TestValidate:
         flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
         with pytest.raises(InvalidPipelineError, match=match):
             flow.validate()
+
+    def test_validate_runs_its_checks_once_per_workflow(self, monkeypatch):
+        calls = []
+        validate_input_schemas = Workflow.validate_input_schemas
+
+        def counted(flow):
+            calls.append(flow)
+            validate_input_schemas(flow)
+
+        monkeypatch.setattr(Workflow, "validate_input_schemas", counted)
+        outputs = {"default": Endpoint("a", "out")}
+        flow = _workflow([_A], outputs=outputs, input_schemas={"q": {"type": "string"}})
+        flow.validate()
+        flow.validate()
+
+        assert flow.is_valid
+        assert calls == [flow]
+
+    def test_validate_raises_on_every_call_to_an_invalid_workflow(self):
+        flow = _workflow([_A], input_schemas={"q": {"type": "strng"}})
+
+        for _ in range(2):
+            assert not flow.is_valid
+
+            with pytest.raises(InvalidPipelineError, match="invalid schema"):
+                flow.validate()
 
 
 def _loop_workflow() -> Workflow:

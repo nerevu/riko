@@ -21,14 +21,8 @@ from riko.base._paths import ROOT_DIR
 from riko.cli import build_workflow, runpipe
 from riko.cli import compile as compile_workflow
 from riko.definitions._workflow_definition import Workflow
-from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_issync
-from tests._workflows import (
-    DAG,
-    DAG_PATH,
-    EXAMPLES_DIR,
-    SPLIT_METHOD_PENDING,
-    run_document,
-)
+from tests import SCRIPT_TIMEOUT, TESTS_DIR, async_test, run_python, skipif_sync
+from tests._workflows import DAG, DAG_PATH, EXAMPLES_DIR, run_document
 
 COMMANDS = {
     "runpipe": runpipe.run,
@@ -76,7 +70,7 @@ DEMO_RUNS = [
         "'farechart'\n",
         ["-a"],
         "in-process",
-        marks=skipif_issync,
+        marks=skipif_sync,
         id="simple1-async",
     ),
     pytest.param(FARECHART_DOCUMENT, FARECHART_TEXT, [], "in-process", id="document"),
@@ -188,7 +182,7 @@ class TestRunPipe:
         assert ran.returncode == 0
         assert ran.stdout == "{'forever': True}\n" * 3
 
-    @skipif_issync
+    @skipif_sync
     def test_run_pipe_workflow_document_async(self, tmp_path):
         """
         The async run of a workflow document produces the same items as the sync one.
@@ -495,11 +489,7 @@ class TestExamplePipelines:
         [
             ("simple1", {"url": "farechart"}),
             ("simple2", {"author": "ABC", "link": "www.google.com", "title": "google"}),
-            pytest.param(
-                "split",
-                {"date": "December 02, 2014", "year": 2014},
-                marks=SPLIT_METHOD_PENDING,
-            ),
+            ("split", {"date": "December 02, 2014", "year": 2014}),
             ("wired", {"date": "May 04, 1982"}),
         ],
     )
@@ -512,16 +502,7 @@ class TestExamplePipelines:
 
     @async_test
     @pytest.mark.parametrize(
-        "pipe_name",
-        [
-            "simple1",
-            "simple2",
-            "gigs",
-            pytest.param("split", marks=SPLIT_METHOD_PENDING),
-            "demo",
-            "wired",
-            "kazeeki",
-        ],
+        "pipe_name", ["simple1", "simple2", "gigs", "split", "demo", "wired", "kazeeki"]
     )
     async def test_async_matches_sync(self, pipe_name):
         """Each example's async_pipe yields the same items as its sync pipe."""

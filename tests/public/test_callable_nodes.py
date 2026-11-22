@@ -12,12 +12,13 @@ from riko.bado.itertools import alist
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._context import Context
 from riko.definitions._nodes import CallableNode
+from riko.definitions._workflow_definition import Workflow
 from riko.ext import ModuleDefinition
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import IdentityMode
 from riko.types._streams import Item
 from riko.types.modules import StrReplaceConf, StrReplaceConfRule
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import registered_modules
 from tests._lifecycle import VALUE, tokenized
 
@@ -116,6 +117,8 @@ _PASSTHROUGH_CASES = [
 _MAP_ERRORS = [
     pytest.param({"resources": "db", "db": 1}, "share names", id="alias-collision"),
     pytest.param({"obj": object()}, "JSON", id="non-json-kwarg"),
+    pytest.param({"context": 1}, "reserved names", id="context-kwarg"),
+    pytest.param({"item": 1}, "reserved names", id="item-kwarg"),
 ]
 
 
@@ -263,7 +266,7 @@ class TestCallableNodes:
         assert_type(strings.pipe("count"), Pipeline[Item])
         assert_type(strings.count(), Pipeline[Item])
 
-    @skipif_issync
+    @skipif_sync
     def test_sync_iteration_bridges_an_async_callable(self):
         pipeline = Pipeline().map(_ascaled, factor=3)
         assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
@@ -290,6 +293,14 @@ class TestCallableNodes:
         )
         assert pipeline.first() == {"content": 3944515045}
         assert len(runs) == 1
+
+    def test_a_callable_node_delivers_a_keyword_named_fn(self):
+        def bound(_: object, **kwargs: object) -> dict[str, object]:
+            return kwargs
+
+        node = CallableNode(id="c", name="c", fn=bound, kwargs={"fn": 1})
+        pipeline = Pipeline(Workflow().with_nodes(node))
+        assert list(pipeline([{"x": 1}])) == [{"fn": 1}]
 
     def test_map_propagates_exceptions(self):
         with pytest.raises(ValueError, match="'x': 1"):
@@ -336,7 +347,7 @@ class TestCallableNodes:
             "are not yet implemented"
         ),
     )
-    @skipif_issync
+    @skipif_sync
     def test_map_ignores_a_replaced_udf_module(self):
         sync_pipe = cast("SyncModuleWrapper", list)
         definition = ModuleDefinition(name="udf", sync_pipe=sync_pipe)

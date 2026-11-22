@@ -10,26 +10,27 @@ dispatcher, or registry.
 
 from __future__ import annotations
 
+from collections import Counter
 from functools import cached_property, partial
 from inspect import Parameter, signature
 from itertools import chain, islice
 from operator import attrgetter
-from typing import TYPE_CHECKING, NamedTuple, Protocol, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from attrs import asdict, define, evolve, field, fields_dict
-from typing_extensions import TypeIs
 
-from riko.bado._util import async_partial, require_value
+from riko.bado._util import async_partial
 from riko.bado.itertools import as_async
 from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values, resolve_default
-from riko.base._guards import is_async_callable
+from riko.base._guards import is_async_callable, require_value
 from riko.base._iterutils import gen_nested_mappings, gen_non_null
 from riko.base._require_guards import (
     def_from_require,
     narrow_from_require,
     require_instance,
+    require_non_null,
     require_str,
     typed_dict_keys,
     validator_from_require,
@@ -37,13 +38,18 @@ from riko.base._require_guards import (
 from riko.base._sentinels import SentinelValue
 from riko.base._strutils import replacer
 from riko.base._typing import require_enum
-from riko.definitions._inputs import freeze_inputs, resolve_input_references
+from riko.definitions._inputs import (
+    freeze_inputs,
+    gen_input_references,
+    resolve_input_references,
+)
 from riko.definitions._nodes import (
     FROZEN_CONF,
     NO_OPTIONS,
     CallableNode,
     ModuleNode,
     conf_converter,
+    gen_positional_names,
     require_runnable_node,
 )
 from riko.definitions._workflow_definition import Inputs, Workflow
@@ -61,12 +67,14 @@ from riko.types._frozendict import (
     optional_mapping_converter,
 )
 from riko.types._options import RawCallOptions
-from riko.types._workflow import parse_port
+from riko.types._workflow import OUT, PortKey, is_input_ref, parse_port
 from riko.types._wrappers import (
+    PARSER_POSITIONALS,
     DeclaresIdentity,
     Func,
+    NodeCall,
     NormalizesItems,
-    require_single_output,
+    is_splitter,
 )
 
 if TYPE_CHECKING:
@@ -84,7 +92,13 @@ if TYPE_CHECKING:
     from riko.definitions._nodes import ConfInput, RunnableNode
     from riko.types._frozendict import FrozenJSON, FrozenWorkflowEdges
     from riko.types._options import CallOptions
-    from riko.types._streams import AnyIterable
+    from riko.types._streams import (
+        AnyIterable,
+        AsyncCascade,
+        AsyncStreamOf,
+        Cascade,
+        StreamOf,
+    )
     from riko.types._workflow import (
         Endpoint,
         NodeId,
@@ -101,18 +115,19 @@ if TYPE_CHECKING:
         Dispatcher,
         ExtraNames,
         ModuleWrapper,
-        SplitterWrapperOutput,
         SyncModuleWrapper,
-        WrapperOutput,
     )
 
     from ._resource_view import ResourceView
 
-type PreparedNodes = FrozenDict[NodeId, PreparedNode]
+type AnyPreparedNode = PreparedNode | PreparedSplitter
+type PreparedNodes = FrozenDict[NodeId, AnyPreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
 type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
+_MODULE_ATTRS = ("type", "subtype", "identity")
 _MODULE_FLAGS = ("loopable", "sequential_inputs")
+_DEFAULT_SPLITS = 2
 _normalize_identity = def_from_require(
     require_enum, IdentityMode, what="module 'identity'"
 )
@@ -123,13 +138,20 @@ _KEYWORD_KINDS = frozenset({Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_O
 _EMPTY_EMBEDS: ResolvedModules = FrozenDict()
 _NO_INPUTS: FrozenInputs = FrozenDict()
 
+# Operators keep ``count`` as a port: stored workflows wire a count stream into
+# ``in:count`` on ``truncate``/``tail``. A processor's parser receives the ``count``
+# option instead, so a processor reserves it.
+_CALL_OPTION_NAMES = frozenset().union(*typed_dict_keys(RawCallOptions)) - {"count"}
 
-class NodeCall[T](Protocol):
-    """A node's call that is prepared once with its configuration and call options."""
+_AWAITABLE_RESULT = (
+    "a map function returned an awaitable; iterate with `async for` to await it"
+)
 
-    def __call__(
-        self, item: T = None, context: Context | None = None, **extra: object
-    ) -> WrapperOutput | SplitterWrapperOutput | Iterator[T] | AsyncIterator[T]: ...
+NO_PIPE_MSG = "{0!r} has neither a sync nor an async callable"
+
+
+def _convert_others(arg: Iterable[object] | None) -> Sequence[object] | None:
+    return tuple(arg) if arg else None
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -137,25 +159,25 @@ class ExecutionExtras[V]:
     """
     The keyword arguments an execution adds to a node's call.
 
-    They sit beside the node's named input streams, so no input port may share a
-    field's name; the ``item`` argument's; or the ``emit``, ``assign``, or ``field``
-    call option's. A field left as ``None`` is not passed.
+    They sit beside the node's named input streams. No input port may share a field's
+    name; the ``item`` argument's; or the ``emit``, ``assign``, or ``field`` call
+    options.
 
     Attributes:
 
         others: The streams wired to the node's positional input ports.
         resources: The Context resources bound to the node.
-        embed: The module a loop node runs per item.
+        embed: The loop node's callable selected for the loop pipe's mode.
 
     Examples:
 
-        >>> extras = ExecutionExtras(others=[iter([1])])
+        >>> extras = ExecutionExtras(others=[[1]])
         >>> list(extras.kwargs)
         ['others']
 
     """
 
-    others: Sequence[V] | None = None
+    others: Sequence[V] | None = field(converter=_convert_others)
     resources: ResourceView | None = None
     embed: ModuleWrapper | None = None
 
@@ -211,10 +233,10 @@ class ExecutionExtras[V]:
 
             >>> extras = ExecutionExtras(others=[[1], [2]])
             >>> extras.map_kwargs(len, {"other": [3, 4]})
-            {'other': 2, 'others': [1, 1]}
+            {'other': 2, 'others': (1, 1)}
 
         """
-        others = None if self.others is None else [func(s) for s in self.others]
+        others = None if self.others is None else map(func, self.others)
         mapped = ExecutionExtras(
             others=others, resources=self.resources, embed=self.embed
         )
@@ -228,23 +250,17 @@ def _get_keyword_names(*funcs: Func[object]) -> frozenset[str]:
     return frozenset(p.name for p in params if p.kind in _KEYWORD_KINDS)
 
 
-# Operators keep ``count`` as a port: stored workflows wire a count stream into
-# ``in:count`` on ``truncate``/``tail``. A processor's parser receives the ``count``
-# option instead, so a processor reserves it.
-_CALL_OPTION_NAMES = frozenset().union(*typed_dict_keys(RawCallOptions)) - {"count"}
-
 _RESERVED_INPUTS = frozenset(
     {"item", *fields_dict(ExecutionExtras), *_CALL_OPTION_NAMES}
 ) | _get_keyword_names(NodeCall.__call__, build_call)
 
 _PROCESSOR_RESERVED_INPUTS = _RESERVED_INPUTS | {"count"}
-
-_AWAITABLE_RESULT = (
-    "a map function returned an awaitable; iterate with `async for` to await it"
-)
-
-_is_single = validator_from_require(require_single_output, optional=True)
 _rmodule_conf_converter = conf_converter(what="ModuleNode 'conf'")
+
+
+def _get_count(func: Func[object] | None) -> int:
+    """Gets how many leading parameters ``func``'s call fills by position."""
+    return 1 if getattr(func, "__wrapped__", None) is None else PARSER_POSITIONALS
 
 
 def _is_distinct(
@@ -259,8 +275,7 @@ def _has_pipe(
     instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
 ) -> None:
     if value is None and instance.sync_pipe is None:
-        msg = f"{instance.name!r} has neither a sync nor an async callable"
-        raise InvalidPipelineError(msg)
+        raise InvalidPipelineError(NO_PIPE_MSG.format(instance.name))
 
 
 def _has_flag(pipe: AnyModuleWrapper, flag: str) -> bool:
@@ -273,13 +288,25 @@ def _has_flag_mismatch(
     return _has_flag(sync_pipe, flag) != _has_flag(async_pipe, flag)
 
 
+def _has_attr_mismatch(
+    sync_pipe: SyncModuleWrapper, async_pipe: AsyncModuleWrapper, attr: str
+) -> bool:
+    return getattr(sync_pipe, attr, None) != getattr(async_pipe, attr, None)
+
+
 def _is_consistent(
     instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
 ) -> None:
     if (sync_pipe := instance.sync_pipe) is not None and value is not None:
         _diff = partial(_has_flag_mismatch, sync_pipe, value)
+        _attr_diff = partial(_has_attr_mismatch, sync_pipe, value)
 
-        if differing := tuple(filter(_diff, _MODULE_FLAGS)):
+        flags = tuple(filter(_diff, _MODULE_FLAGS))
+        attrs = tuple(filter(_attr_diff, _MODULE_ATTRS))
+        splitter = is_splitter(sync_pipe) != is_splitter(value)
+        named = (*flags, *attrs)
+
+        if differing := (*named, "splitter") if splitter else named:
             msg = f"{instance.name!r} has sync and async callables that disagree on "
             msg += ", ".join(repr(flag) for flag in differing)
             raise InvalidPipelineError(msg)
@@ -299,25 +326,28 @@ class ResolvedModule:
 
     Raises:
 
-        InvalidPipelineError: If neither callable is given, either resolved callable is
-            a splitter, one callable fills both slots, or the two callables disagree on
-            whether the module is loopable or reads its input streams one at a time.
+        InvalidPipelineError: If neither callable is given or one callable fills both
+            slots; or if the two callables disagree on whether the module is loopable,
+            reads its input streams one at a time, is a splitter, or in its attributes
+            (type, subtype, or identity mode).
 
     Examples:
 
-        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
+        >>> pipe = dispatcher.require("hash")
         >>> module = ResolvedModule("hash", {}, sync_pipe=pipe)
-        >>> module.select_sync() is module.select_async() is pipe
+        >>> module.sync_pipe is pipe
         True
+        >>> module.async_pipe
 
     """
 
     name: str = field(converter=require_str)
     conf: FrozenConf = field(default=FROZEN_CONF, converter=_rmodule_conf_converter)
-    sync_pipe: SyncModuleWrapper | None = field(default=None, validator=_is_single)
+    sync_pipe: SyncModuleWrapper | None = None
     async_pipe: AsyncModuleWrapper | None = field(
-        default=None, validator=[_is_single, _is_distinct, _has_pipe, _is_consistent]
+        default=None, validator=[_is_distinct, _has_pipe, _is_consistent]
     )
 
     @classmethod
@@ -346,7 +376,6 @@ class ResolvedModule:
         Raises:
 
             UnsupportedModuleError: If no module has the name.
-
             UnsupportedWorkflowError: If no stored workflow has the ``pipe_<id>`` name.
 
         Examples:
@@ -362,42 +391,20 @@ class ResolvedModule:
         resolve = partial(dispatcher.resolve, name)
         return cls(name, conf, sync_pipe=resolve(), async_pipe=resolve(is_async=True))
 
-    def select_sync(self) -> AnyModuleWrapper:
-        """
-        Chooses the callable a synchronous execution runs.
+    @cached_property
+    def _positional_names(self) -> frozenset[str]:
+        """The parameter names either pipe's call fills by position."""
+        pipes = (self.sync_pipe, self.async_pipe)
+        counts = map(_get_count, pipes)
+        positional_names = map(gen_positional_names, pipes, counts)
+        return frozenset().union(*positional_names)
 
-        Returns:
-
-            The synchronous pipe, or the asynchronous pipe to adapt.
-
-        """
-        return self.select_async() if self.sync_pipe is None else self.sync_pipe
-
-    def select_async(self) -> AnyModuleWrapper:
-        """
-        Chooses the callable an asynchronous execution runs.
-
-        Returns:
-
-            The asynchronous pipe, or the synchronous pipe to adapt.
-
-        """
-        return self.select_sync() if self.async_pipe is None else self.async_pipe
-
-    def is_async_pipe(self, pipe: ModuleWrapper | None) -> TypeIs[AsyncModuleWrapper]:
-        """
-        Reports whether ``pipe`` is this module's asynchronous implementation.
-
-        Args:
-
-            pipe: A callable chosen by ``select_sync`` or ``select_async``.
-
-        Returns:
-
-            ``True`` when ``pipe`` fills the asynchronous slot.
-
-        """
-        return self.async_pipe is not None and pipe is self.async_pipe
+    @property
+    def _metadata_pipe(self) -> AnyModuleWrapper:
+        """The pipe reported by the module metadata (async if the module has both)."""
+        pipes = (self.async_pipe, self.sync_pipe)
+        pipe = next((pipe for pipe in pipes if pipe is not None), None)
+        return require_non_null(pipe, NO_PIPE_MSG, self.name)
 
     @property
     def loopable(self) -> bool:
@@ -407,7 +414,7 @@ class ResolvedModule:
         A loopable module gives the same results whether it is called once with the
         whole stream or once per item. Its items may be spread across workers.
         """
-        return _has_flag(self.select_async(), "loopable")
+        return _has_flag(self._metadata_pipe, "loopable")
 
     @property
     def identity(self) -> IdentityMode | None:
@@ -423,7 +430,7 @@ class ResolvedModule:
             InvalidPipelineError: If the declared value is not an ``IdentityMode``.
 
         """
-        return _normalize_identity(getattr(self.select_async(), "identity", None))
+        return _normalize_identity(getattr(self._metadata_pipe, "identity", None))
 
     @property
     def sequential_inputs(self) -> bool:
@@ -432,12 +439,17 @@ class ResolvedModule:
 
         Its input streams never hold their node threads at the same time.
         """
-        return _has_flag(self.select_async(), "sequential_inputs")
+        return _has_flag(self._metadata_pipe, "sequential_inputs")
 
     @property
     def is_processor(self) -> bool:
         """Whether the module runs its parser once per item (a processor module)."""
-        return getattr(self.select_async(), "type", None) == "processor"
+        return getattr(self._metadata_pipe, "type", None) == "processor"
+
+    @property
+    def is_splitter(self) -> bool:
+        """Whether the module splits its input into several streams (a splitter)."""
+        return is_splitter(self._metadata_pipe)
 
     @property
     def is_source(self) -> bool:
@@ -446,18 +458,21 @@ class ResolvedModule:
 
         A module without a declared subtype is not a source.
         """
-        return getattr(self.select_async(), "subtype", None) == "source"
+        return getattr(self._metadata_pipe, "subtype", None) == "source"
 
 
-def _gen_references(value: FrozenJSON) -> Iterator[tuple[str, object]]:
+def _gen_references(value: FrozenJSON | FrozenConf) -> Iterator[tuple[str, str]]:
     """``subkey``/``terminal`` references."""
     for mapping in gen_nested_mappings(value):
         pairs = ((key, mapping.get(key)) for key in _REFERENCE_KEYS)
-        yield from ((key, ref) for key, ref in pairs if ref is not None and ref != "")
+        yield from (
+            (key, ref) for key, ref in pairs if isinstance(ref, str) and ref != ""
+        )
 
 
 def _gen_item_result(
     fn: Func[object],
+    /,
     item: object = None,
     context: Context | None = None,
     *,
@@ -477,12 +492,13 @@ def _gen_item_result(
 
 async def _agen_item_result[T](
     fn: Func[T | Awaitable[T]],
+    /,
     item: object = None,
     context: Context | None = None,
     *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
-) -> AsyncIterator[T]:
+) -> AsyncStreamOf[T]:
     """The async twin of ``_gen_item_result``: an async ``fn`` is awaited."""
     call = async_partial(fn, **kwargs, **normalize_mapping(resources))
     yield await call(item)
@@ -492,6 +508,7 @@ def _gen_stream_results[T](
     fn: Func[T | Awaitable[T]],
     items: Iterable[object] = (),
     context: Context | None = None,
+    /,
     *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
@@ -505,10 +522,11 @@ async def _agen_stream_results[T](
     fn: Func[T | Awaitable[T]],
     item: AnyIterable[object] = (),
     context: Context | None = None,
+    /,
     *,
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
-) -> AsyncIterator[T]:
+) -> AsyncStreamOf[T]:
     """
     Applies a callable node's ``fn`` to each item of a stream, awaiting an async ``fn``.
 
@@ -520,25 +538,73 @@ async def _agen_stream_results[T](
         yield await call(value)
 
 
-class PreparedInterface(NamedTuple):
+@define(frozen=True, slots=True)
+class SyncInterface[O]:
     """
-    The pipe a sync or async execution runs for a node, with its call prepared once.
+    The synchronous pipe an execution runs for a node and its prepared call.
+
+    A synchronous execution runs it natively, and an asynchronous execution adapts it.
 
     Attributes:
 
-        pipe: The callable that execution runs.
+        pipe: The synchronous callable.
         call: The pipe with the node's configuration, options, and extras applied.
         item_call: The per-item call the mapped paths run (``call`` for a module node).
-        native: Whether ``pipe`` runs natively for the execution, without an adapter.
         identity: How each result's identity relates to its input items.
         item_normalizer: The function the pipe applies to each input item.
 
+    Examples:
+
+        >>> from riko.ext import ModuleNode
+        >>> from riko.runtime._resolver import dispatcher
+        >>>
+        >>> pipe = dispatcher.require("hash")
+        >>> module = ResolvedModule("hash", sync_pipe=pipe)
+        >>> prepared = PreparedNode(ModuleNode(id="h", name="hash"), module)
+        >>> isinstance(prepared.sync_interface, SyncInterface)
+        True
+
     """
 
-    pipe: AnyModuleWrapper
-    call: NodeCall[object]
-    item_call: NodeCall[object]
-    native: bool
+    pipe: SyncModuleWrapper
+    call: NodeCall[O]
+    item_call: NodeCall[O]
+    identity: IdentityMode | None
+    item_normalizer: Func[object] | None = None
+
+
+@define(frozen=True, slots=True)
+class AsyncInterface[O]:
+    """
+    The asynchronous pipe an execution runs for a node and its prepared call.
+
+    An asynchronous execution runs it natively, and a synchronous execution adapts it.
+
+    Attributes:
+
+        pipe: The asynchronous callable.
+        call: The pipe with the node's configuration, options, and extras applied.
+        item_call: The per-item call mapped paths run (``call`` for a module node).
+        identity: How each result's identity relates to its input items.
+        item_normalizer: The function the pipe applies to each input item.
+
+    Examples:
+
+        >>> from riko.ext import ModuleNode
+        >>> from riko.runtime._resolver import dispatcher
+        >>>
+        >>> async_pipe = dispatcher.require("hash", is_async=True)
+        >>> module = ResolvedModule("hash", async_pipe=async_pipe)
+        >>> prepared = PreparedNode(ModuleNode(id="h", name="hash"), module)
+        >>> interface = prepared.async_interface
+        >>> isinstance(interface, AsyncInterface)
+        True
+
+    """
+
+    pipe: AsyncModuleWrapper
+    call: NodeCall[O]
+    item_call: NodeCall[O]
     identity: IdentityMode | None
     item_normalizer: Func[object] | None = None
 
@@ -557,55 +623,39 @@ def _resolve_callable[T](
     return evolve(module, sync_pipe=None) if is_async_callable(node.fn) else module
 
 
+def _parse_splits(value: FrozenJSON | None) -> int:
+    """Parses a splitter's ``splits`` conf value."""
+    if value is None:
+        splits = _DEFAULT_SPLITS
+    elif isinstance(value, int) and not isinstance(value, bool):
+        splits = value
+    elif isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        splits = int(value)
+    else:
+        raise InvalidPipelineError(f"a split count must be an integer, got {value!r}")
+
+    return splits
+
+
 _build_is_module = partial(validator_from_require, require_instance, ResolvedModule)
 _is_optional_module = _build_is_module(optional=True)
 
 
 @define(frozen=True, slots=True)
-class PreparedNode:
+class _PreparedBase:
     """
-    One graph node ready to run: the node, its implementation, and its embed.
+    What every graph node ready to run shares: the node, its module, and its inputs.
 
     Attributes:
 
         node: The ``Workflow`` module or callable node this was resolved from.
         module: The node's resolved implementation.
-        embed: The resolved module a loop node runs per item.
         incoming: The stream edges that target the node.
-        input_ports: The parsed target port of each incoming stream edge.
-
-        extras: The names of the extra inputs delivered with each item: a named
-            input stream under its port name, positional streams as ``others``, bound
-            resources as ``resources``, and a loop's embed as ``embed``, in that order.
-
-        sync_interface: The pipe a synchronous execution runs, with its call.
-        async_interface: The pipe an asynchronous execution runs, with its call.
-
-    Examples:
-
-        >>> from riko.ext import ModuleNode
-        >>> from riko.modules.strconcat import pipe
-        >>> from riko.types._workflow import WorkflowEdge
-        >>>
-        >>> node = ModuleNode(id="n", name="strconcat", resources="db")
-        >>> named = WorkflowEdge("a", "n", "out", "in:part")
-        >>> positional = WorkflowEdge("b", "n", "out", "in:1")
-        >>> module = ResolvedModule("strconcat", sync_pipe=pipe)
-        >>> prepared = PreparedNode(node, module, incoming=(named, positional))
-        >>> prepared.node.id
-        'n'
-        >>> dict(prepared.resources)
-        {'db': 'db'}
-        >>> prepared.extras
-        ('part', 'others', 'resources')
-        >>> prepared.is_self_starting
-        True
 
     """
 
     node: RunnableNode = field(converter=require_runnable_node)
     module: ResolvedModule = field(validator=_build_is_module())
-    embed: ResolvedModule | None = field(default=None, validator=_is_optional_module)
     incoming: FrozenWorkflowEdges = field(default=(), converter=tuple)
 
     @property
@@ -615,14 +665,6 @@ class PreparedNode:
     @property
     def options(self) -> CallOptions:
         return self.node.options if isinstance(self.node, ModuleNode) else NO_OPTIONS
-
-    @property
-    def embed_or_self_conf(self) -> FrozenConf:
-        return self.module.conf if self.embed is None else self.embed.conf
-
-    @property
-    def loopable(self) -> bool:
-        return self.module.loopable
 
     @property
     def sequential_inputs(self) -> bool:
@@ -664,12 +706,11 @@ class PreparedNode:
         if self.is_source or (is_builtin and self.module.name in _VALUE_SOURCE_MODULES):
             items = self.input_ports
             connected = set(gen_non_null(items, cmp_attr="name", arg_attr="name"))
+            references = _gen_references(self.module.conf)
 
             is_self_starting = all(
-                key == SentinelValue
-                and isinstance(name, str)
-                and replacer(name, "") in connected
-                for key, name in _gen_references(self.module.conf)
+                key == SentinelValue and replacer(name, "") in connected
+                for key, name in references
             )
 
         return is_self_starting
@@ -696,6 +737,68 @@ class PreparedNode:
         """Whether a stream reaches the node on a port other than its default one."""
         return any(not port.is_default for port in self.input_ports)
 
+
+@define(frozen=True, slots=True)
+class PreparedNode(_PreparedBase):
+    """
+    One graph node ready to run: the node with its implementation and embed.
+
+    The node produces one output stream on its ``out`` port.
+
+    Attributes:
+
+        node: The ``Workflow`` module or callable node this was resolved from.
+        module: The node's resolved implementation.
+        incoming: The stream edges that target the node.
+        embed: The loop node's sync and async callables.
+        input_ports: The parsed target port of each incoming stream edge.
+        sync_interface: The synchronous pipe with its call.
+        async_interface: The asynchronous pipe with its call.
+
+        extras: The names of the extra call inputs delivered with each item:
+
+            - [PORT NAME]: a named input stream
+            - others: positional streams
+            - resources: bound resources
+            - embed: the callable selected for the loop pipe's mode
+
+    Examples:
+
+        >>> from riko.ext import ModuleNode
+        >>> from riko.runtime._resolver import dispatcher
+        >>> from riko.types._workflow import WorkflowEdge
+        >>>
+        >>> node = ModuleNode(id="n", name="strconcat", resources="db")
+        >>> named = WorkflowEdge("a", "n", "out", "in:part")
+        >>> positional = WorkflowEdge("b", "n", "out", "in:1")
+        >>> pipe = dispatcher.require("strconcat")
+        >>>
+        >>> module = ResolvedModule("strconcat", sync_pipe=pipe)
+        >>> prepared = PreparedNode(node, module, incoming=(named, positional))
+        >>> prepared.node.id
+        'n'
+        >>> dict(prepared.resources)
+        {'db': 'db'}
+        >>> prepared.extras
+        ('part', 'others', 'resources')
+        >>> prepared.is_self_starting
+        True
+        >>> prepared.output_ports
+        ('out',)
+
+    """
+
+    output_ports: ClassVar[tuple[Port, ...]] = (OUT,)
+    embed: ResolvedModule | None = field(default=None, validator=_is_optional_module)
+
+    @property
+    def embed_or_self_conf(self) -> FrozenConf:
+        return self.module.conf if self.embed is None else self.embed.conf
+
+    @property
+    def loopable(self) -> bool:
+        return self.module.loopable
+
     @cached_property
     def is_mappable(self) -> bool:
         """
@@ -713,86 +816,193 @@ class PreparedNode:
         Whether an async run holds a thread while the node reads upstream.
 
         Only a node without an async implementation does, and only when it reads its
-        whole input in one call. A mappable node instead runs each item after it has
-        been read.
+        whole input in one call. A mappable node runs each item after reading it.
         """
         return self.module.async_pipe is None and not self.is_mappable
 
-    def _build_native(self, pipe: AnyModuleWrapper) -> PreparedInterface:
-        identity, normalizer = None, None
+    def _get_identity(self, prepared: object) -> IdentityMode | None:
+        declared = prepared.identity if isinstance(prepared, DeclaresIdentity) else None
+        return self.module.identity if declared is None else declared
+
+    def _build_sync_interface(
+        self, pipe: SyncModuleWrapper
+    ) -> SyncInterface[Iterator[object]]:
+        normalizer = None
+        call: NodeCall[Iterator[object]]
+        item_call: NodeCall[Iterator[object]]
 
         if isinstance(node := self.node, CallableNode):
-            if self.module.is_async_pipe(pipe):
-                stream, one = _agen_stream_results, _agen_item_result
-            else:
-                stream, one = _gen_stream_results, _gen_item_result
+            conf = self.module.conf
+            stream_args = (_gen_stream_results, node.fn)
+            item_args = (_gen_item_result, node.fn)
 
-            # partials, not closures: the prepared state ships to the process pool
-            call: NodeCall[object] = partial(stream, node.fn, **self.module.conf)
-            item_call: NodeCall[object] = partial(one, node.fn, **self.module.conf)
+            # partials, not closures because it is sent to the process pool
+            call = partial(*stream_args, **conf)
+            item_call = partial(*item_args, **conf)
             identity = IdentityMode.PRESERVE if node.identity is None else node.identity
         else:
             conf, options = self.embed_or_self_conf, self.options.kwargs
-            prepared = build_call(pipe, *self.extras, conf=conf, **options)
-            call = item_call = prepared
-            declared = None
+            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+            identity = self._get_identity(call)
 
-            if isinstance(prepared, DeclaresIdentity):
-                declared = prepared.identity
+            if isinstance(call, NormalizesItems):
+                normalizer = call.normalize_item
 
-            identity = self.module.identity if declared is None else declared
-
-            if isinstance(prepared, NormalizesItems):
-                normalizer = prepared.normalize_item
-
-        return PreparedInterface(
-            pipe,
-            call,
-            item_call,
-            native=True,
-            identity=identity,
-            item_normalizer=normalizer,
-        )
+        return SyncInterface(pipe, call, item_call, identity, normalizer)
 
     @cached_property
-    def sync_interface(self) -> PreparedInterface:
-        """
-        The pipe a synchronous execution runs, with its call prepared once.
+    def sync_interface(self) -> SyncInterface[Iterator[object]] | None:
+        """The synchronous pipe with its prepared call."""
+        pipe = self.module.sync_pipe
+        return None if pipe is None else self._build_sync_interface(pipe)
 
-        It is the synchronous pipe when the module has one, else the asynchronous
-        pipe for the execution to adapt.
+    def _build_async_interface(
+        self, pipe: AsyncModuleWrapper
+    ) -> AsyncInterface[AsyncIterator[object]]:
+        normalizer = None
+        call: NodeCall[AsyncIterator[object]]
+        item_call: NodeCall[AsyncIterator[object]]
+
+        if isinstance(node := self.node, CallableNode):
+            conf = self.module.conf
+            stream_args = (_agen_stream_results, node.fn)
+            item_args = (_agen_item_result, node.fn)
+
+            # partials, not closures because it is sent to the process pool
+            call = partial(*stream_args, **conf)
+            item_call = partial(*item_args, **conf)
+            identity = IdentityMode.PRESERVE if node.identity is None else node.identity
+        else:
+            conf, options = self.embed_or_self_conf, self.options.kwargs
+            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+            identity = self._get_identity(call)
+
+            if isinstance(call, NormalizesItems):
+                normalizer = call.normalize_item
+
+        return AsyncInterface(pipe, call, item_call, identity, normalizer)
+
+    @cached_property
+    def async_interface(self) -> AsyncInterface[AsyncIterator[object]] | None:
+        """The asynchronous pipe with its prepared call."""
+        pipe = self.module.async_pipe
+        return None if pipe is None else self._build_async_interface(pipe)
+
+    @property
+    def sync_map_interface(self) -> SyncInterface[Iterator[object]] | None:
         """
+        The synchronous interface a run maps across workers, or ``None`` if it can't.
+
+        Only a mappable node with a synchronous pipe qualifies. An adapted asynchronous
+        pipe streams its whole input in one call.
+        """
+        return self.sync_interface if self.is_mappable else None
+
+
+@define(frozen=True, slots=True)
+class PreparedSplitter(_PreparedBase):
+    """
+    One splitter node ready to run: it splits its input stream into several streams.
+
+    Each stream is one output port: ``out`` for the first, then ``out:1``, ``out:2``,
+    and so on. Each stream item keeps its input item's identity.
+
+    Attributes:
+
+        node: The ``Workflow`` module node this was resolved from.
+        module: The node's resolved splitter.
+        incoming: The stream edges that target the node.
+        splits: The number of streams declared in the module's ``splits`` conf.
+        output_ports: The output port of each stream.
+        sync_interface: The synchronous splitter with its call.
+        async_interface: The asynchronous splitter with its call.
+
+    Raises:
+
+        InvalidPipelineError: When ``splits`` is read and is not an integer.
+
+    Examples:
+
+        >>> from riko.ext import ModuleNode
+        >>> from riko.runtime._resolver import dispatcher
+        >>>
+        >>> pipe = dispatcher.require("split")
+        >>> module = ResolvedModule("split", {"splits": 3}, sync_pipe=pipe)
+        >>> prepared = PreparedSplitter(ModuleNode(id="s", name="split"), module)
+        >>> prepared.splits
+        3
+        >>> prepared.output_ports
+        ('out', 'out:1', 'out:2')
+
+    """
+
+    @cached_property
+    def splits(self) -> int:
+        return _parse_splits(self.module.conf.get("splits"))
+
+    @property
+    def has_pending_splits(self) -> bool:
+        """Whether ``splits`` is a workflow input reference not yet given its value."""
+        return is_input_ref(self.module.conf.get("splits"))
+
+    @cached_property
+    def output_ports(self) -> tuple[Port, ...]:
+        return (OUT, *(f"{OUT}:{k}" for k in range(1, self.splits)))
+
+    def validate_streams(
+        self, *owned: StreamOf[object] | AsyncStreamOf[object]
+    ) -> None:
+        """
+        Validates that the splitter yielded one stream per declared split.
+
+        Args:
+
+            owned: The owned streams the splitter yielded, read up to one past
+                ``splits``.
+
+        Raises:
+
+            InvalidPipelineError: If the number of ``owned`` streams differs from
+                ``splits``.
+
+        """
+        if (count := len(owned)) != self.splits:
+            yielded = f"more than {self.splits}" if count > self.splits else count
+            msg = f"splitter node {self.node.id!r} yielded {yielded} streams but "
+            raise InvalidPipelineError(msg + f"declares {self.splits}")
+
+    @property
+    def is_thread_holder(self) -> bool:
+        """Whether an async run holds a thread while the splitter reads upstream."""
+        return self.module.async_pipe is None
+
+    @cached_property
+    def sync_interface(self) -> SyncInterface[Cascade] | None:
+        """The synchronous splitter with its prepared call."""
         if (pipe := self.module.sync_pipe) is None:
-            interface = self.async_interface._replace(native=False)
+            interface = None
+        elif is_splitter(pipe):
+            conf, options = self.module.conf, self.options.kwargs
+            call = build_call(pipe, *self.extras, conf=conf, **options)
+            interface = SyncInterface(pipe, call, call, IdentityMode.PRESERVE)
         else:
-            interface = self._build_native(pipe)
+            raise InvalidPipelineError(f"{self.module.name!r} is not a splitter")
 
         return interface
 
     @cached_property
-    def async_interface(self) -> PreparedInterface:
-        """
-        The pipe an asynchronous execution runs, with its call prepared once.
-
-        It is the asynchronous pipe when the module has one, else the synchronous
-        pipe for the execution to adapt.
-        """
+    def async_interface(self) -> AsyncInterface[AsyncCascade] | None:
+        """The asynchronous splitter with its prepared call."""
         if (pipe := self.module.async_pipe) is None:
-            interface = self.sync_interface._replace(native=False)
+            interface = None
+        elif is_splitter(pipe):
+            conf, options = self.module.conf, self.options.kwargs
+            call = build_call(pipe, *self.extras, conf=conf, **options)
+            interface = AsyncInterface(pipe, call, call, IdentityMode.PRESERVE)
         else:
-            interface = self._build_native(pipe)
+            raise InvalidPipelineError(f"{self.module.name!r} is not a splitter")
 
         return interface
-
-    @cached_property
-    def is_sync_mappable(self) -> bool:
-        """
-        Whether a synchronous run may map the node's items across workers.
-
-        Only a mappable node with a native synchronous pipe qualifies. An adapted
-        asynchronous pipe streams its whole input in one call.
-        """
-        return self.is_mappable and self.sync_interface.native
 
 
 _rmodule_freezer = instances_freezer(ResolvedModule, "ExecutionPlan module")
@@ -807,33 +1017,11 @@ _require_workflow = narrow_from_require(
 )
 
 
-def _is_reserved_input(port: Port, module: ResolvedModule | None) -> bool:
-    is_processor = module is not None and module.is_processor
-    reserved = _PROCESSOR_RESERVED_INPUTS if is_processor else _RESERVED_INPUTS
-    return parse_port(port).name in reserved
-
-
-def require_default_output_port(port: Port, ref: str) -> None:
-    """
-    Rejects a port other than ``out`` until multi-output delivery is executable.
-
-    Only the bare ``out`` port is executable today. A positional ``out:N`` or
-    semantic ``out:<name>`` source or selected workflow output is refused rather than
-    silently read as the node's ``out`` stream.
-
-    Args:
-
-        port: The source or selected workflow output's port string to check.
-        ref: A human-readable reference to the offending edge or workflow output.
-
-    Raises:
-
-        InvalidPipelineError: If ``port`` is not the bare ``out`` port.
-
-    """
-    if not parse_port(port).is_default:
-        msg = f"{ref} uses the port {port!r} instead of 'out', which cannot run yet."
-        raise InvalidPipelineError(msg)
+def _is_async_only(node: AnyPreparedNode) -> bool:
+    """Whether a sync run reads the node or its embed through the portal."""
+    embed = node.embed if isinstance(node, PreparedNode) else None
+    isnt_sync = node.sync_interface is None
+    return isnt_sync or (embed is not None and embed.sync_pipe is None)
 
 
 @define(frozen=True, slots=True)
@@ -850,11 +1038,8 @@ class ExecutionPlan:
 
         workflow: The graph the plan resolves.
         modules: The resolved implementation of each node, keyed by node id.
-        embeds: The resolved module each loop node runs per item, keyed by node id.
-
-        inputs: The input values the nodes' configurations were built from, keyed by
-            input name.
-
+        embeds: The resolved sync and async callables, keyed by loop node id.
+        inputs: Values the nodes' configurations were built from, keyed by input name.
         index: The workflow's graph index, including each workflow output's subgraph.
         nodes: Each workflow node paired with its resolved module and embed.
 
@@ -863,21 +1048,22 @@ class ExecutionPlan:
         InvalidPipelineError: If any of these hold:
 
             - ``workflow`` is not a ``Workflow``, or its graph is invalid.
-            - A source port fans out to more than one edge.
             - A node is neither a module node nor a callable node.
-            - A named input port uses a reserved name (e.g., ``conf``).
+            - A named input port uses a reserved name (e.g., ``conf``) or a parameter
+              name the module's pipe fills by position.
             - ``modules`` does not resolve the workflow's nodes, or ``embeds`` does not
               resolve its loop embeds.
+            - An edge or workflow output reads a port its node does not produce.
+            - A splitter has fewer than one split.
 
     Examples:
 
         >>> from riko import Workflow
         >>> from riko.ext import ModuleNode
-        >>> from riko.modules.hash import pipe
+        >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
-        >>> modules = {"a": ResolvedModule("hash", sync_pipe=pipe)}
-        >>> plan = ExecutionPlan(workflow=flow, modules=modules)
+        >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
+        >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> plan.nodes["a"].node
         ModuleNode(id='a', name='hash', resources=FrozenDict({})...)
         >>> plan.index.order
@@ -900,6 +1086,9 @@ class ExecutionPlan:
         """
         Builds an executable snapshot of ``flow`` with every node resolved once.
 
+        Each distinct module name is looked up once. Nodes that share a name reuse its
+        callables with their own conf.
+
         Args:
 
             flow: The ``Workflow`` to prepare.
@@ -917,11 +1106,12 @@ class ExecutionPlan:
             InvalidPipelineError: If any of these hold:
 
                 - The graph is invalid.
-                - A source port fans out to more than one edge.
                 - A node isn't a module or callable node (write, action, cache, or
                   subscribe).
-                - A named input port uses a reserved name (e.g., ``conf``).
-                - A node runs a splitter.
+                - A named input port uses a reserved name (e.g., ``conf``) or a
+                  parameter name the module's pipe fills by position.
+                - An edge or workflow output reads a port its node does not produce.
+                - A splitter has fewer than one split.
 
             UnsupportedModuleError: If no module has the name a node gives.
 
@@ -934,13 +1124,23 @@ class ExecutionPlan:
             >>> from riko.ext import ModuleNode
             >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="count-1", name="count"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="count-1", name="count"))
             >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
             >>> sorted(plan.nodes)
             ['count-1']
 
         """
-        resolve = partial(ResolvedModule.from_dispatcher, dispatcher)
+        by_name: dict[str, ResolvedModule] = {}
+
+        def resolve(name: str, conf: ConfInput) -> ResolvedModule:
+            if (module := by_name.get(name)) is None:
+                result = ResolvedModule.from_dispatcher(dispatcher, name, conf)
+                by_name[name] = result
+            else:
+                result = evolve(module, conf=conf)
+
+            return result
+
         resolve_callable = partial(_resolve_callable, dispatcher)
         modules = {k: resolve(n.name, n.conf) for k, n in flow.module_nodes.items()}
         embeds = {k: resolve(e["name"], e["conf"]) for k, e in flow.embeds.items()}
@@ -952,20 +1152,27 @@ class ExecutionPlan:
         """The workflow's graph index, including each workflow output's subgraph."""
         return self.workflow.index
 
+    def _build_node(self, node_id: NodeId, node: RunnableNode) -> AnyPreparedNode:
+        module, incoming = self.modules[node_id], self.index.incoming.get(node_id, ())
+
+        if module.is_splitter:
+            prepared: AnyPreparedNode = PreparedSplitter(node, module, incoming)
+        else:
+            embed = self.embeds.get(node_id)
+            prepared = PreparedNode(node, module, incoming, embed=embed)
+
+        return prepared
+
     @cached_property
     def nodes(self) -> PreparedNodes:
-        """Each workflow node paired with its resolved module and embed."""
-        embeds, modules, incoming = self.embeds, self.modules, self.index.incoming
+        """Each runnable node prepared with its resolved module and keyed by node id."""
         pairs = self.workflow.runnable_nodes.items()
-        prepared = {
-            k: PreparedNode(n, modules[k], embeds.get(k), incoming.get(k, ()))
-            for k, n in pairs
-        }
+        prepared = {k: self._build_node(k, n) for k, n in pairs}
         return FrozenDict.from_frozen(prepared)
 
     def require_output(self, output: OutputName) -> Endpoint:
         """
-        Requires a workflow output on the bare ``out`` port.
+        Requires the plan to have a workflow output named ``output``.
 
         Args:
 
@@ -977,15 +1184,53 @@ class ExecutionPlan:
 
         Raises:
 
-            InvalidPipelineError: If the plan exposes no such workflow output, or it
-                reads a port other than ``out``.
+            InvalidPipelineError: If the plan exposes no such workflow output.
 
         """
         if (endpoint := self.index.outputs.get(output)) is None:
             raise InvalidPipelineError(f"workflow has no workflow output {output!r}")
 
-        require_default_output_port(endpoint.port, f"workflow output {output!r}")
         return endpoint
+
+    def get_port_demand(self, output: OutputName) -> Counter[PortKey]:
+        """
+        Counts workflow ``output`` ports' readers.
+
+        Every edge into a node the run builds reads its source port once, and the
+        workflow output reads its own port once. A port the run never reads is absent.
+
+        Args:
+
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            The port reader count, keyed by node id and canonical port.
+
+        Raises:
+
+            InvalidPipelineError: If the plan doesn't expose workflow ``output``.
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
+            >>> from riko.runtime._resolver import dispatcher
+            >>>
+            >>> first = ModuleNode(id="a", name="uniq")
+            >>> second = ModuleNode(id="b", name="uniq")
+            >>>
+            >>> flow = Workflow().with_nodes(first, second)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> sorted(plan.get_port_demand("default").items())
+            [(('a', 'out'), 1), (('b', 'out'), 1)]
+
+        """
+        endpoint = self.require_output(output)
+        nodes = self.nodes
+        required = self.index.required[output]
+        edges = chain.from_iterable(nodes[i].incoming for i in required)
+        return Counter(chain((edge.source_key for edge in edges), [endpoint.port_key]))
 
     def get_thread_demand(self, output: OutputName) -> int:
         """
@@ -1013,18 +1258,18 @@ class ExecutionPlan:
 
             >>> from riko import Workflow
             >>> from riko.ext import ModuleNode
-            >>> from riko.modules import hash, uniq
+            >>> from riko.runtime._resolver import dispatcher
             >>>
-            >>> def plan(name, pipe):
-            ...     a, b = ModuleNode(id="a", name=name), ModuleNode(id="b", name=name)
-            ...     flow = Workflow().with_node(a).with_node(b)
-            ...     modules = dict.fromkeys("ab", ResolvedModule(name, sync_pipe=pipe))
-            ...     return ExecutionPlan(workflow=flow, modules=modules)
-            >>>
-            >>> plan("uniq", uniq.pipe).get_thread_demand("default")
-            2
-            >>> plan("hash", hash.pipe).get_thread_demand("default")
+            >>> nodes = (ModuleNode(id=_id, name="uniq") for _id in "ab")
+            >>> flow = Workflow().with_nodes(*nodes)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan.get_thread_demand("default")
             0
+            >>> pipe = dispatcher.require("uniq")
+            >>> modules = dict.fromkeys("ab", ResolvedModule("uniq", sync_pipe=pipe))
+            >>> sync_plan = ExecutionPlan(flow, modules=modules)
+            >>> sync_plan.get_thread_demand("default")
+            2
 
         """
         demand: dict[NodeId, int] = {}
@@ -1042,6 +1287,40 @@ class ExecutionPlan:
                 demand[node_id] = sum(upstream_demand)
 
         return max(demand.values(), default=0)
+
+    def uses_portal(self, output: OutputName = DEFAULT_OUTPUT) -> bool:
+        """
+        Whether a sync run of ``output`` reads a node or an embed through the portal.
+
+        Kwargs:
+
+            output: The name of the workflow output being run.
+
+        Returns:
+
+            ``True`` when a node that ``output`` runs, or its host embed, has only an
+            async pipe.
+
+        Examples:
+
+            >>> from riko import Workflow
+            >>> from riko.ext import ModuleNode
+            >>> from riko.runtime._resolver import dispatcher
+            >>>
+            >>> node = ModuleNode(id="a", name="hash")
+            >>> flow = Workflow().with_nodes(node)
+            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan.uses_portal()
+            False
+            >>> async_pipe = dispatcher.require("hash", is_async=True)
+            >>> module = ResolvedModule("hash", async_pipe=async_pipe)
+            >>> async_plan = ExecutionPlan(flow, modules={"a": module})
+            >>> async_plan.uses_portal()
+            True
+
+        """
+        nodes = (self.nodes[node_id] for node_id in self.index.required[output])
+        return any(map(_is_async_only, nodes))
 
     def _gen_seed_takers(self, output: OutputName) -> Iterator[NodeId]:
         """Ids of ``output``'s nodes that take a default seed and can't self start."""
@@ -1075,7 +1354,7 @@ class ExecutionPlan:
             >>> from riko.runtime._resolver import dispatcher
             >>>
             >>> def plan(name):
-            ...     flow = Workflow().with_node(ModuleNode(id="n", name=name))
+            ...     flow = Workflow().with_nodes(ModuleNode(id="n", name=name))
             ...     return ExecutionPlan.from_workflow(flow, dispatcher)
             >>>
             >>> plan("forever").is_self_starting_output()
@@ -1212,26 +1491,27 @@ class ExecutionPlan:
         for node_id in self.index.required[output]:
             yield node_id, seed if node_id == seed_target else None
 
-    def with_inputs(self, values: Inputs | None) -> Self:
+    def with_inputs(self, inputs: Inputs | None) -> Self:
         """
         Builds the plan whose nodes run with the given ``Inputs``.
 
         Each ``{"input": name}`` mapping in a module node's conf, a loop's embed conf,
-        or a callable node's keyword arguments is replaced by ``values[name]``.
+        or a callable node's keyword arguments is replaced by ``inputs[name]``. A
+        resolved module whose conf refers to no input is used as is.
 
         Args:
 
-            values: The input values keyed by input name.
+            inputs: The inputs keyed by input name.
 
         Returns:
 
-            A new plan whose ``inputs`` hold the input values its nodes' configurations
-            were built from.
+            A new plan whose ``inputs`` hold the inputs its nodes' configurations were
+            built from.
 
         Raises:
 
             InvalidPipelineError: If the plan's configurations were already built from
-                input values.
+                inputs.
 
         Examples:
 
@@ -1242,31 +1522,45 @@ class ExecutionPlan:
             >>> conf = {"attrs": {"key": "q", "value": {"input": "q"}}}
             >>> node = ModuleNode(id="b", name="itembuilder", conf=conf)
             >>> schemas = {"q": {"type": "integer"}}
-            >>> flow = Workflow(input_schemas=schemas).with_node(node)
-            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-            >>> resolved = plan.with_inputs({"q": 2})
-            >>> dict(resolved.inputs)
+            >>> flow = Workflow(input_schemas=schemas).with_nodes(node)
+            >>>
+            >>> plan_a = ExecutionPlan.from_workflow(flow, dispatcher)
+            >>> plan_b = plan_a.with_inputs({"q": 2})
+            >>> dict(plan_b.inputs)
             {'q': 2}
-            >>> dict(resolved.modules["b"].conf["attrs"])
+            >>> dict(plan_b.modules["b"].conf["attrs"])
             {'key': 'q', 'value': 2}
 
         """
         if self.inputs is not None:
-            msg = "The plan's configurations were already built from input values."
+            msg = "The plan's configurations were already built from inputs."
             raise InvalidPipelineError(msg)
 
-        inputs: Inputs = resolve_default(values, _NO_INPUTS)
+        _inputs: Inputs = resolve_default(inputs, _NO_INPUTS)
 
         def substitute(value: JSONValue) -> FrozenJSON:
-            resolved = resolve_input_references(value, inputs)
-            return json_freeze(resolved)
+            json_value = resolve_input_references(value, _inputs)
+            return json_freeze(json_value)
 
         def resolve(module: ResolvedModule) -> ResolvedModule:
-            return evolve(module, conf=substitute(module.conf))
+            if next(gen_input_references(module.conf), None) is None:
+                result = module
+            else:
+                result = evolve(module, conf=substitute(module.conf))
+
+            return result
 
         modules = map_values(resolve, self.modules)
         embeds = map_values(resolve, self.embeds)
-        return evolve(self, modules=modules, embeds=embeds, _inputs=values)
+        return evolve(self, modules=modules, embeds=embeds, _inputs=inputs)
+
+    def _is_reserved_input(self, target: tuple[NodeId, Port]) -> bool:
+        node_id, port = target
+        module = self.modules.get(node_id)
+        is_processor = module is not None and module.is_processor
+        reserved = _PROCESSOR_RESERVED_INPUTS if is_processor else _RESERVED_INPUTS
+        positional = frozenset() if module is None else module._positional_names
+        return parse_port(port).name in reserved | positional
 
     def validate(self) -> None:
         """
@@ -1277,11 +1571,13 @@ class ExecutionPlan:
             InvalidPipelineError: If any of these hold:
 
                 - The graph is invalid.
-                - A source port fans out to more than one edge.
                 - A workflow node is neither a module node nor a callable node.
-                - A named input port uses a reserved name (e.g., ``conf``).
+                - A named input port uses a reserved name (e.g., ``conf``) or a
+                  parameter name the module's pipe fills by position.
                 - ``modules`` does not resolve the workflow's nodes, or ``embeds``
                   does not resolve its loop embeds.
+                - A splitter has fewer than one split.
+                - An edge or workflow output reads a port its node does not produce.
 
         """
         flow = self.workflow
@@ -1289,13 +1585,10 @@ class ExecutionPlan:
         if not flow.is_empty:
             flow.validate()
 
-        flow.require_executable()
         flow.require_runnable_only("execution")
-        targets = ((e.target, e.target_port) for e in flow.graph_edges)
+        targets = ((e.target_id, e.target_port) for e in flow.graph_edges)
 
-        if reserved := sorted(
-            t for t in targets if _is_reserved_input(t[1], self.modules.get(t[0]))
-        ):
+        if reserved := sorted(filter(self._is_reserved_input, targets)):
             msg = f"input port(s) {reserved} use a reserved name. Rename the port(s)."
             raise InvalidPipelineError(msg)
         elif unresolved := set(flow.runnable_nodes).symmetric_difference(self.modules):
@@ -1305,11 +1598,51 @@ class ExecutionPlan:
             msg = f"embeds must match the workflow's loop embeds: {sorted(mismatched)}"
             raise InvalidPipelineError(msg)
 
+        self._validate_port_wiring()
+
+    def _gen_read_ports(self) -> Iterator[PortKey]:
+        """The node id and canonical port of each edge source and workflow output."""
+        yield from (edge.source_key for edge in self.workflow.graph_edges)
+        yield from (endpoint.port_key for endpoint in self.index.outputs.values())
+
+    def _validate_port_wiring(self) -> None:
+        """
+        Validates that every splitter has an output and every read port exists.
+
+        Input reference splitter counts are checked once ``with_inputs`` supplies the
+        value.
+        """
+        nodes = self.nodes
+        pending = {
+            node_id
+            for node_id, node in nodes.items()
+            if isinstance(node, PreparedSplitter) and node.has_pending_splits
+        }
+
+        for node_id, node in nodes.items():
+            if (
+                isinstance(node, PreparedSplitter)
+                and node_id not in pending
+                and (splits := node.splits) < 1
+            ):
+                msg = f"node {node_id!r} needs at least one split, got {splits}"
+                raise InvalidPipelineError(msg)
+
+        read = (key for key in self._gen_read_ports() if key[0] not in pending)
+
+        for node_id, port in read:
+            if port not in (ports := nodes[node_id].output_ports):
+                msg = f"node {node_id!r} has no output port {port!r}; it produces "
+                msg += f"{ports}"
+                raise InvalidPipelineError(msg)
+
 
 __all__ = [
+    "AsyncInterface",
     "ExecutionExtras",
     "ExecutionPlan",
-    "PreparedInterface",
     "PreparedNode",
+    "PreparedSplitter",
     "ResolvedModule",
+    "SyncInterface",
 ]

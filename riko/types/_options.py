@@ -62,6 +62,7 @@ class Defaults(TypedDict, total=False):
     detag: bool
     encoding: str
     input_key: str
+    isolate: bool
     format: str
     fmt: FmtLike | None
     group_key: str | None
@@ -121,7 +122,7 @@ class SharedDecorationOptions(TypedDict, total=False):
     """Decoration options every pipe decorator reads."""
 
     defaults: Defaults | None
-    isasync: bool
+    is_async: bool
     ftype: BasicCastType
     ptype: BasicCastType
     assign: str

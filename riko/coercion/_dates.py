@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
 
+from riko.base._config import as_maxsize
 from riko.base._config import settings as config
 from riko.base._dateutils import (
     TZINFOS,
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from riko.types._wrappers import Func
 
 
-@lru_cache(maxsize=config.parsed_date_cache_size)
+@lru_cache(maxsize=as_maxsize(config.parsed_date_cache_size))
 def _parse_date_cached(value: str) -> dt | BaseException:
     # cache doesn't work with exceptions, so we return the exception and raise it in the
     # caller
@@ -286,7 +287,7 @@ def get_relative_date(unit: str, count: int, op: Func[date], now: dt) -> date | 
 
     Examples:
 
-        >>> from datetime import datetime
+        >>> from datetime import UTC, datetime
         >>> from operator import add, sub
         >>>
         >>> now = datetime(2024, 1, 31, 12, tzinfo=UTC)

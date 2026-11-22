@@ -100,7 +100,7 @@ _META = {
     "subtypes": {"composer"},
     "pollable": False,
     "loopable": False,
-    "isasync": False,
+    "is_async": False,
 }
 
 MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
@@ -605,9 +605,9 @@ class TestEntryPointModules:
         ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN, replace=True)
-        resolved = fixed_registry.require(_NAME)
-        assert resolved is _MARKER
-        assert resolved is not ep_marker
+        pipe = fixed_registry.require(_NAME)
+        assert pipe is _MARKER
+        assert pipe is not ep_marker
 
     def test_an_entry_point_listed_twice_resolves(self, monkeypatch, fixed_registry):
         twice = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
@@ -809,8 +809,8 @@ class TestWorkflowResolver:
         resolver = _demo_resolver(
             pipe=lambda item=None, **kwargs: iter([]), async_pipe=gen_items
         )
-        assert resolver.require("pipe:demo", is_async=True).isasync
-        assert not resolver.require("pipe:demo").isasync
+        assert resolver.require("pipe:demo", is_async=True).is_async
+        assert not resolver.require("pipe:demo").is_async
 
     def test_load_workflow_accepts_the_colon_alias(self):
         directory = TESTS_DIR / "workflows"
@@ -977,6 +977,27 @@ class TestResolvedDocuments:
         assert resolver.load("pipe_gigs") is module
         assert len(loads) == seen
         assert resolver.require_interfaces("pipe_gigs") == {"pipe", "async_pipe"}
+
+    def test_a_warm_plan_build_rereads_no_stored_document(self, monkeypatch, tmp_path):
+        """A planned dependency's own dependencies come from its resolved workflow."""
+        documents: dict[str, list[str | dict[str, str]]] = {
+            "pipe_a": ["pipe_b"],
+            "pipe_b": ["hash"],
+        }
+        resolver = _stored_resolver(documents, tmp_path)
+        resolver_dispatcher = ResolverDispatcher(module_registry, resolver)
+        flow = module_workflow("pipe_a")
+        build_workflow_pipes(flow, resolver_dispatcher)
+        read, loads = DirectoryStore.load, []
+
+        def counting(self, name):
+            loads.append(name)
+            return read(self, name)
+
+        monkeypatch.setattr(DirectoryStore, "load", counting)
+        build_workflow_pipes(flow, resolver_dispatcher)
+
+        assert loads == []
 
     def test_reset_forgets_resolved_documents(self):
         resolver = _document_resolver(self.workflows)

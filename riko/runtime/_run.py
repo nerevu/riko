@@ -1,5 +1,5 @@
 # vim: sw=4:ts=4:expandtab
-"""Runs a pipeline definition in a fresh one-shot execution, sync or async."""
+"""Runs a pipeline definition in a fresh one-shot sync or async execution."""
 
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator
+    from collections.abc import Iterator
     from types import NotImplementedType
 
     from riko.definitions._pipeline_definition import PipelineDefinition
-    from riko.types._streams import InputLike, PipelineStream
+    from riko.types._streams import AsyncStreamOf, InputLike, PipelineStream
     from riko.types._wrappers import Dispatcher
 
 _SUBJECT = "pipeline run"
@@ -436,7 +436,7 @@ class _PipelineRun[T]:
         """Closes the run."""
         self.stream.close()
 
-    async def __aenter__(self) -> AsyncIterator[T]:
+    async def __aenter__(self) -> AsyncStreamOf[T]:
         """
         Starts the run asynchronously.
 

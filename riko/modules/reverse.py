@@ -77,7 +77,7 @@ def parser(
     return reversed(list(stream))
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously reverses the order of input items in a stream.
@@ -86,7 +86,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
         conf (dict): The module configuration. Unused.
         context (Context): the run environment
 

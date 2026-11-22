@@ -12,12 +12,9 @@ Examples:
     Basic usage::
 
         >>> from riko import Endpoint
-        >>> from riko.types._workflow import parse_port
         >>>
         >>> Endpoint("normalize-1", "out")
         Endpoint(node='normalize-1', port='out')
-        >>> parse_port("out:errors")
-        ParsedPort(direction='out', index=None, name='errors')
 
 """
 
@@ -75,7 +72,8 @@ if TYPE_CHECKING:
 
 type NodeId = str
 type Port = str
-type PortName = str
+type RawPort = str
+type PortKey = tuple[NodeId, Port]
 type OutputName = str
 type ResourceName = str
 type WorkflowDocument = bytes
@@ -88,9 +86,11 @@ type NodeFamily = DocumentNodeFamily | Literal["callable"]
 type EdgeFamily = Literal["stream", "publish"]
 type PortDirection = Literal["in", "out"]
 
+OUT: Port = "out"
 PORT_DIRECTIONS: Final[frozenset[PortDirection]] = frozenset({"in", "out"})
 WORKFLOW_VERSION = "2"
 
+PortName = NewType("PortName", str)
 WorkflowModule = NewType("WorkflowModule", str)
 ResolvedWorkflow = NewType("ResolvedWorkflow", ModuleType)
 
@@ -132,7 +132,7 @@ class RawEndpoint(TypedDict, total=False):
     """Shorthand for an edge or output endpoint; ``node`` is required."""
 
     node: Required[NodeId]
-    port: Port
+    port: RawPort
 
 
 class RawEdge(TypedDict, total=False):
@@ -194,7 +194,7 @@ class Endpoint:
         return f"Endpoint({self.node!r}, {self.port!r})"
 
     @property
-    def port_key(self) -> tuple[NodeId, Port]:
+    def port_key(self) -> PortKey:
         """
         The node id and the port's canonical spelling.
 
@@ -266,6 +266,8 @@ def parse_port(port: Port) -> ParsedPort:
 
         >>> parse_port("out:1")
         ParsedPort(direction='out', index=1, name=None)
+        >>> parse_port("out:errors")
+        ParsedPort(direction='out', index=None, name='errors')
         >>> parse_port("in:0")
         Traceback (most recent call last):
         ValueError: invalid port: 'in:0'
@@ -281,7 +283,7 @@ def parse_port(port: Port) -> ParsedPort:
     elif rest.isdigit() and int(rest) > 0:
         index, name = int(rest), None
     elif rest.isidentifier():
-        index, name = None, rest
+        index, name = None, PortName(rest)
     else:
         raise ValueError(f"invalid port: {port!r}")
 
@@ -300,21 +302,55 @@ class WorkflowEdge:
 
     Attributes:
 
-        source: Id of the node the edge leaves.
-        target: Id of the node the edge enters.
-        source_port: Output port on ``source`` (e.g. ``out``).
-        target_port: Input port on ``target`` (e.g. ``in``/``in:1``/``in:count``).
+        source_id: Id of the node the edge leaves.
+        target_id: Id of the node the edge enters.
+        source_port: Output port on the source node (e.g. ``out``).
+        target_port: Input port on the target node (e.g. ``in``/``in:1``/``in:count``).
 
     """
 
-    source: NodeId
-    target: NodeId
+    source_id: NodeId
+    target_id: NodeId
     source_port: Port
     target_port: Port
 
     @property
     def is_default(self) -> bool:
         return parse_port(self.target_port).is_default
+
+    @property
+    def source_key(self) -> PortKey:
+        """
+        The source node id and the source port's canonical spelling.
+
+        Raises:
+
+            ValueError: If the source port does not follow the port grammar.
+
+        Examples:
+
+            >>> WorkflowEdge("a", "b", "out:01", "in").source_key
+            ('a', 'out:1')
+
+        """
+        return self.source_id, str(parse_port(self.source_port))
+
+    @property
+    def target_key(self) -> PortKey:
+        """
+        The target node id and the target port's canonical spelling.
+
+        Raises:
+
+            ValueError: If the target port does not follow the port grammar.
+
+        Examples:
+
+            >>> WorkflowEdge("a", "b", "out", "in:02").target_key
+            ('b', 'in:2')
+
+        """
+        return self.target_id, str(parse_port(self.target_port))
 
 
 @define(frozen=True, slots=True)
@@ -374,15 +410,15 @@ class WorkflowIndex:
 
     @cached_property
     def incoming(self) -> FrozenWorkflowEdgeCollection:
-        return self._freeze_edges(attrgetter("target"))
+        return self._freeze_edges(attrgetter("target_id"))
 
     @cached_property
     def outgoing(self) -> FrozenWorkflowEdgeCollection:
-        return self._freeze_edges(attrgetter("source"))
+        return self._freeze_edges(attrgetter("source_id"))
 
     @cached_property
     def downstream(self) -> FrozenSetMapping:
-        pairs = ((edge.source, edge.target) for edge in self.edges)
+        pairs = ((edge.source_id, edge.target_id) for edge in self.edges)
         return freeze(edges_to_graph(pairs, *self.node_ids))
 
     @cached_property
@@ -457,7 +493,9 @@ __all__ = [
     "ParsedPort",
     "Port",
     "PortDirection",
+    "PortKey",
     "PortName",
+    "RawPort",
     "ResourceName",
     "WorkflowEdge",
     "WorkflowIndex",

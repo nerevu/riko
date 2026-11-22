@@ -12,12 +12,16 @@ import pickle  # noqa: S403
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, cast
 
+from riko.base._config import as_maxsize
 from riko.base._config import settings as config
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import compose
 from riko.definitions._nodes import CallableNode
 from riko.types._enums import Executor
+from riko.types._streams import require_stream
 from riko.types._wrappers import RunsItems
 
+from ._prepared import PreparedNode
 from ._provenance import run_tracked_item
 
 if TYPE_CHECKING:
@@ -29,22 +33,22 @@ if TYPE_CHECKING:
     from riko.types._workflow import NodeId, OutputName
     from riko.types._wrappers import Func
 
-    from ._prepared import ExecutionPlan, PreparedNode
+    from ._prepared import ExecutionPlan, SyncInterface
 
 __all__ = [
     "build_item_call",
     "build_tracked_call",
     "require_process_safe",
-    "run_shipped_item",
+    "run_pickled_item",
 ]
 
 
-@lru_cache(maxsize=config.shipped_call_cache_size)
+@lru_cache(maxsize=as_maxsize(config.pickled_call_cache_size))
 def _load_call(payload: bytes) -> Func[Iterator[object]]:
     return pickle.loads(payload)  # noqa: S301
 
 
-def run_shipped_item[T](
+def run_pickled_item[T](
     payload: bytes,
     node_id: NodeId,
     identity: IdentityMode | None,
@@ -67,12 +71,11 @@ def run_shipped_item[T](
     Examples:
 
         >>> import pickle
-        >>> from riko.execution._concurrency import run_shipped_item
         >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope("ab", generation=("s", 0))
         >>> payload = pickle.dumps(iter)
-        >>> [r.value for r in run_shipped_item(payload, "n", None, envelope)]
+        >>> [r.value for r in run_pickled_item(payload, "n", None, envelope)]
         ['a', 'b']
 
     """
@@ -81,19 +84,24 @@ def run_shipped_item[T](
 
 
 def build_item_call[T](
-    context: Context | None, node: PreparedNode, **extra: object
+    context: Context | None,
+    node: PreparedNode,
+    interface: SyncInterface[Iterator[object]],
+    /,
+    **extra: object,
 ) -> ItemCall[T]:
     """
     Builds a mappable node's synchronous per-item call with a run's inputs applied.
 
-    ``node`` must be sync native. Each call returns the node's per-item results as a
-    synchronous stream. The built call runs under the run's ``context``. Since callable
-    nodes don't read ``context``, they get ``None`` instead.
+    Each call returns the node's per-item results as a synchronous stream. The built
+    call runs under the run's ``context``. Callable nodes get ``None`` since they don't
+    read ``context``.
 
     Args:
 
         context: The run's context.
         node: The mappable node.
+        interface: The node's synchronous pipe, with its call.
 
     Kwargs:
 
@@ -106,29 +114,30 @@ def build_item_call[T](
     Examples:
 
         >>> from riko import Workflow
-        >>> from riko.execution._concurrency import build_item_call
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> conf = {"rule": {"transform": "upper"}}
         >>> node = ModuleNode(id="u", name="strtransform", conf=conf)
-        >>> flow = Workflow().with_node(node)
+        >>> flow = Workflow().with_nodes(node)
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-        >>> call = build_item_call(None, plan.nodes["u"])
+        >>> prepared = plan.nodes["u"]
+        >>> call = build_item_call(None, prepared, prepared.sync_interface)
         >>> list(call({"content": "hi"}))
         [{'content': 'hi', 'strtransform': 'HI'}]
 
     """
-    item_call = node.sync_interface.item_call
+    item_call = interface.item_call
 
     if isinstance(item_call, RunsItems):
-        call = partial(item_call.run_item, context, extra)
+        _call = partial(item_call.run_item, context, extra)
     else:
         # partial because build_tracked_call pickles for the process pool
         _context = None if isinstance(node.node, CallableNode) else context
-        call = partial(item_call, context=_context, **extra)
+        _call = partial(item_call, context=_context, **extra)
 
+    call = compose(require_stream, _call, node.module.name)
     return cast("ItemCall[T]", call)
 
 
@@ -162,7 +171,6 @@ def build_tracked_call[T](
     Examples:
 
         >>> from riko import Executor
-        >>> from riko.execution._concurrency import build_tracked_call
         >>> from riko.types._feed import _ItemEnvelope
         >>>
         >>> envelope = _ItemEnvelope("ab", generation=("s", 0))
@@ -172,7 +180,7 @@ def build_tracked_call[T](
 
     """
     if executor is Executor.PROCESS:
-        func = partial(run_shipped_item, pickle.dumps(call), node_id, identity)
+        func = partial(run_pickled_item, pickle.dumps(call), node_id, identity)
     else:
         func = partial(run_tracked_item, call, node_id, identity)
 
@@ -180,7 +188,9 @@ def build_tracked_call[T](
 
 
 def _get_process_unsafe_reason(
-    context: Context | None, node: PreparedNode
+    context: Context | None,
+    node: PreparedNode,
+    interface: SyncInterface[Iterator[object]],
 ) -> tuple[str | None, BaseException | None]:
     embed = node.embed
     embed_pipe = None if embed is None else embed.sync_pipe
@@ -193,10 +203,10 @@ def _get_process_unsafe_reason(
         reason = "its embedded module has no synchronous implementation"
     else:
         extra = {} if embed_pipe is None else {"embed": embed_pipe}
-        identity = node.sync_interface.identity
+        identity = interface.identity
 
         try:
-            args = (context, node)
+            args = (context, node, interface)
             call: ItemCall[object] = build_item_call(*args, **extra)
             build_tracked_call(call, node_id=node.node.id, identity=identity)
         except Exception as error:  # noqa: BLE001
@@ -231,23 +241,23 @@ def require_process_safe(
     Examples:
 
         >>> from riko import Workflow
-        >>> from riko.execution._concurrency import require_process_safe
         >>> from riko.execution._prepared import ExecutionPlan
         >>> from riko.ext import ModuleNode
         >>> from riko.runtime._resolver import dispatcher
         >>>
-        >>> flow = Workflow().with_node(ModuleNode(id="h", name="hash"))
+        >>> flow = Workflow().with_nodes(ModuleNode(id="h", name="hash"))
         >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
         >>> require_process_safe(plan, "default", None)
 
     """
     for node_id in plan.index.required[output]:
         node = plan.nodes[node_id]
-        reason, cause = (
-            _get_process_unsafe_reason(context, node)
-            if node.is_sync_mappable
-            else (None, None)
-        )
+        is_node = isinstance(node, PreparedNode)
+
+        if is_node and (interface := node.sync_map_interface) is not None:
+            reason, cause = _get_process_unsafe_reason(context, node, interface)
+        else:
+            reason, cause = (None, None)
 
         if reason is not None:
             msg = f"node {node_id!r} cannot run on the process executor: {reason}"

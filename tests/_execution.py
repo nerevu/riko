@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from functools import reduce
 from inspect import isasyncgenfunction, iscoroutinefunction
 from typing import TYPE_CHECKING, Self, cast
 
@@ -71,8 +70,8 @@ def tag_source[F: Func[object]](fn: F) -> F:
         subtypes={"source"},
         pollable=getattr(fn, "pollable", False),
         loopable=getattr(fn, "loopable", False),
-        isasync=getattr(
-            fn, "isasync", iscoroutinefunction(fn) or isasyncgenfunction(fn)
+        is_async=getattr(
+            fn, "is_async", iscoroutinefunction(fn) or isasyncgenfunction(fn)
         ),
         sequential_inputs=getattr(fn, "sequential_inputs", False),
         prepare=getattr(fn, "prepare", None),
@@ -100,10 +99,6 @@ def build_workflow(
         outputs = {"default": Endpoint(nodes[-1].id, "out")}
 
     return Workflow(nodes=nodes, outputs=outputs, edges=edges, resources=resources)
-
-
-def build_chain(*nodes: ModuleNode) -> Workflow:
-    return reduce(Workflow.with_node, nodes, Workflow())
 
 
 def module_workflow(name: str = "m") -> Workflow:
@@ -146,7 +141,7 @@ echo_pipe = mark_loopable(_echo)
 def build_chain_plan(*names: str) -> ExecutionPlan:
     """Build a plan chaining one built-in module node per name."""
     nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
-    return ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+    return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
 
 def build_doubler_plan(name: str) -> ExecutionPlan:
@@ -194,10 +189,10 @@ def run_plan(
     output: str = "default",
 ) -> list:
     """Runs a plan, or plans and runs a workflow, to a list synchronously."""
-    resolved = DEF_EXECUTION_SETTINGS if settings is None else settings
+    _settings = DEF_EXECUTION_SETTINGS if settings is None else settings
     result: list = []
 
-    with SyncExecution(settings=resolved) as execution:
+    with SyncExecution(settings=_settings) as execution:
         stream = execution.run(_build_plan(plan, dispatcher), output, seed=seed)
         result = list(stream)
 
@@ -213,10 +208,10 @@ async def arun_plan(
     output: str = "default",
 ) -> list:
     """Runs a plan, or plans and runs a workflow, to a list asynchronously."""
-    resolved = DEF_EXECUTION_SETTINGS if settings is None else settings
+    _settings = DEF_EXECUTION_SETTINGS if settings is None else settings
     result: list = []
 
-    async with AsyncExecution(settings=resolved) as execution:
+    async with AsyncExecution(settings=_settings) as execution:
         stream = await execution.arun(_build_plan(plan, dispatcher), output, seed=seed)
         result = [item async for item in stream]
 

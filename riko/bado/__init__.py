@@ -5,7 +5,7 @@ Stable async-runtime API for Riko.
 Names in ``__all__`` are also available from the top-level ``riko`` namespace.
 """
 
-from ._backend import async_chain, async_sleep, backend, isasync, issync, run
+from ._backend import async_chain, async_sleep, backend, is_async, is_sync, run
 from ._util import async_read, async_return
 from .itertools import alist, as_async, async_map, async_map_stream, materialize
 
@@ -19,8 +19,8 @@ __all__ = [
     "async_return",
     "async_sleep",
     "backend",
-    "isasync",
-    "issync",
+    "is_async",
+    "is_sync",
     "materialize",
     "run",
 ]

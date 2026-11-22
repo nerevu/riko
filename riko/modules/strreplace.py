@@ -137,7 +137,7 @@ def parser(
     return reduce(reducer, rules, word)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously replaces a literal substring in an item field.

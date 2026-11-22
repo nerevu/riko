@@ -20,32 +20,40 @@ per worktree, survives `/clear`, shared by every session), written by
 tree id, so committing, staging, an autosquash, or another session's earlier
 tidy keeps it valid; only a content edit invalidates it.
 
-Resolve the whole scope with **one call**:
+Resolve the whole scope, and run every opening check over it, with **one call**:
 
 ```bash
-date && python .claude/skills/land/gates.py scope tidy
+date && python .claude/skills/land/gates.py scope tidy --leads
 ```
 
-It prints which base applies (the tidied tree when git still holds it, so work
-the pass already covered stays out; else the marker's `head` when it is an
-ancestor of `HEAD`; else the parent of the oldest unpushed commit after an
-autosquash; else `HEAD`), the `--stat`, the untracked files, and the diff itself
-with `uv.lock` and the generated files left out. Untracked files are inside the
-diff. A diff over 25kB lands in `.claude/tidy-scope.diff`; read it in slices
-with `Read` offsets, never whole. Exit 0 means tidy already ran on this exact
-content: report "nothing to tidy" and stop. Exit 2 means the scope is empty:
-run `gates.py record tidy` and stop. Never reassemble the scope from `git diff`
-by hand. When the diff is mostly moved code (test reorganizations, file splits),
-`gates.py scope tidy --edits-only` lists just the added lines that no removed
-line carries, `path:line: text`; read those first and the moved spans only
-where an edit sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt`
-pass), `python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's
-wording changes, ignoring line breaks and markup; review those instead of the reflow.
-Whenever the scope touches Markdown, also run
-`python .claude/skills/tidy/heading_drift.py BASE`: it lists each heading the change
-adds, removes, or re-levels and exits 1 on a re-level or a wrapped issue number turned
-heading (`## 60:`), the start of a `rumdl fmt` cascade that demotes every later heading
-in the file. Restore the levels and escape the number (`\#60`).
+It prints which base applies (the tidied tree when git still holds it, so work the pass
+already covered stays out; else the marker's `head` when it is an ancestor of `HEAD`;
+else the parent of the oldest unpushed commit after an autosquash; else `HEAD`), the
+`--stat`, the untracked files, and the diff itself with `uv.lock` and the generated
+files left out. Untracked files are inside the diff. Then, each under its own
+`--- <name>` header (with its exit code when non-zero), the outputs of the checks §1 and
+§3 open with, run side by side over that diff: `lint` (§3's lint selectors),
+`neighborhood` (the touched neighborhood below, with two lines of context around each
+reference), and `mistake_scan` (§3's leads); plus `heading_drift` when the scope touches
+Markdown, `changelog_widows` when it touches `docs/CHANGES.rst` (check 6), and
+`overlap_scan --files` over each touched `tests/<tier>/test_*.py` (check 9). Never rerun
+any of them by hand on the same tree. A diff over 25kB lands in
+`.claude/tidy-scope.diff`, and the output opens with a hint to read `--edits-only`
+first; read the saved diff in slices with `Read` offsets, never whole. Exit 0 means tidy
+already ran on this exact content: report "nothing to tidy" and stop. Exit 2 means the
+scope is empty: under `/land`, just stop and report it (land records tidy after your
+report); otherwise run `gates.py record tidy` and stop. Never reassemble the scope from
+`git diff` by hand. When the diff is mostly moved code (test reorganizations, file
+splits), `gates.py scope tidy --edits-only` lists just the added lines that no removed
+line carries, `path:line: text`; read those first and the moved spans only where an edit
+sits inside them. When it is mostly a Markdown reflow (a `rumdl fmt` pass),
+`python .claude/skills/tidy/reflow_word_diff.py BASE` lists only each file's wording
+changes, ignoring line breaks and markup; review those instead of the reflow. The
+`heading_drift` section (already in `--leads` when the scope touches Markdown) lists
+each heading the change adds, removes, or re-levels and exits 1 on a re-level or a
+wrapped issue number turned heading (`## 60:`), the start of a `rumdl fmt` cascade that
+demotes every later heading in the file. Restore the levels and escape the number
+(`\#60`).
 
 A wholesale run ("tidy the repo") takes every tracked file and fans out one read-only
 agent per top-level package, then applies fixes centrally. Every agent brief ends with
@@ -60,22 +68,17 @@ each: promote it to a shared helper, fold it into an existing one, park it in
 script moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the
 user (agents never delete it); report the verdict.
 
-Also pull in the **touched neighborhood**: callers and docs of every symbol the
-diff renamed, removed, or changed in meaning. One call lists them:
-
-```bash
-python .claude/skills/land/gates.py scope tidy | python .claude/skills/tidy/neighborhood.py
-```
-
-(or `--diff-file .claude/tidy-scope.diff` for a large scope). It reports each
-removed or re-signed definition with its surviving references across `riko/`,
-`tests/`, `docs/`, `_docs/`, `examples/`, `README.rst`, and `CONTRIBUTING.rst`,
-and the names the same file added, so a rename reads as one. Grep by hand only
-for a term the diff changed in meaning without touching its definition. Apply the
-stale names it finds in checked batches with
-`python .claude/skills/tidy/replace_exact.py FILE SPEC.json` (a JSON list of
-`[old, new, expected_count]`; any count mismatch writes nothing), so a rename never
-also hits an unrelated use of the same text.
+Also pull in the **touched neighborhood**: callers and docs of every symbol the diff
+renamed, removed, or changed in meaning. The `neighborhood` section (already in
+`--leads`) lists them: it reports each removed or re-signed definition with its
+surviving references across `riko/`, `tests/`, `docs/`, `_docs/`, `examples/`,
+`README.rst`, and `CONTRIBUTING.rst`, and the names the same file added, so a rename
+reads as one; the two lines around each reference usually settle it without opening the
+file. Grep by hand only for a term the diff changed in meaning without touching its
+definition. Apply the stale names it finds in checked batches with
+`python .claude/skills/tidy/replace_exact.py FILE SPEC.json [--dry-run]` (a JSON list of
+`[old, new, expected_count]`; any count mismatch writes nothing), so a rename never also
+hits an unrelated use of the same text.
 
 ## 2. Load the rules (one batch)
 
@@ -94,36 +97,29 @@ until touched.
 
 ## 3. Check
 
-Open with the lints that already enforce part of this list, in one call:
+Open with the lints that already enforce part of this list: the `lint` section (already
+in `--leads` output; it ran
+`manage lint --terms --literals --docstrings --bindings --tests`). Its output is
+findings. It owns: banned phrases and phase codes in shipped text (`--terms`), summary
+verbs matching the verb table (`--docstrings`), `pipeline`/`flow` bindings
+(`--bindings`), test file/class layout (`--tests`). Do not re-check those by hand; the
+hand checks below cover what a regex cannot. Independent probes go in one response as
+parallel tool calls, or in one chained Bash command — never one grep per turn — and
+`sed -n` ranges of several files go in the same call.
 
-```bash
-uv run --active python -m riko.cli.manage lint --terms --literals --docstrings --bindings --tests
-```
-
-Its output is findings. It owns: banned phrases and phase codes in shipped
-text (`--terms`), summary verbs matching the verb table (`--docstrings`),
-`pipeline`/`flow` bindings (`--bindings`), test file/class layout (`--tests`).
-Do not re-check those by hand; the hand checks below cover what a regex
-cannot. Independent probes go in one response as parallel tool calls, or in one
-chained Bash command — never one grep per turn — and `sed -n` ranges of several
-files go in the same call.
-
-In the same response, scan the added lines for the defect classes past fix
-sessions kept repairing (closing, last-wins, truthiness, sync/async drift,
-chunk decoding, `next()` without a default, hash-seed order, frozen-record
-mutability, unbounded timeouts, `find()` slicing) and for a second `return`:
-
-```bash
-python .claude/skills/land/gates.py scope tidy | uv run --active --no-sync python .claude/skills/tidy/mistake_scan.py --diff-file -
-```
-
-Its leads come most-often-fixed class first. They are leads, not findings:
+The `mistake_scan` section (already in `--leads` output) scans the added lines for
+the defect classes past fix sessions kept repairing (closing, last-wins, truthiness,
+sync/async drift, chunk decoding, `next()` without a default, hash-seed order,
+frozen-record mutability, unbounded timeouts, `find()` slicing, keywords
+shadowing `partial`-bound parameters, unguarded settings casts) and for a second
+`return`. Its leads come most-often-fixed class first. They are leads, not findings:
 verify each against check 4's bar (truthiness is a finding only when a falsy
 value is realistic for that field; a `0` the docstring names as a sentinel is
 not) and the rule's own message, then sort into §4's buckets. A lead you rule
 safe gets a trailing `# mistake-ok: RMnnn` only when it would recur on every
-edit of that line; otherwise just drop it. When a fix lands for a class, bump
-its `CLASS_HISTORY` count and refs in the script.
+edit of that line; otherwise just drop it. `mistake_scan.py --classes` prints
+each class's rules or audit probe and the shapes ruled safe; /triage adds a
+fix's ref to its class when it lands (the count is derived from the refs).
 
 For each file in scope, and only the lines the change introduced or the
 neighborhood it affects:
@@ -174,6 +170,10 @@ neighborhood it affects:
    release, run a probe with `python .claude/skills/tidy/release_probe.py VERSION
    PROBE.py --root SCRATCHPAD`, passing the session's scratchpad directory (pre-2026
    releases: `--python 3.8 --build-pin 'setuptools<58' --build-pin 'cython<3'`).
+   When the scope touches `docs/CHANGES.rst`, the `changelog_widows` section (already
+   in `--leads`, advisory) lists unreleased bullets
+   that spill a word or two onto an extra line; reword one only when a word can go
+   without losing a backticked name.
 7. **Doc drift** — docstrings, RST, README, gameplans, CLAUDE.md, or the
    `_docs/KEY_PATHS.md`/`INTERNALS.md` maps still describing a name or behavior
    the change altered; code blocks that use a name they don't define
@@ -220,32 +220,38 @@ neighborhood it affects:
    doctest), misfits (a class asserting a subject another row owns, or a test in the
    wrong tier), move candidates left behind in the source file, and helpers whose users
    changed (now used by one file → beside its class; by several → `tests/_*.py`). Start
-   from `python .claude/skills/tidy/overlap_scan.py --files <each touched file>`
-   (static, about 2s); when the change touched docstring or user-doc examples, also run
-   `python .claude/skills/tidy/example_scan.py dups` (≥0.8 near-duplicate example pairs,
-   about 0.3s; leads only). The overlap scan lists candidates (unused or single-user
-   helpers, copied definitions and constants, helper bodies inlined in tests, same-shape
-   tests and standalone tests that fit a table, `pytest.param` rows a few columns too
-   long for one line, shared literals, doctest calls repeated as `pytest.param` rows,
-   doctest errors repeated as `pytest.raises`, test messages a doctest also pins,
-   doctests of six or more examples whose callee has a table, tests with no assertion or
-   asserts only inside a loop, same-named tests, unsupported names in public and
-   supported-only internal classes, out-of-order or misplaced classes and helpers,
-   classes that never name their riko-named subject, functional classes with no
-   end-to-end marker, tests that start a process without saying why). Read its full
-   output once; never pipe it through `head`/`grep` and rerun (`--limit` already caps
-   it). Read and verify only those, never whole files. Make the moves with
-   `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
-   `--merge` to fold one class into another, `--sort` for in-class order,
+   from the `overlap_scan` section (already in `--leads`, over each touched test file;
+   rerun `python .claude/skills/tidy/overlap_scan.py --files <file>...` only for a file
+   the change touched indirectly); when the change touched docstring or user-doc
+   examples, also run `python .claude/skills/tidy/example_scan.py dups` (≥0.8
+   near-duplicate example pairs, about 0.3s; leads only). The overlap scan lists
+   candidates (unused or single-user helpers, copied definitions and constants, helper
+   bodies inlined in tests, same-shape tests and standalone tests that fit a table,
+   `pytest.param` rows a few columns too long for one line, shared literals, doctest
+   calls repeated as `pytest.param` rows, doctest errors repeated as `pytest.raises`,
+   test messages a doctest also pins, doctests of six or more examples whose callee has
+   a table, tests with no assertion or asserts only inside a loop, same-named tests,
+   unsupported names in public and supported-only internal classes, out-of-order or
+   misplaced classes and helpers, classes that never name their riko-named subject,
+   functional classes with no end-to-end marker, tests that start a process without
+   saying why). Read its full output once; never pipe it through `head`/`grep` and rerun
+   (`--limit` already caps it). Read and verify only those, never whole files. Make the
+   moves with `python .claude/skills/tidy/move_tests.py` (`--check` before a move to
+   public, `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
    `--with-helpers` so a moved method carries the helpers only it used, `--plan-split`
    for each class's footprint before a split; moves repoint doc citations), and find a
-   test's current home with `overlap_scan.py --where NAME`. Module constants that a move
-   strands below code go back to the top with
-   `python .claude/skills/tidy/lift_constants.py FILE...` (logger, then `type` aliases,
-   then constants private first, each helper a constant calls just above it; it reports
-   what it cannot move). After editing any of these scripts, run the smoke tests:
-   `uv run --active pytest .claude/skills/tidy/ --no-cov`.
+   test's current home with `overlap_scan.py --where NAME`. Usage:
+   `move_tests.py DEST SPEC... [--before CLASS] [--rename NEW]` (plus `--with-helpers`,
+   `--dry-run`), `SPEC` being `path::Class` or `path::Class::method` and `DEST` a path
+   (classes) or `path::Class` (methods); the mode flags above replace `DEST`
+   (`--check`/`--sort`/`--delete SPEC...`, `--merge DEST_CLASS SPEC...`,
+   `--drop-row path::TABLE ID...`, `--place path::NAME... --above CLASS`,
+   `--plan-split FILE`). Module constants that a move strands below code go back to the
+   top with `python .claude/skills/tidy/lift_constants.py FILE [FILE ...] [--dry-run]`
+   (logger, then `type` aliases, then constants private first, each helper a constant
+   calls just above it; it reports what it cannot move). After editing any of these
+   scripts, run the smoke tests: `uv run --active pytest .claude/skills/tidy/ --no-cov`.
 
 Verify every finding against the code before acting on it; drop what you
 cannot substantiate.
@@ -289,9 +295,10 @@ verify: go straight to the marker.
 
 ## 6. Mark and report
 
-After the fixes, run `python .claude/skills/land/gates.py record tidy`. It
-records the tree as tidy left it, so an untouched tree skips the next run from
-any session, and any later edit reopens the range since that `head`.
+Under `/land`, skip the record: land records tidy after your report. Under `/wrapup`
+or a direct run, run `python .claude/skills/land/gates.py record tidy`. It records
+the tree as tidy left it, so an untouched tree skips the next run from any session,
+and any later edit reopens the range since that `head`.
 
 Report: the scope resolved, each fix applied (file:line, rule), findings sent
 to `/triage`, questions asked and their answers, lint promotions proposed, script

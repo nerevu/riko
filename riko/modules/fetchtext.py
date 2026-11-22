@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.io._async import async_url_open
@@ -92,6 +92,7 @@ async def async_parser(
     Examples:
 
         >>> from riko import get_path, run
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -138,6 +139,7 @@ def parser(
     Examples:
 
         >>> from riko import get_path
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path("lorem.txt")
@@ -153,7 +155,7 @@ def parser(
     return auto_close(_gen_stripped_lines(f, objconf.strip_bom), f)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     Asynchronously fetches a text file and yields lines.

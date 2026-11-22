@@ -6,6 +6,7 @@ Implementation typing machinery lives in underscore-prefixed modules and is
 not part of the SemVer-guaranteed API.
 """
 
+from ..base._config import Limit
 from ._enums import CustomUserAgent, FeedTypeLike, UserAgentLike
 from ._events import EventSink
 from ._frozendict import InputSchema, InputSchemaLike, RawInputSchema
@@ -45,6 +46,7 @@ __all__ = [
     "InputSchemaLike",
     "Item",
     "Items",
+    "Limit",
     "PipeDag",
     "PipeDef",
     "PipeDefLike",

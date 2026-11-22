@@ -711,7 +711,7 @@ def require_instance[T](
 
     Returns:
 
-        ``value``, typed as ``cls``.
+        ``value`` typed as ``cls``.
 
     Raises:
 
@@ -831,7 +831,7 @@ def require_nonblank_str(
 
     Returns:
 
-        ``value``, typed as ``str``.
+        ``value`` typed as ``str``.
 
     Raises:
 
@@ -922,7 +922,7 @@ def require_from_form[T](
     def is_member(value: object) -> bool:
         return any(type(value) is type(arg) and value == arg for arg in literals)
 
-    if _aliases := [leaf for leaf in leaves if isinstance(leaf, TypeAliasType)]:
+    if _aliases := tuple(gen_instances(leaves, TypeAliasType)):
         aliases = ", ".join(map(repr, _aliases))
         msg = f"alias {aliases} refers to a name that is not available at runtime, "
         raise TypeError(msg + "such as one imported only for type checking")
@@ -1130,6 +1130,73 @@ def require_finite(
     return value
 
 
+def require_timeout(value: float, what: str = "timeout") -> float:
+    """
+    Requires ``value`` to be greater than 0, or ``inf`` for no timeout.
+
+    Args:
+
+        value: The timeout to check.
+
+    Kwargs:
+
+        what: The name used in the error message (default: "timeout").
+
+    Returns:
+
+        ``value`` unchanged.
+
+    Raises:
+
+        TypeError: If ``value`` is a bool or not a number.
+        ValueError: If ``value`` is 0, negative, or NaN.
+
+    Examples:
+
+        >>> require_timeout(2.5), require_timeout(float("inf"))
+        (2.5, inf)
+        >>> require_timeout(0)
+        Traceback (most recent call last):
+            ...
+        ValueError: timeout must be positive seconds or inf, got 0
+        >>> require_timeout(None)
+        Traceback (most recent call last):
+            ...
+        TypeError: timeout must be a number, got None
+
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{what} must be a number, got {value!r}")
+    elif isnan(value) or value <= 0:
+        raise ValueError(f"{what} must be positive seconds or inf, got {value!r}")
+
+    return value
+
+
+def as_timeout(seconds: float) -> float | None:
+    """
+    Gets the timeout HTTP clients take (``inf`` means no timeout).
+
+    Args:
+
+        seconds: A timeout that ``require_timeout`` accepts.
+
+    Returns:
+
+        ``seconds``, or ``None`` when it is infinite.
+
+    Examples:
+
+        >>> from math import inf
+        >>>
+        >>> as_timeout(2.5)
+        2.5
+        >>> as_timeout(inf)
+
+    """
+    return None if isinf(seconds) else seconds
+
+
 def require_arg[T](value: T | None, name: str, module: str, strict: bool = False) -> T:
     """
     Narrows a module's required keyword argument to ``T`` and raises when it is omitted.
@@ -1141,9 +1208,7 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     Args:
 
         value: The supplied argument value, or ``None`` when omitted.
-
         name: The argument being validated, used in the error message.
-
         module: The module name, used in the error message.
 
     Kwargs:
@@ -1185,6 +1250,46 @@ def require_arg[T](value: T | None, name: str, module: str, strict: bool = False
     return value
 
 
+def require_non_null[T](
+    value: T | None, msg: str, *args: object, **kwargs: object
+) -> T:
+    """
+    Requires ``value`` not to be ``None``.
+
+    Args:
+
+        value: The value to check.
+        msg: The ``str.format`` error message template for a ``None`` value.
+        args: Positional arguments that fill ``msg``.
+
+    Kwargs:
+
+        kwargs: Keyword arguments that fill ``msg``.
+
+    Returns:
+
+        The value, narrowed to ``T``.
+
+    Raises:
+
+        InvalidPipelineError: If ``value`` is ``None``.
+
+    Examples:
+
+        >>> require_non_null(0, "unused")
+        0
+        >>> require_non_null(None, "{!r} has no callable", "hash")
+        Traceback (most recent call last):
+            ...
+        riko.exceptions.InvalidPipelineError: Invalid pipeline: 'hash' has no callable
+
+    """
+    if value is None:
+        raise InvalidPipelineError(msg.format(*args, **kwargs))
+
+    return value
+
+
 def require_conf_key[T](
     objconf: DynamicConf, key: str, module: str, strict: bool = False
 ) -> T:  # pyright: ignore[reportInvalidTypeVarUse]
@@ -1197,9 +1302,7 @@ def require_conf_key[T](
     Args:
 
         objconf: The parsed module configuration.
-
         key: The conf key that must be set.
-
         module: The module name, used in the error message.
 
     Kwargs:

@@ -3,9 +3,9 @@
 Provides workflow authoring for extension authors.
 
 Contains the workflow node and edge classes, stored-workflow registration, dispatcher
-protocol, ``workflow`` decorator, and ``resolve_inputs`` helper a hand-written workflow
-module's pipe uses. It is part of the SemVer-guaranteed ``riko.ext`` surface. Every name
-here is also re-exported from ``riko.ext``.
+protocol, ``workflow`` decorator, and ``CompiledInputSchemas`` record a hand-written
+workflow module's pipe uses. It is part of the SemVer-guaranteed ``riko.ext`` surface.
+Every name here is also re-exported from ``riko.ext``.
 
 Examples:
 
@@ -17,7 +17,7 @@ Examples:
         >>> fetch = ModuleNode(id="fetch-1", name="fetch")
         >>> count = ModuleNode(id="count-1", name="count")
         >>> edge = StreamEdge(Endpoint("fetch-1", "out"), Endpoint("count-1", "in"))
-        >>> flow = Workflow(nodes=[fetch, count], edges=[edge])
+        >>> flow = Workflow([fetch, count], edges=[edge])
         >>> flow
         Workflow(fetch-1 -> count-1)
         >>> flow.dependencies
@@ -25,7 +25,7 @@ Examples:
 
 """
 
-from riko.definitions._inputs import resolve_inputs
+from riko.definitions._inputs import CompiledInputSchemas
 from riko.definitions._nodes import (
     ActionNode,
     CacheNode,
@@ -46,6 +46,7 @@ __all__ = [
     "ActionNode",
     "CacheNode",
     "CallableNode",
+    "CompiledInputSchemas",
     "Dispatcher",
     "ModuleNode",
     "PublishEdge",
@@ -54,7 +55,6 @@ __all__ = [
     "SubscribeNode",
     "WriteNode",
     "register_workflow_store",
-    "resolve_inputs",
     "temporary_registrations",
     "workflow",
 ]

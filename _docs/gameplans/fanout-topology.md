@@ -324,8 +324,10 @@ Semantics:
 - active branches receive items incrementally;
 - only reachable/used outputs become active;
 - unused outputs allocate no queue and exert no backpressure;
-- each active branch has a bounded buffer;
-- default branch buffer is zero/rendezvous;
+- a branch read behind its siblings holds a lossless lag buffer of the items it has
+  not read yet (`itertools.tee` semantics), unbounded in the low-level tee;
+  `Settings.branch_buffer` (`RIKO_BRANCH_BUFFER`, default 1024) caps it, and a branch
+  exceeding the cap fails the run;
 - split is lossless and has **no** drop overflow mode;
 - per-branch ordering follows upstream order;
 - infinite/unbounded upstreams remain streamable;
@@ -333,13 +335,108 @@ Semantics:
   explicit `splits` smaller than the highest reachable `out:N` index is a validation
   error.
 
+**Why a lag buffer, not rendezvous (user decision 2026-11-14).** A split feeding a
+sequential fan-in such as `union` must buffer one branch while the fan-in drains the
+other; a zero buffer would deadlock that composition. Rendezvous (zero buffer) remains
+the rule for subscriptions (§5.2) and for branches driven as execution tasks, which
+arrive in a later slice with the execution-scoped task group.
+
+**Tee contract (decided 2026-11-16 (user), R7 Slice A).**
+
+- Registration: every branch is registered before the first upstream advancement;
+  `branch()` afterwards, or after close, raises `PipelineStateError`. Reentrant
+  upstream advancement raises a clear error; a reentrant read of an already-buffered
+  value is allowed. One consumer per branch, with no runtime guard.
+- Reads stay demand-driven (no fairness or round-robin); the tee machinery stays even
+  with one active output; `Tee` and `AsyncTee` stay separate classes.
+- Two error latches. An upstream read error is drainable: branches drain what they
+  queued, then re-raise the same exception on every later read until closed; a cleanup
+  failure never replaces it. A fatal fan-out error (overflow, copy failure, strict
+  cardinality violation) discards every branch buffer at once and re-raises on every
+  later read until closed.
+- Strict overflow: under strict managed execution an overflow is reported only after
+  attempting the upstream read; non-strict may reject a full buffer before reading (a
+  possible false positive at EOF). Strict validates splitter cardinality/counts only
+  (no per-item provenance ids), applies to managed execution only (direct module
+  splitters are non-strict), defaults off, and early close never forces extra upstream
+  reads to finish validation (R7 Slice B; knob in execution-semantics § 6.5).
+- Limits: low-level `Tee`/`AsyncTee` default to unlimited and never read global
+  settings; managed execution passes its effective `branch_buffer` explicitly at every
+  tee site (explicit splitters, implicit shared-port fan-out, and the async splitter
+  input tee); direct `riko.modules.split` calls keep the process default (Slice B).
+  Unlimited stays `inf`: `RIKO_BRANCH_BUFFER` accepts whole numbers of at least 1 or
+  `inf`, `0` keeps being rejected with a warning, and there is no `None` normalization.
+- Close: natural exhaustion closes the source promptly and buffered values still drain
+  (a cleanup failure is reported after the drain). Closing the last branch while an
+  upstream advance is in flight defers the source close to the advancer and returns
+  promptly; a blocking sync `next()` that cannot be interrupted gets deferred cleanup
+  with failures logged (no public waiting API). A closed branch ends normally (no
+  replayed cancellation); cancelling one async consumer is branch-local. Branches
+  expose only `close()`/`aclose()`, with no weakref/GC cleanup. A fatal read is
+  published (siblings notified) before the source closes, so a blocking close never
+  holds drained siblings; the close-failure note therefore lands on the shared
+  exception after a sibling may already have raised it (visible on later inspection).
+  `Tee._advance` publishes in a `finally` from an empty default read (user
+  2026-11-17), so a second interrupt (Ctrl-C) landing inside its `except BaseException`
+  arm still releases `_advancer` and sibling waiters never hang; they may then end
+  without an error instead (`tests/internal/test_tee.py`
+  `TestTee::test_second_interrupt_while_handling_the_first_releases_the_read`).
+- Cleanup failures beside a primary error keep the primary type, attach via
+  `Exception.add_note`, and log the traceback; there is no tee-specific
+  `ExceptionGroup` (the general resource-unwind rule is unchanged).
+- Lock shape (fewest locks, least deadlock surface): `AsyncTee` keeps no state lock
+  (single-loop deque reads/appends); one `anyio.Lock` serializes only upstream
+  advancement, buffered reads never take it, a waiter re-checks its buffer after
+  acquiring, and AnyIO's same-task reacquire `RuntimeError` surfaces as the reentrancy
+  error. `Tee` uses one `threading.Lock` plus one `Condition` over it, never held
+  across `next(source)`; an advancing flag plus the advancer's thread id serialize
+  advancement and detect reentrancy, and every state transition (item, EOF, read
+  error, fatal, close) notifies waiters. `Tee` registers branches and re-reads the
+  live sibling set after an upstream read without the lock, snapshotting dicts with
+  one `tuple()` call and relying on GIL atomicity (CI has no free-threaded leg). No
+  new generic synchronization framework.
+- Source wrapper (decided 2026-11-16 (user), landed 2026-11-17): `Tee` wraps its source
+  in `auto_close` (moved to `riko/base/_iterutils.py`, with `get_sync_closer`/
+  `require_value` in `riko/base/_guards.py`), so an undrained, unclosed `Tee` closes its
+  source at garbage collection like every other `auto_close` user. Revised 2026-11-17
+  (user, stdlib parity with `itertools.tee`): `auto_close`/`aauto_close` warn
+  `ResourceWarning` only when a closable is a resource (`has_open_resource`: anything
+  with `close`/`aclose` other than a generator or another wrapper), so hand-composed
+  `split` feeding an early-stopping pipe no longer warns; a file-backed leak still does
+  (`tests/internal/test_io.py::TestAutoClose::test_dropping_an_unclosed_wrapper_of_streams_does_not_warn`).
+  `auto_close.close()` closes every value, then raises the single failure or an
+  `ExceptionGroup` (execution-semantics § cleanup). `auto_close.close()` claims its
+  close with one atomic pop of a one-item list, so concurrent closes (a deferred reader
+  close racing `Tee.close()`) close once with no extra lock, and `Tee` keeps no close
+  flag of its own beyond one lifecycle state (idle, reading, done, closed). Locking
+  stays in the few `Tee` methods that already own it; a simplification never adds a
+  locked section. As built 2026-11-17, `AsyncTee` matches it: it wraps its source in
+  `aauto_close`, which claims its close with the same atomic pop, and shares
+  `_TeeState`. Each read of either tee publishes one `TeeRead` built by
+  `from_lag`/`from_interrupt`/`from_item` and delivered by `deliver`; both tees re-read
+  live siblings after the read, publish before closing, and share the plain helpers
+  `require_idle`/`is_lagging`/`log_cleanup_failure` in `riko/base/_iterutils.py` (no
+  base class). Branches are `TeeBranch`/`AsyncTeeBranch` classes (a generator branch
+  cannot drop its buffer when closed unstarted, or end a wait closed from another
+  thread). The advancing branch publishes its own value into its own buffer, so no
+  item/marker union is returned (enums need at least three members).
+
 ### 7.1 Branch isolation
 
 Split branches are observably isolated: mutation in one branch must not silently corrupt
 another branch's logical value.
 
-The runtime chooses the cheapest safe copy/share strategy. There is no public copy-mode
-knob in the initial API.
+Whichever branch pulls an item from upstream receives the original value; every other
+branch receives a `deepcopy` of the envelope's value (provenance fields shared). The
+knob is `pipeline.split(splits=2, *, isolate=True)` and the matching `isolate` conf
+option (default `True`) on the `split` module; `isolate=False` shares each value
+across branches. Plain one-port fan-out (one source port feeding several stream edges,
+no split node) always isolates.
+
+Decided 2026-11-16 (user), R7 Slice A: fan-out is atomic. Every isolated copy is
+prepared before any branch buffer receives the item; a copy failure is fatal, raised
+as `PipelineError` chained from the copy error and naming the node/branch where known,
+and never falls back to sharing.
 
 Similarly:
 
@@ -450,44 +547,34 @@ Canonical validation rejects:
 
 ### 10.1 Executor value-addressing (inherited from R4B)
 
-The R4B executor keys its per-node stream table by node id alone: it stores
-`steps[node_id]`, resolves upstream inputs as `steps[edge.source]`, and returns
-`steps[endpoint.node]`. Neither `GraphEdge.source_port` nor the selected output's
-port is consulted. Rather than silently aliasing a distinct output port (e.g.
-`out:1`, `out:matched`) onto the producer's `out` stream, R4B **fails closed**: a
-guard rejects any non-default source or selected-output port with
-`InvalidPipelineError`, so only the bare `out` port is executable today. This is
-sound because no built-in module produces more than the `out` port before this
-phase.
+Before this phase the R4B executor keyed its per-node stream table by node id alone
+and **failed closed** on any non-default source or selected-output port, and the plan
+build refused one source port feeding more than one stream edge
+(`Workflow.require_executable()`), because both consumers would have shared one
+one-shot iterator.
 
-This phase owns the replacement of that guard: value addressing becomes
-`(node, port)`-keyed so distinct output ports resolve to distinct streams (ordinary
-modules normalize to `out`; split/branch/route produce their declared ports). Because
-branch delivery must carry the final `_ItemEnvelope` provenance envelope, the port-keyed
-production mechanism lands here (after R5A), not as an R4B interim. The current
-fail-closed guard is pinned by
-`tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects` row
-`nondefault-source-output-port`, which R7 must replace when distinct ports begin
-resolving to distinct streams.
+**As built (R7 slice 1, 2026-11-14).** Value addressing is `(node, port)`-keyed: the
+step table maps each `PortKey` to one stream per reader (`ExecutionPlan.get_port_demand`
+counts the readers of each port in a run), and `_resolve_node_inputs` pops one per
+incoming edge. A port with several readers is teed (`Tee`/`AsyncTee`, isolated copies);
+a port nothing reads is closed before any item is pulled. Ordinary modules produce
+`out`; a `PreparedSplitter` produces `out`, `out:1`, … from its `splits`. Both guards
+are gone: `ExecutionPlan.validate()` instead rejects an edge or workflow output that
+reads a port its node doesn't produce (rows
+`nondefault-source-output-port`/`split-port-past-its-count`; fan-out runs in
+`test_run_fans_out_every_item_to_each_consumer`). Branch/route semantic ports arrive
+with their modules. Positional-input gaps are not guarded: `union` reads `others` as an
+ordered list, so `in` + `in:2` (legacy `_OTHER2`) executes
+(`test_run_accepts_sparse_positional_inputs`); `in:0`/`out:0` are grammar errors in
+`parse_port`; per-module fan-in arity belongs to the module port contracts, not this
+phase (tripwire `test_build_plan_rejects_undeclared_positional_input`).
 
-For the same reason the R4B plan build also refuses one source port feeding more than
-one stream edge (`Workflow.require_executable()` in
-`riko/definitions/_workflow_definition.py`, called from `ExecutionPlan.from_workflow`
-and pinned by `test_build_plan_rejects_fan_out_from_one_source_port`): with node-keyed
-streams both consumers would share a single one-shot iterator. Multiple outgoing edges
-per source port remain valid canonical topology (§2), so `Workflow.validate()` does not
-reject them; this phase's bounded branch delivery removes the plan-build guard.
-Positional-input gaps are not guarded: `union` reads `others` as an ordered list, so
-`in` + `in:2` (legacy `_OTHER2`) executes (`test_run_accepts_sparse_positional_inputs`);
-`in:0`/`out:0` are grammar errors in `parse_port`; per-module fan-in arity belongs to
-the module port contracts, not this phase (tripwire
-`test_build_plan_rejects_undeclared_positional_input`).
-
-**Node vs node-id naming (triage 2026-10-25).** `GraphEdge.source`/`target` and the
-executor's `steps` table hold node ids under node-sense names. Rename them
-(`source_id`/`target_id`, a `(node_id, port)`-keyed table) as part of this phase's
-value-addressing rewrite rather than ahead of it. `Endpoint.node` keeps its name: it
-mirrors the serialized endpoint's `"node"` key.
+**Node vs node-id naming (triage 2026-10-25).** `WorkflowEdge`'s node-id fields are
+`source_id`/`target_id` (renamed from the node-sense `source`/`target` as this phase's
+first change), and `WorkflowEdge.source_key`/`target_key` give the canonical
+`PortKey` (`(node_id, port)`) of each end. The executor's `steps` table is
+`PortKey`-keyed. `Endpoint.node` keeps its name: it mirrors the
+serialized endpoint's `"node"` key.
 
 ## 11. Branch-to-fan-in composition
 

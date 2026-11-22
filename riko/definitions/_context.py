@@ -9,6 +9,8 @@ Examples:
         >>> from riko import Context
         >>>
         >>> base = Context({"count": 2}, test=True)
+        >>> base
+        Context(inputs={'count': 2}, test=True)
         >>> derived = base.replace(inputs={"limit": 5})
         >>> base.inputs["count"]
         2
@@ -58,14 +60,12 @@ class Context:
 
     Attributes:
 
-        inputs: Read-only JSON input values keyed by input name. They fill the
-            workflow's inputs and are what an ``input`` module reads in place of its
-            default. When not given, an ``input`` module whose input has no schema
-            prompts unless ``test`` is set; given ``{}``, it uses its default instead
-            of prompting.
+        inputs: Read-only JSON inputs keyed by input name. They fill the workflow's
+            inputs and are what an ``input`` module reads in place of its default. When
+            not given, an ``input`` module whose input has no schema prompts unless
+            ``test`` is set. Given ``{}``, it uses its default instead of prompting.
 
         test: Whether to use defaults instead of prompting.
-
         resources: Read-only, keyed by name, and populated only via ``with_resource``.
 
     """

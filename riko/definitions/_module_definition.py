@@ -73,8 +73,6 @@ class ModuleDefinition:
 
     Examples:
 
-        >>> from riko.ext import ModuleDefinition
-        >>>
         >>> def pipe(*args, **kwargs):
         ...     return []
         >>>
@@ -100,7 +98,8 @@ class ModuleDefinition:
 
         Args:
 
-            module: Object having ``pipe``/``async_pipe``, e.g., a Python module import.
+            module: Object having ``pipe``/``async_pipe``, e.g., a ``ModuleType`` or
+                ``ResolvedWorkflow``.
 
         Kwargs:
 
@@ -147,7 +146,7 @@ class ModuleDefinition:
         cls, pipe: WrapperMeta, *, description: str | None = None
     ) -> ModuleDefinition:
         """
-        Builds a definition from one pipe callable, sync or async.
+        Builds a definition from one sync or async pipe callable.
 
         The definition is named after the module name stamped on the pipe, so a
         stored workflow's generic ``pipe``/``async_pipe`` leaves ``name`` empty.
@@ -167,8 +166,9 @@ class ModuleDefinition:
 
         Examples:
 
-            >>> from riko.modules.hash import async_pipe
+            >>> from riko.runtime._resolver import dispatcher
             >>>
+            >>> async_pipe = dispatcher.require("hash", is_async=True)
             >>> definition = ModuleDefinition.from_pipe(async_pipe)
             >>> definition.name, definition.async_pipe is async_pipe
             ('hash', True)

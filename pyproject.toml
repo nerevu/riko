@@ -85,6 +85,7 @@ lint = [
     "rumdl>=0.3.2,<0.4.0",
     "types-lxml>=2026.2.16",
     "types-networkx>=3.4.2",
+    "types-python-dateutil>=2.9.0.20261104",
 ]
 
 dev = [
@@ -154,6 +155,7 @@ extend-select = [
     "PT",   # flake8-pytest-style
     "PLC0415", # Import not at top of file
     "ERA",  # eradicate: commented-out code (tests only; see per-file ignores)
+    "RUF029",  # unused-async
 ]
 
 ignore = [
@@ -200,6 +202,7 @@ split-on-trailing-comma = false
 "tests/**/*" = [
     "S101",   # Use of `assert` detected
     "S102",   # Use of `exec` detected
+    "RUF029",  # unused-async
 ]
 
 "riko/**/*" = [
@@ -345,24 +348,24 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 320
-uncovered-lowered = 2026-11-14
+uncovered = 316
+uncovered-lowered = 2026-11-19
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
 # `typing.cast` calls. A run fails above either and lowers it on a gain. It records the
 # day as `<key>-lowered`.
-any = 125
-any-lowered = 2026-11-10
-cast = 85
-cast-lowered = 2026-11-11
+any = 122
+any-lowered = 2026-11-14
+cast = 74
+cast-lowered = 2026-11-16
 
 [tool.riko.tests]
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the
 # `pytest.param` rows without `id=` in `tests/`. Each only goes down: a run fails above
 # either and lowers it on a gain. It records the day as `<key>-lowered`.
-inline-tables = 66
-inline-tables-lowered = 2026-11-12
+inline-tables = 65
+inline-tables-lowered = 2026-11-14
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30
 

@@ -161,7 +161,6 @@ def is_lifecycle_factory(val: object) -> TypeGuard[LifecycleFactory[object]]:
     Examples:
 
         >>> from contextlib import contextmanager
-        >>> from riko.types._resource import is_lifecycle_factory
         >>>
         >>> @contextmanager
         ... def connect(ctx):
@@ -325,8 +324,6 @@ def build_lifecycle_plan[T](
 
     Examples:
 
-        >>> from riko.types._resource import build_lifecycle_plan
-        >>>
         >>> def db(name):
         ...     yield {"name": name}
         >>>
@@ -393,8 +390,6 @@ def build_factory_plan[T](
 
     Examples:
 
-        >>> from riko.types._resource import build_factory_plan
-        >>>
         >>> plan = build_factory_plan(dict, cleanup=False, name="main")
         >>> type(plan).__name__
         'ValueFactoryPlan'

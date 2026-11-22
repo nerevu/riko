@@ -101,23 +101,25 @@ def _resolve_default(
         An orderable default suitable as a sort-key filler.
 
     """
-    resolved = ""
+    _default = ""
 
     if default is None:
         if cast_type is not None and cast_type not in INVALID_TYPES:
-            _default = CAST_SWITCH[cast_type].get("default")
-            unorderable = isinstance(_default, (float, Decimal)) and isnan(_default)
+            cast_default = CAST_SWITCH[cast_type].get("default")
+            unorderable = isinstance(cast_default, (float, Decimal)) and isnan(
+                cast_default
+            )
 
             if unorderable or cast_type in DATELIKE_TYPES:
-                resolved = SORT_FILLER
-            elif _default is not None and not is_mapping(_default):
-                resolved = _default
+                _default = SORT_FILLER
+            elif cast_default is not None and not is_mapping(cast_default):
+                _default = cast_default
     elif is_mapping(default):
         logger.warning(f"Invalid {default=}. Setting to empty string.")
     else:
-        resolved = default
+        _default = default
 
-    return resolved
+    return _default
 
 
 def def_itemgetter(
@@ -158,8 +160,8 @@ def def_itemgetter(
         (-inf, -inf)
 
     """
-    resolved = resolve_cast_type(type_)
-    cast_type = None if resolved is CastType.PASS else resolved
+    _type = resolve_cast_type(type_)
+    cast_type = None if _type is CastType.PASS else _type
     sort_default = _resolve_default(cast_type, default)
     invalid_type = cast_type in INVALID_TYPES
 

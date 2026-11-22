@@ -162,7 +162,7 @@ def parser(
     return map(str.strip, split)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[str]:
     """
     Asynchronously fetches the content of a web page as a string.

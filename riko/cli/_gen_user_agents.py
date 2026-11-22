@@ -110,6 +110,8 @@ def generate_user_agents(
 
     Examples:
 
+        >>> from riko import UserAgent
+        >>>
         >>> pools = {UserAgent.DESKTOP: ["riko/1.0"]}
         >>> source = generate_user_agents(pools, "2.2.0")
         >>> "fake-useragent 2.2.0" in source

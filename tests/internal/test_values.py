@@ -41,8 +41,8 @@ from feedparser import FeedParserDict
 from urllib3.response import HTTPResponse
 
 from riko.base import _exceptions as errors
+from riko.base import _guards as guards
 from riko.base._config import STREAMING_THRESHOLD, load_settings
-from riko.base._config import settings as config
 from riko.base._dateutils import TZINFOS
 from riko.base._exceptions import (
     CyclicIdentityError,
@@ -56,7 +56,9 @@ from riko.base._graph import (
     topological_sort,
 )
 from riko.base._guards import (
+    SyncClosable,
     _check_strict_protocol,
+    get_sync_closer,
     isinstance_strict,
     require_listlike,
     require_mapping,
@@ -118,7 +120,7 @@ from riko.types._feed import (
     _ItemEnvelope,
 )
 from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import AsyncCloseable, SyncCloseable, get_async_closer
+from riko.types._io import AsyncClosable, get_async_closer
 from riko.types._pipedef import Embed, PipeModule
 from riko.types._rss import ParserRSSEntry
 from riko.types._workflow import Endpoint, WorkflowEdge, WorkflowIndex
@@ -523,6 +525,11 @@ ABSOLUTE_DATES = [
     pytest.param("10/21/1958", (1958, 10, 21), id="slashed"),
     pytest.param("15 JUN 06", (2006, 6, 15), id="day-month-year"),
 ]
+OUT_OF_RANGE_DATES = [
+    pytest.param(10**19, id="epoch-overflow"),
+    pytest.param(99999999999999999, id="epoch-past-time-t"),
+    pytest.param("99999999999999999999", id="digit-string"),
+]
 
 
 class TestCastDatetime:
@@ -571,6 +578,20 @@ class TestCastDatetime:
             offset = None
 
         assert offset == timedelta(hours=9)
+
+    @pytest.mark.parametrize("value", OUT_OF_RANGE_DATES)
+    def test_out_of_range_date_raises_value_error(self, value):
+        with pytest.raises(ValueError, match="out of range"):
+            cast_datetime(value)
+
+    def test_other_os_errors_propagate(self, monkeypatch):
+        def gmtime(_):
+            raise PermissionError(13, "denied")
+
+        monkeypatch.setattr(cast_module, "gmtime", gmtime)
+
+        with pytest.raises(PermissionError, match="denied"):
+            cast_datetime(1)
 
     def test_rejects_non_date_values(self):
         with pytest.raises(TypeError, match="not date-like"):
@@ -663,9 +684,9 @@ class TestOverloadTypes:
 class TestResolveCastType:
     def test_unknown_name_warns_once_and_passes(self, caplog):
         with caplog.at_level(WARNING, logger="riko"):
-            resolved = resolve_cast_type("unknown")
+            cast_type = resolve_cast_type("unknown")
 
-        assert resolved == CastType.PASS
+        assert cast_type == CastType.PASS
         assert [r.levelno for r in caplog.records] == [WARNING]
 
 
@@ -743,11 +764,13 @@ class TestFromdict:
 class TestParseDateString:
     def test_parsed_date_cache_is_bounded(self):
         _parse_date_cached.cache_clear()
+        maxsize = _parse_date_cached.cache_info().maxsize
+        assert maxsize is not None
 
-        for second in range(config.parsed_date_cache_size + 1):
+        for second in range(maxsize + 1):
             parse_date_string(f"2015-02-01T00:00:00.{second:06d}+00:00")
 
-        assert _parse_date_cached.cache_info().currsize == config.parsed_date_cache_size
+        assert _parse_date_cached.cache_info().currsize == maxsize
 
     def test_ambiguous_cst_resolves_to_us_central(self):
         """
@@ -1308,9 +1331,9 @@ class TestResolveDate:
         assert [r.getMessage() for r in caplog.records] == [
             "skipping unparseable published date 'not a date'"
         ]
-        resolved = resolve_date(raw, *keys, "created")
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2021, 3, 4)
+        stamp = resolve_date(raw, *keys, "created")
+        assert isinstance(stamp, struct_time)
+        assert stamp[:3] == (2021, 3, 4)
 
     @pytest.mark.filterwarnings("error::DeprecationWarning")
     def test_resolve_date_does_not_trigger_feedparser_updated_fallback(self):
@@ -1318,11 +1341,11 @@ class TestResolveDate:
         raw = FeedParserDict({"published": "2020-01-02", "published_parsed": None})
         entry = cast("ParserRSSEntry", raw)
         keys = ("updated_parsed", "updated", "published_parsed", "published")
-        resolved = resolve_date(entry, *keys)
-        assert isinstance(resolved, struct_time)
-        assert resolved[:3] == (2020, 1, 2)
+        stamp = resolve_date(entry, *keys)
+        assert isinstance(stamp, struct_time)
+        assert stamp[:3] == (2020, 1, 2)
         item = dict(next(augment_entries([entry])))
-        assert item["updated_parsed"] == resolved
+        assert item["updated_parsed"] == stamp
 
 
 # Each row: the items, the position options, and the option the error names.
@@ -1428,16 +1451,35 @@ ENV_OVERRIDES = [
     ),
     pytest.param("RIKO_FETCH_TIMEOUT", "2.5", "fetch_timeout", 2.5, id="fetch"),
     pytest.param("RIKO_FETCH_TIMEOUT", "-1", "fetch_timeout", 30.0, id="fetch-neg"),
+    pytest.param("RIKO_FETCH_TIMEOUT", "0", "fetch_timeout", 30.0, id="fetch-0"),
     pytest.param("RIKO_BENCHMARK_DELAY", "0", "benchmark_delay", 0.0, id="delay-0"),
     pytest.param("RIKO_BENCHMARK_WORKERS", "2", "benchmark_workers", 2, id="workers"),
     pytest.param(
-        "RIKO_PARSED_DATE_CACHE_SIZE", "0", "parsed_date_cache_size", 0, id="int-zero"
+        "RIKO_PARSED_DATE_CACHE_SIZE",
+        "0",
+        "parsed_date_cache_size",
+        1024,
+        id="int-zero",
+    ),
+    pytest.param(
+        "RIKO_PARSED_DATE_CACHE_SIZE",
+        "inf",
+        "parsed_date_cache_size",
+        inf,
+        id="cache-inf",
+    ),
+    pytest.param(
+        "RIKO_STRICT_CHECK_CACHE_SIZE",
+        "2.5",
+        "strict_check_cache_size",
+        512,
+        id="cache-fraction",
     ),
     pytest.param(
         "RIKO_RETURN_KINDS_CACHE_SIZE",
         "0",
         "return_kinds_cache_size",
-        0,
+        256,
         id="return-kinds-zero",
     ),
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "inf", "shutdown_timeout", inf, id="inf"),
@@ -1446,13 +1488,19 @@ ENV_OVERRIDES = [
     pytest.param("RIKO_SHUTDOWN_TIMEOUT", "soon", "shutdown_timeout", 30.0, id="bad"),
     pytest.param("RIKO_ENCODING", "bogus", "encoding", "utf-8", id="encoding-unknown"),
     pytest.param("RIKO_ENCODING", "latin-1", "encoding", "latin-1", id="encoding"),
+    pytest.param("RIKO_BRANCH_BUFFER", "64", "branch_buffer", 64, id="branch-buffer"),
+    pytest.param("RIKO_BRANCH_BUFFER", "0", "branch_buffer", 1024, id="branch-0"),
+    pytest.param("RIKO_BRANCH_BUFFER", "x", "branch_buffer", 1024, id="branch-bad"),
+    pytest.param("RIKO_BRANCH_BUFFER", "2.5", "branch_buffer", 1024, id="branch-2.5"),
+    pytest.param("RIKO_BRANCH_BUFFER", "inf", "branch_buffer", inf, id="branch-inf"),
 ]
 
 
 class TestLoadSettings:
     @pytest.mark.parametrize(("key", "raw", "name", "expected"), ENV_OVERRIDES)
     def test_env_override_or_default(self, key, raw, name, expected) -> None:
-        assert getattr(load_settings({key: raw}), name) == expected
+        value = getattr(load_settings({key: raw}), name)
+        assert (value, type(value)) == (expected, type(expected))
 
 
 class _SlottedClose:
@@ -1510,13 +1558,21 @@ class _SlottedStaticClose:
 
 # Values whose protocol verdict is remembered per type, or checked in full each time.
 STRICT_CHECKS = [
-    pytest.param(_gen_one, SyncCloseable, id="generator"),
-    pytest.param(_gen_one, AsyncCloseable, id="generator-async"),
-    pytest.param(_SlottedClose, SyncCloseable, id="slotted"),
-    pytest.param(_SlottedNeedsArg, SyncCloseable, id="slotted-wrong-signature"),
-    pytest.param(_SlottedStaticClose, SyncCloseable, id="slotted-static"),
-    pytest.param(_with_close, SyncCloseable, id="instance-close"),
-    pytest.param(_Plain, SyncCloseable, id="plain"),
+    pytest.param(_gen_one, SyncClosable, id="generator"),
+    pytest.param(_gen_one, AsyncClosable, id="generator-async"),
+    pytest.param(_SlottedClose, SyncClosable, id="slotted"),
+    pytest.param(_SlottedNeedsArg, SyncClosable, id="slotted-wrong-signature"),
+    pytest.param(_SlottedStaticClose, SyncClosable, id="slotted-static"),
+    pytest.param(_with_close, SyncClosable, id="instance-close"),
+    pytest.param(_Plain, SyncClosable, id="plain"),
+    pytest.param(DotDict, SyncClosable, id="dotdict"),
+]
+
+# Whether a value has a sync closer; only a value that defines ``close`` is checked.
+STATIC_CLOSERS = [
+    pytest.param(DotDict, False, id="dotdict"),
+    pytest.param(_Plain, False, id="plain"),
+    pytest.param(_with_close, True, id="instance-close"),
 ]
 
 
@@ -1532,11 +1588,25 @@ class TestRequireGuards:
 
     def test_an_instance_level_close_is_checked_on_each_instance(self) -> None:
         plain, closing = _Plain(), _with_close()
-        verdicts = [isinstance_strict(v, SyncCloseable) for v in (plain, closing)]
+        verdicts = [isinstance_strict(v, SyncClosable) for v in (plain, closing)]
         reversed_verdicts = [
-            isinstance_strict(v, SyncCloseable) for v in (closing, plain)
+            isinstance_strict(v, SyncClosable) for v in (closing, plain)
         ]
         assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
+
+    @pytest.mark.parametrize(("make", "closes"), STATIC_CLOSERS)
+    def test_a_close_neither_type_nor_instance_defines_skips_the_protocol_check(
+        self, monkeypatch, make, closes
+    ) -> None:
+        checked = []
+
+        def spy(obj: object, protocol: type, *methods: str) -> bool:
+            checked.append(obj)
+            return _check_strict_protocol(obj, protocol, *methods)
+
+        monkeypatch.setattr(guards, "_check_strict_protocol", spy)
+        closer = get_sync_closer(make())
+        assert (closer is not None, bool(checked)) == (closes, closes)
 
     def test_an_async_close_is_found_per_type_and_per_instance(self) -> None:
         closers = (

@@ -239,6 +239,7 @@ def serialize_items(items: Items, fmt: Formats, **kwargs: object) -> ConversionO
     Examples:
 
         >>> from json import loads
+        >>> from riko import Formats
         >>>
         >>> serialize_items([{"x": 1}], Formats.JSON).read()
         '[{"x": 1}]'

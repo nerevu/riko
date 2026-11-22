@@ -43,6 +43,7 @@ from riko.types._pipedef import (
     WireEndpoint,
 )
 from riko.types._workflow import (
+    OUT,
     WORKFLOW_VERSION,
     RawEdge,
     RawEndpoint,
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
 
     from riko.types._frozendict import InputSchema, InputSchemas, JSONValue
     from riko.types._pipedef import PipeDefLike, Wires
-    from riko.types._workflow import NodeId, Port
+    from riko.types._workflow import NodeId, RawPort
     from riko.types.modules import Conf, InputRawConf
 
     from ._workflow_definition import RawOutputs, RawPortEdges
@@ -371,7 +372,7 @@ def _migrate_dag_module(index: int, module: DagModule) -> tuple[NodeId, RawNode]
     return node_id, node
 
 
-def _migrate_target_port(port: Port) -> Port:
+def _migrate_target_port(port: RawPort) -> RawPort:
     """Sanitizes a ``PipeDef`` target port into the id the receiving module looks up."""
     return port if port.startswith("_") else pythonise(port)
 
@@ -470,7 +471,7 @@ def _raw_edge(*wire: str) -> RawEdge:
     source = require_str(wire[0], "wire source id")
     target = require_str(wire[1], "wire target id")
     port = "in" if len(wire) == 2 else require_str(wire[2], "wire target port")
-    source_endpoint = RawEndpoint({"node": source, "port": "out"})
+    source_endpoint = RawEndpoint({"node": source, "port": OUT})
     target_endpoint = RawEndpoint({"node": target, "port": port})
     return RawEdge({"source": source_endpoint, "target": target_endpoint})
 

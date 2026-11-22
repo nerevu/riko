@@ -18,23 +18,22 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
-from inspect import iscoroutine
-from math import inf
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal, Self, TypedDict, Unpack, cast, overload
 
-from attrs import define, field
+from attrs import define, evolve, field
 
 from riko.base._config import settings
-from riko.base._exceptions import InvalidPipelineError
-from riko.base._guards import is_async_callable, is_awaitable
-from riko.base._logging import get_logger
-from riko.base._sentinels import MISSING, MissingType
-from riko.types._io import (
+from riko.base._guards import (
     ASYNC_CLEANUP_MSG,
     get_sync_closer,
-    resolve_closer,
-    resolve_user_agent,
+    is_async_callable,
+    is_awaitable,
+    require_value,
 )
+from riko.base._logging import get_logger
+from riko.base._require_guards import as_timeout, require_timeout
+from riko.base._sentinels import MISSING, MissingType
+from riko.types._io import resolve_closer, resolve_user_agent
 
 from ._backend import (
     AsyncClient,
@@ -102,7 +101,7 @@ async def async_get(
     url: str,
     *,
     params: Mapping[str, str] | None = None,
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     user_agent: UserAgentLike | None = None,
 ) -> HTTPXResponse:
     """
@@ -117,7 +116,7 @@ async def async_get(
         params: Query parameters added to ``url``.
 
         timeout: Seconds to wait before giving up (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0``, ``inf``, or ``None`` waits forever.
+            30 seconds). ``inf`` waits forever.
 
         user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
             agent of that kind (default: "riko/<version>").
@@ -128,15 +127,17 @@ async def async_get(
 
     Raises:
 
+        ValueError: If ``timeout`` is 0, negative, or NaN.
+
         httpx.HTTPStatusError: If the final response reports a client or server error (a
             4xx or 5xx status).
 
     """
-    resolved = None if timeout in {0, inf} else timeout
+    _timeout = as_timeout(require_timeout(timeout))
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     async with AsyncClient(follow_redirects=True, headers=headers) as client:
-        response = await client.get(url, params=params, timeout=resolved)
+        response = await client.get(url, params=params, timeout=_timeout)
         response.raise_for_status()
 
     return response
@@ -158,12 +159,12 @@ async def async_read(
     return await (path.read_bytes() if binary else path.read_text(encoding))
 
 
-async def async_json(response: HTTPXResponse) -> dict[str, object]:
+async def async_json(response: HTTPXResponse) -> dict[str, object]:  # noqa: RUF029 (async by contract)
     """Parses the JSON body of ``response``."""
     return response.json()
 
 
-async def async_return[T](value: T, **_: object) -> T:
+async def async_return[T](value: T, **_: object) -> T:  # noqa: RUF029 (async by contract)
     """Wraps ``value`` in an awaitable, for uniform ``await`` call sites."""
     return value
 
@@ -187,45 +188,6 @@ async def gather_results[T](awaitables: Iterable[Awaitable[T]], **_: object) -> 
             tg.start_soon(collect, index, awaitable)
 
     return [r for r in results if not isinstance(r, MissingType)]
-
-
-def require_value[T](result: T | Awaitable[T], msg: str) -> T:
-    """
-    Requires ``result`` not to be awaitable.
-
-    A rejected coroutine is closed before the error is raised. It is never left
-    unawaited.
-
-    Args:
-
-        result: The call's result.
-        msg: The error message for an awaitable result.
-
-    Returns:
-
-        ``result``.
-
-    Raises:
-
-        InvalidPipelineError: If ``result`` is awaitable.
-
-    Examples:
-
-        >>> require_value(3, "unused")
-        3
-        >>> require_value(async_return(3), "use `async for`")
-        Traceback (most recent call last):
-        ...
-        riko.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
-
-    """
-    if is_awaitable(result):
-        if iscoroutine(result):
-            result.close()
-
-        raise InvalidPipelineError(msg)
-
-    return result
 
 
 async def as_awaitable[T](value: T | Awaitable[T]) -> T:
@@ -253,64 +215,149 @@ class _AbandonableCall[T]:
             self.done = True
 
 
-async def asyncify[T](
-    func: Func[T | Awaitable[T]],
-    *args: object,
-    limiter: CapacityLimiter | None = None,
-    abandon_on_cancel: bool = False,
-    **kwargs: object,
-) -> T:
+class _RunnerOptions(TypedDict, total=False):
+    """The execution settings ``async_runner.using`` may change."""
+
+    inline: bool
+    limiter: CapacityLimiter | None
+    abandon_on_cancel: bool
+
+
+@define(frozen=True, kw_only=True)
+class async_runner:  # noqa: N801
     """
-    Runs a blocking callable on a worker thread and awaits its result.
+    Calls a sync or async callable and awaits its result if it is awaitable.
 
-    An async ``func`` is awaited on the event loop instead. An awaitable a blocking
-    ``func`` returns is awaited once the worker hands it back. With
-    ``abandon_on_cancel`` set, cancelling the caller stops the wait while the worker
-    finishes on its own; an error it raises afterwards is logged as a warning.
+    An async callable is always awaited on the event loop. A blocking one runs on the
+    event loop when ``inline`` is set, and on a worker thread otherwise. An awaitable a
+    blocking callable returns is awaited once it is handed back.
 
-    Args:
-
-        func: The callable to run.
-        args: Positional arguments forwarded to ``func``.
+    Arguments given to a call or to ``partial`` always belong to the callee. Only the
+    constructor and ``using`` change how the call runs. ``maybe_async`` is the inline
+    runner and ``asyncify`` the worker-thread one.
 
     Kwargs:
 
-        limiter: Caps the worker threads held at once, or ``None`` for the default.
-        abandon_on_cancel: Whether cancellation stops the wait for a blocking ``func``.
-        kwargs: Keyword arguments forwarded to ``func``.
+        inline: Whether a blocking callable runs on the event loop.
 
-    Returns:
+        limiter: Caps the number of worker threads a non-inline call may hold. ``None``
+            uses the default.
 
-        The value ``func`` returns, awaited when it is awaitable.
+        abandon_on_cancel: Whether cancelling the caller abandons a worker-thread call.
+            If set, the worker finishes on its own. Any error it raises afterwards is
+            logged as a warning.
 
     Examples:
 
         >>> import threading
         >>> from riko import run
         >>>
-        >>> get_name = lambda: threading.current_thread().name
-        >>> main_name = threading.main_thread().name
-        >>> run(asyncify, get_name) == main_name
-        False
+        >>> def locate(value, inline=None):
+        ...     on_main = threading.current_thread() is threading.main_thread()
+        ...     return f"{value=}, {inline=}, {on_main=}"
+        >>>
+        >>> async def main():
+        ...     print(await maybe_async(locate, 1))
+        ...     print(await maybe_async.using(inline=False)(locate, 2))
+        ...     print(await asyncify(locate, 3, inline="callee"))
+        ...
+        ...     call = async_partial(locate, inline="bound")
+        ...     print(await call(4))
+        >>>
+        >>> run(main)
+        value=1, inline=None, on_main=True
+        value=2, inline=None, on_main=False
+        value=3, inline='callee', on_main=False
+        value=4, inline='bound', on_main=True
 
     """
-    if is_async_callable(func):
-        result = await func(*args, **kwargs)
-    else:
-        call = _AbandonableCall(partial(func, **kwargs))
-        worker = _asyncify(call, abandon_on_cancel=abandon_on_cancel, limiter=limiter)
 
-        try:
-            returned = await worker(*args)
-        finally:
-            call.abandoned = not call.done
+    inline: bool = True
+    limiter: CapacityLimiter | None = None
+    abandon_on_cancel: bool = False
 
-        result = await as_awaitable(returned)
+    async def __call__[T, **P](
+        self, func: Callable[P, T | Awaitable[T]], /, *args: P.args, **kwargs: P.kwargs
+    ) -> T:
+        """
+        Runs ``func`` with the given arguments and awaits its result.
 
-    return result
+        Args:
+
+            func: The callable to run.
+            args: Positional arguments passed to ``func``.
+
+        Kwargs:
+
+            kwargs: Keyword arguments passed to ``func``.
+
+        Returns:
+
+            The value ``func`` returns. It is awaited when awaitable.
+
+        """
+        if self.inline:
+            result = await as_awaitable(func(*args, **kwargs))
+        elif is_async_callable(func):
+            result = await func(*args, **kwargs)
+        else:
+            call = _AbandonableCall(partial(func, **kwargs))
+            cancels = self.abandon_on_cancel
+            worker = _asyncify(call, abandon_on_cancel=cancels, limiter=self.limiter)
+
+            try:
+                returned = await worker(*args)
+            finally:
+                call.abandoned = not call.done
+
+            result = await as_awaitable(returned)
+
+        return result
+
+    def using(self, **options: Unpack[_RunnerOptions]) -> Self:
+        """
+        Builds a runner with ``options`` in place of its current settings.
+
+        Kwargs:
+
+            options: The settings to change (the rest are kept).
+
+        Returns:
+
+            The reconfigured runner.
+
+        """
+        return evolve(self, **options)
+
+    def partial[T](
+        self, func: Callable[..., T | Awaitable[T]], /, *args: object, **kwargs: object
+    ) -> AsyncFunc[T]:
+        """
+        Builds a deferred call of ``func`` that this runner awaits.
+
+        Args:
+
+            func: The callable to run.
+            args: Positional arguments passed to ``func``.
+
+        Kwargs:
+
+            kwargs: Keyword arguments passed to ``func``.
+
+        Returns:
+
+            An async callable taking ``func``'s remaining arguments.
+
+        """
+        return cast("AsyncFunc[T]", partial(self.__call__, func, *args, **kwargs))
 
 
-def syncify[**P, T](
+maybe_async = async_runner()
+asyncify = async_runner(inline=False)
+async_partial = maybe_async.partial
+
+
+def syncify[T, **P](
     func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwargs
 ) -> T:
     """
@@ -349,47 +396,6 @@ def syncify[**P, T](
         return await func(*args, **kwargs)
 
     return run_from_thread(await_func)
-
-
-async def maybe_async[T](
-    func: Func[T | Awaitable[T]],
-    *args: object,
-    inline: bool = True,
-    limiter: CapacityLimiter | None = None,
-    abandon_on_cancel: bool = False,
-    **kwargs: object,
-) -> T:
-    """
-    Calls ``func`` and awaits its result only when it is awaitable.
-
-    With ``inline`` unset, a blocking ``func`` runs on a worker thread instead of the
-    event loop. An async ``func`` is awaited either way.
-
-    Args:
-
-        func: The callable to run.
-        args: Positional arguments forwarded to ``func``.
-
-    Kwargs:
-
-        inline: Whether a blocking ``func`` runs on the event loop.
-        limiter: Caps the worker threads a non-inline call may hold.
-        abandon_on_cancel: Whether cancellation stops the wait for a non-inline call.
-        kwargs: Keyword arguments forwarded to ``func``.
-
-    Returns:
-
-        The result, awaited when ``func`` returned an awaitable.
-
-    """
-    if inline:
-        result = await as_awaitable(func(*args, **kwargs))
-    else:
-        result = await asyncify(
-            func, *args, limiter=limiter, abandon_on_cancel=abandon_on_cancel, **kwargs
-        )
-
-    return result
 
 
 def run_bridged[T](
@@ -453,11 +459,11 @@ class maybe_closing[T]:  # noqa: N801
         ...     yield 2
         >>>
         >>> def main():
-        ...     with maybe_closing(gen()) as items:
-        ...         for item in items:
+        ...     with maybe_closing(gen()) as stream:
+        ...         for item in stream:
         ...             break
         ...
-        ...     print(item, items.gi_running, items.gi_frame)
+        ...     print(item, stream.gi_running, stream.gi_frame)
         >>>
         >>> main()
         1 False None
@@ -522,22 +528,3 @@ class maybe_aclosing[T: AsyncIterator[object]]:  # noqa: N801
     async def __aexit__(self, *exc: object) -> None:
         if (closer := resolve_closer(self.stream, is_async=True)) is not None:
             await maybe_async(closer)
-
-
-def async_partial[T](
-    func: Func[T | Awaitable[T]], *args: object, **kwargs: object
-) -> AsyncFunc[T]:
-    """
-    Applies ``args`` and ``kwargs`` to ``func`` for awaiting via ``maybe_async``.
-
-    ``func``'s arguments are bound in their own partial, so a keyword of ``func`` named
-    ``inline``, ``limiter``, or ``abandon_on_cancel`` never reaches ``maybe_async``.
-    ``_inline`` and ``_abandon_on_cancel`` set its options instead.
-    """
-    inline = bool(kwargs.pop("_inline", True))
-    abandon_on_cancel = bool(kwargs.pop("_abandon_on_cancel", False))
-
-    call = partial(func, *args, **kwargs)
-    return partial(
-        maybe_async, call, inline=inline, abandon_on_cancel=abandon_on_cancel
-    )

@@ -126,7 +126,7 @@ async def async_parser(
 
         objconf: The module configuration: any ``timedelta`` unit.
 
-        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+        tuples: Iterable of tuples of (item, objconf): `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
@@ -175,7 +175,7 @@ def parser(
 
         objconf: The module configuration: any ``timedelta`` unit.
 
-        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+        tuples: Iterable of tuples of (item, objconf): `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
@@ -207,7 +207,7 @@ def parser(
     return TimeoutIterator(stream, time_ms)
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Streams items until the timeout expires.

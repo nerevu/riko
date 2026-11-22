@@ -56,7 +56,7 @@ class _EscapeCounter(ast.NodeVisitor):
                     continue
 
                 self._visit_type(parsed.body)
-            elif isinstance(child, ast.Name | ast.Attribute):
+            elif isinstance(child, (ast.Name, ast.Attribute)):
                 self.counts["Any"] += self._get_escape(child) == "Any"
 
     def _visit_quoted(self, node: ast.expr | None) -> None:

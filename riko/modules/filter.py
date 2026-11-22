@@ -162,11 +162,19 @@ def evaluate_rule(rule: FilterConfRule, item: Item, **kwargs: object) -> bool:
     has_value = _y is not None
     result = False
 
-    if has_value and not truthiness:
+    if has_value and not truthiness and _x is not None:
         try:
             x = cast_arg(_x, rule.op)
             y = cast_arg(_y, rule.op)
-        except (AttributeError, TypeError, ValueError, InvalidOperation, ParserError):
+        except (
+            AttributeError,
+            TypeError,
+            ValueError,
+            InvalidOperation,
+            ParserError,
+        ) as err:
+            msg = f"the 'filter' module ignored its {rule.op!r} rule on "
+            logger.warning(msg + f"{rule.field!r}: {err}")
             x = y = None
     else:
         x, y = _x, _y
@@ -205,7 +213,7 @@ def parser(
 
         extract: The item independent rules.
 
-        tuples: Iterable of tuples of (item, objconf) `item` is an element in the
+        tuples: Iterable of tuples of (item, objconf): `item` is an element in the
             input stream and `objconf` is the item configuration. Note: this shares
             the `stream` iterator, so consuming it will consume `stream` as well.
 
@@ -260,7 +268,7 @@ def parser(
                 break
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously filters a stream to the items matching the given rules.
@@ -269,7 +277,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
 
         conf (dict): The module configuration.
 

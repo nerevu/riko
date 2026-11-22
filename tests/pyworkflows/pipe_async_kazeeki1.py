@@ -27,7 +27,7 @@ def build() -> Pipeline:
     subtype="source",
     input_schemas=INPUT_SCHEMAS,
     dependencies=["fetchdata", "rename", "regex"],
-    isasync=True,
+    is_async=True,
 )
 def async_pipe(context: Context | None = None, **_) -> AsyncIterator:
     stream = aiter(build().with_context(Context() if context is None else context))

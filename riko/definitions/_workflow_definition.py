@@ -65,6 +65,7 @@ from riko.types._frozendict import (
 )
 from riko.types._pipedef import Embed, PipeDag
 from riko.types._workflow import (
+    OUT,
     WORKFLOW_VERSION,
     Endpoint,
     NodeId,
@@ -81,7 +82,7 @@ from riko.types._workflow import (
     parse_port,
 )
 
-from ._inputs import compile_input_schema
+from ._inputs import CompiledInputSchemas
 from ._nodes import (
     CallableNode,
     ModuleNode,
@@ -123,7 +124,7 @@ type RikoNodeCollection = Mapping[NodeId, RikoNode]
 type RikoNodes = Sequence[RikoNode]
 type PortEdges = Sequence[PortEdge]
 type RawPortEdges = Sequence[RawEdge]
-type RawInputs = Mapping[str, object]
+type RawValues = Mapping[str, object]
 type Inputs = Mapping[str, JSONValue]
 type RawOutputs = Mapping[OutputName, RawEndpoint]
 type Outputs = Mapping[OutputName, Endpoint]
@@ -221,6 +222,7 @@ class Workflow:
 
     Examples:
 
+        >>> from riko import Endpoint
         >>> from riko.ext import ModuleNode
         >>>
         >>> flow = Workflow(
@@ -274,8 +276,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.from_raw({"nodes": [{"name": "fetch"}]})
             >>> flow
             Workflow(fetch-1; outputs: default)
@@ -354,8 +354,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.parse('{"nodes": [{"name": "fetch"}]}')
             >>> flow
             Workflow(fetch-1; outputs: default)
@@ -366,16 +364,16 @@ class Workflow:
             Workflow(sw-1 -> sw-2; outputs: default)
 
         """
-        resolved = (
+        doc_shape = (
             None if shape is None else require_enum(DocumentShape, shape, "shape")
         )
 
         if not isinstance(document, Workflow):
-            raw = parse_document(document, shape=resolved)
-        elif resolved is None or resolved is DocumentShape.V2:
+            raw = parse_document(document, shape=doc_shape)
+        elif doc_shape is None or doc_shape is DocumentShape.V2:
             raw = build_raw_workflow(document)
         else:
-            msg = f"a Workflow can only be read as shape 'v2', not {resolved.value!r}"
+            msg = f"a Workflow can only be read as shape 'v2', not {doc_shape.value!r}"
             raise InvalidPipelineError(msg)
 
         flow = cls.from_raw(raw)
@@ -406,7 +404,7 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow, get_temp_path
+            >>> from riko import get_temp_path
             >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>>
@@ -424,8 +422,7 @@ class Workflow:
 
         Map keys are sorted at every level and node/edge fields use a fixed shape, so
         the same workflow always yields identical bytes. Edge order follows the
-        workflow. The default is the readable indented form committed files are
-        stored in.
+        workflow. Default: the readable indented form committed files are stored in.
 
         Kwargs:
 
@@ -438,8 +435,6 @@ class Workflow:
 
         Examples:
 
-            >>> from riko import Workflow
-            >>>
             >>> flow = Workflow.parse({"nodes": [{"name": "fetch"}]})
             >>> flow.serialize().decode("utf-8").splitlines()[1]
             '    "edges": [],'
@@ -565,8 +560,13 @@ class Workflow:
         return sort_stably({*names, *embeds})
 
     @cached_property
+    def _compiled_input_schemas(self) -> CompiledInputSchemas:
+        """Holds the compiled input schemas."""
+        return CompiledInputSchemas(self.input_schemas)
+
+    @cached_property
     def index(self) -> WorkflowIndex:
-        """Interprets the topology once; edges and outputs name declared nodes."""
+        """Holds the workflow's topology index."""
         return WorkflowIndex(self.nodes, self.graph_edges, self.outputs)
 
     @property
@@ -576,19 +576,19 @@ class Workflow:
 
     @property
     def endpoints(self) -> list[Endpoint]:
-        """Collect every endpoint referenced by an edge or named output."""
+        """Holds every endpoint referenced by an edge or named output."""
         ends = chain.from_iterable((edge.source, edge.target) for edge in self.edges)
         return list(chain(ends, self.outputs.values()))
 
     @property
     def referenced_resources(self) -> set[ResourceName]:
-        """Collects the Context resource names the workflow's nodes bind."""
+        """Holds the Context resource names the workflow's nodes bind."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_resources for node in nodes))
 
     @property
     def referenced_inputs(self) -> set[str]:
-        """Collects the input names the workflow's node configurations refer to."""
+        """Holds the input names the workflow's node configurations refer to."""
         nodes = self.nodes.values()
         return set(chain.from_iterable(node.referenced_inputs for node in nodes))
 
@@ -608,7 +608,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow(nodes=[ModuleNode(id="fetch-1", name="fetch")])
+            >>> flow = Workflow([ModuleNode(id="fetch-1", name="fetch")])
             >>> flow.get_node_id("fetch"), flow.get_node_id("sort")
             ('fetch-2', 'sort-1')
 
@@ -619,15 +619,15 @@ class Workflow:
         """Requires a default output to chain through, unless the workflow is empty."""
         if (default := self.outputs.get(DEFAULT_OUTPUT)) is None and self.nodes:
             msg = f"{what} has nodes but no default output. Build it with "
-            msg += "Workflow().with_node(node), or declare "
+            msg += "Workflow().with_nodes(node), or declare "
             msg += "outputs={'default': Endpoint(id, 'out')}"
             raise InvalidPipelineError(msg)
 
         return default
 
-    def with_node(self, node: RikoNode) -> Self:
+    def with_nodes(self, *nodes: RikoNode) -> Self:
         """
-        Builds a workflow with ``node`` appended to its end.
+        Builds a workflow with ``nodes`` appended in order.
 
         The previous default output streams into ``node``, and the workflow appends any
         new resources the ``node`` binds at the end.
@@ -651,24 +651,34 @@ class Workflow:
             >>>
             >>> fetch = ModuleNode(id="fetch-1", name="fetch")
             >>> sort = ModuleNode(id="sort-1", name="sort", resources="db")
-            >>> flow = Workflow().with_node(fetch).with_node(sort)
+            >>> flow = Workflow().with_nodes(fetch, sort)
             >>> flow.summary
             'fetch-1 -> sort-1; outputs: default'
             >>> flow.resources
             ('db',)
 
         """
-        if (tail := self._require_default_output("this workflow")) is None:
-            edges = self.edges
-        else:
-            edges = (*self.edges, StreamEdge(tail, Endpoint(node.id, "in")))
+        tail = self._require_default_output("this workflow") if nodes else None
+        edges = list(self.edges)
+        outputs = dict(self.outputs)
+
+        for node in nodes:
+            if tail is not None:
+                edges.append(StreamEdge(tail, Endpoint(node.id, "in")))
+
+            tail = Endpoint(node.id, OUT)
+
+        if tail is not None:
+            outputs[DEFAULT_OUTPUT] = tail
+
+        resources = chain(self.resources, *(node.resources.values() for node in nodes))
 
         return evolve(
             self,
-            nodes=[*self.nodes.values(), node],
-            outputs={**self.outputs, DEFAULT_OUTPUT: Endpoint(node.id, "out")},
+            nodes=(*self.nodes.values(), *nodes),
             edges=edges,
-            resources=unique_everseen(chain(self.resources, node.resources.values())),
+            outputs=outputs,
+            resources=unique_everseen(resources),
         )
 
     def _get_free_ids(self, other: Workflow) -> dict[NodeId, NodeId]:
@@ -721,9 +731,9 @@ class Workflow:
             >>> from riko.ext import ModuleNode
             >>>
             >>> node = ModuleNode(id="fetch-1", name="fetch")
-            >>> fetch = Workflow().with_node(node)
-            >>> sort = Workflow().with_node(ModuleNode(id="sort-1", name="sort"))
-            >>> fetch.with_workflow(sort.with_node(node)).summary
+            >>> fetch = Workflow().with_nodes(node)
+            >>> sort = Workflow().with_nodes(ModuleNode(id="sort-1", name="sort"))
+            >>> fetch.with_workflow(sort.with_nodes(node)).summary
             'fetch-1 -> sort-1 -> fetch-2; outputs: default'
 
         """
@@ -793,8 +803,38 @@ class Workflow:
             riko.exceptions.InvalidPipelineError: ...'q' has an invalid schema: ...
 
         """
-        for name, schema in self.input_schemas.items():
-            compile_input_schema(name, schema)
+        self._compiled_input_schemas.validate()
+
+    def resolve_inputs(self, given: RawValues | None) -> Inputs | None:
+        """
+        Resolves the inputs a run uses from its input schemas and given values.
+
+        A given value wins over the schema's default. A given value for an input with no
+        schema passes through untouched.
+
+        Args:
+
+            given: Raw values keyed by input name, or ``None``.
+
+        Returns:
+
+            Inputs keyed by input name, or ``None`` when there are either no input
+            schemas or no given values.
+
+        Raises:
+
+            InvalidPipelineError: If an input has neither a given value nor a default,
+                a value does not match its input's schema, or an input's schema is
+                malformed.
+
+        Examples:
+
+            >>> flow = Workflow(input_schemas={"limit": {"type": "integer"}})
+            >>> dict(flow.resolve_inputs({"limit": 10}))
+            {'limit': 10}
+
+        """
+        return self._compiled_input_schemas.resolve(given)
 
     def validate(self) -> None:
         """
@@ -812,6 +852,18 @@ class Workflow:
                 - A cycle or an unresolved resource.
                 - A reference to an input with no schema, or an invalid input schema.
                 - No workflow output.
+
+        """
+        if not self.is_valid:
+            self._validate_graph()
+
+    def _validate_graph(self) -> None:
+        """
+        Validates the graph against every check ``validate`` lists.
+
+        Raises:
+
+            InvalidPipelineError: If the graph fails a check ``validate`` lists.
 
         """
         self.validate_input_schemas()
@@ -859,10 +911,10 @@ class Workflow:
 
             >>> from riko.ext import CallableNode, ModuleNode
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
             >>> flow.validate_document_nodes()
             >>> node = CallableNode(id="len-1", name="len", fn=len)
-            >>> flow.with_node(node).validate_document_nodes()
+            >>> flow.with_nodes(node).validate_document_nodes()
             Traceback (most recent call last):
                 ...
             riko.exceptions.InvalidPipelineError: ...callable node(s) ['len-1']...
@@ -871,21 +923,6 @@ class Workflow:
         if callables := sorted(self.callable_nodes):
             msg = "a Python callable has no workflow document form"
             raise InvalidPipelineError(f"callable node(s) {callables}: {msg}")
-
-    def require_executable(self) -> None:
-        """
-        Requires a topology the current executor can run.
-
-        Raises:
-
-            InvalidPipelineError: If a source port feeds more than one stream edge.
-
-        """
-        family_sources = self.get_family_sources().items()
-
-        if fan_out := sorted(source for source, count in family_sources if count > 1):
-            msg = f"un-supported fan-out from source(s): {fan_out}"
-            raise InvalidPipelineError(msg)
 
     def require_runnable_only(self, what: str) -> None:
         """
@@ -905,7 +942,7 @@ class Workflow:
 
             >>> from riko.ext import ModuleNode
             >>>
-            >>> flow = Workflow().with_node(ModuleNode(id="a", name="hash"))
+            >>> flow = Workflow().with_nodes(ModuleNode(id="a", name="hash"))
             >>> flow.require_runnable_only("execution")
 
         """
@@ -916,11 +953,11 @@ class Workflow:
             msg = f"{', '.join(stray)} node {what} is not yet supported"
             raise InvalidPipelineError(msg)
 
-    @property
+    @cached_property
     def is_valid(self) -> bool:
         """Confirms whether the workflow validates."""
         try:
-            self.validate()
+            self._validate_graph()
         except InvalidPipelineError:
             result = False
         else:

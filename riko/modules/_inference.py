@@ -20,7 +20,7 @@ import riko.types._rss as _rss_module
 import riko.types._scalars as _scalars_module
 import riko.types._streams as _streams_module
 import riko.types._values as _values_module
-from riko.base._config import settings
+from riko.base._config import as_maxsize, settings
 from riko.base._logging import get_logger
 from riko.base._typing import gen_union_members, resolve_type_hints
 from riko.types._streams import Item, ItemOrValue
@@ -71,7 +71,7 @@ _HINT_NAMESPACES = (_rss_module, _scalars_module, _values_module, _streams_modul
 _ITEM_ALIASES = frozenset({Item, ItemOrValue, RikoDict})
 
 _FIX_HINT = (
-    "add an explicit return annotation, e.g. `-> Iterator[Item]` for a stream "
+    "add an explicit return annotation, e.g. `-> Stream` for a stream "
     "or `-> int` for a single value"
 )
 
@@ -96,7 +96,7 @@ class AnnotationMember(NamedTuple):
     """
     An annotation arm paired with the type used to classify it.
 
-    ``candidate`` is the arm's ``get_origin`` (``Iterator`` for ``Iterator[Item]``)
+    ``candidate`` is the arm's ``get_origin`` (``Iterator`` for ``Stream``)
     or the arm itself when it has none, so it can be tested against an ABC directly.
     """
 
@@ -449,7 +449,7 @@ def gen_operator_return_kinds(pipe: Func[object]) -> Iterator[OperatorReturnKind
         yield inference.kind
 
 
-@lru_cache(maxsize=settings.return_kinds_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.return_kinds_cache_size))
 def infer_return_kinds(pipe: Func[object]) -> frozenset[OperatorReturnKind]:
     """
     Infers the set of a pipe's bare return kinds, remembered per function.

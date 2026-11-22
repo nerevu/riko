@@ -4,27 +4,29 @@ from __future__ import annotations
 
 from contextlib import aclosing, suppress
 from functools import partial
-from itertools import count
 from threading import Event as ThreadEvent
 from time import perf_counter
 from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 
-from riko.bado._backend import fail_after
+from riko.bado._backend import CancelScope, async_sleep, fail_after, lowlevel
+from riko.bado._util import maybe_async, syncify
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
+from riko.definitions._settings import ExecutionSettings
+from riko.definitions._workflow_definition import Workflow
+from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
 from riko.types._workflow import Endpoint
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     agen_source,
-    build_chain,
     build_dispatcher,
     build_doubler_plan,
     build_workflow,
@@ -38,11 +40,17 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Generator, Iterator
+    from collections.abc import Awaitable, Generator
 
-    from riko.definitions._workflow_definition import Workflow
-    from riko.types._streams import AsyncItemGenerator, Item
+    from riko.types._streams import (
+        AsyncItemGenerator,
+        AsyncStream,
+        Cascade,
+        Item,
+        Stream,
+    )
     from riko.types._wrappers import AsyncModuleWrapper, Func, SyncModuleWrapper
+    from tests._execution import AsyncPipeFunc
 
 
 def _unbound_relay_workflow() -> Workflow:
@@ -62,13 +70,13 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
 
 
 class _TwoItems:
-    """A two-item iterator, or with ``fresh`` a handle that hands out a fresh one."""
+    """A two-item iterator."""
 
-    def __init__(self, closed: list[str], *, fresh: bool = False) -> None:
-        self.closed, self.fresh, self.index = closed, fresh, 0
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.index = closed, 0
 
-    def __iter__(self) -> Iterator[Item]:
-        return iter([{"x": 1}, {"x": 2}]) if self.fresh else self
+    def __iter__(self) -> Self:
+        return self
 
     def __next__(self) -> Item:
         if self.index == 2:
@@ -85,31 +93,128 @@ class ClosingIterator(_TwoItems):
         self.closed.append("closed")
 
 
+class _FailingCascade:
+    """A sync cascade whose second branch fails and whose ``close`` records itself."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed, self.taken = closed, 0
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Stream:
+        self.taken += 1
+
+        if self.taken == 2:
+            msg = "take failed"
+            raise RuntimeError(msg)
+
+        return iter([])
+
+    def close(self) -> None:
+        self.closed.append("closed")
+
+
+def _failing_split_plan(closed: list[str]) -> ExecutionPlan:
+    """Plans a source into a bare sync-only splitter that hands back its cascade."""
+
+    def split(_items: object = None, **_: object) -> Cascade:
+        return _FailingCascade(closed)
+
+    stamp_wrapper_meta(
+        split,
+        name="split",
+        module_type="splitter",
+        subtype="splitter",
+        subtypes={"splitter"},
+        pollable=False,
+        loopable=False,
+        is_async=False,
+    )
+    src = cast("SyncModuleWrapper", tag_source(lambda _items=None, **_: iter([])))
+    pipe = cast("SyncModuleWrapper", split)
+    split_def = ModuleDefinition(name="split", sync_pipe=pipe)
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=src), split_def
+    )
+    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
+    flow = build_workflow(nodes, edges=(edge,))
+    return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
 class _CursorHandle:
-    """A sync iterable, without a close of its own, over a fresh closeable cursor."""
+    """A sync iterable, without a close of its own, over a fresh closable cursor."""
 
     def __init__(self, closed: list[str]) -> None:
         self.closed = closed
 
-    def __iter__(self) -> Iterator[Item]:
+    def __iter__(self) -> Stream:
         return ClosingIterator(self.closed)
 
 
+class _ClosingCursorHandle(_CursorHandle):
+    """A closable sync iterable over a fresh closable cursor."""
+
+    def close(self) -> None:
+        self.closed.append("handle")
+
+
 class _AsyncCursorHandle:
-    """An async iterable, without a close of its own, over a fresh closeable cursor."""
+    """An async iterable, without a close of its own, over a fresh closable cursor."""
 
     def __init__(self, closed: list[str]) -> None:
         self.closed = closed
 
-    def __aiter__(self) -> AsyncIterator[Item]:
+    def __aiter__(self) -> AsyncStream:
         return ClosingAsyncIterator(self.closed)
 
 
+class _ClosingAsyncCursorHandle(_AsyncCursorHandle):
+    """An ``aclose``-able async iterable over a fresh closable async cursor."""
+
+    async def aclose(self) -> None:
+        self.closed.append("handle")
+
+
+class _SlowAcloseIterator(_TwoItems):
+    """A two-item iterator whose only close, ``aclose``, outlasts shutdown."""
+
+    async def aclose(self) -> None:
+        await async_sleep(1)
+        self.closed.append("closed")
+
+
+class _FailingAsyncIterator:
+    """An ``aclose``-able async iterator that fails on its first read."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> Item:
+        raise RuntimeError("read failed")
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+
+class _LoopBoundHandle:
+    """An async iterable that opens its iterator only on a running event loop."""
+
+    def __aiter__(self) -> AsyncStream:
+        lowlevel.current_token()
+        return agen_source()
+
+
 # A sync root reads the seed on a worker thread, and the caller may close the output
-# stream before the execution exits.
+# stream, or drain it, before the execution exits.
 SEED_READERS = [
-    pytest.param(False, id="sync-root"),
-    pytest.param(True, id="sync-root-closed-early"),
+    pytest.param(False, False, id="sync-root"),
+    pytest.param(True, False, id="sync-root-closed-early"),
+    pytest.param(False, True, id="sync-root-drained"),
 ]
 
 
@@ -119,27 +224,34 @@ class ClosingAsyncHandle:
     def __init__(self, closed: list[str]) -> None:
         self.closed = closed
 
-    def __aiter__(self) -> AsyncIterator[Item]:
+    def __aiter__(self) -> AsyncStream:
         return agen_source()
 
     async def aclose(self) -> None:
         self.closed.append("closed")
 
 
+_BOTH = ["closed", "handle"]
+_CLOSED = ["closed"]
+_SKIP = skipif_sync
 CLOSING_SEEDS = [
-    pytest.param(gen_closing_seed, id="generator"),
-    pytest.param(_CursorHandle, id="cursor-handle"),
-    pytest.param(_agen_closing_seed, id="async-generator", marks=skipif_issync),
-    pytest.param(ClosingAsyncIterator, id="async-iterator", marks=skipif_issync),
-    pytest.param(_AsyncCursorHandle, id="async-cursor-handle", marks=skipif_issync),
-    pytest.param(ClosingAsyncHandle, id="async-handle", marks=skipif_issync),
+    pytest.param(gen_closing_seed, _CLOSED, id="generator"),
+    pytest.param(_CursorHandle, _CLOSED, id="cursor-handle"),
+    pytest.param(_ClosingCursorHandle, _BOTH, id="closing-cursor-handle"),
+    pytest.param(_agen_closing_seed, _CLOSED, id="async-generator", marks=_SKIP),
+    pytest.param(ClosingAsyncIterator, _CLOSED, id="async-iterator", marks=_SKIP),
+    pytest.param(_AsyncCursorHandle, _CLOSED, id="async-cursor-handle", marks=_SKIP),
+    pytest.param(ClosingAsyncHandle, _CLOSED, id="async-handle", marks=_SKIP),
     pytest.param(
-        AsyncCloseAsyncIterator, id="async-close-iterator", marks=skipif_issync
+        _ClosingAsyncCursorHandle, _BOTH, id="closing-async-cursor-handle", marks=_SKIP
+    ),
+    pytest.param(
+        AsyncCloseAsyncIterator, _CLOSED, id="async-close-iterator", marks=_SKIP
     ),
 ]
 
 
-def _gen_counting(closed: list[bool]) -> Iterator[Item]:
+def _gen_counting(closed: list[bool]) -> Stream:
     index = 0
 
     try:
@@ -151,7 +263,7 @@ def _gen_counting(closed: list[bool]) -> Iterator[Item]:
 
 
 class _CountingIterator:
-    """An endless closeable item iterator that is not a generator."""
+    """An endless closable item iterator that is not a generator."""
 
     def __init__(self, closed: list[bool]) -> None:
         self.closed, self.index = closed, -1
@@ -162,19 +274,6 @@ class _CountingIterator:
     def __next__(self) -> Item:
         self.index += 1
         return {"x": self.index}
-
-    def close(self) -> None:
-        self.closed.append(True)
-
-
-class _CountingHandle:
-    """A closeable handle that hands out a fresh endless item iterator."""
-
-    def __init__(self, closed: list[bool]) -> None:
-        self.closed = closed
-
-    def __iter__(self) -> Iterator[Item]:
-        return ({"x": index} for index in count())
 
     def close(self) -> None:
         self.closed.append(True)
@@ -205,6 +304,14 @@ class AwaitableCloseIterator(_TwoItems):
         return _record_close(self.closed)
 
 
+class FailingCloseIterator(_TwoItems):
+    """A two-item iterator whose ``close`` records itself then fails."""
+
+    def close(self) -> None:
+        self.closed.append("closed")
+        raise RuntimeError("close failed")
+
+
 class FailingAcloseIterator(_TwoItems):
     """A two-item iterator whose only close, ``aclose``, records itself then fails."""
 
@@ -213,16 +320,17 @@ class FailingAcloseIterator(_TwoItems):
         raise RuntimeError("close failed")
 
 
+class FailingAsyncCloseIterator(ClosingAsyncIterator):
+    """A two-item async iterator whose ``aclose`` records itself then fails."""
+
+    async def aclose(self) -> None:
+        await super().aclose()
+        raise RuntimeError("close failed")
+
+
 COUNTING_SOURCES = [
     pytest.param(_gen_counting, id="generator"),
-    pytest.param(_CountingIterator, id="closeable-iterator"),
-    pytest.param(_CountingHandle, id="fresh-iterator"),
-]
-
-
-CLOSING_ASYNC_SOURCES = [
-    pytest.param(ClosingAsyncIterator, id="own-iterator"),
-    pytest.param(ClosingAsyncHandle, id="fresh-iterator"),
+    pytest.param(_CountingIterator, id="closable-iterator"),
 ]
 
 
@@ -231,7 +339,7 @@ def _seeded(make, closed: list[str]):
 
 
 def _returned(make, closed: list[str]):
-    returned = tag_source(lambda _=None, **__: make(closed, fresh=True))
+    returned = tag_source(lambda _=None, **__: make(closed))
     src = cast("SyncModuleWrapper", returned)
     dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
     return ExecutionPlan.from_workflow(module_workflow("src"), dispatcher), None
@@ -244,11 +352,11 @@ def _streamed(make, closed: list[str]):
         ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
     )
     nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass"))
-    return ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher), None
+    return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher), None
 
 
-# Each value's only close is async: a seed, a sync pipe's return that isn't its item
-# stream, and a non-output node's stream.
+# Each value's only close is async: a seed, a sync pipe's returned iterator, and a
+# non-output node's stream.
 ASYNC_ONLY_CLOSES = [
     pytest.param(_seeded, AsyncCloseIterator, id="seed-async-close"),
     pytest.param(_seeded, AcloseOnlyIterator, id="seed-aclose"),
@@ -304,7 +412,7 @@ def _endless_input(closed: list[str]):
         ModuleDefinition(name="take", sync_pipe=cast("SyncModuleWrapper", take_two)),
     )
     nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="take"))
-    plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+    plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
     return plan, [{"x": 1}, {"x": 1}]
 
 
@@ -361,8 +469,8 @@ SOURCE_TAGS = [
 
 
 class TestPlanClose:
-    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
-    def test_run_closes_an_unfinished_seed_on_exit(self, make_seed) -> None:
+    @pytest.mark.parametrize(("make_seed", "expected"), CLOSING_SEEDS)
+    def test_run_closes_a_seed_once_on_exit(self, make_seed, expected) -> None:
         closed: list[str] = []
         plan = build_doubler_plan("double")
 
@@ -371,7 +479,7 @@ class TestPlanClose:
             assert next(stream) == {"x": 2}
             assert closed == []
 
-        assert closed == ["closed"]
+        assert closed == expected
 
     @pytest.mark.parametrize("tag", SOURCE_TAGS)
     @pytest.mark.parametrize("build", COUNTING_SOURCES)
@@ -383,23 +491,23 @@ class TestPlanClose:
             ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
         )
         a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
-        plan = ExecutionPlan.from_workflow(build_chain(a, b), dispatcher)
+        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
 
         with SyncExecution() as execution:
-            assert next(execution.run(plan)) == {"x": 0}
+            stream = execution.run(plan)
+            assert next(stream) == {"x": 0}
             assert closed == []
 
         assert closed == [True]
 
-    @skipif_issync
-    @pytest.mark.parametrize("build", CLOSING_ASYNC_SOURCES)
-    def test_run_closes_an_async_native_source_on_exit(self, build) -> None:
+    @skipif_sync
+    def test_run_closes_an_async_native_source_on_exit(self) -> None:
         # Not an async generator, so only an explicit aclose can end it.
         closed: list[str] = []
 
         @tag_source
         def src(_items=None, **_):
-            return build(closed)
+            return ClosingAsyncIterator(closed)
 
         dispatcher = build_dispatcher(
             ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src))
@@ -415,7 +523,7 @@ class TestPlanClose:
 
     def test_run_rejects_an_item_result_whose_close_must_be_awaited(self) -> None:
         closed: list[str] = []
-        make = partial(AwaitableCloseIterator, closed, fresh=False)
+        make = partial(AwaitableCloseIterator, closed)
         src = _tag_loopable_source(lambda _items=None, **_: make())
         dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
         plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
@@ -428,7 +536,7 @@ class TestPlanClose:
 
         assert closed == []
 
-    @skipif_issync
+    @skipif_sync
     def test_run_closes_an_unfinished_async_only_item_on_the_portal(self) -> None:
         closed: list[str] = []
 
@@ -449,6 +557,110 @@ class TestPlanClose:
             stream.close()
             assert closed == ["closed"]
 
+    @skipif_sync
+    def test_run_closes_an_unfinished_async_only_stream_on_the_portal(self) -> None:
+        closed: list[str] = []
+
+        @tag_source
+        async def src(_items=None, **_):
+            try:
+                while True:
+                    yield {"x": 1}
+            finally:
+                closed.append("closed")
+
+        pipe = cast("AsyncModuleWrapper", src)
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with SyncExecution() as execution:
+            stream = cast("Generator[Item]", execution.run(plan))
+            assert next(stream) == {"x": 1}
+            stream.close()
+            assert closed == ["closed"]
+
+    @skipif_sync
+    def test_run_closes_an_async_only_value_whose_first_read_fails(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: _FailingAsyncIterator(closed))
+        pipe = cast("AsyncModuleWrapper", src)
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with SyncExecution() as execution:
+            with pytest.raises(RuntimeError, match="read failed"):
+                list(execution.run(plan))
+
+            assert closed == ["closed"]
+
+    @skipif_sync
+    def test_run_opens_an_async_only_stream_on_the_portal(self) -> None:
+        @tag_source
+        def src(_items=None, **_):
+            lowlevel.current_token()
+            return agen_source()
+
+        pipe = cast("AsyncModuleWrapper", src)
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan)) == [{"x": 1}, {"x": 2}]
+
+    @skipif_sync
+    def test_run_opens_an_async_only_item_result_on_the_portal(self) -> None:
+        def item(_item, **_) -> AsyncStream:
+            lowlevel.current_token()
+            return agen_source()
+
+        pipe = mark_async_loopable(cast("AsyncPipeFunc", item))
+        dispatcher = build_dispatcher(ModuleDefinition(name="m", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("m"), dispatcher)
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan, seed={"x": 0})) == [{"x": 1}, {"x": 2}]
+
+    @skipif_sync
+    def test_run_opens_an_async_seed_on_the_portal(self) -> None:
+        plan = build_doubler_plan("double")
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan, seed=_LoopBoundHandle())
+            assert list(stream) == [{"x": 2}, {"x": 4}]
+
+    @skipif_sync
+    def test_run_envelopes_closes_an_abandoned_async_only_stream_on_exit(self) -> None:
+        closed: list[str] = []
+
+        @tag_source
+        async def src(_items=None, **_):
+            try:
+                while True:
+                    yield {"x": 1}
+            finally:
+                closed.append("closed")
+
+        pipe = cast("AsyncModuleWrapper", src)
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        with SyncExecution() as execution:
+            assert next(execution.run_envelopes(plan)).value == {"x": 1}
+
+        assert closed == ["closed"]
+
+    @skipif_sync
+    def test_run_closes_a_drained_async_only_item_result_on_the_portal(self) -> None:
+        # Not an async generator, so only an explicit aclose can end it.
+        closed: list[str] = []
+        pipe = mark_async_loopable(lambda _item, **_: ClosingAsyncIterator(closed))
+        dispatcher = build_dispatcher(ModuleDefinition(name="m", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("m"), dispatcher)
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan, seed={"x": 0})) == [{"x": 1}, {"x": 2}]
+            assert closed == ["closed"]
+
     def test_run_closes_built_streams_when_a_later_node_fails(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: ClosingIterator(closed))
@@ -466,6 +678,23 @@ class TestPlanClose:
 
         assert closed == ["closed"]
 
+    def test_run_reports_a_failed_close_beside_the_build_error(self) -> None:
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: FailingCloseIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with pytest.raises(ExceptionGroup) as info, SyncExecution() as execution:
+            execution.run(plan)
+
+        primary, cleanup = info.value.exceptions
+        assert isinstance(primary, InvalidPipelineError)
+        assert isinstance(cleanup, RuntimeError)
+        assert closed == ["closed"]
+
     @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
     def test_run_rejects_a_value_whose_only_close_is_async(self, build, make) -> None:
         plan, seed = build(make, [])
@@ -476,11 +705,6 @@ class TestPlanClose:
         ):
             execution.run(plan, seed=seed)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="per-run stream ownership under sync execution is not yet implemented",
-    )
     def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
         closed: list[bool] = []
         src = tag_source(lambda _items=None, **_: _gen_counting(closed))
@@ -490,7 +714,7 @@ class TestPlanClose:
             ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
         )
         a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
-        plan = ExecutionPlan.from_workflow(build_chain(a, b), dispatcher)
+        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
 
         with SyncExecution() as execution:
             stream = execution.run(plan)
@@ -500,11 +724,11 @@ class TestPlanClose:
 
 
 class TestAsyncPlanClose:
-    @pytest.mark.parametrize("make_seed", CLOSING_SEEDS)
-    @pytest.mark.parametrize("early", SEED_READERS)
+    @pytest.mark.parametrize(("make_seed", "expected"), CLOSING_SEEDS)
+    @pytest.mark.parametrize(("early", "drain"), SEED_READERS)
     @async_test
-    async def test_arun_closes_an_unfinished_seed_on_exit(
-        self, make_seed, early
+    async def test_arun_closes_a_seed_once_on_exit(
+        self, make_seed, expected, early, drain
     ) -> None:
         closed: list[str] = []
         plan = build_doubler_plan("double")
@@ -517,8 +741,10 @@ class TestAsyncPlanClose:
 
             if early:
                 await stream.aclose()
+            elif drain:
+                assert [item async for item in stream]
 
-        assert closed == ["closed"]
+        assert closed == expected
 
     @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
     @async_test
@@ -546,6 +772,60 @@ class TestAsyncPlanClose:
 
             with pytest.raises(RuntimeError, match="close failed"):
                 await stream.aclose()
+
+        assert closed == ["closed"]
+
+    @pytest.mark.timeout(1)
+    @async_test
+    async def test_arun_closes_a_sync_only_value_when_cancelled_mid_start(self):
+        closed: list[str] = []
+        scope = CancelScope()
+
+        def src(_items=None, **_):
+            syncify(maybe_async, scope.cancel)
+            return ClosingIterator(closed)
+
+        pipe = cast("SyncModuleWrapper", tag_source(src))
+        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+
+        async with AsyncExecution() as execution:
+            with scope:
+                await execution.arun(plan)
+
+        assert scope.cancelled_caught
+        assert closed == ["closed"]
+
+    @pytest.mark.timeout(1)
+    @async_test
+    async def test_arun_bounds_a_failed_run_close_by_the_shutdown_timeout(self):
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: _SlowAcloseIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        async def run_failing() -> None:
+            async with AsyncExecution(settings=settings) as execution:
+                with pytest.raises(InvalidPipelineError, match="not provided"):
+                    await execution.arun(plan)
+
+        with pytest.raises(TimeoutError):
+            await run_failing()
+
+        assert closed == []
+
+    @async_test
+    async def test_arun_closes_a_sync_only_cascade_whose_take_fails(self):
+        closed: list[str] = []
+        plan = _failing_split_plan(closed)
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(RuntimeError, match="take failed"):
+                await execution.arun(plan)
 
         assert closed == ["closed"]
 
@@ -608,17 +888,35 @@ class TestAsyncPlanClose:
 
         assert closed == ["closed"]
 
-    @pytest.mark.parametrize("build", CLOSING_ASYNC_SOURCES)
     @async_test
-    async def test_arun_closes_a_sync_worker_nodes_async_input_once(self, build):
+    async def test_arun_reports_a_failed_close_beside_the_build_error(self) -> None:
         closed: list[str] = []
-        src = tag_source(lambda _items=None, **_: build(closed))
+        src = tag_source(lambda _items=None, **_: FailingAsyncCloseIterator(closed))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
+        )
+        plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
+
+        with pytest.raises(ExceptionGroup) as info:
+            async with AsyncExecution() as execution:
+                await execution.arun(plan)
+
+        primary, cleanup = info.value.exceptions
+        assert isinstance(primary, InvalidPipelineError)
+        assert isinstance(cleanup, RuntimeError)
+        assert closed == ["closed"]
+
+    @async_test
+    async def test_arun_closes_a_sync_worker_nodes_async_input_once(self):
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
             ModuleDefinition(name="relay", sync_pipe=relay_pipe),
         )
         nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="relay"))
-        plan = ExecutionPlan.from_workflow(build_chain(*nodes), dispatcher)
+        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
         with fail_after(1):
             async with AsyncExecution() as execution:
@@ -767,16 +1065,17 @@ class TestAsyncPlanClose:
         release = ThreadEvent()
 
         class BlockingSeed:
-            def __iter__(self) -> Iterator[Item]:
+            def __iter__(self) -> Stream:
                 return iter([{"x": 1}])
 
             def close(self) -> None:
                 release.wait(1)
 
+        settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()
 
         with suppress(TimeoutError):
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 run = await execution.arun(
                     build_doubler_plan("double"), seed=BlockingSeed()
                 )

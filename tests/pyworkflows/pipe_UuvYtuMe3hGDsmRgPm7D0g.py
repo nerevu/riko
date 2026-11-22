@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from riko.ext import resolve_inputs, workflow
+from riko.ext import CompiledInputSchemas, workflow
 from riko.modules.csv import pipe as csv
 from riko.modules.filter import pipe as _filter
 from riko.modules.input import pipe as _input
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 INPUT_SCHEMAS = {
     "name": {"default": "Lancaster", "description": "Name", "type": "string"}
 }
+COMPILED_INPUT_SCHEMAS = CompiledInputSchemas(INPUT_SCHEMAS)
 
 
 @workflow(
@@ -37,7 +38,7 @@ INPUT_SCHEMAS = {
     dependencies=["csv", "filter", "input", "loop", "rename", "strconcat"],
 )
 def pipe(item: Item | None = None, context: Context | None = None, **_):
-    inputs = resolve_inputs(INPUT_SCHEMAS, None if context is None else context.inputs)
+    inputs = COMPILED_INPUT_SCHEMAS.resolve(None if context is None else context.inputs)
     sw_371 = _input(
         item,
         conf=InputRawConf({"input_key": {"type": "text", "value": "name"}}),

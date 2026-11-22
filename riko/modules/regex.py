@@ -91,6 +91,7 @@ async def async_parser(
     Examples:
 
         >>> from riko import run
+        >>> from riko.parsing._dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
@@ -151,6 +152,7 @@ def parser(
 
     Examples:
 
+        >>> from riko.parsing._dotdict import DotDict
         >>> from meza.fntools import Objectify
         >>>
         >>> item = DotDict({"content": "hello world", "title": "greeting"})
@@ -184,7 +186,7 @@ def parser(
     return reduce(reducer, _process_rules(rules), item)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     Asynchronously replaces text in item fields using regexes.

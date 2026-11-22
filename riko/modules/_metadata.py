@@ -50,7 +50,7 @@ SUBTYPES: dict[ModuleSubtype, ModuleType] = {
 def _metadata_from_targets(
     name: str, targets: tuple[WrapperMeta, ...], *, label: str, strict_naming: bool
 ) -> ModuleMetadata | None:
-    attrs = tuple(attr for attr in WRAPPER_META if attr != "isasync")
+    attrs = tuple(attr for attr in WRAPPER_META if attr != "is_async")
 
     if len(targets) == 2:
         for attr in attrs:
@@ -82,8 +82,8 @@ def _metadata_from_targets(
             subtypes=first.subtypes,
             pollable=any(t.pollable for t in targets),
             loopable=any(t.loopable for t in targets),
-            has_sync=any(not t.isasync for t in targets),
-            has_async=any(t.isasync for t in targets),
+            has_sync=any(not t.is_async for t in targets),
+            has_async=any(t.is_async for t in targets),
         )
     else:
         metadata = None
@@ -230,8 +230,6 @@ def list_module_metadata(
 
     Examples:
 
-        >>> from riko import list_module_metadata
-        >>>
         >>> aggregators = list_module_metadata(subtype="aggregator", primary=True)
         >>> [(metadata.name, metadata.type) for metadata in aggregators]
         [('count', 'operator'), ('sum', 'operator')]
@@ -388,10 +386,12 @@ def describe_module(
         if definition is None and module is not None:
             definition = ModuleDefinition.from_module(module, name=canonical)
 
-        is_stored = definition is None and workflow_resolver.is_compatible(canonical)
-
-        if is_stored and (stored := workflow_resolver.load(canonical)) is not None:
-            definition = ModuleDefinition.from_module(stored)  # stored workflow
+        if (
+            definition is None
+            and workflow_resolver.is_compatible(canonical)
+            and (resolved_flow := workflow_resolver.load(canonical)) is not None
+        ):
+            definition = ModuleDefinition.from_module(resolved_flow)
     else:
         definition = None
 

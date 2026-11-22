@@ -28,8 +28,8 @@ from __future__ import annotations
 from os.path import splitext
 from typing import TYPE_CHECKING, Any
 
-from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion._sequences import listize
@@ -148,7 +148,7 @@ def parser(
         yield from any2dict(f, ext, objconf.html5, path=path)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously fetches an XML or JSON source and yields its records.

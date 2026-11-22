@@ -10,7 +10,7 @@ from time import sleep, time
 from timeit import repeat
 from typing import TYPE_CHECKING, cast
 
-from riko.bado._backend import async_sleep, isasync
+from riko.bado._backend import async_sleep, is_async
 from riko.bado._backend import run as async_run
 from riko.bado.itertools import alist, async_map
 from riko.base._config import get_worker_cnt, settings
@@ -20,6 +20,7 @@ from riko.modules.fetch import async_pipe as async_fetch
 from riko.modules.fetch import pipe as fetch
 from riko.modules.regex import pipe as regex
 from riko.runtime._pipeline import Pipeline
+from riko.types._workflow import OUT
 from riko.types.modules import FetchConf, RegexRawConf, RegexRawRule
 
 if TYPE_CHECKING:
@@ -85,7 +86,7 @@ def build_fanin() -> Workflow:
     ]
     edges: list[RawEdge] = [
         {
-            "source": {"node": f"fetch-{pos}", "port": "out"},
+            "source": {"node": f"fetch-{pos}", "port": OUT},
             "target": {"node": UNION_ID, "port": "in" if pos == 0 else f"in:{pos}"},
         }
         for pos in range(length)
@@ -94,7 +95,7 @@ def build_fanin() -> Workflow:
     raw: RawWorkflow = {
         "nodes": nodes,
         "edges": edges,
-        "outputs": {"default": {"node": UNION_ID, "port": "out"}},
+        "outputs": {"default": {"node": UNION_ID, "port": OUT}},
     }
     return Workflow.from_raw(raw)
 
@@ -255,7 +256,7 @@ def main() -> None:
         "sync_workflow",
     ]
 
-    if isasync:
+    if is_async:
         async_tests = [baseline_async, async_module, async_pipeline, async_workflow]
         combined_tests = sync_tests + [f.__name__ for f in async_tests]
     else:
@@ -269,7 +270,7 @@ def main() -> None:
         run_time, units = summarize_results(results)
         print_time(test, max_chars, run_time, units)
 
-    if isasync:
+    if is_async:
         async_run(run_async, async_tests, max_chars)
 
 

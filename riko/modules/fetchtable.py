@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meza.io import read
 
-from riko.bado.itertools import auto_close
 from riko.base._config import ENCODING
+from riko.base._iterutils import auto_close
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_conf_key
 from riko.coercion.cast import SourceOpts
@@ -85,6 +85,7 @@ async def async_parser(
     Examples:
 
         >>> from riko import get_path, run
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> async def main():
@@ -136,6 +137,7 @@ def parser(
     Examples:
 
         >>> from riko import get_path
+        >>> from riko.base._config import ENCODING
         >>> from meza.fntools import Objectify
         >>>
         >>> url = get_path("spreadsheet.csv")
@@ -159,7 +161,7 @@ def parser(
     return auto_close(content, source, f)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously fetches tabular data and yields rows.

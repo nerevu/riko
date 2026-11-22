@@ -91,7 +91,7 @@ def parser(
     return counted
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
     """
     Asynchronously counts items in a stream.
@@ -100,7 +100,7 @@ def async_pipe(*args: Any, **kwargs: object) -> int | Iterator[dict[str, int]]:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
 
         conf (dict): The module configuration.
 

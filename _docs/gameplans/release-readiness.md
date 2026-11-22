@@ -167,7 +167,7 @@ Pipeline API; legacy low-level names are migration inputs only until R7 removes 
   the sync execution portal. AnyIO/portal implementation details remain private.
 - **Decorator DX is owned by [callable-pipes.md](callable-pipes.md).**
   `@processor async def pipe` works for single-implementation async modules;
-  `isasync=`/`async_pipe` remain for the cases where they are structurally needed.
+  `is_async=`/`async_pipe` remain for the cases where they are structurally needed.
 - **`Context` becomes the immutable environment.** Resolved resource values do not live
   on it. Resource definitions, optional `state_store`, Context-local module definitions,
   and identity-encoder selection are resolved during execution preparation.
@@ -243,8 +243,8 @@ Same principle for optional parser/frame/finance/connector dependencies.
   `build-workflow`, `benchmark`), and retire the `manage` entry point in the same move,
   which also closes the `mezmorize` collision quirk in `_docs/INTERNALS.md`. The move
   rewrites every `manage …` invocation (CONTRIBUTING, CI, pre-commit, the skills), so it
-  is done once, there, not ahead of it. Until it lands, the wheel smoke step should list
-  the built wheel and fail on any `riko/cli/_lint` member.
+  is done once, there, not ahead of it. Until it lands, `publish.yml`'s wheel check
+  lists the built wheel and fails on any `riko/cli/_lint` member (added 2026-11-21).
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral
   `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides

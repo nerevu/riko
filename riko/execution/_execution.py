@@ -10,37 +10,39 @@ types are private to the runtime and belong to no supported surface.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Mapping
 from contextlib import AsyncExitStack, ExitStack
-from typing import TYPE_CHECKING, Any, Never, overload
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Never, overload
 
 from attrs import Factory, define, field
 
-from riko.bado._util import maybe_async
+from riko.bado._util import asyncify
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
 from riko.base._funcutils import map_values, resolve_default
 from riko.definitions._context import Context
-from riko.definitions._inputs import resolve_inputs
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS, ExecutionSettings
 from riko.types._workflow import parse_port
 
-from ._prepared import ExecutionPlan, require_default_output_port
+from ._adapt import select_embed
 from ._provenance import PLACEHOLDER
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from contextlib import AbstractContextManager
 
     from anyio.from_thread import BlockingPortal
 
     from riko.definitions._resource_definition import Resource
     from riko.types._events import EventSink
-    from riko.types._feed import _ItemEnvelope
+    from riko.types._feed import AsyncEnvelopeStream, EnvelopeStream, _ItemEnvelope
     from riko.types._frozendict import FrozenWorkflowEdges
-    from riko.types._workflow import NodeId, PortName, ResourceName
-    from riko.types._wrappers import Func
+    from riko.types._workflow import PortKey, PortName, ResourceName
+    from riko.types._wrappers import AnyModuleWrapper, Func
 
-type SyncExecSteps[T] = dict[NodeId, Iterator[T]]
-type AsyncExecSteps[T] = dict[NodeId, AsyncIterator[T]]
+    from ._adapt import Drain
+    from ._prepared import ExecutionPlan, PreparedNode
+
+type SyncExecSteps[T] = dict[PortKey, list[EnvelopeStream[T]]]
+type AsyncExecSteps[T] = dict[PortKey, list[AsyncEnvelopeStream[T]]]
 type Acquisition[T] = _Acquired[T] | _FailedAcquisition
 type Acquisitions = dict[Resource[Any], Acquisition[Any]]
 
@@ -63,6 +65,30 @@ class _NullEventSink:
 
 _NULL_EVENT_SINK = _NullEventSink()
 DEFAULT_ENVELOPES: tuple[_ItemEnvelope[object], ...] = (PLACEHOLDER,)
+
+
+class NodeInputs[V](NamedTuple):
+    """
+    The streams wired onto a node's input ports.
+
+    Attributes:
+
+        stream: The stream on the default input port.
+        named: The streams on the named input ports, keyed by port name.
+        others: The streams on the positional input ports, in port order.
+
+    Examples:
+
+        >>> inputs = NodeInputs(None, {"part": [1]}, None)
+        >>> inputs.stream
+        >>> list(inputs.named)
+        ['part']
+
+    """
+
+    stream: V | None
+    named: dict[PortName, V]
+    others: list[V] | None
 
 
 @define(frozen=True, slots=True)
@@ -112,6 +138,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
     _closing: bool = field(default=False, init=False)
     _cleanup_errors: list[Exception] = field(factory=list, init=False)
     _acquired: Acquisitions = field(factory=dict, init=False)
+    is_async: ClassVar[bool]
 
     def emit(self, event: object) -> None:
         """
@@ -132,7 +159,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self, plan: ExecutionPlan
     ) -> tuple[ExecutionPlan, Context | None]:
         """
-        Resolves the plan's input values and the context its nodes run under.
+        Resolves the inputs and context a plan's nodes run under.
 
         The run's context is derived from the execution's. The execution's own context
         stays as given, so a later run of another plan resolves that plan's defaults
@@ -140,18 +167,18 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         """
         if plan.inputs is None:
             given = None if self.context is None else self.context.inputs
-            values = resolve_inputs(plan.workflow.input_schemas, given)
-            resolved = plan.with_inputs(values)
+            _inputs = plan.workflow.resolve_inputs(given)
+            _plan = plan if _inputs is None else plan.with_inputs(_inputs)
         else:
-            resolved = plan
+            _plan = plan
 
-        if resolved.inputs is None:
+        if _plan.inputs is None:
             context = self.context
         else:
             given_context = resolve_default(self.context, Context())
-            context = given_context.replace(inputs=resolved.inputs)
+            context = given_context.replace(inputs=_plan.inputs)
 
-        return resolved, context
+        return _plan, context
 
     def _record_cleanup_error(self, func: Func[object], *args: object) -> None:
         """Runs a cleanup callback and saves its failure for the shutdown report."""
@@ -173,7 +200,9 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
         self._require_open("add a callback to")
         self._stack.callback(self._record_cleanup_error, func, *args)
 
-    async def run_sync[R](self, func: Func[R], *args: object) -> R:
+    async def run_sync[R, **P](
+        self, func: Callable[P, R], /, *args: P.args, **kwargs: P.kwargs
+    ) -> R:
         """
         Runs a blocking sync callable on a worker thread from the running event loop.
 
@@ -182,13 +211,50 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
             func: A synchronous callable to run off the event loop.
             args: Positional arguments forwarded to ``func``.
 
+        Kwargs:
+
+            kwargs: Keyword arguments forwarded to ``func``.
+
         Returns:
 
             The value ``func`` returns.
 
         """
         self._require_open("run work in")
-        return await maybe_async(func, *args, inline=False)
+        return await asyncify(func, *args, **kwargs)
+
+    def _select_embed(
+        self, node: PreparedNode, to_sync: Drain[object]
+    ) -> AnyModuleWrapper | None:
+        """
+        Selects a loop node's embed for the mode its host pipe runs in.
+
+        Args:
+
+            node: The prepared node whose embed to select.
+            to_sync: Pulls an async-only embed's output stream under a sync host.
+
+        Returns:
+
+            The embed's callable for the host pipe's mode, else ``None`` when the node
+            has no embed.
+
+        """
+        module = node.module
+
+        if node.embed is None:
+            embed = None
+        else:
+            is_async = self.is_async and module.async_pipe is not None
+
+            embed = select_embed(
+                node.embed,
+                host_is_async=is_async or module.sync_pipe is None,
+                run_sync=self.run_sync,
+                to_sync=to_sync,
+            )
+
+        return embed
 
     @overload
     def enter_context(
@@ -228,52 +294,39 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
         return map_values(available.__getitem__, binding)
 
-    def _resolve_node_inputs[I, V: (Iterator[Any], AsyncIterator[Any])](
+    def _resolve_node_inputs[V](
         self,
-        steps: Mapping[NodeId, V],
+        steps: Mapping[PortKey, list[V]],
         incoming: FrozenWorkflowEdges,
-        seed: I | None,
-        *,
-        as_stream: Callable[[I | Iterable[Any]], V],
-    ) -> tuple[V, dict[PortName, V], list[V] | None]:
+        seed: V | None,
+    ) -> NodeInputs[V]:
         """
-        Wires the output streams of a node's upstream nodes onto its input ports.
+        Routes upstream port outputs into a node's input ports.
 
-        Each incoming edge carries its output stream to one of this node's input ports.
         The default input port receives the input stream. ``seed`` supplies it only when
         no edge targets that port. Edges into named ``in:<name>`` ports become the named
         streams, and are keyed by their name. Edges into positional ``in:<n>`` ports
         become the positional streams, and are ordered by ``n``.
 
-        When no edge targets the default input port and no seed is given, the primary
-        input stream is empty if any positional ports are wired. This is because the
-        node then reads only its positional streams. Otherwise, the input stream holds
-        the default seed: one item that lets a self-starting node run once.
-
         Args:
 
-            steps: The output stream of each upstream node, keyed by node id.
+            steps: The streams each upstream port has left to hand out.
             incoming: The stream edges that target the node.
-            seed: The items fed to the node's open input, if any.
-
-        Kwargs:
-
-            as_stream: Turns the seed into the execution's stream kind.
+            seed: The stream fed to the node's open input, if any.
 
         Returns:
 
-            The node's input stream, its named streams, and its positional streams
-            (``None`` when none are wired).
+            The node's input stream (``None`` when neither an edge nor ``seed`` fills
+            the default port), its named streams, and its positional streams.
 
         """
-        stream: V | None = None if seed is None else as_stream(seed)
+        stream = seed
         indexed: list[tuple[int, V]] = []
         named: dict[PortName, V] = {}
 
         for edge in incoming:
-            require_default_output_port(edge.source_port, f"edge from {edge.source!r}")
             input_port = parse_port(edge.target_port)
-            output_stream = steps[edge.source]
+            output_stream = steps[edge.source_key].pop()
 
             if input_port.is_default:
                 stream = output_stream
@@ -284,11 +337,7 @@ class _BaseExecution[S: (ExitStack, AsyncExitStack)]:
 
         ordered = sorted(indexed, key=lambda item: item[0])
         others = [_stream for _, _stream in ordered] if ordered else None
-
-        if stream is None:
-            stream = as_stream(() if indexed else DEFAULT_ENVELOPES)
-
-        return stream, named, others
+        return NodeInputs(stream, named, others)
 
     def _report_shutdown(
         self, exc: BaseException | None, raised: BaseException | None, suppressed: bool

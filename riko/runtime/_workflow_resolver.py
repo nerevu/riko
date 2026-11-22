@@ -58,16 +58,16 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_temp_path
-        >>> from riko.ext import temporary_registrations
+        >>> from riko import Pipeline, get_temp_path
+        >>> from riko.ext import register_workflow_store, temporary_registrations
         >>>
         >>> document = '{"nodes": [{"name": "forever"}]}'
         >>>
         >>> with get_temp_path("pipe_demo.json") as path, temporary_registrations():
         ...     _ = path.write_text(document)
         ...     register_workflow_store(directory=path.parent, replace=True)
-        ...     pipe = workflow_resolver.require("pipe:demo")
-        ...     next(iter(pipe()))
+        ...     with Pipeline.from_module("pipe:demo").open() as stream:
+        ...         next(stream)
         {'forever': True}
 
 """
@@ -80,6 +80,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Literal, overload
 
 from riko.base._exceptions import InvalidPipelineError, UnsupportedWorkflowError
+from riko.base._funcutils import compose
 from riko.base._graph import get_cycle
 from riko.base._strutils import pythonise
 from riko.definitions._module_definition import ModuleDefinition
@@ -92,7 +93,7 @@ from ._workflow_pipes import build_workflow_pipes, workflow
 from ._workflow_stores import DirectoryStore, PackageStore
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Iterator
     from pathlib import Path
 
     from riko.definitions._workflow_definition import Workflow
@@ -111,21 +112,24 @@ if TYPE_CHECKING:
     from ._workflow_stores import DocumentStore, ModuleStore
 
 
-def _get_stored_names(names: Iterable[str]) -> frozenset[PipeId]:
+def _gen_stored_names(names: Iterable[str]) -> Iterator[PipeId]:
     """Gets the stored workflows' ``pipe_<id>`` names among ``names``."""
-    return frozenset(PipeId(pythonise(name)) for name in names if is_pipe_id(name))
+    composed = compose(PipeId, pythonise)
+    yield from (composed(name) for name in names if is_pipe_id(name))
 
 
-def _get_dependencies(module: ResolvedWorkflow | None) -> frozenset[PipeId]:
+def _gen_dependencies(resolved_flow: ResolvedWorkflow | None) -> Iterator[PipeId]:
     """
     Gets the names of a stored workflow's declared dependencies.
 
     These are what the module's pipe reports to ``describe_module``. Only
     ``@workflow``-tagged pipes are able to declare dependencies.
     """
-    definition = None if module is None else ModuleDefinition.from_module(module)
-    declared = None if definition is None else definition.dependencies
-    return _get_stored_names(() if declared is None else declared)
+    if resolved_flow is not None:
+        definition = ModuleDefinition.from_module(resolved_flow)
+
+        if (declared := definition.dependencies) is not None:
+            yield from _gen_stored_names(declared)
 
 
 def _build_resolved_workflow(
@@ -161,19 +165,21 @@ def _build_resolved_workflow(
         >>> from riko.runtime._resolver import dispatcher
         >>>
         >>> flow = Workflow.parse('{"nodes": [{"name": "forever"}]}')
-        >>> resolved = _build_resolved_workflow("pipe_demo", flow, dispatcher)
-        >>> resolved.pipe.dependencies
+        >>> resolved_flow = _build_resolved_workflow("pipe_demo", flow, dispatcher)
+        >>> resolved_flow.pipe.dependencies
         ('forever',)
-        >>> next(iter(resolved.pipe()))
+        >>> next(iter(resolved_flow.pipe()))
         {'forever': True}
 
     """
     pipes = build_workflow_pipes(flow, dispatcher, name=name)
     module = ModuleType(name, f"Pipe {name} built from its workflow document.")
-    resolved = ResolvedWorkflow(module)
+    resolved_flow = ResolvedWorkflow(module)
 
-    vars(resolved).update(flow=flow, pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe)
-    return resolved
+    vars(resolved_flow).update(
+        flow=flow, pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
+    )
+    return resolved_flow
 
 
 class WorkflowResolver:
@@ -212,7 +218,7 @@ class WorkflowResolver:
     ) -> None:
         self._module_store = module_store
         self._document_store = document_store
-        self._resolved_documents: dict[str, ResolvedWorkflow] = {}
+        self._resolved_flows: dict[str, ResolvedWorkflow] = {}
         self._dispatcher: ResolverDispatcher | None = None
 
     def register_dispatcher(self, dispatcher: ResolverDispatcher) -> None:
@@ -237,7 +243,7 @@ class WorkflowResolver:
 
         """
         self._dispatcher = dispatcher
-        self._resolved_documents.clear()
+        self._resolved_flows.clear()
 
     def _require_dispatcher(self, name: str) -> ResolverDispatcher:
         if (dispatcher := self._dispatcher) is None:
@@ -303,7 +309,7 @@ class WorkflowResolver:
             resolve_store(*margs, "module store"),
             resolve_store(*dargs, "document store"),
         )
-        self._resolved_documents.clear()
+        self._resolved_flows.clear()
 
     @contextmanager
     def restoring(self) -> Generator[None]:
@@ -314,7 +320,7 @@ class WorkflowResolver:
             yield
         finally:
             self._module_store, self._document_store = saved
-            self._resolved_documents.clear()
+            self._resolved_flows.clear()
 
     def reset(self) -> None:
         """
@@ -335,7 +341,7 @@ class WorkflowResolver:
         """
         self._module_store = None
         self._document_store = None
-        self._resolved_documents.clear()
+        self._resolved_flows.clear()
 
     def is_compatible(self, name: ModuleNameLike) -> bool:
         """
@@ -363,23 +369,27 @@ class WorkflowResolver:
         """
         Loads the ``pipe_<id>`` names a stored workflow's nodes run.
 
-        A ``ModuleStore`` entry reports the dependencies its pipe declares. Otherwise
-        the ``WorkflowDocument`` is parsed (but not planned) in order to identify
-        cycles. A document the ``ModuleStore`` shadows is never read.
+        Checks both the ``ModuleStore`` and the ``DocumentStore`` for ``pipe_id``, and
+        returns the dependencies of the first found entry. A ``DocumentStore`` entry
+        that shadows a ``ModuleStore`` entry is never read.
+
         """
         module_store, document_store = self._module_store, self._document_store
-        module = None if module_store is None else module_store.load(pipe_id)
+        resolved_flow = None if module_store is None else module_store.load(pipe_id)
+
+        if resolved_flow is None:
+            resolved_flow = self._resolved_flows.get(pipe_id)
 
         if (
-            module is None
+            resolved_flow is None
             and document_store is not None
             and (flow := document_store.load(pipe_id)) is not None
         ):
-            names = _get_stored_names(flow.dependencies)
+            names = _gen_stored_names(flow.dependencies)
         else:
-            names = _get_dependencies(module)
+            names = _gen_dependencies(resolved_flow)
 
-        return names
+        return frozenset(names)
 
     def _require_acyclic(self, pipe_id: PipeIdLike, *dependencies: PipeIdLike) -> None:
         """
@@ -418,21 +428,16 @@ class WorkflowResolver:
 
     def _load_resolved(self, name: str) -> ResolvedWorkflow | None:
         if (
-            (module := self._resolved_documents.get(name)) is None
+            (resolved_flow := self._resolved_flows.get(name)) is None
             and (document_store := self._document_store) is not None
             and (flow := document_store.load(name)) is not None
         ):
             dispatcher = self._require_dispatcher(name)
-            self._require_acyclic(name, *_get_stored_names(flow.dependencies))
-            module = _build_resolved_workflow(name, flow, dispatcher)
-            self._resolved_documents[name] = module
+            self._require_acyclic(name, *_gen_stored_names(flow.dependencies))
+            resolved_flow = _build_resolved_workflow(name, flow, dispatcher)
+            self._resolved_flows[name] = resolved_flow
 
-        return module
-
-    def _load_stored(self, pipe_id: PipeIdLike) -> ResolvedWorkflow | None:
-        store = self._module_store
-        module = None if store is None else store.load(pipe_id)
-        return self._load_resolved(pipe_id) if module is None else module
+        return resolved_flow
 
     def load(self, name: str) -> ResolvedWorkflow | None:
         """
@@ -472,11 +477,14 @@ class WorkflowResolver:
 
         """
         pipe_id = pythonise(name)
+        store = self._module_store
 
-        if (module := self._load_stored(pipe_id)) is not None:
-            self._require_acyclic(pipe_id, *_get_dependencies(module))
+        if (resolved_flow := None if store is None else store.load(pipe_id)) is None:
+            resolved_flow = self._load_resolved(pipe_id)
+        else:
+            self._require_acyclic(pipe_id, *_gen_dependencies(resolved_flow))
 
-        return module
+        return resolved_flow
 
     @overload
     def require(
@@ -542,7 +550,7 @@ class WorkflowResolver:
             tag = workflow(
                 subtype=subtype,
                 loopable=loopable,
-                isasync=is_async,
+                is_async=is_async,
                 input_schemas=getattr(pipe, "input_schemas", None),
                 dependencies=getattr(pipe, "dependencies", None),
             )

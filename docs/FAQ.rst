@@ -85,7 +85,7 @@ Which imports are public?
     ``get_module_metadata``, and ``list_formats``
   - the typed discovery surface (``Modules``/``Sources``/``Transforms``/``Sinks``/
     ``Formats`` bucket enums)
-  - the async backend: ``backend``, ``isasync``, ``issync``, and ``run``
+  - the async backend: ``backend``, ``is_async``, ``is_sync``, and ``run``
   - ``get_path``
   - the pipeline exceptions
 
@@ -278,8 +278,8 @@ as the ``options`` mapping.
     >>> pipeline.first(items)
     {'title': 'riko pt. 1', 'slugify': 'riko-pt-1'}
 
-A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in
-example is ``split``.
+A ``splitter`` returns multiple ``streams`` from one ``stream``. The built-in example is
+``split``.
 
 Keyword arguments
 ^^^^^^^^^^^^^^^^^
@@ -453,8 +453,8 @@ An ``operator`` works on a whole ``stream``. A ``composer`` returns a
 that the wrapper emits as one or more ``items``. Some ``operators`` support both
 behaviors depending on options, so use ``subtype`` metadata when classification matters.
 
-A ``splitter`` returns multiple ``streams``. The built-in ``split`` module
-eagerly materializes its ``source`` before creating copies.
+A ``splitter`` returns multiple ``streams``. The built-in ``split`` module reads its
+``source`` once and streams each ``item`` to every branch.
 
 How does a processor map over items?
 ------------------------------------
@@ -593,14 +593,16 @@ The ways to consume one ``Pipeline``:
 +---------------------------------------+----------------------------------------+------------------------------------------------+
 | ``pipeline.with_execution(...)``      | thread/process executor                | ``concurrency`` limit; optionally ordered      |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
-| ``pipeline.split(n)`` / ``publish``   | streaming fan-out (pending)            | branches and local subscriptions               |
+| ``pipeline.split(n)``                 | streaming fan-out                      | one ``pipeline`` per branch                    |
++---------------------------------------+----------------------------------------+------------------------------------------------+
+| ``pipeline.publish(...)``             | local subscriptions (pending)          | the main stream continues while a copy flows   |
+|                                       |                                        | to each subscription                           |
 +---------------------------------------+----------------------------------------+------------------------------------------------+
 
 .. note::
 
     Pending. The row marked pending describes calls that exist but raise
-    ``NotImplementedError`` until streaming fan-out, local subscriptions, and publishing
-    land.
+    ``NotImplementedError`` until local subscriptions and publishing land.
 
 How do I run a pipeline in parallel?
 ------------------------------------
@@ -660,22 +662,28 @@ Which environment variables tune riko?
 --------------------------------------
 
 ``RIKO_*`` environment variables override riko's runtime defaults. A malformed value
-logs a warning and keeps the default. Defaults are shown in parentheses.
+logs a warning and keeps the default. Defaults are shown in parentheses. A bound accepts
+``inf`` for no limit (``0`` is never an alias for it). The cache sizes take values >= 1
+or ``inf``.
 
-- ``RIKO_CONCURRENCY_LIMIT``: ``riko.async_map``'s default concurrent call ``limit``;
-  pass ``limit=0`` to ``async_map`` for unlimited (``16``).
+- ``RIKO_CONCURRENCY_LIMIT``: the default number of concurrent calls in async mapping
+  and async runs (``16``). It takes a whole number, never ``inf``, because streaming
+  maps need a finite worker count. Pass ``limit=inf`` to ``riko.async_map`` to lift
+  the cap for one call.
 - ``RIKO_NODE_THREADS``: the threads that sync-only modules share in async runs on
   one event loop (``40``).
 - ``RIKO_STREAMING_THRESHOLD``: the response size, in bytes, above which fetched
   content is streamed instead of buffered (``1048576``).
 - ``RIKO_ENCODING``: the default text encoding (``utf-8``).
-- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; pass ``inf`` or ``0`` for no
-  limit (``30``).
+- ``RIKO_FETCH_TIMEOUT``: seconds to wait for a URL fetch; ``inf`` for no limit
+  (``30``).
 - ``RIKO_DISCOVERY_TIMEOUT``: seconds to wait for a feed discovery fetch (``10``).
 - ``RIKO_SHUTDOWN_TIMEOUT``: seconds a run's cleanup, and its stopped worker processes,
   get before being killed (``30``).
+- ``RIKO_BRANCH_BUFFER``: the most items one ``split`` branch may fall behind its
+  siblings before the run fails (1024; ``inf`` for no limit).
 - ``RIKO_EXCHANGE_API``: the ``exchangerate`` module's rates API URL.
-- ``RIKO_SHIPPED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
+- ``RIKO_PICKLED_CALL_CACHE_SIZE``: how many prepared calls are cached for worker
   processes (``32``).
 - ``RIKO_PARSED_DATE_CACHE_SIZE``: how many parsed date strings are cached (``1024``).
 - ``RIKO_STRICT_CHECK_CACHE_SIZE``: how many protocol checks are remembered per object
@@ -741,7 +749,8 @@ module       retains           why
 ``write``    whole ``stream``  Serializing needs every ``item``, so the source is
                                materialized before the write; the items it passes
                                through are replayed from that list.
-``split``    whole ``stream``  Copies a materialized finite ``stream`` to each branch.
+``split``    branch lag        Buffers the ``items`` a branch has not read yet while a
+                               sibling reads ahead. ``RIKO_BRANCH_BUFFER`` caps it.
 ``sort``     whole ``stream``  ``sorted()`` cannot rank a partial ``stream``.
 ``reverse``  whole ``stream``  The last ``item`` must be known before the first is
                                emitted.
@@ -769,27 +778,35 @@ See the `Cookbook`_'s performance and memory section for practical guidance.
 How do I send one stream to multiple consumers?
 -----------------------------------------------
 
-Two forms are planned. ``split(n)`` fans a ``pipeline`` out into ``n`` independently
-consumable branches, and ``subscribe``/``publish`` route a copy of each ``item`` to a
+``split(n)`` fans a ``pipeline`` out into ``n`` independently consumable branches. Each
+branch yields every ``item``. Unless you pass ``isolate=False``, every reader except the
+first gets a deep copy of the ``item``:
+
+.. code-block:: python
+
+    >>> from riko import get_path, Pipeline, Sources
+    >>>
+    >>> url = get_path("feed.xml")
+    >>> left, right = Pipeline.from_module(Sources.FETCH, conf={"url": url}).split(2)
+    >>> len(list(left)), len(list(right))
+    (7, 7)
+
+Running the branches separately runs the ``pipeline`` once per branch. Inside one run,
+``split`` reads its ``source`` once.
+
+A second form is planned. ``subscribe``/``publish`` route a copy of each ``item`` to a
 locally declared subscription while the main ``stream`` continues.
 
 .. note::
 
-    Pending. ``Pipeline.split``, ``Pipeline.subscribe``, and ``Pipeline.publish``
-    exist but raise ``NotImplementedError`` until streaming fan-out and local
-    subscriptions and publishing land. A ``pipeline`` that chains the ``split``
-    module is likewise refused before it runs. In the meantime, run the
-    ``pipeline`` once into a list and feed that list to each consumer.
+    Pending. ``Pipeline.subscribe`` and ``Pipeline.publish`` exist but raise
+    ``NotImplementedError`` until local subscriptions and publishing land.
 
 .. code-block:: python
 
-    from riko import get_path, Pipeline, Sources
+    from riko import Pipeline
 
-    url = get_path("feed.xml")
     items = [{"title": "quiet"}, {"title": "loud"}]
-
-    # streaming fan-out into two branches
-    left, right = Pipeline.from_module(Sources.FETCH, conf={"url": url}).split(2)
 
     # local subscription: the main stream continues while a copy flows to it
     alerts = Pipeline.subscribe("alerts")

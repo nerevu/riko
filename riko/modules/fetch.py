@@ -130,7 +130,7 @@ def parser(
     return augment_entries(entries)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Iterator[RSSEntry]:
     """
     Asynchronously fetches an RSS feed and yields its entries.

@@ -255,7 +255,9 @@ new permanent bullet here.
   as `list_modules(...)` args — their canonical form is the bare metadata string; the
   discovery *tree* is the enum layer. A lone sentinel option beside another type
   (`concurrency: int | Literal["auto"]`) is also `Literal` — a one-member enum buys no
-  choice, only a public name; promote it to a `StrEnum` when a second member arrives.
+  choice, only a public name; promote it to a `StrEnum` when a third member arrives:
+  an enum earns its keep at three or more members; with one or two, use a bool, a
+  `Literal`, a raise, or move the decision into the caller.
 - **Callable parameter names.** `fn` is a callable the user supplies
   (`Pipeline.map(fn)`, `CallableNode.fn`); `call` is a pipe's or node's prepared call,
   its configuration and context already bound (`NodeCall`, `ItemCall`, `LoopCall`,
@@ -263,7 +265,7 @@ new permanent bullet here.
 - **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
   when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,
   `write`/`awrite`); sibling sync/async classes never share a method name across colors.
-  An async-only helper keeps a plain name (`maybe_async`, `pull_stream`). An `async_`
+  An async-only helper keeps a plain name (`maybe_async`, `as_awaitable`). An `async_`
   prefix only says the function is async-flavored and may be a plain `def`
   (`async_pipe`, `async_get_temp_file`). Names that mirror stdlib/AnyIO
   (`enter_async_context`, `run_sync`) are exempt.
@@ -330,7 +332,7 @@ a `normalize`; substituting a default the caller supplies or chooses
   before adding any pytest test, search every tier and the doctests for the behavior
   it asserts (the overlap rule in `tests/__init__.py`).
   When async support is unavailable, Async/Bado doctests are skipped whole and any
-  other doctest's `run(...)` examples are skipped individually, so do not add `issync`
+  other doctest's `run(...)` examples are skipped individually, so do not add `is_sync`
   fallback branches solely for doctest collection.
 - **`manage`** — `riko.cli.manage:manager` is the Click entry point. `manage.py`
   composes private command modules by reason to change. It collides with
@@ -374,6 +376,9 @@ a `normalize`; substituting a default the caller supplies or chooses
 - **meza resolves from PyPI releases only** (a `meza>=` floor, no git source);
   lower-level conversion ownership remains with meza where the runtime contract says
   so. Workarounds for meza defects are tracked in `_docs/gameplans/upstream-fixes.md`.
+- **Bug-class table** — `python .claude/skills/tidy/mistake_scan.py --classes` ranks the
+  defect classes past fixes repaired, with each class's scanner rule or audit probe;
+  audits rank risk areas from it, fixes record their class in it.
 - **Tunable knobs live in `riko/base/_config.py`** — static project policy
   (`LAYER_DEPENDENCIES`/`EXACT_LAYERS`/`PREFIX_LAYERS`, consumed and frozen by the
   import linter; `SINK_NAMES`; `SUBPIPE_TYPE`; the legacy port/output tokens

@@ -2,17 +2,19 @@
 """
 Stable, SemVer-guaranteed API for riko extension authors.
 
-This namespace contains pipe decorators, configuration helpers, module
-metadata and naming types; wrapper protocols, target and workflow authoring
-contracts; and registry interfaces.
+This namespace contains pipe decorators, configuration helpers, stream-close helpers,
+module metadata and naming types, wrapper protocols, target and workflow authoring
+contracts, and registry interfaces.
 
 The names are grouped by extension point in the ``modules``, ``targets``, and
-``workflows`` submodules and re-exported here. ``codegen`` generates typed
-discovery names for a plugin.
+``workflows`` submodules and re-exported here. ``codegen`` generates typed discovery
+names for plugins.
 """
 
+from riko.bado.itertools import aauto_close
+from riko.base._iterutils import auto_close
 from riko.coercion._dynamic_conf import DynamicConf
-from riko.definitions._inputs import resolve_inputs
+from riko.definitions._inputs import CompiledInputSchemas
 from riko.definitions._module_definition import ModuleDefinition, normalize_module_name
 from riko.definitions._nodes import (
     ActionNode,
@@ -62,6 +64,7 @@ __all__ = [
     "AsyncSplitterWrapper",
     "CacheNode",
     "CallableNode",
+    "CompiledInputSchemas",
     "Dispatcher",
     "DynamicConf",
     "FileTarget",
@@ -89,6 +92,8 @@ __all__ = [
     "TargetRegistry",
     "WriteCapabilities",
     "WriteNode",
+    "aauto_close",
+    "auto_close",
     "get_conf_type",
     "normalize_module_name",
     "operator",
@@ -96,7 +101,6 @@ __all__ = [
     "register_module",
     "register_target",
     "register_workflow_store",
-    "resolve_inputs",
     "splitter",
     "temporary_registrations",
     "workflow",

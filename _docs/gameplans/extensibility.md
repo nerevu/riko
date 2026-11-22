@@ -125,7 +125,7 @@ catalog generation does not import uninstalled optional dependencies unnecessari
 Open decision (triaged 2026-10-06): `ModuleDefinition(sync_pipe=…/async_pipe=…)` accepts
 plain undecorated callables (documented, and run by both executions), but its slots and
 `ResolvedModule`'s are typed `SyncModuleWrapper`/`AsyncModuleWrapper`, whose declared
-members (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`, `isasync`) a
+members (`name`, `type`, `subtype`, `subtypes`, `pollable`, `loopable`, `is_async`) a
 plain callable lacks. Readers cope with `getattr` defaults, and `gen_registry_catalog`
 skips such definitions by catching `AttributeError`. The module contract decides one of:
 normalize plain callables at the definition boundary (stamping declared metadata),
@@ -449,13 +449,14 @@ host passes the schema and the node turns it into an `http://` URL).
 A hand-written workflow module declares the same facts on its pipe (shipped 2026-11-09).
 `riko.ext.workflow` tags the pipe; its keyword-only `input_schemas=None` and
 `dependencies=None` (beside `subtype="transformer"`, `loopable=True`, and
-`isasync=None`) stamp its inputs' schemas (shorthand such as `{"q": "string"}` or full
+`is_async=None`) stamp its inputs' schemas (shorthand such as `{"q": "string"}` or full
 JSON Schema, normalized as a `Workflow` normalizes them) and its dependencies (sorted,
 duplicate-free). `describe_module()` reports what the decorator received, and `None` for
 either when omitted; a generated or document-backed workflow's pipe carries its
-`Workflow`'s own. `riko.ext.resolve_inputs` gives the pipe the run's input values, each
-schema's default filled and the values validated, so a hand-written pipe resolves inputs
-exactly as a `Workflow` run does.
+`Workflow`'s own. A `riko.ext.CompiledInputSchemas` record, built once from the schemas,
+gives the pipe the run's input values through `resolve`, each schema's default filled
+and the values validated, so a hand-written pipe resolves inputs exactly as a
+`Workflow` run does.
 
 ### E3.7 Targets and Formats
 

@@ -244,6 +244,8 @@ def require_unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
     Examples:
 
+        >>> import json
+        >>>
         >>> json.loads('{"a": 1}', object_pairs_hook=require_unique_keys)
         {'a': 1}
 
@@ -297,11 +299,11 @@ def parse_document(
 
     """
     mapping = _parse_document(document)
-    resolved = get_document_shape(mapping) if shape is None else shape
+    doc_shape = get_document_shape(mapping) if shape is None else shape
 
-    if resolved is DocumentShape.V2:
+    if doc_shape is DocumentShape.V2:
         raw = mapping
-    elif resolved is DocumentShape.V1:
+    elif doc_shape is DocumentShape.V1:
         raw = parse_pipedef(mapping)
     else:
         raw = parse_pipedag(mapping)

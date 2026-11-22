@@ -93,7 +93,7 @@ def build_pipe_kwargs(pipe: ModuleWrapper, test: bool) -> dict[str, object]:
     Args:
 
         pipe: The target's ``pipe`` or ``async_pipe``.
-        test: Whether to use default input values instead of prompting.
+        test: Whether to use default inputs instead of prompting.
 
     Returns:
 
@@ -131,7 +131,7 @@ async def aemit_result(pipeline: Pipeline) -> None:
     emit_result(await alist(pipeline))
 
 
-def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> None:
+def run_document(path: PathLike, is_async: bool = False, test: bool = False) -> None:
     """
     Runs the ``WorkflowDocument`` at ``path`` and prints what it produces.
 
@@ -141,8 +141,8 @@ def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> N
 
     Kwargs:
 
-        isasync: Whether to iterate the pipeline asynchronously.
-        test: Whether to use default input values instead of prompting.
+        is_async: Whether to iterate the pipeline asynchronously.
+        test: Whether to use default inputs instead of prompting.
 
     """
     document, _ = read_document(path)
@@ -151,7 +151,7 @@ def run_document(path: PathLike, isasync: bool = False, test: bool = False) -> N
         sys.exit(f"Workflow document {path} not found!")
 
     pipeline = Pipeline(require_workflow(document), context=Context(test=test))
-    async_run(aemit_result, pipeline) if isasync else emit_result(pipeline)
+    async_run(aemit_result, pipeline) if is_async else emit_result(pipeline)
 
 
 def get_example_dirs() -> list[Path]:
@@ -241,7 +241,7 @@ def resolve_target(
 
 
 def run_target(
-    target: Path | ModuleType | None, *, isasync: bool = False, test: bool = False
+    target: Path | ModuleType | None, *, is_async: bool = False, test: bool = False
 ) -> None:
     """
     Runs a resolved pipe script, ``WorkflowModule``, or ``WorkflowDocument``.
@@ -253,17 +253,16 @@ def run_target(
 
     Kwargs:
 
-        isasync: Whether to run the async pipe when the target has one.
-
-        test: Whether to use default input values instead of prompting.
+        is_async: Whether to run the async pipe when the target has one.
+        test: Whether to use default inputs instead of prompting.
 
     """
     if isinstance(target, Path):
-        run_document(target, isasync, test)
+        run_document(target, is_async, test)
     else:
         printer = getattr(target, "print_results", emit_result)
 
-        if isasync and (async_pipe := getattr(target, "async_pipe", None)):
+        if is_async and (async_pipe := getattr(target, "async_pipe", None)):
             async_run(runner, async_pipe, test, printer)
         elif main := getattr(target, "main", None):
             main(test=test)
@@ -303,7 +302,7 @@ def run() -> None:
     parser.add_argument(
         "-a",
         "--async",
-        dest="isasync",
+        dest="is_async",
         action="store_true",
         default=False,
         help="Load async pipe.\n\n",
@@ -321,7 +320,7 @@ def run() -> None:
     target = resolve_target(args.path, args.pipeid)
 
     try:
-        run_target(target, isasync=args.isasync, test=args.test)
+        run_target(target, is_async=args.is_async, test=args.test)
     except RikoError as e:
         sys.exit(str(e))
 

@@ -10,6 +10,7 @@ import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
 from functools import partial
+from math import inf
 from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
@@ -53,7 +54,7 @@ from riko.types.modules import (
     StrReplaceConfRule,
     TokenizerRawConf,
 )
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
@@ -75,13 +76,12 @@ from tests._resources import (
     sync_cm_factory,
     sync_gen_factory,
 )
-from tests._workflows import SPLIT_METHOD_PENDING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from riko.types._pipedef import DagModule
-    from riko.types._streams import Item, Items
+    from riko.types._streams import Item, Items, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 _FEED = get_path("feed.xml")
@@ -305,7 +305,7 @@ class TestPipelineChaining:
 
     def test_or_keeps_node_resources_and_label(self):
         node = ModuleNode(id="hash-1", name="hash", resources="db", label="L")
-        hashed = Pipeline(Workflow().with_node(node))
+        hashed = Pipeline(Workflow().with_nodes(node))
         pipeline = Pipeline.from_module("fetch") | hashed
         chained = pipeline.workflow.nodes["hash-1"]
         assert (dict(chained.resources), chained.label) == ({"db": "db"}, "L")
@@ -455,17 +455,16 @@ class TestPipelineIteration:
     def test_first_reads_a_self_starting_pipeline_unseeded(self):
         assert tokenized(VALUE).first(default=None) == EXPECTED[0]
 
-    def test_iterating_a_split_pipeline_raises_before_running(self):
+    def test_iterating_a_split_pipeline_reads_its_first_branch(self):
         consumed = []
 
         def source():
             consumed.append(1)
             yield {"x": 1}
 
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            list(source() | Pipeline.from_module("split"))
-
-        assert consumed == []
+        pipeline = source() | Pipeline.from_module("split")
+        assert list(pipeline) == [{"x": 1}]
+        assert consumed == [1]
 
     def test_a_failing_pipeline_does_not_break_another_pipelines_run(self):
         pipeline = tokenized()
@@ -539,17 +538,16 @@ class TestAsyncPipelineIteration:
         assert await pipeline.afirst([{"x": 1}]) == {"x": 1}
 
     @async_test
-    async def test_async_iterating_a_split_pipeline_raises_before_running(self):
+    async def test_async_iterating_a_split_pipeline_reads_its_first_branch(self):
         consumed = []
 
         def source():
             consumed.append(1)
             yield {"x": 1}
 
-        with pytest.raises(InvalidPipelineError, match="splitter"):
-            _ = [item async for item in source() | Pipeline.from_module("split")]
-
-        assert consumed == []
+        pipeline = source() | Pipeline.from_module("split")
+        assert [item async for item in pipeline] == [{"x": 1}]
+        assert consumed == [1]
 
 
 def _both(build: Callable[[Pipeline], Pipeline]) -> tuple[Items, Items]:
@@ -567,7 +565,7 @@ PARITY_CASES = [
 ]
 
 
-@skipif_issync
+@skipif_sync
 class TestOutputParity:
     @pytest.mark.parametrize(("build", "expected"), PARITY_CASES)
     def test_sync_matches_async(self, build: methodcaller, expected: Items):
@@ -705,7 +703,7 @@ class TestClose:
         # The source stays referenced, and the relay reads it with a plain ``for``
         # loop, so only the run's own close can end it.
         closed: list[bool] = []
-        sources: list[Iterator[Item]] = []
+        sources: list[Stream] = []
 
         def gen():
             try:
@@ -739,7 +737,7 @@ class TestClose:
 
         assert probe_log == ["closed"]
 
-    @skipif_issync
+    @skipif_sync
     def test_leaving_open_closes_an_async_generator_seed(self):
         closed: list[bool] = []
 
@@ -756,8 +754,8 @@ class TestClose:
 
         assert closed == [True]
 
-    @skipif_issync
-    def test_leaving_open_closes_a_closeable_async_iterator_seed(self):
+    @skipif_sync
+    def test_leaving_open_closes_a_closable_async_iterator_seed(self):
         closed: list[str] = []
 
         with Pipeline.from_module("hash").open(ClosingAsyncIterator(closed)) as stream:
@@ -934,7 +932,12 @@ async def _fail(value):
 
 IN_FLIGHT_LIMITS = [
     pytest.param(None, DEF_CONCURRENCY_LIMIT, id="default"),
-    pytest.param(0, _IN_FLIGHT, id="unbounded"),
+    pytest.param(inf, _IN_FLIGHT, id="unbounded"),
+]
+BAD_LIMITS = [
+    pytest.param(-1, ValueError, "at least 1", id="negative"),
+    pytest.param(0, ValueError, "at least 1", id="zero"),
+    pytest.param(2.5, TypeError, "an integer or math.inf", id="fraction"),
 ]
 
 
@@ -942,7 +945,7 @@ class TestAsyncMap:
     @pytest.mark.parametrize(("limit", "expected"), IN_FLIGHT_LIMITS)
     @async_test
     async def test_limit_bounds_in_flight_calls(self, limit, expected):
-        """The default limit caps calls in flight; ``limit=0`` runs them all at once."""
+        """The default limit caps calls in flight; ``limit=inf`` runs them all."""
         active = peak = 0
 
         async def track(value):
@@ -971,10 +974,11 @@ class TestAsyncMap:
 
         assert len(caught.value.exceptions) == 2
 
+    @pytest.mark.parametrize(("limit", "error", "message"), BAD_LIMITS)
     @async_test
-    async def test_async_map_rejects_negative_limit(self):
-        with pytest.raises(ValueError, match="limit cannot be negative"):
-            await async_map(_fail, range(3), limit=-1)
+    async def test_async_map_rejects_an_invalid_limit(self, limit, error, message):
+        with pytest.raises(error, match=f"limit must be {message}"):
+            await async_map(_fail, range(3), limit=limit)
 
 
 class TestFanIn:
@@ -1236,7 +1240,7 @@ class TestExecutionSettings:
 
 
 @pytest.mark.slow
-@skipif_issync
+@skipif_sync
 class TestAsyncBoundedParallel:
     @pytest.mark.anyio
     async def test_parallel_matches_sequential_as_multiset(self):
@@ -1339,7 +1343,7 @@ def branch_log():
 
 
 @pytest.mark.slow
-@skipif_issync
+@skipif_sync
 class TestAsyncFanInParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
@@ -1731,15 +1735,51 @@ class TestSubscriptions:
         assert list(events) == []
 
 
-@SPLIT_METHOD_PENDING
+_BAD_SPLITS = [
+    pytest.param(0, "at least one branch", id="zero"),
+    pytest.param(-1, "at least one branch", id="negative"),
+    pytest.param(2.0, "must be an integer", id="float"),
+    pytest.param("2", "must be an integer", id="str"),
+    pytest.param(True, "must be an integer", id="bool"),
+]
+
+
 class TestSplit:
     """Streaming fan-out into independently consumable branches."""
 
     def test_both_branches_yield_the_same_first_item(self):
         left, right = tokenized(VALUE).split(2)
-        assert next(iter(left)) == EXPECTED[0]
-        assert next(iter(right)) == EXPECTED[0]
+        assert left.first() == EXPECTED[0]
+        assert right.first() == EXPECTED[0]
 
+    def test_reading_a_branch_past_the_split_count_fails_before_reading(self):
+        consumed = []
+
+        def source():
+            consumed.append(1)
+            yield {"x": 1}
+
+        node = ModuleNode(id="split-1", name="split", conf={"splits": 2})
+        outputs = {"default": Endpoint("split-1", "out:2")}
+        pipeline = Pipeline(Workflow(nodes=[node], outputs=outputs))
+
+        with pytest.raises(InvalidPipelineError, match="no output port 'out:2'"):
+            list(pipeline(source()))
+
+        assert consumed == []
+
+    def test_split_records_its_count_and_isolation_in_the_node_conf(self):
+        shared, *_ = Pipeline().split(3, isolate=False)
+        node = shared.workflow.nodes["split-1"]
+        assert isinstance(node, ModuleNode)
+        assert dict(node.conf) == {"splits": 3, "isolate": False}
+
+    @pytest.mark.parametrize(("splits", "match"), _BAD_SPLITS)
+    def test_splitting_into_an_invalid_count_fails(self, splits: object, match: str):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Pipeline().split(splits)  # pyright: ignore[reportArgumentType]
+
+    @UNION_PENDING
     def test_upstream_node_runs_once_for_every_branch(self):
         consumed: list[int] = []
 
@@ -1749,7 +1789,8 @@ class TestSplit:
                 yield {"content": str(index)}
 
         left, right = Pipeline.from_module("hash").split(2)
-        assert list(left(source())) == list(right(source()))
+        merged = Pipeline.union(left, right)  # pyright: ignore[reportAttributeAccessIssue]
+        assert len(list(merged(source()))) == 6
         assert len(consumed) == 3
 
 

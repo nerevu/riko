@@ -234,7 +234,7 @@ thread-affine clients such as `sqlite3` connections work under async execution. 
 entry and exit may land on different worker threads; R11 (provider sessions) owns the
 fix, and a strict xfail,
 `tests/internal/test_execution.py::TestAsyncResourceAcquisition::test_async_sync_lifecycle_resource_exits_on_its_entry_thread`,
-marks it. The same thread rule keeps a sync-closeable seed's `close()` on the event loop
+marks it. The same thread rule keeps a sync-closable seed's `close()` on the event loop
 (it is the caller's object, registered inline), so `shutdown_timeout` cannot bound a
 seed close that blocks; R11 owns that bound with the entry-thread exit (triage
 2026-11-03; tripwire
@@ -251,55 +251,83 @@ async-stream closes included, is bounded by `shutdown_timeout`, and an expiry is
 recorded as a cleanup error. The portal is entered onto the `ExitStack` before every
 cleanup it bridges, so it stops after them. A sync factory with an async cleanup is
 rejected with `InvalidPipelineError` before the factory runs. Every caller-made owned
-value (`Resource(value)`, a sync-read seed, a native pipe's raw return, a node stream)
-whose only close is async (`aclose()`, or an async `close`) is rejected with
+value (`Resource(value)`, a sync-read seed, a native pipe's returned stream, a node
+stream) whose only close is async (`aclose()`, or an async `close`) is rejected with
 `InvalidPipelineError` when it is opened or built, before any item is read, with a
 message naming the fix (an async factory or lifecycle, or `async for`); a bridged
 async-only stream keeps closing on the portal per the adaptation rule below. Under async
-execution every such close is awaited.
+execution every such close is awaited. A pipe returns its stream as the iterator its
+type declares, an `Iterator` from a sync pipe and an `AsyncIterator` from an async one,
+in both execution colors, whether it reads its whole input or one item at a time; a raw
+return distinct from that stream (a list, or a handle whose `__iter__`/`__aiter__` hands
+out a fresh iterator) is not supported, so the executions neither open nor own one
+(decided 2026-11-21). `require_stream`/`require_async_stream`
+(`riko/types/_streams.py`) reject a non-iterator with `TypeError` once per node build
+and once per item call; an async per-item result may also be a sync iterator, since a
+built-in async processor runs one item synchronously (`require_any_stream`). Seeds keep
+accepting any iterable.
 
 Open (backburner): an awaitable seed is also resolved on the portal, so its value could
 qualify for a bridged close; it stays rejected until decided.
 
 Delivery is staged over one close landscape (2026-10-31 triage). Stage 1 (landed):
-`get_sync_closer`/`get_async_closer` in `riko/types/_io.py` classify how a value closes
-(replacing `_has_async_close`), and `require_value` in `riko/bado/_util.py` is the one
-awaitable-rejection helper. Stage 2 (landed): one `run_bridged`/`maybe_async`/`asyncify`
-pair plus a per-execution `register_owned` replace
-`close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
+`get_sync_closer` (`riko/base/_guards.py`)/`get_async_closer` (`riko/types/_io.py`)
+classify how a value closes (replacing `_has_async_close`), and `require_value` in
+`riko/base/_guards.py` is the one awaitable-rejection helper. Stage 2 (landed): one
+`run_bridged`/`maybe_async`/`asyncify` pair plus a per-execution `register_owned`
+replace `close_resource`/`aclose_resource`/`close_with`/`aclose_with`,
 `_adapt._maybe_close`/`_close_returned`, and the inline
 `queue_callback(x.close)`/`x.aclose` sites; it carries the rule above and a regression
-table (seed, native return, node stream, raw return × sync/async) for values whose only
-close is async, which leaked a never-awaited coroutine before it; under sync execution a
+table (seed, native return, node stream × sync/async) for values whose only close is
+async, which leaked a never-awaited coroutine before it; under sync execution a
 sync-iterable seed whose only close is `aclose()` was silently never closed (verified
 2026-10-31) and is now rejected; a seed whose `__iter__`/`__aiter__` hands out a
-separate closeable iterator had only the seed closed (verified 2026-11-13), so both seed
+separate closable iterator had only the seed closed (verified 2026-11-13), so both seed
 openers now own that iterator beside the seed (`CLOSING_SEEDS` rows `cursor-handle` /
 `async-cursor-handle` in `tests/internal/test_plan_closes.py`). Stage 2 decisions
 (2026-10-31): under async execution a sync close keeps its per-kind threading (resource
-close/cleanup on a worker; seeds close inline; a sync node's stream and raw return keep
-their worker); under sync execution `shutdown_timeout` bounds every portal close, the
-existing async-stream closes included. There is no stage 3. Close-once invariant: a
-value is close-once or has one closer, with dedupe state in the value, never a registry.
+close/cleanup on a worker; seeds close inline; a sync node's returned stream keeps its
+worker); under sync execution `shutdown_timeout` bounds every portal close, the existing
+async-stream closes included. There is no stage 3. Close-once invariant: a value is
+close-once or has one closer, with dedupe state in the value, never a registry.
 Riko-made async generators close idempotently; a foreign value closable from two places
-(async seed, sync node raw return and stream, native closeable non-generator output)
-enters through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a run's
-streams, close-once. `aauto_close` (`riko/bado/itertools.py`) and
+(async seed, sync node returned stream, native closable non-generator output) enters
+through `_Owned`, whose `inline` keeps the threading; `_RunStream` owns a run's streams,
+close-once. `aauto_close` (`riko/bado/itertools.py`) and
 `maybe_closing`/`maybe_aclosing` use `run_bridged`/`maybe_async`/`asyncify`
 (`riko/bado/_util.py`); closers come only from `get_sync_closer`/`get_async_closer`.
-Follow-up, owned by R7 fan-out (assigned 2026-11-12, recorded 2026-11-02): sync
-execution still registers each non-endpoint node stream on its exit stack with no run
-object, so an upstream sync generator closes at execution exit, not when its downstream
-node finishes or the output stream closes; a sync twin of `_RunStream`/`_Owned` retires
-`_close_tracked` and the context parameter of the sync `_build_stream`. Tripwire:
-`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`.
-`Workflow.require_executable` refuses fan-out, so each node stream has one consumer;
-when fan-out lands, a sync node's early input close must become per-consumer. Bare
+Follow-up, owned by R7 fan-out (assigned 2026-11-12, recorded 2026-11-02, narrowed
+2026-11-17): sync execution has its own `_RunStream`/`_Owned`, so a sync node stream
+closes when the run's output closes
+(`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_a_sync_source_when_its_output_closes`)
+and a native sync splitter stream closes once its reader finishes. Async-only components
+under `SyncExecution` match since 2026-11-19: an async-only node's stream and an adapted
+async splitter stream are `_Owned` streams the run owns, each closing its async source
+on the portal, so both close when their sync consumer finishes rather than at execution
+exit
+(`tests/internal/test_plan_runs.py::TestPlanRun::test_run_closes_each_split_branch_once_its_reader_finishes[async-split]`,
+`tests/internal/test_plan_closes.py::TestPlanClose::test_run_closes_an_unfinished_async_only_stream_on_the_portal`);
+and a sync run that uses an async-only node starts the portal before it can be closed,
+so its streams close on the portal even when the caller abandons them
+(`tests/internal/test_plan_closes.py::TestPlanClose::test_run_envelopes_closes_an_abandoned_async_only_stream_on_exit`,
+`tests/internal/test_plan_runs.py::TestPlanRun::test_run_envelopes_closes_an_abandoned_async_split_on_exit`);
+and a sync `loop` closes each embed's per-item results once it is done with them, an
+async-only embed's on the portal, or on the event loop when an async run hosts the sync
+`loop` on a worker thread
+(`tests/internal/test_modules.py::TestLoop::test_closing_the_loop_closes_the_running_child`,
+`tests/internal/test_execution_plan.py::TestAdaptEmbed::test_run_closes_an_async_only_embed_stream_once_the_loop_closes`,
+`tests/internal/test_execution_plan.py::TestAsyncAdaptEmbed::test_arun_closes_an_async_only_embed_stream_once_the_loop_closes`).
+A port with several readers is teed, so each reader closes only its own branch. Bare
 operator wrappers never close their input either (triage 2026-11-14): the wrapper closes
 only the parser's result, so closing a direct `truncate`, `uniq`, or `filter` call early
 leaves a source the caller still holds open; that module-level contract is S1's
 ([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)),
-and this run-object follow-up owns the execution-level close.
+and this follow-up owns the execution-level close. The copies have drifted (repository
+audit 2026-11-21): sync `_Owned` takes `cleanup=` where async takes `inline=`, and sync
+`_RunStream.add` picks each closer when a step is added — deliberately, so a value whose
+only close is async raises `InvalidPipelineError` before any item is read — while the
+async twin picks closers at `aclose`; the shared bookkeeping (steps, closed flag,
+last-step output, close-once) is the part to dedupe when R7 reshapes them.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module,
 parser, factory, and extension code never creates event loops, portals, executors,
@@ -518,14 +546,14 @@ values are not rejected on that basis alone.
 
 For `Resource.from_factory(...)`, explicit `cleanup=` is authoritative: the resolved
 factory result is `T` directly and Riko does not additionally interpret it as a context
-manager or closeable object. Without explicit cleanup, lifecycle interpretation follows
+manager or closable object. Without explicit cleanup, lifecycle interpretation follows
 this order:
 
 ```text
 context manager / async context manager
     -> enter it; the entered value is T
 
-otherwise Closeable / AsyncCloseable
+otherwise SyncClosable / AsyncClosable
     -> the factory result itself is T
 
 otherwise
@@ -539,15 +567,15 @@ matching sync or async execution wins; bridging is used only when the matching n
 protocol is unavailable. The same native-mode preference applies to close/aclose
 capability fallback.
 
-Closeability is a runtime capability, not a bound on `T`. Internal structural protocols
+Closability is a runtime capability, not a bound on `T`. Internal structural protocols
 may be modeled permissively because Riko ignores their return values:
 
 ```python
-class Closeable(Protocol):
+class SyncClosable(Protocol):
     def close(self) -> object: ...
 
 
-class AsyncCloseable(Protocol):
+class AsyncClosable(Protocol):
     def aclose(self) -> Awaitable[object]: ...
 ```
 
@@ -825,6 +853,10 @@ When multiple publishers target one subscription, the subscription completes onl
 all attached publishers complete. Concurrent publishers preserve actual delivery order;
 no artificial global ordering is imposed.
 
+Decided 2026-11-16 (user), R7: under async execution a sync subscriber callback runs on
+a bounded AnyIO worker and a native async one on the loop; callbacks within one
+subscription run sequentially.
+
 ### `split()`
 
 `split()` is streaming fan-out, not whole-source `deepcopy`:
@@ -833,7 +865,8 @@ no artificial global ordering is imposed.
 - only reachable/used outputs become active branches;
 - active branches receive items incrementally;
 - unused outputs allocate no queue and exert no backpressure;
-- per-branch buffers are bounded and default to zero-buffer/rendezvous semantics;
+- a branch read behind its siblings holds a lossless lag buffer, unbounded by default
+  and capped by `branch_buffer` (fanout-topology § 7);
 - split is never lossy and has no drop overflow mode.
 
 Branch isolation is observable, but the runtime chooses the cheapest safe copy/share
@@ -1466,6 +1499,23 @@ it, but a registry `register`/`reset` must then invalidate the cached plan (a ge
 counter on the dispatcher is the likely shape). Decide alongside the per-run seed and
 `Pipeline.open()` work, which reshapes the same entry points.
 
+Measured 2026-11-18 (repeated-work audit triage), beside plan reuse:
+
+- A stored workflow's pipe rebuilds and re-prepares its plan on every call
+  (`riko/runtime/_workflow_pipes.py:274-290`, `riko/runtime/_run.py:73`), so as a
+  `loop` embed it pays that per parent item: 876 µs per item on a two-node flow, about
+  48% of it repeated. The plan `build_workflow_pipes` builds for the subtype check is
+  discarded.
+- Rebuilding a plan re-runs every plan check through `__attrs_post_init__`, though only
+  `_validate_port_wiring` (26 µs at 20 nodes) depends on input values; the other ~40 µs
+  and ~160 µs of prepared-node building repeat. Validate-on-construct is deliberate, and
+  a run with no inputs no longer rebuilds the plan, so only input-carrying runs pay it.
+- Unowned: processors rebuild the `Context` per item through `_resolve_context`
+  (`riko/modules/_decorators.py:194-198`, call sites `:893`/`:1032`/`:1086`/`:1131`;
+  the sibling at `:611` already skips the rebuild when there are no overrides). That
+  costs 7.1 µs per item with no context and 3.9 µs with one, 22% of a three-node
+  pipeline (141.6 → 110.1 µs per item when skipped). Deferred by the user.
+
 ### 6.2 Ordering
 
 ```python
@@ -1546,6 +1596,24 @@ Regression:
 must not be entered in the consumer's task across a `yield` — host it in a dedicated
 execution task feeding a bounded channel, or scope it to `Pipeline.open()` — or this
 regression trips.
+
+**Fan-out execution rules (decided 2026-11-16 (user), R7).**
+
+- Slice A: closing a run's last branch returns promptly even while an upstream advance
+  is in flight (the advancer finishes the source close), and execution cancellation is
+  prompt the same way (fanout-topology § 7).
+- Slice B: `Pipeline.with_execution` gains `strict: bool = False` and
+  `overrides: Mapping[str, object] | None`. Override keys are `Settings` attribute
+  names (not env names) with native values, validated at definition time; unknown keys
+  are rejected, and only `branch_buffer` is supported in R7. Successive calls merge,
+  `overrides=None` clears them all, and `{"branch_buffer": None}` removes that one
+  override (falling back to process settings). Right-hand composition operands keep
+  the default-execution-settings rule. `strict` checks splitter cardinality only
+  (fanout-topology § 7).
+- Under `AsyncExecution`, a sync-only splitter branch runs each `next()` as its own
+  worker call: no indefinitely held per-branch thread and no same-thread affinity.
+  Cleanup gets bounded worker capacity separate from read/compute workers and reuses
+  `shutdown_timeout`.
 
 Execution resource cleanup follows the resource rules above. If both execution and
 cleanup fail, cleanup is still attempted comprehensively; multiple independent failures
@@ -1922,13 +1990,16 @@ provided that code is explicitly marked as scheduled for replacement in R7.
 
 Sync execution uses one persistent portal when bridging async-only components: the async
 stream is pulled one `__anext__` at a time on the portal loop and re-exposed as a lazy
-sync iterator. Async execution runs unknown sync extension work on workers unless
-explicitly inline-safe: the sync component runs on a worker thread, reads its async
-inputs lazily from there, and its output is pulled one item per `__anext__` as the
-consumer asks for it. Both directions are demand-driven — no background producer task,
-no channel, and no unbounded queue — so an error surfaces only after every item already
-produced has been delivered, and abandoning the stream closes the producer. The runtime
-must never spin up an async runtime per item.
+sync iterator. The async-only node's call also runs on the portal loop and its output,
+an async iterator, is pulled there, so a call bound to a running loop works and the
+stream is produced where it is closed
+(`test_run_opens_an_async_only_stream_on_the_portal`). Async execution runs unknown sync
+extension work on workers unless explicitly inline-safe: the sync component runs on a
+worker thread, reads its async inputs lazily from there, and its output is pulled one
+item per `__anext__` as the consumer asks for it. Both directions are demand-driven — no
+background producer task, no channel, and no unbounded queue — so an error surfaces only
+after every item already produced has been delivered, and abandoning the stream closes
+the producer. The runtime must never spin up an async runtime per item.
 
 A loop `embed` that exists only on the other side (sync or async) is adapted at
 execution time, to match whether the host pipe actually runs sync or async, into a

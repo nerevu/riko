@@ -88,7 +88,7 @@ def _require_concurrency(
 
 
 def _require_timeout(value: object, what: str | None = "value", **_) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{what} must be a number")
     elif isnan(value) or value < 0:
         raise ValueError(f"{what} must not be negative or NaN, got {value}")
@@ -129,7 +129,7 @@ class ExecutionSettings:
         shutdown_timeout: The bound, in seconds, on cleanup under asynchronous
             iteration, and on how long stopped worker processes get, together, before
             any still running are killed under synchronous iteration. ``math.inf`` means
-            no bound. The default is 30 seconds, or ``RIKO_SHUTDOWN_TIMEOUT`` when set.
+            no bound. Default: 30 seconds, or ``RIKO_SHUTDOWN_TIMEOUT`` when set.
 
     Raises:
 
@@ -141,8 +141,6 @@ class ExecutionSettings:
 
     Examples:
 
-        >>> from riko import ExecutionSettings
-        >>>
         >>> settings = ExecutionSettings(executor="thread", concurrency=4)
         >>> settings.executor, settings.concurrency
         (<Executor.THREAD: 'thread'>, 4)
@@ -171,8 +169,6 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko import ExecutionSettings
-            >>>
             >>> ExecutionSettings().sync_policy
             SyncPolicy(executor=<Executor.INLINE: 'inline'>, workers=None)
             >>> ExecutionSettings(concurrency=4).sync_policy
@@ -201,6 +197,27 @@ class ExecutionSettings:
 
         return policy
 
+    def validate_async(self) -> None:
+        """
+        Validates that asynchronous execution can run with these settings.
+
+        Raises:
+
+            InvalidPipelineError: If the settings name the process executor, which
+                asynchronous iteration cannot use.
+
+        Examples:
+
+            >>> ExecutionSettings(concurrency=4).validate_async()
+            >>> ExecutionSettings(executor="process").validate_async()
+            Traceback (most recent call last):
+            riko.exceptions.InvalidPipelineError: ...requires synchronous execution
+
+        """
+        if self.executor is Executor.PROCESS:
+            msg = "the process executor requires synchronous execution"
+            raise InvalidPipelineError(msg)
+
     @cached_property
     def async_policy(self) -> AsyncPolicy:
         """
@@ -219,8 +236,6 @@ class ExecutionSettings:
 
         Examples:
 
-            >>> from riko import ExecutionSettings
-            >>>
             >>> ExecutionSettings(concurrency=4).async_policy
             AsyncPolicy(limit=4, inline=False)
             >>> ExecutionSettings(concurrency="auto").async_policy.limit > 1
@@ -230,22 +245,17 @@ class ExecutionSettings:
             riko.exceptions.InvalidPipelineError: ...requires synchronous execution
 
         """
+        self.validate_async()
         executor, concurrency = self.executor, self.concurrency
 
-        if executor is Executor.PROCESS:
-            msg = "the process executor requires synchronous execution"
-            raise InvalidPipelineError(msg)
+        if concurrency == "auto":
+            limit = config.concurrency_limit
+        elif isinstance(concurrency, int) or executor is Executor.AUTO:
+            limit = concurrency
         else:
-            if concurrency == "auto":
-                limit = config.concurrency_limit
-            elif isinstance(concurrency, int) or executor is Executor.AUTO:
-                limit = concurrency
-            else:
-                limit = 1
+            limit = 1
 
-            policy = AsyncPolicy(limit, executor is Executor.INLINE)
-
-        return policy
+        return AsyncPolicy(limit, executor is Executor.INLINE)
 
 
 DEF_EXECUTION_SETTINGS = ExecutionSettings()

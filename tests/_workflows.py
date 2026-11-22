@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from riko.base._exceptions import InvalidPipelineError
 from riko.base._paths import ROOT_DIR
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
@@ -35,18 +34,6 @@ if TYPE_CHECKING:
 
 EXAMPLES_DIR = ROOT_DIR / "examples"
 
-SPLIT_PENDING = pytest.mark.xfail(
-    strict=True,
-    raises=InvalidPipelineError,
-    reason="the execution refuses split nodes until streaming fan-out lands",
-)
-
-SPLIT_METHOD_PENDING = pytest.mark.xfail(
-    strict=True,
-    raises=NotImplementedError,
-    reason="Pipeline.split() is not available yet",
-)
-
 DAG_DIR = TESTS_DIR / "dags"
 DAG_PATH = DAG_DIR / "pipe_forever.json"
 DAG = json.loads(DAG_PATH.read_text(encoding="utf-8"))
@@ -68,15 +55,15 @@ PIPE_DEF = {
 
 RAW_WORKFLOW = {"nodes": [{"name": "forever"}]}
 CALLABLE_MATCH = r"callable node\(s\) \['len-1'\]"
-CALLABLE_FLOW = Workflow().with_node(CallableNode(id="len-1", name="len", fn=len))
+CALLABLE_FLOW = Workflow().with_nodes(CallableNode(id="len-1", name="len", fn=len))
 
 
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:
     """Runs ``flow`` through a synchronous execution (default: a test ``Context``)."""
     items: list[Item] = []
-    resolved = Context(test=True) if context is None else context
+    _context = Context(test=True) if context is None else context
 
-    with SyncExecution(context=resolved) as execution:
+    with SyncExecution(context=_context) as execution:
         items = list(execution.run(ExecutionPlan.from_workflow(flow, dispatcher)))
 
     return items

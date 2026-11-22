@@ -85,7 +85,7 @@ def parser(
     yield from stream
 
 
-@operator(DEFAULTS, isasync=True, **OPTS)
+@operator(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously runs an embedded module once per input item.
@@ -96,7 +96,7 @@ def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
         context (Context): the run environment
 
     Kwargs:

@@ -33,6 +33,7 @@ except ImportError:
     Event: type | None = None
     HTTPStatusError: type[Exception] | None = None
     HTTPXResponse: object = None
+    Lock: type | None = None
     MemoryObjectReceiveStream: object = None
     MemoryObjectSendStream: object = None
     NamedTemporaryFile: object = None
@@ -52,7 +53,7 @@ except ImportError:
     run_from_thread: Func[object] = lambda *_, **_kw: None
     start_blocking_portal: Func[object] = lambda *_, **_kw: None
 
-    async def checkpoint() -> None:
+    async def checkpoint() -> None:  # noqa: RUF029 (sync fallback stays awaitable)
         return None
 
     def _run[*PosArgsT, T](
@@ -66,6 +67,7 @@ else:
         CancelScope,
         CapacityLimiter,
         Event,
+        Lock,
         NamedTemporaryFile,
         Path,
         Semaphore,
@@ -86,8 +88,8 @@ else:
     backend = "anyio"
     run: Run = anyio.run
 
-issync: bool = backend == "empty"
-isasync: bool = not issync
+is_sync: bool = backend == "empty"
+is_async: bool = not is_sync
 
 __all__ = [
     "AsyncClient",
@@ -97,6 +99,7 @@ __all__ = [
     "Event",
     "HTTPStatusError",
     "HTTPXResponse",
+    "Lock",
     "MemoryObjectReceiveStream",
     "MemoryObjectSendStream",
     "NamedTemporaryFile",
@@ -113,8 +116,8 @@ __all__ = [
     "create_task_group",
     "fail_after",
     "gather_results",
-    "isasync",
-    "issync",
+    "is_async",
+    "is_sync",
     "lowlevel",
     "run",
     "run_from_thread",

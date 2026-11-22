@@ -2,22 +2,31 @@
 
 from __future__ import annotations
 
+import gc
+import warnings
+from dataclasses import replace
 from threading import get_ident
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 
-from riko.bado.itertools import as_async
-from riko.base._exceptions import InvalidPipelineError
+from riko.bado.itertools import alist, as_async
+from riko.base._config import settings
+from riko.base._exceptions import InvalidPipelineError, PipelineError
 from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._workflow_definition import Workflow
+from riko.execution import _async_execution as async_execution_module
+from riko.execution import _sync_execution as sync_execution_module
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._prepared import ExecutionPlan
+from riko.execution._prepared import ExecutionPlan, PreparedNode
 from riko.execution._sync_execution import SyncExecution
-from riko.modules._decorators import operator
+from riko.modules import split as split_module
+from riko.modules._decorators import operator, splitter
+from riko.modules.split import async_pipe as async_split
+from riko.modules.split import pipe as split_pipe
 from riko.modules.union import async_pipe as async_union
 from riko.modules.union import pipe as union_pipe
 from riko.runtime._module_registry import module_registry
@@ -26,16 +35,16 @@ from riko.runtime._workflow_resolver import WorkflowResolver, _build_resolved_wo
 from riko.runtime._workflow_stores import MappingStore
 from riko.types._workflow import Endpoint
 from riko.types.modules import ItemBuilderConf
-from tests import async_test, skipif_issync
+from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
     agen_source,
     arun_plan,
     awaitable_source,
-    build_chain,
     build_dispatcher,
     build_doubler_plan,
     build_workflow,
+    mark_async_loopable,
     mark_loopable,
     module_workflow,
     passthrough_pipe,
@@ -45,7 +54,7 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from riko.types._streams import Item
+    from riko.types._streams import Cascade, Item, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import Conf
 
@@ -64,7 +73,7 @@ _PORT_1_EDGE = StreamEdge(Endpoint("a", "out:1"), Endpoint("b", "in"))
 _SRC_NODE = [ModuleNode(id="n", name="src")]
 _PORT_1_OUTPUT = {"default": Endpoint("n", "out:1")}
 _NEEDS_SEED = r"'b'.*requires a seed"
-_NON_DEFAULT = "instead of 'out'"
+_NO_OUT_1 = r"node '(a|n)' has no output port 'out:1'; it produces \('out',\)"
 _SRC_ECHO = ModuleDefinition(name="src", sync_pipe=passthrough_pipe)
 _NOPE = "no workflow output 'nope'"
 _RESERVED = "use a reserved name"
@@ -73,6 +82,177 @@ _SUBKEY_PART = {"subkey": "word", "type": "text"}
 _WRAPPED_PART = {"type": "text", "value": "extVal"}
 _URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
 _FAN_IN_RESULT = [{"x": "1"}]
+_LONE_STREAM = "splitter node 's' yielded 1 streams but declares 2"
+_EXTRA_STREAM = "splitter node 's' yielded more than 2 streams but declares 2"
+_UNION = ModuleDefinition(name="union", sync_pipe=union_pipe)
+
+
+def _counting_source(pulled: list[int]) -> ModuleDefinition:
+    """Defines a three-item source that records each item it yields."""
+
+    @tag_source
+    def src(_items=None, **_):
+        for index in range(3):
+            pulled.append(index)
+            yield {"x": index}
+
+    return ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src))
+
+
+def _fan_out_dispatcher(
+    pulled: list[int], *, native: bool = False
+) -> ResolverDispatcher:
+    """Builds the fan-out modules, async-only ``split`` and ``union`` if ``native``."""
+    if native:
+        split = ModuleDefinition(name="split", async_pipe=async_split)
+        union = ModuleDefinition(name="union", async_pipe=async_union)
+    else:
+        split = ModuleDefinition(name="split", sync_pipe=split_pipe)
+        union = ModuleDefinition(name="union", sync_pipe=union_pipe)
+
+    return build_dispatcher(_counting_source(pulled), _PROBE, split, union)
+
+
+@splitter(objectify=False)
+def _lone_branch(stream: Stream, _: object, __: object, **___: object) -> Cascade:
+    return iter([stream])
+
+
+def _counted_branch_dispatcher(
+    pulls: list[int], count: int, *, native: bool
+) -> ResolverDispatcher:
+    """
+    Builds the fan-out modules with a ``split`` that yields ``count`` branches.
+
+    The ``split`` declares two branches, records each branch pulled from it, and is
+    async-only if ``native``.
+    """
+
+    def gen_branches() -> Cascade:
+        for index in range(count):
+            pulls.append(index)
+            yield iter(())
+
+    async def agen_branches():
+        for index in range(count):
+            pulls.append(index)
+            yield as_async(())
+
+    @splitter(objectify=False)
+    def split(_stream: Stream, _: object, __: object, **___: object) -> Cascade:
+        return gen_branches()
+
+    @splitter(objectify=False)
+    async def asplit(_stream, _: object, __: object, **___: object):
+        return agen_branches()
+
+    if native:
+        split_def = ModuleDefinition(name="split", async_pipe=asplit)
+    else:
+        split_def = ModuleDefinition(name="split", sync_pipe=split)
+
+    return build_dispatcher(_counting_source([]), _PROBE, split_def, _UNION)
+
+
+@splitter(objectify=False)
+def _doubled_branches(stream: Stream, _: object, __: object, **___: object) -> Cascade:
+    items = list(stream)
+    return iter([iter(items * 2), iter(items * 2)])
+
+
+class _RecordingBranch:
+    """A split branch that records when it is first read and each time it closes."""
+
+    def __init__(self, items: list[Item], events: list[str], tag: str) -> None:
+        self.items, self.events, self.tag = iter(items), events, tag
+        self.started = False
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Item:
+        if not self.started:
+            self.started = True
+            self.events.append(f"{self.tag}-start")
+
+        return next(self.items)
+
+    def close(self) -> None:
+        self.events.append(f"{self.tag}-close")
+
+
+class _AsyncRecordingBranch(_RecordingBranch):
+    """The async twin of ``_RecordingBranch``."""
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> Item:
+        try:
+            item = self.__next__()
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+        return item
+
+    async def aclose(self) -> None:
+        self.close()
+
+
+def _recording_split_dispatcher(
+    events: list[str], *, native: bool
+) -> ResolverDispatcher:
+    """
+    Builds the fan-out modules with a ``split`` whose branches record reads and closes.
+
+    The ``split`` is async-only if ``native``.
+    """
+
+    @splitter(objectify=False)
+    def split(stream: Stream, _: object, __: object, **___: object) -> Cascade:
+        items = list(stream)
+        tags = ("b0", "b1")
+        return iter([_RecordingBranch(items, events, tag) for tag in tags])
+
+    @splitter(objectify=False)
+    async def asplit(stream, _: object, __: object, **___: object):
+        items = [item async for item in as_async(stream)]
+        tags = ("b0", "b1")
+        return as_async([_AsyncRecordingBranch(items, events, tag) for tag in tags])
+
+    if native:
+        split_def = ModuleDefinition(name="split", async_pipe=asplit)
+    else:
+        split_def = ModuleDefinition(name="split", sync_pipe=split)
+
+    return build_dispatcher(_counting_source([]), _PROBE, split_def, _UNION)
+
+
+def _fan_out_workflow(*, split: bool, output: str = "u") -> Workflow:
+    """Builds ``a`` feeding ``b`` and ``c`` (through a split node or not) into ``u``."""
+    source, port, split_nodes, split_edges = "a", "out", [], []
+
+    if split:
+        source, port = "s", "out:1"
+        split_nodes = [ModuleNode(id="s", name="split")]
+        split_edges = [StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))]
+
+    nodes = [
+        ModuleNode(id="a", name="src"),
+        *split_nodes,
+        ModuleNode(id="b", name="probe"),
+        ModuleNode(id="c", name="probe"),
+        ModuleNode(id="u", name="union"),
+    ]
+    edges = (
+        *split_edges,
+        StreamEdge(Endpoint(source, "out"), Endpoint("b", "in")),
+        StreamEdge(Endpoint(source, port), Endpoint("c", "in")),
+        StreamEdge(Endpoint("b", "out"), Endpoint("u", "in")),
+        StreamEdge(Endpoint("c", "out"), Endpoint("u", "in:1")),
+    )
+    endpoint = Endpoint("s", "out:1") if output == "s" else Endpoint(output, "out")
+    return build_workflow(nodes, edges=edges, outputs={"default": endpoint})
 
 
 @tag_source
@@ -98,22 +278,36 @@ READERS = [
 ]
 
 
-# Execution fails closed on ports other than 'out': only the bare 'out' port is
-# executable, so a distinct 'out:1' source port or selected output is rejected
-# rather than silently aliased to the node's 'out' stream. A named input port that
-# shares a name with an argument every module call takes is rejected rather than
-# overwriting that argument or being overwritten by it.
+async def _agen_rows(rows, **_):
+    async for row in as_async(rows):
+        yield row
+
+
+_DUAL_PROBE = ModuleDefinition(
+    name="probe",
+    sync_pipe=passthrough_pipe,
+    async_pipe=cast("AsyncModuleWrapper", _agen_rows),
+)
+_SPLIT_PROBE = ModuleDefinition(name="probe", sync_pipe=_lone_branch)
+_READER_PROBE = ModuleDefinition(name="probe", sync_pipe=_decorated_reader)
+
+
+# An ordinary module produces only its 'out' port, so an 'out:1' source port or
+# selected output is rejected rather than silently aliased to the node's 'out'
+# stream. A named input port that shares a name with an argument every module call
+# takes, or with a parameter a module's pipe or parser fills by position, is rejected
+# rather than overwriting that argument or being overwritten by it.
 RUN_REJECTIONS = [
     pytest.param(
         build_workflow(_SRC_SINK, edges=(_PORT_1_EDGE,)),
         (_SRC, _SINK),
-        _NON_DEFAULT,
+        _NO_OUT_1,
         id="nondefault-source-output-port",
     ),
     pytest.param(
         build_workflow(_SRC_NODE, outputs=_PORT_1_OUTPUT),
         (_SRC,),
-        _NON_DEFAULT,
+        _NO_OUT_1,
         id="nondefault-selected-output-port",
     ),
     pytest.param(
@@ -141,6 +335,30 @@ RUN_REJECTIONS = [
         (_SRC, _PROCESSOR_PROBE),
         _RESERVED,
         id="in:count-processor",
+    ),
+    pytest.param(
+        _named_port_workflow("source"),
+        (_SRC, _PROBE),
+        _RESERVED,
+        id="plain-pipe-first-parameter",
+    ),
+    pytest.param(
+        _named_port_workflow("rows"),
+        (_SRC, _DUAL_PROBE),
+        _RESERVED,
+        id="async-pipe-first-parameter",
+    ),
+    pytest.param(
+        _named_port_workflow("stream"),
+        (_SRC, _SPLIT_PROBE),
+        _RESERVED,
+        id="splitter-parser-first-parameter",
+    ),
+    pytest.param(
+        _named_port_workflow("tuples"),
+        (_SRC, _READER_PROBE),
+        _RESERVED,
+        id="operator-parser-positional-parameter",
     ),
 ]
 
@@ -172,9 +390,9 @@ async def _awaitable_none() -> None:
 # ``None`` feeds nothing, as a missing seed does.
 SEEDS = [
     pytest.param(lambda: {"x": 5}, [{"x": 10}], id="one-item"),
-    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_issync),
-    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_issync),
-    pytest.param(_awaitable_none, [], id="awaitable-none", marks=skipif_issync),
+    pytest.param(agen_source, _DOUBLED, id="async-stream", marks=skipif_sync),
+    pytest.param(awaitable_source, _DOUBLED, id="awaitable", marks=skipif_sync),
+    pytest.param(_awaitable_none, [], id="awaitable-none", marks=skipif_sync),
     pytest.param(_DualSeed, [{"x": 2}], id="dual-iterable"),
 ]
 ASYNC_SEEDS = [
@@ -228,6 +446,38 @@ INPUT_SOURCES = [
     pytest.param(None, {"q": 5}, 5, id="planned"),
     pytest.param(Context(inputs={"q": 2}), {"q": 5}, 5, id="planned-over-context"),
 ]
+SPLITTERS = [
+    pytest.param(False, id="sync-split"),
+    pytest.param(True, id="async-split", marks=skipif_sync),
+]
+# The streams a splitter declaring two yields, the error, and the streams it pulls.
+STREAM_COUNTS = [
+    pytest.param(1, _LONE_STREAM, 1, id="fewer"),
+    pytest.param(3, _EXTRA_STREAM, 3, id="more"),
+    pytest.param(10, _EXTRA_STREAM, 3, id="pull-count"),
+]
+
+
+async def _alist_item(item=None, **_):
+    return [item]
+
+
+_NOT_ITERATOR = r"module 'src' returned a list\. A pipe must return an iterator"
+_NOT_ASYNC_ITERATOR = (
+    r"module 'src' returned a list\. An async_pipe must return an async iterator"
+)
+
+# A pipe that returns a list instead of an iterator, over its whole input or per item.
+LIST_RETURNS = [
+    pytest.param(tag_source(lambda _=None, **__: [{"x": 1}]), id="whole-stream"),
+    pytest.param(
+        tag_source(mark_loopable(lambda _=None, **__: [{"x": 1}])), id="per-item"
+    ),
+]
+ASYNC_LIST_RETURNS = [
+    pytest.param(tag_source(lambda _=None, **__: [{"x": 1}]), id="whole-stream"),
+    pytest.param(tag_source(mark_async_loopable(_alist_item)), id="per-item"),
+]
 
 
 def _build_default_input_plan(default: int) -> ExecutionPlan:
@@ -235,7 +485,7 @@ def _build_default_input_plan(default: int) -> ExecutionPlan:
     conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
     node = ModuleNode(id="b", name="itembuilder", conf=conf)
     schemas = {"q": {"type": "integer", "default": default}}
-    flow = Workflow(input_schemas=schemas).with_node(node)
+    flow = Workflow(input_schemas=schemas).with_nodes(node)
     return ExecutionPlan.from_workflow(flow, dispatcher)
 
 
@@ -280,9 +530,22 @@ def atagged_source(tag: str) -> AsyncModuleWrapper:
 
 
 class TestPlanRun:
+    @pytest.mark.parametrize("pipe", LIST_RETURNS)
+    def test_run_rejects_a_pipe_that_returns_a_list(self, pipe) -> None:
+        resolver = build_dispatcher(ModuleDefinition(name="src", sync_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), resolver)
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(TypeError, match=_NOT_ITERATOR),
+        ):
+            list(execution.run(plan))
+
     def test_run_maps_a_callable_node_over_a_stream_beside_a_second_one(self) -> None:
         flow = _build_callable_fan_in()
-        assert not ExecutionPlan.from_workflow(flow, dispatcher).nodes["c"].is_mappable
+        node = ExecutionPlan.from_workflow(flow, dispatcher).nodes["c"]
+        assert isinstance(node, PreparedNode)
+        assert not node.is_mappable
         assert run_plan(flow) == _FAN_IN_RESULT
 
     def test_run_executes_single_source_node(self) -> None:
@@ -313,7 +576,7 @@ class TestPlanRun:
                 name="double", sync_pipe=cast("SyncModuleWrapper", double)
             ),
         )
-        flow = build_chain(
+        flow = Workflow().with_nodes(
             ModuleNode(id="a", name="src"), ModuleNode(id="b", name="double")
         )
 
@@ -357,6 +620,30 @@ class TestPlanRun:
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("j", "in")),
             StreamEdge(Endpoint("s", "out"), Endpoint("j", "in:side")),
+        )
+        flow = build_workflow([a, s, j], edges=edges)
+
+        assert run_plan(flow, dispatcher=dispatcher) == [{"t": "a"}, {"t": "side"}]
+
+    @pytest.mark.parametrize("port", ["options", "wrapper"])
+    def test_run_wires_an_input_port_named_like_a_call_parameter(self, port) -> None:
+        def joiner(items, **kwargs):
+            yield from items
+            yield from kwargs.get(port) or ()
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="a", sync_pipe=tagged_source("a")),
+            ModuleDefinition(name="side", sync_pipe=tagged_source("side")),
+            ModuleDefinition(
+                name="joiner", sync_pipe=cast("SyncModuleWrapper", joiner)
+            ),
+        )
+        a = ModuleNode(id="a", name="a")
+        s = ModuleNode(id="s", name="side")
+        j = ModuleNode(id="j", name="joiner")
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("j", "in")),
+            StreamEdge(Endpoint("s", "out"), Endpoint("j", f"in:{port}")),
         )
         flow = build_workflow([a, s, j], edges=edges)
 
@@ -521,6 +808,151 @@ class TestPlanRun:
             {"t": "c"},
         ]
 
+    @pytest.mark.parametrize("split", [False, True], ids=["one-port", "split"])
+    def test_run_fans_out_every_item_to_each_consumer(self, split: bool) -> None:
+        pulled: list[int] = []
+        flow = _fan_out_workflow(split=split)
+        items = [{"x": index} for index in range(3)]
+
+        assert run_plan(flow, dispatcher=_fan_out_dispatcher(pulled)) == items * 2
+        assert pulled == [0, 1, 2]
+
+    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
+    @pytest.mark.parametrize("native", SPLITTERS)
+    def test_run_rejects_a_splitter_yielding_other_than_its_declared_branches(
+        self, native: bool, count: int, match: str, pulled: int
+    ) -> None:
+        pulls: list[int] = []
+        flow = _fan_out_workflow(split=True)
+        dispatcher = _counted_branch_dispatcher(pulls, count, native=native)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            run_plan(flow, dispatcher=dispatcher)
+
+        assert len(pulls) == pulled
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    def test_run_reads_one_split_branch_without_buffering_its_sibling(
+        self, native: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Its unread sibling would queue every item and overrun a one-item buffer.
+        capped = replace(settings, branch_buffer=1)
+        monkeypatch.setattr(split_module, "settings", capped)
+        pulled: list[int] = []
+        dispatcher = _fan_out_dispatcher(pulled, native=native)
+        plan = ExecutionPlan.from_workflow(
+            _fan_out_workflow(split=True, output="s"), dispatcher
+        )
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan)
+            assert next(stream) == {"x": 0}
+            assert pulled == [0]
+            assert list(stream) == [{"x": 1}, {"x": 2}]
+
+    def test_run_fails_when_an_eager_splitter_overruns_the_branch_buffer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The splitter drains its input first, so its envelope branch lags every item.
+        capped = replace(settings, branch_buffer=1)
+        monkeypatch.setattr(sync_execution_module, "settings", capped)
+        split = ModuleDefinition(name="split", sync_pipe=_doubled_branches)
+        dispatcher = build_dispatcher(_counting_source([]), _PROBE, split, _UNION)
+        flow = _fan_out_workflow(split=True, output="s")
+
+        with pytest.raises(PipelineError, match=r"1 items.*RIKO_BRANCH_BUFFER"):
+            run_plan(flow, dispatcher=dispatcher)
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    def test_run_fails_a_split_branch_lagging_past_the_branch_buffer(
+        self, native: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        capped = replace(settings, branch_buffer=1)
+        monkeypatch.setattr(sync_execution_module, "settings", capped)
+        events: list[str] = []
+        dispatcher = _recording_split_dispatcher(events, native=native)
+        flow = _fan_out_workflow(split=True)
+
+        with pytest.raises(PipelineError, match="fell more than 1 items behind"):
+            run_plan(flow, dispatcher=dispatcher)
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    def test_run_closes_each_split_branch_once_its_reader_finishes(
+        self, native: bool
+    ) -> None:
+        events: list[str] = []
+        dispatcher = _recording_split_dispatcher(events, native=native)
+        run_plan(_fan_out_workflow(split=True), dispatcher=dispatcher)
+
+        assert events == ["b0-start", "b0-close", "b1-start", "b1-close"]
+
+    @skipif_sync
+    def test_run_envelopes_closes_an_abandoned_async_split_on_exit(self) -> None:
+        events: list[str] = []
+        dispatcher = _recording_split_dispatcher(events, native=True)
+        plan = ExecutionPlan.from_workflow(_fan_out_workflow(split=True), dispatcher)
+
+        with SyncExecution() as execution:
+            next(execution.run_envelopes(plan))
+
+        assert events == ["b0-start", "b1-close", "b0-close"]
+
+    @skipif_sync
+    @pytest.mark.xfail(
+        strict=True,
+        raises=RuntimeError,
+        reason=(
+            "passing an async-only node's output to an adjacent async-only node under "
+            "a sync run is not yet implemented"
+        ),
+    )
+    def test_run_passes_an_async_only_stream_to_an_adjacent_async_only_node(
+        self,
+    ) -> None:
+        @tag_source
+        async def asrc(_items=None, **_):
+            for x in range(3):
+                yield {"x": x}
+
+        async def relay(source, **_):
+            async for item in as_async(source):
+                yield item
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", asrc)),
+            ModuleDefinition(name="m", async_pipe=cast("AsyncModuleWrapper", relay)),
+        )
+        flow = Workflow().with_nodes(
+            ModuleNode(id="a", name="asrc"), ModuleNode(id="b", name="m")
+        )
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        failure = None
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "coroutine method 'aclose'", RuntimeWarning
+            )
+
+            try:
+                with SyncExecution() as execution:
+                    assert list(execution.run(plan)) == [{"x": x} for x in range(3)]
+            except RuntimeError as error:
+                # A fresh error drops the traceback that keeps the source alive.
+                failure = RuntimeError(*error.args)
+
+            gc.collect()
+
+        if failure is not None:
+            raise failure
+
+    def test_run_drops_split_branch_values_past_the_last_input_item(self) -> None:
+        split = ModuleDefinition(name="split", sync_pipe=_doubled_branches)
+        dispatcher = build_dispatcher(_counting_source([]), _PROBE, split, _UNION)
+        flow = _fan_out_workflow(split=True, output="s")
+
+        assert run_plan(flow, dispatcher=dispatcher) == [{"x": i} for i in range(3)]
+
     @pytest.mark.parametrize("reader", READERS)
     def test_run_module_reads_execution_resources(self, reader) -> None:
         plan = _resource_reader_plan(reader)
@@ -564,7 +996,7 @@ class TestPlanRun:
         ) == [{"x": 1}]
         assert ran == ["a"]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_drives_async_only_module_via_portal(self) -> None:
         @tag_source
         async def src(_items=None, **_):
@@ -580,7 +1012,7 @@ class TestPlanRun:
             {"x": 2},
         ]
 
-    @skipif_issync
+    @skipif_sync
     def test_run_chains_async_only_node_after_sync_node(self) -> None:
         @tag_source
         def src(_items=None, **_):
@@ -594,7 +1026,7 @@ class TestPlanRun:
             ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
             ModuleDefinition(name="atag", async_pipe=cast("AsyncModuleWrapper", atag)),
         )
-        flow = build_chain(
+        flow = Workflow().with_nodes(
             ModuleNode(id="a", name="src"), ModuleNode(id="b", name="atag")
         )
 
@@ -651,10 +1083,8 @@ class TestPlanRun:
     def test_run_starts_a_stored_source_workflow_with_input_schemas(self) -> None:
         schemas = '{"q": {"type": "string", "default": "x"}}'
         raw = f'{{"input_schemas": {schemas}, "nodes": [{{"name": "forever"}}]}}'
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
-        )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        module = _build_resolved_workflow("pipe_demo", Workflow.parse(raw), dispatcher)
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         stored = ResolverDispatcher(module_registry, resolver)
         plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
 
@@ -684,10 +1114,8 @@ class TestPlanRun:
             "input_schemas": {"q": {"type": "string", "default": "x"}},
             "nodes": [{"name": "itembuilder", "conf": conf}],
         }
-        resolved = _build_resolved_workflow(
-            "pipe_demo", Workflow.parse(raw), dispatcher
-        )
-        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": resolved}))
+        module = _build_resolved_workflow("pipe_demo", Workflow.parse(raw), dispatcher)
+        resolver = WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
         stored = ResolverDispatcher(module_registry, resolver)
         plan = ExecutionPlan.from_workflow(module_workflow("pipe_demo"), stored)
         context = Context(inputs={"q": "y", "other": 1})
@@ -790,7 +1218,24 @@ class TestPlanRun:
         assert events == []
 
 
+ASYNC_FAN_OUTS = [
+    pytest.param(False, False, id="one-port"),
+    pytest.param(True, False, id="sync-split"),
+    pytest.param(True, True, id="async-split"),
+]
+
+
 class TestAsyncPlanRun:
+    @pytest.mark.parametrize("pipe", ASYNC_LIST_RETURNS)
+    @async_test
+    async def test_arun_rejects_a_pipe_that_returns_a_list(self, pipe) -> None:
+        resolver = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
+        plan = ExecutionPlan.from_workflow(module_workflow("src"), resolver)
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(TypeError, match=_NOT_ASYNC_ITERATOR):
+                await alist(await execution.arun(plan))
+
     @async_test
     async def test_arun_maps_a_callable_node_over_a_stream_beside_a_second_one(
         self,
@@ -847,7 +1292,7 @@ class TestAsyncPlanRun:
         )
         a = ModuleNode(id="a", name="src")
         b = ModuleNode(id="b", name="double")
-        flow = build_chain(a, b, ModuleNode(id="c", name="atag"))
+        flow = Workflow().with_nodes(a, b, ModuleNode(id="c", name="atag"))
 
         assert await arun_plan(flow, dispatcher=dispatcher) == [{"n": 2, "seen": True}]
 
@@ -898,6 +1343,134 @@ class TestAsyncPlanRun:
 
         assert await arun_plan(flow, dispatcher=dispatcher) == [{"t": "a"}]
         assert seen["source"] == []
+
+    @pytest.mark.parametrize(("split", "native"), ASYNC_FAN_OUTS)
+    @async_test
+    async def test_arun_fans_out_every_item_to_each_consumer(
+        self, split: bool, native: bool
+    ) -> None:
+        pulled: list[int] = []
+        flow = _fan_out_workflow(split=split)
+        dispatcher = _fan_out_dispatcher(pulled, native=native)
+        items = [{"x": index} for index in range(3)]
+
+        assert await arun_plan(flow, dispatcher=dispatcher) == items * 2
+        assert pulled == [0, 1, 2]
+
+    @async_test
+    async def test_arun_feeds_a_sync_only_splitter_named_input_values(self) -> None:
+        seen: list[object] = []
+
+        @splitter(objectify=False)
+        def split(stream: Stream, _: object, __: object, side=None, **___: object):
+            seen.extend(side or ())
+            items = list(stream)
+            return iter([iter(items), iter(items)])
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="a", sync_pipe=tagged_source("a")),
+            ModuleDefinition(name="side", sync_pipe=tagged_source("side")),
+            ModuleDefinition(name="split", sync_pipe=split),
+        )
+        nodes = [
+            ModuleNode(id="a", name="a"),
+            ModuleNode(id="b", name="side"),
+            ModuleNode(id="s", name="split"),
+        ]
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("s", "in:side")),
+        )
+        outputs = {"default": Endpoint("s", "out")}
+        flow = build_workflow(nodes, edges=edges, outputs=outputs)
+
+        assert await arun_plan(flow, dispatcher=dispatcher) == [{"t": "a"}]
+        assert seen == [{"t": "side"}]
+
+    @pytest.mark.parametrize(("count", "match", "pulled"), STREAM_COUNTS)
+    @pytest.mark.parametrize("native", SPLITTERS)
+    @async_test
+    async def test_arun_rejects_a_splitter_yielding_other_than_its_declared_branches(
+        self, native: bool, count: int, match: str, pulled: int
+    ) -> None:
+        pulls: list[int] = []
+        flow = _fan_out_workflow(split=True)
+        dispatcher = _counted_branch_dispatcher(pulls, count, native=native)
+
+        with pytest.raises(InvalidPipelineError, match=match):
+            await arun_plan(flow, dispatcher=dispatcher)
+
+        assert len(pulls) == pulled
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    @async_test
+    async def test_arun_reads_one_split_branch_without_buffering_its_sibling(
+        self, native: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Its unread sibling would queue every item and overrun a one-item buffer.
+        monkeypatch.setattr(
+            split_module, "settings", replace(settings, branch_buffer=1)
+        )
+        pulled: list[int] = []
+        flow = _fan_out_workflow(split=True, output="s")
+        dispatcher = _fan_out_dispatcher(pulled, native=native)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan)
+            assert await anext(stream) == {"x": 0}
+            assert pulled == [0]
+            assert [item async for item in stream] == [{"x": 1}, {"x": 2}]
+
+    @async_test
+    async def test_arun_fails_when_an_eager_splitter_overruns_the_branch_buffer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The splitter drains its input first, so its envelope branch lags every item.
+        capped = replace(settings, branch_buffer=1)
+        monkeypatch.setattr(async_execution_module, "config", capped)
+        split = ModuleDefinition(name="split", sync_pipe=_doubled_branches)
+        dispatcher = build_dispatcher(_counting_source([]), _PROBE, split, _UNION)
+        flow = _fan_out_workflow(split=True, output="s")
+
+        with pytest.raises(PipelineError, match=r"1 items.*RIKO_BRANCH_BUFFER"):
+            await arun_plan(flow, dispatcher=dispatcher)
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    @async_test
+    async def test_arun_fails_a_split_branch_lagging_past_the_branch_buffer(
+        self, native: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        capped = replace(settings, branch_buffer=1)
+        monkeypatch.setattr(async_execution_module, "config", capped)
+        events: list[str] = []
+        dispatcher = _recording_split_dispatcher(events, native=native)
+        flow = _fan_out_workflow(split=True)
+
+        with pytest.raises(PipelineError, match="fell more than 1 items behind"):
+            await arun_plan(flow, dispatcher=dispatcher)
+
+    @pytest.mark.parametrize("native", SPLITTERS)
+    @async_test
+    async def test_arun_closes_each_split_branch_once_its_reader_finishes(
+        self, native: bool
+    ) -> None:
+        events: list[str] = []
+        dispatcher = _recording_split_dispatcher(events, native=native)
+        await arun_plan(_fan_out_workflow(split=True), dispatcher=dispatcher)
+
+        assert events == ["b0-start", "b0-close", "b1-start", "b1-close"]
+
+    @async_test
+    async def test_arun_drops_split_branch_values_past_the_last_input_item(
+        self,
+    ) -> None:
+        split = ModuleDefinition(name="split", sync_pipe=_doubled_branches)
+        dispatcher = build_dispatcher(_counting_source([]), _PROBE, split, _UNION)
+        flow = _fan_out_workflow(split=True, output="s")
+        expected = [{"x": i} for i in range(3)]
+
+        assert await arun_plan(flow, dispatcher=dispatcher) == expected
 
     @async_test
     async def test_arun_sync_worker_node_adapts_secondary_inputs(self) -> None:

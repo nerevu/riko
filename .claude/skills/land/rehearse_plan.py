@@ -65,6 +65,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import fixup_map
+import split_hunks
 from split_hunks import (
     GIT,
     TreeBuilder,
@@ -136,14 +137,15 @@ def require_targets(steps: list[Step]) -> None:
     current = {subject: sha for sha, subject in load_branch_commits().items()}
 
     for step in (s for s in steps if s.kind == "fixup"):
-        cmd = (GIT, "merge-base", "--is-ancestor", step.arg, "HEAD")
+        cmd = (GIT, "merge-base", "--is-ancestor", step.arg, split_hunks.BASE)
         missing = subprocess.run(cmd, capture_output=True, check=False).returncode
 
         if missing:
             subject = git("log", "-1", "--format=%s", step.arg).strip()
             match = current.get(subject)
             hint = f"; that subject is now {match[:8]}" if match else ""
-            sys.exit(f"fixup target {step.arg} is not in HEAD's history{hint}")
+            base = "HEAD" if split_hunks.BASE == "HEAD" else split_hunks.BASE[:8]
+            sys.exit(f"fixup target {step.arg} is not in {base}'s history{hint}")
 
 
 def assign(steps: list[Step], files: list) -> None:
@@ -180,7 +182,7 @@ def assign(steps: list[Step], files: list) -> None:
 
 def build_commits(steps: list[Step], files: list, plan_dir: Path) -> None:
     builder = TreeBuilder(files)
-    parent = git("rev-parse", "HEAD").strip()
+    parent = split_hunks.BASE
     selected: set[str] = set()
 
     for step in steps:
@@ -281,7 +283,7 @@ def run_suite(root: Path, log: Path | None = None) -> str:
 
 
 def oldest(shas: list[str]) -> str:
-    order = git("rev-list", "--topo-order", "HEAD").split()
+    order = git("rev-list", "--topo-order", split_hunks.BASE).split()
     full = [git("rev-parse", s).strip() for s in shas]
     return max(full, key=order.index)
 
@@ -361,8 +363,10 @@ def write_outputs(
     steps: list[Step], out: Path, files: list
 ) -> list[tuple[str, list[str]]]:
     out.mkdir(parents=True, exist_ok=True)
-    lines = ["git reset -q"]
-    parent = git("rev-parse", "HEAD").strip()
+    head = git("rev-parse", "HEAD").strip()
+    base = split_hunks.BASE
+    lines = ["git reset -q" if base == head else f"git reset -q {base}"]
+    parent = base
     hunks: dict[str, set[str]] = {}
     rows = []
 
@@ -397,7 +401,9 @@ def main() -> None:
     parser.add_argument("--full-checks", action="store_true", help="lint + types")
     parser.add_argument("--tests", action="store_true", help="suite per step, alone")
     parser.add_argument("--copy", action="store_true", help="pbcopy the chain")
+    parser.add_argument("--base", default="HEAD", help="commit the chain resets to")
     args = parser.parse_args()
+    split_hunks.set_base(args.base)
 
     out = args.out or Path(tempfile.mkdtemp(prefix="plan-out-"))
     files = load_change(args.context)

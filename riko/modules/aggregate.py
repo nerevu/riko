@@ -59,7 +59,7 @@ async def async_parser(
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], AggregateResult]
+    func: Callable[[Items], AggregateResult]
     | Callable[[Feed], Awaitable[AggregateResult]]
     | None = None,
     **kwargs: object,
@@ -113,12 +113,13 @@ async def async_parser(
     """
     func = require_arg(func, "func", "aggregate", strict=True)
 
-    if isinstance(stream, AsyncIterable) and not is_async_callable(func):
-        source: Feed = await materialize(stream)
+    if is_async_callable(func):
+        result = await maybe_async(func, stream)
+    elif isinstance(stream, AsyncIterable):
+        result = await maybe_async(func, await materialize(stream))
     else:
-        source = stream
+        result = await maybe_async(func, stream)
 
-    result = await maybe_async(func, source)
     return iter(listize(result))
 
 
@@ -127,7 +128,7 @@ def parser(
     objconf: AggregateObjconf,
     tuples: PipeTuples,
     *,
-    func: Callable[[Stream], AggregateResult] | None = None,
+    func: Callable[[Items], AggregateResult] | None = None,
     **kwargs: object,
 ) -> Stream:
     """
@@ -175,7 +176,7 @@ def parser(
     return iter(listize(result))
 
 
-@operator(DEFAULTS, isasync=True)
+@operator(DEFAULTS, is_async=True)
 async def async_pipe(*args: Any, **kwargs: object) -> Stream:
     """
     Asynchronously applies an arbitrary (user-defined) function to a stream.
@@ -185,7 +186,7 @@ async def async_pipe(*args: Any, **kwargs: object) -> Stream:
 
     Args:
 
-        items (Items): The input stream.
+        items (Feed): The input stream.
         conf (dict): The module configuration. Unused.
         context (Context): the run environment
 

@@ -227,9 +227,9 @@ sync when source is moved between package groups.
 - **Ratchet staleness.** Recording or lowering a ceiling also records the day as
   `<key>-lowered` under it (a holding ceiling without one gets today's date). A ceiling
   holding longer than `[tool.riko.ratchet] stale-days` prints a warning; without that
-  key there is no check. Exit codes never change. Under GitHub Actions the warning, and
-  any `pyproject.toml` change the run makes (CI discards it), print as `::warning::`
-  annotations.
+  key there is no check. A ceiling of 0 never goes stale. Exit codes never change.
+  Under GitHub Actions the warning, and any `pyproject.toml` change the run makes (CI
+  discards it), print as `::warning::` annotations.
 - **Docstring parameter-section lint.** `manage lint --docstrings` flags a parameter
   with a default under `Args:`, one without under `Kwargs:`, and a `**kwargs` bag
   under `Args:` (`gen_misplaced_params`); `Args:`/`Kwargs:` entries out of signature
@@ -259,6 +259,14 @@ sync when source is moved between package groups.
   public names from `riko/base/_api_surface.py`: `STABLE` maps to `riko`, `EXTENSION`
   to `riko.ext`, `EXT_CODEGEN` to `riko.ext.codegen`, and `TYPES` to `riko.types`,
   first match winning (`resolve_public_path` in `riko/cli/_docstyle.py`).
+- **Docstring name-binding lint.** `manage lint --docstrings` flags a doctest name
+  that no example imports or defines and that is no builtin (`gen_unbound_names`),
+  and a class or function example that imports a name its own module defines
+  (`gen_own_name_imports`). Class and function examples run with their module's
+  globals, so they may use the module's own definitions bare; a module docstring
+  gets no such allowance and imports its own names through the public path. A name
+  the module only imports, or both imports and assigns (an optional import with a
+  fallback), never counts as its own.
 - **Stale citation lint.** `manage lint --docs` fails on a backticked
   `tests/<tier>/test_*.py` citation (in the tracked `_docs/` root docs, gameplans,
   `CONTRIBUTING.rst`, `CLAUDE.md`, or `docs/*.rst`) or `riko/*.py` citation (in the

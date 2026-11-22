@@ -44,23 +44,27 @@ type ItemOrValue = Item | RikoValue
 type ItemValue = ItemOrValue | list[ItemOrValue]
 
 # Sync
-type Stream = Iterator[Item]
-type Cascade = Iterator[Stream]
+type StreamOf[T] = Iterator[T]
+type Stream = StreamOf[Item]
+type CascadeOf[T] = StreamOf[StreamOf[T]]
+type Cascade = CascadeOf[Item]
 type ItemOrStream = Item | Stream
 type Items = Iterable[Item]
 type Streams = Iterable[Stream]
 type ItemsOrValues = Iterable[ItemOrValue]
-type ValueStream = Iterator[RikoValue]
-type StreamOrValueStream = Iterator[ItemOrValue]
+type ValueStream = StreamOf[RikoValue]
+type StreamOrValueStream = StreamOf[ItemOrValue]
 type ItemGenerator = Generator[Item, None]
 
 # Async
-type AsyncStream = AsyncIterator[Item]
-type AsyncCascade = AsyncIterator[Stream]
+type AsyncStreamOf[T] = AsyncIterator[T]
+type AsyncStream = AsyncStreamOf[Item]
+type AsyncCascadeOf[T] = AsyncStreamOf[AsyncStreamOf[T]]
+type AsyncCascade = AsyncCascadeOf[Item]
 type AsyncItems = AsyncIterable[Item]
 type AsyncStreams = AsyncIterable[Stream]
 type AsyncItemsOrValues = AsyncIterable[ItemOrValue]
-type AsyncStreamOrValueStream = AsyncIterator[ItemOrValue]
+type AsyncStreamOrValueStream = AsyncStreamOf[ItemOrValue]
 type AsyncItemGenerator = AsyncGenerator[Item, None]
 
 # Both
@@ -77,6 +81,117 @@ class StatefulItem(TypedDict):
 
 def is_stateful_item(val: Item) -> TypeGuard[StatefulItem]:
     return isinstance(val.get("state"), StreamState) if is_mapping(val) else False
+
+
+def require_stream[T](value: Iterable[T], name: str) -> StreamOf[T]:
+    """
+    Requires ``value`` to be an iterator.
+
+    Args:
+
+        value: An iterable.
+        name: Name of the module that returned ``value``.
+
+    Returns:
+
+        ``value`` typed as an iterator.
+
+    Raises:
+
+        TypeError: If ``value`` isn't an iterator.
+
+    Examples:
+
+        >>> next(require_stream(iter([1]), "count"))
+        1
+        >>> require_stream([1], "count")
+        Traceback (most recent call last):
+        ...
+        TypeError: module 'count' returned a list. A pipe must return an iterator...
+
+    """
+    if not isinstance(value, Iterator):
+        kind = type(value).__name__
+        msg = f"module {name!r} returned a {kind}. A pipe must return an iterator "
+        raise TypeError(msg + "(wrap it in iter(...))")
+
+    return value
+
+
+def _build_async_stream_error(value: object, name: str) -> TypeError:
+    """Builds the error for an async pipe output that isn't an async iterator."""
+    kind = type(value).__name__
+    msg = f"module {name!r} returned a {kind}. An async_pipe must return an async "
+    return TypeError(msg + "iterator (an async def generator)")
+
+
+def require_async_stream[T](value: AnyIterable[T], name: str) -> AsyncStreamOf[T]:
+    """
+    Requires ``value`` to be an async iterator.
+
+    Args:
+
+        value: A sync or async iterable.
+        name: Name of the module that returned ``value``.
+
+    Returns:
+
+        ``value`` typed as an async iterator.
+
+    Raises:
+
+        TypeError: If ``value`` isn't an async iterator.
+
+    Examples:
+
+        >>> from riko.bado.itertools import as_async
+        >>>
+        >>> stream = require_async_stream(as_async([1]), "count")
+        >>> require_async_stream([1], "count")
+        Traceback (most recent call last):
+        ...
+        TypeError: module 'count' returned a list. An async_pipe must return an async...
+
+    """
+    if not isinstance(value, AsyncIterator):
+        raise _build_async_stream_error(value, name)
+
+    return value
+
+
+def require_any_stream[T](
+    value: AnyIterable[T], name: str
+) -> StreamOf[T] | AsyncStreamOf[T]:
+    """
+    Requires ``value`` to be a sync or async iterator.
+
+    Args:
+
+        value: A sync or async iterable.
+        name: Name of the module that returned ``value``.
+
+    Returns:
+
+        ``value`` typed as a sync or an async iterator.
+
+    Raises:
+
+        TypeError: If ``value`` is neither a sync nor an async iterator.
+
+    Examples:
+
+        >>> next(require_any_stream(iter([1]), "count"))
+        1
+        >>> require_any_stream([1], "count")
+        Traceback (most recent call last):
+        ...
+        TypeError: module 'count' returned a list. An async_pipe must return an async...
+
+    """
+    if not isinstance(value, (Iterator, AsyncIterator)):
+        raise _build_async_stream_error(value, name)
+
+    return value
 
 
 T_co = TypeVar("T_co", covariant=True, default=Item)
@@ -99,7 +214,7 @@ class PipelineStream(Protocol[T_co]):
         """Stops the run and releases its resources (closing again does nothing)."""
         ...
 
-    def __aiter__(self) -> AsyncIterator[T_co]: ...
+    def __aiter__(self) -> AsyncStreamOf[T_co]: ...
     async def __anext__(self) -> T_co: ...
 
     async def aclose(self) -> None:
@@ -118,5 +233,5 @@ class PipelineRun(Protocol[T_co]):
 
     def __enter__(self) -> Iterator[T_co]: ...
     def __exit__(self, *exc: object) -> None: ...
-    async def __aenter__(self) -> AsyncIterator[T_co]: ...
+    async def __aenter__(self) -> AsyncStreamOf[T_co]: ...
     async def __aexit__(self, *exc: object) -> None: ...

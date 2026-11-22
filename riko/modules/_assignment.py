@@ -55,7 +55,7 @@ def bind_subpipe(
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
     *,
-    host_isasync: bool = ...,
+    host_is_async: bool = ...,
 ) -> SyncEmbedder: ...
 @overload
 def bind_subpipe(
@@ -64,7 +64,7 @@ def bind_subpipe(
     embedded_kwargs: EmbedKwargs | None = ...,
     field: str | None = ...,
     *,
-    host_isasync: bool = ...,
+    host_is_async: bool = ...,
 ) -> AsyncEmbedder: ...
 def bind_subpipe(
     embed: ProcessorWrapper | SubPipe,
@@ -72,7 +72,7 @@ def bind_subpipe(
     embedded_kwargs: EmbedKwargs | None = None,
     field: str | None = None,
     *,
-    host_isasync: bool = False,
+    host_is_async: bool = False,
 ) -> SyncEmbedder | AsyncEmbedder:
     if embedded_kwargs and "field" in embedded_kwargs:
         embed_field = embedded_kwargs["field"]
@@ -101,8 +101,8 @@ def bind_subpipe(
 
     call = build_call(embed, conf=kwargs.get("conf"), **options)
 
-    if isinstance(call, RunsItems) and (host_isasync or not embed.isasync):
-        run = call.arun_item if embed.isasync else call.run_item
+    if isinstance(call, RunsItems) and (host_is_async or not embed.is_async):
+        run = call.arun_item if embed.is_async else call.run_item
         embedder = partial(run, context, {})
     else:
         embedder = partial(call, context=context)

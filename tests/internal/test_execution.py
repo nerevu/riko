@@ -28,6 +28,7 @@ from riko.bado._backend import (
     async_sleep,
     create_task_group,
     fail_after,
+    lowlevel,
 )
 from riko.bado._util import asyncify
 from riko.bado.itertools import as_async
@@ -39,7 +40,8 @@ from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
-from riko.execution._async_execution import AsyncExecution
+from riko.execution._async_execution import AsyncExecution, _ThreadBudget
+from riko.execution._async_execution import _RunStream as _AsyncRunStream
 from riko.execution._execution import _NullEventSink
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._provenance import (
@@ -52,7 +54,7 @@ from riko.execution._provenance import (
     run_tracked_item,
 )
 from riko.execution._resource_view import ResourceView
-from riko.execution._sync_execution import SyncExecution
+from riko.execution._sync_execution import SyncExecution, _Owned, _RunStream
 from riko.io import async_url_open
 from riko.parsing._dotdict import DotDict
 from riko.runtime._pipeline import Pipeline
@@ -68,7 +70,7 @@ from riko.types.modules import (
     SortConfRule,
     TruncateConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_issync
+from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
@@ -193,7 +195,56 @@ def _check_closed(resource, acquired: object) -> None:
         acquired.opened = True  # reopen so the same value can be acquired again
 
 
+async def _double(value: int) -> int:
+    return value * 2
+
+
+def _double_on_loop(value: int) -> int:
+    lowlevel.current_token()
+    return value * 2
+
+
+def _double_later(value: int) -> Awaitable[int]:
+    return _double(value)
+
+
+def _scale(value: int, *, factor: int) -> int:
+    lowlevel.current_token()
+    return value * factor
+
+
+def _double_if_bounded(value: int, *, bounded: bool) -> int:
+    return value * 2 if bounded else value
+
+
+# Portal work: an async callable, a sync callable, a sync callable returning an
+# awaitable, a bare awaitable, and sync callables given keywords, one named like the
+# bare awaitable's option.
+PORTAL_WORK = [
+    pytest.param(lambda ex: ex.run_async(_double, 21), id="async"),
+    pytest.param(lambda ex: ex.run_async(_double_on_loop, 21), id="sync"),
+    pytest.param(lambda ex: ex.run_async(_double_later, 21), id="returns-awaitable"),
+    pytest.param(lambda ex: ex.run_async(_double(21)), id="awaitable"),
+    pytest.param(lambda ex: ex.run_async(_scale, 21, factor=2), id="keyword"),
+    pytest.param(
+        lambda ex: ex.run_async(_double_if_bounded, 21, bounded=True),
+        id="callee-bounded-keyword",
+    ),
+]
+
+
 class TestSyncExecution:
+    def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
+        run: _RunStream[object] = _RunStream(None)
+        run.add(object())
+
+        with pytest.raises(TypeError, match="must be an iterator"):
+            next(run)
+
+    def test_an_owned_value_that_is_not_an_iterator_cannot_be_read(self) -> None:
+        with pytest.raises(TypeError, match="only an iterator"):
+            next(_Owned(object()))
+
     def test_sync_exit_stack_unwinds_on_error(self) -> None:
         events: list[str] = []
 
@@ -269,17 +320,52 @@ class TestSyncExecution:
         assert execution.close() is False
         assert calls == ["cleanup"]
 
-    @skipif_issync
-    def test_sync_portal_bridges_to_async(self) -> None:
+    @skipif_sync
+    @pytest.mark.parametrize("build", PORTAL_WORK)
+    def test_sync_portal_runs_work_on_its_loop(self, build) -> None:
         result = None
 
-        async def double(value: int) -> int:
-            return value * 2
-
         with SyncExecution() as execution:
-            result = execution.run_async(double, 21)
+            result = build(execution)
 
         assert result == 42
+
+    @skipif_sync
+    @pytest.mark.filterwarnings("error::pytest.PytestUnraisableExceptionWarning")
+    def test_sync_portal_work_refused_on_its_loop_leaves_no_coroutine(self) -> None:
+        with SyncExecution() as execution:
+
+            async def call_from_loop() -> None:
+                execution.run_async(_double, 21)
+
+            with pytest.raises(RuntimeError, match="event loop thread"):
+                execution.run_async(call_from_loop)
+
+        gc.collect()
+
+    @skipif_sync
+    def test_sync_bounded_portal_work_runs_while_closing(self) -> None:
+        results: list[int] = []
+
+        with SyncExecution() as execution:
+            execution.run_async(_double, 0)
+
+            def cleanup() -> None:
+                with pytest.raises(PipelineStateError, match="closing"):
+                    execution.run_async(_double, 1)
+
+                results.append(execution.run_async(_double(21), bounded=True))
+
+            execution.queue_callback(cleanup)
+
+        assert results == [42]
+
+    @skipif_sync
+    def test_sync_bounded_portal_work_expires_at_the_shutdown_timeout(self) -> None:
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+
+        with SyncExecution(settings=settings) as execution, pytest.raises(TimeoutError):
+            execution.run_async(async_sleep(10), bounded=True)
 
     def test_sync_default_event_sink_is_noop(self) -> None:
         with SyncExecution() as execution:
@@ -309,12 +395,11 @@ class TestSyncExecution:
 
         assert (first.events, second.events) == (["one", "three"], ["two"])
 
-    def test_settings_supply_the_event_sink_and_shutdown_timeout(self) -> None:
+    def test_settings_supply_the_event_sink(self) -> None:
         sink, explicit = RecordingSink(), RecordingSink()
-        settings = ExecutionSettings(event_sink=sink, shutdown_timeout=1.5)
+        settings = ExecutionSettings(event_sink=sink)
         assert SyncExecution(settings=settings).events is sink
         assert SyncExecution(events=explicit, settings=settings).events is explicit
-        assert AsyncExecution(settings=settings).shutdown_timeout == pytest.approx(1.5)
 
     def test_sync_enter_after_close_raises(self) -> None:
         execution = SyncExecution()
@@ -365,6 +450,17 @@ class TestSyncExecution:
 
 
 class TestAsyncExecution:
+    @async_test
+    async def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
+        reservation = await _ThreadBudget(1).reserve(1)
+        run: _AsyncRunStream[object] = _AsyncRunStream(reservation, None)
+        run.add(object())
+
+        with pytest.raises(TypeError, match="must be an async iterator"):
+            await anext(run)
+
+        assert not reservation.held
+
     @async_test
     async def test_async_exit_stack_unwinds_lifo(self) -> None:
         events: list[str] = []
@@ -443,8 +539,10 @@ class TestAsyncExecution:
             await async_sleep(0.1)
             done.append(True)
 
+        settings = ExecutionSettings(shutdown_timeout=inf)
+
         with fail_after(1):
-            async with AsyncExecution(shutdown_timeout=inf) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 execution.queue_async_callback(slow)
 
         assert done == [True]
@@ -460,10 +558,11 @@ class TestAsyncExecution:
             release.wait(1)
             raise ValueError("late")
 
+        settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()
 
         with caplog.at_level(WARNING, logger="riko"), pytest.raises(TimeoutError):
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            async with AsyncExecution(settings=settings) as execution:
                 execution.register_owned(object(), fail_late, inline=False)
 
         assert perf_counter() - start < 1
@@ -546,7 +645,9 @@ class TestAsyncExecution:
             await async_sleep(1)
 
         async def run() -> None:
-            async with AsyncExecution(shutdown_timeout=0.05) as execution:
+            settings = ExecutionSettings(shutdown_timeout=0.05)
+
+            async with AsyncExecution(settings=settings) as execution:
                 execution.queue_async_callback(slow)
                 raise ValueError("primary")
 
@@ -805,7 +906,7 @@ class TestResourceAcquisition:
         assert isinstance(first, error)
         assert second is first
 
-    @skipif_issync
+    @skipif_sync
     def test_awaitable_from_sync_factory_is_awaited(self) -> None:
         resource = Resource.from_factory(_build_awaitable, cleanup=False)
         assert _acquire_twice(resource) == ["value", "value"]
@@ -887,7 +988,7 @@ class TestResourceAcquisition:
 
         assert cleanup.events == ["value"]
 
-    @skipif_issync
+    @skipif_sync
     def test_sync_acquire_async_value_factory_bridges(self) -> None:
         acquired = None
 
@@ -1013,7 +1114,7 @@ class TestResourceAcquisition:
 
         assert events == []
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize("build", SYNC_BRIDGED_CLEANUPS)
     def test_sync_bridges_the_cleanup_of_an_async_produced_value(self, build) -> None:
         events: list[str] = []
@@ -1026,7 +1127,7 @@ class TestResourceAcquisition:
         assert acquired == "value"
         assert events == ["cleanup"]
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.simulated_network
     def test_sync_external_async_http_client_bridged(self) -> None:
         events: list[str] = []
@@ -1047,7 +1148,7 @@ class TestResourceAcquisition:
         with pytest.raises(RuntimeError, match="cleanup failed"):
             execution.close()
 
-    @skipif_issync
+    @skipif_sync
     @pytest.mark.parametrize("build", SYNC_HANGING_CLEANUPS)
     def test_sync_bridged_cleanup_expiry_is_raised_at_exit(self, build) -> None:
         settings = ExecutionSettings(shutdown_timeout=0.05)
@@ -1143,7 +1244,7 @@ class TestAsyncResourceAcquisition:
 
         assert client.closed is False
 
-    # Sync twin: test_owned_and_external_resources_wrap_a_value[closeable]
+    # Sync twin: test_owned_and_external_resources_wrap_a_value[closable]
     @async_test
     async def test_async_acquire_owned_value_closes(self) -> None:
         client = _AsyncClient()
@@ -1537,7 +1638,7 @@ class TestResultEnvelopes:
     ):
         parent = PLACEHOLDER if placeholder else _root()
         expected = list(gen_result_envelopes("n", values, parent, identity))
-        envelopes = agen_result_envelopes("n", values, parent, identity)
+        envelopes = agen_result_envelopes("n", as_async(values), parent, identity)
         assert [env async for env in envelopes] == expected
 
     @pytest.mark.parametrize("round_trip", ROUND_TRIPS)
@@ -1579,7 +1680,7 @@ class TestNodeProvenance:
         ]
         provenance = NodeProvenance.from_identity("filter", IdentityMode.PRESERVE)
         values = list(provenance.gen_values(envelopes))
-        results = list(provenance.gen_envelopes(values))
+        results = list(provenance.gen_envelopes(iter(values)))
         assert [env.generation for env in results] == [
             env.generation for env in envelopes
         ]
@@ -1589,7 +1690,7 @@ class TestNodeProvenance:
         provenance = NodeProvenance.from_identity("join", IdentityMode.PRESERVE)
         values = list(provenance.gen_values(envelopes))
         copies = [DotDict(v) for v in values if isinstance(v, DotDict)]
-        results = list(provenance.gen_envelopes(copies))
+        results = list(provenance.gen_envelopes(iter(copies)))
         last = envelopes[-1].generation
         assert [env.generation for env in results] == [
             ("join", last, 0),
@@ -1598,7 +1699,7 @@ class TestNodeProvenance:
 
     def test_new_values_before_any_input_are_roots(self):
         provenance = NodeProvenance.from_identity("join", None)
-        [result] = provenance.gen_envelopes([DotDict()])
+        [result] = provenance.gen_envelopes(iter([DotDict()]))
         assert result.generation == ("join", 0)
 
     def test_unreferenceable_values_derive_from_their_input(self):
@@ -1621,7 +1722,7 @@ class TestNodeProvenance:
         provenance = _TableProvenance("filter")
         envelopes = _dotdicts(3)
         values = list(provenance.gen_values(envelopes))
-        results = provenance.gen_envelopes(values)
+        results = provenance.gen_envelopes(iter(values))
         next(results)
         results.close()
         assert not provenance._table
@@ -1630,7 +1731,7 @@ class TestNodeProvenance:
         envelopes = _dotdicts(2)
         provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
         values = list(provenance.gen_values(envelopes))
-        results = list(provenance.gen_envelopes(values))
+        results = list(provenance.gen_envelopes(iter(values)))
         assert {env.generation for env in results}.isdisjoint(
             env.generation for env in envelopes
         )
@@ -1639,7 +1740,7 @@ class TestNodeProvenance:
         def combine(envelopes):
             provenance = NodeProvenance.from_identity("count", IdentityMode.COMBINE)
             values = list(provenance.gen_values(envelopes))
-            return next(provenance.gen_envelopes([len(values)])).generation
+            return next(provenance.gen_envelopes(iter([len(values)]))).generation
 
         contributors = IdentityAccumulator(IdentityDomain.GENERATION)
 
@@ -1687,7 +1788,8 @@ class TestNodeProvenance:
         envelopes = _dotdicts(3)
         provenance = NodeProvenance.from_identity("reverse", IdentityMode.PRESERVE)
         values = [value async for value in provenance.agen_values(envelopes)]
-        results = [env async for env in provenance.agen_envelopes(values[::-1])]
+        reversed_values = as_async(values[::-1])
+        results = [env async for env in provenance.agen_envelopes(reversed_values)]
         assert results == envelopes[::-1]
 
 

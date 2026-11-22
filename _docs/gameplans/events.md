@@ -110,8 +110,11 @@ Initial rule:
 - security/redaction policy applies before sensitive payload data reaches optional
   observability consumers.
 
-Whether configured observability failure is fatal or can be explicitly best-effort is an
-execution policy decision; do not give each event type a separate answer.
+Decided 2026-11-16 (user): a configured `EventSink` failure is fatal to the execution;
+there is no per-event-type answer. With no sink, emission is a no-op. Subscriber
+callback exceptions ignored under `error_policy="ignore"` are reported as `EventSink`
+diagnostics carrying the subscription identity and exception info, never the item
+payload.
 
 ## 7. Event taxonomy
 

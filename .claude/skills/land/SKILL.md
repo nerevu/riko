@@ -18,16 +18,23 @@ sessions on the same tree. Gate passes are recorded per tree, not per session,
 by `.claude/skills/land/gates.py` (`G` below):
 
 - **Markers.** A pass is stored in `.claude/gate-markers.json` against the
-  working tree's content tree id, minus what the gate never reads under
-  `.claude/`: nothing for tidy, lint, and prettify (Ruff and rumdl), the whole
-  folder for the other gates. Staging, committing, an autosquash, `/clear`, or
+  working tree's content tree id, minus what the gate never reads: nothing for
+  tidy, lint, and prettify (Ruff and rumdl); everything but `*.py`, `*.pyi`,
+  `pyproject.toml`, `uv.lock`, and `typings/` outside `.claude/` for the two type
+  gates; `.claude/`, `_docs/`, `.github/`, and the root `*.md` files for the suite
+  and `uncovered` (`docs/` and `README.rst` hold doctests, so they count); and
+  `.claude/` for the rest, codegen included (it rewrites generated blocks in
+  `_docs/` and `CLAUDE.md`). Staging, committing, an autosquash, `/clear`, or
   another session leaves it valid; any content edit invalidates it, except
-  that a skill edit reruns only tidy, lint, and prettify. Run each gate through
+  that a skill edit reruns only tidy, lint, and prettify, and a prose edit never
+  reruns the type gates. Run each gate through
   `python $G run <gate> [--mutates] [--lock] -- <command>` (or all of `/land`'s
   in order with `python $G all`, which runs each through `run`): it
   prints `skip <gate>` and exits 0 when the gate already passed on this tree
   (from any session), otherwise runs the command and records a pass only when
-  it succeeds and the tree did not change during the run. Mutating gates
+  it succeeds and the tree did not change during the run, or the only change is
+  the coverage ratchet lowering its ceiling lines in `pyproject.toml` (it prints
+  `recorded <gate> on tree … (ratchet lowered a ceiling)`). Mutating gates
   (prettify, codegen) pass `--mutates`, which records the tree they left. A fix
   changes the tree id of every gate that reads the fixed file, so those gates
   rerun on their own.
@@ -39,7 +46,8 @@ by `.claude/skills/land/gates.py` (`G` below):
   "busy in another session, rerun `/land`". Nothing else is locked; two
   sessions running other gates at once only duplicate work.
 - **Never trust recollection.** A pass you remember but `gates.py` does not
-  record (for example one that ran while the tree changed) is not a pass.
+  record (for example one that ran while the tree changed by more than a ratchet
+  lowering) is not a pass.
 - Before applying any fix (regenerating a file, adding a missing entry,
   correcting a failure), check the current state first: the fix may already
   be in place from this or another session. Re-applying blindly can duplicate
@@ -50,19 +58,32 @@ by `.claude/skills/land/gates.py` (`G` below):
 
 Order matters. Run from the repo root; `<manage>` is `uv run --active python -m
 riko.cli.manage` (the `manage` entry point can collide with mezmorize's) and
-`$G` is `.claude/skills/land/gates.py`.
+`$G` is `.claude/skills/land/gates.py`. After any change to a gate's command,
+`python .claude/skills/land/gate_bench.py` times the read-only gates serially and
+side by side.
 
-Steps 2–6 run as one command. On a tree with no known gate failures, run
-`python $G all [--codegen]` once (`--codegen` per step 3), in the foreground with
-nothing else running beside it, because it contains the suite. It runs prettify
-(then re-marks tidy), codegen, lint, the suite, and both type gates through
-`$G run`, in that order, so each gate already recorded on this tree prints `skip`;
-it stops at the first gate that fails, is busy, or passes unrecorded (the tree
-changed during its run) and ends with one summary line per gate (`skip`, `pass`,
+Steps 2–6 run around tidy (step 1). Prettify (and codegen, per step 3) runs in step 1's
+setup call, before tidy; `python $G all --read-only` (lint and both type gates) runs in
+the background beside the tidy agent. After tidy's report, one command always:
+`python $G record tidy && python $G all [--codegen]` (`--codegen` per step 3), in the
+foreground with nothing else running beside it, because it contains the suite. `all`
+skips every gate already recorded on the tree, so with no tidy edits only the suite
+runs, and with edits only the stale gates rerun before it. On a tree tidy already
+covered, run `python $G all [--codegen]` once, the same way. `all` runs every gate
+through `$G run`, so each gate already recorded on this tree prints `skip`, in three
+steps: prettify (which carries tidy's mark to the tree it leaves when tidy was marked
+on the tree it started from) and codegen, one at a time; then lint
+and both type gates side by side, each gate's output printed whole under a
+`--- <gate>` header when it finishes; then the suite alone, only when every earlier
+gate passed and was recorded. It stops after the first step with a gate that fails,
+is busy, or passes unrecorded (the tree changed during its run), letting the other
+gates of that step finish, and ends with one summary line per gate in the order
+prettify, codegen, lint, check-types, verify-types, test (`skip`, `pass`,
 `pass (unrecorded)`, `fail (<code>)`, `busy`, or `not run`). When it stops, fix
 that gate's failures as its step below describes and rerun `all`, which skips the
-gates already recorded. Each step's `$G run` line is the fallback for iterating on
-one gate alone.
+gates already recorded. `--read-only` runs only the side-by-side step (the other gates
+report `not run`) and refuses `--codegen`. Each step's `$G run` line is the fallback
+for iterating on one gate alone.
 
 0. **Upgrade dependencies**: `manage upgrade --daily` (not wrapped: `--daily`
    is its own once-a-day marker). It re-resolves `uv.lock` to the
@@ -88,31 +109,43 @@ one gate alone.
    call.
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh `implementer`
    subagent (`model: "opus"`, so it never inherits a Fable session's model), never as an
-   in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step
-   0), `python $G check tidy`, and `python .claude/skills/land/require_agents.py`
-   together. When `check tidy` exits 0, skip the agent (tidy already ran on this tree,
-   in any session); when `require_agents.py` fails, stop and report its output (the
-   user-level agent definitions are missing); otherwise launch the agent in the next
-   response. The brief opens "Follow `.claude/skills/tidy/SKILL.md`; `/land` is the
-   caller, so skip its verify step", and the agent reads that file itself as its first
+   in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step 0),
+   `python $G run prettify --mutates -- <manage> prettify` (step 2), then
+   `python $G run codegen --mutates -- <manage> codegen --all` when step 3 applies, then
+   `python $G check tidy` and `python .claude/skills/land/require_agents.py`. Prettify
+   and codegen go before tidy so they never write a file tidy is editing, and before
+   `check tidy` so the check judges the tree they left; nothing records tidy here. When
+   `check tidy` exits 0, skip the agent (tidy already ran on this tree, in any session)
+   and run `python $G all [--codegen]` in the foreground; when `require_agents.py`
+   fails, stop and report its output (the user-level agent definitions are missing);
+   otherwise, in the next response, launch the agent and, in the same response,
+   `python $G all --read-only` with `run_in_background`. The brief opens "Follow
+   `.claude/skills/tidy/SKILL.md`; `/land` is the caller, so skip its verify and record
+   steps; run `python .claude/skills/land/gates.py scope tidy --leads` as your first
+   call after reading the skill", and the agent reads that file itself as its first
    action. Never `cat` or `Read` the tidy skill in the main loop: at 200k context that
    costs several times what the agent's own read does, and the measurement tooling
    attributes the agent run by the `Follow` line, not the pasted body. The brief ends
-   with the mid-run self-check (past
-   about 10 minutes or 100k tokens with mechanical work left: pause, report, and name
-   the helper script; afterwards inspect any scripts it wrote for itself and promote,
-   fold, park in `.claude/skills/drafts/`, or drop each; a dropped or folded script
-   moves to `.claude/skills/disposed/`, which is git-ignored and cleared only by the
-   user, never deleted by an agent). Its mechanical fixes join the change before the
-   gates run; its judgment questions go to the user now, and phase-owned findings go
-   through `/triage`.
-2. **Prettify first, always**: the gate sequence's first gate. Alone:
-   `python $G run prettify --mutates -- <manage> prettify && python $G record tidy`.
+   with the mid-run self-check (past about 10 minutes or 100k tokens with mechanical
+   work left: pause, report, and name the helper script; afterwards inspect any scripts
+   it wrote for itself and promote, fold, park in `.claude/skills/drafts/`, or drop
+   each; a dropped or folded script moves to `.claude/skills/disposed/`, which is
+   git-ignored and cleared only by the user, never deleted by an agent). Its mechanical
+   fixes join the change while the background lint and type gates run, so those gates
+   may end `pass (unrecorded)` or rerun after tidy's edits (a changed tree invalidates
+   their markers); that is expected, not a failure. Once tidy has reported, run
+   `python $G record tidy && python $G all [--codegen]`: the suite always runs after
+   the other gates, and only the gates tidy's edits invalidated rerun before it. Its
+   judgment questions go to the user now, and phase-owned findings go through
+   `/triage`.
+2. **Prettify first, always**: the gate sequence's first gate, run in step 1's setup
+   call before tidy. Alone: `python $G run prettify --mutates -- <manage> prettify`.
    Never hand-fix formatting-class lint errors — formatting is prettify's job, before
-   any linter runs. The tidy re-mark (`record tidy`, which `all` does itself after
-   a prettify pass) records the prettified tree: tidy skips its own prettify under
-   `/land`, so without it a format-only change would reopen tidy's scope for the next
-   session.
+   any linter runs. A prettify pass carries tidy's mark to the tree it leaves when tidy
+   was marked on the tree it started from (a skipped prettify leaves the mark alone):
+   tidy skips its own prettify and record under `/land`, so once land has recorded
+   tidy after its report, a format-only change does not reopen tidy's scope for the
+   next session, and a prettify before tidy has run marks nothing.
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), pass
    `--codegen` to `all` (alone:
@@ -125,17 +158,21 @@ one gate alone.
    terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and
    every import contract, so do not rerun `--docs`, `--docstrings`, `--terms`,
    `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes`
-   separately. It does **not** run the type gate.
+   separately. It does **not** run the type gate. When a ratcheted check that prints
+   its sites as `path:line:` (the `--tests` ceilings) trips, pipe that check's output
+   to `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
+   lint last passed, separating the change's new violations from existing ones.
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
    suite, in the gate sequence or alone with
-   `python $G run test --lock -- <manage> test --ratchet --quiet`, before declaring
-   ready — in the foreground and alone: no other pytest or `manage` gate may run beside
-   it: its thread/pool timing tests and the ~70s run degrade under CPU contention, and
-   its own data folder isolates only the coverage file. Doctests are tests here — doc
-   examples run under pytest. `--ratchet` fails when the run leaves more statements
-   uncovered than the ceiling in `pyproject.toml` (`[tool.riko.coverage] uncovered`):
-   cover the new or newly-unexecuted lines rather than raising the ceiling (raising it
-   is a judgment call for the user). To find them, run this alone, like the suite:
+   `python $G run test --lock -- <manage> test --ratchet --quiet --parallel`, before
+   declaring ready — in the foreground and alone: no other pytest or `manage` gate may
+   run beside it: its thread/pool timing tests and the ~25s run degrade under CPU
+   contention, and its own data folder isolates only the coverage file. Doctests are
+   tests here — doc examples run under pytest. `--ratchet` fails when the run leaves
+   more statements uncovered than the ceiling in `pyproject.toml`
+   (`[tool.riko.coverage] uncovered`): cover the new or newly-unexecuted lines rather
+   than raising the ceiling (raising it is a judgment call for the user). To find them,
+   run this alone, like the suite:
 
    ```bash
    python $G run uncovered --lock -- python .claude/skills/land/diff_uncovered.py --baseline-ref HEAD
@@ -147,7 +184,7 @@ one gate alone.
    When it lowers the ceiling, that `pyproject.toml` diff is part of the change — keep
    it. The ceiling is measured in the full dev environment (`--group dev --all-extras`,
    Python 3.12).
-6. **Types**: the gate sequence's last two gates; alone,
+6. **Types**: the gate sequence's two type gates, run beside lint; alone,
    `python $G run check-types -- <manage> lint --check-types` and
    `python $G run verify-types -- <manage> lint --verify-types`
    (neither is part of `--all`). Always run both: an internal change (for
@@ -179,12 +216,17 @@ staged, tests and internal docs stay unstaged, so never infer concepts from it.
 Write and rehearse the plan in the main loop with the scripts below; don't hand it
 to an agent, which repeats their work by hand for many minutes.
 
-1. **Branch range**: every commit past the branch's merge point, pushed or
-   not: the nearest merge-base with `next` or `main` (the mapper finds it;
-   `--base REF` overrides). Only these commits can be fixup targets; a commit
-   at or before the merge point never is. A pushed target is still a target:
-   the autosquash then rewrites published history, so `/wrapup`'s handover
-   ends with a force push (`git push --force-with-lease`).
+1. **Branch range**: every commit past the branch's merge point, pushed or not: the
+   nearest merge-base with `next` or `main` (the mapper finds it; `--base REF`
+   overrides). Only these commits can be fixup targets; a commit at or before the merge
+   point never is. A pushed target is still a target: the autosquash then rewrites
+   published history, so `/wrapup`'s handover ends with a force push
+   (`git push --force-with-lease`). "Already pushed" is never a reason for a new commit,
+   and never a caveat to raise. A bug fix goes to the commit that introduced the bug,
+   with its regression test in the same fixup, even when blame points elsewhere. Take
+   the introducing commit from the `/triage` disposition, or find it with
+   `git log -S`/`-G`. The fix is a new commit only when that commit is at or before the
+   merge point.
 2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
    with step 3's hunk list in one Bash call:
 
@@ -204,20 +246,26 @@ to an agent, which repeats their work by hand for many minutes.
    behavior). Read a hunk with `git diff` only when its excerpt does not settle its
    concept.
 3. **Write the plan**: the `split_hunks.py list --body 12` output from step 2's call
-   lists the change's hunks by id
-   (`-U0` by default, so mixed-concept regions split finely; `path:N` is the hunk
-   starting on new-side line `N`; new, deleted, untracked, and binary files are
-   whole-file ids; `--body N` prints up to `N` of each hunk's lines under it, for
-   sorting many hunks without a `git diff` per file). Write a plan file in the
-   scratchpad: a `fixup <sha>` or `commit <msg-file>` header per step, oldest fixup
+   lists the change's hunks by id (`-U0` by default, so mixed-concept regions split
+   finely; `path:N` is the hunk starting on new-side line `N`; new, deleted, untracked,
+   and binary files are whole-file ids; `--body N` prints up to `N` of each hunk's lines
+   under it, for sorting many hunks without a `git diff` per file). Write a plan file in
+   the scratchpad: a `fixup <sha>` or `commit <msg-file>` header per step, oldest fixup
    target first and then the new commits in dependency order, each followed by its ids
    (`path` takes every hunk of a file, `path:N-M` a range, `*` the rest, `skip` a step
-   of ids left uncommitted such as untracked scratch docs). Group by file first and
-   split a file only when its hunks are different concepts. A file that one branch
-   commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame hunks
-   included. A hunk that names something another hunk introduces goes in or after that
-   hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go with
-   the step whose source change regenerates them. The coverage-ratchet line in
+   of ids left uncommitted such as untracked scratch docs). For a change of more than a
+   few dozen hunks, write a TOML rules file in the scratchpad instead (buckets in plan
+   order, each a `message`, a `fixup` sha, or `skip`; ordered
+   `ids`/`path`/`body`/`swaps` rules; a `default` bucket; the script's docstring has an
+   example) and let
+   `python .claude/skills/land/bucket_plan.py <rules> --out <scratchpad>/plan` write
+   `plan.txt` and the message files; it takes `--base REF` like `split_hunks.py`. Refine
+   the rules and rerun rather than hand-editing `plan.txt`. Either way, group by file
+   first and split a file only when its hunks are different concepts. A file that one
+   branch commit wholly rewrote is fixed up whole to that commit, its pre-branch-blame
+   hunks included. A hunk that names something another hunk introduces goes in or after
+   that hunk's step. Generated files (tier indexes, API-surface blocks, verb tables) go
+   with the step whose source change regenerates them. The coverage-ratchet line in
    `pyproject.toml` goes with the step whose tests or code moved it:
    `diff_uncovered.py --baseline-ref HEAD` names each file whose missing count changed.
    Put it elsewhere only for a stated reason, such as a later branch commit that also

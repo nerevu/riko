@@ -57,7 +57,7 @@ from riko.cli._lint_import_architecture import (
 )
 from riko.cli._lint_literals import gen_literal_issues
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
-from riko.cli._lint_rst import gen_plain_block_lines
+from riko.cli._lint_rst import gen_plain_block_lines, gen_unrendered_literal_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
 from riko.cli._logging import exception_hook, resolve_log_level
 from riko.cli._ratchet import build_ceiling_text, ratchet_ceiling
@@ -78,11 +78,13 @@ _TODAY = date(2026, 10, 27)
 _WINDOW = "\n[tool.riko.ratchet]\nstale-days = 7\n"
 _FRESH = f"any = 9\nany-lowered = 2026-10-25\n{_WINDOW}"
 _STALE = f"any = 9\nany-lowered = 2026-10-19\n{_WINDOW}"
+_STALE_ZERO = f"any = 0\nany-lowered = 2026-10-19\n{_WINDOW}"
 _DATED = "any = 8\nany-lowered = 2026-10-27\n"
 _LOWERED = f"{_DATED}{_WINDOW}"
 _DATETIME = "any = 8\nany-lowered = 2026-10-01T10:00:00\n"
 _UNWINDOWED = "any = 9\nany-lowered = 2026-01-01\n"
 _HOLDS = "9 uses hold the ceiling of 9."
+_HOLDS_ZERO = "0 uses hold the ceiling of 0."
 _HELD = "9 uses have held the ceiling of 9 since 2026-10-19, over 7 days; lower it."
 _RECORDED = "8 uses; recorded the ceiling as 8 on 2026-10-27."
 
@@ -115,6 +117,7 @@ _RUN_BINDING = (
     "binds a run( result that is skipped without async support "
     "(move it to an async example)"
 )
+_RUN_DOC = ">>> from riko import run\n>>> g = list\n>>> x = run(g())"
 
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
@@ -635,6 +638,7 @@ STALE_CASES = [
     pytest.param(_FRESH, 9, False, _FRESH, _HOLDS, id="fresh"),
     pytest.param(_STALE, 9, False, _STALE, f"Warning: {_HELD}", id="stale"),
     pytest.param(_STALE, 9, True, _STALE, f"::warning::{_HELD}", id="stale-ci"),
+    pytest.param(_STALE_ZERO, 0, False, _STALE_ZERO, _HOLDS_ZERO, id="stale-at-zero"),
     pytest.param(_STALE, 8, False, _LOWERED, _RECORDED, id="lowering-resets"),
     pytest.param(_STALE, 8, True, _LOWERED, _CI_DISCARDS, id="ci-discards"),
     pytest.param("any = 8\n", 8, False, _DATED, _RECORDED, id="undated-starts-clock"),
@@ -724,7 +728,9 @@ EXAMPLE_RULES = [
         ['imports processor privately (use "from riko.ext import processor")'],
         id="extension-name",
     ),
-    pytest.param("mod.py", _doctest("from riko.cli._docs import f"), [], id="nopub"),
+    pytest.param(
+        "mod.py", _doctest("from riko.cli._docs import gen_todo_lines"), [], id="nopub"
+    ),
     pytest.param("mod.py", _doctest("from riko import Pipeline"), [], id="public"),
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
@@ -768,7 +774,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
+        _function(">>> a = 1\n>>> a\n1\n\nWith b:\n\n>>> b = 2\n>>> b\n2"),
         ["narrates between examples (use a # comment)"],
         id="narration",
     ),
@@ -820,18 +826,30 @@ EXAMPLE_RULES = [
         ["leaves a TODO or ??? review note"],
         id="review-note",
     ),
-    pytest.param("mod.py", _doctest("x = run(g())"), [_RUN_BINDING], id="run-bind"),
+    pytest.param("mod.py", _function(_RUN_DOC), [_RUN_BINDING], id="run-bind"),
     pytest.param(
         "mod.py",
-        _doctest("x = run(g())").replace("f()", "async_f()"),
+        _function(_RUN_DOC).replace("f()", "async_f()"),
         [],
         id="run-bind-async",
     ),
     pytest.param(
         "mod.py",
-        "class AsyncThing:\n" + indent(_doctest("x = run(g())"), "    "),
+        "class AsyncThing:\n" + indent(_function(_RUN_DOC), "    "),
         [],
         id="run-bind-method",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("from mod import f"),
+        ["imports its own module's f (use it bare)"],
+        id="own-name-import",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("g()"),
+        ["uses a name it neither imports nor defines"],
+        id="unbound-name",
     ),
 ]
 
@@ -994,6 +1012,12 @@ TERM_PATTERNS = [
         "# pass ExecutionMode.DESCRIBE; ExecutionModes stays\n# a Describe-Mode run\n",
         [(1, "ExecutionMode"), (2, "Describe-Mode")],
         id="retired-describe",
+    ),
+    pytest.param(
+        "class Resolver: ...\nclass TestPipelineResolver: ...\n"
+        "class InputResolver: ...\n",
+        [(3, "InputResolver")],
+        id="resolver-class",
     ),
 ]
 
@@ -1169,16 +1193,36 @@ PLAIN_BLOCK_CASES = [
         id="only-unmarked-blocks-with-their-lines",
     ),
 ]
+UNRENDERED_LITERAL_CASES = [
+    pytest.param(
+        "Intro.\n\n*Use ``map`` lazily*\n", [(3, "Use ``map`` lazily")], id="emphasis"
+    ),
+    pytest.param(
+        ".. code-block:: python\n\n    # filter by ``loopable``\n    x = 1\n",
+        [],
+        id="code-block-comment",
+    ),
+    pytest.param("Use ``map`` lazily.\n", [], id="plain-literal"),
+    pytest.param("Use ``a``X`` here.\n", [], id="glued-literal"),
+]
 
 
 class TestRstLint:
-    """The plain Python code-block marker check."""
+    """The plain Python code-block marker and nested inline literal checks."""
 
     @pytest.mark.parametrize(("text", "expected"), PLAIN_BLOCK_CASES)
     def test_plain_python_blocks_need_a_marker(
         self, text: str, expected: list[int]
     ) -> None:
         assert list(gen_plain_block_lines(text)) == expected
+
+    @pytest.mark.parametrize(("text", "expected"), UNRENDERED_LITERAL_CASES)
+    def test_nested_literals_do_not_render(
+        self, text: str, expected: list[tuple[int, str]]
+    ) -> None:
+        core = pytest.importorskip("docutils.core")
+        doctree = core.publish_doctree(text, settings_overrides={"report_level": 5})
+        assert list(gen_unrendered_literal_lines(doctree)) == expected
 
 
 BINDING_CASES = [

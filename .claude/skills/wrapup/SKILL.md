@@ -45,18 +45,19 @@ folded script moves to `.claude/skills/disposed/`, which is git-ignored and clea
 by the user (agents never delete it); report the verdict.
 
 First, one setup Bash call runs `python .claude/skills/land/gates.py check tidy` and
-`python .claude/skills/land/require_agents.py` together. When `check tidy` exits 0,
-tidy already ran on this exact tree (in this or another session): skip the agent and
-report "tidy current". When `require_agents.py` fails, stop and report its output.
-Otherwise, in the next response, launch one fresh `implementer` agent with
-`model: "opus"` (not a fork — it needs only the diff, not this session's context; pin
-the model so it never inherits a Fable session's) with: "Follow
-`.claude/skills/tidy/SKILL.md` in the repo at the current working directory; `/wrapup`
-is the caller. You cannot ask the user: apply mechanical fixes, and return phase-owned
-findings and framed judgment questions instead of deciding them." The agent reads that
-file itself. Never `cat` or `Read` the tidy skill in the main loop: at 200k context
-that costs several times what the agent's own read does, and the measurement tooling
-attributes the agent run by the `Follow` line, not the pasted body.
+`python .claude/skills/land/require_agents.py` together. When `check tidy` exits 0, tidy
+already ran on this exact tree (in this or another session): skip the agent and report
+"tidy current". When `require_agents.py` fails, stop and report its output. Otherwise,
+in the next response, launch one fresh `implementer` agent with `model: "opus"` (not a
+fork — it needs only the diff, not this session's context; pin the model so it never
+inherits a Fable session's) with: "Follow `.claude/skills/tidy/SKILL.md` in the repo at
+the current working directory; `/wrapup` is the caller; run
+`python .claude/skills/land/gates.py scope tidy --leads` as your first call after
+reading the skill. You cannot ask the user: apply mechanical fixes, and return
+phase-owned findings and framed judgment questions instead of deciding them." The agent
+reads that file itself. Never `cat` or `Read` the tidy skill in the main loop: at 200k
+context that costs several times what the agent's own read does, and the measurement
+tooling attributes the agent run by the `Follow` line, not the pasted body.
 
 In the same response as the Agent launch, run step 1's tidy-independent evidence (one
 Bash call beside it). Only the tree-dependent evidence waits for tidy's report, so it
@@ -73,6 +74,15 @@ current, run both as one call in the turn after the setup call.
 
 - After tidy: `git status --short` and `git diff --stat` (staged and unstaged).
 - Beside the launch: `git log --oneline -8`.
+- Beside the launch: the scanner's recall on this release's fixes,
+  `bash .claude/skills/tidy/replay_fixes.sh $(git log --format=%h
+  $(git describe --tags --abbrev=0)..HEAD --grep='^\[FIX\]')`. Report each fix with
+  0 leads as a scanner miss: a candidate rule, or a probe line for its class in
+  `mistake_scan.py`'s `CLASS_HISTORY`. Run `python .claude/skills/tidy/mistake_scan.py
+  --remap` beside it: it repoints refs a rebase or fold rewrote and writes each listed
+  fix's hash over the `uncommitted (MM-DD <what>)` ref that describes it. Place each
+  ref it prints by hand (a fix folded into a non-`[FIX]` commit), then run
+  `--unclassified` and cite each fix it still lists in a class or `NON_BEHAVIORAL`.
 - Beside the launch: pending fixups,
   `git log --format='%h %s' HEAD --not --remotes`. Each
   `fixup! <subject>` line names its target by subject. A target may already be

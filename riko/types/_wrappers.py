@@ -27,12 +27,12 @@ from typing import (
 from typing_extensions import TypeIs, TypeVar
 
 from riko.base._config import SUBPIPE_TYPE
-from riko.base._exceptions import InvalidPipelineError
 
 from ._options import DecorationOptions, ItemDispatch
 from ._streams import (
     AsyncItems,
     AsyncStream,
+    AsyncStreamOf,
     AsyncStreamOrValueStream,
     ItemOrValue,
     ItemsOrValues,
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from ._frozendict import FrozenInputSchemas
     from ._options import RawCallOptions
     from ._scalars import PrimitiveValue
-    from ._streams import Cascade, Feed, Item, Items
+    from ._streams import AsyncCascade, Cascade, Feed, Item, Items
     from .modules import (
         AnyModuleConf,
         Conf,
@@ -116,14 +116,9 @@ type AsyncProcessorWrapperInternalOutput = (
 )
 
 type AsyncProcessorWrapperInput = SyncProcessorWrapperInput
-type AsyncSplitterWrapperOutput = AsyncWrapperStream[Stream, SyncSplitterWrapperOutput]
-type AsyncSplitterWrapperInput = SyncSplitterWrapperInput
+type AsyncSplitterWrapperOutput = AsyncWrapperStream[AsyncStream, AsyncCascade]
+type AsyncSplitterWrapperInput = Feed
 type AsyncWrapperOutput = AsyncProcessorWrapperOutput | AsyncOperatorWrapperOutput
-
-type AsyncModuleWrapperOutput[T] = (
-    AsyncWrapperStream[T, Iterator[T]]
-    | AsyncWrapperStream[Iterator[T], Iterator[Iterator[T]]]
-)
 
 type AsyncProcessorParser[I, E, O: ItemOrValue] = (
     SyncProcessorParser[I, E, O] | AwaitableProcessorParser[I, E, O]
@@ -162,6 +157,7 @@ type ModuleParser = (
     | SplitterParser[Never]
 )
 
+PARSER_POSITIONALS = 3
 WRAPPER_META: tuple[str, ...] = (
     "name",
     "type",
@@ -169,7 +165,7 @@ WRAPPER_META: tuple[str, ...] = (
     "subtypes",
     "pollable",
     "loopable",
-    "isasync",
+    "is_async",
 )
 
 
@@ -240,7 +236,15 @@ class CastFuncs[T, E](NamedTuple):
     conf_caster: SyncConfCastFunc
 
 
-class PreparedCall(Protocol):
+class NodeCall[O](Protocol):
+    """A node's call that is prepared once with its configuration and call options."""
+
+    def __call__(
+        self, item: Any = None, context: Context | None = None, **extra: object
+    ) -> O: ...
+
+
+class PreparedCall(NodeCall[WrapperOutput | SplitterWrapperOutput], Protocol):
     """
     A module call with its configuration and call options already applied.
 
@@ -248,10 +252,6 @@ class PreparedCall(Protocol):
     whole stream. Each call supplies the ``context`` and any secondary input
     streams, resources, or embed.
     """
-
-    def __call__(
-        self, item: Any = None, context: Context | None = None, **extra: object
-    ) -> WrapperOutput | SplitterWrapperOutput: ...
 
 
 @runtime_checkable
@@ -323,7 +323,7 @@ class WrapperMeta(Protocol):
     subtypes: ModuleSubtypes
     pollable: bool
     loopable: bool
-    isasync: bool
+    is_async: bool
     sequential_inputs: bool
     input_schemas: FrozenInputSchemas | None
     dependencies: tuple[str, ...] | None
@@ -398,7 +398,7 @@ def require_wrapper_meta(value: object, what: str | None = "pipe", **_) -> Wrapp
 
 
 class SyncModuleWrapper(ModuleWrapper, Protocol):
-    isasync = False
+    is_async = False
 
     def __call__(
         self, *args: Any, **kwargs: Any
@@ -465,7 +465,7 @@ class AsyncWrapperStream[Y, A](Protocol):
     """
 
     def __await__(self) -> Generator[object, None, A]: ...
-    def __aiter__(self) -> AsyncIterator[Y]: ...
+    def __aiter__(self) -> AsyncStreamOf[Y]: ...
     def __anext__(self) -> Awaitable[Y]: ...
 
 
@@ -502,12 +502,12 @@ class AwaitableSplitterParser[E](Protocol):
     """
 
     def __call__(
-        self, stream: Stream, extraction: E, tuples: SyncPipeTuples, /, **kwargs: object
-    ) -> Awaitable[SplitterParserOutput]: ...
+        self, stream: Feed, extraction: E, tuples: PipeTuples, /, **kwargs: object
+    ) -> Awaitable[Cascade | AsyncCascade]: ...
 
 
 class AsyncModuleWrapper(ModuleWrapper, Protocol):
-    isasync = True
+    is_async = True
 
     def __call__(
         self, *args: Any, **kwargs: Any
@@ -576,8 +576,8 @@ def is_subpipe(value: _SubPipeT | object) -> TypeIs[_SubPipeT]:
 
     Examples:
 
-        >>> from riko.modules.hash import pipe
         >>> from riko.ext import workflow
+        >>> from riko.modules.hash import pipe
         >>>
         >>> def flow_pipe(item=None, **kwargs):
         ...     return iter(())
@@ -639,7 +639,7 @@ def is_sync_wrapper(value: object) -> TypeIs[SyncModuleWrapper]:
         (True, False, False)
 
     """
-    return is_wrapper_meta(value) and not value.isasync and hasattr(value, "prepare")
+    return is_wrapper_meta(value) and not value.is_async and hasattr(value, "prepare")
 
 
 def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
@@ -662,7 +662,7 @@ def is_async_wrapper(value: object) -> TypeIs[AsyncModuleWrapper]:
         (True, False, False)
 
     """
-    return is_wrapper_meta(value) and value.isasync and hasattr(value, "prepare")
+    return is_wrapper_meta(value) and value.is_async and hasattr(value, "prepare")
 
 
 def require_sync_wrapper(value: object) -> SyncModuleWrapper:
@@ -757,36 +757,6 @@ def is_splitter(pipe: ModuleWrapper) -> TypeIs[SplitterWrapper]:
 
     """
     return getattr(pipe, "type", None) == "splitter"
-
-
-def require_single_output(
-    value: ModuleWrapper, what: str | None = "pipe", **_
-) -> ModuleWrapper:
-    """
-    Rejects a splitter until port-keyed fan-out delivery is executable.
-
-    Args:
-
-        value: A resolved pipe wrapper.
-
-    Kwargs:
-
-        what: How to name the pipe's holder in the error.
-
-    Returns:
-
-        ``value`` unchanged.
-
-    Raises:
-
-        InvalidPipelineError: If ``value`` is a splitter.
-
-    """
-    if is_splitter(value):
-        msg = f"{what} contains splitter: {value.name!r}. These are not yet executable."
-        raise InvalidPipelineError(msg)
-
-    return value
 
 
 class Resolver(Protocol):

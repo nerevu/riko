@@ -43,8 +43,8 @@ def _take_first(results: Items) -> Stream:
     child generator holding resources would otherwise linger until GC; closing it
     releases those resources as soon as the loop moves to the next parent.
     """
-    with maybe_closing(iter(results)) as iterator:
-        for item in iterator:
+    with maybe_closing(iter(results)) as stream:
+        for item in stream:
             yield item
             break
 
@@ -71,22 +71,31 @@ def _fold_parent(
     parent: Item, results: Stream, assign: str, emit: bool = False
 ) -> Stream:
     """
-    Fold a parent's per-child ``results`` back against that parent.
+    Folds a parent's child results back against that parent.
 
-    ``emit`` True yields each child result verbatim (replacing the parent);
-    ``emit`` False yields a preserved parent copy per result with the result
-    stored under ``assign``. Empty-child rule: when the child yields nothing, an
-    ``emit=False`` loop still yields the untouched parent (assign-mode preserves
-    the parent item) while an ``emit=True`` loop drops it (emit-mode has nothing to
-    emit). ``assign`` is guaranteed non-empty in ``emit=False`` mode: the module
-    decorator (``Module.prepare``) resolves an unset ``assign`` to the module
-    name (or ``"content"`` for sources) before the loop ever runs.
+    If a child yields nothing, this still yields the untouched parent unless ``emit`` is
+    set. ``results`` closes once the fold is done with it, whether drained or closed
+    early.
+
+    Args:
+
+        parent: The item the child ran for.
+        results: The child's results for ``parent``.
+
+        assign: The key each result is stored under when ``emit`` is not set. Never
+            empty, since an unset ``assign`` resolves to the module name first.
+
+    Kwargs:
+
+        emit: Yields each result in place of the parent instead of a parent copy.
+
     """
     yielded = False
 
-    for value in results:
-        yielded = True
-        yield value if emit else cast("Item", {**parent, assign: value})
+    with maybe_closing(iter(results)) as stream:
+        for value in stream:
+            yielded = True
+            yield value if emit else cast("Item", {**parent, assign: value})
 
     if not (yielded or emit):
         yield parent
@@ -136,7 +145,7 @@ async def _arun_loop(
     count: CountValues | None,
 ) -> AsyncStream:
     args = embed, context, embedded_kwargs
-    embedder = bind_subpipe(*args, field=field, host_isasync=True)
+    embedder = bind_subpipe(*args, field=field, host_is_async=True)
 
     async for parent in as_async(source):
         items = await maybe_async(embedder, parent)

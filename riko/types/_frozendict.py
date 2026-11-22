@@ -9,9 +9,9 @@ mappings and freeze them into ``FrozenDict``s, and the ``JSONValue``-based
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from itertools import repeat
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal, Self, overload
 
 import attrs
 from typing_extensions import TypeForm, TypeIs
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from riko.definitions._nodes import RikoNode
 
+    from ._pipedef import Embed
     from ._workflow import (
         Endpoint,
         NodeId,
@@ -44,14 +45,10 @@ if TYPE_CHECKING:
     from .modules import AnyConfRule
 
 type FrozenJSON = (
-    bool
-    | int
-    | float
-    | str
-    | tuple[FrozenJSON, ...]
-    | FrozenDict[str, FrozenJSON]
-    | None
+    bool | int | float | str | tuple[FrozenJSON, ...] | FrozenJSONDict | None
 )
+
+type FrozenValue = Hashable | Embed
 
 type JSONValue = (
     bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
@@ -93,8 +90,20 @@ def is_conf_rule(value: object) -> TypeIs[AnyConfRule]:
     return is_dataclass_inst(value) and type(value).__name__.endswith("ConfRule")
 
 
+def _is_frozen(value: object, json_native: bool, key: object) -> bool:
+    """Whether ``value`` is frozen."""
+    if json_native:
+        result = key is None and isinstance(value, FrozenJSONDict)
+    else:
+        result = isinstance(value, FrozenDict)
+
+    return result
+
+
 @overload
-def _freeze_value(value: object, json_native: Literal[True]) -> FrozenJSON: ...
+def _freeze_value(
+    value: object, json_native: Literal[True], *, value_func: Func[object] | None = ...
+) -> FrozenJSON: ...
 @overload
 def _freeze_value[T](
     value: T, json_native: Literal[True], *, key: SortKey[T] | None = ...
@@ -139,7 +148,7 @@ def _freeze_value(
         result = value
     elif isinstance(value, float):
         result = require_finite(value) if json_native else value
-    elif isinstance(value, FrozenDict) and not json_native:
+    elif _is_frozen(value, json_native, key):
         result = value
     elif is_mapping(value):
         if key is None:
@@ -147,19 +156,21 @@ def _freeze_value(
         else:
             ordered = {k: value[k] for k in sorted(value, key=key)}
 
-        result = FrozenDict.from_frozen(
-            _freeze_items(ordered, json_native, mapping_value_func=mapping_value_func)
-        )
+        if json_native:
+            frozen = _json_freeze_items(ordered, mapping_value_func)
+            result = FrozenJSONDict._from_frozen(frozen)
+        else:
+            frozen = _freeze_items(ordered, mapping_value_func=mapping_value_func)
+            result = FrozenDict.from_frozen(frozen)
     elif is_named_tuple and not json_native:
         result = value
     elif is_known_sequence(value):
         ordered = value if key is None else sorted(value, key=key)
         result = tuple(map(_freeze_value, ordered, repeat(json_native)))
     elif json_native and is_conf_rule(value):
-        _value = serialize_dataclass(value, compact=False)
-        result = FrozenDict.from_frozen(
-            _freeze_items(_value, json_native, mapping_value_func=mapping_value_func)
-        )
+        data = serialize_dataclass(value, compact=False)
+        frozen = _json_freeze_items(data, mapping_value_func)
+        result = FrozenJSONDict._from_frozen(frozen)
     elif json_native:
         raise InvalidPipelineError(f"{type(value).__name__} is not JSON-native")
     elif isinstance(value, set):
@@ -172,20 +183,33 @@ def _freeze_value(
 
 def _freeze_items[K, V](
     data: Mapping[K, V] | Iterable[tuple[K, V]],
-    json_native: bool = False,
     mapping_value_func: Callable[[V], object] | None = None,
-) -> dict[K | str, object]:
-    """Freezes each value of a mapping or of key/value pairs into a new dict."""
-    value_func = mapping_value_func
+) -> dict[K, object]:
+    """Freezes each value of a mapping or key/value pairs into a new dict."""
     item = data if is_mapping(data) else dict(data)
 
-    def check(value: K) -> K | str:
-        return require_str(value, what="mapping key") if json_native else value
+    def freeze_item(value: V) -> object:
+        return _freeze_value(value, value_func=mapping_value_func)
 
-    def freeze_item(value: V):
-        return _freeze_value(value, json_native=json_native, value_func=value_func)
+    return map_values(freeze_item, item)
 
-    return map_keys_and_values(check, freeze_item, item)
+
+def _require_key(key: object) -> str:
+    """Requires a mapping key to be a string."""
+    return require_str(key, what="mapping key")
+
+
+def _json_freeze_items[K](
+    data: Mapping[K, object] | Iterable[tuple[K, object]],
+    mapping_value_func: Func[object] | None = None,
+) -> dict[str, FrozenJSON]:
+    """Freezes each key and value into a new JSON-native dict."""
+    item = data if is_mapping(data) else dict(data)
+
+    def freeze_item(value: object) -> FrozenJSON:
+        return _freeze_value(value, True, value_func=mapping_value_func)
+
+    return map_keys_and_values(_require_key, freeze_item, item)
 
 
 @attrs.define(frozen=True, slots=True, eq=False, repr=False, init=False)
@@ -194,9 +218,8 @@ class FrozenDict[K, V](Mapping[K, V]):
     A read-only mapping whose built-in container values are frozen too.
 
     It copies its source, a mapping or key/value pairs, and freezes the values as
-    ``freeze`` does, so it never changes once built. It compares equal to any
-    mapping with the same items, hashes when its values do, and merges with ``|``
-    into a new ``FrozenDict``.
+    ``freeze`` does. It compares equal to any mapping with the same items, hashes when
+    its values do, and merges with ``|`` into a new ``FrozenDict``.
 
     Examples:
 
@@ -237,9 +260,48 @@ class FrozenDict[K, V](Mapping[K, V]):
         merged = FrozenDict({**other, **self._data}) if is_mapping(other) else None
         return NotImplemented if merged is None else merged
 
-    @classmethod
-    def from_frozen(cls, data: Mapping[K, V]) -> FrozenDict[K, V]:
+    @staticmethod
+    def from_frozen[FK, FV: FrozenValue](data: Mapping[FK, FV]) -> FrozenDict[FK, FV]:
         """Wraps ``data`` whose values the caller has already frozen."""
+        frozen: FrozenDict[FK, FV] = object.__new__(FrozenDict)
+        object.__setattr__(frozen, "_data", dict(data))  # noqa: PLC2801
+        return frozen
+
+
+class FrozenJSONDict(FrozenDict[str, FrozenJSON]):
+    """
+    A ``FrozenDict`` whose values are all JSON-native.
+
+    It copies its source, a mapping or key/value pairs, and freezes the values as
+    ``json_freeze`` does, which hands one back untouched. It compares equal to any
+    mapping with the same items, hashes when its values do, and merges with ``|`` into
+    a new ``FrozenDict``.
+
+    Examples:
+
+        >>> frozen = FrozenJSONDict({"a": [1, {"b": 2}]})
+        >>> frozen["a"]
+        (1, FrozenDict({'b': 2}))
+        >>> frozen == FrozenDict({"a": (1, {"b": 2})})
+        True
+
+    """
+
+    __slots__ = ()
+
+    def __init__[K](
+        self, data: Mapping[K, object] | Iterable[tuple[K, object]] = (), /
+    ) -> None:
+        if isinstance(data, FrozenJSONDict):
+            frozen = data._data
+        else:
+            frozen = _json_freeze_items(data)
+
+        object.__setattr__(self, "_data", dict(frozen))
+
+    @classmethod
+    def _from_frozen(cls, data: Mapping[str, FrozenJSON]) -> Self:
+        """Wraps ``data`` whose values the caller has already JSON-frozen."""
         frozen = object.__new__(cls)
         object.__setattr__(frozen, "_data", dict(data))  # noqa: PLC2801
         return frozen
@@ -324,9 +386,9 @@ def freeze(
 @overload
 def json_freeze(value: None) -> None: ...
 @overload
-def json_freeze(value: Mapping[str, object]) -> FrozenDict[str, FrozenJSON]: ...
+def json_freeze(value: Mapping[str, object]) -> FrozenJSONDict: ...
 @overload
-def json_freeze(value: Mapping[object, object]) -> FrozenDict[str, FrozenJSON]: ...
+def json_freeze(value: Mapping[object, object]) -> FrozenJSONDict: ...
 @overload
 def json_freeze(value: object) -> FrozenJSON: ...
 def json_freeze(value: object, key: SortKey[object] | None = None) -> FrozenJSON:
@@ -352,8 +414,7 @@ def json_freeze(value: object, key: SortKey[object] | None = None) -> FrozenJSON
 
     Examples:
 
-        >>> frozen = json_freeze({"a": [1, {"b": 2}]})
-        >>> frozen["a"]
+        >>> json_freeze({"a": [1, {"b": 2}]})["a"]
         (1, FrozenDict({'b': 2}))
         >>> json_freeze({"a": {1, 2}})
         Traceback (most recent call last):
@@ -488,8 +549,6 @@ def mapping_converter[FV](
 
     Examples:
 
-        >>> from riko.types._frozendict import json_freeze
-        >>>
         >>> converter = mapping_converter(json_freeze, what="inputs")
         >>> converter({"ids": [1]})
         FrozenDict({'ids': (1,)})
@@ -575,8 +634,6 @@ def optional_mapping_converter[FV](
 
     Examples:
 
-        >>> from riko.types._frozendict import json_freeze
-        >>>
         >>> converter = optional_mapping_converter(json_freeze)
         >>> converter(None)
         FrozenDict({})

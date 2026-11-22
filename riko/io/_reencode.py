@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from typing import Self
 
-    from riko.types._io import SyncCloseable
+    from riko.base._guards import SyncClosable
 
     from ._filelike import FileLike
 
@@ -108,7 +108,7 @@ class Reencoder[T: (str, bytes)](_Reencoder, ABC):
         fromenc: str = ENCODING,
         toenc: str = ENCODING,
         *,
-        owner: SyncCloseable | None = None,
+        owner: SyncClosable | None = None,
         remove_BOM: bool = False,  # noqa: N803
     ) -> None:
         self._f = f if owner is None else owner

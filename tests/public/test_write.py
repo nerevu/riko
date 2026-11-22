@@ -31,10 +31,7 @@ from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
-    from riko.types._streams import Item
-
+    from riko.types._streams import AsyncStream
 
 WRITE_NODE_PENDING = pytest.mark.xfail(
     strict=True, raises=InvalidPipelineError, reason="write nodes do not execute yet"
@@ -117,7 +114,7 @@ class TestWrite:
 
     @async_test
     async def test_async_source_is_written(self, tmp_path):
-        async def source() -> AsyncIterator[Item]:
+        async def source() -> AsyncStream:
             for item in ITEMS:
                 yield item
 

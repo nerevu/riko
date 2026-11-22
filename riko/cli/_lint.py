@@ -69,7 +69,7 @@ def _lint_types(where: str | None = None) -> int:
         raise RuntimeError("pyright not found")
 
     paths = where.split(" ") if where else []
-    return call([_pyright, "-p", "pyproject.toml", *paths])
+    return call([_pyright, "--threads", "-p", "pyproject.toml", *paths])
 
 
 def _verify_types(where: str | None = None) -> int:
@@ -342,7 +342,10 @@ def _check_command() -> None:
 @click.option(
     "-r",
     "--rst",
-    help="Validate RST rendering, internal links, and plain Python code-block markers",
+    help=(
+        "Validate RST rendering, internal links, plain Python code-block markers, "
+        "and nested inline literals"
+    ),
     is_flag=True,
 )
 @click.option("--docs", help="Validate internal documentation policy", is_flag=True)

@@ -126,8 +126,8 @@ The common development commands are:
     - ``--ratchet`` runs the whole suite and fails when it leaves more statements
       uncovered than the ceiling recorded in ``pyproject.toml``
       (``[tool.riko.coverage]``), and lowers the ceiling when it leaves fewer.
-    - ``--ratchet`` warns, without failing, when the ceiling has held longer than
-      ``[tool.riko.ratchet] stale-days``.
+    - ``--ratchet`` warns, without failing, when a nonzero ceiling has held longer
+      than ``[tool.riko.ratchet] stale-days``.
     - ``--ratchet`` refuses paths, ``--tox``, and ``--failed``, and measures coverage
       even with ``--no-cov``.
 
@@ -160,8 +160,9 @@ The common development commands are:
         class, a subject owned by two files, and misplaced files.
       - ``--basenames``: two package modules sharing a file name.
       - ``--escapes``: ``typing.Any`` references or ``typing.cast`` calls above their
-        ceilings in ``pyproject.toml`` (a lower count lowers the ceiling, and one held
-        longer than ``[tool.riko.ratchet] stale-days`` warns without failing).
+        ceilings in ``pyproject.toml`` (a lower count lowers the ceiling, and a nonzero
+        one held longer than ``[tool.riko.ratchet] stale-days`` warns without
+        failing).
 
     - Runs all standard checks, including all import-contract ones, with ``--all``.
     - Keeps type completeness, strict pylint, and distribution checks explicit via
@@ -474,7 +475,7 @@ A built-in module change commonly requires work in several places:
    whose row in that tier's index names the test's subject, and put the test in
    that subject's ``Test<Subject>`` class. An asynchronous test is a native ``async def`` decorated with ``async_test``
    from ``tests/__init__.py``. Never wrap a coroutine in a synchronous test
-   body. A test stays a plain ``def`` under ``skipif_issync`` only when the
+   body. A test stays a plain ``def`` under ``skipif_sync`` only when the
    synchronous path is deliberately what it exercises (for example, the
    synchronous execution driving an async-only module). If the synchronous
    runner is incidental, drop it and write the test as a native ``async def``.

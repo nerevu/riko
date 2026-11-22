@@ -11,11 +11,12 @@ from collections.abc import (
     AsyncIterable,
     AsyncIterator,
     Awaitable,
+    Generator,
     Iterator,
 )
 from decimal import Decimal
 from functools import wraps
-from inspect import isawaitable, iscoroutinefunction
+from inspect import Parameter, isawaitable, iscoroutinefunction, signature
 from json import loads
 from time import monotonic
 from types import ModuleType, SimpleNamespace
@@ -26,9 +27,10 @@ import pytest
 
 from riko.bado._backend import Event, async_sleep, create_task_group
 from riko.bado._util import maybe_aclosing, maybe_closing
-from riko.bado.itertools import as_async, auto_close
+from riko.bado.itertools import AsyncTeeBranch, as_async
 from riko.base import _paths as paths_module
-from riko.base._exceptions import ReceiverUnavailableError
+from riko.base._exceptions import InvalidPipelineError, ReceiverUnavailableError
+from riko.base._iterutils import auto_close
 from riko.base._paths import PACKAGE_DIR, get_path
 from riko.base._sentinels import MISSING
 from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
@@ -69,12 +71,19 @@ from riko.runtime._pubsub import async_hub
 from riko.runtime._workflow_pipes import workflow
 from riko.types._options import ItemDispatch, ValueDispatch
 from riko.types._wrappers import (
+    PARSER_POSITIONALS,
     WRAPPER_META,
     AsyncProcessorWrapper,
     AsyncSplitterWrapper,
     AsyncSubPipe,
+    AwaitableOperatorParser,
+    AwaitableProcessorParser,
+    AwaitableSplitterParser,
     DeclaresIdentity,
+    SyncOperatorParser,
+    SyncProcessorParser,
     SyncProcessorWrapper,
+    SyncSplitterParser,
     require_async_wrapper,
     require_sync_wrapper,
 )
@@ -86,15 +95,27 @@ from riko.types.modules import (
     SendConf,
     StrconcatRawConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_issync
+from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._resources import Connection
-from tests._streams import Closeable
+from tests._streams import Closable
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
-    from riko.types._streams import AsyncStream, Cascade, Item, ItemOrValue, Stream
-    from riko.types._wrappers import SyncModuleWrapper, SyncOperatorWrapperOutput
+    from riko.types._streams import (
+        AsyncCascade,
+        AsyncStream,
+        Cascade,
+        Feed,
+        Item,
+        ItemOrValue,
+        Stream,
+    )
+    from riko.types._wrappers import (
+        PipeTuples,
+        SyncModuleWrapper,
+        SyncOperatorWrapperOutput,
+    )
 
 type _AliasStream = Iterator[int]
 type _UnavailableAlias = DynamicConf | int
@@ -156,14 +177,14 @@ async def _async_twice(stream: Stream, *args, **kwargs) -> Cascade:
 
 
 async def _drain(value: object) -> object:
-    resolved = await value if isawaitable(value) else value
+    _value = await value if isawaitable(value) else value
 
-    if isinstance(resolved, AsyncIterable):
-        result = [await _drain(part) async for part in resolved]
-    elif isinstance(resolved, Iterator):
-        result = [await _drain(part) for part in resolved]
+    if isinstance(_value, AsyncIterable):
+        result = [await _drain(part) async for part in _value]
+    elif isinstance(_value, Iterator):
+        result = [await _drain(part) for part in _value]
     else:
-        result = resolved
+        result = _value
 
     return result
 
@@ -177,7 +198,7 @@ BARE_FORMS = [
     pytest.param(splitter, _async_twice, {}, id="splitter-async"),
 ]
 BARE_AND_OPTIONS = [
-    pytest.param(processor, (), {"isasync": True}, id="processor+isasync"),
+    pytest.param(processor, (), {"is_async": True}, id="processor+is_async"),
     pytest.param(operator, ({},), {}, id="operator+defaults"),
     pytest.param(splitter, (), {"objectify": False}, id="splitter+objectify"),
 ]
@@ -233,6 +254,14 @@ FIXED_ARITY = [
         FIXED_SPLITTER, _fixed_splitter, FIXED_ROWS, FIXED_CONTEXT, id="splitter"
     ),
 ]
+PARSER_PROTOCOLS = [
+    pytest.param(SyncProcessorParser, id="sync-processor"),
+    pytest.param(SyncOperatorParser, id="sync-operator"),
+    pytest.param(SyncSplitterParser, id="sync-splitter"),
+    pytest.param(AwaitableProcessorParser, id="awaitable-processor"),
+    pytest.param(AwaitableOperatorParser, id="awaitable-operator"),
+    pytest.param(AwaitableSplitterParser, id="awaitable-splitter"),
+]
 
 
 class TestParserSignature:
@@ -249,6 +278,12 @@ class TestParserSignature:
 
         pipe = processor()(parser)
         assert next(pipe({"content": "hi"}, assign="content")) == {"content": "HI"}
+
+    @pytest.mark.parametrize("protocol", PARSER_PROTOCOLS)
+    def test_parser_protocol_takes_the_positional_count(self, protocol) -> None:
+        _, *params = signature(protocol.__call__).parameters.values()
+        kinds = [p.kind for p in params]
+        assert kinds.count(Parameter.POSITIONAL_ONLY) == PARSER_POSITIONALS
 
     def test_fixed_arity_parser_is_a_type_error(self) -> None:
         pipes = [
@@ -271,7 +306,7 @@ class TestParserSignature:
 class _FalsyRows:
     """An iterable of rows whose truth value is ``False``."""
 
-    def __iter__(self) -> Iterator[Item]:
+    def __iter__(self) -> Stream:
         return iter(FIXED_ROWS)
 
     def __bool__(self) -> bool:
@@ -311,27 +346,35 @@ class TestSplitter:
         assert isinstance(prepared, DeclaresIdentity)
         assert prepared.identity is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=TypeError,
-        reason="execution-owned split fan-out is not yet implemented: the async "
-        "splitter wrapper reads its input synchronously, so handing it an async "
-        "stream raises TypeError instead of yielding the branches",
-    )
     @async_test
     async def test_async_splitter_accepts_an_async_input_stream(self) -> None:
         source = as_async(iter([{"x": 1}]))
-        branches = async_split(source)  # pyright: ignore[reportArgumentType]
+        branches = async_split(source)
         first = await anext(branches)
-        assert next(first) == {"x": 1}
+        assert await anext(first) == {"x": 1}
+        second = await anext(branches)
+        assert isinstance(first, AsyncTeeBranch)
+        assert isinstance(second, AsyncTeeBranch)
+        await first.aclose()
+        await second.aclose()
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="execution-owned split fan-out is not yet implemented: the splitter "
-        "wrapper does not resolve its context, so its parser receives the raw "
-        "context object instead of the context's inputs",
-    )
+    @async_test
+    async def test_async_splitter_streams_a_long_feed(self) -> None:
+        pulled: list[int] = []
+
+        async def source() -> AsyncStream:
+            for i in range(10_000):
+                pulled.append(i)
+                yield {"i": i}
+
+        first, second = [branch async for branch in async_split(source())]
+        assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
+        assert pulled == [0]
+        assert isinstance(first, AsyncTeeBranch)
+        assert isinstance(second, AsyncTeeBranch)
+        await first.aclose()
+        await second.aclose()
+
     def test_splitter_resolves_the_context_for_its_parser(self) -> None:
         seen: dict[str, object] = {}
 
@@ -344,6 +387,67 @@ class TestSplitter:
         list(pipe(iter([{"x": 1}]), context=context))
         assert "context" not in seen
         assert seen.get("inputs") == {"name": "riko"}
+
+    def test_sync_splitter_rejects_an_async_input_stream(self) -> None:
+        source = cast("Any", as_async(iter([{"x": 1}])))
+
+        with pytest.raises(TypeError, match="cannot read an async stream"):
+            next(split(source))
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a lazy async feed into a splitter with a synchronous parser is not "
+        "yet implemented",
+    )
+    @async_test
+    async def test_async_splitter_with_a_sync_parser_streams_a_long_feed(self) -> None:
+        pulled: list[int] = []
+
+        async def source() -> AsyncStream:
+            for i in range(10_000):
+                pulled.append(i)
+                yield {"i": i}
+
+        def tee_twice(stream: Stream, *args, **kwargs) -> Cascade:
+            return iter(itertools.tee(stream, 2))
+
+        pipe = splitter(is_async=True)(tee_twice)
+        first, second = [branch async for branch in pipe(source())]
+        assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
+        assert len(pulled) < 10
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="resolving per-item conf for an async splitter input is not yet "
+        "implemented",
+    )
+    @async_test
+    async def test_async_splitter_resolves_conf_per_item(self) -> None:
+        async def parser(
+            stream: Feed, objconf: object, tuples: PipeTuples, /, **kwargs: object
+        ) -> AsyncCascade:
+            items = as_async(tuples) if isinstance(tuples, Iterator) else tuples
+            keys = [{"key": conf.default} async for _, conf in items]
+            return as_async(iter([as_async(iter(keys))]))
+
+        pipe = splitter({"default": "fallback"}, is_async=True)(parser)
+        conf = cast("Conf", {"default": {"subkey": "x"}})
+        source = as_async(iter([{"x": 1}, {"x": 2}]))
+        branch = await anext(pipe(source, conf=conf))
+        assert [item async for item in branch] == [{"key": 1}, {"key": 2}]
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="rejecting a wrongly typed conf value on a direct pipe call is not yet "
+        "implemented",
+    )
+    def test_a_direct_call_rejects_a_string_isolate(self) -> None:
+        """A direct call reads it as true."""
+        with pytest.raises(InvalidPipelineError):
+            list(split(iter([{"n": 1}]), conf={"isolate": "false"}))  # pyright: ignore[reportArgumentType]
 
 
 class TestAsyncOperatorLaziness:
@@ -367,7 +471,7 @@ class TestAsyncOperatorLaziness:
         """
         pulled: list[int] = []
 
-        def source() -> Iterator[Item]:
+        def source() -> Stream:
             for i in range(10_000):
                 pulled.append(i)
                 yield {"i": i}
@@ -398,7 +502,7 @@ class TestAsyncOperatorLaziness:
         async def tick() -> None:
             ran.set()
 
-        def source() -> Iterator[Item]:
+        def source() -> Stream:
             for i in range(2000):
                 saw_loop.append(ran.is_set())
                 yield {"i": i}
@@ -427,7 +531,7 @@ class TestAsyncOperatorLaziness:
         """
         pulled: list[int] = []
 
-        def secondary() -> Iterator[Item]:
+        def secondary() -> Stream:
             for i in range(10_000):
                 if len(pulled) >= 100:
                     raise RuntimeError("the secondary input was read past its guard")
@@ -441,7 +545,7 @@ class TestAsyncOperatorLaziness:
         assert len(pulled) <= 1
 
 
-def _gen_held(closed: list[bool]) -> Iterator[Item]:
+def _gen_held(closed: list[bool]) -> Stream:
     try:
         for i in range(100):
             yield {"i": i}
@@ -768,7 +872,7 @@ class TestWrapperMeta:
             subtypes={"transformer"},
             pollable=False,
             loopable=True,
-            isasync=False,
+            is_async=False,
         )
         assert _carries_wrapper_meta(pipe)
         assert isinstance(cast("SyncModuleWrapper", pipe).subtypes, frozenset)
@@ -788,16 +892,16 @@ class TestWrapperMeta:
 
         assert _carries_wrapper_meta(sync_subpipe)
         assert _carries_wrapper_meta(async_subpipe)
-        assert not sync_subpipe.isasync
-        assert async_subpipe.isasync
-        assert workflow(isasync=True)(other).isasync
+        assert not sync_subpipe.is_async
+        assert async_subpipe.is_async
+        assert workflow(is_async=True)(other).is_async
 
     def test_decorated_wrappers_carry_wrapper_meta(self):
         def total(*args: Any, **kwargs: object) -> int:
             return 1
 
         assert _carries_wrapper_meta(processor()(shout))
-        assert _carries_wrapper_meta(processor(isasync=True)(shout))
+        assert _carries_wrapper_meta(processor(is_async=True)(shout))
         assert _carries_wrapper_meta(operator()(total))
 
     @pytest.mark.parametrize(("require", "match"), WRAPPER_REQUIRES)
@@ -968,6 +1072,35 @@ class TestLoop:
         assert produced == [0, 0]
         assert closed == ["a", "b"]
 
+    def test_closing_the_loop_closes_the_running_child(self):
+        # Not a generator, so only an explicit close can end it.
+        closed: list[str] = []
+
+        class Child:
+            def __init__(self, tag: str) -> None:
+                self.tag, self.index = tag, 0
+
+            def __iter__(self) -> Child:
+                return self
+
+            def __next__(self) -> Item:
+                self.index += 1
+                return {"content": f"{self.tag}{self.index}"}
+
+            def close(self) -> None:
+                closed.append(self.tag)
+
+        def _sub(item, context=None, **_):
+            return Child(str(item["title"]))
+
+        parents = [{"title": "a"}, {"title": "b"}]
+        stream = loop(iter(parents), embed=workflow()(_sub), count="all", emit=True)
+
+        assert isinstance(stream, Generator)
+        assert next(stream) == {"content": "a1"}
+        stream.close()
+        assert closed == ["a"]
+
     @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
     def test_unembeddable_embed_passes_parents_through(self, embed, message, caplog):
         result = loop(iter(PARENTS), embed=embed)
@@ -976,7 +1109,7 @@ class TestLoop:
         assert any(message in r.message for r in caplog.records)
 
 
-@skipif_issync
+@skipif_sync
 class TestAsyncLoop:
     """Async loop preserves the sync per-parent fold and laziness contract."""
 
@@ -1140,14 +1273,14 @@ class TestAsyncProcessor:
 
     @async_test
     async def test_call_is_async_iterable_without_outer_await(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(is_async=True)(shout)
         stream = async_shout({"content": "hi"}, assign="content")
         assert isinstance(stream, AsyncIterator)
         assert [item async for item in stream] == [{"content": "HI"}]
 
     @async_test
     async def test_awaiting_the_call_returns_the_whole_stream(self):
-        async_shout = processor(isasync=True)(shout)
+        async_shout = processor(is_async=True)(shout)
         result = async_shout({"content": "hi"}, assign="content")
         assert isinstance(result, Awaitable)
         assert list(await result) == [{"content": "HI"}]
@@ -1160,7 +1293,7 @@ class TestAsyncProcessor:
             calls.append(item)
             return "x"
 
-        stream = processor(isasync=True)(counting)([{"a": 1}], assign="a")
+        stream = processor(is_async=True)(counting)([{"a": 1}], assign="a")
 
         async with maybe_aclosing(stream):
             pass
@@ -1174,10 +1307,10 @@ class TestAsyncProcessor:
         streams: list[auto_close[str]] = []
 
         def lines(item: Item, *args, **kwargs) -> auto_close[str]:
-            streams.append(auto_close(iter(["a", "b"]), Closeable("file", closes)))
+            streams.append(auto_close(iter(["a", "b"]), Closable("file", closes)))
             return streams[-1]
 
-        stream = processor(isasync=True)(lines)({"x": 1}, emit=True)
+        stream = processor(is_async=True)(lines)({"x": 1}, emit=True)
         async with maybe_aclosing(stream):
             await anext(stream)
 
@@ -1207,7 +1340,7 @@ class TestAsyncProcessor:
             calls.append(item)
             return "x"
 
-        async_count = processor(isasync=True)(counting)
+        async_count = processor(is_async=True)(counting)
         result = async_count({"content": "hi"}, assign="content")
         await result
         await result
@@ -1222,10 +1355,10 @@ class TestAsyncOperator:
 
         def lines(*args, **kwargs) -> auto_close[Item]:
             rows = iter([{"x": 1}, {"x": 2}])
-            streams.append(auto_close(rows, Closeable("file", closes)))
+            streams.append(auto_close(rows, Closable("file", closes)))
             return streams[-1]
 
-        stream = operator(isasync=True)(lines)([{"x": 0}], emit=True)
+        stream = operator(is_async=True)(lines)([{"x": 0}], emit=True)
         async with maybe_aclosing(stream):
             await anext(stream)
 
@@ -1242,6 +1375,15 @@ DECORATION_OPTION_CALLS = [
 PICKLED_CONFS = [
     pytest.param({"times": {"type": "int", "value": "2"}}, id="static"),
     pytest.param({"times": {"subkey": "n"}}, id="dynamic"),
+]
+
+
+PER_ITEM_ARGUMENTS = [
+    pytest.param("embed", ("embed",), id="declared-embed"),
+    pytest.param("others", ("others",), id="declared-others"),
+    pytest.param("label", ("label",), id="declared-label"),
+    pytest.param("embed", (), id="undeclared-embed"),
+    pytest.param("resources", (), id="undeclared-resources"),
 ]
 
 
@@ -1303,6 +1445,19 @@ class TestPrepare:
         list(pipe([{"a": 1}], resources=view))
         assert captured["view"] is view
 
+    @pytest.mark.parametrize("name", ["wrapper", "items"])
+    def test_a_direct_call_passes_an_unknown_keyword_to_the_pipe(self, name):
+        captured = {}
+
+        @processor()
+        def pipe(item: Item, objconf, tuples, **kwargs) -> Item:
+            captured.update(kwargs)
+            return item
+
+        kwargs: dict[str, Any] = {name: "value"}
+        assert list(pipe([{"a": 1}], **kwargs)) == [{"a": 1}]
+        assert captured[name] == "value"
+
     def test_prepared_module_is_frozen(self):
         conf = cast("Conf", {"x": {"subkey": "y"}})
         prepared = processor(ftype="text").prepare("m", conf=conf)
@@ -1324,12 +1479,21 @@ class TestPrepare:
         with pytest.raises(TypeError, match=f"module fixes '{option}' when it is"):
             list(pipe([{"x": 1}], conf={}, **kwargs))
 
-    @pytest.mark.parametrize("extra", ["embed", "others", "label"])
-    def test_prepare_rejects_a_per_item_argument(self, extra):
+    @pytest.mark.parametrize(("extra", "extras"), PER_ITEM_ARGUMENTS)
+    def test_prepare_rejects_a_per_item_argument(self, extra, extras):
         kwargs: dict[str, Any] = {extra: None}
 
         with pytest.raises(TypeError, match=f"'strconcat' module takes '{extra}'"):
-            strconcat.prepare(extra, conf={}, **kwargs)
+            strconcat.prepare(*extras, conf={}, **kwargs)
+
+    @pytest.mark.parametrize("option", ["bogus", "wrapper"])
+    def test_prepare_rejects_an_unknown_option(self, option):
+        kwargs: dict[str, Any] = {option: None}
+
+        with pytest.raises(
+            TypeError, match=rf"unknown call options key\(s\): \['{option}'\]"
+        ):
+            strconcat.prepare(conf={}, **kwargs)
 
     @pytest.mark.xfail(
         strict=True,
@@ -1432,6 +1596,21 @@ class TestCsvParser:
         list(csv.parser({}, None, conf))
         assert closed
 
+    @pytest.mark.parametrize("module", [csv, fetchtable], ids=["csv", "fetchtable"])
+    @pytest.mark.xfail(
+        strict=True,
+        raises=pytest.fail.Exception,
+        reason="rejecting a wrongly typed conf value on a direct pipe call is not yet "
+        "implemented",
+    )
+    def test_a_direct_call_rejects_a_string_has_header(self, tmp_path, module) -> None:
+        """A bare ``"false"`` is read as true, so the first row becomes the header."""
+        path = tmp_path / "rows.csv"
+        path.write_text("a,b\n1,2\n")
+        conf = CsvConf(url=str(path), has_header="false")  # pyright: ignore[reportArgumentType]
+        with pytest.raises(InvalidPipelineError):
+            list(module.pipe(conf=conf))
+
 
 # Each row: a rates response document, and the error message it raises.
 MISSING_RATES = [
@@ -1510,17 +1689,17 @@ class TestExchangeRate:
         [({"verbose": True}, True), ({"verbose": False}, False), ({}, False)],
         ids=["verbose", "quiet", "default"],
     )
-    @pytest.mark.parametrize("isasync", [False, True], ids=["sync", "async"])
+    @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
     @async_test
     async def test_an_unparseable_rate_warns_only_when_verbose(
-        self, extra, warns, isasync, tmp_path, caplog
+        self, extra, warns, is_async, tmp_path, caplog
     ):
         """A bad rate elsewhere in the response warns only with ``verbose`` set."""
         rates_path = tmp_path / "rates.json"
         rates_path.write_text('{"rates": {"USD": 1, "GBP": 2, "XYZ": "bad"}}')
         conf = {"url": str(rates_path), "currency": "USD", "precision": 1}
         objconf = ExchangeRateObjconf({**conf, **extra})
-        if isasync:
+        if is_async:
             rate = await exchangerate_module.async_parser("GBP", None, objconf)
         else:
             rate = exchangerate_module.parser("GBP", None, objconf)

@@ -55,6 +55,8 @@ def gen_subjects(tree: ast.Module) -> Iterator[tuple[str, ast.ClassDef]]:
 
     Examples:
 
+        >>> import ast
+        >>>
         >>> tree = ast.parse("class TestSend: ...\\nclass TestAsyncSend: ...")
         >>> [subject for subject, _ in gen_subjects(tree)]
         ['Send']

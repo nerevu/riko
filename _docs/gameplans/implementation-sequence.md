@@ -934,28 +934,28 @@ lifecycle's context manager live in `riko/execution/_resource_acquisition.py` (w
 
 Preparation is now a resolution snapshot: `ExecutionPlan.from_workflow`
 (`riko/execution/_prepared.py`) resolves each node's sync/async callables once into a
-`PreparedNode` and the returned `ExecutionPlan` holds no dispatcher, so
-`ResolvedModule.select_sync()`/`select_async()` (and
-`PreparedNode.sync_interface`/`async_interface`) pick native-vs-adapter at run time
-without re-inspecting the registry (regression:
-`test_execution_plan_snapshots_resolution`). The two cross-mode defects this section
-tracked behind strict-xfail tripwires are now closed; the shared adaptation helpers live
-in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_plan.py`).
+`PreparedNode` and the returned `ExecutionPlan` holds no dispatcher, so the executions
+pick native-vs-adapter at run time from `PreparedNode.sync_interface`/`async_interface`
+(`None` when the mode has no native pipe) without re-inspecting the registry
+(regression: `test_execution_plan_snapshots_resolution`). The two cross-mode defects
+this section tracked behind strict-xfail tripwires are now closed; the shared
+adaptation helpers live in `riko/execution/_adapt.py` (regressions in
+`tests/internal/test_execution_plan.py`).
 
 1. **Lazy sync-under-async bridge.** A sync-only node under `AsyncExecution`
    materializes neither its async source nor its own output.
    `AsyncExecution._run_sync_node` (`riko/execution/_async_execution.py`) starts the
-   sync pipe on a worker thread through the existing `run_sync` (asyncer's `asyncify`)
+   sync pipe on a worker thread through `_run_on_node_thread` (asyncer's `asyncify`)
    and pulls its output one item per `__anext__` as the consumer demands it, while the
    pipe reads its async primary source and every async secondary input (named ports
    and `others`, both through `ExecutionExtras.map_kwargs`) lazily from the
    worker through `anyio.from_thread.run` (re-exposed by `riko/bado/_backend.py` as
    `run_from_thread`). `_adapt.py` owns the pieces:
    `require_stream`/`require_async_stream` (the node-output boundary, moved out of
-   `_execution.py`), `async_drain(call, stream)` — one
+   `_execution.py`), `to_sync(call, stream)` — one
    async-stream-as-lazy-sync-iterator function that the sync execution's portal drain
    and the worker-side upstream reader share with a different `call` — and
-   `pull_stream(...)`, its sync-iterator-as-lazy-async-stream counterpart.
+   `to_async(...)`, its sync-iterator-as-lazy-async-stream counterpart.
    `_adapt_worker_inputs` and `_drain_sync` are gone. There are no background tasks and
    no channels: backpressure is pure demand, an error raises at the pull that hits it
    after every earlier item has been yielded, and abandoning or closing the async stream
@@ -978,25 +978,26 @@ in `riko/execution/_adapt.py` (regressions in `tests/internal/test_execution_pla
    `test_arun_sync_worker_node_reads_secondary_inputs_lazily`, and
    `test_arun_sync_worker_node_runs_off_the_event_loop`.
 2. **Native-wins for loop embeds — execution-time adaptation.** Each node's mode is
-   chosen at run time by `ResolvedModule.select_sync()`/`select_async()`
-   (`riko/execution/_prepared.py`), which pick the native callable, else the other one
-   to adapt, per the four native-wins quadrants, and a loop node's embed is resolved at
+   chosen at run time from the `ResolvedModule.sync_pipe`/`async_pipe` slots
+   (`riko/execution/_prepared.py`): the native callable, else the other one to adapt,
+   per the four native-wins quadrants, and a loop node's embed is resolved at
    build into a nested `PreparedNode.embed`. Both executions now re-select that embed
    against the **host pipe's actual mode**
-   (`select_embed(embed, host_isasync=, run_sync=, drain=)` in
-   `riko/execution/_adapt.py`, called by both executions with their own adapters) and,
+   (`select_embed(embed, host_is_async=, run_sync=, to_sync=)` in
+   `riko/execution/_adapt.py`, called once by the shared base execution's
+   `_select_embed` with each execution's own async-to-sync drain) and,
    when the embed is adapted, forward a synthesized host-mode wrapper instead of the raw
-   other-mode one. `adapt_embed(embed, drain)` and `async_adapt_embed(embed, run_sync)`
-   copy the wrapper's discovery metadata (`name`, `type`, `subtype`, `subtypes`,
-   `pollable`, `loopable`) and set `isasync` to the host mode — leaving `__wrapped__`
-   unset — so `loop_embed_sync`/`loop_embed_async`, `is_subpipe`, and `bind_subpipe`
-   treat the adapter as a native embed. An async-only embed under a sync host is drained
-   per item (through the portal on the main thread, or through `run_from_thread` when
-   the host pipe itself runs on a worker); a sync-only embed under an async host runs
-   per parent item off the event loop and returns its results as a list, which the
-   per-parent result count keeps bounded. Accepted limitation: the loop's
-   `count="first"` early-close is not applied to a sync-only embed under an async host
-   (the child runs to completion on the worker); tripwire
+   other-mode one. `adapt_embed(embed, to_sync)` and
+   `async_adapt_embed(embed, run_sync)` copy the wrapper's discovery metadata (`name`,
+   `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `is_async` to the host
+   mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
+   `is_subpipe`, and `bind_subpipe` treat the adapter as a native embed. An async-only
+   embed under a sync host is drained per item (through the portal on the main thread,
+   or through `run_from_thread` when the host pipe itself runs on a worker); a sync-only
+   embed under an async host runs per parent item off the event loop and returns its
+   results as a list, which the per-parent result count keeps bounded. Accepted
+   limitation: the loop's `count="first"` early-close is not applied to a sync-only
+   embed under an async host (the child runs to completion on the worker); tripwire
    `test_arun_count_first_stays_lazy_for_a_sync_only_embed` (strict xfail) is owned by
    R10's sync/async laziness parity work (it also needs the async embed wrapper shape
    R10 retires). The other direction is already lazy and closes the child promptly
@@ -1102,7 +1103,7 @@ Deliver:
   ([callable-pipes.md](callable-pipes.md) § Existing decorator model), so a module
   author never needs empty parentheses. The async case is
   `@processor async def async_pipe`; a single async implementation named `pipe` keeps
-  raising until R4E classifies interfaces by `isasync`;
+  raising until R4E classifies interfaces by `is_async`;
 - **shipped 2026-10-24:** `Pipeline.open()`: a fresh single-use run handle per call that
   is a sync and async context manager (`closing(iter(pipeline))` /
   `aclosing(aiter(pipeline))`), the scoped early-exit form of iteration whose semantics
@@ -1313,7 +1314,7 @@ Deliver:
 - **DELETE:** no runtime path interprets business data as typed configuration; any
   legacy typed-value compatibility is bounded to the v1 migration ingress.
 
-### R4E — Module configuration contracts, strict conf validation, and `isasync` interface classification
+### R4E — Module configuration contracts, strict conf validation, and `is_async` interface classification
 
 Scheduled 2026-10-04 **after M1 and before M2**. [extensibility.md](extensibility.md) E1
 owns the module contract ("generate configuration JSON Schema from typed configs";
@@ -1342,6 +1343,15 @@ Deliver:
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
   through the same field;
+- declared output ports for splitter modules (fanout-topology § 10, extensibility
+  port declarations): `ExecutionPlan` reads every splitter's port set from its
+  `splits` conf (default 2), so an extension `@splitter` whose count lives in another
+  conf key plans as two ports and an edge from `out:2` fails at plan build (strict
+  xfail `TestExecutionPlan::test_build_plan_reads_an_extension_splitters_declared_ports`
+  in `tests/internal/test_execution_plan.py`; triaged from the 2026-11-21 branch design
+  audit). The declared-port metadata replaces the conf read; the built-in `split`
+  module keeps `splits` as the conf that derives its port set, and the `splitter`
+  decorator docstring's port paragraph is rewritten to name the declaration;
 - a generated configuration JSON Schema per module, consumable by `describe_module()`
   and the catalog;
 - plan-build validation of every module node's `conf` against its registered contract:
@@ -1354,7 +1364,25 @@ Deliver:
   missing: the fetch-family modules already reject an empty `url` at call time
   (`require_conf_key(strict=True)`), while `urlbuilder.base`, `subelement.path`, and
   `currencyformat.currency` still accept `""` (2026-11-10 triage); make the three
-  consistent with the ruling;
+  consistent with the ruling. The same check covers a direct `pipe()` call (triaged
+  2026-11-14): today `split.pipe(items, conf={"isolate": "false"})` and
+  `csv`/`fetchtable` with `has_header: "false"` read the bare string as true
+  (`bool(objconf.isolate)` in `riko/modules/split.py`, `if objconf.has_header` in
+  `csv.py`/`fetchtable.py`), while `ExecutionPlan.from_workflow` already rejects it
+  (`_parse_isolate` in `riko/execution/_prepared.py`) and the legacy typed value
+  `{"type": "bool", "value": "false"}` casts correctly — strict xfails
+  `tests/internal/test_modules.py::TestSplitter::test_a_direct_call_rejects_a_string_isolate`
+  and
+  `tests/internal/test_modules.py::TestCsvParser::test_a_direct_call_rejects_a_string_has_header`.
+  The derived schema must resolve through to the objconf type: `CsvConf`
+  (`riko/types/modules.py`) types `has_header` as `NotRequired[Value]` while
+  `CsvObjconf` types it `bool`, so a schema taken from the `TypedDict` alone would still
+  admit the string. A filter date operator (`after`/`before`) whose literal rule `value`
+  does not parse as a date is invalid conf (today the rule silently matches no item); a
+  `value` that references the item (a subkey or terminal reference) cannot be checked
+  statically and is exempt — strict xfail
+  `tests/public/test_workflow.py::TestValidate::test_invalid_conf_rejected_before_the_source_is_read[unparseable-date]`
+  (triage 2026-11-19);
 - the same check for built-in and entry-point modules;
 - the describe modes retired (ruled 2026-11-09, [release-readiness.md
   § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work);
@@ -1375,11 +1403,11 @@ Deliver:
   inside (widening alone gives 15 pyright errors in `config.py`), and settle whether a
   scalar item can reach it: `resolve_conf` tests `if item` for truthiness before
   `DotDict.dictize`.
-- interface classification by `isasync` rather than by attribute name, so a single async
-  implementation named `pipe` (`@processor async def pipe`) wraps as the async interface
-  instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out of R4C;
-  [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns the
-  semantics,
+- interface classification by `is_async` rather than by attribute name, so a single
+  async implementation named `pipe` (`@processor async def pipe`) wraps as the async
+  interface instead of raising `TypeError` (scheduled here by the 2026-10-22 triage, out
+  of R4C; [callable-pipes.md](callable-pipes.md) § Sync and async implementations owns
+  the semantics,
   [release-readiness.md § 4](release-readiness.md#4-api-shape-compression-the-highest-value-remaining-work)
   makes it a 1.0 requirement). It touches the decorator wrapper builder,
   `ModuleDefinition`'s interface slots, and codegen, beside the plain-callable slot
@@ -1414,16 +1442,35 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   `require_interfaces`) and the double lookup. Decide
   `ModuleDefinition.get_pipe(is_async)` in the same change, so the flag goes from both
   or neither;
+- `ResolvedModule._metadata_pipe` (`riko/execution/_prepared.py`) reads the async
+  pipe's metadata when a module has both; its validator `_is_consistent` makes every
+  attribute it reads agree across the twins (triaged 2026-11-21 from a repository
+  audit), so the choice is immaterial today. When the interface slots change here,
+  validate the twins at `ModuleDefinition` construction and keep mode-specific metadata
+  on the selected `SyncInterface`/`AsyncInterface`, retiring the projection;
 - `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
   `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
-  favor of `interfaces` when classification moves to `isasync`, updating the
+  favor of `interfaces` when classification moves to `is_async`, updating the
   [module-documentation.md](module-documentation.md) generator inputs;
 - legacy conf keys declared in the raw conf types but read by no module:
   `FetchRawConf.offline`, `CsvRawConf.other_sep`, and `InputRawConf.debug`/`param`/
   `position` (`tests/workflows/pipe_e519dd393f943315f7e4128d19db2eac.json` and
   `tests/workflows/pipe_UuvYtuMe3hGDsmRgPm7D0g.json` set `offline`/`other_sep`).
   Since the contract derives from these types, decide whether these legacy keys are
-  accepted and ignored or rejected as unknown before the strict check lands.
+  accepted and ignored or rejected as unknown before the strict check lands;
+- ~~the spelling of the color flag~~ (done 2026-11-17 by triage, ahead of this slice;
+  every tier now says `is_async`/`is_sync`) (2026-11-17 naming audit):
+  `isasync`/`issync` (the STABLE `riko.isasync`/`riko.issync` pair, the
+  `processor`/`operator`/`splitter`/ `workflow` decorator option, the `WRAPPER_META`
+  member, `host_isasync`, `skipif_issync`) and `is_async` (the
+  resolver/`get_pipe`/`compile_workflow`/ `resolve_closer`/`register_owned` parameters,
+  `ValueFactoryPlan.is_async`, `Execution.is_async`) name the same boolean with no rule
+  splitting them. Merge to `is_async`/`is_sync` in this slice, which already rewrites
+  the decorator and resolver overloads carrying the flag; the public rename
+  (`riko.isasync`/`issync`, the decorator option, the wrapper metadata attribute
+  extension authors read) is one entry in the `docs/CHANGES.rst` rename list, with
+  `docs/COOKBOOK.rst`/ `docs/FAQ.rst`, the ~40 built-in `isasync=True` decorations, and
+  the `skipif_issync` marker following.
 
 Open decision (triaged 2026-10-05): the released `riko.ext.get_conf_type` reads a
 parser's `objconf` annotation and returns the generated `<Name>Objconf`, but no runtime
@@ -1480,6 +1527,10 @@ is the fix; an interim per-call cache was rejected (no cheap key until the accel
 encoder lands, and a conf-identity key goes stale under mutation). `pipe.prepare()` is
 the supported way to amortize repeated calls meanwhile. No tripwire: only a timing test
 could probe it.
+
+Measured 2026-11-18 (repeated-work audit triage): `regex` rebuilds its compiled rules
+per item (`riko/modules/regex.py:67`, `_process_rules`), 7.5 µs per item with one rule
+and 20.1 µs with three. The once-parsed typed config is the fix here too.
 
 Caster typing (triaged 2026-10-15): the conf-casting types this redesign replaces do not
 describe their callables. `_build_caster` (`riko/modules/_prepare.py`) hides behind
@@ -1543,9 +1594,9 @@ always a plain `DynamicConf`), but the user kept it here (2026-10-27 triage) so 
 stubs are rewritten once, with the conf contract. The last three
 (`aggregate`/`receive`/`write` `async_pipe`) also need their async parsers annotated
 `stream: Feed`. Separately, 12 casts in `riko/modules/_decorators.py` are pure
-sync/async output unions picked by the runtime `isasync` flag (plus 3 `wraps` and 2
+sync/async output unions picked by the runtime `is_async` flag (plus 3 `wraps` and 2
 `embed` casts on the same split, and the untyped `_PreparedCall.parser` behind 3 more);
-`isasync` interface classification here should type that split instead; the cast on the
+`is_async` interface classification here should type that split instead; the cast on the
 worker-mapped `partial` in `riko/execution/_sync_execution.py` (a `partial` because the
 process executor pickles it) and on `build_item_call`'s return in
 `riko/execution/_concurrency.py` narrows the same `NodeCall` output union and goes with
@@ -1779,7 +1830,7 @@ Decided design (2026-11-11):
 Positional embed call (triage 2026-11-12; landed 2026-11-14): the loop
 embedder (`bind_subpipe`, `riko/modules/_assignment.py`) binds a `RunsItems` call's
 `run_item`/`arun_item` positionally, as `build_item_call` does; the async loop awaits
-`arun_item`'s coroutine through `maybe_async`. Its keyword-only `host_isasync` is the
+`arun_item`'s coroutine through `maybe_async`. Its keyword-only `host_is_async` is the
 loop's color: an async embed in a sync loop (and any non-`RunsItems` call, such as a
 stored workflow) keeps the keyword-bound `__call__`, so the lazy dual-protocol stream
 never starts a coroutine nobody awaits (the strict xfail
@@ -1904,7 +1955,7 @@ a `cached_property` (the async one is a `property` returning a coroutine),
 `needs_newline`/`skip_header` and their `a*` twins are properties that change state when
 read, `ends_with_newline`/`aends_with_newline` are zero-argument methods beside those
 properties, `_framed_content`/`_aframed_content` build the framed document behind a noun
-name, and the `input_shape` setter performs a one-shot state transition that can raise.
+name, and the `is_stream` setter performs a one-shot state transition that can raise.
 Whichever shape this phase picks replaces them (explicit state-transition methods, a
 cached size, a `_build_framed_content`), so they were left as they are rather than
 reshaped ahead of it. Atomic publication (shutdown-timeout triage 2026-10-29): a replace
@@ -2019,6 +2070,63 @@ global hub lifecycle.
 R7 depends on R5A so fanout transports the final `_ItemEnvelope` provenance envelope. It
 does not depend on cache/effects/state.
 
+**Decisions (user, 2026-11-14).** The execution-scoped task group is entered and exited
+by `AsyncExecution.__aenter__`/`__aexit__`, and `_PipelineStream` owns the run's
+open/close; a driver task behind a bounded channel is started only for plans that need
+tasks, and a garbage-collected run left by a bare `break` cancels the scope and warns.
+`Pipeline.union` is an instance method, `def union(self, *others)` (the `set.union`
+shape), which settles the classmethod-vs-chained-form question below. GitHub #82 is
+retired and closed as superseded by structural completion: an unknown serialized
+subscription target fails at plan build, a subscription with no publishers yields an
+empty stream at once, and a subscription completes when its last publisher does.
+Drop-oldest exists only on `Pipeline.subscribe(buffer_size > 0, overflow="drop")`;
+`buffer_size=0` with `overflow="drop"` is a validation error, and split/fan-out never
+drop. Split/fan-out branches hold a lossless lag buffer capped by `RIKO_BRANCH_BUFFER`
+(fanout-topology § 7), and isolation is `split(..., isolate=True)` with plain fan-out
+always isolating (§ 7.1).
+
+**Decisions (user, 2026-11-16).** The remaining R7 work runs as four slices, each
+detailed in its topical owner:
+
+- **Slice A, tee correctness** (landed 2026-11-17): lock scope, atomic isolated
+  copies, the drainable read-error and fatal fan-out latches, prompt cleanup and
+  close, and the late-branch/reentrancy rules (fanout-topology § 7, § 7.1). It flipped
+  four tests in `tests/internal/test_tee.py`: `TestTee`/`TestAsyncTee`
+  `::test_max_lag_overflow_discards_every_buffer_and_keeps_raising` and
+  `::test_closing_branches_frees_buffers_then_closes_source_once`.
+- **Slice B, managed-execution settings** (next):
+  `with_execution(strict=, overrides=)`, the explicit per-site `branch_buffer`, and
+  strict splitter cardinality (execution-semantics § 6.5, fanout-topology § 7).
+- **Slice C**: the task group and driver task, `Pipeline.union`, and concurrent fan-in.
+  - Shape (repository audit 2026-11-21): the port and run builders
+    (`_build_splitter_ports`, `_register_port`, `_build_node_ports`, `_build_run`,
+    `run_envelopes` and their async twins) are hand-copied across
+    `SyncExecution`/`AsyncExecution` (about 230 same-logic lines per side;
+    `_register_port`'s parameter order had already drifted, realigned that day). When
+    Slice C rewrites them, the mode-independent decisions — interface choice and
+    adaptation, active ports and reader counts, tee isolation and `max_lag`, the seed's
+    root envelopes, the endpoint pop — move into one plan walk on `_BaseExecution`
+    beside `_resolve_node_inputs`/`_select_embed`, and each class keeps only its own
+    leaves (`Tee`/`AsyncTee`, `_wrap`/`_awrap`, `auto_close`/`aauto_close`, the close
+    and unwrap helpers). That stays within the two-explicit-classes ruling below
+    (2026-10-05): share the walk, keep the leaves per mode; no strategy object. Helper
+    for checking the remaining twin pairs: `.claude/skills/drafts/twin_diff.sh`.
+- **Slice D**: object-first publish/subscribe, with the event-sink failure rule
+  (events § 6) and subscriber offload (execution-semantics, Subscriber scheduling).
+  Queue bounds follow the shipped bounds rule (user, 2026-11-17): a bound is a
+  `Limit` (whole number of at least 1, or `math.inf`), never `None` or `0` for
+  unbounded. The shipped generator-coroutine decorator and `receive`'s
+  `register_receiver` still take `maxlen=None` for an unbounded `deque`; the rewrite
+  replaces that with `inf` (a `docs/CHANGES.rst` rename-of-meaning line, since it
+  shipped in v0.77.3).
+
+**Slice 1 (done 2026-11-14).** Port-keyed dispatch (executions keyed by
+`(node_id, port)`; one source port may feed several edges, each a teed, isolated copy),
+splitter typing (separately typed stream and cascade paths, `PreparedSplitter`), the
+streaming `split` module (`Tee`/`AsyncTee`, `isolate` conf), `Pipeline.split(splits, *,
+isolate=True)`, and the `ExecutionPlan.validate()` output-port rule. Later slices: the
+task group and driver task, `Pipeline.union`, and publish/subscribe.
+
 Deliver:
 
 - `Publisher[T]`, `Subscription[T]`, `Channel[T]` runtime protocols;
@@ -2046,15 +2154,19 @@ Deliver:
   pulling branches together makes that a **sum**, and that test changes with it;
   `union`/`join` (`sequential_inputs`) likewise score the max of their inputs (pinned by
   `test_async_sequential_fan_in_needs_only_its_deepest_input`), which holds only while
-  they keep reading their inputs in turn;
+  they keep reading their inputs in turn; a sync-only splitter likewise scores like a
+  whole-stream node today (`PreparedSplitter.is_thread_holder`: one node thread, on
+  which `list(cascade)` runs) because its branches are read in turn, so once branches
+  are pulled together each concurrently pulled branch of a sync-only splitter holds a
+  node thread and the demand must count them;
 - a one-call fluent fan-in, `Pipeline.union(*pipelines)` (fanout-topology § 11), wiring
   each operand's default output into one `union` node's `in`, `in:1`, … — the native
   replacement for `SyncCollection(mod, srcs)`, which today needs a hand-wired `union`
   `Workflow` (assigned by triage 2026-10-26; tripwire
-  `TestFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`). Open
-  shape question: a `Pipeline.union` classmethod shadows the module-name chaining
-  `pipeline.union(...)` that `__getattr__` provides today, so R7 decides between a
-  classmethod that also accepts the chained form or a distinct name;
+  `TestFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`). Shape
+  decided 2026-11-14: an instance method `def union(self, *others)`, which shadows the
+  module-name chaining `pipeline.union(...)` that `__getattr__` provides today (the
+  tripwire `TestSplit::test_upstream_node_runs_once_for_every_branch` also waits on it);
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish,
   derived structurally from incoming `PublishEdge`s and owned sender endpoints;
@@ -2062,13 +2174,17 @@ Deliver:
   `StatefulItem`/`StreamState` marker types the built-in `receive` yields stay off the
   supported type surface; 2026-10-30 surface triage);
 - per-subscription order guarantees;
-- buffer default `0`, overflow `block`, optional drop-oldest where permitted;
+- buffer default `0`, overflow `block`, drop-oldest only on a buffered subscription
+  (decided 2026-11-14, above);
 - receive-time `func=` semantics in sync and async together: run at subscription
   delivery/materialization time, discard the return value, and preserve the original
   item; the migrated subscriber resolves `func`'s accepted keyword names once at
   subscription (the legacy `_apply` in `riko/modules/receive.py` calls
   `inspect.signature(func)` per received item; left alone because this phase deletes
-  the module, 2026-11-09 triage);
+  the module, 2026-11-09 triage), and binds the received item positionally (or
+  positional-only) so a forwarded keyword named `item`/`func` cannot collide (the legacy
+  `_apply(func, item, **fkwargs)` raises "multiple values for argument 'item'" when
+  `func_kwargs` holds `item`; triage 2026-11-19);
 - an explicit disposition for bounded waiting (GitHub issue #82): the tripwire
   `TestReceive::test_async_receive_without_a_publisher_stops_after_max_wait` in
   `tests/public/test_modules.py` exercises the legacy `receive` module this phase
@@ -2076,15 +2192,18 @@ Deliver:
   yet, so this phase either keeps bounded waiting on the new subscription API and
   migrates that regression test, or retires the legacy timeout and closes #82 as
   superseded; the tripwire does not simply vanish with the module (gameplan audit triage
-  2026-11-05);
-- `split()` upstream-once, active-branches-only, bounded, never lossy;
-- reachable positional output ports drive `split`'s active branch count: an explicit
+  2026-11-05). Decided 2026-11-14: retire it and close #82 as superseded (above);
+- **done 2026-11-14** (slice 1):
+  `split()` upstream-once, active-branches-only, bounded, never lossy;
+- **done 2026-11-14** (slice 1):
+  reachable positional output ports drive `split`'s active branch count: an explicit
   `splits` smaller than the highest reachable `out:N` index is a validation error, and a
   graph that references `out:N` beyond the configured count never reaches an undefined
   branch (today `Workflow.validate()` accepts `splits=2` with an `out:2` edge;
   strict-xfail row `split-port-past-its-count` in `INVALID_WORKFLOWS`,
   `tests/public/test_workflow.py`, triaged from GitHub issue #61 on 2026-11-05);
-- port-keyed execution steps replace the R4B refusal of splitter nodes
+- **done 2026-11-14** (slice 1):
+  port-keyed execution steps replace the R4B refusal of splitter nodes
   (`require_single_output` in `riko/types/_wrappers.py`, applied as a `ResolvedModule`
   pipe validator and inside `require_stream`/`require_async_stream`) and the
   `require_default_output_port` guard (`riko/execution/_prepared.py`); the async
@@ -2093,7 +2212,8 @@ Deliver:
   resolves an execution `context` into its parser's `inputs`/`test`/`resources` as
   processors and operators do rather than forwarding the raw `Context` (tripwire
   `test_splitter_resolves_the_context_for_its_parser`);
-- the splitter/stream distinction is typed by module type rather than carried as a
+- **done 2026-11-14** (slice 1):
+  the splitter/stream distinction is typed by module type rather than carried as a
   union: today `ModuleWrapper`/`SyncModuleWrapper`/`AsyncModuleWrapper.__call__`
   (`riko/types/_wrappers.py`) return `WrapperOutput | SplitterWrapperOutput`, so every
   single-output call site in `riko/execution/_sync_execution.py`, `_async_execution.py`,
@@ -2106,15 +2226,27 @@ Deliver:
   branches (today `AsyncWrapperStream[Stream, Cascade]` yields sync streams); the unused
   `AsyncCascade` alias (`riko/types/_streams.py`) is either that type or deleted (audit
   triage 2026-10-05);
-- branch/route port behavior from the R4A contract;
-- one input router: both executions already share `_BaseExecution._resolve_node_inputs`
+- **done 2026-11-19**:
+  branch/route port behavior from the R4A contract. In the execution layer a generic
+  splitter's output is a `Cascade` of `Stream`s, one per output port, not tee branches,
+  so the tee term stays with `Tee`/`AsyncTee`, the `split` module, `Pipeline.split`,
+  and `RIKO_BRANCH_BUFFER`: the splitter helpers became `_gen_owned`/`_agen_owned` and
+  `PreparedSplitter.validate_branches` became `validate_streams` (`riko/execution/`),
+  while the adapters keep their `_adapt_interface`/`_aadapt_interface` names. The sync
+  side no longer conflates three shapes: the adapted async-only splitter yields `_Owned`
+  streams that close their async source on the portal instead of `(stream, closer)`
+  pairs, and `_build_splitter_ports` dropped its `native` flag, so every stream closes
+  with its port in both colors (triage 2026-11-19);
+- **done 2026-11-14** (slice 1):
+  one input router: both executions already share `_BaseExecution._resolve_node_inputs`
   (`riko/execution/_execution.py`, extracted 2026-10-13), which runs
   `require_default_output_port` per incoming edge, then sends `in` to the primary
   source, `in:N` to the ordered `others` list, and named ports into the call kwargs,
   differing per execution only in its `as_stream` adapter. Port-keyed dispatch rekeys
   that router on the source port instead of guarding it (its input changes from node
   streams to port streams);
-- port-keyed dispatch rewrites the node-dispatch code in place across
+- **done 2026-11-14** (slice 1):
+  port-keyed dispatch rewrites the node-dispatch code in place across
   `riko/execution/_execution.py` (the shared base and input-binding/build-order cores),
   `_sync_execution.py` (`SyncExecution`), and `_async_execution.py` (`AsyncExecution`).
   It stays two explicit execution classes, never a generic executor/strategy hierarchy
@@ -2165,12 +2297,12 @@ generic `_acquire_entry_once[R]` can carry. One typing unsoundness rides on this
 `DEFAULT_ENVELOPES` (the placeholder envelope in a tuple) to `as_stream` as
 `V = Iterator[T]` for an unbounded `T`; retyping the router on `Stream`/`AsyncStream`
 port streams removes it. The second one, acquisition entries holding
-`Acquisition[R | Closeable]` while `acquire`/`aacquire` return `R`, closed on
+`Acquisition[R | Closable]` while `acquire`/`aacquire` return `R`, closed on
 2026-11-02: the `ResolvedValue` alias is gone, `OwnedPlan[T]`/`ExternalPlan[T]` hold a
 plain `T`, and `register_owned` (sync and async executions) types its `cleanup` as
 `Cleanup[R]` for the registered value (it was `Cleanup[Never]` while the plan paired a
-`T | Closeable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closeable)`
-overload leaves `T` unbound (a method-scoped `[C: Closeable]` with
+`T | Closable` value with a `Cleanup[T]`). Still open: the `Resource(value: Closable)`
+overload leaves `T` unbound (a method-scoped `[C: Closable]` with
 `cls: type[Resource[C]]` is inconsistent with the `__new__` implementation under
 pyright), so `Resource(client)` with no cleanup types as `OneShotResource[Unknown]`.
 
@@ -2183,6 +2315,12 @@ interface into sync and async variants (a tagged union that `isinstance` narrows
 with a color-typed call protocol) in the same rewrite of node dispatch. `_run_sync_node`
 (`riko/execution/_async_execution.py`) then takes the sync variant by type rather than
 by docstring.
+Done 2026-11-14 (slice 1): `SyncInterface[O]`/`AsyncInterface[O]` replaced
+`PreparedInterface`, and `_run_sync_node` takes `SyncInterface[Iterator[object]]`.
+Done 2026-11-20: the sync execution's twin of `_run_sync_node`, the async-interface
+branch of `SyncExecution._build_whole_stream`, is extracted as `_run_async_node` with
+the matching argument order (TODO triage 2026-11-16). `_build_item_stream`'s branch runs
+per item, so it is not the twin.
 
 Audit note (2026-10-31 sibling audit): a sync `receive` closed early stays registered on
 its channel, so a later `receive` on that channel with `func=` gets items without `func`
@@ -2296,6 +2434,13 @@ Deliver iterative mode:
   `node.embed["conf"] = ...` type-checks yet raises, and its converter list makes
   pyright reject a conf-less embed mapping that the runtime accepts. Give it an honest
   immutable type with typed fields and a single typed converter in the same change.
+  The execution-side hook to reshape with it is `_BaseExecution._select_embed`
+  (`riko/execution/_execution.py`), which picks the embed's `sync_pipe`/`async_pipe`
+  slot for the host pipe's mode at run time and adapts the other through
+  `select_embed` (`riko/execution/_adapt.py`); prepare-time embed slots on
+  `PreparedNode` were rejected (2026-11-16 triage) because the adapters close over
+  execution state and the shape changes when an embed may be a stored workflow or a
+  `Pipeline`.
 
 Agent packages compose Pipeline + loop + Publisher/Subscription + StateStore rather than
 creating `AgentGraph`/`AgentNetwork` runtime primitives.
@@ -2339,8 +2484,8 @@ sync/async bodies (`loop_embed_sync`/`loop_embed_async`, `_fold_parent`/`_afold_
 `_run_loop`/`_arun_loop`) and one copy has already drifted (`module_name` vs
 `op_module_name`); `_take_first` re-implements the owned-value close now in
 `run_bridged` (`riko/bado/_util.py`) and closes only a `Generator` result while
-`_atake_first` closes anything async-closeable (audit 2026-11-01; no built-in embed
-returns a closeable non-generator, so no tripwire). Consolidate the pure logic into one
+`_atake_first` closes anything async-closable (audit 2026-11-01; no built-in embed
+returns a closable non-generator, so no tripwire). Consolidate the pure logic into one
 body behind an iterator adapter (as the execution split did for `_resolve_inputs`) when
 this phase settles the embed shape, since the names change then anyway.
 
@@ -2385,7 +2530,13 @@ R10 therefore owns:
   interleaves or drops items. Select the one view a parser needs before invoking it and
   share the view-building between operator and splitter; this changes the `riko.ext`
   parser protocols, so it needs a compatibility boundary (repo-audit triage 2026-10-29,
-  design note, no tripwire).
+  design note, no tripwire). An async splitter input currently skips per-item dispatch
+  (static conf only; strict-xfail tripwire
+  `tests/internal/test_modules.py::TestSplitter::test_async_splitter_resolves_conf_per_item`,
+  TODO triage 2026-11-16). Measured 2026-11-18 (repeated-work audit triage): the sync
+  splitter `setup` (`riko/modules/_decorators.py:2137-2146`) dispatches every item even
+  with a static conf, unlike the operator's `static_casted` path (`:1758`), which is 9.5
+  of 30 µs per item for `split`; the shared view-building should carry the static path.
 - a sync-only loop embed under an async host honors `count="first"` lazily instead of
   running the child to completion on its worker (strict-xfail tripwire
   `tests/internal/test_execution_plan.py::TestAsyncAdaptEmbed::test_arun_count_first_stays_lazy_for_a_sync_only_embed`;
@@ -2400,7 +2551,25 @@ R10 therefore owns:
   repo-audit triage). When the tripwire flips, re-check its neighbour
   `TestThreadBudget::test_async_nested_run_short_of_threads_raises`: once the parent's
   demand counts the nested threads, `arun` may raise the up-front demand error outside
-  that test's `pytest.raises` block (2026-11-12 test audit).
+  that test's `pytest.raises` block (2026-11-12 test audit). The mechanism this replaces
+  is the `_on_node_thread` context flag and the `_run_on_node_thread` wrapper in
+  `riko/execution/_async_execution.py`, which today mark a worker call and let
+  `_reserve_threads` reject the unsafe nested wait; the replacement is an
+  execution-owned node runner that carries the parent's reservation into the nested run.
+  It stays in `riko/execution/`: `async_runner` in `riko/bado/_util.py` is a generic
+  dispatcher and never grows a node-aware option such as a node-thread flag, because
+  `bado` sits below `execution` in the layer DAG and the execution owns worker
+  adaptation (2026-11-21 triage).
+- under a sync execution, an async-only node downstream of another async-only node reads
+  a portal-backed sync view of its input on the portal loop and fails (`portal.call`
+  from the loop's own thread raises `RuntimeError`); hand the async stream through
+  without the sync round trip, as part of the laziness/materialization-seam audit
+  (strict-xfail tripwire
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_passes_an_async_only_stream_to_an_adjacent_async_only_node`,
+  2026-11-20 triage). The failed close leaves the async source unfinalized, so the
+  tripwire collects it under a warnings filter; until this lands, a user hitting this
+  path also gets a "coroutine method 'aclose' … was never awaited" warning (2026-11-22
+  tox triage).
 - a sync run under `with_execution(concurrency>1)`, and an async run under any item
   limit (an explicit `concurrency`, `1` included, or an explicit `thread`/`inline`
   executor), stream a mapped node's per-item output instead of collecting it first
@@ -2476,10 +2645,21 @@ Audit note (2026-10-31 sibling audit): named input streams reach a node's call a
 keyword arguments beside the call options and execution extras, so
 `ExecutionPlan.validate` keeps a reserved port-name list (`_RESERVED_INPUTS` in
 `riko/execution/_prepared.py`), and `count` is reserved on processors only because
-operators take it as a port (`in:count` on `truncate`/`tail`). Deliver named inputs in
-their own mapping as part of the parser input contract above; that retires the reserved
-list and the processor-only `count` rule. It changes the `riko.ext` parser protocol
-(what `**kwargs` holds), so it shares that contract's compatibility boundary.
+operators take it as a port (`in:count` on `truncate`/`tail`). The names a node's pipe
+fills by position are reserved too (`ResolvedModule._positional_names`, sized by
+`PARSER_POSITIONALS` in `riko/types/_wrappers.py`; rows `plain-pipe-first-parameter`,
+`async-pipe-first-parameter`, `splitter-parser-first-parameter`, and
+`operator-parser-positional-parameter` in
+`tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects`). Deliver named inputs
+in their own mapping as part of the parser input contract above; that retires the
+reserved list and the processor-only `count` rule. It changes the `riko.ext` parser
+protocol (what `**kwargs` holds), so it shares that contract's compatibility boundary.
+The two item calls that are not `RunsItems` records (`prepare_call`'s `_call_plain`
+partial in `riko/definitions/_wrapping.py` and the `_gen_item_result` partial in
+`riko/execution/_prepared.py`) still bind `context=`/`**extra` by keyword at
+`riko/execution/_concurrency.py` `build_item_call` and
+`AsyncExecution._build_async_item_call`; giving them the positional `RunsItems.run_item`
+shape rides this delivery (triage 2026-11-17).
 
 Audit note (2026-10-31 sibling audit): a sync pipe given async input (an async-only
 embed for sync `loop`, an async generator as `union` others or `join` other) fails with

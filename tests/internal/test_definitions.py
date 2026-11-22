@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import pickle  # noqa: S403
 from collections import ChainMap
 from functools import partial
 from typing import TYPE_CHECKING, Any, cast, get_args, get_type_hints
@@ -12,7 +13,9 @@ import pytest
 from attrs import fields_dict
 
 from riko.base._exceptions import ResourceInterpretationWarning
+from riko.base._guards import get_sync_closer
 from riko.base._require_guards import typed_dict_keys
+from riko.coercion._canonical import canonical_bytes
 from riko.definitions._context import Context
 from riko.definitions._nodes import (
     ActionNode,
@@ -47,8 +50,8 @@ from riko.definitions._targets import (
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._write import WriteMode, WriteOperation
 from riko.types._enums import Formats
-from riko.types._frozendict import FrozenDict, freeze
-from riko.types._io import get_async_closer, get_sync_closer
+from riko.types._frozendict import FrozenDict, FrozenJSONDict, freeze, json_freeze
+from riko.types._io import get_async_closer
 from riko.types._options import CallOptions, RawCallOptions
 from riko.types._resource import (
     AsyncLifecyclePlan,
@@ -64,6 +67,7 @@ from riko.types._workflow import (
     DocumentNodeFamily,
     Endpoint,
     ParsedPort,
+    PortName,
     RawEdge,
     RawEndpoint,
     RawNode,
@@ -139,6 +143,22 @@ class TestFrozenDict:
     def test_an_unhashable_value_makes_it_unhashable(self):
         with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
             hash(FrozenDict({"a": bytearray()}))
+
+    def test_json_freeze_marks_what_it_builds_and_keeps_it(self):
+        frozen = json_freeze({"a": [1, {"b": 2}]})
+        plain = FrozenDict({"a": [1, {"b": 2}]})
+        restored = pickle.loads(pickle.dumps(frozen))  # noqa: S301
+        copied = FrozenJSONDict(frozen)
+
+        assert json_freeze(frozen) is frozen
+        assert (type(copied), copied._data is frozen._data) == (FrozenJSONDict, False)
+        assert (frozen == plain, hash(frozen) == hash(plain)) == (True, True)
+        assert canonical_bytes(frozen) == canonical_bytes(plain)
+        assert (type(restored), restored) == (FrozenJSONDict, frozen)
+
+    def test_the_public_trusted_constructor_never_marks(self):
+        wrapped = FrozenJSONDict.from_frozen({"a": 1})
+        assert (type(wrapped), json_freeze(wrapped) is wrapped) == (FrozenDict, False)
 
 
 def _sync_generator():
@@ -220,7 +240,7 @@ CONTEXT_FACTORY_REJECTIONS = [
 
 
 RESOLVED_VALUE_REJECTIONS = [
-    pytest.param("scalar", "Must provide a Closeable value", id="scalar"),
+    pytest.param("scalar", "Must provide a Closable value", id="scalar"),
     pytest.param("sync_contextmanager", _RESOLVED, id="sync-context-manager"),
     pytest.param("async_contextmanager", _RESOLVED, id="async-context-manager"),
     pytest.param("one_shot_resource", _RESOLVED, id="one-shot"),
@@ -403,7 +423,7 @@ class TestResource:
                 factory,  # pyright: ignore[reportArgumentType]
             )
 
-        with pytest.raises(TypeError, match="Must provide a Closeable value"):
+        with pytest.raises(TypeError, match="Must provide a Closable value"):
             Resource(factory)
 
         with pytest.raises(TypeError, match="Invalid lifecycle factory"):
@@ -603,8 +623,8 @@ class TestParsePort:
             ("out", ParsedPort("out", None, None)),
             ("in:1", ParsedPort("in", 1, None)),
             ("out:2", ParsedPort("out", 2, None)),
-            ("out:matched", ParsedPort("out", None, "matched")),
-            ("in:count", ParsedPort("in", None, "count")),
+            ("out:matched", ParsedPort("out", None, PortName("matched"))),
+            ("in:count", ParsedPort("in", None, PortName("count"))),
         ],
     )
     def test_parse_port_grammar(self, port, expected):

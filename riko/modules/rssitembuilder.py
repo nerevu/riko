@@ -99,7 +99,7 @@ def parser(
     return DotDict(rdict)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> DotDict[RikoValue]:
     """
     Asynchronously builds a single RSS item.

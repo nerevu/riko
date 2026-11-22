@@ -9,7 +9,7 @@ from logging import getLogger
 
 import pytest
 
-from riko.bado._backend import issync
+from riko.bado._backend import is_sync
 from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._logging import LOGGER_NAME
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
@@ -85,6 +85,8 @@ def pytest_runtest_teardown(item: pytest.Item) -> None:
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     skip_async = pytest.mark.skip(reason="async support not available")
     skip_lxml = pytest.mark.skip(reason="lxml not installed")
+    skip_docutils = pytest.mark.skip(reason="docutils not installed")
+    docutils_missing = _extra_missing("docutils")
 
     perf_missing = _extra_missing("lxml", "ijson", "fastfeedparser")
     finance_missing = _extra_missing("csv2ofx")
@@ -110,9 +112,11 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         if any(map(item.path.is_relative_to, _EXAMPLE_DIRS)):
             item.add_marker(QUIET_LEAKS)
 
-        if issync and any(marker in name for marker in ASYNC_DOCTEST_MARKERS):
+        if is_sync and any(marker in name for marker in ASYNC_DOCTEST_MARKERS):
             item.add_marker(skip_async)
         elif not IS_LXML and "xpathfetchpage" in name:
             item.add_marker(skip_lxml)
-        elif issync:
+        elif docutils_missing and "_lint_rst" in name:
+            item.add_marker(skip_docutils)
+        elif is_sync:
             _skip_coroutine_runs(item)

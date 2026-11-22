@@ -6,11 +6,13 @@ Examples:
 
     Basic usage::
 
-        >>> from riko import get_path
+        >>> from riko import get_temp_file
         >>>
-        >>> with Fetch(get_path("spreadsheet.csv")) as f:
-        ...     print(f.readline())
-        Member,Name,...
+        >>> with get_temp_file() as fp:
+        ...     _ = fp.write(b"hello")
+        ...     _ = fp.seek(0)
+        ...     fp.read()
+        b'hello'
 
 Attributes:
 
@@ -23,7 +25,6 @@ from __future__ import annotations
 from contextlib import ExitStack, contextmanager
 from functools import partial, wraps
 from io import BytesIO, RawIOBase, StringIO
-from math import isinf
 from pathlib import Path
 from tempfile import NamedTemporaryFile, SpooledTemporaryFile, TemporaryDirectory
 from typing import IO, TYPE_CHECKING, Literal, cast, overload
@@ -35,6 +36,7 @@ from mezmorize.utils import get_cache_type
 
 from riko.base._config import ENCODING, STREAMING_THRESHOLD, settings
 from riko.base._paths import is_http_url, normalize_url
+from riko.base._require_guards import as_timeout, require_timeout
 from riko.base._sentinels import MISSING, is_missing_type
 from riko.coercion._canonical import repr_cache
 from riko.types._io import resolve_user_agent
@@ -406,7 +408,7 @@ def opener(
     offline: bool = ...,
     *,
     binary: Literal[True],
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[BytesIO, str | None]: ...
@@ -419,7 +421,7 @@ def opener(
     offline: bool = ...,
     *,
     binary: Literal[True],
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     user_agent: UserAgentLike | None = None,
     **_: object,
 ) -> tuple[addinfourl | URLLib3Response, str | None]: ...
@@ -431,7 +433,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     *,
     user_agent: UserAgentLike | None = None,
     **_: object,
@@ -444,7 +446,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = ...,
     offline: bool = ...,
     binary: Literal[False] = ...,
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     *,
     user_agent: UserAgentLike | None = None,
     **_: object,
@@ -456,7 +458,7 @@ def opener(
     params: Mapping[str, AnyStr | int | float] | None = None,
     offline: bool = True,
     binary: bool = False,
-    timeout: float | None = settings.fetch_timeout,
+    timeout: float = settings.fetch_timeout,
     *,
     user_agent: UserAgentLike | None = None,
     **_: object,
@@ -482,7 +484,7 @@ def opener(
         binary: Whether to return bytes rather than decoded text.
 
         timeout: Per-request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``, 30
-            seconds). ``None``, ``0``, or ``inf`` waits forever.
+            seconds). ``inf`` waits forever.
 
         user_agent: The HTTP ``User-Agent`` to send. A ``UserAgent`` member selects an
             agent of that kind (default: "riko/<version>").
@@ -495,6 +497,7 @@ def opener(
     Raises:
 
         TypeError: If ``url`` is empty.
+        ValueError: If ``timeout`` is 0, negative, or NaN.
 
     """
     if not url:
@@ -502,13 +505,17 @@ def opener(
 
     params = params or {}
     url = normalize_url(url, offline=offline)
-    timeout = None if (not timeout) or isinf(timeout) else timeout
+    _timeout = as_timeout(require_timeout(timeout))
     headers = {"User-Agent": resolve_user_agent(user_agent)}
 
     with ExitStack() as stack:
         if is_http_url(url):
             r = requests.get(
-                url, params=params, headers=headers, stream=not memoize, timeout=timeout
+                url,
+                params=params,
+                headers=headers,
+                stream=not memoize,
+                timeout=_timeout,
             )
             stack.callback(r.close)
             r.raise_for_status()
@@ -525,7 +532,7 @@ def opener(
                 response = TextReencoder(r.raw, encoding, owner=r)
         else:
             req = Request(url, headers=headers)  # noqa: S310
-            r = urlopen(req, timeout=timeout)  # noqa: S310
+            r = urlopen(req, timeout=_timeout)  # noqa: S310
             stack.callback(r.close)
 
             if binary and memoize:
@@ -600,6 +607,8 @@ def get_temp_file() -> IO[bytes]:
 
     Examples:
 
+        >>> from pathlib import Path
+        >>>
         >>> with get_temp_file() as fp:
         ...     Path(fp.name).exists()
         True
@@ -660,6 +669,14 @@ class Fetch[B: (Literal[True], Literal[False])]:
     Raises:
 
         TypeError: If ``url`` is empty.
+
+    Examples:
+
+        >>> from riko import get_path
+        >>>
+        >>> with Fetch(get_path("spreadsheet.csv")) as f:
+        ...     print(f.readline())
+        Member,Name,...
 
     """
 

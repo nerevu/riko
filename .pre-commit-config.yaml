@@ -26,7 +26,7 @@ repos:
         name: rumdl (check)
         entry: rumdl check --fix
         language: python
-        additional_dependencies: [rumdl==0.3.2]
+        additional_dependencies: [rumdl==0.3.4]
         types: [markdown]
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12

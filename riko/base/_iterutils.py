@@ -1,18 +1,64 @@
-"""General iterable composition, fan-out, interleaving, and deduplication helpers."""
+"""
+General iterable composition, fan-out, interleaving, and deduplication helpers.
+
+Examples:
+
+    Basic usage::
+
+        >>> from io import StringIO
+        >>> from riko.ext import auto_close
+        >>>
+        >>> f = StringIO("hi")
+        >>> stream = auto_close((line.upper() for line in f), f)
+        >>> list(stream), f.closed
+        (['HI'], True)
+
+"""
 
 from __future__ import annotations
 
+import warnings
+from collections import deque
+from contextlib import suppress
+from copy import deepcopy
+from enum import StrEnum
 from functools import partial
-from itertools import cycle, dropwhile, islice, takewhile
-from typing import TYPE_CHECKING, Literal, overload
+from itertools import count, cycle, dropwhile, islice, takewhile
+from math import ceil, inf
+from threading import Condition, Lock, get_ident
+from types import GeneratorType
+from typing import TYPE_CHECKING, Literal, Self, overload
 
-from ._guards import is_known_sequence, is_mapping, require_sequence
+import attrs
+
+from ._config import Limit, require_limit
+from ._exceptions import PipelineError, PipelineStateError
+from ._guards import (
+    ASYNC_CLEANUP_MSG,
+    get_sync_closer,
+    is_known_sequence,
+    is_mapping,
+    require_sequence,
+    require_value,
+)
+from ._logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+    from logging import Logger
 
     from riko.types._frozendict import SortKey
     from riko.types._wrappers import Func
+
+logger: Logger = get_logger(__name__)
+
+BRANCH_LAG_MSG = (
+    "a branch fell more than {} items behind its siblings; raise RIKO_BRANCH_BUFFER "
+    "or read the branches together"
+)
+READ_INTERRUPTED_MSG = (
+    "the upstream read was cancelled or interrupted by another consumer"
+)
 
 
 def gen_instances[T](
@@ -517,3 +563,654 @@ def multiplex[T](sources: Iterable[Iterable[T]]) -> Iterator[T]:
         except StopIteration:
             active -= 1
             nexts = cycle(islice(nexts, active))
+
+
+def fan_out[T](func: Callable[[T], T], item: T, *keys: int) -> Iterator[tuple[int, T]]:
+    r"""
+    Delivers the same item to a function once per key.
+
+                /--> func(item) --> (key1, result)
+               /
+        item -----> func(item) --> (key2, result)
+               \
+                \--> func(item) --> (key3, result)
+
+    Args:
+
+        func: The function applied to ``item``.
+        item: The value passed to ``func``.
+        keys: The branches that receive it.
+
+    Yields:
+
+        Each key paired with its own result of ``func(item)``.
+
+    Raises:
+
+        PipelineError: If the function call fails.
+
+    Examples:
+
+        >>> from copy import copy
+        >>>
+        >>> dict(fan_out(copy, "a", 1, 2))
+        {1: 'a', 2: 'a'}
+
+    """
+    for key in keys:
+        try:
+            yield key, func(item)
+        except Exception as error:
+            msg = "could not {} an item for branch {} of the fan-out"
+            name = getattr(func, "__name__", repr(func))
+            raise PipelineError(msg.format(name, key)) from error
+
+
+def log_cleanup_failure(
+    error: BaseException | None, failure: BaseException, msg: str
+) -> None:
+    """
+    Logs a cleanup failure and notes it on the error it accompanies when there is one.
+
+    Args:
+
+        error: The error being raised, if any.
+        failure: The error the cleanup raised.
+        msg: What the cleanup was doing.
+
+    Examples:
+
+        >>> error = ValueError("read failed")
+        >>> log_cleanup_failure(error, OSError("close failed"), "closing the source")
+        >>> error.__notes__
+        ["closing the source also failed: OSError('close failed')"]
+
+    """
+    if error is None:
+        logger.warning(f"{msg} failed", exc_info=failure)
+    else:
+        error.add_note(f"{msg} also failed: {failure!r}")
+        logger.warning(" ".join(error.__notes__), exc_info=failure)
+
+
+def has_open_resource(values: Iterable[object], *ignored: type) -> bool:
+    """
+    Checks whether any of ``values`` is a closable resource rather than a stream.
+
+    A value of an ``ignored`` type never counts: pass generators, which close what
+    they hold when garbage collected, and wrappers, which report their own leaks. Any
+    other value with ``close`` or ``aclose`` does, such as a file, a response, or a
+    cursor.
+
+    Args:
+
+        values: The values a wrapper would close.
+        ignored: The types that are not resources.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>> from types import GeneratorType
+        >>>
+        >>> has_open_resource([(x for x in "ab"), None], GeneratorType)
+        False
+        >>> has_open_resource([StringIO("hi")], GeneratorType)
+        True
+
+    """
+    closables = (v for v in values if hasattr(v, "close") or hasattr(v, "aclose"))
+    return not all(isinstance(v, ignored) for v in closables)
+
+
+class auto_close[T]:  # noqa: N801
+    """
+    Passes ``source`` through so it closes ``closables`` when iteration ends.
+
+    Closes each closable on exhaustion, an early close, or an exception. Also closes
+    ``source`` if it is closable. A ``close`` before the first read releases
+    everything. A value with no close (including ``None``) is skipped.
+
+    Use ``maybe_closing`` instead when the handle is consumed inside one ``with`` block.
+    This wrapper is for a handle whose consumption is deferred.
+
+    E.g., a parser that returns a lazy iterator over an open file keeps the file alive
+    until the caller drains it. A ``with`` block would close it before the first read.
+    Pass a second closable when a seekable copy is read but the original fetch must
+    still be released.
+
+    Args:
+
+        source: The items to yield.
+        closables: The values closed once iteration finishes.
+
+    Warns:
+
+        ResourceWarning: If a wrapper holding a resource (not just generators or other
+            wrappers) is read from but garbage collected before it finishes or closes.
+            It closes either way, as an abandoned generator does.
+
+    Raises:
+
+        InvalidPipelineError: If a close returns an awaitable since there is no event
+            loop.
+
+        Exception: Whatever a failing close raises, once every closable has been
+            closed.
+
+        ExceptionGroup: If several fail. A close failure after a read error is noted
+            on that error instead.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO("hi")
+        >>> list(auto_close(f))
+        ['hi']
+        >>> f.closed
+        True
+
+        # Closing before the first read
+        >>> g, h = StringIO("hi"), StringIO("extra")
+        >>> auto_close(g, h).close()
+        >>> g.closed, h.closed
+        (True, True)
+
+    """
+
+    __slots__ = ("_open", "_started", "closables", "source")
+
+    def __init__(self, source: Iterable[T], *closables: object) -> None:
+        self.source: Iterator[T] = iter(source)
+        self.closables: tuple[object, ...] = closables
+        self._open = [True]
+        self._started = False
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> T:
+        self._started = True
+
+        try:
+            item = next(self.source)
+        except StopIteration:
+            self.close()
+            raise
+        except BaseException as primary:
+            try:
+                self.close()
+            except Exception as failure:  # noqa: BLE001 (noted on the primary)
+                log_cleanup_failure(primary, failure, "closing the source")
+
+            raise
+
+        return item
+
+    def __del__(self) -> None:
+        """Closes a started but unclosed wrapper, and warns if it holds a resource."""
+        if getattr(self, "_started", False) and getattr(self, "_open", None):
+            values = (getattr(self, "source", None), *getattr(self, "closables", ()))
+
+            if has_open_resource(values, GeneratorType, auto_close):
+                msg = "unclosed auto_close stream. Exhaust or close it"
+                warnings.warn(msg, ResourceWarning, source=self, stacklevel=1)
+
+            with suppress(Exception):
+                self.close()
+
+    def close(self) -> None:
+        """
+        Closes the source and each closable (closing again does nothing).
+
+        Raises:
+
+            Exception: Whatever the one failing close raises.
+            ExceptionGroup: If several closes fail.
+
+        """
+        failures: list[Exception] = []
+
+        try:
+            # A single atomic pop, so concurrent callers close only once.
+            self._open.pop()
+        except IndexError:
+            pass
+        else:
+            for value in (self.source, *self.closables):
+                if (closer := get_sync_closer(value)) is not None:
+                    try:
+                        require_value(closer(), ASYNC_CLEANUP_MSG)
+                    except Exception as error:  # noqa: BLE001 (raised after the loop)
+                        failures.append(error)
+
+        if len(failures) == 1:
+            raise failures[0]
+        elif failures:
+            raise ExceptionGroup("multiple errors during auto_close", failures)
+
+
+@attrs.frozen(kw_only=True)
+class TeeRead[T]:
+    """
+    What one upstream read of a tee publishes to its branches.
+
+    Examples:
+
+        >>> from collections import deque
+        >>>
+        >>> buffers = {0: deque(), 1: deque()}
+        >>> read = TeeRead.from_item([1], 0, 1, isolate=True)
+        >>> read.deliver(buffers)
+        >>> buffers
+        {0: deque([[1]]), 1: deque([[1]])}
+        >>> buffers[0][0] is buffers[1][0]
+        False
+
+    """
+
+    values: Mapping[int, T] = attrs.field(factory=dict)
+    error: Exception | None = None
+    discard: bool = False
+    done: bool = False
+
+    @classmethod
+    def from_lag(cls, max_lag: Limit) -> Self:
+        """
+        Builds the read that fails every branch once one falls too far behind.
+
+        Args:
+
+            max_lag: The most items a branch may have queued.
+
+        Returns:
+
+            A read that discards every buffer and carries the overflow error.
+
+        """
+        error = PipelineError(BRANCH_LAG_MSG.format(ceil(max_lag)))
+        return cls(error=error, discard=True)
+
+    @classmethod
+    def from_interrupt(cls, exc: BaseException) -> Self:
+        """
+        Builds the read that fails the other branches after an interrupted read.
+
+        Args:
+
+            exc: What interrupted the read.
+
+        Returns:
+
+            A read whose error is caused by ``exc``.
+
+        """
+        error = PipelineError(READ_INTERRUPTED_MSG)
+        error.__cause__ = exc
+        return cls(error=error)
+
+    @classmethod
+    def from_item(cls, item: T, key: int, *others: int, isolate: bool) -> Self:
+        """
+        Builds the read that queues one upstream item for the reader and its siblings.
+
+        Args:
+
+            item: The item read.
+            key: The branch that read it.
+            others: The live sibling branches.
+
+        Kwargs:
+
+            isolate: Gives every sibling a deep copy of ``item``.
+
+        Returns:
+
+            A read that queues the item, or one that discards every buffer and carries
+            the error when a copy fails.
+
+        """
+        if isolate:
+            try:
+                read = cls(values={key: item, **dict(fan_out(deepcopy, item, *others))})
+            except PipelineError as copy_error:
+                read = cls(error=copy_error, discard=True)
+        else:
+            read = cls(values=dict.fromkeys((key, *others), item))
+
+        return read
+
+    def deliver(self, buffers: Mapping[int, deque[T]]) -> None:
+        """
+        Delivers the read's values to the open branch buffers.
+
+        Discarding clears every buffer first.
+
+        Args:
+
+            buffers: Each live branch's queued items.
+
+        """
+        if self.discard:
+            for buffer in buffers.values():
+                buffer.clear()
+
+        for k, value in self.values.items():
+            if (buffer := buffers.get(k)) is not None:
+                buffer.append(value)
+
+
+class _TeeState(StrEnum):
+    """The lifecycle state of a tee."""
+
+    IDLE = "idle"
+    READING = "reading"
+    DONE = "done"
+    CLOSED = "closed"
+
+
+def require_idle(state: _TeeState) -> None:
+    """
+    Requires an idle tee (has not started reading and hasn't closed).
+
+    Args:
+
+        state: The tee's state.
+
+    Raises:
+
+        PipelineStateError: If the tee is not idle.
+
+    Examples:
+
+        >>> require_idle(_TeeState.IDLE)
+
+    """
+    if state is not _TeeState.IDLE:
+        raise PipelineStateError(state.value, "branch", subject="tee")
+
+
+def is_lagging[T](buffers: Mapping[int, deque[T]], key: int, max_lag: Limit) -> bool:
+    """
+    Checks whether any of ``key``'s siblings has ``max_lag`` items queued.
+
+    Args:
+
+        buffers: Each live branch's queued items.
+        key: The branch about to read upstream.
+        max_lag: The most items a branch may have queued.
+
+    Returns:
+
+        Whether reading another item would overflow a sibling.
+
+    Examples:
+
+        >>> from collections import deque
+        >>>
+        >>> is_lagging({0: deque(), 1: deque([1, 2])}, 0, 2)
+        True
+
+    """
+    return any(len(buffers[k]) >= max_lag for k in buffers if k != key)
+
+
+class TeeBranch[T]:
+    """
+    One ``Tee`` branch: an iterator that releases its buffer when closed.
+
+    Created by ``Tee.branch``. Exhausting or closing the branch drops its buffer. Once
+    every branch has done so, the tee closes its source. Closing a branch while its
+    consumer waits on another thread's read ends that wait at once.
+    """
+
+    __slots__ = ("_key", "_tee")
+
+    def __init__(self, tee: Tee[T], key: int) -> None:
+        self._tee = tee
+        self._key = key
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> T:
+        try:
+            item = self._tee._pull(self._key)
+        except StopIteration:
+            self._tee._drop(self._key)
+            raise
+
+        return item
+
+    def close(self) -> None:
+        """Drops the branch and its buffer (closing again does nothing)."""
+        self._tee._drop(self._key)
+
+
+class Tee[T]:
+    """
+    Shares one iterator among branches pulled in any order.
+
+    Each upstream item is pulled once, by whichever branch first asks for it. It is
+    queued for every other open branch. Nothing is ever dropped. A lagging branch
+    buffers, and if it falls more than ``max_lag`` items behind, fails the tee instead.
+    Create every branch before reading any. Branches may be read from different threads,
+    one consumer per branch.
+
+    The source closes as soon as it is exhausted or fails, and buffered items still
+    drain. An upstream error reaches every branch once it has drained what it queued.
+    Every later read raises it again.
+
+    An overflow or a failed copy discards every buffer and fails every branch at once.
+    Closing the last branch while another thread is reading upstream returns at once.
+    That reader closes the source when its read returns.
+
+    Args:
+
+        source: The items to share.
+
+    Kwargs:
+
+        isolate: Gives every branch but the first reader a deep copy.
+        max_lag: The most items a branch may have queued (default: no bound).
+
+    Raises:
+
+        PipelineError: If
+
+            - A branch would queue more than ``max_lag`` items
+            - An item cannot be copied
+            - Another consumer's upstream read was cancelled or interrupted.
+
+        PipelineStateError: If a branch is created after the first read or after
+            close, or the source reads a branch that has nothing queued.
+
+        TypeError: If ``max_lag`` is neither an integer nor ``math.inf``.
+        ValueError: If ``max_lag`` is 0 or negative.
+
+    Examples:
+
+        >>> tee = Tee([{"n": 1}, {"n": 2}], isolate=True)
+        >>> first, second = tee.branch(), tee.branch()
+        >>> next(first)
+        {'n': 1}
+        >>> list(second)
+        [{'n': 1}, {'n': 2}]
+        >>> list(first)
+        [{'n': 2}]
+
+    """
+
+    __slots__ = (
+        "_advancer",
+        "_buffers",
+        "_error",
+        "_isolate",
+        "_keys",
+        "_lock",
+        "_max_lag",
+        "_ready",
+        "_source",
+        "_state",
+    )
+
+    def __init__(
+        self, source: Iterable[T], *, isolate: bool = False, max_lag: Limit = inf
+    ) -> None:
+        self._max_lag = require_limit(max_lag, "max_lag")
+        self._source: auto_close[T] = auto_close(source)
+        self._isolate = isolate
+        self._buffers: dict[int, deque[T]] = {}
+        self._keys = count()
+        self._lock = Lock()
+        self._ready = Condition(self._lock)
+        self._advancer: int | None = None
+        self._state = _TeeState.IDLE
+        self._error: Exception | None = None
+
+    def _require_buffer(self, key: int) -> deque[T]:
+        if (buffer := self._buffers.get(key)) is None:
+            raise StopIteration
+
+        if not buffer:
+            if self._error is not None:
+                raise self._error
+
+            if self._state is _TeeState.DONE:
+                raise StopIteration
+
+            if self._advancer == get_ident():
+                raise PipelineStateError("advancing", "read", subject="tee")
+
+        return buffer
+
+    def _publish(self, read: TeeRead[T]) -> None:
+        with self._lock:
+            read.deliver(self._buffers)
+
+            if read.error is not None:
+                self._error = read.error
+
+            if read.done and self._state is _TeeState.READING:
+                self._state = _TeeState.DONE
+
+            self._advancer = None
+            self._ready.notify_all()
+
+    def _close_source(self, error: Exception | None = None) -> None:
+        try:
+            self._source.close()
+        except BaseException as failure:
+            log_cleanup_failure(error, failure, "closing the source")
+
+            if not isinstance(failure, Exception):
+                raise
+
+    def _process(self, key: int, *, full: bool) -> TeeRead[T]:
+        if full:
+            read = TeeRead[T].from_lag(self._max_lag)
+        else:
+            try:
+                item = next(self._source)
+            except StopIteration:
+                read = TeeRead[T](done=True)
+            except Exception as read_error:  # noqa: BLE001 (latched, re-raised)
+                read = TeeRead[T](error=read_error)
+            else:
+                # Reads keys atomically so closed branches get no copy.
+                others = tuple(k for k in tuple(self._buffers) if k != key)
+                read = TeeRead.from_item(item, key, *others, isolate=self._isolate)
+
+        return read
+
+    def _advance(self, key: int, *, full: bool) -> None:
+        read = TeeRead[T]()
+        interrupted: BaseException | None = None
+
+        try:
+            read = self._process(key, full=full)
+        except BaseException as exc:  # noqa: BLE001 (re-raised below)
+            interrupted = exc
+            read = TeeRead[T].from_interrupt(exc)
+        finally:
+            self._publish(read)
+
+        if read.error is not None:
+            self._close_source(read.error)
+
+        # A close requested during the read was left to this reader
+        if self._state is _TeeState.CLOSED:
+            self._close_source()
+
+        if interrupted is not None:
+            raise interrupted
+        elif read.error is not None:
+            raise read.error
+
+    def _pull(self, key: int) -> T:
+        with self._lock:
+            while not (buffer := self._require_buffer(key)):
+                if self._advancer is None:
+                    self._advancer = get_ident()
+                    self._state = _TeeState.READING
+                    full = is_lagging(self._buffers, key, self._max_lag)
+                    self._lock.release()
+
+                    try:
+                        self._advance(key, full=full)
+                    finally:
+                        self._lock.acquire()
+                else:
+                    self._ready.wait()
+
+            item = buffer.popleft()
+
+        return item
+
+    def _drop(self, key: int) -> None:
+        with self._lock:
+            dropped = self._buffers.pop(key, None) is not None
+            last = dropped and not self._buffers
+            self._ready.notify_all()
+
+        if last:
+            self.close()
+
+    def branch(self) -> TeeBranch[T]:
+        """
+        Builds a new branch that yields every item the tee reads.
+
+        Returns:
+
+            The branch.
+
+        Raises:
+
+            PipelineStateError: If the tee has started reading or has closed.
+
+        """
+        require_idle(self._state)
+        key = next(self._keys)
+        self._buffers[key] = deque()
+        return TeeBranch(self, key)
+
+    def close(self) -> None:
+        """
+        Closes the source and ends every branch.
+
+        While another thread is reading upstream, returns at once and leaves the
+        close to that reader.
+
+        Raises:
+
+            Exception: Whatever closing the source raises.
+
+        """
+        with self._lock:
+            self._buffers.clear()
+            deferred = self._advancer is not None
+            self._state = _TeeState.CLOSED
+            self._ready.notify_all()
+
+        if not deferred:
+            self._source.close()

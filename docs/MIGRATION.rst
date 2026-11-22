@@ -115,13 +115,14 @@ and ``PipeState`` with ``Pipeline``, one class for sync and async runs:
   ``Pipeline.from_module('fetch', conf=…)``.
 - ``pipe | ('sort', conf)`` → ``pipeline.sort(conf=…)`` or
   ``pipeline.pipe('sort', conf=…)``.
-- A ``Transforms.UDF`` step → ``pipeline.map(func)``.
+- ``Transforms.UDF`` → ``pipeline.map(func)``.
 - ``pipe.export(…)`` → ``export(pipeline, …)``.
 - ``SyncCollection``/``AsyncCollection`` multi-source fetching → a ``union`` of
   ``fetch`` pipelines (the Cookbook's "Fetch several sources" recipe).
 - ``parallel``/``workers``/``threads``/``pool`` arguments →
   ``pipeline.with_execution(concurrency=…)``.
-- ``PipeState`` and ``subscribe``/``publish``/``split`` have no replacement.
+- ``split`` → ``pipeline.split(n)``.
+- ``PipeState`` and ``subscribe``/``publish`` have no replacement.
 
 .. _CHANGES: CHANGES.rst
 .. _How do I see a workflow's inputs and dependencies without running it: FAQ.rst#how-do-i-see-a-workflows-inputs-and-dependencies-without-running-it

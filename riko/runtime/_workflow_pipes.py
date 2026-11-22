@@ -44,12 +44,12 @@ from riko.types._wrappers import require_subpipe
 from ._run import arun_pipeline, run_pipeline
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import Callable, Iterator
 
     from riko.definitions._context import Context
     from riko.definitions._workflow_definition import Workflow
     from riko.types._frozendict import FrozenInputSchemas, InputSchemasLike
-    from riko.types._streams import InputLike
+    from riko.types._streams import AsyncStreamOf, InputLike
     from riko.types._wrappers import (
         AsyncFunc,
         AsyncSubPipe,
@@ -112,7 +112,7 @@ def workflow(  # pyright: ignore[reportOverlappingOverload]
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    isasync: Literal[True],
+    is_async: Literal[True],
     input_schemas: InputSchemasLike | None = ...,
     dependencies: Iterable[str] | None = ...,
 ) -> Callable[[Func[object]], AsyncSubPipe]: ...
@@ -121,7 +121,7 @@ def workflow(
     *,
     subtype: ModuleSubtype = ...,
     loopable: bool = ...,
-    isasync: bool | None = ...,
+    is_async: bool | None = ...,
     input_schemas: InputSchemasLike | None = ...,
     dependencies: Iterable[str] | None = ...,
 ) -> _WorkflowTagger: ...
@@ -129,7 +129,7 @@ def workflow(
     *args: object,
     subtype: ModuleSubtype = "transformer",
     loopable: bool = True,
-    isasync: bool | None = None,
+    is_async: bool | None = None,
     input_schemas: InputSchemasLike | None = None,
     dependencies: Iterable[str] | None = None,
 ) -> Callable[[Func[object]], SubPipe]:
@@ -155,7 +155,7 @@ def workflow(
         loopable: The pipe's ``loopable`` discovery flag. ``loop`` embeds a tagged pipe
             either way.
 
-        isasync: Whether the pipe is an ``async_pipe``. Defaults to ``True`` for an
+        is_async: Whether the pipe is an ``async_pipe``. Defaults to ``True`` for an
             async function or an async generator function.
 
         input_schemas: The input schemas the workflow reads (each a type name or JSON
@@ -181,7 +181,7 @@ def workflow(
         ... def pipe(item=None, **kwargs):
         ...     return iter([])
         >>>
-        >>> pipe.type, pipe.subtype, pipe.isasync
+        >>> pipe.type, pipe.subtype, pipe.is_async
         ('pipe', 'source', False)
         >>> pipe.dependencies
         ('count', 'fetch')
@@ -203,10 +203,10 @@ def workflow(
         tagged = partial(pipe)
         update_wrapper(tagged, pipe)
 
-        if isasync is None:
-            resolved = is_async_callable(pipe) or isasyncgenfunction(pipe)
+        if is_async is None:
+            _is_async = is_async_callable(pipe) or isasyncgenfunction(pipe)
         else:
-            resolved = isasync
+            _is_async = is_async
 
         stamp_wrapper_meta(
             tagged,
@@ -216,7 +216,7 @@ def workflow(
             subtypes={subtype},
             pollable=False,
             loopable=loopable,
-            isasync=resolved,
+            is_async=_is_async,
             input_schemas=schemas,
             dependencies=names,
         )
@@ -284,16 +284,16 @@ def build_workflow_pipes(
 
     def async_pipe(
         item: InputLike | None = None, context: Context | None = None, **kwargs: object
-    ) -> AsyncIterator[object]:
+    ) -> AsyncStreamOf[object]:
         validate_call_keywords(name, kwargs)
         definition = PipelineDefinition(flow, context=context)
         return arun_pipeline(definition, dispatcher, seed=item)
 
     schemas, names = flow.input_schemas, flow.dependencies
     sync_tag = workflow(
-        subtype=subtype, isasync=False, input_schemas=schemas, dependencies=names
+        subtype=subtype, is_async=False, input_schemas=schemas, dependencies=names
     )
     async_tag = workflow(
-        subtype=subtype, isasync=True, input_schemas=schemas, dependencies=names
+        subtype=subtype, is_async=True, input_schemas=schemas, dependencies=names
     )
     return SubPipes(sync_tag(pipe), async_tag(async_pipe))

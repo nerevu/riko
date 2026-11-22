@@ -344,8 +344,9 @@ def async_url_open(
     with ``async with`` to auto-close it on exit. Use ``async with`` only when the
     buffer is consumed inside the block. When returning a lazy iterator that outlives
     the block, keep the ``await`` form and release the handle on iteration end with
-    :class:`riko.bado.itertools.auto_close` (an ``async with`` would close it before the
-    caller ever reads it).
+    :class:`riko.ext.auto_close`. Use its async twin :class:`riko.ext.aauto_close` for
+    an async-closable handle (an ``async with`` would close it before the caller ever
+    reads it).
 
     Args:
 
@@ -354,7 +355,7 @@ def async_url_open(
     Kwargs:
 
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0`` or ``inf`` waits forever.
+            30 seconds). ``inf`` waits forever; ``0`` raises ``ValueError``.
 
         encoding: The text decoding used when ``binary`` is False.
 
@@ -421,7 +422,7 @@ async def async_url_read(
     Kwargs:
 
         timeout: The HTTP request timeout in seconds (default: ``RIKO_FETCH_TIMEOUT``,
-            30 seconds). ``0`` or ``inf`` waits forever.
+            30 seconds). ``inf`` waits forever; ``0`` raises ``ValueError``.
 
         encoding: The text decoding used for local reads.
 
@@ -482,7 +483,7 @@ async def async_write(
     Examples:
 
         >>> from io import StringIO
-        >>> from riko import async_get_temp_file, run
+        >>> from riko import run
         >>>
         >>> async def main():
         ...     async with async_get_temp_file() as fp:

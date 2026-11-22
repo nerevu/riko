@@ -31,6 +31,7 @@ from riko.base._require_guards import (
     require_str,
 )
 from riko.types._workflow import (
+    OUT,
     PORT_DIRECTIONS,
     EdgeFamily,
     Endpoint,
@@ -41,6 +42,7 @@ from riko.types._workflow import (
     RawEdge,
     RawEndpoint,
     RawNode,
+    RawPort,
     RawWorkflow,
     parse_port,
 )
@@ -94,31 +96,31 @@ require_raw_edge = require_from_typed_dict(RawEdge, "PortEdge")
 require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 
 
-def _get_legacy_index(port: Port, prefix: str, default: int) -> int:
+def _get_legacy_index(port: RawPort, prefix: str, default: int) -> int:
     """Reads the trailing number off a legacy ``_OTHER``/``_OUTPUT`` port suffix."""
     suffix = port.removeprefix(prefix)
     return int(suffix) if suffix.isdigit() else default
 
 
-def _is_legacy_port(port: Port, prefix: str) -> bool:
-    """Confirms a legacy port suffix is empty or a bare series number."""
+def _is_legacy_port(port: RawPort, prefix: str) -> bool:
+    """Confirms a port has a legacy prefix and an empty or numeric series suffix."""
     suffix = port.removeprefix(prefix)
-    return not suffix or suffix.isdigit()
+    return port.startswith(prefix) and (suffix == "" or suffix.isdigit())
 
 
-def _normalize_port(port: Port, direction: PortDirection) -> Port:
+def _normalize_port(port: RawPort, direction: PortDirection) -> Port:
     """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
     if not port or port in PORT_DIRECTIONS:
         result = port
     elif port == INPUT_PORT:
         result = "in"
     elif port == OUTPUT_PORT:
-        result = "out"
+        result = OUT
     elif _is_legacy_port(port, OTHER_PORT):
         result = f"in:{_get_legacy_index(port, OTHER_PORT, 1)}"
     elif _is_legacy_port(port, OUTPUT_PORT):
         index = _get_legacy_index(port, OUTPUT_PORT, 1) - 1
-        result = "out" if index < 1 else f"out:{index}"
+        result = OUT if index < 1 else f"{OUT}:{index}"
     elif port.isidentifier():
         result = f"{direction}:{port}"
     else:
@@ -137,18 +139,18 @@ def _validate_port(port: Port) -> None:
 
 def _resolve_aliases[T](raw: Mapping[str, T], kind: str) -> dict[str, T]:
     """Folds each aliased field onto its name and accepts both only when they agree."""
-    resolved = dict(raw)
+    aliases = dict(raw)
 
     for alias, name in _ALIASES[kind].items():
-        primary, value = resolved.get(name), resolved.pop(alias, None)
+        if alias in aliases:
+            value = aliases.pop(alias)
 
-        if primary is None and value is not None:
-            resolved[name] = value
-        elif value is not None and value != primary:
-            what = f"{kind} {name!r}/{alias!r}"
-            raise InvalidPipelineError(f"conflicting {what}: {primary!r} and {value!r}")
+            if value != (primary := aliases.setdefault(name, value)):
+                what = f"{kind} {name!r}/{alias!r}"
+                msg = f"conflicting {what}: {primary!r} and {value!r}"
+                raise InvalidPipelineError(msg)
 
-    return resolved
+    return aliases
 
 
 def _build_node(raw: NodeLike) -> RikoNode:
@@ -160,8 +162,8 @@ def _build_node(raw: NodeLike) -> RikoNode:
         msg = f"unknown node key 'type': {hint}"
         raise InvalidPipelineError(msg)
     else:
-        resolved = _resolve_aliases(raw, "node")
-        _family = resolved.pop("family", None)
+        aliases = _resolve_aliases(raw, "node")
+        _family = aliases.pop("family", None)
         family = "module" if _family is None else str(_family)
 
         if family == CallableNode.family:
@@ -171,8 +173,8 @@ def _build_node(raw: NodeLike) -> RikoNode:
         elif (builder := _NODE_BUILDERS.get(family)) is None:
             raise InvalidPipelineError(f"unknown node family: {family!r}")
 
-        require_from_attrs(builder)(resolved)
-        node = builder(**cast("dict[str, Any]", resolved))
+        require_from_attrs(builder)(aliases)
+        node = builder(**cast("dict[str, Any]", aliases))
 
     return node
 
@@ -292,7 +294,7 @@ def build_nodes(raw_nodes: NodesLike) -> RikoNodeCollection:
     return result
 
 
-def resolve_port(port: Port | None, default: Port) -> Port:
+def resolve_port(port: RawPort | None, default: RawPort) -> RawPort:
     """Resolves an authored endpoint port."""
     return default if port is None else str(port)
 
@@ -304,8 +306,8 @@ def _normalize_endpoint(default_port: PortDirection, raw: EndpointLike) -> Endpo
     else:
         endpoint = require_raw_endpoint(require_mapping(raw, "endpoint"))
         node = require_str(endpoint.get("node"), "edge endpoint 'node'")
-        resolved = resolve_port(endpoint.get("port"), default_port)
-        port = _normalize_port(resolved, default_port)
+        raw_port = resolve_port(endpoint.get("port"), default_port)
+        port = _normalize_port(raw_port, default_port)
         _validate_port(port)
         result = Endpoint(node, port)
 
@@ -409,7 +411,7 @@ def normalize_outputs(
     if raw is None:
         pairs = ((e.source.node, e.target.node) for e in get_family_edges(edges))
         ends = leaves(edges_to_graph(pairs, *node_ids))
-        result = {DEFAULT_OUTPUT: Endpoint(ends[0], "out")} if len(ends) == 1 else {}
+        result = {DEFAULT_OUTPUT: Endpoint(ends[0], OUT)} if len(ends) == 1 else {}
     else:
         outputs = require_mapping(raw, "outputs")
         normalize = partial(_normalize_endpoint, "out")

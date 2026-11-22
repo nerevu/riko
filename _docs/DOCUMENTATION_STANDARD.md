@@ -67,7 +67,7 @@ The source parameter differs by wrapper type:
 
 | Wrapper | Label | Because |
 |---|---|---|
-| `operator` / `splitter` | `items (Items)` | the input *is* the stream |
+| `operator` / `splitter` | `items (Items)` on `pipe`; `items (Feed)` on `async_pipe` | the input *is* the stream (sync, or sync or async for `async_pipe`) |
 | `processor` | `item (Item \| Items)` | one item, or an iterable mapped element-by-element |
 
 A processor's first argument is overloaded — one item, or many — and the wrapper
@@ -526,8 +526,9 @@ contradict the "public examples exercise the public object" rule under Doctest
 rules. This bounds only the *module* docstring — a private function may still
 carry a local doctest where a compact executable example clarifies non-obvious
 behavior. `manage lint --docstrings` enforces all three cases of this rule (no
-public API, a runtime public API, a type-only public API) and the public-path rule
-for example imports.
+public API, a runtime public API, a type-only public API), the public-path rule
+for example imports, and that a module example imports its own module's names
+rather than using them bare.
 
 ## General docstring rules
 
@@ -638,6 +639,10 @@ field name needs ``content``.
 `(default: word)` whose parameter defaults to the string ``"word"``. Value vs. name
 vs. label is a judgment call no lint makes.
 
+RST does not nest inline markup: a ``literal`` inside `**bold**` or `*emphasis*`
+renders as raw backticks, so write the bold around it
+(`**Removed** ``Objconf`` **entirely**`); `manage lint --rst` flags the nested form.
+
 ```rst
 Value:  ``executor`` accepts ``"thread"``.
 Name:   Splits ``content`` on the delimiter.
@@ -664,8 +669,15 @@ is caught unless it also gains one).
 - Every code block runs on its own: it imports and defines everything it uses,
   even when an earlier block in the same file or section already did, because
   readers land on a block directly. Repeating that setup across blocks is
-  expected, never duplication to remove. Within one block, never rebind a name:
-  give each step its own name (`page`, `feed`, `merged`).
+  expected, never duplication to remove. The one exception is a class or function
+  docstring, whose examples run with the module's globals: they use the names
+  their own module defines bare, never importing them, and import everything else,
+  including names the module itself only imports. A module docstring imports its
+  own names too, through the public path. `manage lint --docstrings` flags an
+  example name that is neither imported, defined in the example, a builtin, nor
+  (in a class or function docstring) defined by the enclosing module, and a class
+  or function example that imports its own module's name. Within one block, never
+  rebind a name: give each step its own name (`page`, `feed`, `merged`).
 - Name inputs by role: `items`, `result`, `stream`, `conf`, `pipe`.
 - Prefer `list(result)` when demonstrating the complete sequence; `next(result)`
   when streaming/laziness is the point.
@@ -748,7 +760,7 @@ Use idiomatic Python 3.12+:
 **There is no Twisted anywhere.** The optional async backend is AnyIO. Document
 the async contract, not the machinery. When async support is unavailable,
 `conftest.py` skips Async/Bado doctest items whole and, everywhere else (including
-`.rst` files), skips just the examples that call `run(...)`. So do not add `issync`
+`.rst` files), skips just the examples that call `run(...)`. So do not add `is_sync`
 fallback branches merely to make an async doctest pass in a sync-only environment.
 The canonical async doctest form is:
 
@@ -885,12 +897,14 @@ reader to the wrong place.
 | **`WorkflowModule`** | Python source defining `pipe`/`async_pipe` over an item, a stream, or nothing, plus a `context` — what `compile_workflow` returns, or the same shape written by hand; "workflow module" on first use; never a loaded module | not "generated module", "pipeline module", "compiled pipeline", or "pipe module" |
 | **stored workflow** | a workflow looked up by its `pipe_<id>` name, found by `WorkflowResolver` in a workflow store; defined on first use | not "named workflow", "registered workflow", "named/composed pipeline", or "sub-pipeline" |
 | **resolved workflow** | `ResolvedWorkflow`: the `types.ModuleType` a stored workflow resolves to, imported as is or built from a `WorkflowDocument` | not `WorkflowModule`, "workflow module", or "imported workflow" |
+| **isasync** / **issync** | the old spellings of the `is_async` decorator option, pipe attribute, and the `riko.is_async`/`riko.is_sync` backend flags | say `is_async`/`is_sync` |
+| **closeable** | the old spelling of *closable*: `SyncClosable`, `AsyncClosable`, `Closable`, `tests/_streams.Closable` | say "closable" |
 | **pipe script** | a hand-written Python file defining `pipe(test=False)` that `run-pipe` executes | not "pipe file" or "pipe module" |
 | **resource binding** | a node's `resources=` mapping of local alias (the slot a module reads) to Context resource name; the verb *bind* means only this ("the Context names a node binds") | never for adding a definition to a `Context`: a Context *provides* a resource (`with_resource`); never for fixing a call's arguments (*prepare*/*apply*) or attaching callables (*attach*); a Python name binding (`flow = ...`, `manage lint --bindings`) keeps its language meaning |
 | **prepare** | fix a module call's configuration and call options once for reuse over many items (a pipe callable's `prepare`, the `Preparer`/`PreparedCall` protocols, `prepare_call`, `Module.prepare`); the result is a *prepared* call or pipe | never "bind" (*bind* is reserved for resource binding) or "bound keywords" (say "keyword arguments"); "apply" for keyword arguments fixed on a plain callable |
 | **registry** | a `Registry[T]` only: the module registry (`ModuleRegistry`, `module_registry`) or the target registry (`TargetRegistry`); entries resolve runtime → entry point → built-in | not for `WorkflowResolver`, the dispatcher, a workflow store, export formats, or the pub/sub receivers |
 | **register** | add an entry to a registry's runtime tier (`register_module`, `register_target`) or add a workflow store (`register_workflow_store`) | "declare an entry point" for the entry-point tier; "available"/"resolvable" for any module, built-ins included (built-ins are not registered); never "registered workflow" |
-| **resolver** | always qualified: the workflow resolver (`WorkflowResolver`) or the `Resolver` protocol | "dispatcher" for `ResolverDispatcher` |
+| **resolver** | always qualified: the workflow resolver (`WorkflowResolver`) or the `Resolver` protocol; reserved for module-name → pipe lookup, so a record is named for what it holds (`CompiledInputSchemas`), and `manage lint --terms` rejects any other `*Resolver` class | "dispatcher" for `ResolverDispatcher` |
 | **dispatcher** | `ResolverDispatcher` (`dispatcher`): routes a module name to the module registry and a `pipe_<id>` name to the workflow resolver | not "resolver" or "resolver façade" |
 | **catalog** | the module catalog: what `list_modules()`/`describe_module()` report over built-in, entry-point, and runtime-registered modules (`discovered_names` is a registry's share of it) | "serialization formats"/"export formats" or the `Formats` enum for what `export`/`write` serialize to |
 | **store** | a workflow store (`WorkflowStore`: a module store or a document store) that a `pipe_<id>` name is looked up in | always qualify a later kind ("state store", "checkpoint store"); never for a registry |

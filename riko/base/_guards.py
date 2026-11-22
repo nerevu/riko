@@ -20,19 +20,21 @@ from inspect import (
     getattr_static,
     getmembers_static,
     isawaitable,
+    iscoroutine,
     iscoroutinefunction,
     isfunction,
     signature,
 )
 from itertools import filterfalse, repeat
+from operator import contains
 from types import MemberDescriptorType, MethodDescriptorType, MethodType
-from typing import TYPE_CHECKING, TypeGuard, overload
+from typing import TYPE_CHECKING, Protocol, TypeGuard, overload, runtime_checkable
 
 import attrs
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import TypeIs, TypeVar
 
-from ._config import settings
+from ._config import as_maxsize, settings
 from ._exceptions import InvalidPipelineError
 from ._sentinels import MISSING
 from ._typing import BasicValueType, PrimitiveValueType
@@ -49,6 +51,11 @@ if TYPE_CHECKING:
 _KT = TypeVar("_KT", default=str)
 _VT = TypeVar("_VT", default=object)
 
+ASYNC_CLEANUP_MSG = (
+    "an async resource cleanup runs under `for` only for a value an async factory "
+    "produced. Make the factory async, or iterate with `async for`"
+)
+
 
 def _protocol_signature(method: Func[object]) -> Signature:
     sig = signature(method)
@@ -58,10 +65,10 @@ def _protocol_signature(method: Func[object]) -> Signature:
         raise TypeError("protocol methods must be instance methods")
 
     params = params[1:]
+    msg = "protocol methods may only use positional-or-keyword parameters"
 
     for param in params:
         if param.kind is not Parameter.POSITIONAL_OR_KEYWORD:
-            msg = "protocol methods may only use positional-or-keyword parameters"
             raise TypeError(msg)
 
     return sig.replace(parameters=params)
@@ -89,12 +96,12 @@ def _is_public_function(value: object) -> bool:
     return isfunction(value) and not value.__name__.startswith("_")
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _get_protocol_members(protocol: type) -> tuple[tuple[str, Func[object]], ...]:
     return tuple(getmembers_static(protocol, _is_public_function))
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _is_type_bound_static(cls: type, *names: str) -> bool:
     """Whether ``cls`` has no ``__getattr__`` and none of ``names`` is a slot."""
     get_cls_attr_static = partial(getattr_static, cls)
@@ -111,6 +118,24 @@ def is_type_bound(obj: object, *names: str) -> bool:
     and none of the names is a slot. It means no instance can add or replace them.
     """
     return not hasattr(obj, "__dict__") and _is_type_bound_static(type(obj), *names)
+
+
+def _is_statically_absent(obj: object, name: str) -> bool:
+    """
+    Whether neither ``obj``'s type nor its instance ``__dict__`` defines ``name``.
+
+    A class is never reported absent since its attributes also come from its own MRO.
+    Mirrors ``getattr_static``, which runtime protocol checks use. An absent member can
+    never match a protocol.
+    """
+    try:
+        instance = object.__getattribute__(obj, "__dict__")  # noqa: PLC2801
+    except AttributeError:
+        instance = {}
+
+    defined = map(vars, type(obj).__mro__)
+    in_type = any(map(contains, defined, repeat(name)))
+    return not (isinstance(obj, type) or in_type or name in instance)
 
 
 def _get_bound_method(cls: type, name: str) -> object:
@@ -187,7 +212,7 @@ def _check_strict_protocol(obj: object, protocol: type, *methods: str) -> bool:
     return _check_strict(isinstance(obj, protocol), protocol, get_method, *methods)
 
 
-@lru_cache(maxsize=settings.strict_check_cache_size)
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _check_strict_type(cls: type, protocol: type, *methods: str) -> bool:
     get_method = partial(_get_bound_method, cls)
     return _check_strict(issubclass(cls, protocol), protocol, get_method, *methods)
@@ -200,11 +225,13 @@ def isinstance_strict[P](obj: object, protocol: type[P], *methods: str) -> TypeI
     A built-in method is compared as its instances see it. One whose signature
     ``inspect`` cannot read counts as compatible.
     """
-    names = (name for name, _ in _get_protocol_members(protocol))
+    names = tuple(name for name, _ in _get_protocol_members(protocol))
     by_type = not getattr(protocol, "__non_callable_proto_members__", None)
 
     if by_type and is_type_bound(obj, *names):
         match = _check_strict_type(type(obj), protocol, *methods)
+    elif any(map(_is_statically_absent, repeat(obj), names)):
+        match = False
     else:
         match = _check_strict_protocol(obj, protocol, *methods)
 
@@ -400,8 +427,40 @@ def is_async_callable[T](val: Func[T | Awaitable[T]]) -> TypeGuard[AsyncFunc[T]]
 @overload
 def is_async_callable(val: object) -> TypeGuard[AsyncFunc[object]]: ...
 def is_async_callable(val: object) -> bool:
-    if callable(val):
-        result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
+    """
+    Reports whether ``val`` is a callable that returns a coroutine.
+
+    A ``functools.partial`` is judged by the callable it wraps.
+
+    Args:
+
+        val: The value to classify.
+
+    Returns:
+
+        True when calling ``val`` must be awaited, False otherwise.
+
+    Examples:
+
+        >>> from functools import partial
+        >>>
+        >>> async def fetch(url):
+        ...     return url
+        >>>
+        >>> read = lambda url: url
+        >>> is_async_callable(fetch), is_async_callable(read)
+        (True, False)
+        >>> is_async_callable(partial(fetch, "a"))
+        True
+
+    """
+    func = val
+
+    while isinstance(func, partial):
+        func = func.func
+
+    if callable(func):
+        result = iscoroutinefunction(func) or iscoroutinefunction(type(func).__call__)
     else:
         result = False
 
@@ -448,3 +507,99 @@ def is_callable[T](val: Func[T] | None) -> TypeGuard[Func[T]]: ...
 def is_callable(val: object) -> TypeGuard[Func[object]]: ...
 def is_callable(val: object) -> bool:
     return callable(val)
+
+
+def require_value[T](result: T | Awaitable[T], msg: str) -> T:
+    """
+    Requires ``result`` not to be awaitable.
+
+    A rejected coroutine is closed before the error is raised. It is never left
+    unawaited.
+
+    Args:
+
+        result: The call's result.
+        msg: The error message for an awaitable result.
+
+    Returns:
+
+        ``result``.
+
+    Raises:
+
+        InvalidPipelineError: If ``result`` is awaitable.
+
+    Examples:
+
+        >>> async def coro():
+        ...     return 3
+        >>>
+        >>> require_value(3, "unused")
+        3
+        >>> require_value(coro(), "use `async for`")
+        Traceback (most recent call last):
+        ...
+        riko.exceptions.InvalidPipelineError: Invalid pipeline: use `async for`
+
+    """
+    if is_awaitable(result):
+        if iscoroutine(result):
+            result.close()
+
+        raise InvalidPipelineError(msg)
+
+    return result
+
+
+@runtime_checkable
+class SyncClosable(Protocol):
+    def close(self) -> object | None: ...
+
+
+@lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
+def _has_async_close(cls: type) -> bool:
+    """Whether instances of ``cls`` close asynchronously through their type."""
+    return is_async_callable(getattr(cls, "close", None))
+
+
+def _is_async_close(close: object, owner: object) -> TypeGuard[AsyncFunc[object]]:
+    """Whether ``owner``'s ``close`` is async."""
+    if is_type_bound(owner, "close"):
+        result = _has_async_close(type(owner))
+    else:
+        result = is_async_callable(close)
+
+    return result
+
+
+def get_sync_closer(value: object) -> Func[object] | None:
+    """
+    Gets the method that closes ``value`` without an event loop.
+
+    An async def ``close`` is rejected.
+
+    Args:
+
+        value: The value to inspect.
+
+    Returns:
+
+        The value's synchronous ``close``, or ``None`` when it has none.
+
+    Examples:
+
+        >>> from io import StringIO
+        >>>
+        >>> f = StringIO()
+        >>> get_sync_closer(f)()
+        >>> f.closed, get_sync_closer(1)
+        (True, None)
+
+    """
+    closer = None
+    is_sync_closable = isinstance_strict(value, SyncClosable)
+
+    if is_sync_closable and not _is_async_close(value.close, value):
+        closer = value.close
+
+    return closer

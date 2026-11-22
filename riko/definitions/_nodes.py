@@ -27,7 +27,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from functools import partial
-from itertools import chain, filterfalse
+from inspect import Parameter, signature
+from itertools import chain, filterfalse, islice
 from keyword import iskeyword
 from typing import TYPE_CHECKING, ClassVar, Self
 
@@ -84,6 +85,7 @@ type RunnableNode = ModuleNode | CallableNode[object]
 
 _FROZEN_PARAMS: FrozenDict[str, FrozenJSON] = FrozenDict()
 _FROZEN_POLICY: FrozenDict[str, FrozenJSON] = FrozenDict()
+_RESERVED_KWARGS = frozenset({"item", "context", "resources", "version", "identity"})
 NO_OPTIONS = CallOptions()
 EMPTY_BINDINGS: FrozenDict[str, ResourceName] = FrozenDict()
 FROZEN_CONF: FrozenConf = FrozenDict()
@@ -157,6 +159,20 @@ def require_binding(
         raise error(f"{what} must not repeat an alias, got {value!r}")
 
     return FrozenDict(named)
+
+
+def gen_positional_names(func: Func[object] | None, count: int = 1) -> Iterator[str]:
+    """Generates the parameter names ``func`` fills by position."""
+    try:
+        params = iter(() if func is None else signature(func).parameters.values())
+    except (TypeError, ValueError):
+        params = iter(())
+
+    positional = Parameter.POSITIONAL_OR_KEYWORD
+
+    for param in islice(params, count):
+        if param.kind is positional:
+            yield param.name
 
 
 optional_str = narrow_def_from_require(require_str)
@@ -245,8 +261,8 @@ class ModuleNode(RikoNode):
         options: the call options forwarded to the module callable itself, such as
             ``emit``, ``assign``, ``field``, and ``count``.
 
-        embed: names the module a ``loop`` runs once per item, together with that
-            module's own configuration.
+        embed: the module a ``loop`` runs once per item, with its own configuration. The
+            plan resolves it and the run hands it to ``loop``.
 
     """
 
@@ -291,16 +307,19 @@ class CallableNode[T](RikoNode):
 
     Raises:
 
-        InvalidPipelineError: If a resource alias is not a Python identifier, a keyword
-            argument shares a name with a resource alias, ``kwargs`` is not JSON-native,
-            or ``identity`` is not an ``IdentityMode``.
+        InvalidPipelineError: If any of these hold:
+
+            - A resource alias is not a Python identifier.
+            - A keyword argument shares a name with a resource alias, ``fn``'s item
+              parameter, or a reserved name (``item``, ``context``, ``resources``,
+              ``version``, ``identity``).
+            - ``kwargs`` is not JSON-native.
+            - ``identity`` is not an ``IdentityMode``.
 
         TypeError: If ``fn`` is not callable or ``version`` is ``None`` or unhashable.
 
     Examples:
 
-        >>> from riko.ext import CallableNode
-        >>>
         >>> node = CallableNode(id="len-1", name="len", fn=len, resources="db")
         >>> node.family, dict(node.resources)
         ('callable', {'db': 'db'})
@@ -318,12 +337,17 @@ class CallableNode[T](RikoNode):
     kwargs: FrozenKwargs = field(default=_FROZEN_PARAMS, converter=_kw_converter)
 
     def __attrs_post_init__(self) -> None:
+        params, kwargs = gen_positional_names(self.fn), self.kwargs
+
         if invalid := sorted(filterfalse(_is_alias, self.resources)):
             msg = f"CallableNode resource aliases must be Python identifiers: {invalid}"
             raise InvalidPipelineError(msg)
         elif shared := sorted(set(self.resources).intersection(self.kwargs)):
             msg = "CallableNode keyword arguments share names with resource aliases: "
             msg += f"{shared}"
+            raise InvalidPipelineError(msg)
+        elif reserved := sorted(_RESERVED_KWARGS.union(params).intersection(kwargs)):
+            msg = f"CallableNode keyword arguments use reserved names: {reserved}"
             raise InvalidPipelineError(msg)
 
     @property

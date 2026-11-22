@@ -249,7 +249,7 @@ Seed close is owned twice on purpose (ruling amended 2026-11-03, superseding the
 2026-10-29 "retire together" line):
 `tests/public/test_pipeline.py::TestAsyncClose::test_early_close_closes_the_seed` owns
 an async root closing each `CLOSING_SEEDS` shape, and the plan-level pair
-`TestPlanClose::test_run_closes_an_unfinished_seed_on_exit`/`TestAsyncPlanClose::test_arun_closes_an_unfinished_seed_on_exit`
+`TestPlanClose::test_run_closes_a_seed_once_on_exit`/`TestAsyncPlanClose::test_arun_closes_a_seed_once_on_exit`
 in `tests/internal/test_plan_closes.py` keeps only what `Pipeline` never reaches: a
 sync-only root reading the seed on a worker thread, a close on execution exit without
 `aclose`, and one close across two triggers. An async-root row there would duplicate
@@ -304,7 +304,7 @@ adds only what that rule does not say:
   basic chaining" installation smoke test.
 - In sync-only environments `conftest.py` skips Async/Bado doctest items whole and skips
   the individual `run(...)` examples of every other doctest (`.rst` files included). Do
-  not add `issync` branches solely as doctest fallbacks; write the real async example
+  not add `is_sync` branches solely as doctest fallbacks; write the real async example
   and let collection policy handle unavailable optional support.
 - `>>>` in `examples/**`, `_docs/**`, and `CLAUDE.md` are **not** collected today —
   which is exactly why `functional/test_script.py`'s `TestExamplePipelines` matters: it

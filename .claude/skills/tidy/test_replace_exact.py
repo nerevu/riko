@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from replace_exact import apply_replacements, main
@@ -29,3 +31,10 @@ def test_a_count_mismatch_writes_nothing(tmp_path: Path) -> None:
 
     assert main([str(target), str(spec)]) == 1
     assert target.read_text() == "GraphIndex and GraphIndex"
+
+
+def test_help_prints_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit, match="0"):
+        main(["--help"])
+
+    assert "--dry-run" in capsys.readouterr().out

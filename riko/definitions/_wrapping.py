@@ -9,25 +9,31 @@ plain wrappers.
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Unpack
+from typing import TYPE_CHECKING, Unpack, overload
 
 from riko.base._exceptions import RemovedOptionError
 from riko.types._frozendict import EMPTY_INPUT_SCHEMAS
 from riko.types._wrappers import is_wrapper_meta
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import AsyncIterator, Iterable, Iterator
 
     from riko.types._frozendict import FrozenInputSchemas
     from riko.types._options import RawCallOptions
+    from riko.types._streams import AsyncCascade, Cascade
     from riko.types._wrappers import (
+        AsyncModuleWrapper,
+        AsyncSplitterWrapper,
         ExtraName,
         Func,
         ModuleWrapper,
+        NodeCall,
         PrepareConf,
         PreparedCall,
         Preparer,
         SplitterWrapperOutput,
+        SyncModuleWrapper,
+        SyncSplitterWrapper,
         WrapperOutput,
     )
     from riko.types.modules import ModuleSubtype, ModuleType
@@ -45,6 +51,7 @@ def _call_plain(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
     conf: PrepareConf | None,
     options: RawCallOptions,
+    /,
     item: object = None,
     context: Context | None = None,
     **extra: object,
@@ -55,6 +62,7 @@ def _call_plain(
 
 def prepare_call(
     wrapper: Func[WrapperOutput | SplitterWrapperOutput],
+    /,
     *_: ExtraName,
     conf: PrepareConf | None = None,
     **options: Unpack[RawCallOptions],
@@ -105,12 +113,40 @@ def prepare_call(
     return partial(_call_plain, wrapper, conf, options)
 
 
+@overload
+def build_call(
+    pipe: SyncSplitterWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[Cascade]: ...
+@overload
+def build_call(
+    pipe: AsyncSplitterWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[AsyncCascade]: ...
+@overload
+def build_call(
+    pipe: SyncModuleWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[Iterator[object]]: ...
+@overload
+def build_call(
+    pipe: AsyncModuleWrapper,
+    *extras: ExtraName,
+    conf: PrepareConf | None = None,
+    **options: Unpack[RawCallOptions],
+) -> NodeCall[AsyncIterator[object]]: ...
 def build_call(
     pipe: ModuleWrapper,
     *extras: ExtraName,
     conf: PrepareConf | None = None,
     **options: Unpack[RawCallOptions],
-) -> PreparedCall:
+) -> NodeCall[object]:
     """
     Prepares ``pipe``'s configuration and call options once for reuse over many items.
 
@@ -174,7 +210,7 @@ def stamp_wrapper_meta(
     subtypes: Iterable[ModuleSubtype],
     pollable: bool,
     loopable: bool,
-    isasync: bool,
+    is_async: bool,
     sequential_inputs: bool = False,
     prepare: Preparer | None = None,
     input_schemas: FrozenInputSchemas | None = EMPTY_INPUT_SCHEMAS,
@@ -198,7 +234,7 @@ def stamp_wrapper_meta(
         subtypes: Every subtype the module supports.
         pollable: Whether the module can be polled.
         loopable: Whether ``loop`` can embed the module.
-        isasync: Whether ``target`` is an ``async_pipe``.
+        is_async: Whether ``target`` is an ``async_pipe``.
 
         sequential_inputs: Whether the module reads its input streams one at a time
             (default: False).
@@ -224,9 +260,9 @@ def stamp_wrapper_meta(
         ...     subtypes=("transformer",),
         ...     pollable=False,
         ...     loopable=True,
-        ...     isasync=False,
+        ...     is_async=False,
         ... )
-        >>> pipe.type, pipe.isasync
+        >>> pipe.type, pipe.is_async
         ('processor', False)
         >>> pipe.dependencies
         ()
@@ -240,7 +276,7 @@ def stamp_wrapper_meta(
     setattr(target, "subtypes", frozenset(subtypes))  # noqa: B010
     setattr(target, "pollable", pollable)  # noqa: B010
     setattr(target, "loopable", loopable)  # noqa: B010
-    setattr(target, "isasync", isasync)  # noqa: B010
+    setattr(target, "is_async", is_async)  # noqa: B010
     setattr(target, "sequential_inputs", sequential_inputs)  # noqa: B010
     setattr(target, "input_schemas", input_schemas)  # noqa: B010
     setattr(target, "dependencies", dependencies)  # noqa: B010

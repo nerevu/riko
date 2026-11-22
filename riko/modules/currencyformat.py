@@ -94,7 +94,7 @@ def parser(
     return parsed
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 def async_pipe(*args: Any, **kwargs: object) -> str:
     """
     Asynchronously formats a number as a currency string.

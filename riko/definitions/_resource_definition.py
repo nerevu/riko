@@ -46,7 +46,7 @@ from riko.types._resource import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from riko.types._io import Closeable
+    from riko.types._io import Closable
     from riko.types._workflow import ResourceName
 
 type ResourcesLike = str | Iterable[str] | Mapping[str, str]
@@ -91,7 +91,7 @@ class Resource[T]:
     @overload
     def __new__(
         cls,
-        value: Closeable,
+        value: Closable,
         *,
         cleanup: Cleanup[T] | None = ...,
         credential: str | None = ...,
@@ -328,8 +328,6 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko import Resource
-            >>>
             >>> class Client:
             ...     closed = False
             ...     def close(self):
@@ -381,8 +379,6 @@ class Resource[T]:
 
         Examples:
 
-            >>> from riko import OneShotResource, Resource
-            >>>
             >>> def db():
             ...     yield object()
             >>>

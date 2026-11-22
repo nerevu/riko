@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from riko.bado._util import maybe_async, require_value
+from riko.bado._util import maybe_async
+from riko.base._guards import require_value
 from riko.base._logging import get_logger
 from riko.base._require_guards import require_arg
 
@@ -139,7 +140,7 @@ def parser(
     return require_value(func(item), msg)
 
 
-@processor(DEFAULTS, isasync=True, **OPTS)
+@processor(DEFAULTS, is_async=True, **OPTS)
 async def async_pipe(*args: Any, **kwargs: object) -> Item:
     """
     Asynchronously applies an arbitrary (user-defined) function to each item.
