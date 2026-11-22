@@ -280,9 +280,9 @@ CLASS_HISTORY = {
             "once); 7ee178c7 (10-31 loop aclosing, async_merge aclosing); c6a3838c "
             "(11-01 owned values by type, raw return, async close()); d229b9b9 (11-03 "
             "unify closers); d7528227 (11-05 fetch responses; missing ExitStack); "
-            "ef55b123 (11-13 async processor streams; missing early close); 2d9d3306 "
+            "ef55b123 (11-13 async processor streams; missing early close); 5de5cc80 "
             "(11-19 adapted async-only streams, worker-thread embed drain; closer "
-            "pairs); a2009845 (11-19 loop embed results; bare fold); 2d9d3306 (11-20 "
+            "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
             "stream, splitter cascade at node start; cancellation window, failed iter)"
         ),
@@ -319,8 +319,8 @@ CLASS_HISTORY = {
             "cb4ab17d (10-28 async_write iterables); 0cfbfc62 (10-29 lazy async "
             "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
             "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
-            "async HTTP status); 24a19342 (11-17 split branches in both colors); none "
-            "RM801-shaped (source shape, status handling, not keyword drift); daa41ecf "
+            "async HTTP status); 6dba2fe3 (11-17 split branches in both colors); none "
+            "RM801-shaped (source shape, status handling, not keyword drift); 6ad28467 "
             "(11-21 twin type/subtype/identity)"
         ),
         (
@@ -334,7 +334,7 @@ CLASS_HISTORY = {
             "e937e766 (10-05 parse_dag keys, alias collisions, id collisions, registry "
             "shadow); 39b93e99 (10-29 duplicate entry points; no JSON load); 05fd5672 "
             "(10-29 entry-point keys; no JSON load); 7ee178c7 (10-31 dup JSON keys, "
-            "migrate keys, target shadow, codegen names); 5f64f9f9 (11-19 `format` "
+            "migrate keys, target shadow, codegen names); 6921e8a8 (11-19 `format` "
             "alias over an explicit null `fmt`; not a JSON key)"
         ),
         (
@@ -354,7 +354,7 @@ CLASS_HISTORY = {
             "47c409b5 (09-03 numeric strings); 9f1af91c (10-28 text-only XML root); "
             "682124d4 (10-28 DotDict non-str keys); 3a177544 (11-03 sort untyped "
             "values); e0f6e05b (11-03 empty CSV export); f82af774 (11-14 unindexable "
-            "pairs); 0361ec29 (11-21 split count guard)"
+            "pairs); 4f642c6d (11-21 split count guard)"
         ),
         (
             "feed mixed-type, empty, and wrong-shape values to every sort, export, and "
@@ -388,7 +388,7 @@ CLASS_HISTORY = {
         (
             "e937e766 (10-05 deep-frozen definitions); fe0ef32a (10-14 DotDict nested "
             "writes; not a record field); 1906d375 (10-21 definition snapshots; no "
-            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 24a19342 "
+            "frozen record pre-fix); 7ee178c7 (10-31 WriteCapabilities); 6dba2fe3 "
             "(11-17 Tee _Read; introduced in the same commit)"
         ),
         "mutate the list/dict/set a caller passed in and check the record is unchanged",
@@ -398,8 +398,8 @@ CLASS_HISTORY = {
         (
             "df5b36fd (10-29 fetch timeout); f3f371ad (10-29 async_map limit); "
             "7ee178c7 (10-31 async fetch timeout; not a default); c6a3838c (11-01 "
-            "async cleanup under for; missing bound); 24a19342 (11-17 branch lag; "
-            "missing bound); e5448a49 (11-19 splitter branches collected before the "
+            "async cleanup under for; missing bound); 6dba2fe3 (11-17 branch lag; "
+            "missing bound); 33c481e4 (11-19 splitter branches collected before the "
             "count check; missing bound)"
         ),
         "run each wait, read, and pool against a source that never answers",
@@ -429,7 +429,7 @@ CLASS_HISTORY = {
         (
             "64f59e8f (09-30 cleanup errors); c11c205d (10-27 dead worker process); "
             "9173167b (10-27 lone task failure); dd6867e8 (10-27 pickled errors); "
-            "5052114a (11-21 failed close on a failed build)"
+            "61aaa929 (11-21 failed close on a failed build)"
         ),
         (
             "make a worker, task, or cleanup step die or raise, once and twice, and "
@@ -464,7 +464,7 @@ CLASS_HISTORY = {
     "bad-config": BugClass(
         (
             "fb7ea681 (10-29 out-of-range settings); 597a0181 (11-03 int cast "
-            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); 34fe7bf7 "
+            "overflow); cfbb627b (11-03 RIKO_ENCODING; not line-scannable); fcf97e1c "
             "(11-19 cast_datetime timestamp overflow)"
         ),
         (
@@ -520,7 +520,7 @@ CLASS_HISTORY = {
     ),
     "colors": BugClass(
         (
-            "24a19342 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
+            "6dba2fe3 (11-17 AsyncTee _advance/_close_source/_drop/_pull; introduced "
             "in the same commit)"
         ),
         "compare method names across each sync/async class pair",
@@ -528,7 +528,7 @@ CLASS_HISTORY = {
     ),
     "find-slice": BugClass(
         (
-            "7ee178c7 (10-31 fetchpage.get_string); 5f64f9f9 (11-19 legacy port "
+            "7ee178c7 (10-31 fetchpage.get_string); 6921e8a8 (11-19 legacy port "
             "suffix; removeprefix() not find())"
         ),
         (
@@ -540,7 +540,7 @@ CLASS_HISTORY = {
     ),
     "kwarg-shadow": BugClass(
         (
-            "b0f523b7 (11-17 call keywords; a missing `/`); 8837d68b (11-19 "
+            "a9079f9b (11-17 call keywords; a missing `/`); 322664c6 (11-19 "
             "prepare_call wrapper, _call_direct wrapper/items)"
         ),
         (
@@ -558,8 +558,8 @@ CLASS_HISTORY = {
             "remap); ff6a6030 (09-12 autorss Attributes guard); 8b95ee51 (10-28 "
             "http-prefixed file names); 186f976d (10-29 Context shipped to workers); "
             "bffd2dc0 (10-29 self-embedding workflow); 46d7c568 (10-31 half-applied "
-            "register); 263fffe7 (11-03 registry-unaware metadata); d3c2d047 (11-19 "
-            "subscripted generic alias inference); de16d9dc (11-20 is_async_callable "
+            "register); 263fffe7 (11-03 registry-unaware metadata); 5f351de8 (11-19 "
+            "subscripted generic alias inference); ee464524 (11-20 is_async_callable "
             "through partial)"
         ),
         (
