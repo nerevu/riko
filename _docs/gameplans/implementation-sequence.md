@@ -1343,6 +1343,15 @@ Deliver:
   typed `<Name>Conf` `TypedDict` contracts in `riko/types/modules.py` (the same source
   `gen-config` consumes), so there is one source of truth; plugins declare theirs
   through the same field;
+- declared output ports for splitter modules (fanout-topology § 10, extensibility
+  port declarations): `ExecutionPlan` reads every splitter's port set from its
+  `splits` conf (default 2), so an extension `@splitter` whose count lives in another
+  conf key plans as two ports and an edge from `out:2` fails at plan build (strict
+  xfail `TestExecutionPlan::test_build_plan_reads_an_extension_splitters_declared_ports`
+  in `tests/internal/test_execution_plan.py`; triaged from the 2026-11-21 branch design
+  audit). The declared-port metadata replaces the conf read; the built-in `split`
+  module keeps `splits` as the conf that derives its port set, and the `splitter`
+  decorator docstring's port paragraph is rewritten to name the declaration;
 - a generated configuration JSON Schema per module, consumable by `describe_module()`
   and the catalog;
 - plan-build validation of every module node's `conf` against its registered contract:

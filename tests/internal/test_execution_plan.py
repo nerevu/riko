@@ -35,7 +35,7 @@ from riko.execution._prepared import (
     SyncInterface,
 )
 from riko.execution._sync_execution import SyncExecution
-from riko.modules._decorators import Module, processor
+from riko.modules._decorators import Module, processor, splitter
 from riko.modules.hash import pipe as hash_pipe
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
@@ -71,7 +71,7 @@ from tests._execution import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
 
-    from riko.types._streams import Item, Stream
+    from riko.types._streams import Cascade, Item, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import Conf
 
@@ -560,6 +560,39 @@ class TestExecutionPlan:
     ):
         with pytest.raises(InvalidPipelineError, match=match):
             ExecutionPlan(workflow=flow, modules=modules, embeds=embeds)
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=InvalidPipelineError,
+        reason="declared output ports for splitter modules are not yet implemented: "
+        "the plan reads every splitter's port count from its `splits` conf",
+    )
+    def test_build_plan_reads_an_extension_splitters_declared_ports(self) -> None:
+        @splitter(objectify=False)
+        def three_way(stream: Stream, _: object, __: object, **___: object) -> Cascade:
+            items = list(stream)
+            return iter([iter(items), iter(items), iter(items)])
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=tagged_source("a")),
+            ModuleDefinition(name="three_way", sync_pipe=three_way),
+            ModuleDefinition(name="sink", sync_pipe=passthrough_pipe),
+        )
+        nodes = [
+            ModuleNode(id="a", name="src"),
+            ModuleNode(id="s", name="three_way", conf={"ways": 3}),
+            ModuleNode(id="b", name="sink"),
+        ]
+        edges = (
+            StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
+            StreamEdge(Endpoint("s", "out:2"), Endpoint("b", "in")),
+        )
+        flow = build_workflow(nodes, edges=edges)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        node = plan.nodes["s"]
+
+        assert isinstance(node, PreparedSplitter)
+        assert node.output_ports == ("out", "out:1", "out:2")
 
     @pytest.mark.xfail(
         strict=True,
