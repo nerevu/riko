@@ -117,6 +117,7 @@ _RUN_BINDING = (
     "binds a run( result that is skipped without async support "
     "(move it to an async example)"
 )
+_RUN_DOC = ">>> from riko import run\n>>> g = list\n>>> x = run(g())"
 
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
@@ -727,7 +728,9 @@ EXAMPLE_RULES = [
         ['imports processor privately (use "from riko.ext import processor")'],
         id="extension-name",
     ),
-    pytest.param("mod.py", _doctest("from riko.cli._docs import f"), [], id="nopub"),
+    pytest.param(
+        "mod.py", _doctest("from riko.cli._docs import gen_todo_lines"), [], id="nopub"
+    ),
     pytest.param("mod.py", _doctest("from riko import Pipeline"), [], id="public"),
     pytest.param("_mod.py", _MODULE_EXAMPLE, _PRIVATE_MODULE, id="private-module"),
     pytest.param("_mod.py", f"{_MODULE_EXAMPLE}class Pipeline: ...\n", [], id="api"),
@@ -771,7 +774,7 @@ EXAMPLE_RULES = [
     ),
     pytest.param(
         "mod.py",
-        _function(">>> a\n1\n\nWith b:\n\n>>> b\n2"),
+        _function(">>> a = 1\n>>> a\n1\n\nWith b:\n\n>>> b = 2\n>>> b\n2"),
         ["narrates between examples (use a # comment)"],
         id="narration",
     ),
@@ -823,18 +826,30 @@ EXAMPLE_RULES = [
         ["leaves a TODO or ??? review note"],
         id="review-note",
     ),
-    pytest.param("mod.py", _doctest("x = run(g())"), [_RUN_BINDING], id="run-bind"),
+    pytest.param("mod.py", _function(_RUN_DOC), [_RUN_BINDING], id="run-bind"),
     pytest.param(
         "mod.py",
-        _doctest("x = run(g())").replace("f()", "async_f()"),
+        _function(_RUN_DOC).replace("f()", "async_f()"),
         [],
         id="run-bind-async",
     ),
     pytest.param(
         "mod.py",
-        "class AsyncThing:\n" + indent(_doctest("x = run(g())"), "    "),
+        "class AsyncThing:\n" + indent(_function(_RUN_DOC), "    "),
         [],
         id="run-bind-method",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("from mod import f"),
+        ["imports its own module's f (use it bare)"],
+        id="own-name-import",
+    ),
+    pytest.param(
+        "mod.py",
+        _doctest("g()"),
+        ["uses a name it neither imports nor defines"],
+        id="unbound-name",
     ),
 ]
 

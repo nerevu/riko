@@ -3,23 +3,31 @@
 
 from __future__ import annotations
 
+import builtins
 import re
 from ast import (
     AST,
-    AnnAssign,
-    Assign,
     AsyncFunctionDef,
     Attribute,
     ClassDef,
+    ExceptHandler,
     FunctionDef,
+    Import,
     ImportFrom,
     Module,
     Name,
+    ParamSpec,
+    Store,
     Subscript,
     TypeAlias,
+    TypeVar,
+    TypeVarTuple,
+    arg,
     expr,
     get_docstring,
+    iter_child_nodes,
     parse,
+    unparse,
     walk,
 )
 from doctest import DocTestParser
@@ -51,6 +59,7 @@ _NAME_VERBS: frozenset[str] = frozenset(_LEAD_VERBS.values())
 _TYPE_ONLY_BASES: frozenset[str] = frozenset({"Protocol", "TypedDict"})
 _EXCEPTION_SUFFIXES: tuple[str, ...] = ("Error", "Exception", "Warning")
 _PUBLIC_NAMES: frozenset[str] = STABLE | EXTENSION | EXT_CODEGEN | TYPES
+_BUILTINS: frozenset[str] = frozenset(dir(builtins))
 
 _PUBLIC_PATHS: tuple[tuple[str, frozenset[str]], ...] = (
     ("riko", STABLE),
@@ -486,6 +495,17 @@ def _is_private_path(module: str) -> bool:
     return segments[0] == "riko" and any(seg.startswith("_") for seg in segments[1:])
 
 
+def _gen_example_trees(doc: str) -> Iterator[Module]:
+    """Parses each doctest example in a docstring, skipping unparsable ones."""
+    for example in DocTestParser().get_examples(doc):
+        try:
+            tree = parse(example.source)
+        except SyntaxError:
+            tree = Module(body=[], type_ignores=[])
+
+        yield tree
+
+
 def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
     """
     Finds doctest imports of public names through private module paths.
@@ -507,27 +527,120 @@ def gen_private_imports(doc: str) -> Iterator[tuple[str, str, str]]:
         []
 
     """
-    for example in DocTestParser().get_examples(doc):
-        try:
-            tree = parse(example.source)
-        except SyntaxError:
-            tree = Module(body=[], type_ignores=[])
-
-        lines = example.source.splitlines()
+    for tree in _gen_example_trees(doc):
         imports = (
             node
-            for node in walk(tree)
-            if isinstance(node, ImportFrom)
-            and node.module is not None
-            and _is_private_path(node.module)
+            for node in gen_instances(walk(tree), ImportFrom)
+            if node.module is not None and _is_private_path(node.module)
         )
 
         for node in imports:
+            text = unparse(node)
+
             for alias in node.names:
                 public = resolve_public_path(alias.name)
 
                 if public is not None:
-                    yield lines[node.lineno - 1].strip(), alias.name, public
+                    yield text, alias.name, public
+
+
+def _get_import_name(node: Import | ImportFrom, name: str, asname: str | None) -> str:
+    """Gets the name an import alias binds."""
+    bound = asname or name
+    return bound.split(".", 1)[0] if isinstance(node, Import) else bound
+
+
+def _gen_bound_names(tree: Module) -> Iterator[str]:
+    """Lists the names a doctest example binds by assignment, import, or definition."""
+    for node in walk(tree):
+        if isinstance(node, (Import, ImportFrom)):
+            names = node.names
+            yield from (_get_import_name(node, a.name, a.asname) for a in names)
+        elif isinstance(node, Name) and isinstance(node.ctx, Store):
+            yield node.id
+        elif isinstance(node, (*FUNCTION_NODES, ClassDef)):
+            yield node.name
+        elif isinstance(node, arg):
+            yield node.arg
+        elif isinstance(node, (TypeVar, ParamSpec, TypeVarTuple)):
+            yield node.name
+        elif isinstance(node, ExceptHandler):
+            yield from gen_non_null([node.name])
+
+
+def gen_own_name_imports(
+    doc: str, defined: frozenset[str]
+) -> Iterator[tuple[str, str]]:
+    """
+    Finds doctest imports of names the enclosing module defines.
+
+    A class or function example runs with its module's globals, so it uses the names
+    its own module defines without importing them.
+
+    Args:
+
+        doc: A cleaned class or function docstring.
+        defined: The names the enclosing module defines.
+
+    Yields:
+
+        The offending import line and the imported name.
+
+    Examples:
+
+        >>> doc = ">>> from riko import Pipeline, run"
+        >>> list(gen_own_name_imports(doc, frozenset({"Pipeline"})))
+        [('from riko import Pipeline, run', 'Pipeline')]
+        >>> list(gen_own_name_imports(">>> from riko import run", frozenset({"f"})))
+        []
+
+    """
+    for tree in _gen_example_trees(doc):
+        for node in gen_instances(walk(tree), (Import, ImportFrom)):
+            text = unparse(node)
+
+            for alias in node.names:
+                name = _get_import_name(node, alias.name, alias.asname)
+
+                if name in defined:
+                    yield text, name
+
+
+def gen_unbound_names(doc: str, defined: frozenset[str]) -> Iterator[str]:
+    """
+    Finds names a docstring's examples use without binding them.
+
+    A name counts as bound when an example assigns, imports, or defines it, when it is
+    a builtin, or when it is in ``defined``. The value of a ``type`` statement is
+    evaluated lazily, so the names it uses need not be bound.
+
+    Args:
+
+        doc: A cleaned docstring.
+        defined: The enclosing module's names a class or function example may use
+            bare; empty for a module docstring, whose examples import everything.
+
+    Yields:
+
+        Each unbound name, once, in sorted order.
+
+    Examples:
+
+        >>> doc = ">>> from riko import run\\n>>> items = [Path(), f()]"
+        >>> list(gen_unbound_names(doc, frozenset({"f"})))
+        ['Path']
+        >>> list(gen_unbound_names(doc, frozenset()))
+        ['Path', 'f']
+
+    """
+    trees = list(_gen_example_trees(doc))
+    bound = set(chain.from_iterable(map(_gen_bound_names, trees)))
+    nodes = list(chain.from_iterable(map(walk, trees)))
+    aliases = gen_instances(nodes, TypeAlias)
+    lazy = {id(node) for alias in aliases for node in walk(alias.value)}
+    names = gen_instances(nodes, Name)
+    used = {node.id for node in names if id(node) not in lazy}
+    yield from sorted(used - bound - defined - _BUILTINS)
 
 
 def _get_base_name(base: expr) -> str:
@@ -543,19 +656,38 @@ def _get_base_name(base: expr) -> str:
     return name
 
 
-def _gen_defined_names(tree: Module) -> Iterator[str]:
-    """Lists the names a module's top-level statements define."""
-    for node in tree.body:
-        if isinstance(node, (*FUNCTION_NODES, ClassDef)):
-            yield node.name
-        elif isinstance(node, Assign):
-            for target in node.targets:
-                yield from (name.id for name in walk(target) if isinstance(name, Name))
-        elif isinstance(node, (AnnAssign, TypeAlias)):
-            target = node.target if isinstance(node, AnnAssign) else node.name
+def _gen_global_bindings(node: AST) -> Iterator[tuple[bool, str]]:
+    """
+    Lists the names a module binds at its top level, each flagged when imported.
 
-            if isinstance(target, Name):
-                yield target.id
+    Bindings under ``if``/``try``/``with`` blocks count; the bodies of functions and
+    classes do not.
+
+    """
+    if isinstance(node, (*FUNCTION_NODES, ClassDef)):
+        yield False, node.name
+    elif isinstance(node, Name) and isinstance(node.ctx, Store):
+        yield False, node.id
+    elif isinstance(node, (Import, ImportFrom)):
+        names = node.names
+        yield from ((True, _get_import_name(node, a.name, a.asname)) for a in names)
+    else:
+        children = iter_child_nodes(node)
+        yield from chain.from_iterable(map(_gen_global_bindings, children))
+
+
+def _get_global_names(tree: Module) -> frozenset[str]:
+    """
+    Gets the names a module defines rather than imports.
+
+    A name it both imports and assigns, such as an optional import with a fallback,
+    counts as imported. The loop variables of a module-level comprehension count as
+    defined, which only widens the names an example may use bare.
+
+    """
+    bindings = list(_gen_global_bindings(tree))
+    imported = {name for is_import, name in bindings if is_import}
+    return frozenset(name for _, name in bindings) - imported
 
 
 def _gen_runtime_names(tree: Module) -> Iterator[str]:
@@ -591,7 +723,7 @@ def _gen_module_example_issues(path: Path, tree: Module) -> Iterator[DocstringIs
     """
     doc = get_docstring(tree) or ""
     private = path.name.startswith("_") and path.name != "__init__.py"
-    exported = not _PUBLIC_NAMES.isdisjoint(_gen_defined_names(tree))
+    exported = not _PUBLIC_NAMES.isdisjoint(_get_global_names(tree))
     runtime = sorted(_PUBLIC_NAMES.intersection(_gen_runtime_names(tree)))
     has_example = bool(DocTestParser().get_examples(doc))
 
@@ -642,6 +774,10 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
     a public name through a private module, or bind a ``run(`` result in a doctest
     that is not skipped whole without async support.
 
+    Examples use only names they import or define, builtins, and, in a class or
+    function docstring, the names their own module defines, which they use bare
+    rather than import. A module docstring imports its own names too.
+
     A parameter with a default is documented under ``Kwargs:``, one without under
     ``Args:``. A private module without a public API or with only a type-only public API
     carries no module example, and one with a public runtime API carries one.
@@ -663,6 +799,7 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
             nodes = gen_instances(walk(tree), types)
             module_name = _get_module_name(path)
             qualnames = {tree: module_name, **dict(_gen_qualnames(tree, module_name))}
+            global_names = _get_global_names(tree)
 
             for node in sorted(nodes, key=lambda node: getattr(node, "lineno", 0)):
                 doc = get_docstring(node) or ""
@@ -731,6 +868,22 @@ def gen_docstring_issues(*roots: Path) -> Iterator[DocstringIssue]:
                     )
                     yield DocstringIssue(path, lineno, name, problem, line)
 
+                is_module = node is tree
+                own_names = frozenset() if is_module else global_names
+
+                for line, imported in gen_own_name_imports(doc, own_names):
+                    problem = f"imports its own module's {imported} (use it bare)"
+                    yield DocstringIssue(path, lineno, name, problem, line)
+
+                for unbound in gen_unbound_names(doc, own_names):
+                    problem = (
+                        "uses its own name without importing it "
+                        "(import it through its public path)"
+                        if unbound in global_names
+                        else "uses a name it neither imports nor defines"
+                    )
+                    yield DocstringIssue(path, lineno, name, problem, unbound)
+
             yield from _gen_module_example_issues(path, tree)
 
 
@@ -743,10 +896,12 @@ __all__ = [
     "gen_malformed_raises",
     "gen_misplaced_params",
     "gen_null_checks",
+    "gen_own_name_imports",
     "gen_private_imports",
     "gen_review_notes",
     "gen_run_bindings",
     "gen_section_names",
+    "gen_unbound_names",
     "gen_unordered_params",
     "get_name_verb",
     "get_summary_verb",

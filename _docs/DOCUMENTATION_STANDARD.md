@@ -526,8 +526,9 @@ contradict the "public examples exercise the public object" rule under Doctest
 rules. This bounds only the *module* docstring — a private function may still
 carry a local doctest where a compact executable example clarifies non-obvious
 behavior. `manage lint --docstrings` enforces all three cases of this rule (no
-public API, a runtime public API, a type-only public API) and the public-path rule
-for example imports.
+public API, a runtime public API, a type-only public API), the public-path rule
+for example imports, and that a module example imports its own module's names
+rather than using them bare.
 
 ## General docstring rules
 
@@ -668,8 +669,15 @@ is caught unless it also gains one).
 - Every code block runs on its own: it imports and defines everything it uses,
   even when an earlier block in the same file or section already did, because
   readers land on a block directly. Repeating that setup across blocks is
-  expected, never duplication to remove. Within one block, never rebind a name:
-  give each step its own name (`page`, `feed`, `merged`).
+  expected, never duplication to remove. The one exception is a class or function
+  docstring, whose examples run with the module's globals: they use the names
+  their own module defines bare, never importing them, and import everything else,
+  including names the module itself only imports. A module docstring imports its
+  own names too, through the public path. `manage lint --docstrings` flags an
+  example name that is neither imported, defined in the example, a builtin, nor
+  (in a class or function docstring) defined by the enclosing module, and a class
+  or function example that imports its own module's name. Within one block, never
+  rebind a name: give each step its own name (`page`, `feed`, `merged`).
 - Name inputs by role: `items`, `result`, `stream`, `conf`, `pipe`.
 - Prefer `list(result)` when demonstrating the complete sequence; `next(result)`
   when streaming/laziness is the point.
