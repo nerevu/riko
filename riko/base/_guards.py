@@ -427,8 +427,40 @@ def is_async_callable[T](val: Func[T | Awaitable[T]]) -> TypeGuard[AsyncFunc[T]]
 @overload
 def is_async_callable(val: object) -> TypeGuard[AsyncFunc[object]]: ...
 def is_async_callable(val: object) -> bool:
-    if callable(val):
-        result = iscoroutinefunction(val) or iscoroutinefunction(type(val).__call__)
+    """
+    Reports whether ``val`` is a callable that returns a coroutine.
+
+    A ``functools.partial`` is judged by the callable it wraps.
+
+    Args:
+
+        val: The value to classify.
+
+    Returns:
+
+        True when calling ``val`` must be awaited, False otherwise.
+
+    Examples:
+
+        >>> from functools import partial
+        >>>
+        >>> async def fetch(url):
+        ...     return url
+        >>>
+        >>> read = lambda url: url
+        >>> is_async_callable(fetch), is_async_callable(read)
+        (True, False)
+        >>> is_async_callable(partial(fetch, "a"))
+        True
+
+    """
+    func = val
+
+    while isinstance(func, partial):
+        func = func.func
+
+    if callable(func):
+        result = iscoroutinefunction(func) or iscoroutinefunction(type(func).__call__)
     else:
         result = False
 
