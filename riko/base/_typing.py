@@ -40,7 +40,8 @@ def resolve_alias(annotation: object) -> object:
     """
     Resolves a ``type`` alias to the annotation it names.
 
-    Follows alias chains to their end (e.g., ``type A = B``; ``type B = int``). Any
+    Follows alias chains to their end (e.g., ``type A = B``; ``type B = int``). A
+    subscripted generic alias resolves to its value with the arguments substituted. Any
     other annotation passes through. As does an alias whose value names something
     missing at runtime (e.g., a name imported only for type checking). The chain stops
     at the last resolvable alias.
@@ -59,14 +60,20 @@ def resolve_alias(annotation: object) -> object:
         >>> type Total = Count
         >>> resolve_alias(Total), resolve_alias(str)
         (<class 'int'>, <class 'str'>)
+        >>> type Pair[T] = tuple[T, T]
+        >>> resolve_alias(Pair[int])
+        tuple[int, int]
         >>> type Unknown = Missing
         >>> resolve_alias(Unknown)
         Unknown
 
     """
     with suppress(NameError):
-        while isinstance(annotation, TypeAliasType):
-            annotation = annotation.__value__
+        while isinstance(origin := get_origin(annotation) or annotation, TypeAliasType):
+            if origin is annotation:
+                annotation = origin.__value__
+            else:
+                annotation = origin.__value__[get_args(annotation)]
 
     return annotation
 
