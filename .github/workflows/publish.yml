@@ -57,6 +57,15 @@ jobs:
           fi
       - name: Build
         run: uv build
+      - name: Check the wheel for dev-only tooling
+        # Keeps dev-only lint tooling out of the wheel until that tooling moves.
+        run: |
+          dist="$(ls "$GITHUB_WORKSPACE"/dist/*.whl)"
+          unzip -Z1 "$dist"
+          if unzip -Z1 "$dist" | grep -q 'riko/cli/_lint'; then
+            echo "the wheel ships dev-only lint tooling (riko/cli/_lint*)"
+            exit 1
+          fi
       - name: Resolve every extra from PyPI (wheel)
         # Installs the wheel with its published metadata only (no lockfile, no git
         # sources), so an extra that users cannot install fails before publishing.

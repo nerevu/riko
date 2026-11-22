@@ -243,8 +243,8 @@ Same principle for optional parser/frame/finance/connector dependencies.
   `build-workflow`, `benchmark`), and retire the `manage` entry point in the same move,
   which also closes the `mezmorize` collision quirk in `_docs/INTERNALS.md`. The move
   rewrites every `manage …` invocation (CONTRIBUTING, CI, pre-commit, the skills), so it
-  is done once, there, not ahead of it. Until it lands, the wheel smoke step should list
-  the built wheel and fail on any `riko/cli/_lint` member.
+  is done once, there, not ahead of it. Until it lands, `publish.yml`'s wheel check
+  lists the built wheel and fails on any `riko/cli/_lint` member (added 2026-11-21).
 - **CI enforces formatting** — `ruff check` + `ruff format --check`, not an ephemeral
   `--fix` pass.
 - **Public dependency-graph lane** — add a job that ignores workspace/source overrides
