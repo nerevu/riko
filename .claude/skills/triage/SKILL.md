@@ -50,25 +50,36 @@ ships with an entry there plus a strict-xfail canary in
 
 ## 3. Decide the disposition
 
-- **Local repair** — no phase owns the behavior, or the owning phase has
-  already landed: fix now at the root cause, add a regression test (a row in
-  the subject's existing table when one has the same shape; see
-  `tests/__init__.py`), add a `docs/CHANGES.rst` line if user-observable. No
-  prose journaling. Prove each new test fails on the old code with
-  `python .claude/skills/triage/fail_first.py --ref <commit before the fix> --
-  <test files> -k <selectors>` (it never touches the working tree); a test that
-  passes there either guards something else or does not probe the bug. When the fix
-  is uncommitted, pass `--old <path>=<pre-fix copy>` per fixed file instead of
-  `--ref`: it snapshots the working tree with those files swapped back. Name the
-  fix's class from `python .claude/skills/tidy/mistake_scan.py --classes`, add the fix's
-  ref to that class's `CLASS_HISTORY` refs (or add the class with a probe line), then
-  run `mistake_scan.py --rewrap` and `ruff format` on it; the
-  count is derived from the refs, where each item before a `;` in a dated group
-  counts, so a note goes after the `;`. An
-  uncommitted fix's ref reads `uncommitted (MM-DD <what>)`, and /wrapup swaps in the
-  hash once the user commits; never ask the user to. And when
-  the scanner has a rule for the class, add the pre-fix line as a row in
+- **Local repair** — no phase owns the behavior, or the owning phase has already landed:
+  fix now at the root cause, add a regression test (a row in the subject's existing
+  table when one has the same shape; see `tests/__init__.py`), add a `docs/CHANGES.rst`
+  line if user-observable. No prose journaling. Prove each new test fails on the old
+  code with `python .claude/skills/triage/fail_first.py --ref <commit before the fix>`
+  followed by `-- <test files> -k <selectors>` (it never touches the working tree); a
+  test that passes there either guards something else or does not probe the bug. When
+  the fix is uncommitted, pass `--old <path>=<pre-fix copy>` per fixed file instead of
+  `--ref`: it snapshots the working tree with those files swapped back. Name the fix's
+  class from `python .claude/skills/tidy/mistake_scan.py --classes`, add the fix's ref
+  to that class's `CLASS_HISTORY` refs (or add the class with a probe line), then run
+  `mistake_scan.py --rewrap` and `ruff format` on it; the count is derived from the
+  refs, where each item before a `;` in a dated group counts, so a note goes after the
+  `;`. An uncommitted fix's ref reads `uncommitted (MM-DD <what>)`, and /wrapup swaps in
+  the hash once the user commits; never ask the user to. And when the scanner has a rule
+  for the class, add the pre-fix line as a row in
   `.claude/skills/tidy/test_mistake_scan.py`.
+
+  **Find the commit that introduced the bug before placing the fix.** Use
+  `git log -S`/`-G` on the broken line, or bisect with the regression test. When that
+  commit is past the branch's merge point (the merge-base with `next` or `main`), the
+  fix and its regression test become a `fixup!` of it, whether or not it was pushed:
+  - prove the test with `fail_first.py --ref <introducing commit>`;
+  - add no `docs/CHANGES.rst` line and no `CLASS_HISTORY` ref, since the autosquash
+    removes the bug from history and nothing would replay or resolve the ref;
+  - still add the `test_mistake_scan.py` row when a scanner rule covers the shape;
+  - name the introducing commit in the disposition so `/land` targets it.
+
+  Only a bug from a commit at or before the merge point gets a new fix commit with the
+  ref and CHANGES line above.
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.

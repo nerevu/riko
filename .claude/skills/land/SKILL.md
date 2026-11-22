@@ -216,12 +216,17 @@ staged, tests and internal docs stay unstaged, so never infer concepts from it.
 Write and rehearse the plan in the main loop with the scripts below; don't hand it
 to an agent, which repeats their work by hand for many minutes.
 
-1. **Branch range**: every commit past the branch's merge point, pushed or
-   not: the nearest merge-base with `next` or `main` (the mapper finds it;
-   `--base REF` overrides). Only these commits can be fixup targets; a commit
-   at or before the merge point never is. A pushed target is still a target:
-   the autosquash then rewrites published history, so `/wrapup`'s handover
-   ends with a force push (`git push --force-with-lease`).
+1. **Branch range**: every commit past the branch's merge point, pushed or not: the
+   nearest merge-base with `next` or `main` (the mapper finds it; `--base REF`
+   overrides). Only these commits can be fixup targets; a commit at or before the merge
+   point never is. A pushed target is still a target: the autosquash then rewrites
+   published history, so `/wrapup`'s handover ends with a force push
+   (`git push --force-with-lease`). "Already pushed" is never a reason for a new commit,
+   and never a caveat to raise. A bug fix goes to the commit that introduced the bug,
+   with its regression test in the same fixup, even when blame points elsewhere. Take
+   the introducing commit from the `/triage` disposition, or find it with
+   `git log -S`/`-G`. The fix is a new commit only when that commit is at or before the
+   merge point.
 2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
    with step 3's hunk list in one Bash call:
 
