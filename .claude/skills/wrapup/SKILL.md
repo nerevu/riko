@@ -252,7 +252,12 @@ a target was already pushed (`git branch -r --contains <target>` is non-empty),
 the rebase rewrites published history: append `&& git push --force-with-lease`
 to the clipboard line and say so in the report. In
 the handoff, record the fixups as "pending autosquash" with that line, so a
-session that starts before the user runs it knows to.
+session that starts before the user runs it knows to. When `/land` handed over a
+fold-only chain (`git reset --keep <tip>` with no plan steps after it) and the user has
+not run it yet, that tip already squashes the pending fixups: put that chain on the
+clipboard instead of the autosquash line, and record it as the pending handover. A
+chain that resets to a fold tip and then runs plan steps leaves the autosquash here as
+usual.
 
 ## 6. Report
 

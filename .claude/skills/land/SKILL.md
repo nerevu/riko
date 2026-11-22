@@ -227,6 +227,20 @@ to an agent, which repeats their work by hand for many minutes.
    the introducing commit from the `/triage` disposition, or find it with
    `git log -S`/`-G`. The fix is a new commit only when that commit is at or before the
    merge point.
+
+   An already-committed fix that belongs to an earlier branch commit becomes a
+   `fold <target> <mover>` plan step (or `--fold TARGET:MOVER[@ID,...]`), listing the
+   mover's ids from `split_hunks.py list --base M^ --head M` (none for the whole
+   commit). `fixup_map.py --fixes` lists leads: the branch commits that wrote the lines
+   each `[FIX]` commit removed. A lead is not a verdict (refactor moves show up too), so
+   confirm the bug existed at the target first. `rehearse_plan.py` replays the folds and
+   the pending fixups in one autosquash pass in a throwaway worktree; a conflict stops
+   it unless `--resolve PATH=ours|theirs|max` picks a side. The handover is
+   `git reset --keep <tip>` (plus `git push --force-with-lease` when pushed), and
+   `/wrapup`'s separate autosquash is then not needed unless the plan also has
+   working-tree fixups, which stay pending as usual. A `reword <sha> <msg-file>` step
+   (or `--reword SHA=FILE`) rewrites a branch commit's message in the same rehearsal,
+   such as a fold target's subject or a trimmed mover's.
 2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
    with step 3's hunk list in one Bash call:
 
@@ -305,7 +319,8 @@ to an agent, which repeats their work by hand for many minutes.
    any time after handover. Only a working-tree edit or a new `HEAD` makes the
    chain stale; staging alone never calls for a re-rehearsal. **No rebase**: the
    `fixup!` commits stay pending; `/wrapup` hands over the autosquash as its very
-   last step.
+   last step. The exception is a fold: it hands over `git reset --keep <tip>`, whose
+   tip already squashes the pending fixups in the same pass.
 
 ## Report
 
@@ -322,7 +337,8 @@ End with:
   skills take `[DEV]`, and the files each step touches with their line counts and
   partial-hunk lines), the check and autosquash results, which chain is on the
   clipboard, any hunk dropped from a fixup and why, and that the autosquash waits for
-  `/wrapup`. These are commands for the user to run, never executed on their branch.
+  `/wrapup` (unless a fold's `git reset --keep <tip>` already squashed it). These are
+  commands for the user to run, never executed on their branch.
 - **Script candidates**: candidates come from the main loop as much as from subagents:
   any helper script written this session into the scratchpad or `/tmp` (inline heredoc
   scripts included), any scan, count, or cross-check run by hand three or more times,
