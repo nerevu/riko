@@ -322,7 +322,12 @@ operator wrappers never close their input either (triage 2026-11-14): the wrappe
 only the parser's result, so closing a direct `truncate`, `uniq`, or `filter` call early
 leaves a source the caller still holds open; that module-level contract is S1's
 ([feed-native-streaming.md § 11](feed-native-streaming.md#11-implementation-order)),
-and this follow-up owns the execution-level close.
+and this follow-up owns the execution-level close. The copies have drifted (repository
+audit 2026-11-21): sync `_Owned` takes `cleanup=` where async takes `inline=`, and sync
+`_RunStream.add` picks each closer when a step is added — deliberately, so a value whose
+only close is async raises `InvalidPipelineError` before any item is read — while the
+async twin picks closers at `aclose`; the shared bookkeeping (steps, closed flag,
+last-step output, close-once) is the part to dedupe when R7 reshapes them.
 
 **Adaptation happens only at an execution boundary chosen during preparation.** Module,
 parser, factory, and extension code never creates event loops, portals, executors,

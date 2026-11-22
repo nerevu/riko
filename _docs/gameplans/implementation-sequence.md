@@ -2098,6 +2098,19 @@ detailed in its topical owner:
   `with_execution(strict=, overrides=)`, the explicit per-site `branch_buffer`, and
   strict splitter cardinality (execution-semantics § 6.5, fanout-topology § 7).
 - **Slice C**: the task group and driver task, `Pipeline.union`, and concurrent fan-in.
+  - Shape (repository audit 2026-11-21): the port and run builders
+    (`_build_splitter_ports`, `_register_port`, `_build_node_ports`, `_build_run`,
+    `run_envelopes` and their async twins) are hand-copied across
+    `SyncExecution`/`AsyncExecution` (about 230 same-logic lines per side;
+    `_register_port`'s parameter order had already drifted, realigned that day). When
+    Slice C rewrites them, the mode-independent decisions — interface choice and
+    adaptation, active ports and reader counts, tee isolation and `max_lag`, the seed's
+    root envelopes, the endpoint pop — move into one plan walk on `_BaseExecution`
+    beside `_resolve_node_inputs`/`_select_embed`, and each class keeps only its own
+    leaves (`Tee`/`AsyncTee`, `_wrap`/`_awrap`, `auto_close`/`aauto_close`, the close
+    and unwrap helpers). That stays within the two-explicit-classes ruling below
+    (2026-10-05): share the walk, keep the leaves per mode; no strategy object. Helper
+    for checking the remaining twin pairs: `.claude/skills/drafts/twin_diff.sh`.
 - **Slice D**: object-first publish/subscribe, with the event-sink failure rule
   (events § 6) and subscriber offload (execution-semantics, Subscriber scheduling).
   Queue bounds follow the shipped bounds rule (user, 2026-11-17): a bound is a

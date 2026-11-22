@@ -65,6 +65,11 @@ private execution mode and adapts only when that side is absent.
    Other extension kinds get sibling groups later (`riko.stores`, `riko.events`,
    `riko.converters`) rather than overloading this one. This string is a
    **public contract** the moment an external package declares it.
+3. **Module names are case-sensitive (ruling 2026-11-21, repository audit).** A
+   registered name is an identifier like a Python module name: `Sort` and `sort` are
+   different modules, the shadow guard compares names exactly, and no lookup folds
+   case. A name grammar, if one is ever wanted, belongs to the `ModuleDefinition`
+   rebuild in implementation-sequence.md that validates definitions at construction.
 
 ## Remaining deltas
 
