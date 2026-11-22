@@ -1161,7 +1161,7 @@ another task) would cancel the caller's scope. Task hosting for fan-out belongs 
 boundary: `to_sync(call, stream)` (an
 async stream re-exposed as a lazy sync iterator; the sync execution's portal drain and
 the worker-side upstream reader are the same function with a different `call`),
-`pull_stream(...)` (a sync iterator re-exposed as a lazy async stream), and the
+`to_async(...)` (a sync iterator re-exposed as a lazy async stream), and the
 `adapt_embed`/`async_adapt_embed` sync/async loop-embed wrappers.
 
 - **`SyncExecution`** runs synchronously behind an `ExitStack`; async-only components
@@ -1176,7 +1176,7 @@ the worker-side upstream reader are the same function with a different `call`),
   shutdown timeout (30 s by default, `RIKO_SHUTDOWN_TIMEOUT`, `math.inf` for none), so
   ambient cancellation of the shutdown task can never skip cleanup. A sync close or
   cleanup the unwind runs on a worker thread is abandoned at expiry
-  (`asyncify(..., abandon_on_cancel=True)` in `riko/bado/_util.py`): the unwind records
+  (`asyncify.using(abandon_on_cancel=True)` in `riko/bado/_util.py`): the unwind records
   the `TimeoutError` and returns, the call finishes on its thread, and an error it
   raises afterwards is logged as a warning. A sync-closable seed closes inline on the
   event loop and is not bounded (strict xfail, owned by R11).
@@ -1221,16 +1221,17 @@ async or awaitable-returning cleanup, and an async lifecycle, entered through
 in one task. A sync factory with an async cleanup raises `InvalidPipelineError` before
 the factory runs, an awaitable its sync cleanup returns raises it at close, and a
 caller-made value whose only close is async (`Resource(value)`, a sync-read seed, a
-native pipe's raw return, a node stream) raises it when opened or built, before any item
-is read (`ASYNC_CLEANUP_MSG`/ `ASYNC_CLOSE_MSG` name the fix). Under `AsyncExecution`
-every async close is awaited, and blocking sync work is offloaded to a worker thread: a
-sync value factory, a resource's sync cleanup callback, and its owned sync `close()` run
-on a worker through `asyncify` (`riko/bado/_util.py`, the unguarded worker seam, because
-cleanup runs while the execution is closing, when the guarded `to_async` would refuse;
-an awaitable the sync close returns is then awaited on the loop), a seed's sync close
-runs inline, a sync node's stream and raw return close on a worker, and a sync
-context-manager lifecycle is entered through a `_WorkerLifecycle` async wrapper so both
-`__enter__` and `__exit__` run off-loop with exception info preserved.
+native pipe's returned stream, a node stream) raises it when opened or built, before any
+item is read (`ASYNC_CLEANUP_MSG`/ `ASYNC_CLOSE_MSG` name the fix). Under
+`AsyncExecution` every async close is awaited, and blocking sync work is offloaded to a
+worker thread: a sync value factory, a resource's sync cleanup callback, and its owned
+sync `close()` run on a worker through `asyncify` (`riko/bado/_util.py`, the unguarded
+worker seam, because cleanup runs while the execution is closing, when the guarded
+`run_sync` would refuse; an awaitable the sync close returns is then awaited on the
+loop), a seed's sync close runs inline, a sync node's returned stream closes on a
+worker, and a sync context-manager lifecycle is entered through a `_WorkerLifecycle`
+async wrapper so both `__enter__` and `__exit__` run off-loop with exception info
+preserved.
 
 **Resource-model shape.** `Resource` stores `_plan`, `credential`, and `lazy` — no
 private subclass hierarchy and no field-pair invariants. `OneShotResource` /
@@ -1349,9 +1350,9 @@ run:
   `AsyncStream`. Native async nodes chain natively; an adapted node (sync-only pipe
   under async execution) runs off the event loop through the bridge and nothing is
   materialized. `_run_sync_node` starts the sync pipe on a worker thread through
-  `to_async` (asyncer's `asyncify`) and returns `pull_stream(...)`, which pulls one item
-  per `__anext__` as the consumer demands it; the pipe reads its async primary source
-  and every async secondary input (named ports and `others`, both through
+  `_run_on_node_thread` (asyncer's `asyncify`) and returns `to_async(...)`, which
+  pulls one item per `__anext__` as the consumer demands it; the pipe reads its async
+  primary source and every async secondary input (named ports and `others`, both through
   `ExecutionExtras.map_kwargs`) lazily from the worker through `anyio.from_thread.run`
   (re-exposed by `riko/bado/_backend.py` as `run_from_thread`). There are no background
   tasks and no channels, so backpressure is pure demand, an error raises at the pull
@@ -1378,11 +1379,11 @@ run:
   the loop wrapper is prepared with the node's `options` and the runner forwards
   `embed=<callable>` with each call. The embed is re-selected against
   **whether the host pipe actually runs sync or async**
-  (`select_embed(embed, host_is_async=, to_async=, to_sync=)` in `_adapt.py`, which the
+  (`select_embed(embed, host_is_async=, run_sync=, to_sync=)` in `_adapt.py`, which the
   shared base execution's `_select_embed` calls once, with each execution's own
   async-to-sync drain), so an adapted loop node gets an embed matching
   how it really runs. On adaptation the runner forwards a synthesized wrapper matching
-  the host: `adapt_embed(embed, to_sync)` / `async_adapt_embed(embed, to_async)` copy
+  the host: `adapt_embed(embed, to_sync)` / `async_adapt_embed(embed, run_sync)` copy
   the wrapper's discovery metadata (`name`, `type`, `subtype`, `subtypes`, `pollable`,
   `loopable`) and set `is_async` to match the host, leaving `__wrapped__` unset, so
   `loop_embed_sync`/`loop_embed_async`, `is_subpipe`, and `bind_subpipe` treat the
@@ -1467,7 +1468,7 @@ run:
   `<name>-<occurrence>` node id (`Workflow.get_node_id`, the id `normalize_workflow`
   gives an appended node without one; both use `get_free_occurrence`), append the node
   plus a `StreamEdge` from the current default output, and re-point `outputs["default"]`
-  (`Workflow.with_node`); prior nodes/edges are shared by reference. `a | b` appends
+  (`Workflow.with_nodes`); prior nodes/edges are shared by reference. `a | b` appends
   `b`'s whole workflow (`Workflow.with_workflow`): a clashing `b` id gets the next free
   `<name>-<occurrence>` (so `|` is associative), `a`'s default output feeds `b`'s single
   node with an open default `in` port, and every node field carries over through
@@ -1500,7 +1501,7 @@ run:
   hand the raw value through and the helpers below `run` keep their wide `Items`/`Feed`
   parameters. The async side wraps that iterator in `_Owned` when it has an async close,
   so the root node's own close and the exit stack's reach it only once; a sync-iterable
-  seed is read through `pull_stream` (no close on exhaustion), so its one close is at
+  seed is read through `to_async` (no close on exhaustion), so its one close is at
   exit. Both colors register the seed before its iterator, so the iterator closes first.
   Splitter branches close once (`_Owned`) when their port's reader finishes (sync
   native branches through `auto_close`; async-only branches under `SyncExecution`
@@ -1550,24 +1551,28 @@ at exit whether or not they are generators. Each run owns every node stream it b
 `SyncExecution` registers each non-output node stream's `close` on its exit stack (the
 runner's `yield from` closes the output), so a downstream operator that reads with a
 plain `for` loop never strands its input, and a node that fails to build still closes
-the streams built before it. A sync node stream or raw return whose only close is async
-raises `InvalidPipelineError` when built. `AsyncExecution`'s `_RunStream` also carries
-the run's resolved context and thread limiter for its nodes, and owns every stream one
-run builds: it closes each once, last built first, on `_RunStream.aclose`, a failed
-build, or execution exit, closing through `asyncify` so a sync node's stream and
-the raw return it was drawn from (registered as soon as the node is called, so an output
-nobody reads still closes them) keep their worker; a sync node on a worker closes its
-async inputs through it as soon as it finishes, so an upstream source is released before
-the run ends without being closed twice. Named input ports may not use a name every
-module call already takes (the `ExecutionExtras` fields `others`/`resources`/`embed`,
-`conf` and `context` from the call signatures, `item`, and the call options; operators
-keep `count` as a port because stored workflows wire a count stream into
-`truncate`/`tail`, while a processor reserves it because its parser receives the `count`
-option); `ExecutionPlan.validate` rejects them rather than letting one argument
-overwrite the other. A pipe's closable return value that is not its own iterator is
-closed once, after the node stream, in both modes. Duplicate-port and fan-out checks
-count `Endpoint.port_key` (the node plus the port's canonical spelling), so `in:1` and
-`in:01` are one port.
+the streams built before it. A sync node stream whose only close is async raises
+`InvalidPipelineError` when built. A pipe's output, whole-stream or per item, must be
+the iterator its type declares; `require_stream`/`require_async_stream`
+(`riko/types/_streams.py`) raise `TypeError` for anything else. `AsyncExecution`'s
+`_RunStream` also carries the run's resolved context and thread limiter for its nodes,
+and owns every stream one run builds: it closes each once, last built first, on
+`_RunStream.aclose`, a failed build, or execution exit, closing through `asyncify` so a
+sync node's stream (registered as soon as the node is called, so an output nobody reads
+still closes it) keeps its worker; a sync node on a worker closes its async inputs
+through it as soon as it finishes, so an upstream source is released before the run ends
+without being closed twice. In both modes a close that fails while a failed build
+unwinds is recorded as a cleanup error, so the build error stays primary. Named input
+ports may not use a name every module call
+already takes (the `ExecutionExtras` fields `others`/`resources`/`embed`, `conf` and
+`context` from the call signatures, `item`, and the call options; operators keep `count`
+as a port because stored workflows wire a count stream into `truncate`/`tail`, while a
+processor reserves it because its parser receives the `count` option);
+`ExecutionPlan.validate` rejects them rather than letting one argument overwrite the
+other. A pipe's closable return value that is not its own iterator is closed once, after
+the node stream, in both modes. Duplicate-port and fan-out checks count
+`Endpoint.port_key` (the node plus the port's canonical spelling), so `in:1` and `in:01`
+are one port.
 
 **Process executor ships each call once** (2026-10-16). `build_tracked_call`
 (`riko/execution/_concurrency.py`) pickles a mapped node's prepared call once on first
@@ -1674,13 +1679,13 @@ arrives as a tuple and a dict as a `FrozenDict`.
   reaches `fn` whole under every executor.
 - **Async `fn`.** When `is_async_callable(fn)`, `_resolve_callable` drops `udf`'s sync
   pipe, so sync iteration takes the existing async-only bridge
-  (`SyncExecution._build_stream` else-branch through the portal) and the node is never
-  sync-mapped. Async iteration awaits `fn` via `maybe_async`; a sync `fn` under async
-  iteration runs inline like `udf.async_pipe`.
+  (`SyncExecution._build_node_ports` else-branch through the portal) and the node is
+  never sync-mapped. Async iteration awaits `fn` via `maybe_async`; a sync `fn` under
+  async iteration runs inline like `udf.async_pipe`.
 - **Process executor.** `require_process_safe` pickles `node.sync_interface.item_call`,
   so a lambda or closure `fn` fails at planning ("cannot be pickled") and a bound
   resource fails with "live resource values cannot cross a process boundary".
-- **Resources.** `Workflow.with_node` declares each appended node's bound Context names
+- **Resources.** `Workflow.with_nodes` declares each appended node's bound Context names
   on `Workflow.resources` (order-stable, de-duplicated), so `Workflow.validate` accepts
   them; a missing binding still fails in `_require_bindings` before acquisition.
 - **No document form.** `validate_document_nodes` refuses a callable node in

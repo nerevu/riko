@@ -945,7 +945,7 @@ adaptation helpers live in `riko/execution/_adapt.py` (regressions in
 1. **Lazy sync-under-async bridge.** A sync-only node under `AsyncExecution`
    materializes neither its async source nor its own output.
    `AsyncExecution._run_sync_node` (`riko/execution/_async_execution.py`) starts the
-   sync pipe on a worker thread through the existing `to_async` (asyncer's `asyncify`)
+   sync pipe on a worker thread through `_run_on_node_thread` (asyncer's `asyncify`)
    and pulls its output one item per `__anext__` as the consumer demands it, while the
    pipe reads its async primary source and every async secondary input (named ports
    and `others`, both through `ExecutionExtras.map_kwargs`) lazily from the
@@ -955,7 +955,7 @@ adaptation helpers live in `riko/execution/_adapt.py` (regressions in
    `_execution.py`), `to_sync(call, stream)` — one
    async-stream-as-lazy-sync-iterator function that the sync execution's portal drain
    and the worker-side upstream reader share with a different `call` — and
-   `pull_stream(...)`, its sync-iterator-as-lazy-async-stream counterpart.
+   `to_async(...)`, its sync-iterator-as-lazy-async-stream counterpart.
    `_adapt_worker_inputs` and `_drain_sync` are gone. There are no background tasks and
    no channels: backpressure is pure demand, an error raises at the pull that hits it
    after every earlier item has been yielded, and abandoning or closing the async stream
@@ -983,12 +983,12 @@ adaptation helpers live in `riko/execution/_adapt.py` (regressions in
    per the four native-wins quadrants, and a loop node's embed is resolved at
    build into a nested `PreparedNode.embed`. Both executions now re-select that embed
    against the **host pipe's actual mode**
-   (`select_embed(embed, host_is_async=, to_async=, to_sync=)` in
+   (`select_embed(embed, host_is_async=, run_sync=, to_sync=)` in
    `riko/execution/_adapt.py`, called once by the shared base execution's
    `_select_embed` with each execution's own async-to-sync drain) and,
    when the embed is adapted, forward a synthesized host-mode wrapper instead of the raw
    other-mode one. `adapt_embed(embed, to_sync)` and
-   `async_adapt_embed(embed, to_async)` copy the wrapper's discovery metadata (`name`,
+   `async_adapt_embed(embed, run_sync)` copy the wrapper's discovery metadata (`name`,
    `type`, `subtype`, `subtypes`, `pollable`, `loopable`) and set `is_async` to the host
    mode — leaving `__wrapped__` unset — so `loop_embed_sync`/`loop_embed_async`,
    `is_subpipe`, and `bind_subpipe` treat the adapter as a native embed. An async-only
@@ -2198,17 +2198,17 @@ Deliver:
   branches (today `AsyncWrapperStream[Stream, Cascade]` yields sync streams); the unused
   `AsyncCascade` alias (`riko/types/_streams.py`) is either that type or deleted (audit
   triage 2026-10-05);
-- branch/route port behavior from the R4A contract. In the execution layer a generic
-  splitter's output is a `Cascade` of `Stream`s, one per output port, not tee branches:
-  `_gen_branches`/`_agen_branches`/`_aadapt_branches` and
-  `PreparedSplitter.validate_branches` (`riko/execution/`) borrow the tee term, which
-  belongs to `Tee`/`AsyncTee`, the `split` module, `Pipeline.split`, and
-  `RIKO_BRANCH_BUFFER`. The sync side also conflates three shapes: native streams
-  are `_Owned`, the adapted async-only splitter yields `(stream, closer)` pairs, and
-  `_build_cascade` branches on a `native` flag, so only native streams close with
-  their port; the async side yields self-closing streams in both cases. Target: one
-  self-closing owned stream per port in both colors, named as streams of the cascade
-  (triage 2026-11-19);
+- **done 2026-11-19**:
+  branch/route port behavior from the R4A contract. In the execution layer a generic
+  splitter's output is a `Cascade` of `Stream`s, one per output port, not tee branches,
+  so the tee term stays with `Tee`/`AsyncTee`, the `split` module, `Pipeline.split`,
+  and `RIKO_BRANCH_BUFFER`: the splitter helpers became `_gen_owned`/`_agen_owned` and
+  `PreparedSplitter.validate_branches` became `validate_streams` (`riko/execution/`),
+  while the adapters keep their `_adapt_interface`/`_aadapt_interface` names. The sync
+  side no longer conflates three shapes: the adapted async-only splitter yields `_Owned`
+  streams that close their async source on the portal instead of `(stream, closer)`
+  pairs, and `_build_splitter_ports` dropped its `native` flag, so every stream closes
+  with its port in both colors (triage 2026-11-19);
 - **done 2026-11-14** (slice 1):
   one input router: both executions already share `_BaseExecution._resolve_node_inputs`
   (`riko/execution/_execution.py`, extracted 2026-10-13), which runs
@@ -2289,9 +2289,10 @@ with a color-typed call protocol) in the same rewrite of node dispatch. `_run_sy
 by docstring.
 Done 2026-11-14 (slice 1): `SyncInterface[O]`/`AsyncInterface[O]` replaced
 `PreparedInterface`, and `_run_sync_node` takes `SyncInterface[Iterator[object]]`.
-The same rewrite also extracts the sync execution's twin of `_run_sync_node` (today the
-inline async-interface branches of `SyncExecution._build_whole_stream`/
-`_build_item_stream`) with a matching name and argument order (TODO triage 2026-11-16).
+Done 2026-11-20: the sync execution's twin of `_run_sync_node`, the async-interface
+branch of `SyncExecution._build_whole_stream`, is extracted as `_run_async_node` with
+the matching argument order (TODO triage 2026-11-16). `_build_item_stream`'s branch runs
+per item, so it is not the twin.
 
 Audit note (2026-10-31 sibling audit): a sync `receive` closed early stays registered on
 its channel, so a later `receive` on that channel with `func=` gets items without `func`
@@ -2522,7 +2523,22 @@ R10 therefore owns:
   repo-audit triage). When the tripwire flips, re-check its neighbour
   `TestThreadBudget::test_async_nested_run_short_of_threads_raises`: once the parent's
   demand counts the nested threads, `arun` may raise the up-front demand error outside
-  that test's `pytest.raises` block (2026-11-12 test audit).
+  that test's `pytest.raises` block (2026-11-12 test audit). The mechanism this replaces
+  is the `_on_node_thread` context flag and the `_run_on_node_thread` wrapper in
+  `riko/execution/_async_execution.py`, which today mark a worker call and let
+  `_reserve_threads` reject the unsafe nested wait; the replacement is an
+  execution-owned node runner that carries the parent's reservation into the nested run.
+  It stays in `riko/execution/`: `async_runner` in `riko/bado/_util.py` is a generic
+  dispatcher and never grows a node-aware option such as a node-thread flag, because
+  `bado` sits below `execution` in the layer DAG and the execution owns worker
+  adaptation (2026-11-21 triage).
+- under a sync execution, an async-only node downstream of another async-only node reads
+  a portal-backed sync view of its input on the portal loop and fails (`portal.call`
+  from the loop's own thread raises `RuntimeError`); hand the async stream through
+  without the sync round trip, as part of the laziness/materialization-seam audit
+  (strict-xfail tripwire
+  `tests/internal/test_plan_runs.py::TestPlanRun::test_run_passes_an_async_only_stream_to_an_adjacent_async_only_node`,
+  2026-11-20 triage).
 - a sync run under `with_execution(concurrency>1)`, and an async run under any item
   limit (an explicit `concurrency`, `1` included, or an explicit `thread`/`inline`
   executor), stream a mapped node's per-item output instead of collecting it first

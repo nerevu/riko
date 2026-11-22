@@ -265,7 +265,7 @@ new permanent bullet here.
 - **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
   when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,
   `write`/`awrite`); sibling sync/async classes never share a method name across colors.
-  An async-only helper keeps a plain name (`maybe_async`, `pull_stream`). An `async_`
+  An async-only helper keeps a plain name (`maybe_async`, `as_awaitable`). An `async_`
   prefix only says the function is async-flavored and may be a plain `def`
   (`async_pipe`, `async_get_temp_file`). Names that mirror stdlib/AnyIO
   (`enter_async_context`, `run_sync`) are exempt.
