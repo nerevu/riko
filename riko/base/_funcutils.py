@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Concatenate, overload
 
 from ._logging import get_logger
@@ -80,35 +81,56 @@ def noop[T](value: T) -> T:
     return value
 
 
-def compose[A, B, R](
-    outer: Callable[[B], R], inner: Callable[[A], B]
+def _composed[A, B, R](
+    outer: Callable[..., R],
+    inner: Callable[[A], B],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    value: A,
+    /,
+) -> R:
+    return outer(inner(value), *args, **kwargs)
+
+
+def compose[A, B, R, **P](
+    outer: Callable[Concatenate[B, P], R],
+    inner: Callable[[A], B],
+    /,
+    *args: P.args,
+    **kwargs: P.kwargs,
 ) -> Callable[[A], R]:
     """
-    Combines two one-argument callables into one that calls ``inner``, then ``outer``.
+    Combines two callables into one that calls ``inner``, then ``outer``.
+
+    The composed function takes one argument and can be pickled when both callables
+    can, so a process pool can run it.
 
     Args:
 
-        outer: Called with the result of ``inner``.
+        outer: Called with the result of ``inner``, ``args``, and ``kwargs``.
         inner: Called with the composed function's argument.
+        args: Positional arguments passed to ``outer``.
+
+    Kwargs:
+
+        kwargs: Keyword arguments passed to ``outer``.
 
     Returns:
 
-        A function equivalent to ``lambda value: outer(inner(value))``.
+        A function equivalent to
+        ``lambda value: outer(inner(value), *args, **kwargs)``.
 
     Examples:
 
         >>> to_int = compose(int, float)
         >>> to_int("2.5")
         2
+        >>> to_rounded = compose(round, float, 1)
+        >>> to_rounded("2.25")
+        2.2
 
     """
-
-    def composed(
-        value: A, _outer: Callable[[B], R] = outer, _inner: Callable[[A], B] = inner, /
-    ) -> R:
-        return _outer(_inner(value))
-
-    return composed
+    return partial(_composed, outer, inner, args, kwargs)
 
 
 def map_values[K, V, R](
@@ -155,14 +177,14 @@ def map_values[K, V, R](
     return result
 
 
-def call_if_distinct[T, **P](
-    func: Callable[Concatenate[T, P], object],
+def call_if_distinct[T, R, **P](
+    func: Callable[Concatenate[T, P], R],
     value: T,
     other: object,
     /,
     *args: P.args,
     **kwargs: P.kwargs,
-) -> None:
+) -> R | None:
     """
     Calls ``func`` with ``value`` unless ``value`` is ``other``.
 
@@ -179,6 +201,10 @@ def call_if_distinct[T, **P](
 
         **kwargs: Keyword arguments passed to ``func``.
 
+    Returns:
+
+        The result of ``func`` when called, or ``None`` when ``value`` is ``other``.
+
     Examples:
 
         >>> calls = []
@@ -191,8 +217,12 @@ def call_if_distinct[T, **P](
         [[1]]
 
     """
+    result = None
+
     if value is not other:
-        func(value, *args, **kwargs)
+        result = func(value, *args, **kwargs)
+
+    return result
 
 
 def map_keys[K, V, R](func: Callable[[K], R], item: Mapping[K, V]) -> dict[R, V]:
