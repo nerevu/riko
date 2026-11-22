@@ -260,6 +260,7 @@ Fixes
   - ``filter`` resolves relative dates like ``"today"`` per evaluation, so they advance.
   - A ``sort`` rule without a ``type`` no longer raises ``TypeError`` when some items
     lack the field and the rest hold dates.
+  - A sync ``loop`` now closes each embed's results instead of leaving them open.
 
 Dev
 ~~~

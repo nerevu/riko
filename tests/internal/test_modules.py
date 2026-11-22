@@ -11,6 +11,7 @@ from collections.abc import (
     AsyncIterable,
     AsyncIterator,
     Awaitable,
+    Generator,
     Iterator,
 )
 from decimal import Decimal
@@ -1070,6 +1071,35 @@ class TestLoop:
         assert list(result) == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
+
+    def test_closing_the_loop_closes_the_running_child(self):
+        # Not a generator, so only an explicit close can end it.
+        closed: list[str] = []
+
+        class Child:
+            def __init__(self, tag: str) -> None:
+                self.tag, self.index = tag, 0
+
+            def __iter__(self) -> Child:
+                return self
+
+            def __next__(self) -> Item:
+                self.index += 1
+                return {"content": f"{self.tag}{self.index}"}
+
+            def close(self) -> None:
+                closed.append(self.tag)
+
+        def _sub(item, context=None, **_):
+            return Child(str(item["title"]))
+
+        parents = [{"title": "a"}, {"title": "b"}]
+        stream = loop(iter(parents), embed=workflow()(_sub), count="all", emit=True)
+
+        assert isinstance(stream, Generator)
+        assert next(stream) == {"content": "a1"}
+        stream.close()
+        assert closed == ["a"]
 
     @pytest.mark.parametrize(("embed", "message"), UNEMBEDDABLE)
     def test_unembeddable_embed_passes_parents_through(self, embed, message, caplog):
