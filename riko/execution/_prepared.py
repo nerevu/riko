@@ -125,6 +125,7 @@ type PreparedNodes = FrozenDict[NodeId, AnyPreparedNode]
 type ResolvedModules = FrozenDict[NodeId, ResolvedModule]
 type ResolvedModulesInput = Mapping[NodeId, ResolvedModule]
 
+_MODULE_ATTRS = ("type", "subtype", "identity")
 _MODULE_FLAGS = ("loopable", "sequential_inputs")
 _DEFAULT_SPLITS = 2
 _normalize_identity = def_from_require(
@@ -287,16 +288,25 @@ def _has_flag_mismatch(
     return _has_flag(sync_pipe, flag) != _has_flag(async_pipe, flag)
 
 
+def _has_attr_mismatch(
+    sync_pipe: SyncModuleWrapper, async_pipe: AsyncModuleWrapper, attr: str
+) -> bool:
+    return getattr(sync_pipe, attr, None) != getattr(async_pipe, attr, None)
+
+
 def _is_consistent(
     instance: ResolvedModule, _: object, value: AsyncModuleWrapper | None
 ) -> None:
     if (sync_pipe := instance.sync_pipe) is not None and value is not None:
         _diff = partial(_has_flag_mismatch, sync_pipe, value)
+        _attr_diff = partial(_has_attr_mismatch, sync_pipe, value)
 
         flags = tuple(filter(_diff, _MODULE_FLAGS))
+        attrs = tuple(filter(_attr_diff, _MODULE_ATTRS))
         splitter = is_splitter(sync_pipe) != is_splitter(value)
+        named = (*flags, *attrs)
 
-        if differing := (*flags, "splitter") if splitter else flags:
+        if differing := (*named, "splitter") if splitter else named:
             msg = f"{instance.name!r} has sync and async callables that disagree on "
             msg += ", ".join(repr(flag) for flag in differing)
             raise InvalidPipelineError(msg)
@@ -318,7 +328,8 @@ class ResolvedModule:
 
         InvalidPipelineError: If neither callable is given or one callable fills both
             slots; or if the two callables disagree on whether the module is loopable,
-            reads its input streams one at a time, or is a splitter.
+            reads its input streams one at a time, is a splitter, or in its attributes
+            (type, subtype, or identity mode).
 
     Examples:
 

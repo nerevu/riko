@@ -1442,6 +1442,12 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   `require_interfaces`) and the double lookup. Decide
   `ModuleDefinition.get_pipe(is_async)` in the same change, so the flag goes from both
   or neither;
+- `ResolvedModule._metadata_pipe` (`riko/execution/_prepared.py`) reads the async
+  pipe's metadata when a module has both; its validator `_is_consistent` makes every
+  attribute it reads agree across the twins (triaged 2026-11-21 from a repository
+  audit), so the choice is immaterial today. When the interface slots change here,
+  validate the twins at `ModuleDefinition` construction and keep mode-specific metadata
+  on the selected `SyncInterface`/`AsyncInterface`, retiring the projection;
 - `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
   `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
   favor of `interfaces` when classification moves to `is_async`, updating the

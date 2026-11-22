@@ -109,6 +109,18 @@ def _flagged(func, flag: str) -> Any:
     return func
 
 
+def _mismatched(attr: str, sync_value: str, async_value: str) -> dict[str, Any]:
+    def sync_pipe(source, **_):
+        return iter(source or {})
+
+    def async_pipe(source, **_):
+        return as_async(source or {})
+
+    setattr(sync_pipe, attr, sync_value)
+    setattr(async_pipe, attr, async_value)
+    return {"sync_pipe": sync_pipe, "async_pipe": async_pipe}
+
+
 _LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
 
 _SEQUENTIAL_ASYNC = _flagged(
@@ -637,18 +649,33 @@ INVALID_MODULES = [
     ),
     pytest.param(
         {"sync_pipe": passthrough_pipe, "async_pipe": async_split},
-        "disagree on 'splitter'",
+        "'splitter'",
         id="sync-non-splitter",
     ),
     pytest.param(
         {"sync_pipe": split_pipe, "async_pipe": _ASYNC_PIPE},
-        "disagree on 'splitter'",
+        "'splitter'",
         id="async-non-splitter",
     ),
     pytest.param(
         {"sync_pipe": passthrough_pipe, "async_pipe": _SEQUENTIAL_ASYNC},
         "disagree on 'sequential_inputs'",
         id="mismatched-sequential-inputs",
+    ),
+    pytest.param(
+        _mismatched("subtype", "source", "transformer"),
+        "disagree on 'subtype'",
+        id="mismatched-subtype",
+    ),
+    pytest.param(
+        _mismatched("type", "processor", "operator"),
+        "disagree on 'type'",
+        id="mismatched-type",
+    ),
+    pytest.param(
+        _mismatched("identity", "preserve", "derive"),
+        "disagree on 'identity'",
+        id="mismatched-identity",
     ),
 ]
 

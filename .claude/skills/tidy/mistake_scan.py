@@ -320,7 +320,8 @@ CLASS_HISTORY = {
             "processor reads); 7ee178c7 (10-31 exchangerate timeout, ijson shape, "
             "async_write, async fetchpage/exchangerate encoding); 592972a2 (11-05 "
             "async HTTP status); 24a19342 (11-17 split branches in both colors); none "
-            "RM801-shaped (source shape, status handling, not keyword drift)"
+            "RM801-shaped (source shape, status handling, not keyword drift); 2903b365 "
+            "(11-21 twin type/subtype/identity)"
         ),
         (
             "run each sync/async twin on the same input, an error status and a bad "

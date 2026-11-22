@@ -7,7 +7,8 @@ named ``flow``. The name ``workflow`` is the decorator that tags a workflow modu
 pipe. Instance fields (``pipeline.workflow``), the ``from_workflow`` constructor name,
 and the ``workflow=`` keywords that set those fields keep their names, including a
 method's keyword-only parameter named after its class's field
-(``replace(*, workflow=None)``).
+(``replace(*, workflow=None)``). Because those fields keep the name, a value read from
+an attribute named ``workflow`` counts as a ``Workflow``.
 """
 
 from __future__ import annotations
