@@ -1056,7 +1056,7 @@ that wire `in:1` into `passthrough_pipe` need a host with declared positional po
 `test_execution_plan.py`, and
 `TestPlanRun::test_run_rejects_seed_with_multiple_open_inputs` in `test_plan_runs.py`).
 The R4B "source normalization at one boundary" item is also done: `InputLike`
-(`Item | ValueFeed | Awaitable[Item | ValueFeed]`) is resolved once in
+(`ItemLike | AnyIterable[ItemLike | ItemValue] | Awaitable[...]`) is resolved once in
 `SyncExecution.run`/`AsyncExecution.arun` (`_open_seed`/`_aopen_seed`, sharing `listize`
 from `riko/coercion/_sequences.py`); `Pipeline.__call__`, `__ror__`, and the generated
 module template hand the raw seed through, and the async `processor` wrapper maps an
@@ -1480,6 +1480,46 @@ Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong 
   audit), so the choice is immaterial today. When the interface slots change here,
   validate the twins at `ModuleDefinition` construction and keep mode-specific metadata
   on the selected `SyncInterface`/`AsyncInterface`, retiring the projection;
+- near-duplicates this slice collapses (triaged 2026-11-24 from the
+  `.claude/skills/tidy/reuse_scan.py --all --shapes` scan): the
+  `require_conf_key(objconf, ..., strict=...)` call (18 sites in `riko/modules`), the
+  repeated decoration-option dicts (`{"ftype": BasicCastType.TEXT, "field": ...}` ×7,
+  the `TEXT` + `listize`/`field`/`extract` form ×5, the `NONE` +
+  `listize`/`extract` form ×4), and `getattr(self._metadata_pipe, ..., None)` ×3 in
+  `riko/execution/_prepared.py`. Required-key checks move into the conf contract,
+  the decoration options move with the decorator wrapper-builder rebuild, and the
+  projection retires, so no interim shared helper is built before this slice;
+- read-only items at the entry points (triaged 2026-11-24): every alias built on `Item`
+  rejects a read-only mapping (`FrozenDict`), because `Item` is a union of mutable
+  shapes only. `ItemLike = Item | Mapping[str, ItemValue]` (`riko/types/_streams.py`)
+  already widens the pipeline seed (`InputLike`). The stub rewrite applies the same
+  rule to every place riko only reads caller data, and keeps `Item` wherever riko
+  produces items or hands them to code that may change them:
+  - accept `ItemLike` (and `Items`/`Stream`/`Feed` input variants built on it): the
+    wrapper inputs `SyncProcessorWrapperInput`/`AsyncProcessorWrapperInput`,
+    `SyncOperatorWrapperInput`/`AsyncOperatorWrapperInput`,
+    `SyncSplitterWrapperInput`/`AsyncSplitterWrapperInput`
+    (`riko/types/_wrappers.py`) and any other public function that takes a stream of
+    items only as input (`Pipeline.__ror__` already takes `object`);
+  - keep `Item`: wrapper and pipeline outputs (`Stream`, `AsyncStream`, `Cascade`,
+    `PipelineStream`), what a parser receives after normalization (`DotDict`/`Item`,
+    which parser code may assign into), and internal aliases carrying items riko built
+    (`ItemGenerator`, `auto_close[Item]`);
+  - pin the contract first: widening the inputs promises that riko never mutates a
+    caller's input item. A frozen-seed run of identity, `strtransform`, `hash`,
+    `count`, `sort`, and `rename` (sync, async, async stream) mutated nothing on
+    2026-11-24 (`.claude/skills/drafts/frozen_seed_check.py`, parked for this); add a
+    test or lint covering every built-in module before the types promise it;
+  - then dedupe the test rows the type rejection kept literal: every
+    `[{"x": 1}, {"x": 2}]` and `[{"content": ...}, ...]` row that feeds a widened
+    input becomes the shared frozen `X_ROWS` (`tests/__init__.py`) or a frozen
+    constant, and `AB_ROWS` (`tests/public/test_modules.py`) becomes `freeze(...)`.
+    Rows that are a fixture iterator's asserted output stay literal. Find the sites
+    with `python .claude/skills/tidy/reuse_scan.py --all --tests --shapes` (the
+    `[{'x': <int>}, ...]` and `[{'content': <str>}, ...]` clusters, the single-row
+    `iter([{'x': 1}])`, the `[{'title': ...}]`, `[{'a': ...}]`, `[{'name': ...}]`, and
+    `[{'t': ...}]` rows, a wrapper-fed `as_async([...])`, and `session.write({...})`,
+    whose `Item | Items` parameter is mutable-only);
 - `ModuleMetadata.has_sync`/`has_async` (`riko/types/modules.py`) restate
   `describe_module(name).interfaces` and nothing in `riko/` reads them; retire them in
   favor of `interfaces` when classification moves to `is_async`, updating the

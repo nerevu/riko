@@ -10,6 +10,7 @@ from collections.abc import (
     Generator,
     Iterable,
     Iterator,
+    Mapping,
 )
 from typing import TYPE_CHECKING, Protocol, TypedDict, TypeGuard
 
@@ -42,6 +43,7 @@ type Item = (
 
 type ItemOrValue = Item | RikoValue
 type ItemValue = ItemOrValue | list[ItemOrValue]
+type ItemLike = Item | Mapping[str, ItemValue]
 
 # Sync
 type StreamOf[T] = Iterator[T]
@@ -70,8 +72,11 @@ type AsyncItemGenerator = AsyncGenerator[Item, None]
 # Both
 type AnyIterable[T] = Iterable[T] | AsyncIterable[T]
 type Feed = AnyIterable[Item]
-type ValueFeed = AnyIterable[ItemValue]
-type InputLike = Item | ValueFeed | Awaitable[Item | ValueFeed]
+type InputLike = (
+    ItemLike
+    | AnyIterable[ItemLike | ItemValue]
+    | Awaitable[ItemLike | AnyIterable[ItemLike | ItemValue]]
+)
 
 
 # Item/value

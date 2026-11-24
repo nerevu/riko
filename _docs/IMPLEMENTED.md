@@ -1495,33 +1495,35 @@ run:
   open node that is not self-starting, else the single open node; otherwise
   `InvalidPipelineError`) while other open nodes take the default seed and must be
   self-starting. The seed is an `InputLike`
-  (`Item | ValueFeed | Awaitable[Item | ValueFeed]`, a `ValueFeed` being any sync/async
-  iterable of item values, `riko/types/_streams.py`) opened once per run —
+  (`ItemLike | AnyIterable[ItemLike | ItemValue] | Awaitable[...]`, an `ItemLike` being
+  an `Item` or a read-only mapping, the iterable being any sync/async iterable of
+  `ItemLike`s or item values, `riko/types/_streams.py`) opened once per run —
   `SyncExecution._open_seed` awaits an awaitable through the portal and drains an
-  async-only stream through it, `AsyncExecution._aopen_seed` awaits and wraps, both
-  sharing `listize` (`riko/coercion/_sequences.py`: a mapping or primitive is one item,
-  `None` is no item, any other iterable is the stream). A seed closes when the run is
-  done reading it (the roots adapter over it closes it) or when the execution exits,
-  whichever is first: sync and async wrap it once (`auto_close` through
-  `_auto_close`, which rejects a sync-read seed whose only close is async before any
-  item is read; `aauto_close`, or `to_async(..., inline=True)` for a sync-iterable seed
-  under async) and register that close-once wrapper on the exit stack, plus the iterator
-  the seed hands out when it is a different object (`call_if_distinct` in
-  `riko/base/_funcutils.py` registers the seed only then) — so `Pipeline.__call__`,
-  `__ror__` (`is_streamlike` or awaitable, never a `PipelineDefinition`), and the
-  generated module's `pipe(item)` hand the raw value through and the helpers below `run`
-  keep their wide `Items`/`Feed` parameters. Sync and async runs both register the seed
-  before its iterator, so the iterator closes first. A splitter's cascade closes once
-  its streams are taken, and each split branch closes once when its port's reader
-  finishes, native or adapted, sync and async alike (an async-only splitter under
-  `SyncExecution` reads its inputs through `to_async` over sync unwrap readers the run
-  closes, and its branches through `to_sync`). A branch with more values than input
-  items drops the extras in sync and async runs alike. A named input port may not take a
-  name the module's pipe fills by position (`ResolvedModule._positional_names`,
-  `PARSER_POSITIONALS` in `riko/types/_wrappers.py`); under async a sync-only splitter
-  reads its named and `others` inputs as sync streams. `shutdown_timeout` comes only
-  from `ExecutionSettings`. An async `processor` node fed an async stream maps it lazily
-  and in order (`_aprocess_stream` in `riko/modules/_decorators.py`, a bounded ordered
+  async-only stream through it,
+  `AsyncExecution._aopen_seed` awaits and wraps, both sharing `listize`
+  (`riko/coercion/_sequences.py`: a mapping or primitive is one item, `None` is no item,
+  any other iterable is the stream). A seed closes when the run is done reading it (the
+  roots adapter over it closes it) or when the execution exits, whichever is first: sync
+  and async wrap it once (`auto_close` through `_auto_close`, which rejects a sync-read
+  seed whose only close is async before any item is read; `aauto_close`, or
+  `to_async(..., inline=True)` for a sync-iterable seed under async) and register that
+  close-once wrapper on the exit stack, plus the iterator the seed hands out when it is
+  a different object (`call_if_distinct` in `riko/base/_funcutils.py` registers the seed
+  only then) — so `Pipeline.__call__`, `__ror__` (`is_streamlike` or awaitable, never a
+  `PipelineDefinition`), and the generated module's `pipe(item)` hand the raw value
+  through and the helpers below `run` keep their wide `Items`/`Feed` parameters. Sync
+  and async runs both register the seed before its iterator, so the iterator closes
+  first. A splitter's cascade closes once its streams are taken, and each split branch
+  closes once when its port's reader finishes, native or adapted, sync and async alike
+  (an async-only splitter under `SyncExecution` reads its inputs through `to_async` over
+  sync unwrap readers the run closes, and its branches through `to_sync`). A branch with
+  more values than input items drops the extras in sync and async runs alike. A named
+  input port may not take a name the module's pipe fills by position
+  (`ResolvedModule._positional_names`, `PARSER_POSITIONALS` in
+  `riko/types/_wrappers.py`); under async a sync-only splitter reads its named and
+  `others` inputs as sync streams. `shutdown_timeout` comes only from
+  `ExecutionSettings`. An async `processor` node fed an async stream maps it lazily and
+  in order (`_aprocess_stream` in `riko/modules/_decorators.py`, a bounded ordered
   window) instead of treating the stream object as one item. Closing the node's stream
   (`_AsyncWrapperStream.aclose`) closes that window and its source at once, not at
   garbage collection. Since R7 slice 1 a source port feeding more than one stream edge
