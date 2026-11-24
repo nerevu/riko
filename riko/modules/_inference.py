@@ -21,6 +21,7 @@ import riko.types._scalars as _scalars_module
 import riko.types._streams as _streams_module
 import riko.types._values as _values_module
 from riko.base._config import as_maxsize, settings
+from riko.base._guards import is_subclass
 from riko.base._logging import get_logger
 from riko.base._typing import gen_union_members, resolve_type_hints
 from riko.types._streams import Item, ItemOrValue
@@ -134,10 +135,6 @@ def _gen_members(annotation: object) -> Iterator[AnnotationMember]:
                 yield from _gen_members(args[-1])
         else:
             yield AnnotationMember(arm, origin or arm)
-
-
-def _matches_abc(candidate: object, abc: type) -> bool:
-    return isinstance(candidate, type) and issubclass(candidate, abc)
 
 
 def _expression_path(node: ast.expr) -> str | None:
@@ -421,7 +418,7 @@ def gen_return_inferences(pipe: Func[object]) -> Iterator[ReturnInference]:
                 elif isinstance(member, TypeAliasType):
                     reason = f"return annotation alias {member!r} names a type that is "
                     yield ReturnInference(*unknown, reason + "not available at runtime")
-                elif _matches_abc(candidate, Iterator):
+                elif is_subclass(candidate, Iterator):
                     yield ReturnInference(*stream_anno)
                 else:
                     yield ReturnInference(*nonstream_anno)

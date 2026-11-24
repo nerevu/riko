@@ -248,7 +248,7 @@ Within a private module, split the rule by name:
   class-level `Examples:`. The summary and any prose lead with the **why,
   invariant, assumption, or trap**; the sections stack on top, never in place of it.
 - An **underscore-prefixed helper may omit the sections — or the docstring
-  entirely — when it is obvious**: `_matches_abc(candidate, abc) -> bool` needs
+  entirely — when it is obvious**: `_is_private_module(module) -> bool` needs
   none, and `"""Get the field."""` is worse than nothing. But the moment a `_`
   helper documents a why/invariant/trap, complete the sections its signature
   implies rather than stopping at prose.

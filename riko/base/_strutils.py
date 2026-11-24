@@ -94,6 +94,29 @@ def get_doc_summary(obj: object) -> str | None:
     return lines[0].strip() if lines else None
 
 
+def get_indent(line: str) -> int:
+    """
+    Gets the indentation width of a line.
+
+    Args:
+
+        line: The line to measure.
+
+    Returns:
+
+        The number of leading whitespace characters.
+
+    Examples:
+
+        >>> get_indent("    return x")
+        4
+        >>> get_indent("x = 1")
+        0
+
+    """
+    return len(line) - len(line.lstrip())
+
+
 def get_codegen_note(selector: str) -> str:
     """
     Gets the do-not-edit note naming the command that regenerates a file or block.

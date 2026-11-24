@@ -195,7 +195,7 @@ def _recording_split_dispatcher(
 
     @splitter(objectify=False)
     async def asplit(stream, _: object, __: object, **___: object):
-        items = [item async for item in as_async(stream)]
+        items = await alist(stream)
         tags = ("b0", "b1")
         return as_async([_AsyncRecordingBranch(items, events, tag) for tag in tags])
 

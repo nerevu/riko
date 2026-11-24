@@ -251,6 +251,10 @@ def is_attrs_inst(value: object) -> TypeIs[attrs.AttrsInstance]:
     return attrs.has(type(value)) and not is_mapping(value)
 
 
+def is_subclass[T](candidate: object, cls: type[T]) -> TypeIs[type[T]]:
+    return isinstance(candidate, type) and issubclass(candidate, cls)
+
+
 @overload
 def require_mapping(
     value: Conf | None,
@@ -346,7 +350,7 @@ def is_listlike(value: object) -> bool:
 
 
 def is_sequence(val: object) -> TypeIs[Sequence[object]]:
-    return isinstance(val, (list, tuple)) or (
+    return is_known_sequence(val) or (
         not isinstance(val, (int, float)) and isinstance(val, Sequence)
     )
 

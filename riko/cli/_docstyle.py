@@ -38,6 +38,7 @@ from riko.base._api_surface import EXT_CODEGEN, EXTENSION, STABLE, TYPES
 from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._iterutils import gen_instances, gen_non_null
 from riko.base._paths import ROOT_DIR
+from riko.base._strutils import get_indent
 from riko.base._verbs import VERBS
 
 from ._import_graph import FUNCTION_NODES
@@ -245,7 +246,7 @@ def gen_malformed_raises(doc: str) -> Iterator[str]:
     entry: int | None = None
 
     for raw in doc.splitlines():
-        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+        indent, line = get_indent(raw), raw.strip()
 
         if line == "Raises:":
             section, entry = indent, None
@@ -284,7 +285,7 @@ def gen_section_names(doc: str, section: str) -> Iterator[str]:
     entry: int | None = None
 
     for raw in doc.splitlines():
-        indent, line = len(raw) - len(raw.lstrip()), raw.strip()
+        indent, line = get_indent(raw), raw.strip()
 
         if line == f"{section}:":
             start, entry = indent, None

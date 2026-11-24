@@ -20,7 +20,7 @@ from attrs import AttrsInstance
 
 from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OTHER_PORT, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._funcutils import map_keys_and_values, map_values
+from riko.base._funcutils import map_keys_and_values, map_values, resolve_str
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._guards import is_mapping, require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null
@@ -161,7 +161,7 @@ def _build_node(raw: NodeLike) -> RikoNode:
     else:
         aliases = _resolve_aliases(raw, "node")
         _family = aliases.pop("family", None)
-        family = "module" if _family is None else str(_family)
+        family = resolve_str(_family, "module")
 
         if family == CallableNode.family:
             msg = "a workflow document cannot hold a callable node. "
@@ -287,7 +287,7 @@ def build_nodes(raw_nodes: NodesLike) -> RikoNodeCollection:
 
 def resolve_port(port: RawPort | None, default: RawPort) -> RawPort:
     """Resolves an authored endpoint port."""
-    return default if port is None else str(port)
+    return resolve_str(port, default)
 
 
 def _normalize_endpoint(default_port: PortDirection, raw: EndpointLike) -> Endpoint:

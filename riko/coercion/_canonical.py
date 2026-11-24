@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
-from dataclasses import fields, is_dataclass
+from dataclasses import fields
 from datetime import UTC, date, datetime
 from decimal import Context, Decimal, localcontext
 from enum import Enum, StrEnum
@@ -23,7 +23,7 @@ from uuid import UUID
 import attrs
 
 from riko.base._exceptions import CyclicIdentityError, IdentityEncodingError
-from riko.base._guards import is_mapping
+from riko.base._guards import is_dataclass_inst, is_mapping
 from riko.base._iterutils import sort_stably
 
 from ._dates import resolve_aware_datetime, tt_to_datetime
@@ -222,7 +222,7 @@ def _canon(value: object, seen: set[int]) -> CanonicalValue:  # noqa: C901
         case _:
             if attrs.has(type(value)):
                 result = _guard(value, seen, _canon_attrs)
-            elif is_dataclass(value) and not isinstance(value, type):
+            elif is_dataclass_inst(value):
                 result = _guard(value, seen, _canon_dataclass)
             else:
                 raise IdentityEncodingError(type(value))

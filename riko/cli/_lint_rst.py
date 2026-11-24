@@ -13,6 +13,7 @@ from subprocess import check_output
 from typing import TYPE_CHECKING
 
 from riko.base._paths import ARCHIVE_DIR, ROOT_DIR
+from riko.base._strutils import get_indent
 
 try:
     from docutils import nodes
@@ -42,17 +43,12 @@ UNRENDERED_LITERAL_MESSAGE = (
 )
 
 
-def _get_indent(line: str) -> int:
-    """Gets the indentation width of a line."""
-    return len(line) - len(line.lstrip())
-
-
 def _get_block_end(lines: list[str], start: int, indent: int) -> int:
     """Gets the index just past the directive body that starts at ``start``."""
     end = start
 
     while end < len(lines) and (
-        not lines[end].strip() or _get_indent(lines[end]) > indent
+        not lines[end].strip() or get_indent(lines[end]) > indent
     ):
         end += 1
 
@@ -106,7 +102,7 @@ def gen_plain_block_lines(text: str) -> Iterator[int]:
             before = index - 1
 
             while before >= 0 and (
-                not lines[before].strip() or _get_indent(lines[before]) > indent
+                not lines[before].strip() or get_indent(lines[before]) > indent
             ):
                 before -= 1
 

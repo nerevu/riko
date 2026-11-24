@@ -19,6 +19,7 @@ import pytest
 from click.testing import CliRunner
 
 from riko.base._exceptions import InvalidPipelineError
+from riko.base._funcutils import map_keys
 from riko.base._paths import PYPROJECT
 from riko.cli import (
     _codegen,
@@ -1491,7 +1492,7 @@ class TestHelperLint:
     def test_single_use_helpers_are_counted_per_function(
         self, sources: dict[str, str], keep: tuple[tuple[str, str], ...], count: int
     ) -> None:
-        paths = {Path(name): source for name, source in sources.items()}
+        paths = map_keys(Path, sources)
         kept = frozenset((Path(path), name) for path, name in keep)
         assert ChainReport.from_sources(paths, keep=kept).helper_count == count
 

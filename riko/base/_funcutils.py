@@ -487,3 +487,27 @@ def resolve_default(
     fallback = value if fallback is None else fallback
     default = {} if default is None else default
     return default if value is None else fallback
+
+
+def resolve_str[D](value: object, default: D) -> str | D:
+    """
+    Resolves ``default`` when ``value`` is None, else ``value`` as a string.
+
+    Args:
+
+        value: The value to test against None.
+        default: The result when ``value`` is None.
+
+    Returns:
+
+        ``default`` or ``str(value)``.
+
+    Examples:
+
+        >>> resolve_str(None, "module")
+        'module'
+        >>> resolve_str(3, "module")
+        '3'
+
+    """
+    return default if value is None else str(value)
