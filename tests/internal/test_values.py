@@ -679,12 +679,11 @@ class TestOverloadTypes:
 
 
 class TestResolveCastType:
-    def test_unknown_name_warns_once_and_passes(self, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            cast_type = resolve_cast_type("unknown")
+    def test_unknown_name_warns_once_and_passes(self, riko_warnings):
+        cast_type = resolve_cast_type("unknown")
 
         assert cast_type == CastType.PASS
-        assert [r.levelno for r in caplog.records] == [WARNING]
+        assert [r.levelno for r in riko_warnings.records] == [WARNING]
 
 
 SORT_KEY_WARNINGS = [
@@ -706,13 +705,12 @@ INVALID_CAST_KEYS = [
 
 class TestDefItemgetter:
     @pytest.mark.parametrize(("type_", "warnings"), SORT_KEY_WARNINGS)
-    def test_uncast_types_warn_at_most_once(self, type_, warnings, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            keyfunc = def_itemgetter("n", type_=type_)
-            keys = [keyfunc({"n": n}) for n in (3, 1, 2)]
+    def test_uncast_types_warn_at_most_once(self, type_, warnings, riko_warnings):
+        keyfunc = def_itemgetter("n", type_=type_)
+        keys = [keyfunc({"n": n}) for n in (3, 1, 2)]
 
         assert keys == [3, 1, 2]
-        assert len(caplog.records) == warnings
+        assert len(riko_warnings.records) == warnings
 
     @pytest.mark.parametrize(("value", "expected"), INVALID_CAST_KEYS)
     def test_invalid_cast_type_keeps_scalars_and_defaults_containers(
@@ -721,12 +719,11 @@ class TestDefItemgetter:
         keyfunc = def_itemgetter("n", default="x", type_="location")
         assert keyfunc({"n": value}) == expected
 
-    def test_an_unsortable_value_warns_and_sorts_by_the_default(self, caplog):
-        with caplog.at_level(WARNING, logger="riko"):
-            key = def_itemgetter("n", default="x")({"n": _UNSORTABLE})
+    def test_an_unsortable_value_warns_and_sorts_by_the_default(self, riko_warnings):
+        key = def_itemgetter("n", default="x")({"n": _UNSORTABLE})
 
         assert key == "x"
-        assert "non-sortable object" in caplog.text
+        assert "non-sortable object" in riko_warnings.text
 
 
 @dataclass
@@ -894,10 +891,8 @@ class TestDatetimeToDatedict:
     def test_cast_datetime_reads_it_back(self, moment, label):
         result = cast_datetime(loads(dumps(datetime_to_datedict(moment))))
         assert result is not None
-        assert (result.timestamp(), result.utcoffset()) == (
-            moment.timestamp(),
-            moment.utcoffset(),
-        )
+        assert result.timestamp() == moment.timestamp()
+        assert result.utcoffset() == moment.utcoffset()
 
     def test_date_parts_never_change_the_moment(self):
         built = datetime_to_datedict(datetime(2014, 12, 3, 9, tzinfo=UTC))
@@ -1206,19 +1201,14 @@ class TestAny2dict:
     @pytest.mark.parametrize("read", JSON_READERS)
     @pytest.mark.parametrize(("content", "path", "match"), JSON_WITHOUT_RECORDS)
     def test_any2dict_warns_on_json_without_records(
-        self, monkeypatch, caplog, read, content, path, match
+        self, streamed_json, riko_warnings, read, content, path, match
     ):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
+        assert list(any2dict(read(content), ext="json", path=path)) == []
 
-        with caplog.at_level(WARNING, logger="riko"):
-            assert list(any2dict(read(content), ext="json", path=path)) == []
-
-        assert match in caplog.text
+        assert match in riko_warnings.text
 
     @pytest.mark.parametrize(("build", "streams"), STREAMED_JSON_SOURCES)
-    def test_only_binary_sources_stream_json(self, monkeypatch, build, streams):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
-
+    def test_only_binary_sources_stream_json(self, streamed_json, build, streams):
         with build(get_path("gigs.json")) as source:
             assert (documents._get_ijson_source(source) is not None) is streams
 
@@ -1228,9 +1218,8 @@ class TestAny2dict:
 
     @pytest.mark.parametrize(("read", "expected"), CASE_DUPLICATE_READERS)
     def test_case_duplicate_keys_pick_a_branch_specific_value(
-        self, monkeypatch, read, expected
+        self, streamed_json, read, expected
     ):
-        monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
         records = any2dict(read(CASE_DUPLICATE_JSON), ext="json", path="x")
         assert list(records) == expected
 
@@ -1309,7 +1298,7 @@ class TestAugmentEntries:
 
 
 class TestResolveDate:
-    def test_resolve_date_skips_blank_and_unparseable_values(self, caplog):
+    def test_resolve_date_skips_blank_and_unparseable_values(self, riko_warnings):
         """A blank or unparseable candidate never raises; the next key is tried."""
         raw = cast(
             "ParserRSSEntry",
@@ -1323,10 +1312,9 @@ class TestResolveDate:
         )
         keys = ("published_parsed", "published", "updated_parsed", "updated")
 
-        with caplog.at_level(WARNING, logger="riko"):
-            assert resolve_date(raw, *keys) is None
+        assert resolve_date(raw, *keys) is None
 
-        assert [r.getMessage() for r in caplog.records] == [
+        assert [r.getMessage() for r in riko_warnings.records] == [
             "skipping unparseable published date 'not a date'"
         ]
         stamp = resolve_date(raw, *keys, "created")

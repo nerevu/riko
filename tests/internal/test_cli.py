@@ -160,6 +160,29 @@ _ALL_LINTS = [
     "yaml",
     "imports",
 ]
+_PATCHED_LINTS = (
+    ("_lint_python", "ruff"),
+    ("_lint_markdown", "rumdl"),
+    ("lint_rst", "rst"),
+    ("lint_docs", "docs"),
+    ("_lint_docstrings", "docstrings"),
+    ("_lint_terms", "terms"),
+    ("_lint_literals", "literals"),
+    ("_lint_deps", "deps"),
+    ("_lint_bindings", "bindings"),
+    ("_lint_tests", "tests"),
+    ("_lint_actions", "actions"),
+    ("_lint_yaml", "yaml"),
+    ("run_import_checks", "imports"),
+    ("_lint_basenames", "basenames"),
+    ("_lint_escapes", "escapes"),
+    ("_lint_helpers", "helpers"),
+    ("_lint_ownership", "ownership"),
+    ("_lint_types", "types"),
+    ("_verify_types", "verify-types"),
+    ("twine_check", "dist"),
+    ("_lint_python_strict", "strict"),
+)
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
@@ -238,7 +261,7 @@ def write(root: Path, path: str, text: str) -> None:
 
 
 def _record(calls: list[str], name: str, code: int = 0) -> Func[int]:
-    def runner() -> int:
+    def runner(*_: object, **_kw: object) -> int:
         calls.append(name)
         return code
 
@@ -419,45 +442,8 @@ class TestImportsCommand:
 
 
 def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
-    monkeypatch.setattr(
-        _lint, "_lint_python", lambda *_, **_kw: calls.append("ruff") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_markdown", lambda *_: calls.append("rumdl") or 0)
-    monkeypatch.setattr(_lint, "lint_rst", lambda *_: calls.append("rst") or 0)
-    monkeypatch.setattr(_lint, "lint_docs", lambda: calls.append("docs") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_docstrings", lambda *_: calls.append("docstrings") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_terms", lambda *_: calls.append("terms") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_literals", lambda *_: calls.append("literals") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_deps", lambda: calls.append("deps") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_bindings", lambda *_: calls.append("bindings") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_tests", lambda: calls.append("tests") or 0)
-    monkeypatch.setattr(_lint, "_lint_actions", lambda *_: calls.append("actions") or 0)
-    monkeypatch.setattr(_lint, "_lint_yaml", lambda *_: calls.append("yaml") or 0)
-    monkeypatch.setattr(
-        _lint, "run_import_checks", lambda *_: calls.append("imports") or 0
-    )
-    monkeypatch.setattr(
-        _lint, "_lint_basenames", lambda: calls.append("basenames") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_escapes", lambda: calls.append("escapes") or 0)
-    monkeypatch.setattr(_lint, "_lint_helpers", lambda: calls.append("helpers") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_ownership", lambda *_: calls.append("ownership") or 0
-    )
-    monkeypatch.setattr(_lint, "_lint_types", lambda *_: calls.append("types") or 0)
-    monkeypatch.setattr(
-        _lint, "_verify_types", lambda *_: calls.append("verify-types") or 0
-    )
-    monkeypatch.setattr(_lint, "twine_check", lambda: calls.append("dist") or 0)
-    monkeypatch.setattr(
-        _lint, "_lint_python_strict", lambda *_: calls.append("strict") or 0
-    )
+    for name, tag in _PATCHED_LINTS:
+        monkeypatch.setattr(_lint, name, _record(calls, tag))
 
 
 TEXT_CHECKS = [
@@ -906,21 +892,25 @@ CITATION_SCANS = [
 ]
 
 
+@pytest.fixture
+def docs_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
+    return tmp_path
+
+
 class TestCitationLint:
     """The stale test-file and source-file citation checks."""
 
     @pytest.mark.parametrize(("scan", "template", "kept"), CITATION_SCANS)
     def test_every_document_is_checked_against_the_known_files(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
+        docs_root: Path,
         scan: Callable[[str, Iterable[str]], Iterator[tuple[int, str]]],
         template: str,
         kept: str,
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
         gone = template.format("gone")
-        paths = (tmp_path / "a.md", tmp_path / "b.md")
+        paths = (docs_root / "a.md", docs_root / "b.md")
 
         for path in paths:
             text = f"See `{template.format('kept')}` and `{gone}`.\n"
@@ -944,11 +934,8 @@ class TestCitationLint:
         )
         assert list(scan(text, (kept,))) == [(3, gone), (5, gone)]
 
-    def test_test_symbols_cover_files_classes_and_tests(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        path = tmp_path / "tests" / "public" / "test_alpha.py"
+    def test_test_symbols_cover_files_classes_and_tests(self, docs_root: Path) -> None:
+        path = docs_root / "tests" / "public" / "test_alpha.py"
         path.parent.mkdir(parents=True)
         path.write_text("class TestAlpha:\n    def test_one(self): ...\n")
         rel = "tests/public/test_alpha.py"
@@ -965,10 +952,9 @@ class TestCitationLint:
         ] == stale
 
     def test_source_symbols_cover_bindings_in_every_scope_shape(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, docs_root: Path
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        path = tmp_path / "riko" / "alpha.py"
+        path = docs_root / "riko" / "alpha.py"
         path.parent.mkdir()
         source = (
             "import os.path as osp\n"
@@ -984,11 +970,8 @@ class TestCitationLint:
         expected = {"riko/alpha.py", *(f"riko/alpha.py::{n}" for n in names + members)}
         assert set(_docs.gen_source_symbols(path)) == expected
 
-    def test_private_names_cover_every_binding_shape(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        path = tmp_path / "riko" / "_pkg" / "_mod.py"
+    def test_private_names_cover_every_binding_shape(self, docs_root: Path) -> None:
+        path = docs_root / "riko" / "_pkg" / "_mod.py"
         path.parent.mkdir(parents=True)
         source = (
             "from . import _sib as _alias\nimport os.path\n"
@@ -1006,13 +989,12 @@ class TestUserDocsLint:
     """The internal-docs lint checks over the shipped user docs."""
 
     def test_todo_lines_are_named_by_path_and_line(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch, docs_root: Path
     ) -> None:
-        monkeypatch.setattr(_docs, "ROOT_DIR", tmp_path)
-        monkeypatch.setattr(_docs, "DOCS_DIR", tmp_path / "docs")
-        (tmp_path / "docs").mkdir()
-        (tmp_path / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
-        (tmp_path / "docs" / "FAQ.rst").write_text(
+        monkeypatch.setattr(_docs, "DOCS_DIR", docs_root / "docs")
+        (docs_root / "docs").mkdir()
+        (docs_root / "README.rst").write_text("TODO: intro\n", encoding="utf-8")
+        (docs_root / "docs" / "FAQ.rst").write_text(
             "Intro.\n\nTODO: add seeding\n", encoding="utf-8"
         )
         offenders = list(_docs._gen_todo_offenders())

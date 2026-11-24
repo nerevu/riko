@@ -88,7 +88,7 @@ import pickle  # noqa: S403
 import subprocess
 import sys
 from importlib.util import find_spec
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -96,16 +96,42 @@ from riko.bado._backend import is_sync
 from riko.base._funcutils import resolve_default
 from riko.base._paths import ROOT_DIR
 from riko.base._paths import TESTS_DIR as TESTS_DIR
+from riko.types._frozendict import freeze
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+    from riko.types._feed import _ItemEnvelope
 
 SCRIPT_TIMEOUT = 5
+X_ROWS = freeze([{"x": 1}, {"x": 2}])
+X_ROW = X_ROWS[:1]
+TWO_NODES = freeze([{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}])
+FETCH_NODES = freeze([{"id": "a", "name": "fetch"}])
+SUBSCRIBED_NODES = freeze(
+    [*FETCH_NODES, {"id": "s", "name": "sub", "family": "subscribe"}]
+)
+FAN_IN_WIRES = freeze([["a", "u"], ["b", "u", "in:1"]])
+OUT_MODULE = freeze({"id": "_OUTPUT", "type": "output", "conf": {}})
+
+FAN_IN_MODULES = freeze(
+    [
+        {"id": "a", "name": "fetch"},
+        {"id": "b", "name": "fetch"},
+        {"id": "u", "name": "union"},
+    ]
+)
+
+FAN_IN_DAG = freeze({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
 
 
-def _pickle_round_trip[T](value: T) -> T:
+def pickle_round_trip[T](value: T) -> T:
+    """Rebuilds ``value`` from its pickled bytes."""
     return pickle.loads(pickle.dumps(value))  # noqa: S301
 
 
 ROUND_TRIPS = [
-    pytest.param(_pickle_round_trip, id="pickle"),
+    pytest.param(pickle_round_trip, id="pickle"),
     pytest.param(copy.copy, id="copy"),
     pytest.param(copy.deepcopy, id="deepcopy"),
 ]
@@ -124,6 +150,16 @@ def async_test(f):
 def is_installed(module: str) -> bool:
     """Check whether *module* is importable in this environment."""
     return find_spec(module) is not None
+
+
+def get_values(stream: Iterable[Mapping[str, Any]], key: str) -> list[Any]:
+    """Gets each item's ``key`` value from ``stream``, ``None`` where it is absent."""
+    return [item.get(key) for item in stream]
+
+
+def get_envelope_values[T](envelopes: Iterable[_ItemEnvelope[T]]) -> list[T]:
+    """Gets the value each of ``envelopes`` carries, in order."""
+    return [envelope.value for envelope in envelopes]
 
 
 def run_python(

@@ -65,7 +65,6 @@ from riko.cli._gen_user_agents import (
     load_user_agents,
 )
 from riko.cli._gen_verbs import TableFormat, generate_verb_tables
-from riko.definitions._context import Context
 from riko.definitions._workflow_definition import Workflow
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
@@ -88,7 +87,7 @@ from riko.types.modules import (
     SortRawRule,
 )
 from tests import TESTS_DIR, async_test, is_installed
-from tests._workflows import EXAMPLES_DIR, run_document, run_workflow
+from tests._workflows import EXAMPLES_DIR, TEST_CONTEXT, run_document, run_workflow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -256,7 +255,7 @@ def _compile_fixtures(unrunnable: bool = False) -> list[Any]:
 async def _arun_document(flow: Workflow) -> list[Item]:
     items: list[Item] = []
 
-    async with AsyncExecution(context=Context(test=True)) as execution:
+    async with AsyncExecution(context=TEST_CONTEXT) as execution:
         stream = await execution.arun(ExecutionPlan.from_workflow(flow, dispatcher))
         items = [item async for item in stream]
 
@@ -294,7 +293,7 @@ class TestWorkflowModule:
         """Each workflow module yields the items its workflow document yields."""
         flow = Workflow.parse(path.read_text())
         module = _build(flow, path.stem, tmp_path)
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
+        assert list(module.pipe(context=TEST_CONTEXT)) == run_workflow(flow)
 
     @pytest.mark.parametrize("path", _compile_fixtures(unrunnable=True))
     def test_generated_matches_document_failure(self, path: Path, tmp_path: Path):
@@ -303,7 +302,7 @@ class TestWorkflowModule:
 
         def run_generated() -> list[object]:
             module = _build(flow, path.stem, tmp_path)
-            return list(module.pipe(context=Context(test=True)))
+            return list(module.pipe(context=TEST_CONTEXT))
 
         generated = _failure(run_generated)
         assert generated == _failure(lambda: run_workflow(flow))
@@ -315,7 +314,7 @@ class TestWorkflowModule:
         path = TESTS_DIR / "workflows" / f"{stem}.json"
         flow = Workflow.parse(path.read_text())
         module = _build(flow, stem, tmp_path, is_async=True)
-        stream = module.async_pipe(context=Context(test=True))
+        stream = module.async_pipe(context=TEST_CONTEXT)
         assert [item async for item in stream] == await _arun_document(flow)
 
     @pytest.mark.parametrize(("source", "expected"), GENERATED_INPUTS)
@@ -390,7 +389,7 @@ class TestCompileWorkflow:
         flow = Workflow.from_raw({"nodes": [{"name": "itembuilder", "conf": conf}]})
         module = _build(flow, "pipe_verbatim", tmp_path)
         assert module.flow == flow
-        assert list(module.pipe(context=Context(test=True))) == run_workflow(flow)
+        assert list(module.pipe(context=TEST_CONTEXT)) == run_workflow(flow)
 
     def test_generation_is_deterministic(self):
         """Generating the same workflow twice produces identical source."""
@@ -605,7 +604,7 @@ def _run_probe(package: str, name: str) -> list[object]:
     if package.startswith("examples"):
         stream = module.pipe(test=True)
     else:
-        stream = module.pipe(context=Context(test=True))
+        stream = module.pipe(context=TEST_CONTEXT)
 
     return list(stream)
 

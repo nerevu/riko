@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pickle  # noqa: S403
 from functools import partial
 from itertools import pairwise
 from threading import get_ident
@@ -46,7 +45,6 @@ from riko.execution._prepared import (
 from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import Module, processor, splitter
 from riko.modules.hash import pipe as hash_pipe
-from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop_pipe
 from riko.modules.split import async_pipe as async_split
 from riko.modules.split import pipe as split_pipe
@@ -57,23 +55,41 @@ from riko.runtime._workflow_pipes import workflow
 from riko.runtime._workflow_resolver import workflow_resolver
 from riko.types import _frozendict as frozendict_module
 from riko.types._enums import BasicCastType, IdentityMode
+from riko.types._frozendict import freeze
 from riko.types._options import CallOptions
 from riko.types._workflow import Endpoint, InputRef, WorkflowIndex
 from riko.types.modules import RenameRawConf
-from tests import async_test, skipif_sync
+from tests import async_test, pickle_round_trip, skipif_sync
 from tests._execution import (
+    ECHO_DEFINITION,
     EMPTY,
+    FETCH_NODE,
+    HASH_NODE,
+    LOOP_DEFINITION,
+    M_NODE,
     OUTPUT_A,
+    OUTPUTS_AB,
+    PASS_DEFINITION,
+    PASS_NODE,
+    Q_NODE,
+    SORT_NODE,
+    SRC_DEFINITION,
+    SRC_NODE,
     ClosingAsyncIterator,
     agen_closing_seed,
+    arun_items,
     arun_plan,
+    build_async_definition,
     build_chain_plan,
     build_dispatcher,
+    build_module_plan,
+    build_sync_definition,
     build_workflow,
-    echo_pipe,
     gen_closing_seed,
     module_workflow,
     passthrough_pipe,
+    require_prepared_node,
+    run_items,
     run_plan,
     tag_source,
     tagged_source,
@@ -82,9 +98,9 @@ from tests._lifecycle import build_async_lazy_embed, build_lazy_embed
 from tests._streams import Closable
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Generator
+    from collections.abc import Callable
 
-    from riko.types._streams import Cascade, Item, Stream
+    from riko.types._streams import Cascade, Stream
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
     from riko.types.modules import Conf
 
@@ -96,7 +112,16 @@ _HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
 _COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
 _NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
 _URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
-_FETCH, _SORT = ModuleNode(id="a", name="fetch"), ModuleNode(id="b", name="sort")
+_X_SRC_DEFINITION = build_sync_definition(tagged_source("x"))
+
+
+@tag_source
+def _titled_source(_items=None, **_):
+    yield {"title": "a"}
+    yield {"title": "b"}
+
+
+_TITLED_DEFINITION = build_sync_definition(_titled_source)
 
 
 def _split_workflow(splits: int | str | InputRef, port: str) -> Workflow:
@@ -105,22 +130,60 @@ def _split_workflow(splits: int | str | InputRef, port: str) -> Workflow:
         StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
         StreamEdge(Endpoint("s", port), Endpoint("b", "in")),
     )
-    return build_workflow([_FETCH, split, _SORT], edges=edges)
+    return build_workflow([FETCH_NODE, split, SORT_NODE], edges=edges)
 
 
 _SPLIT_PAST_COUNT = _split_workflow(2, "out:2")
 _NO_SPLITS = _split_workflow(0, "out")
 
 
-def _get_node(plan: ExecutionPlan, node_id: str) -> PreparedNode:
-    node = plan.nodes[node_id]
-    assert isinstance(node, PreparedNode)
-    return node
-
-
 def _flagged(func, flag: str) -> Any:
     setattr(func, flag, True)
     return func
+
+
+_LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
+
+_SEQUENTIAL_ASYNC = _flagged(
+    lambda source, **_: as_async(source or {}), "sequential_inputs"
+)
+
+_SYNC_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe)
+_ASYNC_MODULE = ResolvedModule("m", async_pipe=_ASYNC_PIPE)
+_BOTH_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe, async_pipe=_ASYNC_PIPE)
+_MAPPED_MODULE = ResolvedModule("m", sync_pipe=_LOOPABLE_SYNC)
+_SYNC_SPLITTER = ResolvedModule("split", {"splits": 1}, sync_pipe=split_pipe)
+_REPLACE_ITEMS = [{"content": "abc"}, {"content": "aa"}]
+_STATIC_REPLACE = cast("Conf", {"rule": [{"find": "a", "replace": "Z"}]})
+
+_DYNAMIC_REPLACE = cast(
+    "Conf", {"rule": [{"find": "a", "replace": {"terminal": "rep", "type": "text"}}]}
+)
+
+_UPPER = cast("Conf", {"rule": {"transform": "upper"}})
+_Q_SCHEMAS = freeze({"q": {"type": "integer"}})
+_HASH_FLOW = Workflow(nodes=[HASH_NODE], outputs=OUTPUT_A)
+_LOOP_NODE = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
+_LOOP_FLOW = Workflow(nodes=[_LOOP_NODE], outputs=OUTPUT_A)
+_BARE_LOOP = Workflow(nodes=[ModuleNode(id="a", name="loop")], outputs=OUTPUT_A)
+_WRITE = WriteNode(id="a", name="write", backend="file", dest="out.csv")
+_WRITE_FLOW = Workflow(nodes=[_WRITE], outputs=OUTPUT_A)
+_HASH_A = {"a": _HASH}
+_HASH_AB = {"a": _HASH, "b": _HASH}
+_SYNC, _ASYNC = "sync_interface", "async_interface"
+
+
+def _chain_plan(*modules: ResolvedModule) -> ExecutionPlan:
+    """Builds a plan chaining one node per resolved module."""
+    nodes = [ModuleNode(id=f"n{i}", name=m.name) for i, m in enumerate(modules)]
+    resolved = {node.id: m for node, m in zip(nodes, modules, strict=True)}
+    return ExecutionPlan(Workflow().with_nodes(*nodes), modules=resolved)
+
+
+_ASYNC_CHAIN = partial(_chain_plan, _ASYNC_MODULE, _ASYNC_MODULE)
+_MIXED_CHAIN = partial(_chain_plan, *[_SYNC_MODULE, _ASYNC_MODULE] * 2)
+_SPLITTER_CHAIN = partial(_chain_plan, _SYNC_SPLITTER, _BOTH_MODULE)
+_MAPPED_CHAIN = partial(_chain_plan, _MAPPED_MODULE, _MAPPED_MODULE)
 
 
 def _mismatched(attr: str, sync_value: str, async_value: str) -> dict[str, Any]:
@@ -133,36 +196,6 @@ def _mismatched(attr: str, sync_value: str, async_value: str) -> dict[str, Any]:
     setattr(sync_pipe, attr, sync_value)
     setattr(async_pipe, attr, async_value)
     return {"sync_pipe": sync_pipe, "async_pipe": async_pipe}
-
-
-_LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
-
-_SEQUENTIAL_ASYNC = _flagged(
-    lambda source, **_: as_async(source or {}), "sequential_inputs"
-)
-_SYNC_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe)
-_ASYNC_MODULE = ResolvedModule("m", async_pipe=_ASYNC_PIPE)
-_BOTH_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe, async_pipe=_ASYNC_PIPE)
-_MAPPED_MODULE = ResolvedModule("m", sync_pipe=_LOOPABLE_SYNC)
-_SYNC_SPLITTER = ResolvedModule("split", {"splits": 1}, sync_pipe=split_pipe)
-
-_REPLACE_ITEMS = [{"content": "abc"}, {"content": "aa"}]
-_STATIC_REPLACE = cast("Conf", {"rule": [{"find": "a", "replace": "Z"}]})
-
-_DYNAMIC_REPLACE = cast(
-    "Conf", {"rule": [{"find": "a", "replace": {"terminal": "rep", "type": "text"}}]}
-)
-
-_UPPER = cast("Conf", {"rule": {"transform": "upper"}})
-_HASH_FLOW = Workflow(nodes=[ModuleNode(id="a", name="hash")], outputs=OUTPUT_A)
-_LOOP_NODE = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
-_LOOP_FLOW = Workflow(nodes=[_LOOP_NODE], outputs=OUTPUT_A)
-_BARE_LOOP = Workflow(nodes=[ModuleNode(id="a", name="loop")], outputs=OUTPUT_A)
-_WRITE = WriteNode(id="a", name="write", backend="file", dest="out.csv")
-_WRITE_FLOW = Workflow(nodes=[_WRITE], outputs=OUTPUT_A)
-_HASH_A = {"a": _HASH}
-_HASH_AB = {"a": _HASH, "b": _HASH}
-_SYNC, _ASYNC = "sync_interface", "async_interface"
 
 
 def _stamp_embed(up, *, is_async: bool) -> None:
@@ -179,14 +212,13 @@ def _stamp_embed(up, *, is_async: bool) -> None:
 
 
 def _loop(loop_name="fakeloop", embed_name="up"):
-    src = ModuleNode(id="s", name="src")
     loop = ModuleNode(
         id="loop",
         name=loop_name,
         embed={"name": embed_name, "conf": {}},
         options={"emit": True, "count": "first"},
     )
-    return Workflow().with_nodes(src, loop)
+    return Workflow().with_nodes(SRC_NODE, loop)
 
 
 def _async_up_dispatcher() -> ResolverDispatcher:
@@ -201,18 +233,10 @@ def _async_up_dispatcher() -> ResolverDispatcher:
 
     _stamp_embed(up, is_async=True)
     return build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-        ModuleDefinition(
-            name="fakeloop", sync_pipe=cast("SyncModuleWrapper", fakeloop)
-        ),
-        ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
+        _X_SRC_DEFINITION,
+        build_sync_definition(fakeloop, name="fakeloop"),
+        build_async_definition(up, name="up"),
     )
-
-
-@tag_source
-def _titled_source(_items=None, **_):
-    yield {"title": "a"}
-    yield {"title": "b"}
 
 
 def _real_loop_workflow(embed_name="child"):
@@ -275,9 +299,9 @@ def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
     """Builds a sync-only ``loop`` over an async-only embed that ``build`` makes."""
     child = workflow()(lambda _item, context=None, **_: build(closed))
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-        ModuleDefinition(name="loop", sync_pipe=loop_pipe),
-        ModuleDefinition(name="child", async_pipe=cast("AsyncModuleWrapper", child)),
+        _X_SRC_DEFINITION,
+        build_sync_definition(loop_pipe, name="loop"),
+        build_async_definition(child, name="child"),
     )
     loop = ModuleNode(
         id="loop",
@@ -285,20 +309,19 @@ def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
         embed={"name": "child", "conf": {}},
         options={"emit": True, "count": "all"},
     )
-    flow = Workflow().with_nodes(ModuleNode(id="s", name="src"), loop)
+    flow = Workflow().with_nodes(SRC_NODE, loop)
     return ExecutionPlan.from_workflow(flow, dispatcher)
 
 
 def _two_output_plan() -> ExecutionPlan:
     """Builds a sync-only ``a`` on ``default`` and an async-only ``b`` on ``other``."""
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="s", sync_pipe=passthrough_pipe),
-        ModuleDefinition(name="m", async_pipe=_ASYNC_PIPE),
+        build_sync_definition(passthrough_pipe, name="s"),
+        build_async_definition(_ASYNC_PIPE, name="m"),
     )
-    nodes = [ModuleNode(id="a", name="s"), ModuleNode(id="b", name="m")]
-    outputs = {"default": Endpoint("a", "out"), "other": Endpoint("b", "out")}
+    nodes = [ModuleNode(id="a", name="s"), M_NODE]
     return ExecutionPlan.from_workflow(
-        Workflow(nodes=nodes, outputs=outputs), dispatcher
+        Workflow(nodes=nodes, outputs=OUTPUTS_AB), dispatcher
     )
 
 
@@ -313,19 +336,6 @@ PORTAL_USES = [
         id="async-only-embed",
     ),
 ]
-
-
-def _chain_plan(*modules: ResolvedModule) -> ExecutionPlan:
-    """Builds a plan chaining one node per resolved module."""
-    nodes = [ModuleNode(id=f"n{i}", name=m.name) for i, m in enumerate(modules)]
-    resolved = {node.id: m for node, m in zip(nodes, modules, strict=True)}
-    return ExecutionPlan(Workflow().with_nodes(*nodes), modules=resolved)
-
-
-_ASYNC_CHAIN = partial(_chain_plan, _ASYNC_MODULE, _ASYNC_MODULE)
-_MIXED_CHAIN = partial(_chain_plan, *[_SYNC_MODULE, _ASYNC_MODULE] * 2)
-_SPLITTER_CHAIN = partial(_chain_plan, _SYNC_SPLITTER, _BOTH_MODULE)
-_MAPPED_CHAIN = partial(_chain_plan, _MAPPED_MODULE, _MAPPED_MODULE)
 
 # How many node threads a sync or an async run may hold at once.
 THREAD_DEMANDS = [
@@ -380,8 +390,7 @@ class TestExecutionPlan:
             calls.append(1)
             return source
 
-        sync_pipe = cast("SyncModuleWrapper", pipe)
-        definition = ModuleDefinition(name="m", sync_pipe=sync_pipe)
+        definition = build_sync_definition(pipe, name="m")
         ExecutionPlan.from_workflow(
             module_workflow(), dispatcher=build_dispatcher(definition)
         )
@@ -397,27 +406,23 @@ class TestExecutionPlan:
             return WorkflowIndex(*args)  # pyright: ignore[reportArgumentType]
 
         monkeypatch.setattr(workflow_definitions, "WorkflowIndex", counting)
-        ExecutionPlan.from_workflow(module_workflow("count"), dispatcher)
+        build_module_plan(dispatcher, "count")
         assert len(calls) == 1
 
     def test_execution_plan_snapshots_resolution(self) -> None:
         # The plan resolves each node's callable once at build time, so replacing a
         # module afterward does not change what a built plan runs.
         registry = ModuleRegistry()
-        registry.register(ModuleDefinition(name="src", sync_pipe=tagged_source("a")))
+        registry.register(SRC_DEFINITION)
         dispatcher = ResolverDispatcher(registry, workflow_resolver)
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("src"), dispatcher=dispatcher
-        )
-        registry.register(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("b")), replace=True
-        )
+        plan = build_module_plan(dispatcher)
+        registry.register(build_sync_definition(tagged_source("b")), replace=True)
 
         with SyncExecution() as execution:
             assert list(execution.run(plan)) == [{"t": "a"}]
 
     def test_build_carries_conf_index_and_resources(self) -> None:
-        definition = ModuleDefinition(name="m", sync_pipe=passthrough_pipe)
+        definition = build_sync_definition(passthrough_pipe, name="m")
         node = ModuleNode(id="n", name="m", conf={"url": "x"}, resources={"db": "db"})
         flow = build_workflow([node], resources=("db",))
         dispatcher = build_dispatcher(definition)
@@ -432,21 +437,17 @@ class TestExecutionPlan:
         node = ModuleNode(id="a", name="loop", embed={"name": "hash", "conf": {}})
         flow = Workflow(nodes=[node], outputs=OUTPUT_A)
         plan = ExecutionPlan(workflow=flow, modules={"a": _HASH}, embeds={"a": _HASH})
-        prepared = _get_node(plan, "a")
+        prepared = require_prepared_node(plan, "a")
         assert (prepared.node, prepared.module, prepared.embed) == (node, _HASH, _HASH)
 
     def test_a_lone_source_is_the_seed_target(self) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
-        )
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(SRC_DEFINITION)
+        plan = build_module_plan(dispatcher)
 
         assert plan.require_seed_target("default") == "n"
 
     def test_inputs_are_set_only_through_with_inputs_once(self):
-        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
-        node = ModuleNode(id="b", name="itembuilder", conf=conf)
-        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_nodes(node)
+        flow = Workflow(input_schemas=_Q_SCHEMAS).with_nodes(Q_NODE)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
         planned = plan.with_inputs({"q": 5})
 
@@ -465,9 +466,7 @@ class TestExecutionPlan:
             return fjs_compile(schema, **kwargs)
 
         monkeypatch.setattr(inputs_module, "fjs_compile", counted)
-        conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
-        node = ModuleNode(id="b", name="itembuilder", conf=conf)
-        flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_nodes(node)
+        flow = Workflow(input_schemas=_Q_SCHEMAS).with_nodes(Q_NODE)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with SyncExecution(context=Context(inputs={"q": 5})) as execution:
@@ -480,7 +479,7 @@ class TestExecutionPlan:
         self, monkeypatch, count, schemas, given, rebuilt
     ) -> None:
         nodes = [
-            ModuleNode(id="a", name="hash"),
+            HASH_NODE,
             ModuleNode(id="b", name="truncate", conf={"count": count}),
             ModuleNode(id="c", name="hash"),
         ]
@@ -584,19 +583,16 @@ class TestExecutionPlan:
         assert (bool(kept), refrozen) == (True, [])
 
     def test_build_plan_accepts_fan_out_from_one_source_port(self) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="sink", sync_pipe=passthrough_pipe),
-        )
-        a = ModuleNode(id="a", name="src")
-        b = ModuleNode(id="b", name="sink")
-        c = ModuleNode(id="c", name="sink")
+        dispatcher = build_dispatcher(SRC_DEFINITION, PASS_DEFINITION)
+        c = ModuleNode(id="c", name="pass")
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("b", "in")),
             StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
         )
         flow = build_workflow(
-            [a, b, c], edges=edges, outputs={"default": Endpoint("b", "out")}
+            [SRC_NODE, PASS_NODE, c],
+            edges=edges,
+            outputs={"default": Endpoint("b", "out")},
         )
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
 
@@ -669,14 +665,14 @@ class TestExecutionPlan:
             return iter([iter(items), iter(items), iter(items)])
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="three_way", sync_pipe=three_way),
-            ModuleDefinition(name="sink", sync_pipe=passthrough_pipe),
+            SRC_DEFINITION,
+            build_sync_definition(three_way, name="three_way"),
+            PASS_DEFINITION,
         )
         nodes = [
-            ModuleNode(id="a", name="src"),
+            SRC_NODE,
             ModuleNode(id="s", name="three_way", conf={"ways": 3}),
-            ModuleNode(id="b", name="sink"),
+            PASS_NODE,
         ]
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
@@ -696,18 +692,14 @@ class TestExecutionPlan:
         "ports is not yet implemented: the input is accepted and silently ignored",
     )
     def test_build_plan_rejects_undeclared_positional_input(self) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="sink", sync_pipe=passthrough_pipe),
-        )
-        a = ModuleNode(id="a", name="src")
+        dispatcher = build_dispatcher(SRC_DEFINITION, PASS_DEFINITION)
         b = ModuleNode(id="b", name="src")
-        s = ModuleNode(id="s", name="sink")
+        s = ModuleNode(id="s", name="pass")
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("s", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("s", "in:1")),
         )
-        flow = build_workflow([a, b, s], edges=edges)
+        flow = build_workflow([SRC_NODE, b, s], edges=edges)
 
         with pytest.raises(InvalidPipelineError, match="positional"):
             ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
@@ -854,13 +846,13 @@ class TestAdaptEmbed:
     def test_build_resolves_nested_embed(self) -> None:
         up = cast("SyncModuleWrapper", lambda item, **_: item)
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="fakeloop", sync_pipe=passthrough_pipe),
-            ModuleDefinition(name="up", sync_pipe=up),
+            build_sync_definition(passthrough_pipe, name="fakeloop"),
+            build_sync_definition(up, name="up"),
         )
         plan = ExecutionPlan.from_workflow(
             _lone_loop({"case": "upper"}), dispatcher=dispatcher
         )
-        node = _get_node(plan, "loop")
+        node = require_prepared_node(plan, "loop")
 
         assert node.embed == ResolvedModule("up", {"case": "upper"}, sync_pipe=up)
         assert node.module.name == "fakeloop"
@@ -887,11 +879,9 @@ class TestAdaptEmbed:
 
         _stamp_embed(up, is_async=False)
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(
-                name="fakeloop", async_pipe=cast("AsyncModuleWrapper", fakeloop)
-            ),
-            ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+            _X_SRC_DEFINITION,
+            build_async_definition(fakeloop, name="fakeloop"),
+            build_sync_definition(up, name="up"),
         )
 
         assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
@@ -911,11 +901,10 @@ class TestAdaptEmbed:
             for row in items:
                 yield from embed(row)
 
-        sync_pipe = cast("SyncModuleWrapper", fakeloop)
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(name="fakeloop", sync_pipe=sync_pipe),
-            ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+            _X_SRC_DEFINITION,
+            build_sync_definition(fakeloop, name="fakeloop"),
+            build_sync_definition(up, name="up"),
         )
 
         assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
@@ -926,11 +915,11 @@ class TestAdaptEmbed:
     def test_run_loops_async_only_embed_through_the_real_loop(self) -> None:
         embed = _build_async_embed()
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
-            ModuleDefinition(name=embed.name, async_pipe=embed),
+            _X_SRC_DEFINITION,
+            LOOP_DEFINITION,
+            build_async_definition(embed, name=embed.name),
         )
-        flow = _loop(loop_name="loop", embed_name=embed.name)
+        flow = _real_loop_workflow(embed.name)
         assert run_plan(flow, dispatcher=dispatcher) == [{"up": "X"}]
 
     @skipif_sync
@@ -942,7 +931,7 @@ class TestAdaptEmbed:
         plan = _closing_embed_plan(build, closed)
 
         with SyncExecution() as execution:
-            stream = cast("Generator[Item]", execution.run(plan))
+            stream = run_items(execution, plan)
             assert next(stream) == {"x": 1}
             stream.close()
             assert closed == ["closed"]
@@ -951,12 +940,11 @@ class TestAdaptEmbed:
     def test_run_count_first_stays_lazy_for_an_async_only_embed(self) -> None:
         produced: list[int] = []
         closed: list[str] = []
-        sync_pipe = cast("SyncModuleWrapper", _titled_source)
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=sync_pipe),
-            ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
-            ModuleDefinition(
-                name="child", async_pipe=build_async_lazy_embed(produced, closed)
+            _TITLED_DEFINITION,
+            LOOP_DEFINITION,
+            build_async_definition(
+                build_async_lazy_embed(produced, closed), name="child"
             ),
         )
 
@@ -976,7 +964,7 @@ class TestAsyncAdaptEmbed:
         plan = _closing_embed_plan(build, closed)
 
         async with AsyncExecution() as execution:
-            stream = cast("AsyncGenerator[Item]", await execution.arun(plan))
+            stream = await arun_items(execution, plan)
             assert await anext(stream) == {"x": 1}
             await stream.aclose()
             assert closed == ["closed"]
@@ -996,14 +984,12 @@ class TestAsyncAdaptEmbed:
 
         _stamp_embed(up, is_async=False)
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(
-                name="fakeloop", async_pipe=cast("AsyncModuleWrapper", fakeloop)
-            ),
-            ModuleDefinition(name="up", sync_pipe=cast("SyncModuleWrapper", up)),
+            _X_SRC_DEFINITION,
+            build_async_definition(fakeloop, name="fakeloop"),
+            build_sync_definition(up, name="up"),
         )
         plan = ExecutionPlan.from_workflow(_loop(), dispatcher=dispatcher)
-        embed = _get_node(plan, "loop").embed
+        embed = require_prepared_node(plan, "loop").embed
         loop_thread = get_ident()
 
         assert embed is not None
@@ -1036,13 +1022,9 @@ class TestAsyncAdaptEmbed:
         produced: list[int] = []
         closed: list[str] = []
         dispatcher = build_dispatcher(
-            ModuleDefinition(
-                name="src", sync_pipe=cast("SyncModuleWrapper", _titled_source)
-            ),
-            ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
-            ModuleDefinition(
-                name="child", sync_pipe=build_lazy_embed(produced, closed)
-            ),
+            _TITLED_DEFINITION,
+            LOOP_DEFINITION,
+            build_sync_definition(build_lazy_embed(produced, closed), name="child"),
         )
 
         assert await arun_plan(_real_loop_workflow(), dispatcher=dispatcher) == [
@@ -1180,13 +1162,9 @@ class TestPreparedCall:
 
     def test_a_dynamic_conf_matches_the_direct_call(self) -> None:
         dispatcher = build_dispatcher(
-            ModuleDefinition(
-                name="reps", sync_pipe=cast("SyncModuleWrapper", _replacements)
-            ),
-            ModuleDefinition(
-                name="items", sync_pipe=cast("SyncModuleWrapper", _replace_source)
-            ),
-            ModuleDefinition(name="strreplace", sync_pipe=strreplace_pipe),
+            build_sync_definition(_replacements, name="reps"),
+            build_sync_definition(_replace_source, name="items"),
+            build_sync_definition(strreplace_pipe, name="strreplace"),
         )
         sources = [ModuleNode(id="reps", name="reps"), ModuleNode(id="i", name="items")]
         edges = (
@@ -1217,7 +1195,7 @@ class TestPreparedCall:
         interface = plan.nodes["r"].sync_interface
         assert interface is not None
         call = interface.call
-        restored = pickle.loads(pickle.dumps(call))  # noqa: S301
+        restored = pickle_round_trip(call)
 
         restored_items = cast("Stream", restored(_REPLACE_ITEMS))
         call_items = cast("Stream", call(_REPLACE_ITEMS))
@@ -1226,9 +1204,9 @@ class TestPreparedCall:
 
     def test_the_plan_names_each_nodes_extras(self) -> None:
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("a")),
-            ModuleDefinition(name="host", sync_pipe=passthrough_pipe),
-            ModuleDefinition(name="up", sync_pipe=passthrough_pipe),
+            SRC_DEFINITION,
+            build_sync_definition(passthrough_pipe, name="host"),
+            build_sync_definition(passthrough_pipe, name="up"),
         )
         sources = [ModuleNode(id=key, name="src") for key in ("a", "b", "c")]
         host = ModuleNode(
@@ -1370,14 +1348,12 @@ class TestPreparedNode:
 
     def test_prepared_node_reports_loopable(self) -> None:
         plan = build_chain_plan("hash", "count")
-        assert _get_node(plan, "n0").loopable is True
-        assert _get_node(plan, "n1").loopable is False
+        assert require_prepared_node(plan, "n0").loopable is True
+        assert require_prepared_node(plan, "n1").loopable is False
 
     @pytest.mark.parametrize("port", ["in:1", "in:side"])
     def test_secondary_input_stream_makes_a_node_unmappable(self, port) -> None:
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="echo", sync_pipe=echo_pipe)
-        )
+        dispatcher = build_dispatcher(ECHO_DEFINITION)
         nodes = [ModuleNode(id=id_, name="echo") for id_ in ("a", "b", "c")]
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
@@ -1386,8 +1362,8 @@ class TestPreparedNode:
         plan = ExecutionPlan.from_workflow(
             build_workflow(nodes, edges=edges), dispatcher
         )
-        assert _get_node(plan, "a").is_mappable is True
-        assert _get_node(plan, "c").is_mappable is False
+        assert require_prepared_node(plan, "a").is_mappable is True
+        assert require_prepared_node(plan, "c").is_mappable is False
 
     @pytest.mark.parametrize(("url", "connected", "expected"), SOURCE_STARTS)
     def test_is_self_starting_only_when_a_source_reads_no_default_input(
@@ -1416,7 +1392,7 @@ class TestPreparedNode:
 
     def test_prepared_module_must_be_resolved(self):
         with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):
-            PreparedNode(ModuleNode(id="a", name="hash"), "hash")  # pyright: ignore[reportArgumentType]
+            PreparedNode(HASH_NODE, "hash")  # pyright: ignore[reportArgumentType]
 
     def test_prepared_node_must_wrap_a_module_node(self):
         node = WriteNode(id="a", name="write", backend="file", dest="out.csv")

@@ -27,6 +27,7 @@ ITEMS = [{"x": 0}, {"x": 1}, {"x": 2}]
 LOOKAHEAD = 2
 PARENTS = [{"title": "a b"}, {"title": "c d"}]
 TOKENIZER_CONF = TokenizerRawConf({"delimiter": {"type": "text", "value": " "}})
+HASHED = Pipeline().hash(options={"assign": "h"})
 
 
 def tokenized(value: str = "a,b,c", *, hashed: bool = False) -> Pipeline:

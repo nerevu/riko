@@ -60,7 +60,12 @@ from riko.runtime._workflow_stores import (
 from riko.types._enums import Backends, ModuleName
 from riko.types._wrappers import SubPipe, is_subpipe
 from tests import pyworkflows
-from tests._execution import build_pipe_wrapper, module_workflow, registered_modules
+from tests._execution import (
+    build_pipe_wrapper,
+    build_sync_definition,
+    module_workflow,
+    registered_modules,
+)
 from tests._workflows import register_documents
 
 if TYPE_CHECKING:
@@ -71,18 +76,13 @@ if TYPE_CHECKING:
 _NAME = "acme.mod"
 _MISSING_NAME = "nope"
 _ADDED_NAME = "acme.added"
-
-
 _MARKER = build_pipe_wrapper()
+_DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
+MOD_DEFN = build_sync_definition(_MARKER, name=_NAME)
 
 
 class _FileBackendTarget:
     backend: ClassVar[Backends] = Backends.FILE
-
-
-_DOC = "\nShouts each item.\n\nIgnored trailing prose.\n"
-
-MOD_DEFN = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
 
 
 @pytest.fixture
@@ -161,7 +161,7 @@ class _Typo(ModuleName):
 BUILTIN_SHADOWS = [
     pytest.param(
         ModuleRegistry(),
-        ModuleDefinition(name="count", sync_pipe=_MARKER),
+        build_sync_definition(_MARKER, name="count"),
         "module",
         id="module",
     ),
@@ -180,7 +180,7 @@ class TestModuleRegistry:
         assert fixed_registry.require("tokenizer").__name__ == "pipe"
 
     def test_runtime_registration_takes_precedence(self, fixed_registry):
-        definition = ModuleDefinition(name="tokenizer", sync_pipe=_MARKER)
+        definition = build_sync_definition(_MARKER, name="tokenizer")
         fixed_registry.register(definition, replace=True)
         assert fixed_registry.require("tokenizer") is _MARKER
 
@@ -194,8 +194,8 @@ class TestModuleRegistry:
         assert registry.registered_names == ()
 
     def test_registered_names_are_sorted(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name="zeta", sync_pipe=_MARKER))
-        fixed_registry.register(ModuleDefinition(name="alpha", sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name="zeta"))
+        fixed_registry.register(build_sync_definition(_MARKER, name="alpha"))
         assert fixed_registry.registered_names == ("alpha", "zeta")
 
     def test_falsy_callable_supplies_name(self):
@@ -296,7 +296,7 @@ class TestModuleRegistry:
         fixed_registry.register(MOD_DEFN, replace=True)
 
     def test_registered_module_missing_interface_raises(self, fixed_registry):
-        fixed_registry.register(ModuleDefinition(name=_MISSING_NAME, sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name=_MISSING_NAME))
 
         with pytest.raises(UnsupportedModuleError):
             fixed_registry.require(_MISSING_NAME, True)
@@ -385,9 +385,9 @@ class TestTemporaryRegistrations:
         register_module(MOD_DEFN)
 
         with temporary_registrations():
-            replacement = ModuleDefinition(name=_NAME, sync_pipe=build_pipe_wrapper())
+            replacement = build_sync_definition(build_pipe_wrapper(), name=_NAME)
             register_module(replacement, replace=True)
-            register_module(ModuleDefinition(name=_ADDED_NAME, sync_pipe=_MARKER))
+            register_module(build_sync_definition(_MARKER, name=_ADDED_NAME))
 
         assert module_registry.load_definition(_NAME) is MOD_DEFN
 
@@ -458,7 +458,7 @@ class TestResolverDispatcher:
         stored-workflow (``pipe_<id>``) name routing.
         """
         name = "pipe_transform"
-        fixed_registry.register(ModuleDefinition(name=name, sync_pipe=_MARKER))
+        fixed_registry.register(build_sync_definition(_MARKER, name=name))
         assert dispatcher.require(name) is _MARKER
 
 
@@ -563,7 +563,7 @@ class TestRegistryEntryPoints:
         self, monkeypatch, fixed_registry
     ):
         ep_marker = build_pipe_wrapper()
-        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=ep_marker)
+        ep_defn = build_sync_definition(ep_marker, name=_NAME)
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
         fixed_registry.register(MOD_DEFN, replace=True)
         pipe = fixed_registry.require(_NAME)
@@ -599,7 +599,7 @@ class TestRegistryEntryPoints:
 
         def factory():
             barrier.wait(timeout=5)
-            return ModuleDefinition(name=_NAME, sync_pipe=build_pipe_wrapper())
+            return build_sync_definition(build_pipe_wrapper(), name=_NAME)
 
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, factory))
         loaded: list[ModuleDefinition | None] = []
@@ -616,7 +616,7 @@ class TestRegistryEntryPoints:
         assert loaded[0] is loaded[1]
 
     def test_name_key_mismatch_raises(self, monkeypatch, fixed_registry):
-        defn = ModuleDefinition(name="acme.other", sync_pipe=_MARKER)
+        defn = build_sync_definition(_MARKER, name="acme.other")
         _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, defn))
 
         with pytest.raises(ValueError, match="must match"):
@@ -632,14 +632,13 @@ class TestRegistryEntryPoints:
     def test_register_rejects_entry_point_shadow_without_replace(
         self, monkeypatch, fixed_registry
     ):
-        ep_defn = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
-        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, ep_defn))
+        _patch_entry_points(monkeypatch, _FakeEntryPoint(_NAME, MOD_DEFN))
 
         with pytest.raises(ValueError, match="shadows an entry-point module"):
             fixed_registry.register(MOD_DEFN)
 
     def test_duplicate_entry_point_names_raise(self, monkeypatch, fixed_registry):
-        other = ModuleDefinition(name=_NAME, sync_pipe=_MARKER)
+        other = build_sync_definition(_MARKER, name=_NAME)
         acme = _FakeEntryPoint(_NAME, MOD_DEFN, dist="acme")
         globex = _FakeEntryPoint(_NAME, other, dist="globex")
         _patch_entry_points(monkeypatch, acme, globex)

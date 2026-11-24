@@ -27,8 +27,8 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, IdentityMode
 from riko.types._workflow import Endpoint, InputRef
-from tests import TESTS_DIR
-from tests._execution import OUTPUT_A
+from tests import FAN_IN_DAG, TESTS_DIR, TWO_NODES
+from tests._execution import FETCH_NODE, HASH_NODE, M_NODE, OUTPUT_A, SORT_NODE
 from tests._workflows import (
     CALLABLE_FLOW,
     CALLABLE_MATCH,
@@ -42,27 +42,27 @@ if TYPE_CHECKING:
 
 
 _TWO_HASHES = [ModuleNode(id="b", name="hash"), ModuleNode(id="c", name="hash")]
-_A = ModuleNode(id="a", name="fetch")
 _C_IN = Endpoint("c", "in")
 _HAS_DB = ModuleNode(id="a", name="fetch", resources={"db": "prod"})
 _UNKNOWN_KEY_RULE = {"fieldd": "title", "op": "contains", "value": "1"}
-_B = ModuleNode(id="b", name="sort")
 _INVALID = InvalidPipelineError
 _URL_REF: dict[str, InputRef] = {"url": {"input": "u"}}
 _ASKS_Q = ModuleNode(id="a", name="fetch", conf={"url": {"input": "q"}})
 _A_IN, _A_OUT = Endpoint("a", "in"), Endpoint("a", "out")
 _B_IN, _B_OUT = Endpoint("b", "in"), Endpoint("b", "out")
 
+_MERGE_NODES = (
+    FETCH_NODE,
+    ModuleNode(id="b", name="fetch"),
+    ModuleNode(id="c", name="join"),
+)
 _MERGE = {
-    "nodes": [_A, ModuleNode(id="b", name="fetch"), ModuleNode(id="c", name="join")],
+    "nodes": _MERGE_NODES,
     "edges": [StreamEdge(_A_OUT, _C_IN), StreamEdge(_B_OUT, _C_IN)],
     "outputs": {"default": Endpoint("c", "out")},
 }
 _CONF_PENDING = "module configuration is not validated against its contract yet"
-_HASH_FLOW: dict[str, Any] = {
-    "nodes": [ModuleNode(id="a", name="hash")],
-    "outputs": OUTPUT_A,
-}
+_HASH_FLOW: dict[str, Any] = {"nodes": [HASH_NODE], "outputs": OUTPUT_A}
 _EMPTY_FLOW: dict[str, Any] = {"nodes": [], "outputs": {}}
 _LIST_FIELDS = ("nodes", "edges")
 _NON_LISTS = ("ab", b"ab", {"a": 1}, 3)
@@ -77,11 +77,13 @@ _UNBOUND_BINDINGS = {
     "non-str-item": ["db", 1],
 }
 _UNBOUND_MSG = "must bind non-empty strings"
+_TITLE_ROWS = [{"title": str(index)} for index in range(3)]
+_WRITE_NODE = WriteNode(id="write-1", name="write", backend=Backends.FILE)
 
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
     (ReadNode(id="read-1", name="read", backend=Backends.FILE), "read"),
-    (WriteNode(id="write-1", name="write", backend=Backends.FILE), "write"),
+    (_WRITE_NODE, "write"),
     (CacheNode(id="cache-1", name="cache"), "cache"),
     (ActionNode(id="act-1", name="act", backend=Backends.HTTP), "action"),
     (SubscribeNode(id="sub-1", name="sub"), "subscribe"),
@@ -98,20 +100,24 @@ WORKFLOW_BUILDS = [
 ]
 
 APPENDS = [
-    pytest.param(lambda flow: flow.with_nodes(_B), id="node"),
-    pytest.param(lambda flow: flow.with_workflow(Workflow().with_nodes(_B)), id="flow"),
+    pytest.param(lambda flow: flow.with_nodes(SORT_NODE), id="node"),
+    pytest.param(
+        lambda flow: flow.with_workflow(Workflow().with_nodes(SORT_NODE)), id="flow"
+    ),
 ]
 
 
 APPEND_REJECTIONS = [
-    pytest.param(Workflow(nodes=[_B]), "appended workflow has nodes", id="no-default"),
+    pytest.param(
+        Workflow(nodes=[SORT_NODE]), "appended workflow has nodes", id="no-default"
+    ),
     pytest.param(
         Workflow(nodes=_TWO_HASHES, outputs={"default": _B_OUT}),
         "exactly one node",
         id="two-open-inputs",
     ),
     pytest.param(
-        Workflow(nodes=[_B], outputs={"default": _B_OUT, "side": _B_OUT}),
+        Workflow(nodes=[SORT_NODE], outputs={"default": _B_OUT, "side": _B_OUT}),
         "workflow output",
         id="named-output-clash",
     ),
@@ -161,16 +167,8 @@ class TestWorkflow:
         assert build().version == "2"
 
     def test_repr_counts_a_branching_graph(self):
-        dag = {
-            "modules": [
-                {"id": "a", "name": "fetch"},
-                {"id": "b", "name": "fetch"},
-                {"id": "u", "name": "union"},
-            ],
-            "wires": [["a", "u"], ["b", "u", "in:1"]],
-        }
         expected = "Workflow(nodes: 3, edges: 2; outputs: default)"
-        assert repr(Workflow.parse(dag)) == expected
+        assert repr(Workflow.parse(FAN_IN_DAG)) == expected
 
     def test_repr_shows_an_empty_workflow(self):
         assert repr(Workflow()) == "Workflow(empty)"
@@ -181,10 +179,7 @@ class TestWorkflow:
 
     def test_repr_survives_a_cycle(self):
         flow = Workflow.from_raw(
-            {
-                "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "sort"}],
-                "edges": [build_edge("a", "b"), build_edge("b", "a")],
-            }
+            {"nodes": TWO_NODES, "edges": [build_edge("a", "b"), build_edge("b", "a")]}
         )
         assert repr(flow) == "Workflow(nodes: 2, edges: 2)"
 
@@ -193,19 +188,18 @@ class TestWorkflow:
         nodes = [
             ModuleNode(id="loop-1", name="loop", embed=embed),
             ModuleNode(id="hash-1", name="hash"),
-            WriteNode(id="write-1", name="write", backend=Backends.FILE),
+            _WRITE_NODE,
         ]
         flow = Workflow(nodes=nodes)
         assert dict(flow.embeds) == {"loop-1": embed}
 
     def test_workflow_index_orders_and_indexes(self) -> None:
         a = ModuleNode(id="a", name="m")
-        b = ModuleNode(id="b", name="m")
         c = ModuleNode(id="c", name="m")
         edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
         outputs = {"default": Endpoint("b", "out"), "extra": Endpoint("c", "out")}
         flow = Workflow(
-            nodes=[a, b, c],
+            nodes=[a, M_NODE, c],
             outputs=outputs,
             input_schemas={},
             edges=(edge,),
@@ -231,7 +225,6 @@ class TestWorkflow:
     def test_cycle_names_only_the_nodes_on_the_cycle(self):
         src = ModuleNode(id="src", name="fetch")
         a = ModuleNode(id="a", name="sort")
-        b = ModuleNode(id="b", name="sort")
         after = ModuleNode(id="after", name="sort")
         edges = (
             StreamEdge(Endpoint("src", "out"), Endpoint("a", "in")),
@@ -240,7 +233,7 @@ class TestWorkflow:
             StreamEdge(Endpoint("b", "out"), Endpoint("after", "in")),
         )
         flow = Workflow(
-            nodes=[src, a, b, after],
+            nodes=[src, a, SORT_NODE, after],
             edges=edges,
             outputs={"default": Endpoint("after", "out")},
             input_schemas={},
@@ -270,7 +263,7 @@ class TestWorkflow:
 
     @pytest.mark.parametrize("append", APPENDS)
     def test_appending_needs_a_default_output_to_follow(self, append):
-        flow = Workflow(nodes=[ModuleNode(id="a", name="fetch")])
+        flow = Workflow(nodes=[FETCH_NODE])
         with pytest.raises(
             InvalidPipelineError, match="this workflow has nodes but no default output"
         ):
@@ -289,7 +282,7 @@ class TestWorkflow:
     @pytest.mark.parametrize(("other", "match"), APPEND_REJECTIONS)
     def test_appending_a_workflow_rejects(self, other, match):
         flow = Workflow(
-            nodes=[ModuleNode(id="a", name="fetch")],
+            nodes=[FETCH_NODE],
             outputs={"default": Endpoint("a", "out"), "side": Endpoint("a", "out")},
             input_schemas={"limit": {"type": "integer"}},
         )
@@ -297,7 +290,7 @@ class TestWorkflow:
             flow.with_workflow(other)
 
     def test_a_node_id_cannot_repeat(self):
-        nodes = [ModuleNode(id="a", name="hash"), ModuleNode(id="a", name="count")]
+        nodes = [HASH_NODE, ModuleNode(id="a", name="count")]
 
         with pytest.raises(InvalidPipelineError, match="must not repeat a node id"):
             Workflow(nodes=nodes, outputs=OUTPUT_A)
@@ -330,7 +323,7 @@ class TestNodeFamily:
         assert PublishEdge(endpoint, endpoint).family == "publish"
 
     def test_write_node_defaults(self):
-        node = WriteNode(id="write-1", name="write", backend=Backends.FILE)
+        node = _WRITE_NODE
         assert node.fmt is None
         assert node.mode is WriteMode.REPLACE
         assert node.keys == ()
@@ -486,13 +479,13 @@ class TestCallableNode:
 class TestRequireRunnableOnly:
     def test_callable_nodes_pass(self):
         node = CallableNode(id="c", name="len", fn=len)
-        flow = Workflow(nodes=[_A, node])
+        flow = Workflow(nodes=[FETCH_NODE, node])
         assert flow.require_runnable_only("execution") is None
 
     def test_other_families_are_named_with_the_activity(self):
         write = WriteNode(id="w", name="write", backend="file", dest="out.csv")
         cache = CacheNode(id="c", name="cache")
-        nodes = [_A, write, cache]
+        nodes = [FETCH_NODE, write, cache]
         flow = Workflow(nodes=nodes)
 
         with pytest.raises(InvalidPipelineError, match="cache, write node execution"):
@@ -500,9 +493,9 @@ class TestRequireRunnableOnly:
 
 
 VALID_GRAPHS = [
-    pytest.param([_A], [], "a", (), id="single-node"),
+    pytest.param([FETCH_NODE], [], "a", (), id="single-node"),
     pytest.param(
-        [_A, ModuleNode(id="b", name="fetch"), ModuleNode(id="c", name="join")],
+        _MERGE_NODES,
         [
             StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("c", "in:1")),
@@ -512,7 +505,7 @@ VALID_GRAPHS = [
         id="distinct-fan-in-ports",
     ),
     pytest.param(
-        [_A, SubscribeNode(id="s", name="sub")],
+        [FETCH_NODE, SubscribeNode(id="s", name="sub")],
         [PublishEdge(Endpoint("a", "out"), Endpoint("s", "in"))],
         "a",
         (),
@@ -522,7 +515,7 @@ VALID_GRAPHS = [
 ]
 INVALID_WORKFLOWS = [
     pytest.param(
-        {"nodes": [_A], "outputs": {"default": _A_OUT}, "version": "1"},
+        {"nodes": [FETCH_NODE], "outputs": {"default": _A_OUT}, "version": "1"},
         "unsupported workflow version",
         id="unsupported-version",
     ),
@@ -533,7 +526,7 @@ INVALID_WORKFLOWS = [
         "unresolved resource",
         id="unresolved-resource",
     ),
-    pytest.param({"nodes": [_A]}, "exposes no workflow output", id="no-output"),
+    pytest.param({"nodes": [FETCH_NODE]}, "exposes no workflow output", id="no-output"),
     pytest.param(
         {"nodes": [_ASKS_Q], "outputs": {"default": _A_OUT}},
         r"unresolved input reference\(s\): \['q'\]",
@@ -633,12 +626,6 @@ def _workflow(
     )
 
 
-def _counted_source(consumed):
-    for index in range(3):
-        consumed.append(index)
-        yield {"title": str(index)}
-
-
 class TestValidate:
     @pytest.mark.parametrize(("nodes", "edges", "output", "resources"), VALID_GRAPHS)
     def test_valid_graphs_pass(self, nodes, edges, output, resources):
@@ -648,13 +635,13 @@ class TestValidate:
 
     @pytest.mark.parametrize(("name", "conf", "match"), INVALID_CONFS)
     def test_invalid_conf_rejected_before_the_source_is_read(self, name, conf, match):
-        consumed = []
-        pipeline = _counted_source(consumed) | Pipeline.from_module(name, conf=conf)
+        seed = iter(_TITLE_ROWS)
+        pipeline = seed | Pipeline.from_module(name, conf=conf)
 
         with pytest.raises(InvalidPipelineError, match=match):
             list(pipeline)
 
-        assert consumed == []
+        assert list(seed) == _TITLE_ROWS
 
     def test_validate_runs_its_checks_once_per_workflow(self, monkeypatch):
         calls = []
@@ -666,7 +653,9 @@ class TestValidate:
 
         monkeypatch.setattr(Workflow, "validate_input_schemas", counted)
         outputs = {"default": Endpoint("a", "out")}
-        flow = _workflow([_A], outputs=outputs, input_schemas={"q": {"type": "string"}})
+        flow = _workflow(
+            [FETCH_NODE], outputs=outputs, input_schemas={"q": {"type": "string"}}
+        )
         flow.validate()
         flow.validate()
 
@@ -674,7 +663,7 @@ class TestValidate:
         assert calls == [flow]
 
     def test_validate_raises_on_every_call_to_an_invalid_workflow(self):
-        flow = _workflow([_A], input_schemas={"q": {"type": "strng"}})
+        flow = _workflow([FETCH_NODE], input_schemas={"q": {"type": "strng"}})
 
         for _ in range(2):
             assert not flow.is_valid
@@ -690,7 +679,7 @@ class TestValidate:
     @pytest.mark.parametrize(("edge", "target"), EDGE_FAMILY_MISMATCHES)
     def test_edge_family_disagreeing_with_its_target_rejected(self, edge, target):
         flow = _workflow(
-            [_A, target],
+            [FETCH_NODE, target],
             edges=[edge(Endpoint("a", "out"), Endpoint("b", "in"))],
             outputs={"default": Endpoint("a", "out")},
         )
@@ -699,7 +688,9 @@ class TestValidate:
 
     @pytest.mark.parametrize(("edges", "output", "match"), INVALID_EDGES)
     def test_invalid_edges_rejected(self, edges, output, match):
-        flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
+        flow = _workflow(
+            [FETCH_NODE, SORT_NODE], edges=edges, outputs={"default": output}
+        )
         with pytest.raises(InvalidPipelineError, match=match):
             flow.validate()
 

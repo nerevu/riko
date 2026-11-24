@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from operator import itemgetter
-from typing import TYPE_CHECKING, Any, NoReturn, assert_type, cast
+from typing import TYPE_CHECKING, Any, NoReturn, assert_type
 
 import pytest
 
@@ -13,19 +13,16 @@ from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._context import Context
 from riko.definitions._nodes import CallableNode
 from riko.definitions._workflow_definition import Workflow
-from riko.ext import ModuleDefinition
 from riko.runtime._pipeline import Pipeline
 from riko.types._enums import IdentityMode
 from riko.types._streams import Item
 from riko.types.modules import StrReplaceConf, StrReplaceConfRule
-from tests import async_test, skipif_sync
-from tests._execution import registered_modules
+from tests import X_ROW, X_ROWS, async_test, skipif_sync
+from tests._execution import build_sync_definition, registered_modules
 from tests._lifecycle import VALUE, tokenized
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Generator, Iterable, Iterator, Mapping
-
-    from riko.types._wrappers import SyncModuleWrapper
 
 
 _THREAD = {"executor": "thread", "concurrency": 2, "ordered": True}
@@ -159,14 +156,13 @@ class TestPipelineMap:
 
     @pytest.mark.parametrize(("left", "right"), _FUNCTOR_LAWS)
     def test_map_obeys_the_functor_laws(self, left, right):
-        seed = [{"x": 1}, {"x": 2}]
         chains = [Pipeline(), Pipeline()]
 
         for index, fns in enumerate((left, right)):
             for fn in fns:
                 chains[index] = chains[index].map(fn)
 
-        assert list(chains[0](seed)) == list(chains[1](seed))
+        assert list(chains[0](X_ROWS)) == list(chains[1](X_ROWS))
 
     @pytest.mark.parametrize(("produce", "settings"), _LISTLIKE_ITEMS)
     def test_a_listlike_item_reaches_the_next_map_whole(self, produce, settings):
@@ -192,7 +188,7 @@ class TestPipelineMap:
 
     def test_map_binds_keywords(self):
         pipeline = Pipeline().map(_scaled, factor=10)
-        assert list(pipeline([{"x": 1}, {"x": 2}])) == [10, 20]
+        assert list(pipeline(X_ROWS)) == [10, 20]
 
     def test_bound_keywords_are_identity_significant(self):
         ten = Pipeline().map(_scaled, factor=10).workflow.nodes["_scaled-1"]
@@ -207,7 +203,7 @@ class TestPipelineMap:
             .map(_enrich, resources={"db": "primary"})
         )
         assert pipeline.workflow.resources == ("primary",)
-        assert list(pipeline([{"x": 1}])) == [{"x": 1, "owner": 7}]
+        assert list(pipeline(X_ROW)) == [{"x": 1, "owner": 7}]
 
     @pytest.mark.parametrize("settings", _EXECUTIONS)
     def test_map_passes_only_bound_keywords(self, settings):
@@ -233,7 +229,7 @@ class TestPipelineMap:
         ordered = chained.map(str, resources=("cache", "db"))
 
         assert pipeline.workflow.resources == ("db",)
-        assert list(pipeline([{"x": 1}])) == [{"x": 1, "owner": 7}]
+        assert list(pipeline(X_ROW)) == [{"x": 1, "owner": 7}]
         assert ordered.workflow.resources == ("db", "cache")
         assert ordered.workflow.is_valid
 
@@ -269,7 +265,7 @@ class TestPipelineMap:
     @skipif_sync
     def test_sync_iteration_bridges_an_async_callable(self):
         pipeline = Pipeline().map(_ascaled, factor=3)
-        assert list(pipeline([{"x": 1}, {"x": 2}])) == [3, 6]
+        assert list(pipeline(X_ROWS)) == [3, 6]
 
     @pytest.mark.slow
     @pytest.mark.timeout(8)
@@ -300,7 +296,7 @@ class TestPipelineMap:
 
         node = CallableNode(id="c", name="c", fn=bound, kwargs={"fn": 1})
         pipeline = Pipeline(Workflow().with_nodes(node))
-        assert list(pipeline([{"x": 1}])) == [{"fn": 1}]
+        assert list(pipeline(X_ROW)) == [{"fn": 1}]
 
     def test_map_propagates_exceptions(self):
         with pytest.raises(ValueError, match="'x': 1"):
@@ -310,13 +306,13 @@ class TestPipelineMap:
         pipeline = Pipeline().map(_defer_scaled)
 
         with pytest.raises(InvalidPipelineError, match="a map function"):
-            list(pipeline([{"x": 1}]))
+            list(pipeline(X_ROW))
 
     def test_map_requires_the_context_to_provide_its_resources(self):
         pipeline = Pipeline().map(_enrich, resources="db")
 
         with pytest.raises(InvalidPipelineError, match="'db' not provided"):
-            list(pipeline([{"x": 1}]))
+            list(pipeline(X_ROW))
 
     @pytest.mark.parametrize(("kwargs", "match"), _MAP_ERRORS)
     def test_map_rejects_invalid_arguments(self, kwargs, match):
@@ -349,8 +345,7 @@ class TestPipelineMap:
     )
     @skipif_sync
     def test_map_ignores_a_replaced_udf_module(self):
-        sync_pipe = cast("SyncModuleWrapper", list)
-        definition = ModuleDefinition(name="udf", sync_pipe=sync_pipe)
+        definition = build_sync_definition(list, name="udf")
 
         with registered_modules(definition, replace=True):
             assert list(Pipeline().map(_ascaled)([{"x": 1}])) == [2]
@@ -389,7 +384,7 @@ class TestAsyncPipelineMap:
     @async_test
     async def test_async_map_passes_only_bound_keywords(self):
         pipeline = Pipeline().map(_keywords, factor=2)
-        assert [item async for item in pipeline([{"x": 1}])] == [["factor"]]
+        assert [item async for item in pipeline(X_ROW)] == [["factor"]]
 
     @async_test
     async def test_async_map_resolves_an_input_reference(self):
@@ -401,7 +396,7 @@ class TestAsyncPipelineMap:
     @async_test
     async def test_async_iteration_awaits_an_async_callable(self):
         pipeline = Pipeline().map(_ascaled)
-        assert [item async for item in pipeline([{"x": 1}, {"x": 2}])] == [2, 4]
+        assert [item async for item in pipeline(X_ROWS)] == [2, 4]
 
     @async_test
     async def test_async_iteration_runs_a_sync_callable(self):
@@ -416,4 +411,4 @@ class TestAsyncPipelineMap:
         pipeline = Pipeline().map(fn).with_execution(concurrency=concurrency)
 
         with pytest.raises(ValueError, match="bad item"):
-            await alist(pipeline([{"x": 1}, {"x": 2}]))
+            await alist(pipeline(X_ROWS))

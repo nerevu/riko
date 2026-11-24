@@ -29,6 +29,15 @@ from riko.runtime._pipeline import Pipeline
 from riko.types._enums import Backends, DocumentShape, Formats
 from riko.types._workflow import Endpoint, NodeId
 from riko.types.modules import TruncateRawConf
+from tests import (
+    FAN_IN_DAG,
+    FAN_IN_MODULES,
+    FETCH_NODES,
+    OUT_MODULE,
+    SUBSCRIBED_NODES,
+    TWO_NODES,
+)
+from tests._execution import FETCH_NODE
 from tests._workflows import (
     CALLABLE_FLOW,
     CALLABLE_MATCH,
@@ -39,10 +48,12 @@ from tests._workflows import (
     PIPE_DEF,
     RAW_WORKFLOW,
     build_edge,
+    build_wire,
+    require_module_node,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping
 
     from riko.types._pipedef import DagModule, Embed, PipeDag
 
@@ -66,18 +77,37 @@ _NODE_VALUE_PLACEMENTS = {
     },
 }
 
+_PARSE_DAG = partial(Workflow.parse, shape="dag")
 _READ_NODE = {"id": "r", "name": "read", "family": "read", "backend": "file"}
-_TWO_NODES = [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}]
-_CHAINED = {"nodes": _TWO_NODES, "edges": [build_edge("a", "b")]}
+_WRITE_NODE = {"name": "write", "family": "write", "backend": "file"}
+_CHAINED = {"nodes": TWO_NODES, "edges": [build_edge("a", "b")]}
 _ERRORS = {"errors": {"node": "a", "port": "_OUTPUT2"}}
 _ROUTED = {"nodes": [{"id": "a", "name": "route"}], "outputs": _ERRORS}
-_EXPLICIT_EMPTY = {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
+_EXPLICIT_EMPTY = {"nodes": FETCH_NODES, "outputs": {}}
 _REPEATED = [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]
 _TAKEN_ID = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
 _NULL_STRING = {"type": ("string", "null"), "default": None}
 _ENUM = {"type": "integer", "default": 1, "enum": (1, 2)}
 _EDGE_ALIASES = ("src", "tgt", "from", "to")
 _PIPE_DEF_TOKENS = ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"')
+_FETCH = {"id": "a", "type": "fetch", "conf": {}}
+_INPUT = {"id": "i", "type": "input", "conf": {"name": "q", "default": "x"}}
+_WIRE = build_wire("_w1", "a", "_OUTPUT")
+_FETCHED = {"modules": [_FETCH, OUT_MODULE], "wires": [_WIRE]}
+_TYPED = {"type": "text", "value": "int"}
+_INT = {"type": "integer"}
+_STR = {"type": "string"}
+_UNKNOWN_KEY_TARGET = {"node": "b", "porrt": "in"}
+_CONFLICTING_FORMATS = {
+    "conflicting-fmt-format": ("csv", "jsonl"),
+    "conflicting-null-fmt": (None, "csv"),
+    "conflicting-null-format": ("csv", None),
+}
+_BAD_EDGE_KEYS = {
+    "unknown-edge-field": ({"bogus": 1}, "unknown PortEdge key"),
+    "unknown-edge-family": ({"family": "broadcast"}, "unknown edge family"),
+    "edge-type-key": ({"type": "stream"}, "type"),
+}
 
 
 MODULES: list[DagModule] = [
@@ -88,14 +118,6 @@ MODULES: list[DagModule] = [
         "conf": TruncateRawConf({"count": {"type": "int", "value": "3"}}),
     },
 ]
-
-FAN_IN_MODULES: list[DagModule] = [
-    {"id": "a", "name": "fetch"},
-    {"id": "b", "name": "fetch"},
-    {"id": "u", "name": "union"},
-]
-
-FAN_IN_WIRES: Sequence[Sequence[str]] = [["a", "u"], ["b", "u", "in:1"]]
 
 RICH_RAW = {
     "version": "2",
@@ -223,20 +245,9 @@ WRITE_PIPE_DEF = {
     "modules": [
         {"id": "sw-1", "type": "fetch", "conf": {}},
         {"id": "sw-2", "type": "write", "conf": {"fmt": "json"}},
-        {"id": "_OUTPUT", "type": "output", "conf": {}},
+        OUT_MODULE,
     ],
-    "wires": [
-        {
-            "id": "_w1",
-            "src": {"id": "_OUTPUT", "moduleid": "sw-1"},
-            "tgt": {"id": "_INPUT", "moduleid": "sw-2"},
-        },
-        {
-            "id": "_w2",
-            "src": {"id": "_OUTPUT", "moduleid": "sw-2"},
-            "tgt": {"id": "_INPUT", "moduleid": "_OUTPUT"},
-        },
-    ],
+    "wires": [build_wire("_w1", "sw-1", "sw-2"), build_wire("_w2", "sw-2", "_OUTPUT")],
 }
 
 
@@ -246,9 +257,7 @@ SHAPE_DECLARATIONS = [
     pytest.param(lambda shape: shape.value, id="value"),
 ]
 DOCUMENTS = [
-    pytest.param(
-        DAG, DocumentShape.DAG, partial(Workflow.parse, shape="dag"), id="dag"
-    ),
+    pytest.param(DAG, DocumentShape.DAG, _PARSE_DAG, id="dag"),
     pytest.param(PIPE_DEF, DocumentShape.V1, Workflow.parse, id="v1"),
     pytest.param(RAW_WORKFLOW, DocumentShape.V2, Workflow.from_raw, id="v2"),
     pytest.param(DOCUMENT, DocumentShape.V2, Workflow.from_raw, id="workflow"),
@@ -339,13 +348,6 @@ def _edges(flow: Workflow) -> list[tuple[NodeId, NodeId]]:
     return [(edge.source.node, edge.target.node) for edge in flow.edges]
 
 
-def _module_node(flow: Workflow, node_id: NodeId) -> ModuleNode:
-    """Narrows one of a workflow's nodes to a module node."""
-    node = flow.nodes[node_id]
-    assert isinstance(node, ModuleNode)
-    return node
-
-
 INVALID_PIPE_DAGS = [
     pytest.param({"modules": []}, "no nodes", id="empty-modules"),
     pytest.param({"modules": None}, "must be a list", id="null-modules"),
@@ -381,14 +383,14 @@ class TestPipeDag:
         assert flow.outputs["default"] == Endpoint("trunc", "out")
 
     def test_third_wire_entry_sets_the_target_port(self):
-        flow = Workflow.parse({"modules": FAN_IN_MODULES, "wires": FAN_IN_WIRES})
+        flow = Workflow.parse(FAN_IN_DAG)
         ports = [(edge.source.port, edge.target.port) for edge in flow.edges]
         assert ports == [("out", "in"), ("out", "in:1")]
         assert flow.outputs["default"] == Endpoint("u", "out")
 
     def test_conf_survives_verbatim(self):
         flow = Workflow.parse({"modules": MODULES})
-        assert dict(_module_node(flow, "sw-2").conf) == {
+        assert dict(require_module_node(flow, "sw-2").conf) == {
             "count": {"type": "int", "value": "3"}
         }
 
@@ -397,19 +399,19 @@ class TestPipeDag:
             {"id": "t", "type": "tokenizer", "options": {"emit": True}}
         ]
         flow = Workflow.parse({"modules": modules})
-        assert _module_node(flow, "t").options.kwargs == {"emit": True}
+        assert require_module_node(flow, "t").options.kwargs == {"emit": True}
 
     def test_pipe_dag_accepts_the_older_type_spelling_of_name(self):
         named = Workflow.parse({"modules": [{"name": "forever"}]})
         typed = Workflow.parse({"modules": [{"type": "forever"}]})
         agreeing = Workflow.parse({"modules": [{"name": "forever", "type": "forever"}]})
         assert named == typed == agreeing
-        assert _module_node(typed, "sw-1").name == "forever"
+        assert require_module_node(typed, "sw-1").name == "forever"
 
     def test_pipe_dag_offers_known_node_fields_to_the_node(self):
         embed: Embed = {"name": "fetch", "conf": {}}
         flow = Workflow.parse({"modules": [{"name": "loop", "embed": embed}]})
-        module = _module_node(flow, "sw-1")
+        module = require_module_node(flow, "sw-1")
         assert module.embed is not None
         assert module.embed["name"] == "fetch"
 
@@ -465,7 +467,7 @@ EDGE_PORTS = [
 ]
 NORMALIZED_OUTPUTS = [
     pytest.param(_CHAINED, {"default": Endpoint("b", "out")}, id="single-leaf"),
-    pytest.param({"nodes": _TWO_NODES}, {}, id="ambiguous-leaves"),
+    pytest.param({"nodes": TWO_NODES}, {}, id="ambiguous-leaves"),
     pytest.param(_ROUTED, {"errors": Endpoint("a", "out:1")}, id="legacy-port-alias"),
     pytest.param(_EXPLICIT_EMPTY, {}, id="explicit-empty"),
 ]
@@ -491,10 +493,7 @@ TOP_LEVEL_RESOURCES = [
 FIXED_POINT_WORKFLOWS = [
     pytest.param(
         {
-            "nodes": [
-                {"name": "fetch"},
-                {"name": "write", "family": "write", "backend": "file"},
-            ],
+            "nodes": [{"name": "fetch"}, _WRITE_NODE],
             "edges": [build_edge("fetch-1", "write-1")],
         },
         id="write-chain",
@@ -515,12 +514,10 @@ FORMAT_SPELLINGS = [
 MALFORMED_NODES = [
     pytest.param({"name": "fetch", "resources": 5}, "'resources'", id="res"),
     pytest.param(
-        {"name": "w", "family": "write", "backend": "file", "keys": 5},
-        "WriteNode 'keys' must be a string",
-        id="keys-type",
+        {**_WRITE_NODE, "keys": 5}, "WriteNode 'keys' must be a string", id="keys-type"
     ),
     pytest.param(
-        {"name": "w", "family": "write", "backend": "file", "keys": ["a", "a"]},
+        {**_WRITE_NODE, "keys": ["a", "a"]},
         "duplicate WriteNode 'keys'",
         id="keys-duplicate",
     ),
@@ -530,42 +527,27 @@ MALFORMED_NODES = [
         id="missing-backend",
     ),
     pytest.param(
-        {"name": "r", "family": "read", "backend": "ftp"},
-        "Invalid Backends",
-        id="unknown-backend",
+        {**_READ_NODE, "backend": "ftp"}, "Invalid Backends", id="unknown-backend"
     ),
     pytest.param(
         {"name": "x", "family": "sink"}, "unknown node family", id="unknown-family"
     ),
     pytest.param({"family": "module"}, "node 'name'", id="missing-name"),
     pytest.param(
-        {"name": "w", "family": "write", "backend": "file", "mode": "apend"},
-        "Invalid WriteMode",
-        id="invalid-write-mode",
+        {**_WRITE_NODE, "mode": "apend"}, "Invalid WriteMode", id="invalid-write-mode"
     ),
-    pytest.param(
-        {"name": "r", "family": "read", "backend": "file", "fmt": "xml"},
-        "Invalid Formats",
-        id="invalid-format",
-    ),
+    pytest.param({**_READ_NODE, "fmt": "xml"}, "Invalid Formats", id="invalid-format"),
     pytest.param(
         {"name": "fetch", "bogus": 1}, "unknown ModuleNode key", id="unknown-field"
     ),
     pytest.param({"name": "fetch", "conf": []}, "Node 'conf'", id="falsy-conf"),
-    pytest.param(
-        {**_READ_NODE, "fmt": "csv", "format": "jsonl"},
-        "conflicting node 'fmt'/'format'",
-        id="conflicting-fmt-format",
-    ),
-    pytest.param(
-        {**_READ_NODE, "fmt": None, "format": "csv"},
-        "conflicting node 'fmt'/'format'",
-        id="conflicting-null-fmt",
-    ),
-    pytest.param(
-        {**_READ_NODE, "fmt": "csv", "format": None},
-        "conflicting node 'fmt'/'format'",
-        id="conflicting-null-format",
+    *(
+        pytest.param(
+            {**_READ_NODE, "fmt": fmt, "format": alias},
+            "conflicting node 'fmt'/'format'",
+            id=key,
+        )
+        for key, (fmt, alias) in _CONFLICTING_FORMATS.items()
     ),
     pytest.param(
         {"name": "tokenizer", "options": {"bogus": 1}},
@@ -609,37 +591,20 @@ MALFORMED_GRAPHS = [
         "conflicts",
         id="mapping-key-conflicts-inner-id",
     ),
-    pytest.param(
-        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", bogus=1)]},
-        "unknown PortEdge key",
-        id="unknown-edge-field",
+    *(
+        pytest.param(
+            _CHAINED | {"edges": [build_edge("a", "b", **extra)]}, match, id=key
+        )
+        for key, (extra, match) in _BAD_EDGE_KEYS.items()
     ),
     pytest.param(
-        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", family="broadcast")]},
-        "unknown edge family",
-        id="unknown-edge-family",
-    ),
-    pytest.param(
-        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", type="stream")]},
-        "type",
-        id="edge-type-key",
-    ),
-    pytest.param(
-        {
-            "nodes": _TWO_NODES,
-            "edges": [
-                {"source": {"node": "a"}, "target": {"node": "b", "porrt": "in"}}
-            ],
-        },
+        _CHAINED | {"edges": [build_edge("a", "b") | {"target": _UNKNOWN_KEY_TARGET}]},
         "unknown Endpoint key",
         id="unknown-endpoint-field",
     ),
     *(
         pytest.param(
-            {
-                "nodes": _TWO_NODES,
-                "edges": [{alias: {"node": "a"}, "target": {"node": "b"}}],
-            },
+            _CHAINED | {"edges": [{alias: {"node": "a"}, "target": {"node": "b"}}]},
             "'source'/'target'",
             id=f"edge-alias-{alias}",
         )
@@ -717,7 +682,7 @@ class TestNormalizeWorkflow:
         self, source, target, expected
     ):
         flow = Workflow.from_raw(
-            {"nodes": _TWO_NODES, "edges": [{"source": source, "target": target}]}
+            _CHAINED | {"edges": [{"source": source, "target": target}]}
         )
         source_port, target_port = expected
         assert flow.edges == (
@@ -726,13 +691,7 @@ class TestNormalizeWorkflow:
 
     def test_publish_edge_detected_from_subscribe_target(self):
         flow = Workflow.from_raw(
-            {
-                "nodes": [
-                    {"id": "a", "name": "fetch"},
-                    {"id": "s", "name": "sub", "family": "subscribe"},
-                ],
-                "edges": [build_edge("a", "s")],
-            }
+            {"nodes": SUBSCRIBED_NODES, "edges": [build_edge("a", "s")]}
         )
         assert isinstance(flow.nodes["s"], SubscribeNode)
         assert isinstance(flow.edges[0], PublishEdge)
@@ -744,10 +703,7 @@ class TestNormalizeWorkflow:
     @pytest.mark.parametrize(("raw_schema", "schema"), INPUT_SCHEMAS)
     def test_input_schemas_normalize(self, raw_schema, schema):
         def normalize(value: object):
-            raw = {
-                "nodes": [{"id": "a", "name": "fetch"}],
-                "input_schemas": {"n": value},
-            }
+            raw = {"nodes": FETCH_NODES, "input_schemas": {"n": value}}
             return Workflow.parse(raw).input_schemas["n"]
 
         normalized = normalize(raw_schema)
@@ -761,18 +717,13 @@ class TestNormalizeWorkflow:
 
     @pytest.mark.parametrize(("resources", "expected"), TOP_LEVEL_RESOURCES)
     def test_top_level_resources_normalize_to_tuple(self, resources, expected):
-        flow = Workflow.from_raw(
-            {"nodes": [{"id": "a", "name": "fetch"}], "resources": resources}
-        )
+        flow = Workflow.from_raw({"nodes": FETCH_NODES, "resources": resources})
         assert flow.resources == expected
 
     def test_explicit_stream_family_to_subscribe_is_preserved(self):
         flow = Workflow.from_raw(
             {
-                "nodes": [
-                    {"id": "a", "name": "fetch"},
-                    {"id": "s", "name": "sub", "family": "subscribe"},
-                ],
+                "nodes": SUBSCRIBED_NODES,
                 "edges": [build_edge("a", "s", family="stream")],
             }
         )
@@ -802,10 +753,8 @@ class TestNormalizeWorkflow:
         assert Workflow.from_raw(Workflow.from_raw(first)) == first
 
     def test_normalize_renormalizes_a_hand_built_workflow(self):
-        a = ModuleNode(id="a", name="fetch")
-        b = ModuleNode(id="b", name="filter")
         hand = Workflow(
-            nodes=[a, b],
+            nodes=[FETCH_NODE, ModuleNode(id="b", name="filter")],
             edges=(StreamEdge(Endpoint("a", "_OUTPUT"), Endpoint("b", "_OTHER2")),),
             outputs={"default": Endpoint("b", "_OUTPUT")},
             input_schemas={},
@@ -819,7 +768,7 @@ class TestNormalizeWorkflow:
     def test_renormalizing_keeps_an_edge_family(self, edge, target):
         """A mismatched edge family is kept, not inferred from its target."""
         flow = Workflow(
-            nodes=[ModuleNode(id="a", name="fetch"), target],
+            nodes=[FETCH_NODE, target],
             edges=[edge(Endpoint("a", "out"), Endpoint("b", "in"))],
             outputs={"default": Endpoint("a", "out")},
         )
@@ -843,8 +792,7 @@ class TestNormalizeWorkflow:
                 ]
             }
         )
-        node = flow.nodes["tokenizer-1"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "tokenizer-1")
         assert node.options.kwargs == {"field": "title", "count": "first"}
         assert node.conf == {}
 
@@ -854,8 +802,7 @@ class TestNormalizeWorkflow:
         flow = Workflow.from_raw({"nodes": [{"id": "a", "name": "f", "conf": conf}]})
         inner["k"] = 99
         conf["list"] = [3]
-        node = flow.nodes["a"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "a")
         assert node.conf is not None
         assert node.conf.get("nested") == {"k": 1}
         assert node.conf.get("list") == (1, 2)
@@ -870,8 +817,7 @@ class TestNormalizeWorkflow:
                 ]
             }
         )
-        node = flow.nodes["loop-1"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "loop-1")
         assert node.embed == {"name": "tokenizer", "conf": {"d": " "}}
         with pytest.raises(TypeError):
             node.embed["name"] = "hash"  # type: ignore[index]
@@ -881,8 +827,7 @@ class TestNormalizeWorkflow:
         flow = Workflow.from_raw(
             {"nodes": [{"name": "loop", "embed": {"name": "tokenizer"}}]}
         )
-        node = flow.nodes["loop-1"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "loop-1")
         assert node.embed == {"name": "tokenizer", "conf": {}}
 
     @pytest.mark.parametrize(("node", "match"), MALFORMED_NODES)
@@ -900,14 +845,11 @@ class TestNormalizeWorkflow:
         edge = {"source": {"node": "a"}, "target": {"node": "b", "port": port}}
 
         with pytest.raises(InvalidPipelineError, match=f"invalid port: {port!r}"):
-            Workflow.from_raw({"nodes": _TWO_NODES, "edges": [edge]})
+            Workflow.from_raw(_CHAINED | {"edges": [edge]})
 
     @pytest.mark.parametrize(("raw_schema", "match"), BAD_INPUT_SCHEMAS)
     def test_input_without_type_name_or_schema_raises(self, raw_schema, match):
-        raw = {
-            "nodes": [{"id": "a", "name": "fetch"}],
-            "input_schemas": {"n": raw_schema},
-        }
+        raw = {"nodes": FETCH_NODES, "input_schemas": {"n": raw_schema}}
 
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse(raw)
@@ -931,14 +873,6 @@ class TestNormalizeWorkflow:
             Workflow.from_raw(CALLABLE_FLOW)
 
 
-def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
-    return {
-        "id": wid,
-        "src": {"id": src_port, "moduleid": src_mod},
-        "tgt": {"id": tgt_port, "moduleid": tgt_mod},
-    }
-
-
 WIRE_PORTS = [
     pytest.param("_OUTPUT", "_OTHER1", ("out", "in:1"), id="legacy"),
     pytest.param(None, None, ("out", "in"), id="null"),
@@ -956,13 +890,6 @@ UPPERCASE_CONFS = [
     pytest.param({"URL": {"value": "x"}}, {"url": {"value": "x"}}, id="mapping"),
     pytest.param({"URL": [{"VALUE": "x"}]}, {"url": ({"value": "x"},)}, id="list"),
 ]
-
-
-_FETCH = {"id": "a", "type": "fetch", "conf": {}}
-_INPUT = {"id": "i", "type": "input", "conf": {"name": "q", "default": "x"}}
-_OUT = {"id": "_OUTPUT", "type": "output", "conf": {}}
-_WIRE = _wire("_w1", "a", "_OUTPUT")
-
 MALFORMED_MODULES = [
     pytest.param(
         {"id": "w", "type": "write", "conf": {"dest": "o", "mode": "rb"}},
@@ -998,30 +925,28 @@ MALFORMED_MODULES = [
 ]
 MALFORMED_DOCUMENTS = [
     pytest.param(
-        {"modules": [_FETCH, _OUT], "wires": [_WIRE], "bogus": 1},
+        _FETCHED | {"bogus": 1},
         "unknown pipe definition key",
         id="pipe-def-unknown-key",
     ),
     pytest.param(
-        {"modules": [_FETCH, _OUT], "wires": [{**_WIRE, "bogus": 1}]},
+        _FETCHED | {"wires": [_WIRE | {"bogus": 1}]},
         "unknown wire key",
         id="wire-unknown-key",
     ),
     pytest.param(
-        {
-            "modules": [_FETCH, _OUT],
-            "wires": [{**_WIRE, "src": {"id": "_OUTPUT", "moduleid": "a", "x": 1}}],
-        },
+        _FETCHED
+        | {"wires": [_WIRE | {"src": {"id": "_OUTPUT", "moduleid": "a", "x": 1}}]},
         "unknown wire endpoint key",
         id="wire-endpoint-unknown-key",
     ),
     pytest.param(
-        {"modules": [_FETCH, {**_OUT, "conf": {"x": 1}}], "wires": [_WIRE]},
+        {"modules": [_FETCH, {**OUT_MODULE, "conf": {"x": 1}}], "wires": [_WIRE]},
         "output node takes no 'conf'",
         id="output-module-conf",
     ),
     pytest.param(
-        {"modules": [_FETCH, {**_OUT, "bogus": 1}], "wires": [_WIRE]},
+        {"modules": [_FETCH, {**OUT_MODULE, "bogus": 1}], "wires": [_WIRE]},
         "unknown `PipeDef` output node key",
         id="output-module-unknown-key",
     ),
@@ -1031,21 +956,16 @@ MALFORMED_DOCUMENTS = [
         id="dag-unknown-key",
     ),
     pytest.param(
-        {"modules": [_INPUT, {**_INPUT, "id": "j", "conf": {"name": "q"}}, _OUT]},
+        {"modules": [_INPUT, {**_INPUT, "id": "j", "conf": {"name": "q"}}, OUT_MODULE]},
         "gives input 'q' two different schemas",
         id="input-schema-clash",
     ),
     pytest.param(
-        {"modules": [{**_INPUT, "conf": {"type": {"x": 1}}}, _OUT]},
+        {"modules": [{**_INPUT, "conf": {"type": {"x": 1}}}, OUT_MODULE]},
         "input 'type' must be a string or a ConfArg",
         id="input-type-mapping",
     ),
 ]
-
-_TYPED = {"type": "text", "value": "int"}
-_INT = {"type": "integer"}
-_STR = {"type": "string"}
-
 MIGRATED_INPUTS = [
     pytest.param(
         {"name": "q", "default": {"type": "int", "value": "5"}},
@@ -1093,19 +1013,16 @@ V1_TYPED_DEFAULTS = [
 ]
 
 
+def _build_input_workflow(conf: Mapping[str, object]) -> Workflow:
+    """Builds the workflow of a pipe definition whose input module carries ``conf``."""
+    return Workflow.parse({"modules": [_INPUT | {"conf": conf}]})
+
+
 class TestMigrate:
     def test_terminal_output_becomes_default_output(self):
-        flow = Workflow.parse(
-            {
-                "modules": [
-                    {"id": "sw-1", "type": "fetch", "conf": {}},
-                    {"id": "_OUTPUT", "type": "output", "conf": {}},
-                ],
-                "wires": [_wire("_w1", "sw-1", "_OUTPUT")],
-            }
-        )
-        assert list(flow.nodes) == ["sw-1"]
-        assert flow.outputs["default"] == Endpoint("sw-1", "out")
+        flow = Workflow.parse(_FETCHED)
+        assert list(flow.nodes) == ["a"]
+        assert flow.outputs["default"] == Endpoint("a", "out")
         assert flow.edges == ()
         assert flow.version == "2"
 
@@ -1115,11 +1032,8 @@ class TestMigrate:
     ):
         flow = Workflow.parse(
             {
-                "modules": [
-                    {"id": "a", "type": "fetch", "conf": {}},
-                    {"id": "b", "type": "urlbuilder", "conf": {}},
-                ],
-                "wires": [_wire("_w1", "a", "b", source_port, target_port)],
+                "modules": [_FETCH, {"id": "b", "type": "urlbuilder", "conf": {}}],
+                "wires": [build_wire("_w1", "a", "b", source_port, target_port)],
             }
         )
         source, target = expected
@@ -1192,8 +1106,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = flow.nodes["c"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "c")
         assert node.conf == {"x": 1}
         assert node.options.kwargs == {
             "emit": True,
@@ -1215,8 +1128,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = flow.nodes["t"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "t")
         assert node.conf == {"count": {"value": 3}}
         assert node.options.kwargs == {"count": "first"}
 
@@ -1237,8 +1149,7 @@ class TestMigrate:
                 ]
             }
         )
-        node = flow.nodes["sw-2"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "sw-2")
         assert node.conf == {}
         assert node.embed == {
             "name": "tokenizer",
@@ -1264,55 +1175,43 @@ class TestMigrate:
                 ]
             }
         )
-        node = flow.nodes["sw-2"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "sw-2")
         assert node.conf == {}
         assert node.embed == {"name": "pipe:shout", "conf": {}}
 
     @pytest.mark.parametrize(("conf", "expected"), UPPERCASE_CONFS)
     def test_uppercase_conf_keys_are_lowered(self, conf, expected):
         flow = Workflow.parse({"modules": [{"id": "f", "type": "fetch", "conf": conf}]})
-        node = flow.nodes["f"]
-        assert isinstance(node, ModuleNode)
+        node = require_module_node(flow, "f")
         assert node.conf == expected
 
     def test_orphan_module_is_retained_not_erased(self):
-        flow = Workflow.parse(
-            {
-                "modules": [
-                    {"id": "a", "type": "fetch", "conf": {}},
-                    {"id": "orphan", "type": "count", "conf": {}},
-                    {"id": "_OUTPUT", "type": "output", "conf": {}},
-                ],
-                "wires": [_wire("_w1", "a", "_OUTPUT")],
-            }
-        )
+        orphan = {"id": "orphan", "type": "count", "conf": {}}
+        flow = Workflow.parse(_FETCHED | {"modules": [_FETCH, orphan, OUT_MODULE]})
         assert "orphan" in flow.nodes
 
     def test_migration_warns(self, caplog):
-        Workflow.parse({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
+        Workflow.parse({"modules": [_FETCH]})
         assert any("pipe definition" in record.message for record in caplog.records)
 
     @pytest.mark.parametrize(("conf", "name", "schema", "kept"), MIGRATED_INPUTS)
     def test_input_module_conf_migrates(self, conf, name, schema, kept):
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        node = flow.nodes["i"]
-        assert isinstance(node, ModuleNode)
+        flow = _build_input_workflow(conf)
+        node = require_module_node(flow, "i")
         assert flow.input_schemas == {name: schema}
         assert node.conf == {"input_key": {"type": "text", "value": name}, **kept}
 
     @pytest.mark.parametrize(("v1_type", "default", "schema"), V1_TYPED_DEFAULTS)
     def test_input_module_type_sets_its_schema(self, v1_type, default, schema):
         conf = {"name": "q", "type": v1_type, "default": default}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        node = flow.nodes["i"]
-        assert isinstance(node, ModuleNode)
+        flow = _build_input_workflow(conf)
+        node = require_module_node(flow, "i")
         assert flow.input_schemas == {"q": schema}
         assert node.conf["type"] == {"type": "text", "value": v1_type}
 
     def test_migrated_url_input_accepts_a_schemeless_host(self):
         conf = {"name": "u", "type": "url"}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
+        flow = _build_input_workflow(conf)
         pipeline = Pipeline(flow).with_context(Context(inputs={"u": "example.com"}))
         assert list(pipeline) == ["http://example.com"]
 
@@ -1355,16 +1254,9 @@ class TestSerialize:
         assert '\n  "version": "2"\n' in document
 
     def test_serialization_is_order_independent(self):
-        reordered = {
-            "nodes": [{"name": "filter"}, {"name": "fetch"}],
-            "edges": [build_edge("fetch-1", "filter-1")],
-            "outputs": {"default": {"node": "filter-1", "port": "out"}},
-        }
-        forward = {
-            "nodes": [{"name": "fetch"}, {"name": "filter"}],
-            "edges": [build_edge("fetch-1", "filter-1")],
-            "outputs": {"default": {"node": "filter-1", "port": "out"}},
-        }
+        output = {"default": {"node": "filter-1", "port": "out"}}
+        forward = TOPOLOGIES["module-chain"] | {"outputs": output}
+        reordered = forward | {"nodes": [{"name": "filter"}, {"name": "fetch"}]}
         first = Workflow.from_raw(reordered).serialize()
         second = Workflow.from_raw(forward).serialize()
         assert first == second

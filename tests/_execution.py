@@ -14,13 +14,17 @@ from riko.definitions._settings import DEF_EXECUTION_SETTINGS
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution._async_execution import AsyncExecution
-from riko.execution._prepared import ExecutionPlan
+from riko.execution._prepared import ExecutionPlan, PreparedNode
 from riko.execution._sync_execution import SyncExecution
+from riko.modules.loop import async_pipe as async_loop
+from riko.modules.loop import pipe as loop_pipe
 from riko.runtime._module_registry import ModuleRegistry, module_registry
 from riko.runtime._resolver import ResolverDispatcher, dispatcher
 from riko.runtime._workflow_resolver import workflow_resolver
+from riko.types._frozendict import freeze
 from riko.types._workflow import Endpoint
 from riko.types._wrappers import Func
+from tests import X_ROWS
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -33,32 +37,56 @@ if TYPE_CHECKING:
 
     from riko.definitions._settings import ExecutionSettings
     from riko.definitions._workflow_definition import Outputs
-    from riko.types._streams import Item
+    from riko.types._frozendict import FrozenDict
+    from riko.types._streams import AsyncItemGenerator, Item
+    from riko.types._workflow import NodeId
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
-
+    from riko.types.modules import Conf
 
 type AsyncPipeFunc = Func[AsyncIterator[object] | Awaitable[object]]
 
 EMPTY = Workflow(nodes=[], outputs={})
 OUTPUT_A = {"default": Endpoint("a", "out")}
+OUTPUTS_AB = freeze({"default": Endpoint("a", "out"), "other": Endpoint("b", "out")})
+SRC_NODE = ModuleNode(id="a", name="src")
+ASRC_NODE = ModuleNode(id="a", name="asrc")
+FETCH_NODE = ModuleNode(id="a", name="fetch")
+HASH_NODE = ModuleNode(id="a", name="hash")
+M_NODE = ModuleNode(id="b", name="m")
+PASS_NODE = ModuleNode(id="b", name="pass")
+SORT_NODE = ModuleNode(id="b", name="sort")
+PROBE_NODE = ModuleNode(id="b", name="probe")
+BSRC_NODE = ModuleNode(id="b", name="bsrc")
+SPLIT_NODE = ModuleNode(id="s", name="split")
+UNION_NODE = ModuleNode(id="u", name="union")
+MERGE_NODE = ModuleNode(id="m", name="merge")
+Q_CONF = cast("Conf", freeze({"attrs": {"key": "q", "value": {"input": "q"}}}))
+Q_NODE = ModuleNode(id="b", name="itembuilder", conf=Q_CONF)
+
+LOOP_DEFINITION = ModuleDefinition(
+    name="loop", sync_pipe=loop_pipe, async_pipe=async_loop
+)
 
 
-@contextmanager
-def registered_modules(
-    *definitions: ModuleDefinition, replace: bool = False
-) -> Generator[ModuleRegistry]:
-    """Registers *definitions* in an emptied module registry, restored on exit."""
-    with module_registry.restoring():
-        module_registry.reset()
+def _mark(func: Func[object]) -> None:
+    setattr(func, "loopable", True)  # noqa: B010
+    setattr(func, "type", "processor")  # noqa: B010
 
-        try:
-            for definition in definitions:
-                module_registry.register(definition, replace=replace)
 
-            yield module_registry
-        finally:
-            # drops any entry-point cache a test filled from patched entry points
-            module_registry.reset()
+def mark_loopable(func: Func[object]) -> SyncModuleWrapper:
+    """Mark sync *func* as a loopable processor so a plan may map it per item."""
+    _mark(func)
+    return cast("SyncModuleWrapper", func)
+
+
+def build_sync_definition(func: Func[object], *, name: str = "src") -> ModuleDefinition:
+    """Builds the definition of module ``name`` whose sync pipe is ``func``."""
+    return ModuleDefinition(name=name, sync_pipe=cast("SyncModuleWrapper", func))
+
+
+PROCESSOR_PROBE = build_sync_definition(
+    mark_loopable(lambda item, **_: iter([item])), name="probe"
+)
 
 
 def tag_source[F: Func[object]](fn: F) -> F:
@@ -78,6 +106,36 @@ def tag_source[F: Func[object]](fn: F) -> F:
         prepare=getattr(fn, "prepare", None),
     )
     return fn
+
+
+def tagged_source(tag):
+    """Builds a sync source module that yields one item tagged ``tag``."""
+
+    def src(_items=None, **_):
+        yield {"t": tag}
+
+    return cast("SyncModuleWrapper", tag_source(src))
+
+
+SRC_DEFINITION = build_sync_definition(tagged_source("a"))
+
+
+@contextmanager
+def registered_modules(
+    *definitions: ModuleDefinition, replace: bool = False
+) -> Generator[ModuleRegistry]:
+    """Registers *definitions* in an emptied module registry, restored on exit."""
+    with module_registry.restoring():
+        module_registry.reset()
+
+        try:
+            for definition in definitions:
+                module_registry.register(definition, replace=replace)
+
+            yield module_registry
+        finally:
+            # drops any entry-point cache a test filled from patched entry points
+            module_registry.reset()
 
 
 def build_dispatcher(*definitions: ModuleDefinition) -> ResolverDispatcher:
@@ -106,24 +164,39 @@ def module_workflow(name: str = "m") -> Workflow:
     return build_workflow([ModuleNode(id="n", name=name)])
 
 
-async def agen_source() -> AsyncGenerator[dict[str, int]]:
-    yield {"x": 1}
-    yield {"x": 2}
+def build_module_plan(resolver: ResolverDispatcher, name: str = "src") -> ExecutionPlan:
+    """Builds the plan of a one-node workflow running module ``name``."""
+    return ExecutionPlan.from_workflow(module_workflow(name), resolver)
 
 
-async def awaitable_source() -> list[dict[str, int]]:
-    return [{"x": 1}, {"x": 2}]
+def run_items(
+    execution: SyncExecution, plan: ExecutionPlan, *, seed: object = None
+) -> Generator[Item]:
+    """Runs ``plan`` and returns its open item stream."""
+    return cast("Generator[Item]", execution.run(plan, seed=seed))
 
 
-def _mark(func: Func[object]) -> None:
-    setattr(func, "loopable", True)  # noqa: B010
-    setattr(func, "type", "processor")  # noqa: B010
+async def arun_items(
+    execution: AsyncExecution, plan: ExecutionPlan, *, seed: object = None
+) -> AsyncItemGenerator:
+    """Runs ``plan`` asynchronously and returns its open item stream."""
+    return cast("AsyncItemGenerator", await execution.arun(plan, seed=seed))
 
 
-def mark_loopable(func: Func[object]) -> SyncModuleWrapper:
-    """Mark sync *func* as a loopable processor so a plan may map it per item."""
-    _mark(func)
-    return cast("SyncModuleWrapper", func)
+async def agen_source() -> AsyncGenerator[Item]:
+    for row in X_ROWS:
+        yield dict(row)
+
+
+async def awaitable_source() -> tuple[FrozenDict[str, int], ...]:
+    return X_ROWS
+
+
+def require_prepared_node(plan: ExecutionPlan, node_id: NodeId) -> PreparedNode:
+    """Requires the plan's node ``node_id`` to be a prepared module node."""
+    node = plan.nodes[node_id]
+    assert isinstance(node, PreparedNode)
+    return node
 
 
 def mark_async_loopable(func: AsyncPipeFunc) -> AsyncModuleWrapper:
@@ -134,6 +207,15 @@ def mark_async_loopable(func: AsyncPipeFunc) -> AsyncModuleWrapper:
 
 def _echo(item, **_):
     return iter([item])
+
+
+def build_echo() -> Func[object]:
+    """Builds a fresh, unpicklable copy of ``_echo`` local to its caller."""
+
+    def echo(item, **_):
+        return _echo(item)
+
+    return echo
 
 
 echo_pipe = mark_loopable(_echo)
@@ -158,12 +240,9 @@ async def adouble(source, **_):
 
 def build_doubler_plan(name: str) -> ExecutionPlan:
     """Builds a one-node plan whose ``double``/``adouble`` module doubles ``x``."""
-    sync_pipe = cast("SyncModuleWrapper", double)
-    async_pipe = cast("AsyncModuleWrapper", adouble)
-    definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
-    adefinition = ModuleDefinition(name="adouble", async_pipe=async_pipe)
-    dispatcher = build_dispatcher(definition, adefinition)
-    return ExecutionPlan.from_workflow(module_workflow(name), dispatcher)
+    definition = build_sync_definition(double, name="double")
+    adefinition = build_async_definition(adouble, name="adouble")
+    return build_module_plan(build_dispatcher(definition, adefinition), name)
 
 
 class RecordingSink:
@@ -271,11 +350,6 @@ async def _arelay(items, **_):
 arelay_pipe = cast("AsyncModuleWrapper", _arelay)
 
 
-PROCESSOR_PROBE = ModuleDefinition(
-    name="probe", sync_pipe=mark_loopable(lambda item, **_: iter([item]))
-)
-
-
 class RecordingBranch:
     """A split branch that records when it is first read and each time it closes."""
 
@@ -337,10 +411,15 @@ class AsyncCloseAsyncIterator:
         self.closed.append("closed")
 
 
-def tagged_source(tag):
-    """Builds a sync source module that yields one item tagged ``tag``."""
+def build_async_definition(
+    func: Func[object], *, name: str = "src"
+) -> ModuleDefinition:
+    """Builds the definition of module ``name`` whose async pipe is ``func``."""
+    return ModuleDefinition(name=name, async_pipe=cast("AsyncModuleWrapper", func))
 
-    def src(_items=None, **_):
-        yield {"t": tag}
 
-    return cast("SyncModuleWrapper", tag_source(src))
+SRC_ECHO_DEFINITION = build_sync_definition(passthrough_pipe)
+PASS_DEFINITION = build_sync_definition(passthrough_pipe, name="pass")
+RELAY_DEFINITION = build_sync_definition(relay_pipe, name="relay")
+M_ARELAY_DEFINITION = build_async_definition(arelay_pipe, name="m")
+ECHO_DEFINITION = build_sync_definition(echo_pipe, name="echo")

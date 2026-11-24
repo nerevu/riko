@@ -7,7 +7,6 @@ from pprint import pprint
 from typing import TYPE_CHECKING
 
 from riko import Pipeline
-from riko.base._paths import get_path
 from riko.coercion._dataclass import build_regex_conf_rule
 from riko.definitions._context import Context
 from riko.ext import workflow
@@ -16,7 +15,6 @@ from riko.types.modules import (
     CurrencyFormatRawConf,
     ExchangeRateConf,
     FetchConf,
-    FetchDataConf,
     RegexConf,
     RegexConfRule,
     RenameConf,
@@ -28,6 +26,7 @@ from riko.types.modules import (
     SubstrConf,
     TokenizerConf,
 )
+from tests.pyworkflows._pipe_kazeeki import fetchdata_conf, rename_conf
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -36,7 +35,7 @@ DEF_CUR_CODE = "USD"
 INPUT_SCHEMAS: dict = {}
 
 
-def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
+def build_simplemath(other: str, op: str) -> SimpleMathRawConf:
     return SimpleMathRawConf(
         {
             "other": {"subkey": other, "type": "float"},
@@ -45,34 +44,17 @@ def make_simplemath(other: str, op: str) -> SimpleMathRawConf:
     )
 
 
-def make_substring(start: str | int, length: str | int) -> SubstrConf:
+def build_substring(start: str | int, length: str | int) -> SubstrConf:
     return SubstrConf({"start": int(start), "length": int(length)})
 
 
-def make_exchangerate(quote: str = DEF_CUR_CODE) -> ExchangeRateConf:
+def build_exchangerate(quote: str = DEF_CUR_CODE) -> ExchangeRateConf:
     return ExchangeRateConf({"currency": quote})
 
 
-def make_tokenizer(delimiter: str, dedupe=False, sort=False) -> TokenizerConf:
+def build_tokenizer(delimiter: str, dedupe=False, sort=False) -> TokenizerConf:
     return TokenizerConf({"delimiter": delimiter, "dedupe": dedupe, "sort": sort})
 
-
-rename1_rule = [
-    RenameConfRule(newval="", field="y:title", copy=False),
-    RenameConfRule(newval="", field="content", copy=False),
-    RenameConfRule(newval="k:posted", field="y:published", copy=False),
-    RenameConfRule(newval="k:job_type", field="summary", copy=True),
-    RenameConfRule(newval="k:content", field="summary", copy=True),
-    RenameConfRule(newval="k:work_location", field="summary", copy=True),
-    RenameConfRule(newval="k:client_location", field="summary", copy=True),
-    # RenameConfRule(newval="k:category", field="summary", copy=True),
-    RenameConfRule(newval="k:tags", field="summary", copy=True),
-    RenameConfRule(newval="k:due", field="summary", copy=True),
-    RenameConfRule(newval="k:submissions", field="summary", copy=True),
-    RenameConfRule(newval="k:budget_raw", field="summary", copy=True),
-    RenameConfRule(newval="k:marketplace", field="link", copy=True),
-    RenameConfRule(newval="k:author", field="title", copy=True),
-]
 
 rename2_rule = [
     RenameConfRule(newval="k:budget_raw1", field="k:budget_raw", copy=True),
@@ -238,16 +220,16 @@ strconcat3_conf = StrconcatConf(
 strconcat4_conf = StrconcatConf(
     {"part": [{"subkey": "k:budget_full", "type": "text"}, " / hr"]}
 )
-tokenizer_conf = make_tokenizer(",", True, True)
-substring1_conf = make_substring("0", "3")
-substring2_conf = make_substring("1", "1")
+tokenizer_conf = build_tokenizer(",", True, True)
+substring1_conf = build_substring("0", "3")
+substring2_conf = build_substring("1", "1")
 currencyformat1_conf = CurrencyFormatRawConf(
     {"currency": {"subkey": "k:cur_code", "type": "text"}}
 )
-exchangerate_conf = make_exchangerate(DEF_CUR_CODE)
+exchangerate_conf = build_exchangerate(DEF_CUR_CODE)
 currencyformat2_conf = CurrencyFormatConf({"currency": DEF_CUR_CODE})
-simplemath1_conf = make_simplemath("k:budget_raw2_num", "mean")
-simplemath2_conf = make_simplemath("k:rate", "multiply")
+simplemath1_conf = build_simplemath("k:budget_raw2_num", "mean")
+simplemath2_conf = build_simplemath("k:rate", "multiply")
 
 my_item = {
     "content": (
@@ -289,13 +271,12 @@ my_item = {
 itembuilder_attrs = [{"key": k, "value": v} for k, v in my_item.items()]
 itembuilder_conf = {"attrs": itembuilder_attrs}
 fetch_conf = FetchConf({"url": "http://feeds.feedburner.com/guru/all"})
-fetchdata_conf = FetchDataConf({"url": get_path("kazeeki2.json"), "path": "items"})
 
 
 def parse_source(source: Pipeline) -> Pipeline:
     """Appends the kazeeki enrichment chain onto an already seeded pipeline."""
     return (
-        source.rename(conf=RenameConf({"rule": rename1_rule}))
+        source.rename(conf=rename_conf)
         .regex(conf=RegexConf({"rule": regex1_rule}))
         .rename(conf=RenameConf({"rule": rename2_rule}))
         .regex(conf=RegexConf({"rule": regex2_rule}))

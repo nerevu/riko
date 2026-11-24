@@ -15,7 +15,6 @@ from riko.bado._backend import CancelScope, async_sleep, fail_after
 from riko.bado._util import maybe_async, syncify
 from riko.bado.itertools import aauto_close, as_async
 from riko.base._exceptions import InvalidPipelineError
-from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
@@ -27,29 +26,43 @@ from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import splitter
 from riko.modules.split import async_pipe as async_split
 from riko.types._workflow import Endpoint
-from tests import async_test, skipif_sync
+from tests import X_ROWS, async_test, skipif_sync
 from tests._execution import (
+    ASRC_NODE,
+    BSRC_NODE,
+    M_ARELAY_DEFINITION,
+    M_NODE,
+    PASS_DEFINITION,
+    PASS_NODE,
+    PROBE_NODE,
     PROCESSOR_PROBE,
+    RELAY_DEFINITION,
+    SPLIT_NODE,
+    SRC_ECHO_DEFINITION,
+    SRC_NODE,
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     RecordingBranch,
     agen_source,
     arelay_pipe,
+    arun_items,
+    build_async_definition,
     build_dispatcher,
     build_doubler_plan,
+    build_module_plan,
+    build_sync_definition,
     build_workflow,
     gen_closing_seed,
     mark_async_loopable,
     mark_loopable,
-    module_workflow,
-    passthrough_pipe,
-    relay_pipe,
+    run_items,
     tag_source,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Generator
+    from collections.abc import Awaitable, Callable
 
+    from riko.definitions._module_definition import ModuleDefinition
     from riko.types._streams import (
         AsyncItemGenerator,
         AsyncStream,
@@ -57,15 +70,14 @@ if TYPE_CHECKING:
         Item,
         Stream,
     )
-    from riko.types._wrappers import AsyncModuleWrapper, Func, SyncModuleWrapper
+    from riko.types._wrappers import Func, SyncModuleWrapper
 
 
 def _unbound_relay_workflow() -> Workflow:
     """Chains a source into a relay that binds a resource no context provides."""
-    a = ModuleNode(id="a", name="src")
     b = ModuleNode(id="b", name="relay", resources={"slot": "primary"})
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("b", "in"))
-    return build_workflow([a, b], edges=(edge,), resources=("primary",))
+    return build_workflow([SRC_NODE, b], edges=(edge,), resources=("primary",))
 
 
 async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
@@ -148,13 +160,11 @@ def _bare_split_plan(
         loopable=False,
         is_async=False,
     )
-    src = cast("SyncModuleWrapper", tag_source(lambda _items=None, **_: iter([])))
-    pipe = cast("SyncModuleWrapper", split)
-    split_def = ModuleDefinition(name="split", sync_pipe=pipe)
+    src = tag_source(lambda _items=None, **_: iter([]))
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=src), split_def
+        build_sync_definition(src), build_sync_definition(split, name="split")
     )
-    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    nodes = [SRC_NODE, SPLIT_NODE]
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
     flow = build_workflow(nodes, edges=(edge,))
     return ExecutionPlan.from_workflow(flow, dispatcher)
@@ -349,18 +359,14 @@ def _seeded(make, closed: list[str]):
 
 def _returned(make, closed: list[str]):
     returned = tag_source(lambda _=None, **__: make(closed))
-    src = cast("SyncModuleWrapper", returned)
-    dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
-    return ExecutionPlan.from_workflow(module_workflow("src"), dispatcher), None
+    dispatcher = build_dispatcher(build_sync_definition(returned))
+    return build_module_plan(dispatcher), None
 
 
 def _streamed(make, closed: list[str]):
-    src = cast("SyncModuleWrapper", tag_source(lambda _=None, **__: make(closed)))
-    dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=src),
-        ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
-    )
-    nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass"))
+    src = tag_source(lambda _=None, **__: make(closed))
+    dispatcher = build_dispatcher(build_sync_definition(src), PASS_DEFINITION)
+    nodes = (SRC_NODE, PASS_NODE)
     return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher), None
 
 
@@ -417,19 +423,17 @@ def _endless_input(closed: list[str]):
             yield item
 
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
-        ModuleDefinition(name="take", sync_pipe=cast("SyncModuleWrapper", take_two)),
+        build_async_definition(src), build_sync_definition(take_two, name="take")
     )
-    nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="take"))
+    nodes = (SRC_NODE, ModuleNode(id="b", name="take"))
     plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
     return plan, [{"x": 1}, {"x": 1}]
 
 
 def _closing_return(closed: list[str]):
     returned = tag_source(lambda _=None, **__: ClosingIterator(closed))
-    src = cast("SyncModuleWrapper", returned)
-    dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
-    plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+    dispatcher = build_dispatcher(build_sync_definition(returned))
+    plan = build_module_plan(dispatcher)
     return plan, [{"x": 1}, {"x": 2}]
 
 
@@ -500,10 +504,9 @@ def _async_cascade_plan(closed: list[str], _: pytest.MonkeyPatch) -> ExecutionPl
         return _ClosingAsyncCascade(closed)
 
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
-        ModuleDefinition(name="split", async_pipe=asplit),
+        SRC_ECHO_DEFINITION, build_async_definition(asplit, name="split")
     )
-    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    nodes = [SRC_NODE, SPLIT_NODE]
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
     flow = build_workflow(
         nodes, edges=(edge,), outputs={"default": Endpoint("s", "out")}
@@ -562,11 +565,8 @@ def _async_relay_input_plan(
 ) -> ExecutionPlan:
     """Plans a sync source read by an async-only relay, recording its input's close."""
     _record_async_inputs(closed, monkeypatch)
-    dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
-        ModuleDefinition(name="m", async_pipe=arelay_pipe),
-    )
-    nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="m"))
+    dispatcher = build_dispatcher(SRC_ECHO_DEFINITION, M_ARELAY_DEFINITION)
+    nodes = (SRC_NODE, M_NODE)
     return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
 
@@ -576,10 +576,9 @@ def _async_split_input_plan(
     """Plans a sync source into a lazy async-only split, recording its input's close."""
     _record_async_inputs(closed, monkeypatch)
     dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
-        ModuleDefinition(name="split", async_pipe=async_split),
+        SRC_ECHO_DEFINITION, build_async_definition(async_split, name="split")
     )
-    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    nodes = [SRC_NODE, SPLIT_NODE]
     edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
     outputs = {"default": Endpoint("s", "out")}
     flow = build_workflow(nodes, edges=(edge,), outputs=outputs)
@@ -609,12 +608,10 @@ def _gen_rows(rows, **_):
     yield from rows
 
 
-_GEN_PROBE = ModuleDefinition(
-    name="probe", sync_pipe=cast("SyncModuleWrapper", _gen_rows)
-)
+_GEN_PROBE = build_sync_definition(_gen_rows, name="probe")
 
 
-_ASYNC_PROBE = ModuleDefinition(name="probe", async_pipe=arelay_pipe)
+_ASYNC_PROBE = build_async_definition(arelay_pipe, name="probe")
 
 
 # A node that reads a source over its whole input, once per item, or async-only.
@@ -642,13 +639,10 @@ class TestPlanClose:
     @pytest.mark.parametrize("build", COUNTING_SOURCES)
     def test_run_closes_a_sync_source_once_on_early_exit(self, build, tag) -> None:
         closed: list[bool] = []
-        src = cast("SyncModuleWrapper", tag(lambda _items=None, **_: build(closed)))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=src),
-            ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
-        )
-        a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
-        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
+        src = tag(lambda _items=None, **_: build(closed))
+        dispatcher = build_dispatcher(build_sync_definition(src), PASS_DEFINITION)
+        flow = Workflow().with_nodes(SRC_NODE, PASS_NODE)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with SyncExecution() as execution:
             stream = execution.run(plan)
@@ -666,10 +660,8 @@ class TestPlanClose:
         def src(_items=None, **_):
             return ClosingAsyncIterator(closed)
 
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src))
-        )
-        plan = ExecutionPlan.from_workflow(module_workflow("asrc"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(src, name="asrc"))
+        plan = build_module_plan(dispatcher, "asrc")
 
         with SyncExecution() as execution:
             stream = execution.run(plan)
@@ -689,10 +681,9 @@ class TestPlanClose:
             return ClosingAsyncIterator(closed)
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(name="m", async_pipe=arelay_pipe),
+            build_async_definition(src, name="asrc"), M_ARELAY_DEFINITION
         )
-        nodes = (ModuleNode(id="a", name="asrc"), ModuleNode(id="b", name="m"))
+        nodes = (ASRC_NODE, M_NODE)
         plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
         with SyncExecution() as execution:
@@ -704,8 +695,8 @@ class TestPlanClose:
         closed: list[str] = []
         make = partial(AwaitableCloseIterator, closed)
         src = _tag_loopable_source(lambda _items=None, **_: make())
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=src))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_sync_definition(src))
+        plan = build_module_plan(dispatcher)
 
         with (
             SyncExecution() as execution,
@@ -720,11 +711,11 @@ class TestPlanClose:
         closed: list[str] = []
         src = mark_async_loopable(lambda _items=None, **_: _agen_endless(closed))
         pipe = tag_source(src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(pipe))
+        plan = build_module_plan(dispatcher)
 
         with SyncExecution() as execution:
-            stream = cast("Generator[Item]", execution.run(plan))
+            stream = run_items(execution, plan)
             assert next(stream) == {"t": "a"}
             stream.close()
             assert closed == ["closed"]
@@ -733,12 +724,11 @@ class TestPlanClose:
     def test_run_closes_an_unfinished_async_only_stream_on_the_portal(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: _agen_endless(closed))
-        pipe = cast("AsyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(src))
+        plan = build_module_plan(dispatcher)
 
         with SyncExecution() as execution:
-            stream = cast("Generator[Item]", execution.run(plan))
+            stream = run_items(execution, plan)
             assert next(stream) == {"t": "a"}
             stream.close()
             assert closed == ["closed"]
@@ -747,9 +737,8 @@ class TestPlanClose:
     def test_run_closes_an_async_only_value_whose_first_read_fails(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: _FailingAsyncIterator(closed))
-        pipe = cast("AsyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(src))
+        plan = build_module_plan(dispatcher)
 
         with SyncExecution() as execution:
             with pytest.raises(RuntimeError, match="read failed"):
@@ -763,9 +752,8 @@ class TestPlanClose:
     ) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: _agen_endless(closed))
-        pipe = cast("AsyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(src))
+        plan = build_module_plan(dispatcher)
 
         with SyncExecution() as execution:
             assert next(execution.build_envelope_stream(plan)).value == {"t": "a"}
@@ -777,8 +765,8 @@ class TestPlanClose:
         # Not an async generator, so only an explicit aclose can end it.
         closed: list[str] = []
         pipe = mark_async_loopable(lambda _item, **_: ClosingAsyncIterator(closed))
-        dispatcher = build_dispatcher(ModuleDefinition(name="m", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("m"), dispatcher)
+        dispatcher = build_dispatcher(build_async_definition(pipe, name="m"))
+        plan = build_module_plan(dispatcher, "m")
 
         with SyncExecution() as execution:
             assert list(execution.run(plan, seed={"x": 0})) == [{"x": 1}, {"x": 2}]
@@ -787,10 +775,7 @@ class TestPlanClose:
     def test_run_closes_built_streams_when_a_later_node_fails(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: ClosingIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
         with (
@@ -804,10 +789,7 @@ class TestPlanClose:
     def test_run_reports_a_failed_close_beside_the_build_error(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: FailingCloseIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
         with pytest.raises(ExceptionGroup) as info, SyncExecution() as execution:
@@ -821,13 +803,9 @@ class TestPlanClose:
     def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
         closed: list[bool] = []
         src = tag_source(lambda _items=None, **_: _gen_counting(closed))
-        src = cast("SyncModuleWrapper", src)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=src),
-            ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
-        )
-        a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
-        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
+        dispatcher = build_dispatcher(build_sync_definition(src), PASS_DEFINITION)
+        flow = Workflow().with_nodes(SRC_NODE, PASS_NODE)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with SyncExecution() as execution:
             stream = execution.run(plan)
@@ -842,10 +820,9 @@ class TestPlanClose:
     ) -> None:
         closed: list[str] = []
         plan = build(closed, monkeypatch)
-        seed = [{"x": 1}, {"x": 2}]
 
         with SyncExecution() as execution:
-            stream = execution.run(plan, seed=seed)
+            stream = execution.run(plan, seed=X_ROWS)
             assert next(stream) == {"x": 1}
             stream.close()  # pyright: ignore[reportAttributeAccessIssue]
             assert closed == ["closed"]
@@ -876,13 +853,8 @@ class TestPlanClose:
         def src(_items=None, **_):
             return RecordingBranch([{"x": 0}], events, "src")
 
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            probe,
-        )
-        flow = Workflow().with_nodes(
-            ModuleNode(id="a", name="src"), ModuleNode(id="b", name="probe")
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src), probe)
+        flow = Workflow().with_nodes(SRC_NODE, PROBE_NODE)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with SyncExecution() as execution:
@@ -933,7 +905,7 @@ class TestAsyncPlanClose:
         plan, seed = build(make, closed)
 
         async with AsyncExecution() as execution:
-            stream = cast("AsyncItemGenerator", await execution.arun(plan, seed=seed))
+            stream = await arun_items(execution, plan, seed=seed)
             assert await anext(stream)
             await stream.aclose()
 
@@ -947,7 +919,7 @@ class TestAsyncPlanClose:
         plan, seed = build(FailingAcloseIterator, closed)
 
         async with AsyncExecution() as execution:
-            stream = cast("AsyncItemGenerator", await execution.arun(plan, seed=seed))
+            stream = await arun_items(execution, plan, seed=seed)
             assert await anext(stream)
 
             with pytest.raises(RuntimeError, match="close failed"):
@@ -965,9 +937,8 @@ class TestAsyncPlanClose:
             syncify(maybe_async, scope.cancel)
             return ClosingIterator(closed)
 
-        pipe = cast("SyncModuleWrapper", tag_source(src))
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
+        dispatcher = build_dispatcher(build_sync_definition(tag_source(src)))
+        plan = build_module_plan(dispatcher)
 
         async with AsyncExecution() as execution:
             with scope:
@@ -981,10 +952,7 @@ class TestAsyncPlanClose:
     async def test_arun_bounds_a_failed_run_close_by_the_shutdown_timeout(self):
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: _SlowAcloseIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
         settings = ExecutionSettings(shutdown_timeout=0.05)
 
@@ -1016,7 +984,7 @@ class TestAsyncPlanClose:
         plan, seed = build(ClosingIterator, closed)
 
         async with AsyncExecution() as execution:
-            stream = cast("AsyncItemGenerator", await execution.arun(plan, seed=seed))
+            stream = await arun_items(execution, plan, seed=seed)
             await stream.aclose()
             assert closed == ["closed"]
 
@@ -1058,16 +1026,13 @@ class TestAsyncPlanClose:
     async def test_arun_sync_only_source_closes_on_early_exit(self, build, tag):
         closed = []
         src = tag(lambda _items=None, **_: build(closed))
-        sync_pipe = cast("SyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("src"), dispatcher=dispatcher
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src))
+        plan = build_module_plan(dispatcher)
         seen = []
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                stream = await arun_items(execution, plan)
 
                 async for item in stream:
                     seen.append(item)
@@ -1084,10 +1049,7 @@ class TestAsyncPlanClose:
     async def test_arun_closes_built_streams_when_a_later_node_fails(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        dispatcher = build_dispatcher(build_async_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
         with pytest.raises(InvalidPipelineError, match="not provided"):
@@ -1100,10 +1062,7 @@ class TestAsyncPlanClose:
     async def test_arun_reports_a_failed_close_beside_the_build_error(self) -> None:
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: FailingAsyncCloseIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
+        dispatcher = build_dispatcher(build_async_definition(src), RELAY_DEFINITION)
         plan = ExecutionPlan.from_workflow(_unbound_relay_workflow(), dispatcher)
 
         with pytest.raises(ExceptionGroup) as info:
@@ -1122,17 +1081,14 @@ class TestAsyncPlanClose:
         self, build, tag
     ) -> None:
         closed: list[bool] = []
-        src = cast("SyncModuleWrapper", tag(lambda _items=None, **_: build(closed)))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=src),
-            ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
-        )
-        a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
-        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
+        src = tag(lambda _items=None, **_: build(closed))
+        dispatcher = build_dispatcher(build_sync_definition(src), PASS_DEFINITION)
+        flow = Workflow().with_nodes(SRC_NODE, PASS_NODE)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                stream = await arun_items(execution, plan)
                 assert await anext(stream) == {"x": 0}
                 assert closed == []
 
@@ -1142,16 +1098,13 @@ class TestAsyncPlanClose:
     async def test_arun_closes_a_sync_worker_nodes_async_input_once(self):
         closed: list[str] = []
         src = tag_source(lambda _items=None, **_: ClosingAsyncIterator(closed))
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(name="relay", sync_pipe=relay_pipe),
-        )
-        nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="relay"))
+        dispatcher = build_dispatcher(build_async_definition(src), RELAY_DEFINITION)
+        nodes = (SRC_NODE, ModuleNode(id="b", name="relay"))
         plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                stream = await arun_items(execution, plan)
                 assert await anext(stream) == {"x": 1}
                 await stream.aclose()
 
@@ -1191,24 +1144,18 @@ class TestAsyncPlanClose:
                 sources.append(gen())
                 return sources[-1]
 
-            return cast("AsyncModuleWrapper", src)
+            return src
 
         def interleave(items, others=None, **_):
             for row in zip(items, *(others or ()), strict=False):
                 yield from row
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="asrc", async_pipe=tagged("a")),
-            ModuleDefinition(name="bsrc", async_pipe=tagged("b")),
-            ModuleDefinition(
-                name="interleave", sync_pipe=cast("SyncModuleWrapper", interleave)
-            ),
+            build_async_definition(tagged("a"), name="asrc"),
+            build_async_definition(tagged("b"), name="bsrc"),
+            build_sync_definition(interleave, name="interleave"),
         )
-        nodes = [
-            ModuleNode(id="a", name="asrc"),
-            ModuleNode(id="b", name="bsrc"),
-            ModuleNode(id="m", name="interleave"),
-        ]
+        nodes = [ASRC_NODE, BSRC_NODE, ModuleNode(id="m", name="interleave")]
         edges = (
             StreamEdge(Endpoint("a", "out"), Endpoint("m", "in")),
             StreamEdge(Endpoint("b", "out"), Endpoint("m", "in:1")),
@@ -1219,7 +1166,7 @@ class TestAsyncPlanClose:
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                stream = await arun_items(execution, plan)
                 await anext(stream)
                 await stream.aclose()
                 upstream_closed = sorted(closed)
@@ -1240,12 +1187,10 @@ class TestAsyncPlanClose:
             return sources[-1]
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(
-                name="apass", async_pipe=cast("AsyncModuleWrapper", downstream)
-            ),
+            build_async_definition(src, name="asrc"),
+            build_async_definition(downstream, name="apass"),
         )
-        nodes = [ModuleNode(id="a", name="asrc"), ModuleNode(id="p", name="apass")]
+        nodes = [ASRC_NODE, ModuleNode(id="p", name="apass")]
         edges = (StreamEdge(Endpoint("a", "out"), Endpoint("p", "in")),)
         flow = build_workflow(nodes, edges=edges)
         plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
@@ -1253,7 +1198,7 @@ class TestAsyncPlanClose:
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                stream = await arun_items(execution, plan)
                 await anext(stream)
                 await stream.aclose()
                 upstream_closed = list(closed)
@@ -1271,12 +1216,10 @@ class TestAsyncPlanClose:
             yield await anext(it)
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
-            ModuleDefinition(
-                name="take", async_pipe=cast("AsyncModuleWrapper", take_one)
-            ),
+            build_async_definition(src, name="asrc"),
+            build_async_definition(take_one, name="take"),
         )
-        nodes = [ModuleNode(id="a", name="asrc"), ModuleNode(id="t", name="take")]
+        nodes = [ASRC_NODE, ModuleNode(id="t", name="take")]
         edges = (StreamEdge(Endpoint("a", "out"), Endpoint("t", "in")),)
         plan = ExecutionPlan.from_workflow(
             build_workflow(nodes, edges=edges), dispatcher
@@ -1302,11 +1245,8 @@ class TestAsyncPlanClose:
                 pulled.append(index)
                 yield {"x": index}
 
-        sync_pipe = cast("SyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", sync_pipe=sync_pipe))
-        plan = ExecutionPlan.from_workflow(
-            module_workflow("src"), dispatcher=dispatcher
-        )
+        dispatcher = build_dispatcher(build_sync_definition(src))
+        plan = build_module_plan(dispatcher)
 
         with fail_after(1):
             async with AsyncExecution() as execution:

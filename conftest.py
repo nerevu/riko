@@ -8,7 +8,7 @@ import importlib.util
 import os
 import re
 from asyncio.base_events import BaseEventLoop
-from logging import getLogger
+from logging import WARNING, getLogger
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -20,6 +20,7 @@ from riko.bado._backend import is_sync
 from riko.base._config import ASYNC_DOCTEST_MARKERS
 from riko.base._logging import LOGGER_NAME
 from riko.base._paths import PACKAGE_DIR, ROOT_DIR, TESTS_DIR
+from riko.parsing import documents
 from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._registrations import temporary_registrations
@@ -27,6 +28,7 @@ from riko.runtime._workflow_resolver import register_workflow_store
 from tests import run_python
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from types import AsyncGeneratorType
 
 _EXAMPLE_DIRS = (PACKAGE_DIR / "modules", PACKAGE_DIR / "rss")
@@ -146,6 +148,21 @@ def riko_level():
     level = getLogger(LOGGER_NAME).level
     yield
     getLogger(LOGGER_NAME).setLevel(level)
+
+
+@pytest.fixture
+def riko_warnings(
+    caplog: pytest.LogCaptureFixture,
+) -> Generator[pytest.LogCaptureFixture]:
+    """Captures the riko logger's warnings for the whole test."""
+    with caplog.at_level(WARNING, logger=LOGGER_NAME):
+        yield caplog
+
+
+@pytest.fixture
+def streamed_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Streams every streamable JSON source, whatever its size, for the whole test."""
+    monkeypatch.setattr(documents, "STREAMING_THRESHOLD", 0)
 
 
 def _skip_coroutine_runs(item: pytest.DoctestItem) -> None:

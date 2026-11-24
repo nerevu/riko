@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import pickle  # noqa: S403
 from collections.abc import (
     AsyncGenerator,
     AsyncIterable,
@@ -100,7 +99,7 @@ from riko.types.modules import (
     SendConf,
     StrconcatRawConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_sync
+from tests import ROUND_TRIPS, async_test, pickle_round_trip, skipif_sync
 from tests._lifecycle import (
     LOOKAHEAD,
     PARENTS,
@@ -110,7 +109,7 @@ from tests._lifecycle import (
     gen_lazy_child,
 )
 from tests._resources import Connection
-from tests._streams import Closable
+from tests._streams import AsyncPullLog, Closable, PullLog, gen_items
 
 if TYPE_CHECKING:
     from riko.coercion._dynamic_conf import DynamicConf
@@ -148,6 +147,8 @@ async def _async_subpipe(item: Item, context: Context | None = None, **_) -> Str
 
 _ASYNC_SUBPIPE = workflow()(_async_subpipe)
 _SOURCE_LEN = 5
+_SOURCE_ROWS = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
+_LONG_ROWS = [{"i": i} for i in range(10_000)]
 _PLACES = Decimal("0.0001")
 BARE_ROWS = [{"content": "hi"}]
 DECORATORS = [processor, operator, splitter]
@@ -248,11 +249,11 @@ class TestBareDecorator:
 
 
 def _fixed_processor(item: Item, extraction: object, objconf: object) -> str:
-    return str(item.get("content", "")).upper()
+    return shout(item)
 
 
 def _fixed_operator(stream: Stream, extraction: object, tuples: object) -> int:
-    return sum(1 for _ in stream)
+    return _count(stream)
 
 
 def _fixed_splitter(stream: Stream, extraction: object, tuples: object) -> Cascade:
@@ -286,7 +287,7 @@ class TestParserSignature:
 
     def test_processor_parser_with_kwargs_is_accepted(self) -> None:
         def parser(item: Item, extraction: object, objconf: object, **_: object) -> str:
-            return str(item.get("content", "")).upper()
+            return shout(item)
 
         pipe = processor()(parser)
         assert next(pipe({"content": "hi"}, assign="content")) == {"content": "HI"}
@@ -374,16 +375,10 @@ class TestSplitter:
 
     @async_test
     async def test_async_splitter_streams_a_long_feed(self) -> None:
-        pulled: list[int] = []
-
-        async def source() -> AsyncStream:
-            for i in range(10_000):
-                pulled.append(i)
-                yield {"i": i}
-
-        first, second = [branch async for branch in async_split(source())]
+        source = AsyncPullLog(_LONG_ROWS)
+        first, second = [branch async for branch in async_split(source)]
         assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
-        assert pulled == [0]
+        assert source.pulled == ({"i": 0},)
         assert isinstance(first, AsyncTeeBranch)
         assert isinstance(second, AsyncTeeBranch)
         await first.aclose()
@@ -416,20 +411,15 @@ class TestSplitter:
     )
     @async_test
     async def test_async_splitter_with_a_sync_parser_streams_a_long_feed(self) -> None:
-        pulled: list[int] = []
-
-        async def source() -> AsyncStream:
-            for i in range(10_000):
-                pulled.append(i)
-                yield {"i": i}
+        source = AsyncPullLog(_LONG_ROWS)
 
         def tee_twice(stream: Stream, *args, **kwargs) -> Cascade:
             return iter(itertools.tee(stream, 2))
 
         pipe = splitter(is_async=True)(tee_twice)
-        first, second = [branch async for branch in pipe(source())]
+        first, second = [branch async for branch in pipe(source)]
         assert (await anext(second), await anext(first)) == ({"i": 0}, {"i": 0})
-        assert len(pulled) < 10
+        assert len(source.pulled) < 10
 
     @pytest.mark.xfail(
         strict=True,
@@ -486,16 +476,10 @@ class TestAsyncOperatorLaziness:
         The source is long but finite so the test ends on its own: an endless source
         would rely on a timeout interrupting the materialization.
         """
-        pulled: list[int] = []
-
-        def source() -> Stream:
-            for i in range(10_000):
-                pulled.append(i)
-                yield {"i": i}
-
-        stream = async_truncate(as_async(source()), conf={"count": 3})
+        source = PullLog(_LONG_ROWS)
+        stream = async_truncate(as_async(source), conf={"count": 3})
         assert await anext(stream) == {"i": 0}
-        assert len(pulled) <= 3
+        assert len(source.pulled) <= 3
 
     @pytest.mark.xfail(
         strict=True,
@@ -1147,15 +1131,9 @@ class TestAsyncLoop:
 
     @pytest.mark.anyio
     async def test_async_loop_is_lazy_and_ordered(self):
-        consumed: list[str] = []
-
-        def tracking() -> Stream:
-            for parent in PARENTS:
-                consumed.append(str(parent["title"]))
-                yield parent
-
+        source = PullLog(PARENTS)
         stream = async_loop(
-            tracking(),
+            source,
             embed=async_tok,
             conf=TOKENIZER_CONF,
             field="title",
@@ -1167,7 +1145,7 @@ class TestAsyncLoop:
             first = await anext(stream)
 
         assert first == {"content": "a"}
-        assert list(consumed) == ["a b"]
+        assert source.pulled == tuple(PARENTS[:1])
 
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_SUBPIPE_FOLD_CASES)
     @pytest.mark.anyio
@@ -1404,7 +1382,7 @@ class TestPrepare:
     @pytest.mark.parametrize("conf", PICKLED_CONFS)
     def test_a_pickled_prepared_module_rebuilds_its_callables(self, conf):
         prepared = processor(ftype="text").prepare("m", conf=cast("Conf", conf))
-        restored = pickle.loads(pickle.dumps(prepared))  # noqa: S301
+        restored = pickle_round_trip(prepared)
         item = {"n": "3", "content": 4}
 
         assert restored == prepared
@@ -1742,25 +1720,14 @@ class TestExchangeRate:
             exchangerate_module.require_rates(document)
 
 
-def _finite_source(consumed: list[int]) -> Stream:
-    for i in range(_SOURCE_LEN):
-        consumed.append(i)
-        yield {"x": "foo", "i": i}
-
-
-async def _afinite_source(consumed: list[int]) -> AsyncStream:
-    for i in range(_SOURCE_LEN):
-        consumed.append(i)
-        yield {"x": "foo", "i": i}
-
-
 async def _drain_receiver(receive_stream: Any, into: list[Item] | None = None) -> None:
     async for item in receive_stream:
         if into is not None:
             into.append(item)
 
 
-async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+async def _send_first() -> tuple[ItemOrValue, int]:
+    source = PullLog(map(dict, _SOURCE_ROWS))
     first: ItemOrValue = {}
     seen = 0
 
@@ -1770,11 +1737,11 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
             create_task_group() as tg,
         ):
             tg.start_soon(_drain_receiver, receive_stream)
-            stream = async_send(_finite_source(consumed), others=["r4-lazy"])
+            stream = async_send(source, others=["r4-lazy"])
 
             async with maybe_aclosing(stream):
                 first = await anext(stream)
-                seen = len(consumed)
+                seen = len(source.pulled)
 
     return (first, seen)
 
@@ -1789,14 +1756,14 @@ async def _send_missing_target(received: list[Item]) -> None:
 
             with pytest.raises(ReceiverUnavailableError):
                 async for _ in async_send(
-                    _finite_source([]),
+                    map(dict, _SOURCE_ROWS),
                     conf=SendConf(max_wait=0.05),
                     others=["r4-good", "r4-missing"],
                 ):
                     pass
 
 
-async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
+async def _send_feed(received: list[Item]) -> list[ItemOrValue]:
     out: list[ItemOrValue] = []
 
     with fail_after(1):
@@ -1805,7 +1772,7 @@ async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrVa
             create_task_group() as tg,
         ):
             tg.start_soon(_drain_receiver, receive_stream, received)
-            stream = async_send(_afinite_source(consumed), others=["r4-feed"])
+            stream = async_send(gen_items(map(dict, _SOURCE_ROWS)), others=["r4-feed"])
             out = [item async for item in stream]
 
     return out
@@ -1833,13 +1800,11 @@ class TestAsyncSend:
         when the caller passes a ``Feed``. So a sync ``for`` over it raises
         ``TypeError``.
         """
-        consumed: list[int] = []
         received: list[Item] = []
-        expected = [{"x": "foo", "i": i} for i in range(_SOURCE_LEN)]
-        out = await _send_feed(consumed, received)
+        out = await _send_feed(received)
 
-        assert out == expected
-        assert received == expected
+        assert out == _SOURCE_ROWS
+        assert received == _SOURCE_ROWS
 
     @pytest.mark.xfail(
         strict=True,
@@ -1849,14 +1814,14 @@ class TestAsyncSend:
     @async_test
     async def test_async_send_does_not_buffer_its_source(self):
         """Send yields its first item without reading its source past the lookahead."""
-        consumed: list[int] = []
-        first, seen = await _send_first(consumed)
+        first, seen = await _send_first()
 
         assert first == {"x": "foo", "i": 0}
         assert seen <= LOOKAHEAD
 
 
-async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
+async def _receive_first() -> tuple[ItemOrValue, int]:
+    source = PullLog(map(dict, _SOURCE_ROWS))
     first: ItemOrValue = {}
     seen = 0
 
@@ -1866,7 +1831,7 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
 
         async for item in receive_stream:
             if idx == 0:
-                first, seen = item, len(consumed)
+                first, seen = item, len(source.pulled)
 
             idx += 1
 
@@ -1876,7 +1841,7 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
             create_task_group() as tg,
         ):
             tg.start_soon(_snapshot, receive_stream)
-            async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
+            async for _ in async_send(source, others=["r-recv-lazy"]):
                 pass
 
     return (first, seen)
@@ -1892,8 +1857,7 @@ class TestAsyncReceive:
         the source. ``send`` still eagerly collects its own passthrough return; see
         ``test_async_send_does_not_buffer_its_source``.
         """
-        consumed: list[int] = []
-        first, seen = await _receive_first(consumed)
+        first, seen = await _receive_first()
 
         assert first == {"x": "foo", "i": 0}
         assert seen <= LOOKAHEAD

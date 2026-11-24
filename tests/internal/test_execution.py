@@ -13,7 +13,6 @@ from contextlib import (
 )
 from functools import partial
 from itertools import count
-from logging import WARNING
 from math import inf
 from threading import Event as ThreadEvent
 from threading import get_ident
@@ -71,7 +70,7 @@ from riko.types.modules import (
     SortConfRule,
     TruncateConf,
 )
-from tests import ROUND_TRIPS, async_test, skipif_sync
+from tests import ROUND_TRIPS, async_test, get_envelope_values, skipif_sync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
@@ -90,6 +89,7 @@ from tests._resources import (
     wrapped_sync_cm_factory,
     wrapped_sync_gen_factory,
 )
+from tests._streams import AsyncPullLog, PullLog
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -118,6 +118,20 @@ def _needs_arg(ctx: object) -> Generator[object]:
 
 _LIFECYCLE_NEEDS_ARG = lambda: Resource.from_lifecycle(_needs_arg)
 
+
+def _fail() -> object:
+    raise RuntimeError("boom")
+
+
+_FAILING_VALUE = Resource.from_factory(_fail, cleanup=False)
+
+
+async def _afail() -> object:
+    raise RuntimeError("boom")
+
+
+_AFAILING_VALUE = Resource.from_factory(_afail, cleanup=False)
+
 _FEED_SEED: list[Item] = [
     {"i": index, "content": content}
     for index, content in enumerate(("a b", "c", "a", "d e"))
@@ -127,6 +141,7 @@ _SCALAR_SEED: list[ItemOrValue] = ["a b", "c", "a"]
 _CONTAINS_A = FilterConfRule(field="content", op="contains", value="a")
 _HASH = Pipeline.from_module("hash")
 _FILTER = Pipeline.from_module("filter", conf=FilterConf({"rule": _CONTAINS_A}))
+_TRUNCATE_2 = Pipeline.from_module("truncate", conf=TruncateConf(count=2))
 
 _TOKENS = Pipeline.from_module(
     "tokenizer", conf={"delimiter": " "}, options={"emit": True}
@@ -574,7 +589,7 @@ class TestAsyncExecution:
     @pytest.mark.timeout(2)
     @async_test
     async def test_async_shutdown_timeout_abandons_a_blocking_sync_cleanup(
-        self, caplog
+        self, riko_warnings
     ) -> None:
         release = ThreadEvent()
 
@@ -585,7 +600,7 @@ class TestAsyncExecution:
         settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()
 
-        with caplog.at_level(WARNING, logger="riko"), pytest.raises(TimeoutError):
+        with pytest.raises(TimeoutError):
             async with AsyncExecution(settings=settings) as execution:
                 execution.register_owned(object(), fail_late, inline=False)
 
@@ -593,10 +608,10 @@ class TestAsyncExecution:
         release.set()
 
         with fail_after(1):
-            while not caplog.records:
+            while not riko_warnings.records:
                 await async_sleep(0.01)
 
-        assert "abandoned" in caplog.records[0].getMessage()
+        assert "abandoned" in riko_warnings.records[0].getMessage()
 
     @async_test
     async def test_async_run_sync_bridges_to_worker(self) -> None:
@@ -770,25 +785,13 @@ async def _async_test_open_close(resource, value: object | None = None):
     _check_closed(resource, acquired)
 
 
-def _fail() -> object:
-    raise RuntimeError("boom")
-
-
-async def _afail() -> object:
-    raise RuntimeError("boom")
-
-
 FAILED_ACQUISITIONS = [
     pytest.param(_LIFECYCLE_NEEDS_ARG, TypeError, id="lifecycle"),
-    pytest.param(
-        lambda: Resource.from_factory(_fail, cleanup=False), RuntimeError, id="value"
-    ),
+    pytest.param(lambda: _FAILING_VALUE, RuntimeError, id="value"),
 ]
 AFAILED_ACQUISITIONS = [
     pytest.param(_LIFECYCLE_NEEDS_ARG, TypeError, id="lifecycle"),
-    pytest.param(
-        lambda: Resource.from_factory(_afail, cleanup=False), RuntimeError, id="value"
-    ),
+    pytest.param(lambda: _AFAILING_VALUE, RuntimeError, id="value"),
 ]
 
 
@@ -1014,7 +1017,7 @@ class TestResourceAcquisition:
         def run() -> None:
             with SyncExecution() as execution:
                 execution.acquire(Resource(client))
-                execution.acquire(Resource.from_factory(_fail, cleanup=False))
+                execution.acquire(_FAILING_VALUE)
 
         with pytest.raises(RuntimeError, match="boom"):
             run()
@@ -1081,7 +1084,7 @@ class TestResourceAcquisition:
                 execution.acquire(
                     Resource.from_lifecycle(_sync_http_client(url, events))
                 )
-                execution.acquire(Resource.from_factory(_fail, cleanup=False))
+                execution.acquire(_FAILING_VALUE)
 
         with pytest.raises(RuntimeError, match="boom"):
             run()
@@ -1552,40 +1555,28 @@ class TestResultEnvelopes:
                 build_generation("n", parent.generation, i) for i in range(len(values))
             ]
 
-        assert [env.value for env in envelopes] == list(values)
+        assert get_envelope_values(envelopes) == list(values)
         assert [env.generation for env in envelopes] == expected
 
     @pytest.mark.parametrize("identity", [*IdentityMode, None])
     def test_first_result_is_yielded_before_the_second_is_read(self, identity):
-        pulled: list[int] = []
-
-        def gen_values():
-            for value in count():
-                pulled.append(value)
-                yield value
-
-        envelopes = gen_result_envelopes("n", gen_values(), _root(), identity)
+        values = PullLog(count())
+        envelopes = gen_result_envelopes("n", values, _root(), identity)
         assert next(envelopes).value == 0
-        assert pulled == [0]
+        assert values.pulled == (0,)
 
     @pytest.mark.parametrize("identity", [*IdentityMode, None])
     @async_test
     async def test_async_first_result_is_yielded_before_the_second_is_read(
         self, identity
     ):
-        pulled: list[int] = []
-
-        async def gen_values():
-            for value in count():
-                pulled.append(value)
-                yield value
-
-        results = agen_result_envelopes("n", gen_values(), _root(), identity)
+        values = AsyncPullLog(count())
+        results = agen_result_envelopes("n", values, _root(), identity)
 
         async with aclosing(results) as envelopes:
             assert (await anext(envelopes)).value == 0
 
-        assert pulled == [0]
+        assert values.pulled == (0,)
 
     def test_preserve_keeps_the_input_identity(self):
         parent = _ItemEnvelope("a", "key", ("n", 0), Metadata({"seen": True}))
@@ -1641,11 +1632,8 @@ class TestResultEnvelopes:
         assert envelopes == expected
 
 
-def _dotdicts(count: int) -> list[_ItemEnvelope[DotDict]]:
-    return [
-        _ItemEnvelope.from_parent(PLACEHOLDER, "source", DotDict({"i": i}), i)
-        for i in range(count)
-    ]
+def _dotdicts(count: int) -> list[_ItemEnvelope[object]]:
+    return [_root(i, DotDict({"i": i})) for i in range(count)]
 
 
 class TestNodeProvenance:
@@ -1661,9 +1649,7 @@ class TestNodeProvenance:
 
     def test_a_value_read_twice_gets_its_envelopes_back_in_order(self):
         value = DotDict({"i": 0})
-        envelopes = [
-            _ItemEnvelope.from_parent(PLACEHOLDER, "source", value, i) for i in range(2)
-        ]
+        envelopes = [_root(i, value) for i in range(2)]
         provenance = NodeProvenance.from_identity("filter", IdentityMode.PRESERVE)
         values = list(provenance.gen_values(envelopes))
         results = list(provenance.gen_envelopes(iter(values)))
@@ -1692,7 +1678,7 @@ class TestNodeProvenance:
         envelopes = [_root(i, f"v{i}") for i in range(2)]
         provenance = NodeProvenance.from_identity("upper", IdentityMode.PRESERVE)
         results = list(provenance.gen_envelopes(provenance.gen_values(envelopes)))
-        assert [env.value for env in results] == ["v0", "v1"]
+        assert get_envelope_values(results) == ["v0", "v1"]
         assert [env.generation for env in results] == [
             ("upper", env.generation, k) for k, env in enumerate(envelopes)
         ]
@@ -1729,12 +1715,13 @@ class TestNodeProvenance:
             return next(provenance.gen_envelopes(iter([len(values)]))).generation
 
         contributors = IdentityAccumulator(IdentityDomain.GENERATION)
+        pair = (_root(0), _root(1))
 
-        for env in (_root(0), _root(1)):
+        for env in pair:
             contributors.add(env.generation)
 
-        assert combine([_root(0), _root(1)]) == ("count", contributors.digest(), 0)
-        assert combine([_root(0), _root(1)]) != combine([_root(0), _root(2)])
+        assert combine(pair) == ("count", contributors.digest(), 0)
+        assert combine(pair) != combine([_root(0), _root(2)])
 
     def test_closing_the_output_closes_the_wrapped_stream(self):
         closed: list[bool] = []
@@ -1862,9 +1849,7 @@ PRESERVING_PIPELINES = [
     pytest.param(_HASH | _HASH, 4, id="processor-chain"),
     pytest.param(_FILTER, 2, id="seeded-filter"),
     pytest.param(_HASH | _FILTER, 2, id="filter"),
-    pytest.param(
-        Pipeline.from_module("truncate", conf=TruncateConf(count=2)), 2, id="truncate"
-    ),
+    pytest.param(_TRUNCATE_2, 2, id="truncate"),
     pytest.param(
         Pipeline.from_module(
             "sort", conf=SortConf({"rule": SortConfRule(field="i", dir="desc")})
@@ -1880,11 +1865,7 @@ PRESERVING_PIPELINES = [
 # Pipelines over scalar seed items, with the seed positions of the items they keep.
 SCALAR_PIPELINES = [
     pytest.param(_FILTER, [0, 2], id="filter"),
-    pytest.param(
-        Pipeline.from_module("truncate", conf=TruncateConf(count=2)),
-        [0, 1],
-        id="truncate",
-    ),
+    pytest.param(_TRUNCATE_2, [0, 1], id="truncate"),
 ]
 # Pipelines whose results run on a worker pool or the async execution.
 PARALLEL_PIPELINES = [
@@ -1923,10 +1904,9 @@ class TestBuildEnvelopeStream:
         assert generations == [build_generation(target, MISSING, i) for i in indexes]
 
     def test_keeps_each_identity_of_a_repeated_item(self) -> None:
-        pipeline = Pipeline.from_module("truncate", conf=TruncateConf(count=2))
-        target = _seed_target(pipeline)
+        target = _seed_target(_TRUNCATE_2)
         item = DotDict({"content": "a"})
-        generations = [gen for _, gen in _feed(pipeline, [item, item])]
+        generations = [gen for _, gen in _feed(_TRUNCATE_2, [item, item])]
         assert generations == [build_generation(target, MISSING, i) for i in (0, 1)]
 
     def test_derives_tokens_from_their_own_item(self) -> None:

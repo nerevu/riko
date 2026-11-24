@@ -93,7 +93,7 @@ from riko.runtime._write_session import (
 )
 from riko.types._enums import Formats, UserAgent
 from riko.types._io import require_closer
-from tests import async_test, is_installed, run_python, skipif_sync
+from tests import async_test, get_values, is_installed, run_python, skipif_sync
 from tests._lifecycle import ITEMS
 from tests._loopback import ForwardOnly, loopback_url
 from tests._resources import AsyncConnection, Connection
@@ -292,8 +292,8 @@ class TestLoadRssLinks:
         path = tmp_path / "page.html"
         path.write_text(_FEED_PAGE)
         url = path.as_uri()
-        links = [entry.get("link") for entry in load_rss_links(url, **kwargs)]
-        alinks = [entry.get("link") for entry in await aload_rss_links(url, **kwargs)]
+        links = get_values(load_rss_links(url, **kwargs), "link")
+        alinks = get_values(await aload_rss_links(url, **kwargs), "link")
         assert links == alinks == expected
 
     @async_test
@@ -305,8 +305,8 @@ class TestLoadRssLinks:
         )
         url = path.as_uri()
         expected = [(tmp_path / "feed.xml").as_uri(), "file:///atom.xml"]
-        links = [entry.get("link") for entry in load_rss_links(url)]
-        alinks = [entry.get("link") for entry in await aload_rss_links(url)]
+        links = get_values(load_rss_links(url), "link")
+        alinks = get_values(await aload_rss_links(url), "link")
         assert links == alinks == expected
 
     @pytest.mark.parametrize("link_type", EMPTY_LINK_TYPES)

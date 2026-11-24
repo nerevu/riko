@@ -12,7 +12,6 @@ from datetime import UTC, datetime, timedelta, timezone
 from functools import partial
 from inspect import isawaitable
 from itertools import count
-from logging import WARNING
 from time import struct_time
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +26,6 @@ from riko.base._paths import get_path
 from riko.coercion._dates import datetime_to_datedict
 from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
-from riko.definitions._module_definition import ModuleDefinition
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
@@ -96,15 +94,17 @@ from riko.types.modules import (
     SubelementConf,
     XpathFetchPageConf,
 )
-from tests import async_test
-from tests._execution import build_pipe_wrapper
+from tests import async_test, get_values
+from tests._execution import build_pipe_wrapper, build_sync_definition
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
+from tests._streams import PullLog
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable
     from pathlib import Path
 
+    from riko.definitions._module_definition import ModuleDefinition
     from riko.types._streams import AsyncStream, Item
     from riko.types.modules import Conf
 
@@ -149,10 +149,7 @@ MISSING_URL = "file:///nonexistent.xml"
 JSON = b'{"items": [{"title": "A"}, {"title": "B"}]}'
 XML = b"<root><items><title>A</title></items><items><title>B</title></items></root>"
 USER_AGENT = "custom/1.0"
-
-
-def _values(stream: Any, key: str) -> list[Any]:
-    return [item.get(key) for item in stream]
+AB_ROWS = ({"content": "a"}, {"content": "b"})
 
 
 class TestInput:
@@ -405,7 +402,7 @@ class TestFetchdata:
         path = tmp_path / "data.xml"
         path.write_bytes(XML)
         items = fetchdata_pipe(conf={"url": path.as_uri(), "path": "items"})
-        assert [item.get("title") for item in items] == ["A", "B"]
+        assert get_values(items, "title") == ["A", "B"]
 
     @pytest.mark.xfail(
         strict=True,
@@ -436,7 +433,7 @@ class TestFetchdata:
         text = f"{declaration}<r><items><t>café</t></items></r>"
         path.write_bytes(text.encode("latin-1"))
         items = fetchdata_pipe(conf={"url": path.as_uri(), "path": "items"})
-        assert [item.get("t") for item in items] == ["café"]
+        assert get_values(items, "t") == ["café"]
 
 
 FEED_PREFERENCES = [
@@ -460,8 +457,8 @@ class TestFeedautodiscovery:
         path.write_text(_FEEDS_PAGE)
         conf = FeedAutoDiscoveryConf(url=path.as_uri(), **options)
         pipeline = Pipeline.from_module("feedautodiscovery", conf=conf)
-        links = _values(pipeline, "link")
-        assert links == _values(await alist(pipeline), "link") == expected
+        links = get_values(pipeline, "link")
+        assert links == get_values(await alist(pipeline), "link") == expected
 
 
 BOM_LINES = [
@@ -573,23 +570,24 @@ class TestFilter:
         items = [{"x": x} for x in values]
         rule = FilterConfRule(field="x", op=op, value=value)
         conf = FilterConf({"rule": rule})
-        assert _values(filter_pipe(items, conf=conf), "x") == expected
+        assert get_values(filter_pipe(items, conf=conf), "x") == expected
 
     @pytest.mark.parametrize(("op", "value", "expected"), STRING_COMPARES)
     def test_filter_string_compare_needs_a_value(self, op, value, expected):
         rule = FilterConfRule(field="x", op=op, value=value)
         conf = FilterConf({"rule": rule})
-        assert _values(filter_pipe(STRING_FIELDS, conf=conf), "i") == expected
+        assert get_values(filter_pipe(STRING_FIELDS, conf=conf), "i") == expected
 
-    def test_filter_warns_and_ignores_an_out_of_range_date(self, caplog):
+    def test_filter_warns_and_ignores_an_out_of_range_date(self, riko_warnings):
         items = [{"x": 10**19}, {"y": 1}, {"x": None}, {"x": "2020-01-01"}]
         rule = FilterConfRule(field="x", op="after", value="2019-01-01")
         conf = FilterConf({"rule": rule})
 
-        with caplog.at_level(WARNING, logger="riko"):
-            assert _values(filter_pipe(items, conf=conf), "x") == ["2020-01-01"]
+        assert get_values(filter_pipe(items, conf=conf), "x") == ["2020-01-01"]
 
-        assert ["out of range" in r.getMessage() for r in caplog.records] == [True]
+        assert ["out of range" in r.getMessage() for r in riko_warnings.records] == [
+            True
+        ]
 
 
 class TestDatebuilder:
@@ -875,35 +873,34 @@ SLUGIFY_CASES = [
 class TestSlugify:
     @pytest.mark.parametrize(("content", "slug"), SLUGIFY_CASES)
     def test_non_ascii_content_transliterates(self, content, slug):
-        assert _values(slugify_pipe({"content": content}), "slugify") == [slug]
+        assert get_values(slugify_pipe({"content": content}), "slugify") == [slug]
 
 
-def _counting_source(consumed: list[int]) -> Any:
+def _gen_foo_rows() -> Iterator[Item]:
     for i in count():
-        consumed.append(i)
         yield {"x": "foo", "i": i}
 
 
 class TestJoin:
     def test_keyed_join_does_not_materialize_its_primary(self):
         """``other`` is the replayed side, so an unbounded primary must still emit."""
-        consumed: list[int] = []
+        source = PullLog(_gen_foo_rows())
         other = [{"x": "bar", "c": 4}, {"x": "foo", "c": 5}]
         conf = JoinConf(join_key="x")
-        joined = join_pipe(_counting_source(consumed), conf=conf, other=other)
+        joined = join_pipe(source, conf=conf, other=other)
 
         assert next(joined) == {"x": "foo", "i": 0, "c": 5}
-        assert len(consumed) <= LOOKAHEAD
+        assert len(source.pulled) <= LOOKAHEAD
         assert next(joined) == {"x": "foo", "i": 1, "c": 5}
-        assert len(consumed) <= 1 + LOOKAHEAD
+        assert len(source.pulled) <= 1 + LOOKAHEAD
 
     def test_natural_join_does_not_materialize_its_primary(self):
         """The keyless natural join is lazy in its primary stream too."""
-        consumed: list[int] = []
-        joined = join_pipe(_counting_source(consumed), other=[{"c": 5}])
+        source = PullLog(_gen_foo_rows())
+        joined = join_pipe(source, other=[{"c": 5}])
 
         assert next(joined) == {"x": "foo", "i": 0, "c": 5}
-        assert len(consumed) <= LOOKAHEAD
+        assert len(source.pulled) <= LOOKAHEAD
 
 
 SORTABLE_VALUES = [
@@ -938,7 +935,7 @@ class TestSort:
         rule = SortConfRule(field="n", dir=dir_, type=type_)
         items = [{"n": val} for val in vals]
         expected = ascending if dir_ == "asc" else list(reversed(ascending))
-        assert _values(sort_pipe(items, conf=SortConf(rule=rule)), "n") == expected
+        assert get_values(sort_pipe(items, conf=SortConf(rule=rule)), "n") == expected
 
     @pytest.mark.parametrize("dir_", ["asc", "desc"])
     @pytest.mark.parametrize(("type_", "vals"), SORTABLE_VALUES)
@@ -972,15 +969,15 @@ class TestSort:
             {"n": vals[1]},
         ]
 
-        assert _values(sort_pipe(mid, conf=conf), "n") == expected
-        assert _values(sort_pipe(first, conf=conf), "n") == expected
+        assert get_values(sort_pipe(mid, conf=conf), "n") == expected
+        assert get_values(sort_pipe(first, conf=conf), "n") == expected
 
     def test_sort_missing_field_is_not_the_cast_default(self):
         """A missing numeric field groups first instead of sorting as ``0``."""
         items = [{"n": "3"}, {"x": "no number"}, {"n": "-5"}]
         conf = SortConf(rule=SortConfRule(field="n", type=SortableCastType.INT))
 
-        assert _values(sort_pipe(items, conf=conf), "n") == [None, "-5", "3"]
+        assert get_values(sort_pipe(items, conf=conf), "n") == [None, "-5", "3"]
 
     def test_sort_rule_default_sorts_missing_field_as_that_value(self):
         """A rule ``default`` stands in for the missing field, cast like a value."""
@@ -988,7 +985,7 @@ class TestSort:
         rule = SortConfRule(field="n", type=SortableCastType.INT, default="0")
         conf = SortConf(rule=rule)
 
-        assert _values(sort_pipe(items, conf=conf), "n") == ["-5", None, "3"]
+        assert get_values(sort_pipe(items, conf=conf), "n") == ["-5", None, "3"]
 
     @pytest.mark.parametrize("dir_", ["asc", "desc"])
     def test_untyped_sort_groups_items_lacking_the_field(self, dir_):
@@ -1003,7 +1000,7 @@ class TestSort:
         else:
             expected = [late, early, None, None]
 
-        assert _values(sort_pipe(items, conf=conf), "d") == expected
+        assert get_values(sort_pipe(items, conf=conf), "d") == expected
 
 
 class TestCount:
@@ -1161,7 +1158,7 @@ NON_LOOPABLE_FILTERS = [
 
 def _acme_definition(**attrs: object) -> ModuleDefinition:
     """Defines an ``acme.mod`` pass-through module whose pipe carries ``attrs``."""
-    return ModuleDefinition(name=_ACME, sync_pipe=build_pipe_wrapper(**attrs))
+    return build_sync_definition(build_pipe_wrapper(**attrs), name=_ACME)
 
 
 class TestListModules:
@@ -1306,10 +1303,10 @@ def _create_wrapper(name: str, *, iscoro: bool, is_async: bool):
     """Decorate a fresh function with the given name/awaitability/explicit flag."""
 
     async def _coro(item, extraction, objconf, **kwargs) -> str:
-        return str(item["content"]).upper()
+        return str(item["content"]).upper()  # reuse-ok: _upper_content
 
     def _sync(item, extraction, objconf, **kwargs) -> str:
-        return str(item["content"]).upper()
+        return str(item["content"]).upper()  # reuse-ok: _upper_content
 
     fn = _coro if iscoro else _sync
     fn.__name__ = name
@@ -1382,7 +1379,7 @@ PROCESSOR_FOLD_CASES = [
 
 
 ASSIGN_SHAPE_CASES = [
-    pytest.param("a b", {}, [{"content": "a"}, {"content": "b"}], id="many"),
+    pytest.param("a b", {}, list(AB_ROWS), id="many"),
     pytest.param("a", {}, [{"content": "a"}], id="one-is-a-list"),
     pytest.param("", {}, [], id="none-is-an-empty-list"),
     pytest.param("a b", {"count": "first"}, {"content": "a"}, id="first"),
@@ -1459,16 +1456,14 @@ class TestProcessor:
         assert ("w" in result) is (expected is not None)
 
     def test_emit_yields_a_result_before_reading_the_next(self):
-        pulled: list[int] = []
+        parts = PullLog({"part": index} for index in count())
 
         def gen_parts(item: Item, extraction, objconf, /, **kwargs):
-            for index in count():
-                pulled.append(index)
-                yield {"part": index}
+            yield from parts
 
         pipe = processor()(gen_parts)
         assert next(pipe({"x": 1}, emit=True)) == {"part": 0}
-        assert pulled == [0]
+        assert parts.pulled == ({"part": 0},)
 
     def test_mode_keyword_raises_pointing_at_describe_module(self):
         with pytest.raises(RemovedOptionError, match=r"'hash' module.*describe_mod"):
@@ -1574,29 +1569,25 @@ class TestAsyncOperator:
 
     @async_test
     async def test_sync_parser_operator_returns_async_iterator(self):
-        items = [{"content": "a"}, {"content": "b"}]
-
         @operator(is_async=True)
         def async_pipe(stream, objconf, tuples, **kwargs):
             yield from stream
 
-        async with maybe_aclosing(async_pipe(items)) as stream:
+        async with maybe_aclosing(async_pipe(AB_ROWS)) as stream:
             assert isinstance(stream, AsyncIterator)
             assert not isawaitable(stream)
             assert await anext(stream) == {"content": "a"}
 
     @async_test
     async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):
-        items = [{"content": "a"}, {"content": "b"}]
-
         @operator(is_async=True)
         async def async_pipe(stream, objconf, tuples, **kwargs):
-            return iter(items)
+            return iter(AB_ROWS)
 
-        stream = async_pipe(items)
+        stream = async_pipe(AB_ROWS)
         assert isinstance(stream, AsyncIterator)
         assert not isawaitable(stream)
-        assert [item async for item in stream] == items
+        assert [item async for item in stream] == list(AB_ROWS)
 
 
 ENUM_MEMBER_NAMES = [

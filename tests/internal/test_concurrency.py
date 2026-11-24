@@ -16,7 +16,7 @@ from pathlib import Path
 from signal import SIG_IGN, SIGTERM, signal
 from threading import Event, Lock, Thread, Timer, get_ident
 from time import perf_counter, sleep
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -43,13 +43,19 @@ from riko.runtime._resolver import dispatcher
 from riko.runtime._workflow_pipes import build_workflow_pipes
 from riko.types._enums import Executor
 from riko.types._feed import _ItemEnvelope
+from riko.types._frozendict import freeze
 from riko.types._workflow import Endpoint
-from tests import async_test, skipif_sync
+from tests import async_test, get_envelope_values, skipif_sync
 from tests._execution import (
+    ECHO_DEFINITION,
     arelay_pipe,
     arun_plan,
+    build_async_definition,
     build_chain_plan,
     build_dispatcher,
+    build_echo,
+    build_module_plan,
+    build_sync_definition,
     build_workflow,
     echo_pipe,
     mark_async_loopable,
@@ -57,17 +63,22 @@ from tests._execution import (
     run_plan,
     tag_source,
 )
+from tests._streams import AsyncPullLog, PullLog
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterator
 
-    from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
 _INLINE = {"executor": "inline"}
 _PROCESS = {"executor": "process"}
 _THREAD = {"executor": "thread"}
 _ITEM_LIMITS = ({"concurrency": 1}, {"concurrency": 2}, _THREAD)
+_LONG_ITEMS = [{"x": x} for x in range(10_000)]
+_FAN_ROWS = [{"n": n} for n in range(50)]
 ITEMS = [{"x": x} for x in range(20)]
+TWO_ITEMS = freeze(ITEMS[:2])
+TWO_WORKERS = ExecutionSettings(concurrency=2)
+TWO_PROCESSES = ExecutionSettings(executor="process", concurrency=2)
 LIMIT = config.concurrency_limit
 INLINE, THREAD, PROCESS = Executor.INLINE, Executor.THREAD, Executor.PROCESS
 _INLINE_POLICY = SyncPolicy(INLINE, None)
@@ -88,10 +99,6 @@ ITEM_CALLS = [
 ]
 
 
-def _values(envelopes):
-    return [env.value for env in envelopes]
-
-
 def _run_on_worker(func: Callable[[], None]) -> Thread:
     """Runs ``func`` on a daemon thread and waits up to a second for it to finish."""
     worker = Thread(target=func, daemon=True)
@@ -107,14 +114,15 @@ class TestBuildTrackedCall:
         assert isinstance(call, partial)
         assert (call.func, call.args) == (func, (bound, "n", None))
         envelope = _ItemEnvelope.from_parent(PLACEHOLDER, "s", "a")
-        assert _values(call(envelope)) == ["a", "a"]
+        assert get_envelope_values(call(envelope)) == ["a", "a"]
 
     def test_pickled_call_is_unpickled_once_per_worker(self) -> None:
         _load_call.cache_clear()
         func = build_tracked_call(_pair, node_id="n")
         chars = enumerate("ab")
         a, b = (_ItemEnvelope.from_parent(PLACEHOLDER, "s", v, i) for i, v in chars)
-        assert (_values(func(a)), _values(func(b))) == (["a", "a"], ["b", "b"])
+        assert get_envelope_values(func(a)) == ["a", "a"]
+        assert get_envelope_values(func(b)) == ["b", "b"]
         assert _load_call.cache_info()[:2] == (1, 1)
 
 
@@ -146,10 +154,9 @@ class _Unpicklable:
 
 
 def _loop_dispatcher():
-    up = cast("AsyncModuleWrapper", lambda item, **_: item)
     return build_dispatcher(
-        ModuleDefinition(name="fakeloop", sync_pipe=echo_pipe),
-        ModuleDefinition(name="up", async_pipe=up),
+        build_sync_definition(echo_pipe, name="fakeloop"),
+        build_async_definition(lambda item, **_: item, name="up"),
     )
 
 
@@ -170,12 +177,9 @@ def _embed_refusal() -> tuple[ExecutionPlan, Context | None]:
 
 
 def _local_pipe_refusal(pipe=None) -> tuple[ExecutionPlan, Context | None]:
-    def local(item, **_):
-        return iter([item])
-
-    definition = ModuleDefinition(name="local", sync_pipe=mark_loopable(pipe or local))
-    flow = build_workflow([ModuleNode(id="n", name="local")])
-    plan = ExecutionPlan.from_workflow(flow, dispatcher=build_dispatcher(definition))
+    sync_pipe = mark_loopable(pipe or build_echo())
+    definition = build_sync_definition(sync_pipe, name="local")
+    plan = build_module_plan(build_dispatcher(definition), "local")
     return plan, None
 
 
@@ -199,7 +203,7 @@ class TestRequireProcessSafe:
     ) -> None:
         monkeypatch.setattr(_sync_execution, "start_blocking_portal", lambda: None)
         plan, context = build()
-        settings = ExecutionSettings(executor="process", concurrency=2)
+        settings = TWO_PROCESSES
         execution = SyncExecution(context, settings=settings)
 
         with (
@@ -289,7 +293,7 @@ class TestSyncPolicy:
     @pytest.mark.timeout(5)
     def test_sync_process_executor_maps_items(self, opened) -> None:
         plan = build_chain_plan("hash")
-        settings = ExecutionSettings(executor="process", concurrency=2)
+        settings = TWO_PROCESSES
         result = run_plan(plan, settings=settings, seed=ITEMS)
 
         assert Counter(map(_key, result)) == Counter(
@@ -321,8 +325,8 @@ class TestSyncPolicy:
             yield {"t": "side"}
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="side", sync_pipe=cast("SyncModuleWrapper", source)),
-            ModuleDefinition(name="joiner", sync_pipe=mark_loopable(joiner)),
+            build_sync_definition(source, name="side"),
+            build_sync_definition(mark_loopable(joiner), name="joiner"),
         )
         side = ModuleNode(id="s", name="side")
         joined = ModuleNode(id="j", name="joiner", resources={"slot": "primary"})
@@ -345,7 +349,7 @@ class TestSyncPolicy:
     ) -> None:
         plan = build_chain_plan("hash")
 
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
+        with SyncExecution(settings=TWO_WORKERS) as execution:
             stream = cast("Generator", execution.run(plan, seed=ITEMS))
             next(stream)
             stream.close()
@@ -366,7 +370,7 @@ class TestSyncPolicy:
             return iter([item])
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="slow", sync_pipe=mark_loopable(slow))
+            build_sync_definition(mark_loopable(slow), name="slow")
         )
         node = ModuleNode(id="s", name="slow", resources={"slot": "primary"})
         flow = build_workflow([node], resources=("primary",))
@@ -374,7 +378,7 @@ class TestSyncPolicy:
         cleanup = lambda _: events.append("cleanup")
         resource = Resource.from_factory(object, cleanup=cleanup)
         context = Context().with_resource("primary", resource)
-        settings = ExecutionSettings(concurrency=2)
+        settings = TWO_WORKERS
 
         with SyncExecution(context, settings=settings) as execution:
             stream = cast("Generator", execution.run(plan, seed=ITEMS))
@@ -388,32 +392,26 @@ class TestSyncPolicy:
     @pytest.mark.slow
     @pytest.mark.parametrize("ordered", [False, True])
     def test_sync_chained_mapping_reads_the_source_on_demand(self, ordered) -> None:
-        pulled: list[int] = []
+        source = PullLog(_LONG_ITEMS)
         concurrency = 2
-
-        def tracked():
-            for x in range(10_000):
-                pulled.append(x)
-                yield {"x": x}
-
         plan = build_chain_plan("hash", "hash")
         settings = ExecutionSettings(concurrency=concurrency, ordered=ordered)
 
         def consume() -> None:
             with SyncExecution(settings=settings) as execution:
-                stream = cast("Generator", execution.run(plan, seed=tracked()))
+                stream = cast("Generator", execution.run(plan, seed=source))
                 next(stream)
                 stream.close()
 
         assert not _run_on_worker(consume).is_alive(), (
             "chained mapped nodes deadlocked on the shared pool"
         )
-        assert len(pulled) <= 2 * concurrency + 1
+        assert len(source.pulled) <= 2 * concurrency + 1
 
     def test_sync_mapping_waits_for_the_first_pull(self, opened) -> None:
         plan = build_chain_plan("hash")
 
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
+        with SyncExecution(settings=TWO_WORKERS) as execution:
             execution.run(plan, seed=ITEMS)
 
         assert opened == []
@@ -430,10 +428,9 @@ class TestSyncPolicy:
             return iter([item])
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="explode", sync_pipe=mark_loopable(explode))
+            build_sync_definition(mark_loopable(explode), name="explode")
         )
-        flow = build_workflow([ModuleNode(id="n", name="explode")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        plan = build_module_plan(dispatcher, "explode")
 
         with pytest.raises(ValueError, match="boom"):
             run_plan(
@@ -455,23 +452,20 @@ class TestSyncPolicy:
         "not yet implemented: each item's whole output is collected first",
     )
     def test_sync_mapped_node_output_streams_before_the_item_completes(self) -> None:
-        pulled: list[int] = []
+        outputs = PullLog(_FAN_ROWS)
 
         def fan(item, **_):
-            for n in range(50):
-                pulled.append(n)
-                yield {"n": n}
+            yield from outputs
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="fan", sync_pipe=mark_loopable(fan))
+            build_sync_definition(mark_loopable(fan), name="fan")
         )
-        flow = build_workflow([ModuleNode(id="f", name="fan")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        plan = build_module_plan(dispatcher, "fan")
 
-        with SyncExecution(settings=ExecutionSettings(concurrency=2)) as execution:
+        with SyncExecution(settings=TWO_WORKERS) as execution:
             stream = cast("Generator", execution.run(plan, seed=[{"x": 0}]))
             next(stream)
-            assert len(pulled) < 50
+            assert len(outputs.pulled) < 50
             stream.close()
 
 
@@ -494,10 +488,7 @@ class TestPoolLifetime:
         (worker,) = pool._processes.values()
         pool.submit(sleep, 5)
         sleep(0.2)
-        terminating = Thread(target=lifetime.terminate, daemon=True)
-        terminating.start()
-        terminating.join(timeout=1)
-        assert not terminating.is_alive()
+        assert not _run_on_worker(lifetime.terminate).is_alive()
         assert (worker.is_alive(), worker.exitcode) == (False, -SIGTERM)
 
     @pytest.mark.slow
@@ -549,11 +540,8 @@ def _thread_probe():
         threads.append(get_ident())
         return iter([item])
 
-    definition = ModuleDefinition(name="probe", sync_pipe=mark_loopable(probe))
-    flow = build_workflow([ModuleNode(id="n", name="probe")])
-    return threads, ExecutionPlan.from_workflow(
-        flow, dispatcher=build_dispatcher(definition)
-    )
+    definition = build_sync_definition(mark_loopable(probe), name="probe")
+    return threads, build_module_plan(build_dispatcher(definition), "probe")
 
 
 # A mappable node, one that reads its whole input in one call, and no nodes.
@@ -580,16 +568,9 @@ class TestAsyncPolicy:
             yield item
             yield item
 
-        definition = ModuleDefinition(
-            name="twice", async_pipe=mark_async_loopable(twice)
-        )
-        flow = build_workflow([ModuleNode(id="n", name="twice")])
-        plan = ExecutionPlan.from_workflow(
-            flow, dispatcher=build_dispatcher(definition)
-        )
-        result = await arun_plan(
-            plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS
-        )
+        definition = build_async_definition(mark_async_loopable(twice), name="twice")
+        plan = build_module_plan(build_dispatcher(definition), "twice")
+        result = await arun_plan(plan, settings=TWO_WORKERS, seed=ITEMS)
 
         assert Counter(map(_key, result)) == Counter(map(_key, ITEMS * 2))
 
@@ -605,7 +586,7 @@ class TestAsyncPolicy:
             active -= 1
             return iter([item])
 
-        definition = ModuleDefinition(name="slow", async_pipe=mark_async_loopable(slow))
+        definition = build_async_definition(mark_async_loopable(slow), name="slow")
         nodes = [ModuleNode(id="a", name="slow"), ModuleNode(id="b", name="slow")]
         plan = ExecutionPlan.from_workflow(
             Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
@@ -620,9 +601,7 @@ class TestAsyncPolicy:
     @async_test
     async def test_async_concurrency_runs_sync_pipes_on_worker_threads(self) -> None:
         threads, plan = _thread_probe()
-        result = await arun_plan(
-            plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS
-        )
+        result = await arun_plan(plan, settings=TWO_WORKERS, seed=ITEMS)
 
         assert Counter(map(_key, result)) == Counter(map(_key, ITEMS))
         assert len(threads) == len(ITEMS)
@@ -643,7 +622,7 @@ class TestAsyncPolicy:
     @async_test
     async def test_async_run_refuses_the_process_executor(self, build) -> None:
         threads, plan = build()
-        settings = ExecutionSettings(executor="process", concurrency=2)
+        settings = TWO_PROCESSES
 
         async with AsyncExecution(settings=settings) as execution:
             with pytest.raises(InvalidPipelineError, match="synchronous execution"):
@@ -672,13 +651,8 @@ class TestAsyncPolicy:
             finally:
                 stopped.append(item["x"])
 
-        definition = ModuleDefinition(
-            name="stall", async_pipe=mark_async_loopable(stall)
-        )
-        flow = build_workflow([ModuleNode(id="n", name="stall")])
-        plan = ExecutionPlan.from_workflow(
-            flow, dispatcher=build_dispatcher(definition)
-        )
+        definition = build_async_definition(mark_async_loopable(stall), name="stall")
+        plan = build_module_plan(build_dispatcher(definition), "stall")
         settings = ExecutionSettings(concurrency=3, ordered=ordered)
 
         with fail_after(1):
@@ -706,25 +680,23 @@ class TestAsyncPolicy:
     async def test_async_mapped_node_output_streams_before_the_item_completes(
         self, kwargs
     ) -> None:
-        pulled: list[int] = []
+        outputs = AsyncPullLog(_FAN_ROWS)
 
         async def fan(item, **_):
-            for n in range(50):
-                pulled.append(n)
-                yield {"n": n}
+            async for output in outputs:
+                yield output
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="fan", async_pipe=mark_async_loopable(fan))
+            build_async_definition(mark_async_loopable(fan), name="fan")
         )
-        flow = build_workflow([ModuleNode(id="f", name="fan")])
-        plan = ExecutionPlan.from_workflow(flow, dispatcher=dispatcher)
+        plan = build_module_plan(dispatcher, "fan")
         settings = ExecutionSettings(**kwargs)
         pulled_before_first: int | None = None
 
         async with AsyncExecution(settings=settings) as execution:
             stream = await execution.arun(plan, seed=[{"x": 0}])
             await anext(stream)
-            pulled_before_first = len(pulled)
+            pulled_before_first = len(outputs.pulled)
             await stream.aclose()  # pyright: ignore[reportAttributeAccessIssue]
 
         assert pulled_before_first is not None
@@ -736,6 +708,7 @@ def _passthru(stream, **_):
 
 
 _passthru.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
+_PASSTHRU = build_sync_definition(_passthru, name="passthru")
 
 
 @dataclass
@@ -774,7 +747,7 @@ def _gauged_plan(gauge: _ThreadGauge, depth: int) -> ExecutionPlan:
             yield item
 
     gauged.type = "operator"  # pyright: ignore[reportFunctionMemberAccess]
-    definition = ModuleDefinition(name="gauged", sync_pipe=cast("Any", gauged))
+    definition = build_sync_definition(gauged, name="gauged")
     nodes = [ModuleNode(id=f"n{i}", name="gauged") for i in range(depth)]
     return ExecutionPlan.from_workflow(
         Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
@@ -782,38 +755,32 @@ def _gauged_plan(gauge: _ThreadGauge, depth: int) -> ExecutionPlan:
 
 
 def _passthru_plan(depth: int) -> ExecutionPlan:
-    pipe = cast("SyncModuleWrapper", _passthru)
-    definition = ModuleDefinition(name="passthru", sync_pipe=pipe)
     nodes = [ModuleNode(id=f"n{i}", name="passthru") for i in range(depth)]
     return ExecutionPlan.from_workflow(
-        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(_PASSTHRU)
     )
 
 
 def _nested_plan() -> ExecutionPlan:
     """Plans a stored workflow of one sync-only node, read by a sync-only node."""
-    pipe = cast("SyncModuleWrapper", _passthru)
-    passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
     inner = Workflow().with_nodes(ModuleNode(id="i", name="passthru"))
-    pipes = build_workflow_pipes(inner, build_dispatcher(passthru))
+    pipes = build_workflow_pipes(inner, build_dispatcher(_PASSTHRU))
     stored = ModuleDefinition(
         name="stored", sync_pipe=pipes.sync_pipe, async_pipe=pipes.async_pipe
     )
     nodes = (ModuleNode(id="s", name="stored"), ModuleNode(id="p", name="passthru"))
     return ExecutionPlan.from_workflow(
-        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(passthru, stored)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(_PASSTHRU, stored)
     )
 
 
 def _alternating_plan(pairs: int) -> ExecutionPlan:
     """Plans ``pairs`` sync-only passthroughs, each read by an async-only relay."""
-    pipe = cast("SyncModuleWrapper", _passthru)
-    passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
-    relay = ModuleDefinition(name="relay", async_pipe=arelay_pipe)
+    relay = build_async_definition(arelay_pipe, name="relay")
     names = ("passthru", "relay") * pairs
     nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
     return ExecutionPlan.from_workflow(
-        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(passthru, relay)
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(_PASSTHRU, relay)
     )
 
 
@@ -851,7 +818,7 @@ class TestThreadBudget:
 
         with fail_after(2):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, seed=ITEMS[:2])
+                stream = await execution.arun(plan, seed=TWO_ITEMS)
                 result = [item async for item in stream]
 
         assert result == ITEMS[:2]
@@ -861,16 +828,13 @@ class TestThreadBudget:
         self, node_threads
     ) -> None:
         node_threads(1)
-        definition = ModuleDefinition(name="echo", sync_pipe=echo_pipe)
         nodes = [ModuleNode(id=f"n{i}", name="echo") for i in range(3)]
         plan = ExecutionPlan.from_workflow(
-            Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(definition)
+            Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(ECHO_DEFINITION)
         )
 
         with fail_after(1):
-            result = await arun_plan(
-                plan, settings=ExecutionSettings(concurrency=2), seed=ITEMS[:2]
-            )
+            result = await arun_plan(plan, settings=TWO_WORKERS, seed=TWO_ITEMS)
 
         assert Counter(map(_key, result)) == Counter(map(_key, ITEMS[:2]))
 
@@ -905,13 +869,13 @@ class TestThreadBudget:
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, seed=ITEMS[:2])
+                stream = await execution.arun(plan, seed=TWO_ITEMS)
 
                 for _ in range(reads):
                     await anext(stream)
 
                 await stream.aclose()  # pyright: ignore[reportAttributeAccessIssue]
-                rerun = await execution.arun(plan, seed=ITEMS[:2])
+                rerun = await execution.arun(plan, seed=TWO_ITEMS)
                 result = [item async for item in rerun]
 
         assert result == ITEMS[:2]
@@ -927,13 +891,13 @@ class TestThreadBudget:
 
         async def wait_for_threads() -> None:
             try:
-                await waiter.arun(plan, seed=ITEMS[:2])
+                await waiter.arun(plan, seed=TWO_ITEMS)
             except PipelineStateError as error:
                 errors.append(type(error))
 
         with fail_after(1):
             async with AsyncExecution() as holder, create_task_group() as tg:
-                held = await holder.arun(plan, seed=ITEMS[:2])
+                held = await holder.arun(plan, seed=TWO_ITEMS)
                 await anext(held)
                 tg.start_soon(wait_for_threads)
                 await async_sleep(0.05)
@@ -960,11 +924,9 @@ class TestThreadBudget:
             yield from chain.from_iterable(zip(items, *(others or ()), strict=False))
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(
-                name="passthru", sync_pipe=cast("SyncModuleWrapper", _passthru)
-            ),
-            ModuleDefinition(name="zip", sync_pipe=cast("SyncModuleWrapper", zipped)),
+            build_sync_definition(src),
+            _PASSTHRU,
+            build_sync_definition(zipped, name="zip"),
         )
         names = {"a": "src", "a1": "passthru", "b": "src", "b1": "passthru", "z": "zip"}
         nodes = [ModuleNode(id=id_, name=name) for id_, name in names.items()]
@@ -998,10 +960,8 @@ class TestThreadBudget:
             yield from ITEMS[:3]
 
         dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
-            ModuleDefinition(
-                name="passthru", sync_pipe=cast("SyncModuleWrapper", _passthru)
-            ),
+            build_sync_definition(src),
+            _PASSTHRU,
             ModuleDefinition(
                 name="fan_in", sync_pipe=module.pipe, async_pipe=module.async_pipe
             ),
@@ -1060,11 +1020,11 @@ class TestThreadBudget:
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(plan, seed=ITEMS[:2])
+                stream = await execution.arun(plan, seed=TWO_ITEMS)
                 await anext(stream)
 
                 with pytest.raises(InvalidPipelineError, match="open output streams"):
-                    await execution.arun(plan, seed=ITEMS[:2])
+                    await execution.arun(plan, seed=TWO_ITEMS)
 
                 rest = [item async for item in stream]
 
@@ -1081,7 +1041,7 @@ class TestThreadBudget:
 
         def consume() -> None:
             with SyncExecution() as execution:
-                result.extend(execution.run(plan, seed=ITEMS[:2]))
+                result.extend(execution.run(plan, seed=TWO_ITEMS))
 
         assert not _run_on_worker(consume).is_alive()
         assert plan.get_thread_demand("default", is_async=False) == 45
@@ -1121,13 +1081,13 @@ class TestThreadBudget:
 
         def consume() -> None:
             with SyncExecution() as execution:
-                stream = execution.run(plan, seed=ITEMS[:2])
+                stream = execution.run(plan, seed=TWO_ITEMS)
 
                 for _ in range(reads):
                     next(stream)
 
                 stream.close()  # pyright: ignore[reportAttributeAccessIssue]
-                result.extend(execution.run(plan, seed=ITEMS[:2]))
+                result.extend(execution.run(plan, seed=TWO_ITEMS))
 
         assert not _run_on_worker(consume).is_alive()
         assert result == ITEMS[:2]
@@ -1143,11 +1103,11 @@ class TestThreadBudget:
 
         def consume() -> None:
             with SyncExecution() as execution:
-                stream = execution.run(plan, seed=ITEMS[:2])
+                stream = execution.run(plan, seed=TWO_ITEMS)
                 next(stream)
 
                 with pytest.raises(InvalidPipelineError, match="open output streams"):
-                    execution.run(plan, seed=ITEMS[:2])
+                    execution.run(plan, seed=TWO_ITEMS)
 
                 rest.extend(stream)
 
@@ -1160,7 +1120,7 @@ class TestThreadBudget:
 
         with fail_after(1):
             async with AsyncExecution() as execution:
-                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
+                stream = await execution.arun(_nested_plan(), seed=TWO_ITEMS)
 
                 with pytest.raises(
                     InvalidPipelineError, match="nested stored workflow"

@@ -6,7 +6,6 @@ from __future__ import annotations
 import threading
 from functools import partial
 from itertools import count
-from logging import WARNING
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,34 +21,13 @@ from riko.bado.itertools import AsyncTee, AsyncTeeBranch, alist
 from riko.base._exceptions import PipelineError, PipelineStateError
 from riko.base._iterutils import Tee
 from tests import async_test, skipif_sync
-from tests._streams import gen_items
+from tests._streams import AsyncPullLog, PullLog, gen_items
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
 
-def _gen_counted(items, log: list[str], error: Exception | None = None):
-    try:
-        for item in items:
-            log.append("pull")
-            yield item
-
-        if error is not None:
-            raise error
-    finally:
-        log.append("close")
-
-
-async def _agen_counted(items, log: list[str], error: Exception | None = None):
-    try:
-        for item in items:
-            log.append("pull")
-            yield item
-
-        if error is not None:
-            raise error
-    finally:
-        log.append("close")
+_PULL_CLOSE = ["pull", "close"]
 
 
 class _Uncopyable:
@@ -229,13 +207,14 @@ _BAD_LAGS = [
 class TestTee:
     def test_branches_in_any_order_see_every_item_once_pulled(self):
         """Every branch sees each item in order however reads interleave."""
-        log: list[str] = []
-        tee = Tee(_gen_counted(range(4), log))
+        source = PullLog(range(4))
+        tee = Tee(source)
         first, second, third = tee.branch(), tee.branch(), tee.branch()
         assert list(second) == [0, 1, 2, 3]
         assert [next(third), next(first), next(first), next(third)] == [0, 0, 1, 1]
         assert (list(first), list(third)) == ([2, 3], [2, 3])
-        assert log == ["pull"] * 4 + ["close"]
+        assert len(source.pulled) == 4
+        assert source.closes == 1
 
     def test_isolate_copies_for_every_branch_but_the_puller(self):
         """The puller gets the original; siblings get a deep copy."""
@@ -272,8 +251,8 @@ class TestTee:
 
     def test_closing_branches_frees_buffers_then_closes_source_once(self):
         """A closed branch drops its queue; the last close closes the source once."""
-        log: list[str] = []
-        tee = Tee(_gen_counted(range(3), log))
+        source = PullLog(range(3))
+        tee = Tee(source)
         first, second, third = tee.branch(), tee.branch(), tee.branch()
         next(first)
         second.close()
@@ -281,7 +260,8 @@ class TestTee:
         assert list(first) == [1, 2]
         third.close()
         tee.close()
-        assert log == ["pull"] * 3 + ["close"]
+        assert len(source.pulled) == 3
+        assert source.closes == 1
 
     def test_upstream_error_reaches_every_branch(self):
         """The puller raises first; a sibling drains its queue, then re-raises."""
@@ -315,7 +295,7 @@ class TestTee:
 
         assert raised.value.__cause__ is failure
         assert not any(tee._buffers.values())
-        assert log == ["pull", "close"]
+        assert log == _PULL_CLOSE
 
         for branch in (second, third):
             with pytest.raises(PipelineError) as again:
@@ -394,9 +374,9 @@ class TestTee:
 
         thread.join(timeout=1)
         assert not thread.is_alive()
-        assert (results, log) == ([[]], ["pull", "close"])
+        assert (results, log) == ([[]], _PULL_CLOSE)
 
-    def test_a_failing_deferred_close_is_logged_not_raised(self, caplog):
+    def test_a_failing_deferred_close_is_logged_not_raised(self, riko_warnings):
         """The blocked reader logs the source close failure and still ends normally."""
         gate, log, results = threading.Event(), [], []
         failure = OSError("close failed")
@@ -404,20 +384,19 @@ class TestTee:
         tee = Tee(source)
         first, _ = tee.branch(), tee.branch()
 
-        with caplog.at_level(WARNING, logger="riko"):
-            thread = _start(partial(list, first), results)
+        thread = _start(partial(list, first), results)
 
-            try:
-                assert source.reached.wait(timeout=1)
-                tee.close()
-            finally:
-                gate.set()
+        try:
+            assert source.reached.wait(timeout=1)
+            tee.close()
+        finally:
+            gate.set()
 
-            thread.join(timeout=1)
+        thread.join(timeout=1)
 
         assert not thread.is_alive()
-        assert (results, log) == ([[]], ["pull", "close"])
-        assert [(r.getMessage(), r.exc_info[1]) for r in caplog.records] == [
+        assert (results, log) == ([[]], _PULL_CLOSE)
+        assert [(r.getMessage(), r.exc_info[1]) for r in riko_warnings.records] == [
             ("closing the source failed", failure)
         ]
 
@@ -484,49 +463,45 @@ class TestTee:
             with pytest.raises(OSError, match="close failed"):
                 next(branch)
 
-    def test_cleanup_failure_beside_a_read_error_keeps_the_primary(self, caplog):
+    def test_cleanup_failure_beside_a_read_error_keeps_the_primary(self, riko_warnings):
         """The read error stays primary and notes and logs the close failure."""
         error, failure = ValueError("boom"), OSError("close failed")
         tee = Tee(_Source([error], [], close_error=failure))
         first = tee.branch()
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(ValueError, match="boom") as raised:
+        with pytest.raises(ValueError, match="boom") as raised:
             next(first)
 
         assert raised.value.__notes__ == [
             f"closing the source also failed: {failure!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [failure]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
-    def test_cleanup_failure_beside_an_overflow_keeps_the_overflow(self, caplog):
+    def test_cleanup_failure_beside_an_overflow_keeps_the_overflow(self, riko_warnings):
         """The overflow stays primary and notes and logs the close failure."""
         failure = OSError("close failed")
         tee = Tee(_Source([0, 1], [], close_error=failure), max_lag=1)
         first, _ = tee.branch(), tee.branch()
         assert next(first) == 0
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(PipelineError, match="1 items") as raised:
+        with pytest.raises(PipelineError, match="1 items") as raised:
             next(first)
 
         assert raised.value.__notes__ == [
             f"closing the source also failed: {failure!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [failure]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
-    def test_interrupted_cleanup_beside_an_overflow_keeps_the_overflow(self, caplog):
+    def test_interrupted_cleanup_beside_an_overflow_keeps_the_overflow(
+        self, riko_warnings
+    ):
         """The overflow stays primary and discards when its cleanup is interrupted."""
         interrupt = KeyboardInterrupt()
         tee = Tee(_Source([0, 1], [], close_error=interrupt), max_lag=1)
         first, second = tee.branch(), tee.branch()
         assert next(first) == 0
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(KeyboardInterrupt) as raised:
+        with pytest.raises(KeyboardInterrupt) as raised:
             next(first)
 
         assert raised.value is interrupt
@@ -538,15 +513,16 @@ class TestTee:
         assert again.value.__notes__ == [
             f"closing the source also failed: {interrupt!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [interrupt]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [interrupt]
 
     def test_infinite_stream_reads_incrementally(self):
         """Branches over an endless source pull only what is asked for."""
-        log: list[str] = []
-        tee = Tee(_gen_counted(count(), log))
+        source = PullLog(count())
+        tee = Tee(source)
         first, second = tee.branch(), tee.branch()
         assert [next(first), next(first), next(second)] == [0, 1, 0]
-        assert log == ["pull", "pull"]
+        assert len(source.pulled) == 2
+        assert not source.closed
         tee.close()
 
     def test_interrupted_read_reraises_and_fails_siblings_after_the_drain(self):
@@ -629,14 +605,15 @@ class TestAsyncTee:
     @async_test
     async def test_branches_in_any_order_see_every_item_once_pulled(self):
         """Every branch sees each item in order however reads interleave."""
-        log: list[str] = []
-        tee = AsyncTee(_agen_counted(range(4), log))
+        source = AsyncPullLog(range(4))
+        tee = AsyncTee(source)
         first, second, third = tee.branch(), tee.branch(), tee.branch()
         assert await alist(second) == [0, 1, 2, 3]
         pulled = [await anext(b) for b in (third, first, first, third)]
         assert pulled == [0, 0, 1, 1]
         assert (await alist(first), await alist(third)) == ([2, 3], [2, 3])
-        assert log == ["pull"] * 4 + ["close"]
+        assert len(source.pulled) == 4
+        assert source.closes == 1
 
     @async_test
     async def test_isolate_copies_for_every_branch_but_the_puller(self):
@@ -676,8 +653,8 @@ class TestAsyncTee:
     @async_test
     async def test_closing_branches_frees_buffers_then_closes_source_once(self):
         """A closed branch drops its queue; the last close closes the source once."""
-        log: list[str] = []
-        tee = AsyncTee(_agen_counted(range(3), log))
+        source = AsyncPullLog(range(3))
+        tee = AsyncTee(source)
         first, second, third = tee.branch(), tee.branch(), tee.branch()
         await anext(first)
         await second.aclose()
@@ -685,7 +662,8 @@ class TestAsyncTee:
         assert await alist(first) == [1, 2]
         await third.aclose()
         await tee.aclose()
-        assert log == ["pull"] * 3 + ["close"]
+        assert len(source.pulled) == 3
+        assert source.closes == 1
 
     @async_test
     async def test_upstream_error_reaches_every_branch(self):
@@ -721,7 +699,7 @@ class TestAsyncTee:
 
         assert raised.value.__cause__ is failure
         assert not any(tee._buffers.values())
-        assert log == ["pull", "close"]
+        assert log == _PULL_CLOSE
 
         for branch in (second, third):
             with pytest.raises(PipelineError) as again:
@@ -802,7 +780,7 @@ class TestAsyncTee:
                 assert log == ["pull"]
                 gate.set()
 
-        assert (results, log) == ([[]], ["pull", "close"])
+        assert (results, log) == ([[]], _PULL_CLOSE)
 
     @async_test
     async def test_branches_closed_during_the_read_get_no_copy(self):
@@ -828,7 +806,7 @@ class TestAsyncTee:
         await tee.aclose()
 
     @async_test
-    async def test_a_failing_deferred_close_is_logged_not_raised(self, caplog):
+    async def test_a_failing_deferred_close_is_logged_not_raised(self, riko_warnings):
         """The blocked reader logs the source close failure and still ends normally."""
         gate, log, results = Event(), [], []
         failure = OSError("close failed")
@@ -839,15 +817,15 @@ class TestAsyncTee:
         async def read_first() -> None:
             results.append(await alist(first))
 
-        with caplog.at_level(WARNING, logger="riko"), fail_after(1):
+        with fail_after(1):
             async with create_task_group() as tg:
                 tg.start_soon(read_first)
                 await source.reached.wait()
                 await tee.aclose()
                 gate.set()
 
-        assert (results, log) == ([[]], ["pull", "close"])
-        assert [(r.getMessage(), r.exc_info[1]) for r in caplog.records] == [
+        assert (results, log) == ([[]], _PULL_CLOSE)
+        assert [(r.getMessage(), r.exc_info[1]) for r in riko_warnings.records] == [
             ("closing the source failed", failure)
         ]
 
@@ -907,7 +885,7 @@ class TestAsyncTee:
 
         assert (results, tee._read_done, tee._advancer) == ([0] * 4, None, None)
         await _aclose_each(branches)
-        assert log == ["pull", "close"]
+        assert log == _PULL_CLOSE
 
     @async_test
     async def test_cancelling_a_waiter_leaves_the_owed_close_to_the_reader(self):
@@ -937,11 +915,9 @@ class TestAsyncTee:
                 assert log == ["pull"]
                 gate.set()
 
-        assert (results, waiter.cancelled_caught, log) == (
-            [[]],
-            True,
-            ["pull", "close"],
-        )
+        assert results == [[]]
+        assert waiter.cancelled_caught
+        assert log == _PULL_CLOSE
 
     @async_test
     async def test_cancelling_the_advancer_latches_for_survivors(self):
@@ -1038,43 +1014,43 @@ class TestAsyncTee:
                 await anext(branch)
 
     @async_test
-    async def test_cleanup_failure_beside_a_read_error_keeps_the_primary(self, caplog):
+    async def test_cleanup_failure_beside_a_read_error_keeps_the_primary(
+        self, riko_warnings
+    ):
         """The read error stays primary and notes and logs the close failure."""
         error, failure = ValueError("boom"), OSError("close failed")
         tee = AsyncTee(_ASource([error], [], close_error=failure))
         first = tee.branch()
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(ValueError, match="boom") as raised:
+        with pytest.raises(ValueError, match="boom") as raised:
             await anext(first)
 
         assert raised.value.__notes__ == [
             f"closing the source also failed: {failure!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [failure]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
     @async_test
-    async def test_cleanup_failure_beside_an_overflow_keeps_the_overflow(self, caplog):
+    async def test_cleanup_failure_beside_an_overflow_keeps_the_overflow(
+        self, riko_warnings
+    ):
         """The overflow stays primary and notes and logs the close failure."""
         failure = OSError("close failed")
         tee = AsyncTee(_ASource([0, 1], [], close_error=failure), max_lag=1)
         first, _ = tee.branch(), tee.branch()
         assert await anext(first) == 0
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(PipelineError, match="1 items") as raised:
+        with pytest.raises(PipelineError, match="1 items") as raised:
             await anext(first)
 
         assert raised.value.__notes__ == [
             f"closing the source also failed: {failure!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [failure]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [failure]
 
     @async_test
     async def test_interrupted_cleanup_beside_an_overflow_keeps_the_overflow(
-        self, caplog
+        self, riko_warnings
     ):
         """The overflow stays primary and discards when its cleanup is interrupted."""
         interrupt = KeyboardInterrupt()
@@ -1082,9 +1058,7 @@ class TestAsyncTee:
         first, second = tee.branch(), tee.branch()
         assert await anext(first) == 0
 
-        logged = caplog.at_level(WARNING, logger="riko")
-
-        with logged, pytest.raises(KeyboardInterrupt) as raised:
+        with pytest.raises(KeyboardInterrupt) as raised:
             await anext(first)
 
         assert raised.value is interrupt
@@ -1096,20 +1070,21 @@ class TestAsyncTee:
         assert again.value.__notes__ == [
             f"closing the source also failed: {interrupt!r}"
         ]
-        assert [record.exc_info[1] for record in caplog.records] == [interrupt]
+        assert [record.exc_info[1] for record in riko_warnings.records] == [interrupt]
 
     @async_test
     async def test_infinite_stream_reads_incrementally(self):
         """Branches over an endless source pull only what is asked for."""
-        log: list[str] = []
-        tee = AsyncTee(_agen_counted(count(), log))
+        source = AsyncPullLog(count())
+        tee = AsyncTee(source)
         first, second = tee.branch(), tee.branch()
         assert [await anext(first), await anext(first), await anext(second)] == [
             0,
             1,
             0,
         ]
-        assert log == ["pull", "pull"]
+        assert len(source.pulled) == 2
+        assert not source.closed
         await tee.aclose()
 
     @skipif_sync

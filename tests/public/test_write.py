@@ -27,7 +27,7 @@ from riko.types._enums import Formats
 from riko.types._workflow import Endpoint
 from riko.types.modules import WriteConf
 from tests import async_test, is_installed
-from tests._lifecycle import EXPECTED, ITEMS, VALUE, tokenized
+from tests._lifecycle import EXPECTED, HASHED, ITEMS, VALUE, tokenized
 from tests._targets import RecordStore
 
 if TYPE_CHECKING:
@@ -281,15 +281,14 @@ class TestPipelineWrite:
 
     def test_leaf_write_produces_one_framed_document(self, tmp_path):
         path = tmp_path / "out.json"
-        pipeline = Pipeline().hash(options={"assign": "h"}).write(path)
+        pipeline = HASHED.write(path)
         assert len(list(pipeline(ITEMS))) == len(ITEMS)
         assert path.read_bytes().startswith(b"[")
         assert path.read_bytes().endswith(b"]")
 
     def test_write_does_not_rerun_preceding_module(self, tmp_path):
-        hashed = Pipeline().hash(options={"assign": "h"})
-        through = list(hashed.write(tmp_path / "out.json")(ITEMS))
-        assert through == list(hashed(ITEMS))
+        through = list(HASHED.write(tmp_path / "out.json")(ITEMS))
+        assert through == list(HASHED(ITEMS))
 
     def test_non_file_target_execution_unsupported(self):
         pipeline = Pipeline().write(RecordStore())
@@ -318,7 +317,7 @@ class TestPipelineWrite:
 
 class TestFormats:
     def test_format_values(self):
-        assert [f.value for f in Formats] == [
+        assert [f.value for f in Formats] == [  # reuse-ok: get_envelope_values
             "csv",
             "geojson",
             "json",
@@ -505,7 +504,8 @@ class TestGetTempPath:
 
 class TestWriteMode:
     def test_mode_values(self):
-        assert [m.value for m in WriteMode] == ["append", "merge", "replace", "delete"]
+        modes = [m.value for m in WriteMode]  # reuse-ok: get_envelope_values
+        assert modes == ["append", "merge", "replace", "delete"]
 
 
 class TestWriteCapabilities:

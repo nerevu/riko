@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import pickle  # noqa: S403
 from collections import ChainMap
 from functools import partial
 from itertools import chain
@@ -75,7 +74,7 @@ from riko.types._workflow import (
     parse_port,
 )
 from riko.types._workflow import PortEdge as EdgeBase
-from tests import ROUND_TRIPS
+from tests import ROUND_TRIPS, pickle_round_trip
 from tests._resources import (
     CREDENTIAL,
     SCALAR,
@@ -97,6 +96,7 @@ from tests._resources import (
     wrapped_sync_gen_factory,
 )
 from tests._targets import RecordStore
+from tests._workflows import require_module_node
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -145,7 +145,7 @@ class TestFrozenDict:
     def test_json_freeze_marks_what_it_builds_and_keeps_it(self):
         frozen = json_freeze({"a": [1, {"b": 2}]})
         plain = FrozenDict({"a": [1, {"b": 2}]})
-        restored = pickle.loads(pickle.dumps(frozen))  # noqa: S301
+        restored = pickle_round_trip(frozen)
         copied = FrozenJSONDict(frozen)
 
         assert json_freeze(frozen) is frozen
@@ -532,8 +532,7 @@ class TestWorkflowFields:
         restored = round_trip(flow)
 
         assert restored == flow
-        restored_node = restored.nodes["a"]
-        assert isinstance(restored_node, ModuleNode)
+        restored_node = require_module_node(restored, "a")
         rules = restored_node.conf["rules"]
         assert isinstance(rules, tuple)
         assert isinstance(rules[0], FrozenDict)
