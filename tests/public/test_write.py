@@ -65,6 +65,12 @@ PARITY_WRITES = [
 ]
 
 
+NESTED_DOTDICT_WRITES = [
+    pytest.param("json", b'[{"a": {"b": [1, {"c": 2}]}}]', id="json"),
+    pytest.param("jsonl", b'{"a": {"b": [1, {"c": 2}]}}', id="jsonl"),
+]
+
+
 SKIPPED_TARGETS = [
     pytest.param({"fmt": "bogus"}, id="bogus"),
     pytest.param({"fmt": "list"}, id="list"),
@@ -133,13 +139,7 @@ class TestWrite:
         assert sync_path.read_bytes() == expected
         assert async_path.read_bytes() == expected
 
-    @pytest.mark.parametrize(
-        ("fmt", "expected"),
-        [
-            ("json", b'[{"a": {"b": [1, {"c": 2}]}}]'),
-            ("jsonl", b'{"a": {"b": [1, {"c": 2}]}}'),
-        ],
-    )
+    @pytest.mark.parametrize(("fmt", "expected"), NESTED_DOTDICT_WRITES)
     def test_nested_dotdict_items(self, tmp_path, fmt, expected):
         source = tmp_path / "nested.json"
         source.write_text('[{"a": {"b": [1, {"c": 2}]}}]')

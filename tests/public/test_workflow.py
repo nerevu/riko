@@ -34,6 +34,7 @@ from tests._workflows import (
     CALLABLE_MATCH,
     EDGE_FAMILY_MISMATCHES,
     RAW_WORKFLOW,
+    build_edge,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,19 @@ _HASH_FLOW: dict[str, Any] = {
     "outputs": OUTPUT_A,
 }
 _EMPTY_FLOW: dict[str, Any] = {"nodes": [], "outputs": {}}
+_LIST_FIELDS = ("nodes", "edges")
+_NON_LISTS = ("ab", b"ab", {"a": 1}, 3)
+_BAD_SCHEMAS = "Workflow 'input_schemas'"
+_UNBOUND_BINDINGS = {
+    "bytes": b"db",
+    "empty-name": "",
+    "non-str-alias": {"db": 1},
+    "none-alias": {"db": None},
+    "non-str-key": {1: "db"},
+    "empty-key": {"": "db"},
+    "non-str-item": ["db", 1],
+}
+_UNBOUND_MSG = "must bind non-empty strings"
 
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
@@ -77,6 +91,11 @@ NODE_FAMILIES = (
 def _fetch_workflow() -> Workflow:
     return Workflow().with_nodes(ModuleNode(id="fetch-1", name="fetch"))
 
+
+WORKFLOW_BUILDS = [
+    pytest.param(_fetch_workflow, id="constructed"),
+    pytest.param(partial(Workflow.from_raw, RAW_WORKFLOW), id="normalized"),
+]
 
 APPENDS = [
     pytest.param(lambda flow: flow.with_nodes(_B), id="node"),
@@ -107,12 +126,10 @@ APPEND_REJECTIONS = [
 FIELD_TYPE_REJECTIONS = [
     *(
         pytest.param(
-            _HASH_FLOW | {field: value},
-            f"'{field}' must be a list",
-            id=f"{field}-{type(value).__name__}",
+            _HASH_FLOW | {f: v}, f"'{f}' must be a list", id=f"{f}-{type(v).__name__}"
         )
-        for field in ("nodes", "edges")
-        for value in ("ab", b"ab", {"a": 1}, 3)
+        for f in _LIST_FIELDS
+        for v in _NON_LISTS
     ),
     pytest.param(_HASH_FLOW | {"edges": [("a", "b")]}, "Workflow edge", id="edge"),
     pytest.param(
@@ -127,29 +144,19 @@ FIELD_TYPE_REJECTIONS = [
     ),
     pytest.param(_EMPTY_FLOW | {"outputs": "abc"}, "Workflow 'outputs'", id="outputs"),
     pytest.param(
-        _EMPTY_FLOW | {"input_schemas": "abc"},
-        "Workflow 'input_schemas'",
-        id="input-schemas",
+        _EMPTY_FLOW | {"input_schemas": "abc"}, _BAD_SCHEMAS, id="input-schemas"
     ),
-    *(
-        pytest.param(
-            _EMPTY_FLOW | {"input_schemas": {"q": schema}},
-            "Workflow 'input_schemas'",
-            id=f"schema-{type(schema).__name__}",
-        )
-        for schema in (5, "string")
+    pytest.param(
+        _EMPTY_FLOW | {"input_schemas": {"q": 5}}, _BAD_SCHEMAS, id="schema-int"
+    ),
+    pytest.param(
+        _EMPTY_FLOW | {"input_schemas": {"q": "string"}}, _BAD_SCHEMAS, id="schema-str"
     ),
 ]
 
 
 class TestWorkflow:
-    @pytest.mark.parametrize(
-        "build",
-        [
-            pytest.param(_fetch_workflow, id="constructed"),
-            pytest.param(partial(Workflow.from_raw, RAW_WORKFLOW), id="normalized"),
-        ],
-    )
+    @pytest.mark.parametrize("build", WORKFLOW_BUILDS)
     def test_workflow_version_defaults_to_2(self, build):
         assert build().version == "2"
 
@@ -176,10 +183,7 @@ class TestWorkflow:
         flow = Workflow.from_raw(
             {
                 "nodes": [{"id": "a", "name": "fetch"}, {"id": "b", "name": "sort"}],
-                "edges": [
-                    {"source": {"node": "a"}, "target": {"node": "b"}},
-                    {"source": {"node": "b"}, "target": {"node": "a"}},
-                ],
+                "edges": [build_edge("a", "b"), build_edge("b", "a")],
             }
         )
         assert repr(flow) == "Workflow(nodes: 2, edges: 2)"
@@ -376,6 +380,16 @@ REFERENCED_INPUTS = [
     ),
 ]
 
+JSON_FIELD_REJECTIONS = [
+    pytest.param(
+        ActionNode, {"backend": "file", "params": 1}, "ActionNode 'params'", id="params"
+    ),
+    pytest.param(CacheNode, {"policy": 1}, "CacheNode 'policy'", id="cache-policy"),
+    pytest.param(
+        SubscribeNode, {"policy": 1}, "SubscribeNode 'policy'", id="subscribe-policy"
+    ),
+]
+
 
 class TestNodes:
     @pytest.mark.parametrize(("node", "expected"), REFERENCED_INPUTS)
@@ -401,52 +415,32 @@ class TestNodes:
         with pytest.raises(InvalidPipelineError, match=f"{match} must not be blank"):
             build()
 
-    @pytest.mark.parametrize(
-        ("node", "kwargs", "match"),
-        [
-            (ActionNode, {"backend": "file", "params": 1}, "ActionNode 'params'"),
-            (CacheNode, {"policy": 1}, "CacheNode 'policy'"),
-            (SubscribeNode, {"policy": 1}, "SubscribeNode 'policy'"),
-        ],
-    )
+    @pytest.mark.parametrize(("node", "kwargs", "match"), JSON_FIELD_REJECTIONS)
     def test_json_fields_name_themselves(self, node: Any, kwargs: Any, match: str):
         with pytest.raises(InvalidPipelineError, match=f"{match} must be a mapping"):
             node(id="a", name="n", **kwargs)
 
 
+RESOURCE_FORMS = [
+    pytest.param("db", {"db": "db"}, id="str"),
+    pytest.param(["db", "cache"], {"db": "db", "cache": "cache"}, id="iterable"),
+    pytest.param({"db": "primary_db"}, {"db": "primary_db"}, id="mapping"),
+    pytest.param(None, {}, id="none"),
+]
+BINDING_REJECTIONS = [
+    *(pytest.param(v, _UNBOUND_MSG, id=k) for k, v in _UNBOUND_BINDINGS.items()),
+    pytest.param(5, "must be a str, mapping, or iterable", id="non-binding"),
+]
+
+
 class TestResourceBinding:
-    @pytest.mark.parametrize(
-        ("resources", "expected"),
-        [
-            ("db", {"db": "db"}),
-            (["db", "cache"], {"db": "db", "cache": "cache"}),
-            ({"db": "primary_db"}, {"db": "primary_db"}),
-            (None, {}),
-        ],
-    )
+    @pytest.mark.parametrize(("resources", "expected"), RESOURCE_FORMS)
     def test_accepted_forms_normalize(self, resources: Any, expected: dict):
         assert (
             ModuleNode(id="a", name="hash", resources=resources).resources == expected
         )
 
-    @pytest.mark.parametrize(
-        ("resources", "match"),
-        [
-            *(
-                pytest.param(value, "must bind non-empty strings", id=repr(value))
-                for value in (
-                    b"db",
-                    "",
-                    {"db": 1},
-                    {"db": None},
-                    {1: "db"},
-                    {"": "db"},
-                    ["db", 1],
-                )
-            ),
-            pytest.param(5, "must be a str, mapping, or iterable", id="non-binding"),
-        ],
-    )
+    @pytest.mark.parametrize(("resources", "match"), BINDING_REJECTIONS)
     def test_invalid_bindings_are_rejected(self, resources: Any, match: str):
         with pytest.raises(InvalidPipelineError, match=f"node 'resources' {match}"):
             ModuleNode(id="a", name="hash", resources=resources)
@@ -505,6 +499,27 @@ class TestRequireRunnableOnly:
             flow.require_runnable_only("execution")
 
 
+VALID_GRAPHS = [
+    pytest.param([_A], [], "a", (), id="single-node"),
+    pytest.param(
+        [_A, ModuleNode(id="b", name="fetch"), ModuleNode(id="c", name="join")],
+        [
+            StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
+            StreamEdge(Endpoint("b", "out"), Endpoint("c", "in:1")),
+        ],
+        "c",
+        (),
+        id="distinct-fan-in-ports",
+    ),
+    pytest.param(
+        [_A, SubscribeNode(id="s", name="sub")],
+        [PublishEdge(Endpoint("a", "out"), Endpoint("s", "in"))],
+        "a",
+        (),
+        id="publish-to-subscribe",
+    ),
+    pytest.param([_HAS_DB], [], "a", ("prod",), id="declared-resource"),
+]
 INVALID_WORKFLOWS = [
     pytest.param(
         {"nodes": [_A], "outputs": {"default": _A_OUT}, "version": "1"},
@@ -625,36 +640,7 @@ def _counted_source(consumed):
 
 
 class TestValidate:
-    @pytest.mark.parametrize(
-        ("nodes", "edges", "output", "resources"),
-        [
-            pytest.param([_A], [], "a", (), id="single-node"),
-            pytest.param(
-                [_A, ModuleNode(id="b", name="fetch"), ModuleNode(id="c", name="join")],
-                [
-                    StreamEdge(Endpoint("a", "out"), Endpoint("c", "in")),
-                    StreamEdge(Endpoint("b", "out"), Endpoint("c", "in:1")),
-                ],
-                "c",
-                (),
-                id="distinct-fan-in-ports",
-            ),
-            pytest.param(
-                [_A, SubscribeNode(id="s", name="sub")],
-                [PublishEdge(Endpoint("a", "out"), Endpoint("s", "in"))],
-                "a",
-                (),
-                id="publish-to-subscribe",
-            ),
-            pytest.param(
-                [ModuleNode(id="a", name="fetch", resources={"db": "prod"})],
-                [],
-                "a",
-                ("prod",),
-                id="declared-resource",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("nodes", "edges", "output", "resources"), VALID_GRAPHS)
     def test_valid_graphs_pass(self, nodes, edges, output, resources):
         outputs = {"default": Endpoint(output, "out")}
         flow = _workflow(nodes, edges=edges, outputs=outputs, resources=resources)

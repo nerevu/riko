@@ -817,12 +817,27 @@ class TestAsyncUrlOpen:
                 assert sync_result == f.read()
 
 
+FOREIGN_NEWLINES = [
+    pytest.param(b"abc\r\rdef", ["abc", "", "def"], id="doubled-cr"),
+    pytest.param(b"\rabc", ["", "abc"], id="leading-cr"),
+    pytest.param(b"abc\rdef\r", ["abc", "def", ""], id="trailing-cr"),
+]
 PARTIAL_READS = [
     pytest.param(
         b"abc\nde\n", BytesReencoder, list, [b"c\n", b"de\n"], id="bytes-iter"
     ),
     pytest.param(b"abc\nde\n", BytesReencoder, bytes, b"c\nde\n", id="bytes-buffer"),
     pytest.param("abc\nde\n", TextReencoder, list, ["c\n", "de\n"], id="text-iter"),
+]
+EMPTY_SOURCES = [
+    pytest.param(b"", TextReencoder, {}, "", id="text"),
+    pytest.param(b"", BytesReencoder, {}, b"", id="bytes"),
+    pytest.param(b"\xff\xfe", TextReencoder, {"fromenc": "utf-16"}, "", id="utf16-bom"),
+]
+BOM_READS = [
+    pytest.param(TextReencoder, {}, "﻿<r/>\n", id="text-keeps-bom"),
+    pytest.param(TextReencoder, {"remove_BOM": True}, "<r/>\n", id="text-drops-bom"),
+    pytest.param(BytesReencoder, {"remove_BOM": True}, b"<r/>\n", id="bytes-drops-bom"),
 ]
 
 
@@ -863,14 +878,7 @@ class TestReencode:
         assert reader.readlines() == [f"abc{linesep}", f"def{linesep}", "ghi"]
         assert bare == ["abc", "def", "ghi"]
 
-    @pytest.mark.parametrize(
-        ("data", "expected"),
-        [
-            (b"abc\r\rdef", ["abc", "", "def"]),
-            (b"\rabc", ["", "abc"]),
-            (b"abc\rdef\r", ["abc", "def", ""]),
-        ],
-    )
+    @pytest.mark.parametrize(("data", "expected"), FOREIGN_NEWLINES)
     def test_foreign_newlines_keep_blank_lines(self, data, expected):
         """Each carriage return ends exactly one line, so blank lines survive."""
         full = TextReencoder(BytesIO(data)).read()
@@ -901,28 +909,14 @@ class TestReencode:
         data = "a\nb\nc\n".encode("utf-16")
         assert BytesReencoder(BytesIO(data), "utf-16").read() == b"a\nb\nc\n"
 
-    @pytest.mark.parametrize(
-        ("data", "cls", "kwargs", "expected"),
-        [
-            (b"", TextReencoder, {}, ""),
-            (b"", BytesReencoder, {}, b""),
-            (b"\xff\xfe", TextReencoder, {"fromenc": "utf-16"}, ""),
-        ],
-    )
+    @pytest.mark.parametrize(("data", "cls", "kwargs", "expected"), EMPTY_SOURCES)
     def test_empty_source_reads_empty(self, data, cls, kwargs, expected):
         """A source with no content reads as empty instead of raising."""
         reader = cls(BytesIO(data), **kwargs)
         assert reader.read() == expected
         assert reader.readline() == expected
 
-    @pytest.mark.parametrize(
-        ("cls", "kwargs", "expected"),
-        [
-            (TextReencoder, {}, "﻿<r/>\n"),
-            (TextReencoder, {"remove_BOM": True}, "<r/>\n"),
-            (BytesReencoder, {"remove_BOM": True}, b"<r/>\n"),
-        ],
-    )
+    @pytest.mark.parametrize(("cls", "kwargs", "expected"), BOM_READS)
     def test_remove_bom_strips_the_byte_order_mark(self, cls, kwargs, expected):
         """``remove_BOM`` drops a leading byte order mark; it is kept by default."""
         data = b"\xef\xbb\xbf<r/>\n"
@@ -1377,6 +1371,22 @@ def _sync_forever(closed: list[bool]):
         closed.append(True)
 
 
+MAP_STREAMS = [
+    pytest.param(async_map_stream, id="unordered"),
+    pytest.param(async_map_ordered_stream, id="ordered"),
+]
+INFLIGHT_BOUNDS = [
+    pytest.param(async_map_stream, 3 + 2 + 2, id="unordered"),
+    pytest.param(async_map_ordered_stream, 2 * (3 + 2), id="ordered"),
+]
+BUDGET_ARRANGEMENTS = [
+    pytest.param(async_map_stream, sorted, id="unordered"),
+    pytest.param(async_map_ordered_stream, list, id="ordered"),
+]
+EARLY_CLOSE_FIRSTS = [
+    pytest.param(async_map_stream, {0, 2}, id="unordered"),
+    pytest.param(async_map_ordered_stream, {0}, id="ordered"),
+]
 STREAM_OPTION_REJECTIONS = [
     pytest.param({"limit": 0}, "limit must be at least 1", id="limit"),
     pytest.param({"buffer": -1}, "buffer cannot be negative", id="buffer"),
@@ -1392,13 +1402,7 @@ class TestAsyncMapStream:
     """
 
     @skipif_sync
-    @pytest.mark.parametrize(
-        "stream",
-        [
-            pytest.param(async_map_stream, id="unordered"),
-            pytest.param(async_map_ordered_stream, id="ordered"),
-        ],
-    )
+    @pytest.mark.parametrize("stream", MAP_STREAMS)
     def test_empty_source_yields_nothing(self, stream):
         assert run(alist, stream(_double, [], limit=4)) == []
 
@@ -1411,13 +1415,7 @@ class TestAsyncMapStream:
         results = run(alist, async_map_stream(_double, gen(), limit=2))
         assert sorted(results) == [0, 2, 4, 6, 8]
 
-    @pytest.mark.parametrize(
-        ("stream", "bound"),
-        [
-            pytest.param(async_map_stream, 3 + 2 + 2, id="unordered"),
-            pytest.param(async_map_ordered_stream, 2 * (3 + 2), id="ordered"),
-        ],
-    )
+    @pytest.mark.parametrize(("stream", "bound"), INFLIGHT_BOUNDS)
     @async_test
     async def test_backpressure_bounds_inflight(self, stream, bound):
         """An unbounded-ish source with a slow consumer must not run far ahead."""
@@ -1471,13 +1469,7 @@ class TestAsyncMapStream:
         assert len(results) == 4
         assert state["peak"] <= 3
 
-    @pytest.mark.parametrize(
-        ("stream", "arrange"),
-        [
-            pytest.param(async_map_stream, sorted, id="unordered"),
-            pytest.param(async_map_ordered_stream, list, id="ordered"),
-        ],
-    )
+    @pytest.mark.parametrize(("stream", "arrange"), BUDGET_ARRANGEMENTS)
     @async_test
     async def test_shared_budget_caps_concurrent_streams(self, stream, arrange):
         """Two concurrent maps sharing a budget of 3 never exceed it."""
@@ -1492,13 +1484,7 @@ class TestAsyncMapStream:
         assert [arrange(result) for result in results] == [list(range(10))] * 2
         assert 1 < state["peak"] <= 3
 
-    @pytest.mark.parametrize(
-        ("stream", "firsts"),
-        [
-            pytest.param(async_map_stream, {0, 2}, id="unordered"),
-            pytest.param(async_map_ordered_stream, {0}, id="ordered"),
-        ],
-    )
+    @pytest.mark.parametrize(("stream", "firsts"), EARLY_CLOSE_FIRSTS)
     @pytest.mark.parametrize(
         "source", [_forever, _sync_forever], ids=["async-source", "sync-source"]
     )

@@ -108,6 +108,7 @@ _RESOLVED = "Expected a resolved resource value"
 _NODES = (ModuleNode, ReadNode, WriteNode, ActionNode, CacheNode, SubscribeNode)
 _NODE_ALIASES = frozenset({"family", "format"})
 _EDGE_ALIASES = frozenset({"family"})
+_MERGE = {"mode": "merge"}
 
 
 def gen_client(*_args: object, **_kwargs: object):
@@ -277,6 +278,10 @@ LIFECYCLE_FACTORY_PLANS = [
     pytest.param(wrapped_sync_cm_factory, SyncLifecyclePlan, id="wraps-sync-cm"),
     pytest.param(wrapped_async_cm_factory, AsyncLifecyclePlan, id="wraps-async-cm"),
 ]
+VALUE_FACTORY_PLANS = [
+    pytest.param(sync_callable_factory, close_connection, False, id="sync"),
+    pytest.param(async_callable_factory, close_async_connection, True, id="async"),
+]
 
 
 @pytest.fixture
@@ -329,13 +334,7 @@ class TestResource:
         resource = Resource.from_factory(factory)
         test_metadata(resource, ReusableResource, external=False, reusable=True)
 
-    @pytest.mark.parametrize(
-        ("factory", "cleanup", "is_async"),
-        [
-            (sync_callable_factory, close_connection, False),
-            (async_callable_factory, close_async_connection, True),
-        ],
-    )
+    @pytest.mark.parametrize(("factory", "cleanup", "is_async"), VALUE_FACTORY_PLANS)
     def test_value_factory_metadata[T](
         self, factory: ValueFactory[T], cleanup, is_async: bool
     ):
@@ -553,6 +552,20 @@ _EXISTING_IDS = [
     pytest.param(("fetch-a",), "fetch-1", id="custom-id"),
     pytest.param(("fetch-2",), "fetch-1", id="gap"),
 ]
+LEGACY_PORTS = [
+    pytest.param("_INPUT", "in", "in", id="input"),
+    pytest.param("_OTHER", "in", "in:1", id="other"),
+    pytest.param("_OTHER2", "in", "in:2", id="other2"),
+    pytest.param("_OTHER5", "in", "in:5", id="other5"),
+    pytest.param("_OUTPUT", "out", "out", id="output"),
+    pytest.param("_OUTPUT1", "out", "out", id="output1"),
+    pytest.param("_OUTPUT2", "out", "out:1", id="output2"),
+    pytest.param("_OUTPUT4", "out", "out:3", id="output4"),
+    pytest.param("out:matched", "out", "out:matched", id="out-matched"),
+    pytest.param("in", "in", "in", id="in"),
+    pytest.param("count", "in", "in:count", id="count"),
+    pytest.param("matched", "out", "out:matched", id="matched"),
+]
 
 
 class TestNormalizeInternals:
@@ -574,23 +587,7 @@ class TestNormalizeInternals:
         flow = Workflow(nodes=[ModuleNode(id=node_id, name="fetch") for node_id in ids])
         assert flow.get_node_id("fetch") == normalized == expected
 
-    @pytest.mark.parametrize(
-        ("legacy", "direction", "canonical"),
-        [
-            ("_INPUT", "in", "in"),
-            ("_OTHER", "in", "in:1"),
-            ("_OTHER2", "in", "in:2"),
-            ("_OTHER5", "in", "in:5"),
-            ("_OUTPUT", "out", "out"),
-            ("_OUTPUT1", "out", "out"),
-            ("_OUTPUT2", "out", "out:1"),
-            ("_OUTPUT4", "out", "out:3"),
-            ("out:matched", "out", "out:matched"),
-            ("in", "in", "in"),
-            ("count", "in", "in:count"),
-            ("matched", "out", "out:matched"),
-        ],
-    )
+    @pytest.mark.parametrize(("legacy", "direction", "canonical"), LEGACY_PORTS)
     def test_normalize_port_maps_open_ended_legacy_series(
         self, legacy, direction, canonical
     ):
@@ -602,6 +599,21 @@ class TestNormalizeInternals:
         assert {builder.family for builder in _NODE_BUILDERS.values()} == families
 
 
+PARSED_PORTS = [
+    pytest.param("in", ParsedPort("in", None, None), id="in"),
+    pytest.param("out", ParsedPort("out", None, None), id="out"),
+    pytest.param("in:1", ParsedPort("in", 1, None), id="in-1"),
+    pytest.param("out:2", ParsedPort("out", 2, None), id="out-2"),
+    pytest.param(
+        "out:matched", ParsedPort("out", None, PortName("matched")), id="out-matched"
+    ),
+    pytest.param("in:count", ParsedPort("in", None, PortName("count")), id="in-count"),
+]
+PORT_KINDS = [
+    pytest.param("in", (True, False), id="default"),
+    pytest.param("in:1", (False, True), id="positional"),
+    pytest.param("in:count", (False, False), id="named"),
+]
 BAD_PORTS = [
     pytest.param("sideways", "invalid port direction", id="direction-sideways"),
     pytest.param("up:1", "invalid port direction", id="direction-up-1"),
@@ -617,28 +629,11 @@ BAD_PORTS = [
 
 
 class TestParsePort:
-    @pytest.mark.parametrize(
-        ("port", "expected"),
-        [
-            ("in", ParsedPort("in", None, None)),
-            ("out", ParsedPort("out", None, None)),
-            ("in:1", ParsedPort("in", 1, None)),
-            ("out:2", ParsedPort("out", 2, None)),
-            ("out:matched", ParsedPort("out", None, PortName("matched"))),
-            ("in:count", ParsedPort("in", None, PortName("count"))),
-        ],
-    )
+    @pytest.mark.parametrize(("port", "expected"), PARSED_PORTS)
     def test_parse_port_grammar(self, port, expected):
         assert parse_port(port) == expected
 
-    @pytest.mark.parametrize(
-        ("port", "expected"),
-        [
-            pytest.param("in", (True, False), id="default"),
-            pytest.param("in:1", (False, True), id="positional"),
-            pytest.param("in:count", (False, False), id="named"),
-        ],
-    )
+    @pytest.mark.parametrize(("port", "expected"), PORT_KINDS)
     def test_parse_port_kind_predicates(self, port, expected):
         parsed = parse_port(port)
 
@@ -691,33 +686,35 @@ class TestRawWorkflowFields:
         assert typed_dict_keys(RawEdge)[0] == {"source", "target"}
 
 
+DEFINITION_SETTING_REJECTIONS = [
+    pytest.param({"context": "x"}, "'context' must be of type Context", id="context"),
+    pytest.param(
+        {"settings": {}}, "'settings' must be of type ExecutionSettings", id="settings"
+    ),
+]
+
+
 class TestPipelineDefinitionFields:
     def test_a_context_is_accepted(self):
         context = Context()
         assert PipelineDefinition(context=context).context is context
 
-    @pytest.mark.parametrize(
-        ("kwargs", "match"),
-        [
-            ({"context": "x"}, "'context' must be of type Context"),
-            ({"settings": {}}, "'settings' must be of type ExecutionSettings"),
-        ],
-    )
+    @pytest.mark.parametrize(("kwargs", "match"), DEFINITION_SETTING_REJECTIONS)
     def test_run_settings_are_checked_when_built(self, kwargs: Any, match: str):
         with pytest.raises(TypeError, match=match):
             PipelineDefinition(**kwargs)
 
 
+WRITE_KEY_FORMS = [
+    pytest.param({}, (), id="omitted"),
+    pytest.param({"keys": ("endpoint_id",)}, ("endpoint_id",), id="tuple"),
+    pytest.param({"keys": ["id"]}, ("id",), id="list"),
+    pytest.param({"keys": "id"}, ("id",), id="bare-key-not-split"),
+]
+
+
 class TestWriteOperation:
-    @pytest.mark.parametrize(
-        ("kwargs", "expected"),
-        [
-            pytest.param({}, (), id="omitted"),
-            pytest.param({"keys": ("endpoint_id",)}, ("endpoint_id",), id="tuple"),
-            pytest.param({"keys": ["id"]}, ("id",), id="list"),
-            pytest.param({"keys": "id"}, ("id",), id="bare-key-not-split"),
-        ],
-    )
+    @pytest.mark.parametrize(("kwargs", "expected"), WRITE_KEY_FORMS)
     def test_keys_normalize_to_a_tuple(self, kwargs: dict[str, Any], expected):
         assert WriteOperation(WriteMode.MERGE, **kwargs).keys == expected
 
@@ -760,15 +757,15 @@ class TestResolveFormat:
             resolve_format("out.txt", None)
 
 
+SUPPORTED_KEY_MODES = [
+    pytest.param(WriteMode.MERGE, ("id",), id="match-keyed"),
+    pytest.param(WriteMode.APPEND, (), id="idempotent-unkeyed"),
+    pytest.param(WriteMode.APPEND, ("id",), id="idempotent-keyed"),
+]
+
+
 class TestValidateTargetMode:
-    @pytest.mark.parametrize(
-        ("mode", "keys"),
-        [
-            pytest.param(WriteMode.MERGE, ("id",), id="match-keyed"),
-            pytest.param(WriteMode.APPEND, (), id="idempotent-unkeyed"),
-            pytest.param(WriteMode.APPEND, ("id",), id="idempotent-keyed"),
-        ],
-    )
+    @pytest.mark.parametrize(("mode", "keys"), SUPPORTED_KEY_MODES)
     def test_supported_key_combinations(self, mode, keys):
         target = RecordStore()
         capabilities = target.get_capabilities()
@@ -784,6 +781,17 @@ UNSUPPORTED_FILE_MODES = [
     pytest.param("out.csv", "merge", id="merge"),
     pytest.param("out.json", "append", id="append-framed-json"),
     pytest.param("out.geojson", "append", id="append-framed-geojson"),
+]
+CALL_SITE_REJECTIONS = [
+    pytest.param(
+        {"mode": "bogus"}, ValueError, "Invalid WriteMode: 'bogus'", id="mode"
+    ),
+    pytest.param(
+        _MERGE | {"keys": 5}, TypeError, "keys must be a string", id="keys-type"
+    ),
+    pytest.param(
+        _MERGE | {"keys": ["a", "a"]}, ValueError, "duplicate keys", id="duplicate-keys"
+    ),
 ]
 
 
@@ -804,14 +812,7 @@ class TestBuildWrite:
         with pytest.raises(ValueError, match=f"does not support the '{mode}'"):
             build_write(FileTarget(dest), mode)
 
-    @pytest.mark.parametrize(
-        ("kwargs", "error", "match"),
-        [
-            ({"mode": "bogus"}, ValueError, "Invalid WriteMode: 'bogus'"),
-            ({"mode": "merge", "keys": 5}, TypeError, "keys must be a string"),
-            ({"mode": "merge", "keys": ["a", "a"]}, ValueError, "duplicate keys"),
-        ],
-    )
+    @pytest.mark.parametrize(("kwargs", "error", "match"), CALL_SITE_REJECTIONS)
     def test_build_write_raises_call_site_errors(self, kwargs, error, match):
         with pytest.raises(error, match=match):
             build_write("out.csv", **kwargs)

@@ -58,6 +58,11 @@ CALLABLE_MATCH = r"callable node\(s\) \['len-1'\]"
 CALLABLE_FLOW = Workflow().with_nodes(CallableNode(id="len-1", name="len", fn=len))
 
 
+def build_edge(source: str, target: str, **extra: object) -> dict[str, object]:
+    """Builds a raw edge from node ``source`` to node ``target`` with ``extra`` keys."""
+    return {"source": {"node": source}, "target": {"node": target}, **extra}
+
+
 def run_workflow(flow: Workflow, *, context: Context | None = None) -> list[Item]:
     """Runs ``flow`` through a synchronous execution (default: a test ``Context``)."""
     items: list[Item] = []

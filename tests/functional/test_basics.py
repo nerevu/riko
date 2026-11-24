@@ -259,6 +259,10 @@ WHOLE_STREAMS = [
         id="input-override",
     ),
 ]
+FETCHPAGE_PIPES = [
+    pytest.param("pipe_9420a757a49ddf11d8b98349abb5bcf4", id="plain"),
+    pytest.param("pipe_188eca77fd28c96c559f71f5729d91ec", id="within-loop"),
+]
 
 
 UNSUPPORTED_MODULES = [
@@ -581,13 +585,7 @@ class TestStoredWorkflows:
         for item in contains:
             assert item in items
 
-    @pytest.mark.parametrize(
-        "pipe_name",
-        [
-            pytest.param("pipe_9420a757a49ddf11d8b98349abb5bcf4", id="plain"),
-            pytest.param("pipe_188eca77fd28c96c559f71f5729d91ec", id="within-loop"),
-        ],
-    )
+    @pytest.mark.parametrize("pipe_name", FETCHPAGE_PIPES)
     def test_fetchpage(self, pipe_name):
         """Loads a workflow containing a fetchpage module (plain and within a loop)."""
         items = self._run_example(pipe_name)

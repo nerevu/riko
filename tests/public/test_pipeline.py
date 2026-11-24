@@ -10,7 +10,7 @@ import warnings
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import nullcontext
 from functools import partial
-from math import inf
+from math import inf, nan
 from operator import itemgetter, methodcaller
 from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
@@ -248,6 +248,35 @@ def _assert_embed(node):
     assert node.options == _OPTIONS
 
 
+OR_REJECTIONS = [
+    pytest.param(lambda p: p | 3, TypeError, "unsupported", id="or"),
+    pytest.param(lambda p: 3 | p, TypeError, "unsupported", id="ror"),
+    pytest.param(lambda p: p | ("sort", {}), TypeError, "tuple", id="pair"),
+    pytest.param(lambda p: p | len, TypeError, r"\.map\(fn\)", id="function"),
+    pytest.param(
+        lambda p: (
+            p.with_resource("db", Resource.from_external(1))
+            | p.with_resource("db", Resource.from_external(2))
+        ),
+        InvalidPipelineError,
+        "different resources",
+        id="resource-clash",
+    ),
+    pytest.param(
+        lambda p: p | p.with_execution(concurrency=2),
+        InvalidPipelineError,
+        "execution settings",
+        id="settings",
+    ),
+    pytest.param(
+        lambda p: p | p.with_context(Context(inputs={"a": 1})),
+        InvalidPipelineError,
+        "not inputs or a test flag",
+        id="context",
+    ),
+]
+
+
 class TestPipelineChaining:
     def test_pipe_appends_node_and_edge(self):
         p1 = Pipeline.from_module("fetch")
@@ -351,36 +380,7 @@ class TestPipelineChaining:
         with pytest.raises(AttributeError):
             getattr(Pipeline.from_module("fetch"), name)
 
-    @pytest.mark.parametrize(
-        ("combine", "error", "match"),
-        [
-            pytest.param(lambda p: p | 3, TypeError, "unsupported", id="or"),
-            pytest.param(lambda p: 3 | p, TypeError, "unsupported", id="ror"),
-            pytest.param(lambda p: p | ("sort", {}), TypeError, "tuple", id="pair"),
-            pytest.param(lambda p: p | len, TypeError, r"\.map\(fn\)", id="function"),
-            pytest.param(
-                lambda p: (
-                    p.with_resource("db", Resource.from_external(1))
-                    | p.with_resource("db", Resource.from_external(2))
-                ),
-                InvalidPipelineError,
-                "different resources",
-                id="resource-clash",
-            ),
-            pytest.param(
-                lambda p: p | p.with_execution(concurrency=2),
-                InvalidPipelineError,
-                "execution settings",
-                id="settings",
-            ),
-            pytest.param(
-                lambda p: p | p.with_context(Context(inputs={"a": 1})),
-                InvalidPipelineError,
-                "not inputs or a test flag",
-                id="context",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("combine", "error", "match"), OR_REJECTIONS)
     def test_or_rejects(self, combine, error, match):
         with pytest.raises(error, match=match):
             combine(Pipeline.from_module("fetch"))
@@ -420,6 +420,13 @@ class TestModuleNameEnum:
     def test_enum_through_chaining(self, pipeline, node_id, count):
         assert pipeline.workflow.nodes[node_id].name == node_id.split("-")[0]
         assert len(list(pipeline(SRC))) == count
+
+
+ASYNC_MODULE_SEEDS = [
+    pytest.param(lambda: [{"x": 1}, {"x": 2}], id="sync-iterable"),
+    pytest.param(agen_source, id="async-iterable"),
+    pytest.param(awaitable_source, id="awaitable"),
+]
 
 
 class TestPipelineIteration:
@@ -500,14 +507,7 @@ class TestAsyncPipelineIteration:
 
         assert [item async for item in Pipeline()(seed())] == [{"x": 1}]
 
-    @pytest.mark.parametrize(
-        "make_seed",
-        [
-            pytest.param(lambda: [{"x": 1}, {"x": 2}], id="sync-iterable"),
-            pytest.param(agen_source, id="async-iterable"),
-            pytest.param(awaitable_source, id="awaitable"),
-        ],
-    )
+    @pytest.mark.parametrize("make_seed", ASYNC_MODULE_SEEDS)
     @async_test
     async def test_a_seed_runs_through_a_registered_async_module(self, make_seed):
         async_pipe = cast("AsyncModuleWrapper", adouble)
@@ -998,6 +998,38 @@ class TestAsyncPipelineFanIn:
         assert both == 2 * one
 
 
+EXECUTOR_SPELLINGS = [
+    pytest.param("thread", Executor.THREAD, id="thread-string"),
+    pytest.param("inline", Executor.INLINE, id="inline-string"),
+    pytest.param(Executor.PROCESS, Executor.PROCESS, id="process-member"),
+    pytest.param(Executor.AUTO, Executor.AUTO, id="auto-member"),
+]
+RESETTABLE_SETTINGS = [
+    pytest.param("executor", "thread", id="executor"),
+    pytest.param("concurrency", 4, id="concurrency"),
+    pytest.param("ordered", True, id="ordered"),
+    pytest.param("event_sink", RecordingSink(), id="event-sink"),
+    pytest.param("shutdown_timeout", 2.5, id="shutdown-timeout"),
+]
+INVALID_SETTINGS = [
+    pytest.param(
+        {"executor": "gpu"},
+        ValueError,
+        "'gpu'. Expected one of auto, inline",
+        id="unknown-executor",
+    ),
+    pytest.param({"concurrency": 0}, ValueError, None, id="zero-concurrency"),
+    pytest.param({"concurrency": "4"}, TypeError, None, id="string-concurrency"),
+    pytest.param({"concurrency": "max"}, TypeError, None, id="named-concurrency"),
+    pytest.param(
+        {"concurrency": True}, TypeError, "must be an int", id="bool-concurrency"
+    ),
+    pytest.param({"ordered": "yes"}, TypeError, None, id="string-ordered"),
+    pytest.param({"shutdown_timeout": -1}, ValueError, None, id="negative-timeout"),
+    pytest.param({"shutdown_timeout": nan}, ValueError, None, id="nan-timeout"),
+]
+
+
 class TestWithExecution:
     def test_defaults(self):
         pipeline = Pipeline.from_module("fetch")
@@ -1028,15 +1060,7 @@ class TestWithExecution:
         ]
         assert all(each.settings.concurrency == 4 for each in chained)
 
-    @pytest.mark.parametrize(
-        ("executor", "expected"),
-        [
-            ("thread", Executor.THREAD),
-            ("inline", Executor.INLINE),
-            (Executor.PROCESS, Executor.PROCESS),
-            (Executor.AUTO, Executor.AUTO),
-        ],
-    )
+    @pytest.mark.parametrize(("executor", "expected"), EXECUTOR_SPELLINGS)
     def test_executor_accepts_strings_and_members(self, executor, expected):
         pipeline = Pipeline.from_module("fetch").with_execution(executor=executor)
         assert pipeline.settings.executor is expected
@@ -1058,16 +1082,7 @@ class TestWithExecution:
         assert pipeline.settings.shutdown_timeout == pytest.approx(2.5)
         assert pipeline.with_execution().settings == pipeline.settings
 
-    @pytest.mark.parametrize(
-        ("name", "value"),
-        [
-            ("executor", "thread"),
-            ("concurrency", 4),
-            ("ordered", True),
-            ("event_sink", RecordingSink()),
-            ("shutdown_timeout", 2.5),
-        ],
-    )
+    @pytest.mark.parametrize(("name", "value"), RESETTABLE_SETTINGS)
     def test_explicit_none_restores_the_default(self, name, value):
         kwargs = {"executor": "process", "concurrency": 8, name: value}
         pipeline = Pipeline.from_module("fetch").with_execution(**kwargs)
@@ -1078,19 +1093,7 @@ class TestWithExecution:
             assert reset.settings.executor is Executor.PROCESS
             assert reset.settings.concurrency == 8
 
-    @pytest.mark.parametrize(
-        ("kwargs", "error", "match"),
-        [
-            ({"executor": "gpu"}, ValueError, "'gpu'. Expected one of auto, inline"),
-            ({"concurrency": 0}, ValueError, None),
-            ({"concurrency": "4"}, TypeError, None),
-            ({"concurrency": "max"}, TypeError, None),
-            ({"concurrency": True}, TypeError, "must be an int"),
-            ({"ordered": "yes"}, TypeError, None),
-            ({"shutdown_timeout": -1}, ValueError, None),
-            ({"shutdown_timeout": float("nan")}, ValueError, None),
-        ],
-    )
+    @pytest.mark.parametrize(("kwargs", "error", "match"), INVALID_SETTINGS)
     def test_invalid_settings_raise_at_call_time(self, kwargs, error, match):
         with pytest.raises(error, match=match):
             Pipeline.from_module("fetch").with_execution(**kwargs)
@@ -1121,6 +1124,27 @@ def _wait_or_block(item):
     return item
 
 
+PARALLEL_BUILDS = [
+    pytest.param(lambda: tokenized(VALUE), None, id="module-source"),
+    pytest.param(Pipeline, SRC, id="seed"),
+]
+ORDERED_RUNS = [
+    pytest.param(
+        lambda: tokenized(VALUE),
+        None,
+        {"concurrency": 4, "ordered": True},
+        [item["content"] for item in EXPECTED],
+        id="ordered",
+    ),
+    pytest.param(Pipeline, SRC, {}, ["a", "b", "c"], id="no-settings"),
+    pytest.param(
+        Pipeline,
+        SRC,
+        {"executor": "inline", "concurrency": 4},
+        ["a", "b", "c"],
+        id="inline",
+    ),
+]
 _STOPPED_RUNS = [
     pytest.param("block", "pass", None, nullcontext(), id="early-close"),
     pytest.param("block", "fail", None, _BOOM, id="failing-sibling"),
@@ -1131,13 +1155,7 @@ _STOPPED_RUNS = [
 class TestExecutionSettings:
     """Run-wide settings: concurrency, ordering, and where per-item work runs."""
 
-    @pytest.mark.parametrize(
-        ("build", "seed"),
-        [
-            pytest.param(lambda: tokenized(VALUE), None, id="module-source"),
-            pytest.param(Pipeline, SRC, id="seed"),
-        ],
-    )
+    @pytest.mark.parametrize(("build", "seed"), PARALLEL_BUILDS)
     def test_parallel_matches_sequential_as_multiset(self, build, seed):
         pipeline = build().hash(options={"assign": "h"})
         sequential = list(pipeline(seed))
@@ -1145,26 +1163,7 @@ class TestExecutionSettings:
         assert len(parallel) == len(sequential) == 3
         assert _by_content(parallel) == _by_content(sequential)
 
-    @pytest.mark.parametrize(
-        ("build", "seed", "settings", "expected"),
-        [
-            pytest.param(
-                lambda: tokenized(VALUE),
-                None,
-                {"concurrency": 4, "ordered": True},
-                [item["content"] for item in EXPECTED],
-                id="ordered",
-            ),
-            pytest.param(Pipeline, SRC, {}, ["a", "b", "c"], id="no-settings"),
-            pytest.param(
-                Pipeline,
-                SRC,
-                {"executor": "inline", "concurrency": 4},
-                ["a", "b", "c"],
-                id="inline",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("build", "seed", "settings", "expected"), ORDERED_RUNS)
     def test_preserves_source_order(self, build, seed, settings, expected):
         pipeline = build().hash(options={"assign": "h"}).with_execution(**settings)
         assert [item["content"] for item in pipeline(seed)] == expected

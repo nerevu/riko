@@ -140,6 +140,26 @@ _STEPS = (
 )
 
 _STRAY_ADD = "def f(run, s):\n    run.add(s)\n"
+_UPGRADE_ALL = ["uv", "lock", "--upgrade"]
+_ALL_LINTS = [
+    "ruff",
+    "rumdl",
+    "rst",
+    "docs",
+    "docstrings",
+    "terms",
+    "literals",
+    "deps",
+    "bindings",
+    "tests",
+    "basenames",
+    "escapes",
+    "helpers",
+    "ownership",
+    "actions",
+    "yaml",
+    "imports",
+]
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
@@ -225,19 +245,21 @@ def _record(calls: list[str], name: str, code: int = 0) -> Func[int]:
     return runner
 
 
+CODEGEN_SELECTORS = [
+    pytest.param([], ["config"], id="default"),
+    pytest.param(["--names", "--api"], ["names", "api"], id="names-api"),
+    pytest.param(["--tests", "--verbs"], ["tests", "verbs"], id="tests-verbs"),
+    pytest.param(["--user-agents"], ["user-agents"], id="user-agents"),
+    pytest.param(
+        ["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"], id="all"
+    ),
+]
+
+
 class TestCodegenCommand:
     """The ``manage codegen`` selectors."""
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], ["config"]),
-            (["--names", "--api"], ["names", "api"]),
-            (["--tests", "--verbs"], ["tests", "verbs"]),
-            (["--user-agents"], ["user-agents"]),
-            (["--all"], ["config", "names", "api", "tests", "verbs", "user-agents"]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), CODEGEN_SELECTORS)
     def test_codegen_selectors(
         self, monkeypatch: pytest.MonkeyPatch, args: list[str], expected: list[str]
     ) -> None:
@@ -271,28 +293,21 @@ def _record_upgrade(
     return calls
 
 
+UPGRADE_RUNS = [
+    pytest.param([], [_UPGRADE_ALL, SYNC], id="default"),
+    pytest.param(
+        ["-p", "ruff", "--package", "pyright"],
+        [["uv", "lock", "--upgrade-package=ruff", "--upgrade-package=pyright"], SYNC],
+        id="packages",
+    ),
+    pytest.param(["--no-sync"], [_UPGRADE_ALL], id="no-sync"),
+]
+
+
 class TestUpgradeCommand:
     """The ``manage upgrade`` lock, sync, and daily stamp."""
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], [["uv", "lock", "--upgrade"], SYNC]),
-            (
-                ["-p", "ruff", "--package", "pyright"],
-                [
-                    [
-                        "uv",
-                        "lock",
-                        "--upgrade-package=ruff",
-                        "--upgrade-package=pyright",
-                    ],
-                    SYNC,
-                ],
-            ),
-            (["--no-sync"], [["uv", "lock", "--upgrade"]]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), UPGRADE_RUNS)
     def test_upgrade_locks_then_syncs(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -349,28 +364,30 @@ def _record_path(calls: list[str], name: str, code: int = 0) -> Callable[[Path],
     return runner
 
 
+IMPORT_SELECTORS = [
+    pytest.param([], (), ["canonical"], 0, id="default"),
+    pytest.param(
+        ["--relative", "--architecture"],
+        (),
+        ["relative", "architecture"],
+        0,
+        id="additive",
+    ),
+    pytest.param(
+        ["--all"],
+        ("canonical",),
+        ["canonical", "relative", "architecture"],
+        1,
+        id="all-continues-past-a-failure",
+    ),
+]
+
+
 class TestImportsCommand:
     """The ``manage lint imports`` selectors."""
 
     @pytest.mark.parametrize(
-        ("args", "failing", "expected", "exit_code"),
-        [
-            pytest.param([], (), ["canonical"], 0, id="default"),
-            pytest.param(
-                ["--relative", "--architecture"],
-                (),
-                ["relative", "architecture"],
-                0,
-                id="additive",
-            ),
-            pytest.param(
-                ["--all"],
-                ("canonical",),
-                ["canonical", "relative", "architecture"],
-                1,
-                id="all-continues-past-a-failure",
-            ),
-        ],
+        ("args", "failing", "expected", "exit_code"), IMPORT_SELECTORS
     )
     def test_import_selectors(
         self,
@@ -443,16 +460,29 @@ def _patch_lints(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     )
 
 
+TEXT_CHECKS = [
+    pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
+    pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
+]
+LINT_SELECTORS = [
+    pytest.param([], ["ruff", "rumdl"], id="default"),
+    pytest.param(["--rst", "--yaml"], ["rst", "yaml"], id="rst-yaml"),
+    pytest.param(["--all"], _ALL_LINTS, id="all"),
+    pytest.param(
+        ["--terms", "--literals", "--deps", "--bindings", "--tests"],
+        ["terms", "literals", "deps", "bindings", "tests"],
+        id="text-and-code-checks",
+    ),
+    pytest.param(["--check-types", "--strict"], ["types", "strict"], id="types-strict"),
+    pytest.param(["--helpers"], ["helpers"], id="helpers"),
+    pytest.param(["--ownership"], ["ownership"], id="ownership"),
+]
+
+
 class TestLintCommand:
     """The ``manage lint`` selectors."""
 
-    @pytest.mark.parametrize(
-        ("check", "text"),
-        [
-            pytest.param(_lint._lint_terms, "Run a sub-pipeline.\n", id="terms"),
-            pytest.param(_lint._lint_literals, "Pass ``'list'``.\n", id="literals"),
-        ],
-    )
+    @pytest.mark.parametrize(("check", "text"), TEXT_CHECKS)
     def test_text_checks_exit_by_whether_issues_were_found(
         self, tmp_path: Path, capsys, check, text: str
     ) -> None:
@@ -499,42 +529,7 @@ class TestLintCommand:
             ["rumdl", "check", "README.md"],
         ]
 
-    @pytest.mark.parametrize(
-        ("args", "expected"),
-        [
-            ([], ["ruff", "rumdl"]),
-            (["--rst", "--yaml"], ["rst", "yaml"]),
-            (
-                ["--all"],
-                [
-                    "ruff",
-                    "rumdl",
-                    "rst",
-                    "docs",
-                    "docstrings",
-                    "terms",
-                    "literals",
-                    "deps",
-                    "bindings",
-                    "tests",
-                    "basenames",
-                    "escapes",
-                    "helpers",
-                    "ownership",
-                    "actions",
-                    "yaml",
-                    "imports",
-                ],
-            ),
-            (
-                ["--terms", "--literals", "--deps", "--bindings", "--tests"],
-                ["terms", "literals", "deps", "bindings", "tests"],
-            ),
-            (["--check-types", "--strict"], ["types", "strict"]),
-            (["--helpers"], ["helpers"]),
-            (["--ownership"], ["ownership"]),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "expected"), LINT_SELECTORS)
     def test_lint_selectors(
         self, monkeypatch: pytest.MonkeyPatch, args: list[str], expected: list[str]
     ) -> None:
@@ -553,6 +548,17 @@ def _coverage_report(root: Path, uncovered: int) -> Path:
     return report
 
 
+COVERAGE_RATCHETS = [
+    pytest.param(1249, 1240, 0, "uncovered = 1240", id="gain-lowers"),
+    pytest.param(1249, 1249, 0, "uncovered = 1249", id="equal-holds"),
+    pytest.param(1249, 1250, 1, "uncovered = 1249", id="loss-fails"),
+    pytest.param(None, 1250, 0, "uncovered = 1250", id="first-run-records"),
+]
+COVERAGE_OPTIONS = [
+    pytest.param(["-q"], "--cov=riko", "--cov-report", id="default"),
+    pytest.param(["-q", "--no-cov"], "--no-cov", "--cov-report", id="no-cov"),
+    pytest.param(["-q", "--ratchet"], "--cov-report=json:", "", id="ratchet"),
+]
 PARTIAL_RATCHET_CASES = [
     pytest.param(["tests/public"], id="paths"),
     pytest.param(["--tox"], id="tox"),
@@ -564,13 +570,7 @@ class TestCoverageRatchet:
     """The ``manage test --ratchet`` uncovered-line ceiling."""
 
     @pytest.mark.parametrize(
-        ("recorded", "uncovered", "code", "ceiling"),
-        [
-            pytest.param(1249, 1240, 0, "uncovered = 1240", id="gain-lowers"),
-            pytest.param(1249, 1249, 0, "uncovered = 1249", id="equal-holds"),
-            pytest.param(1249, 1250, 1, "uncovered = 1249", id="loss-fails"),
-            pytest.param(None, 1250, 0, "uncovered = 1250", id="first-run-records"),
-        ],
+        ("recorded", "uncovered", "code", "ceiling"), COVERAGE_RATCHETS
     )
     def test_ratchet_holds_or_lowers_the_ceiling(
         self,
@@ -594,14 +594,7 @@ class TestCoverageRatchet:
         assert _test._ratchet_coverage(_coverage_report(tmp_path, uncovered)) == code
         assert ceiling in pyproject.read_text()
 
-    @pytest.mark.parametrize(
-        ("args", "present", "absent"),
-        [
-            pytest.param(["-q"], "--cov=riko", "--cov-report", id="default"),
-            pytest.param(["-q", "--no-cov"], "--no-cov", "--cov-report", id="no-cov"),
-            pytest.param(["-q", "--ratchet"], "--cov-report=json:", "", id="ratchet"),
-        ],
-    )
+    @pytest.mark.parametrize(("args", "present", "absent"), COVERAGE_OPTIONS)
     def test_command_passes_coverage_options_to_pytest(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -1779,6 +1772,16 @@ ARCHITECTURE_IMPORTS = [
     pytest.param(_LOCAL, ["runtime"], id="function-local-upward-fails"),
 ]
 
+LAYER_GRAPH_REJECTIONS = [
+    pytest.param(
+        {"a": {"b", "c"}, "b": {"c"}, "c": set()},
+        "redundant dependency: a -> c",
+        id="redundant",
+    ),
+    pytest.param({"a": {"b"}, "b": {"a"}}, "cyclic layer graph", id="cyclic"),
+    pytest.param({"a": {"b"}}, "undeclared layers: b", id="undeclared"),
+]
+
 
 class TestImportArchitectureLint:
     """The import-architecture lint check."""
@@ -1807,18 +1810,7 @@ class TestImportArchitectureLint:
         assert report.unclassified[0].module == "riko.mystery"
         assert lint_architecture(report) == 1
 
-    @pytest.mark.parametrize(
-        ("graph", "match"),
-        [
-            pytest.param(
-                {"a": {"b", "c"}, "b": {"c"}, "c": set()},
-                "redundant dependency: a -> c",
-                id="redundant",
-            ),
-            pytest.param({"a": {"b"}, "b": {"a"}}, "cyclic layer graph", id="cyclic"),
-            pytest.param({"a": {"b"}}, "undeclared layers: b", id="undeclared"),
-        ],
-    )
+    @pytest.mark.parametrize(("graph", "match"), LAYER_GRAPH_REJECTIONS)
     def test_layer_graph_validation_rejects(self, graph, match):
         with pytest.raises(InvalidArchitectureError, match=match):
             _validate_graph("test", graph)

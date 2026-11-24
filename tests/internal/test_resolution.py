@@ -169,6 +169,12 @@ BUILTIN_SHADOWS = [
 ]
 
 
+SUBCLASS_HOOKS = [
+    pytest.param("_key", "entry", id="key"),
+    pytest.param("_load", SimpleNamespace(name="entry"), id="load"),
+]
+
+
 class TestModuleRegistry:
     def test_builtin_resolves_lazily(self, fixed_registry):
         assert fixed_registry.require("tokenizer").__name__ == "pipe"
@@ -230,13 +236,7 @@ class TestModuleRegistry:
         assert fixed_registry.require(_NAME) is _MARKER  # explicit wins
         assert fixed_registry.require(_NAME, True) is other  # from module
 
-    @pytest.mark.parametrize(
-        ("method", "arg"),
-        [
-            pytest.param("_key", "entry", id="key"),
-            pytest.param("_load", SimpleNamespace(name="entry"), id="load"),
-        ],
-    )
+    @pytest.mark.parametrize(("method", "arg"), SUBCLASS_HOOKS)
     def test_base_registry_requires_subclass_hooks(self, method, arg):
         with pytest.raises(NotImplementedError, match=rf"Registry\.{method} must"):
             getattr(Registry(), method)(arg)
@@ -306,6 +306,20 @@ class TestModuleRegistry:
             fixed_registry.register(ModuleDefinition(sync_pipe=_MARKER))
 
 
+IMPORT_ERRORS = [
+    pytest.param(
+        ModuleNotFoundError("No module named 'phantom_dep'", name="phantom_dep"),
+        "phantom_dep",
+        id="nested-dependency",
+    ),
+    pytest.param(
+        ModuleNotFoundError("broken import with no module name"),
+        "no module name",
+        id="unnamed",
+    ),
+]
+
+
 class TestDescribeModule:
     def test_describes_a_pipe_from_its_stamped_metadata(self):
         definition = describe_module(truncate)
@@ -320,23 +334,7 @@ class TestDescribeModule:
     def test_unknown_stored_workflow_is_none(self):
         assert describe_module("pipe_missing") is None
 
-    @pytest.mark.parametrize(
-        ("error", "match"),
-        [
-            pytest.param(
-                ModuleNotFoundError(
-                    "No module named 'phantom_dep'", name="phantom_dep"
-                ),
-                "phantom_dep",
-                id="nested-dependency",
-            ),
-            pytest.param(
-                ModuleNotFoundError("broken import with no module name"),
-                "no module name",
-                id="unnamed",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("error", "match"), IMPORT_ERRORS)
     def test_describe_module_reraises_import_error(
         self, monkeypatch, error: ModuleNotFoundError, match: str
     ):
@@ -718,6 +716,12 @@ def _demo_resolver(**interfaces: object) -> WorkflowResolver:
     return WorkflowResolver(module_store=MappingStore({"pipe_demo": module}))
 
 
+WORKFLOW_PACKAGES = [
+    pytest.param("tests.pyworkflows", id="import-path"),
+    pytest.param(pyworkflows, id="package"),
+]
+
+
 class TestWorkflowResolver:
     def test_core_default_has_no_stored_workflows(self):
         """A bare (unconfigured) resolver finds no pipe_* module and no workflow."""
@@ -727,13 +731,7 @@ class TestWorkflowResolver:
         with pytest.raises(UnsupportedWorkflowError, match="no document store"):
             resolver.load_workflow("pipe_x")
 
-    @pytest.mark.parametrize(
-        "package",
-        [
-            pytest.param("tests.pyworkflows", id="import-path"),
-            pytest.param(pyworkflows, id="package"),
-        ],
-    )
+    @pytest.mark.parametrize("package", WORKFLOW_PACKAGES)
     def test_configured_resolver_loads_resolved_workflow(self, package):
         resolver = WorkflowResolver(module_store=PackageStore(package))
         assert resolver.load("pipe_kazeeki1") is not None

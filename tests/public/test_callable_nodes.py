@@ -114,6 +114,13 @@ _PASSTHROUGH_CASES = [
 ]
 
 
+_MAP_NODE_NAMES = [
+    pytest.param(len, "len-1", id="named"),
+    pytest.param(lambda item: item, "map-1", id="lambda"),
+    pytest.param(itemgetter("x"), "map-1", id="itemgetter"),
+]
+
+
 _MAP_ERRORS = [
     pytest.param({"resources": "db", "db": 1}, "share names", id="alias-collision"),
     pytest.param({"obj": object()}, "JSON", id="non-json-kwarg"),
@@ -237,14 +244,7 @@ class TestPipelineMap:
         assert node.version == "len-v1"
         assert node.identity is IdentityMode.DERIVE
 
-    @pytest.mark.parametrize(
-        ("fn", "node_id"),
-        [
-            pytest.param(len, "len-1", id="named"),
-            pytest.param(lambda item: item, "map-1", id="lambda"),
-            pytest.param(itemgetter("x"), "map-1", id="itemgetter"),
-        ],
-    )
+    @pytest.mark.parametrize(("fn", "node_id"), _MAP_NODE_NAMES)
     def test_map_names_the_node_after_the_callable(self, fn, node_id):
         assert list(Pipeline().map(fn).workflow.nodes) == [node_id]
 

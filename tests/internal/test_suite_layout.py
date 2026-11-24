@@ -169,6 +169,38 @@ def _write_alpha(root: Path, addition: str) -> Path:
     return tests_dir
 
 
+MISPLACED_FILES = [
+    pytest.param(
+        {"public__test_gamma.py": "class TestGamma: ...\n"}, STALE, id="unindexed-file"
+    ),
+    pytest.param(
+        {"public__test_gamma.py": "class TestBeta: ...\n"},
+        "Beta is owned by both test_alpha.py and test_gamma.py",
+        id="duplicate-subject",
+    ),
+    pytest.param(
+        {"public__test_regressions.py": ""},
+        "name the file for its subject, not its history",
+        id="history-name",
+    ),
+    pytest.param(
+        {"public__helpers.py": ""},
+        "shared helpers belong in a tests/_*.py module",
+        id="helper-in-tier",
+    ),
+    pytest.param(
+        {"test_root.py": ""},
+        "test files live in public, internal, functional",
+        id="root-test-file",
+    ),
+    pytest.param(
+        {"misc__test_x.py": ""},
+        "unexpected folder; tests live in public, internal, functional",
+        id="stray-folder",
+    ),
+]
+
+
 BOUND_CASES = [
     pytest.param(
         _case("...", "@pytest.mark.timeout(4)"),
@@ -260,6 +292,22 @@ BOUND_CASES = [
 ]
 
 
+IN_FILE_DEPARTURES = [
+    pytest.param(
+        "\ndef test_loose(): ...\n",
+        "test_loose must live in a Test<Subject> class",
+        id="top-level-test",
+    ),
+    pytest.param("\nclass TestGamma: ...\n", STALE, id="unindexed-class"),
+    pytest.param(
+        "\nfrom riko.x import _hidden\n",
+        "public tests import supported names: _hidden",
+        id="private-import",
+    ),
+    *BOUND_CASES,
+]
+
+
 CLEAN_BOUND_CASES = [
     pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
     pytest.param(
@@ -345,6 +393,10 @@ GLOBAL_BOUND_CASES = [
         id="faulthandler-at-timeout",
     ),
 ]
+FINDING_EXIT_CODES = [
+    pytest.param(True, "a.py:3: error: bad", 1, id="error"),
+    pytest.param(False, "a.py:3: advice: bad", 0, id="advice"),
+]
 
 
 class TestTestsLint:
@@ -353,63 +405,13 @@ class TestTestsLint:
     def test_an_indexed_suite_passes(self, tmp_path: Path) -> None:
         assert _messages(_write_suite(tmp_path)) == []
 
-    @pytest.mark.parametrize(
-        ("files", "message"),
-        [
-            pytest.param(
-                {"public__test_gamma.py": "class TestGamma: ...\n"},
-                STALE,
-                id="unindexed-file",
-            ),
-            pytest.param(
-                {"public__test_gamma.py": "class TestBeta: ...\n"},
-                "Beta is owned by both test_alpha.py and test_gamma.py",
-                id="duplicate-subject",
-            ),
-            pytest.param(
-                {"public__test_regressions.py": ""},
-                "name the file for its subject, not its history",
-                id="history-name",
-            ),
-            pytest.param(
-                {"public__helpers.py": ""},
-                "shared helpers belong in a tests/_*.py module",
-                id="helper-in-tier",
-            ),
-            pytest.param(
-                {"test_root.py": ""},
-                "test files live in public, internal, functional",
-                id="root-test-file",
-            ),
-            pytest.param(
-                {"misc__test_x.py": ""},
-                "unexpected folder; tests live in public, internal, functional",
-                id="stray-folder",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("files", "message"), MISPLACED_FILES)
     def test_misplaced_files_fail(
         self, tmp_path: Path, files: dict[str, str], message: str
     ) -> None:
         assert (message, True) in _messages(_write_suite(tmp_path, **files))
 
-    @pytest.mark.parametrize(
-        ("addition", "message"),
-        [
-            pytest.param(
-                "\ndef test_loose(): ...\n",
-                "test_loose must live in a Test<Subject> class",
-                id="top-level-test",
-            ),
-            pytest.param("\nclass TestGamma: ...\n", STALE, id="unindexed-class"),
-            pytest.param(
-                "\nfrom riko.x import _hidden\n",
-                "public tests import supported names: _hidden",
-                id="private-import",
-            ),
-            *BOUND_CASES,
-        ],
-    )
+    @pytest.mark.parametrize(("addition", "message"), IN_FILE_DEPARTURES)
     def test_in_file_departures_fail(
         self, tmp_path: Path, addition: str, message: str
     ) -> None:
@@ -468,13 +470,7 @@ class TestTestsLint:
         assert [fatal for _, fatal in messages] == [False]
         assert "move its largest Test<Subject> class" in messages[0][0]
 
-    @pytest.mark.parametrize(
-        ("fatal", "line", "code"),
-        [
-            pytest.param(True, "a.py:3: error: bad", 1, id="error"),
-            pytest.param(False, "a.py:3: advice: bad", 0, id="advice"),
-        ],
-    )
+    @pytest.mark.parametrize(("fatal", "line", "code"), FINDING_EXIT_CODES)
     def test_findings_print_and_set_the_exit_code(
         self,
         monkeypatch: pytest.MonkeyPatch,

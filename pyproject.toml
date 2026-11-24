@@ -377,7 +377,7 @@ cast-lowered = 2026-11-16
 # Ceilings for `manage lint --tests`: the inline multi-line parametrize tables and the
 # `pytest.param` rows without `id=` in `tests/`. Each only goes down: a run fails above
 # either and lowers it on a gain. It records the day as `<key>-lowered`.
-inline-tables = 64
+inline-tables = 0
 inline-tables-lowered = 2026-11-24
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30

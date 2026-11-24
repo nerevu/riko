@@ -38,6 +38,7 @@ from tests._workflows import (
     EDGE_FAMILY_MISMATCHES,
     PIPE_DEF,
     RAW_WORKFLOW,
+    build_edge,
 )
 
 if TYPE_CHECKING:
@@ -67,8 +68,7 @@ _NODE_VALUE_PLACEMENTS = {
 
 _READ_NODE = {"id": "r", "name": "read", "family": "read", "backend": "file"}
 _TWO_NODES = [{"id": "a", "name": "fetch"}, {"id": "b", "name": "filter"}]
-_CHAIN = {"source": {"node": "a"}, "target": {"node": "b"}}
-_CHAINED = {"nodes": _TWO_NODES, "edges": [_CHAIN]}
+_CHAINED = {"nodes": _TWO_NODES, "edges": [build_edge("a", "b")]}
 _ERRORS = {"errors": {"node": "a", "port": "_OUTPUT2"}}
 _ROUTED = {"nodes": [{"id": "a", "name": "route"}], "outputs": _ERRORS}
 _EXPLICIT_EMPTY = {"nodes": [{"id": "a", "name": "fetch"}], "outputs": {}}
@@ -76,6 +76,8 @@ _REPEATED = [{"name": "fetch"}, {"name": "filter"}, {"name": "filter"}]
 _TAKEN_ID = [{"name": "fetch"}, {"id": "fetch-1", "name": "sort"}]
 _NULL_STRING = {"type": ("string", "null"), "default": None}
 _ENUM = {"type": "integer", "default": 1, "enum": (1, 2)}
+_EDGE_ALIASES = ("src", "tgt", "from", "to")
+_PIPE_DEF_TOKENS = ("_OUTPUT", "_INPUT", "wires", '"src"', '"tgt"', '"type":"output"')
 
 
 MODULES: list[DagModule] = [
@@ -126,13 +128,9 @@ RICH_RAW = {
         },
     ],
     "edges": [
-        {"source": {"node": "read-1"}, "target": {"node": "filter-1"}},
-        {
-            "source": {"node": "filter-1"},
-            "target": {"node": "sub-1"},
-            "family": "publish",
-        },
-        {"source": {"node": "filter-1"}, "target": {"node": "write-1"}},
+        build_edge("read-1", "filter-1"),
+        build_edge("filter-1", "sub-1", family="publish"),
+        build_edge("filter-1", "write-1"),
     ],
     "outputs": {"default": {"node": "write-1", "port": "out"}},
 }
@@ -155,7 +153,7 @@ TOPOLOGIES = {
     "single-module": {"nodes": [{"name": "fetch"}]},
     "module-chain": {
         "nodes": [{"name": "fetch"}, {"name": "filter"}],
-        "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "filter-1"}}],
+        "edges": [build_edge("fetch-1", "filter-1")],
     },
     "read-write": {
         "nodes": [
@@ -175,7 +173,7 @@ TOPOLOGIES = {
                 "keys": ["k"],
             },
         ],
-        "edges": [{"source": {"node": "r"}, "target": {"node": "w"}}],
+        "edges": [build_edge("r", "w")],
         "outputs": {"default": {"node": "w", "port": "out"}},
     },
     "cache": {
@@ -197,9 +195,7 @@ TOPOLOGIES = {
             {"id": "p", "name": "produce"},
             {"id": "s", "name": "listen", "family": "subscribe"},
         ],
-        "edges": [
-            {"source": {"node": "p"}, "target": {"node": "s"}, "family": "publish"}
-        ],
+        "edges": [build_edge("p", "s", family="publish")],
         "outputs": {"default": {"node": "p", "port": "out"}},
     },
     "typed-inputs": {
@@ -244,6 +240,27 @@ WRITE_PIPE_DEF = {
 }
 
 
+SHAPE_DECLARATIONS = [
+    pytest.param(lambda shape: None, id="detected"),
+    pytest.param(lambda shape: shape, id="enum"),
+    pytest.param(lambda shape: shape.value, id="value"),
+]
+DOCUMENTS = [
+    pytest.param(
+        DAG, DocumentShape.DAG, partial(Workflow.parse, shape="dag"), id="dag"
+    ),
+    pytest.param(PIPE_DEF, DocumentShape.V1, Workflow.parse, id="v1"),
+    pytest.param(RAW_WORKFLOW, DocumentShape.V2, Workflow.from_raw, id="v2"),
+    pytest.param(DOCUMENT, DocumentShape.V2, Workflow.from_raw, id="workflow"),
+]
+MISREAD_SHAPES = [
+    pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
+    pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
+    pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
+    pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
+    pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
+    pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
+]
 PARSE_REJECTIONS = [
     pytest.param({"pipeline": []}, None, "'nodes' or 'modules'", id="unknown-shape"),
     pytest.param(RAW_WORKFLOW, "v3", "Invalid shape", id="unknown-declared-shape"),
@@ -265,25 +282,8 @@ PARSE_REJECTIONS = [
 ]
 
 
-DOCUMENTS = [
-    pytest.param(
-        DAG, DocumentShape.DAG, partial(Workflow.parse, shape="dag"), id="dag"
-    ),
-    pytest.param(PIPE_DEF, DocumentShape.V1, Workflow.parse, id="v1"),
-    pytest.param(RAW_WORKFLOW, DocumentShape.V2, Workflow.from_raw, id="v2"),
-    pytest.param(DOCUMENT, DocumentShape.V2, Workflow.from_raw, id="workflow"),
-]
-
-
 class TestWorkflowParse:
-    @pytest.mark.parametrize(
-        "declare",
-        [
-            pytest.param(lambda shape: None, id="detected"),
-            pytest.param(lambda shape: shape, id="enum"),
-            pytest.param(lambda shape: shape.value, id="value"),
-        ],
-    )
+    @pytest.mark.parametrize("declare", SHAPE_DECLARATIONS)
     @pytest.mark.parametrize(("document", "shape", "loader"), DOCUMENTS)
     def test_parse_reads_each_document_shape(self, document, shape, loader, declare):
         """Each readable shape, detected or declared, is read as its loader would."""
@@ -307,17 +307,7 @@ class TestWorkflowParse:
     def test_parse_reads_pipe_dag_text(self):
         assert Workflow.parse(json.dumps(DAG)) == Workflow.parse(DAG)
 
-    @pytest.mark.parametrize(
-        ("document", "shape"),
-        [
-            pytest.param(DAG, DocumentShape.V2, id="dag-as-v2"),
-            pytest.param(DAG, DocumentShape.V1, id="dag-as-v1"),
-            pytest.param(PIPE_DEF, DocumentShape.DAG, id="v1-as-dag"),
-            pytest.param(PIPE_DEF, DocumentShape.V2, id="v1-as-v2"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.DAG, id="v2-as-dag"),
-            pytest.param(RAW_WORKFLOW, DocumentShape.V1, id="v2-as-v1"),
-        ],
-    )
+    @pytest.mark.parametrize(("document", "shape"), MISREAD_SHAPES)
     def test_parse_rejects_a_document_read_as_another_shape(self, document, shape):
         """A document read as a shape it is not written in is rejected, not guessed."""
         with pytest.raises(InvalidPipelineError):
@@ -354,6 +344,28 @@ def _module_node(flow: Workflow, node_id: NodeId) -> ModuleNode:
     node = flow.nodes[node_id]
     assert isinstance(node, ModuleNode)
     return node
+
+
+INVALID_PIPE_DAGS = [
+    pytest.param({"modules": []}, "no nodes", id="empty-modules"),
+    pytest.param({"modules": None}, "must be a list", id="null-modules"),
+    pytest.param({"modules": [1]}, "module must be a mapping", id="int-module"),
+    pytest.param(
+        {"modules": [{"type": "forever"}], "wires": 5},
+        "must be a list",
+        id="scalar-wires",
+    ),
+]
+UNKNOWN_MODULE_KEYS = [
+    pytest.param({"name": "forever", "bogus": 1}, "bogus", id="unknown-key"),
+    pytest.param(
+        {"type": "forever", "name": "sort"}, "conflicting", id="name-type-conflict"
+    ),
+    pytest.param({"id": "x", "options": 0}, "needs a 'name'", id="missing-name"),
+    pytest.param(
+        {"name": "forever", "family": "module"}, "family", id="node-family-key"
+    ),
+]
 
 
 class TestPipeDag:
@@ -405,19 +417,7 @@ class TestPipeDag:
         flow = Workflow.parse(_dag("pipe_reordered"))
         assert list(Pipeline(flow)) == [{"forever": True}] * 2
 
-    @pytest.mark.parametrize(
-        ("document", "message"),
-        [
-            pytest.param({"modules": []}, "no nodes", id="empty-modules"),
-            pytest.param({"modules": None}, "must be a list", id="null-modules"),
-            pytest.param({"modules": [1]}, "module must be a mapping", id="int-module"),
-            pytest.param(
-                {"modules": [{"type": "forever"}], "wires": 5},
-                "must be a list",
-                id="scalar-wires",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("document", "message"), INVALID_PIPE_DAGS)
     def test_parse_rejects_invalid_pipe_dags(self, document, message, caplog):
         with pytest.raises(InvalidPipelineError, match=message):
             Workflow.parse(document)
@@ -429,48 +429,46 @@ class TestPipeDag:
         with pytest.raises(InvalidPipelineError, match="wire"):
             Workflow.parse({"modules": FAN_IN_MODULES, "wires": [wire]})
 
-    @pytest.mark.parametrize(
-        ("module", "message"),
-        [
-            pytest.param({"name": "forever", "bogus": 1}, "bogus", id="unknown-key"),
-            pytest.param(
-                {"type": "forever", "name": "sort"},
-                "conflicting",
-                id="name-type-conflict",
-            ),
-            pytest.param(
-                {"id": "x", "options": 0}, "needs a 'name'", id="missing-name"
-            ),
-            pytest.param(
-                {"name": "forever", "family": "module"}, "family", id="node-family-key"
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("module", "message"), UNKNOWN_MODULE_KEYS)
     def test_pipe_dag_reports_unknown_module_keys(self, module, message):
         with pytest.raises(InvalidPipelineError, match=message):
             Workflow.parse({"modules": [module]})
 
 
-NON_JSON_NODE_VALUES = [
-    pytest.param("conf", Decimal("1.50"), id="conf-decimal"),
-    pytest.param("conf", date(2020, 6, 15), id="conf-date"),
-    pytest.param("conf", {"a", "b"}, id="conf-set"),
-    pytest.param("conf", b"bytes", id="conf-bytes"),
-    pytest.param("conf", nan, id="conf-nan"),
-    pytest.param("conf", inf, id="conf-inf"),
-    pytest.param("embed", date(2020, 6, 15), id="embed-date"),
-    pytest.param("policy", {"a", "b"}, id="policy-set"),
-    pytest.param("params", nan, id="params-nan"),
+NODE_IDS = [
+    pytest.param(_REPEATED, ["fetch-1", "filter-1", "filter-2"], id="occurrence-ids"),
+    pytest.param([{"id": "keep", "name": "fetch"}], ["keep"], id="explicit-id-kept"),
+    pytest.param({"a": {"id": "a", "name": "fetch"}}, ["a"], id="key-matches-id"),
+    pytest.param({"a": {"name": "fetch"}}, ["a"], id="mapping-key-id"),
+    pytest.param(_TAKEN_ID, ["fetch-2", "fetch-1"], id="generated-skip-explicit"),
 ]
-
-
+EDGE_PORTS = [
+    pytest.param(
+        {"node": "a", "port": "_OUTPUT"},
+        {"node": "b", "port": "_OTHER"},
+        ("out", "in:1"),
+        id="legacy",
+    ),
+    pytest.param({"node": "a"}, {"node": "b"}, ("out", "in"), id="omitted"),
+    pytest.param(
+        {"node": "a", "port": None},
+        {"node": "b", "port": None},
+        ("out", "in"),
+        id="null",
+    ),
+    pytest.param(
+        {"node": "a"},
+        {"node": "b", "port": "in:count"},
+        ("out", "in:count"),
+        id="named-preserved",
+    ),
+]
 NORMALIZED_OUTPUTS = [
     pytest.param(_CHAINED, {"default": Endpoint("b", "out")}, id="single-leaf"),
     pytest.param({"nodes": _TWO_NODES}, {}, id="ambiguous-leaves"),
     pytest.param(_ROUTED, {"errors": Endpoint("a", "out:1")}, id="legacy-port-alias"),
     pytest.param(_EXPLICIT_EMPTY, {}, id="explicit-empty"),
 ]
-
 INPUT_SCHEMAS = [
     pytest.param("string", {"type": "string"}, id="type-name"),
     pytest.param(
@@ -486,6 +484,174 @@ INPUT_SCHEMAS = [
     pytest.param({"type": ["string"], "default": None}, _NULL_STRING, id="type-list"),
     pytest.param(_ENUM, _ENUM, id="enum"),
 ]
+TOP_LEVEL_RESOURCES = [
+    pytest.param(["db", "cache"], ("db", "cache"), id="list"),
+    pytest.param("db", ("db",), id="bare-string"),
+]
+FIXED_POINT_WORKFLOWS = [
+    pytest.param(
+        {
+            "nodes": [
+                {"name": "fetch"},
+                {"name": "write", "family": "write", "backend": "file"},
+            ],
+            "edges": [build_edge("fetch-1", "write-1")],
+        },
+        id="write-chain",
+    ),
+    pytest.param(
+        {
+            "nodes": [
+                {"name": "loop", "embed": {"name": "tokenizer", "conf": {"d": " "}}}
+            ]
+        },
+        id="embed",
+    ),
+]
+FORMAT_SPELLINGS = [
+    pytest.param({"format": "csv"}, id="format-alias"),
+    pytest.param({"fmt": "csv", "format": "csv"}, id="agreeing-fmt-format"),
+]
+MALFORMED_NODES = [
+    pytest.param({"name": "fetch", "resources": 5}, "'resources'", id="res"),
+    pytest.param(
+        {"name": "w", "family": "write", "backend": "file", "keys": 5},
+        "WriteNode 'keys' must be a string",
+        id="keys-type",
+    ),
+    pytest.param(
+        {"name": "w", "family": "write", "backend": "file", "keys": ["a", "a"]},
+        "duplicate WriteNode 'keys'",
+        id="keys-duplicate",
+    ),
+    pytest.param(
+        {"name": "w", "family": "write"},
+        r"missing WriteNode key\(s\): \['backend'\]",
+        id="missing-backend",
+    ),
+    pytest.param(
+        {"name": "r", "family": "read", "backend": "ftp"},
+        "Invalid Backends",
+        id="unknown-backend",
+    ),
+    pytest.param(
+        {"name": "x", "family": "sink"}, "unknown node family", id="unknown-family"
+    ),
+    pytest.param({"family": "module"}, "node 'name'", id="missing-name"),
+    pytest.param(
+        {"name": "w", "family": "write", "backend": "file", "mode": "apend"},
+        "Invalid WriteMode",
+        id="invalid-write-mode",
+    ),
+    pytest.param(
+        {"name": "r", "family": "read", "backend": "file", "fmt": "xml"},
+        "Invalid Formats",
+        id="invalid-format",
+    ),
+    pytest.param(
+        {"name": "fetch", "bogus": 1}, "unknown ModuleNode key", id="unknown-field"
+    ),
+    pytest.param({"name": "fetch", "conf": []}, "Node 'conf'", id="falsy-conf"),
+    pytest.param(
+        {**_READ_NODE, "fmt": "csv", "format": "jsonl"},
+        "conflicting node 'fmt'/'format'",
+        id="conflicting-fmt-format",
+    ),
+    pytest.param(
+        {**_READ_NODE, "fmt": None, "format": "csv"},
+        "conflicting node 'fmt'/'format'",
+        id="conflicting-null-fmt",
+    ),
+    pytest.param(
+        {**_READ_NODE, "fmt": "csv", "format": None},
+        "conflicting node 'fmt'/'format'",
+        id="conflicting-null-format",
+    ),
+    pytest.param(
+        {"name": "tokenizer", "options": {"bogus": 1}},
+        "unknown ModuleNode 'options' key",
+        id="unknown-call-option",
+    ),
+    pytest.param(
+        {"name": "loop", "embed": {"name": "tokenizer", "bogus": 1}},
+        "unknown ModuleNode 'embed' key",
+        id="unknown-embed-key",
+    ),
+    pytest.param(
+        {"name": "loop", "embed": {"conf": {}}},
+        "missing ModuleNode 'embed' key",
+        id="embed-without-name",
+    ),
+    pytest.param(
+        {"id": "a", "type": "fetch", "conf": {"url": "x"}},
+        "a module goes in 'name'",
+        id="type-key",
+    ),
+    pytest.param(
+        {"id": "n", "family": "cache", "name": "cache", "policy": {1: True}},
+        "mapping key must be of type str",
+        id="non-string-policy-key",
+    ),
+]
+MALFORMED_GRAPHS = [
+    pytest.param(
+        {"nodes": [{"name": "fetch"}], "bogus": 1},
+        "unknown Workflow key",
+        id="unknown-top-level-field",
+    ),
+    pytest.param(
+        {"nodes": [{"id": "a", "name": "fetch"}, {"id": "a", "name": "filter"}]},
+        "duplicate node id",
+        id="duplicate-ids",
+    ),
+    pytest.param(
+        {"nodes": {"a": {"id": "b", "name": "fetch"}}},
+        "conflicts",
+        id="mapping-key-conflicts-inner-id",
+    ),
+    pytest.param(
+        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", bogus=1)]},
+        "unknown PortEdge key",
+        id="unknown-edge-field",
+    ),
+    pytest.param(
+        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", family="broadcast")]},
+        "unknown edge family",
+        id="unknown-edge-family",
+    ),
+    pytest.param(
+        {"nodes": _TWO_NODES, "edges": [build_edge("a", "b", type="stream")]},
+        "type",
+        id="edge-type-key",
+    ),
+    pytest.param(
+        {
+            "nodes": _TWO_NODES,
+            "edges": [
+                {"source": {"node": "a"}, "target": {"node": "b", "porrt": "in"}}
+            ],
+        },
+        "unknown Endpoint key",
+        id="unknown-endpoint-field",
+    ),
+    *(
+        pytest.param(
+            {
+                "nodes": _TWO_NODES,
+                "edges": [{alias: {"node": "a"}, "target": {"node": "b"}}],
+            },
+            "'source'/'target'",
+            id=f"edge-alias-{alias}",
+        )
+        for alias in _EDGE_ALIASES
+    ),
+]
+INVALID_PORTS = [
+    pytest.param("out:", id="empty-index"),
+    pytest.param("1", id="bare-1"),
+    pytest.param("2", id="bare-2"),
+    pytest.param("12", id="bare-12"),
+]
 BAD_INPUT_SCHEMAS = [
     pytest.param(5, "type name or mapping", id="number"),
     pytest.param(["a"], "type name or mapping", id="list"),
@@ -494,22 +660,23 @@ BAD_INPUT_SCHEMAS = [
     pytest.param({"type": []}, "invalid schema", id="empty-type-list"),
     pytest.param({"minimum": "x"}, "invalid schema", id="malformed-keyword"),
 ]
-
-
-NODE_IDS = [
-    pytest.param(_REPEATED, ["fetch-1", "filter-1", "filter-2"], id="occurrence-ids"),
-    pytest.param([{"id": "keep", "name": "fetch"}], ["keep"], id="explicit-id-kept"),
-    pytest.param({"a": {"id": "a", "name": "fetch"}}, ["a"], id="key-matches-id"),
-    pytest.param({"a": {"name": "fetch"}}, ["a"], id="mapping-key-id"),
-    pytest.param(_TAKEN_ID, ["fetch-2", "fetch-1"], id="generated-skip-explicit"),
+NON_JSON_NODE_VALUES = [
+    pytest.param("conf", Decimal("1.50"), id="conf-decimal"),
+    pytest.param("conf", date(2020, 6, 15), id="conf-date"),
+    pytest.param("conf", {"a", "b"}, id="conf-set"),
+    pytest.param("conf", b"bytes", id="conf-bytes"),
+    pytest.param("conf", nan, id="conf-nan"),
+    pytest.param("conf", inf, id="conf-inf"),
+    pytest.param("embed", date(2020, 6, 15), id="embed-date"),
+    pytest.param("policy", {"a", "b"}, id="policy-set"),
+    pytest.param("params", nan, id="params-nan"),
 ]
-
-
-INVALID_PORTS = [
-    pytest.param("out:", id="empty-index"),
-    pytest.param("1", id="bare-1"),
-    pytest.param("2", id="bare-2"),
-    pytest.param("12", id="bare-12"),
+MISTYPED_OPTIONS = [
+    pytest.param({"assign": b"bytes"}, id="assign-bytes"),
+    pytest.param({"field": float("nan")}, id="field-nan"),
+    pytest.param({"emit": "yes"}, id="emit-string"),
+    pytest.param({"count": "x"}, id="count-string"),
+    pytest.param({"count": ["first"]}, id="count-list"),
 ]
 
 
@@ -545,30 +712,7 @@ class TestNormalizeWorkflow:
         assert write.mode is WriteMode.APPEND
         assert write.keys == ("id",)
 
-    @pytest.mark.parametrize(
-        ("source", "target", "expected"),
-        [
-            pytest.param(
-                {"node": "a", "port": "_OUTPUT"},
-                {"node": "b", "port": "_OTHER"},
-                ("out", "in:1"),
-                id="legacy",
-            ),
-            pytest.param({"node": "a"}, {"node": "b"}, ("out", "in"), id="omitted"),
-            pytest.param(
-                {"node": "a", "port": None},
-                {"node": "b", "port": None},
-                ("out", "in"),
-                id="null",
-            ),
-            pytest.param(
-                {"node": "a"},
-                {"node": "b", "port": "in:count"},
-                ("out", "in:count"),
-                id="named-preserved",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("source", "target", "expected"), EDGE_PORTS)
     def test_edge_ports_normalize_to_canonical_endpoints(
         self, source, target, expected
     ):
@@ -587,7 +731,7 @@ class TestNormalizeWorkflow:
                     {"id": "a", "name": "fetch"},
                     {"id": "s", "name": "sub", "family": "subscribe"},
                 ],
-                "edges": [{"source": {"node": "a"}, "target": {"node": "s"}}],
+                "edges": [build_edge("a", "s")],
             }
         )
         assert isinstance(flow.nodes["s"], SubscribeNode)
@@ -615,13 +759,7 @@ class TestNormalizeWorkflow:
         )
         assert flow.nodes["a"].resources == {"db": "db"}
 
-    @pytest.mark.parametrize(
-        ("resources", "expected"),
-        [
-            pytest.param(["db", "cache"], ("db", "cache"), id="list"),
-            pytest.param("db", ("db",), id="bare-string"),
-        ],
-    )
+    @pytest.mark.parametrize(("resources", "expected"), TOP_LEVEL_RESOURCES)
     def test_top_level_resources_normalize_to_tuple(self, resources, expected):
         flow = Workflow.from_raw(
             {"nodes": [{"id": "a", "name": "fetch"}], "resources": resources}
@@ -635,13 +773,7 @@ class TestNormalizeWorkflow:
                     {"id": "a", "name": "fetch"},
                     {"id": "s", "name": "sub", "family": "subscribe"},
                 ],
-                "edges": [
-                    {
-                        "source": {"node": "a"},
-                        "target": {"node": "s"},
-                        "family": "stream",
-                    }
-                ],
+                "edges": [build_edge("a", "s", family="stream")],
             }
         )
         assert isinstance(flow.edges[0], StreamEdge)
@@ -663,34 +795,7 @@ class TestNormalizeWorkflow:
         assert isinstance(write, WriteNode)
         assert write.dest == "out.json"
 
-    @pytest.mark.parametrize(
-        "raw",
-        [
-            pytest.param(
-                {
-                    "nodes": [
-                        {"name": "fetch"},
-                        {"name": "write", "family": "write", "backend": "file"},
-                    ],
-                    "edges": [
-                        {"source": {"node": "fetch-1"}, "target": {"node": "write-1"}}
-                    ],
-                },
-                id="write-chain",
-            ),
-            pytest.param(
-                {
-                    "nodes": [
-                        {
-                            "name": "loop",
-                            "embed": {"name": "tokenizer", "conf": {"d": " "}},
-                        }
-                    ]
-                },
-                id="embed",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("raw", FIXED_POINT_WORKFLOWS)
     def test_normalizing_a_workflow_is_a_fixed_point(self, raw):
         first = Workflow.from_raw(raw)
         assert Workflow.from_raw(first) == first
@@ -720,13 +825,7 @@ class TestNormalizeWorkflow:
         )
         assert Workflow.from_raw(flow) == flow
 
-    @pytest.mark.parametrize(
-        "spelling",
-        [
-            pytest.param({"format": "csv"}, id="format-alias"),
-            pytest.param({"fmt": "csv", "format": "csv"}, id="agreeing-fmt-format"),
-        ],
-    )
+    @pytest.mark.parametrize("spelling", FORMAT_SPELLINGS)
     def test_format_alias_maps_to_fmt(self, spelling):
         flow = Workflow.from_raw({"nodes": [{**_READ_NODE, **spelling}]})
         read = flow.nodes["r"]
@@ -786,185 +885,12 @@ class TestNormalizeWorkflow:
         assert isinstance(node, ModuleNode)
         assert node.embed == {"name": "tokenizer", "conf": {}}
 
-    @pytest.mark.parametrize(
-        ("node", "match"),
-        [
-            pytest.param({"name": "fetch", "resources": 5}, "'resources'", id="res"),
-            pytest.param(
-                {"name": "w", "family": "write", "backend": "file", "keys": 5},
-                "WriteNode 'keys' must be a string",
-                id="keys-type",
-            ),
-            pytest.param(
-                {"name": "w", "family": "write", "backend": "file", "keys": ["a", "a"]},
-                "duplicate WriteNode 'keys'",
-                id="keys-duplicate",
-            ),
-            pytest.param(
-                {"name": "w", "family": "write"},
-                r"missing WriteNode key\(s\): \['backend'\]",
-                id="missing-backend",
-            ),
-            pytest.param(
-                {"name": "r", "family": "read", "backend": "ftp"},
-                "Invalid Backends",
-                id="unknown-backend",
-            ),
-            pytest.param(
-                {"name": "x", "family": "sink"},
-                "unknown node family",
-                id="unknown-family",
-            ),
-            pytest.param({"family": "module"}, "node 'name'", id="missing-name"),
-            pytest.param(
-                {"name": "w", "family": "write", "backend": "file", "mode": "apend"},
-                "Invalid WriteMode",
-                id="invalid-write-mode",
-            ),
-            pytest.param(
-                {"name": "r", "family": "read", "backend": "file", "fmt": "xml"},
-                "Invalid Formats",
-                id="invalid-format",
-            ),
-            pytest.param(
-                {"name": "fetch", "bogus": 1},
-                "unknown ModuleNode key",
-                id="unknown-field",
-            ),
-            pytest.param({"name": "fetch", "conf": []}, "Node 'conf'", id="falsy-conf"),
-            pytest.param(
-                {**_READ_NODE, "fmt": "csv", "format": "jsonl"},
-                "conflicting node 'fmt'/'format'",
-                id="conflicting-fmt-format",
-            ),
-            pytest.param(
-                {**_READ_NODE, "fmt": None, "format": "csv"},
-                "conflicting node 'fmt'/'format'",
-                id="conflicting-null-fmt",
-            ),
-            pytest.param(
-                {**_READ_NODE, "fmt": "csv", "format": None},
-                "conflicting node 'fmt'/'format'",
-                id="conflicting-null-format",
-            ),
-            pytest.param(
-                {"name": "tokenizer", "options": {"bogus": 1}},
-                "unknown ModuleNode 'options' key",
-                id="unknown-call-option",
-            ),
-            pytest.param(
-                {"name": "loop", "embed": {"name": "tokenizer", "bogus": 1}},
-                "unknown ModuleNode 'embed' key",
-                id="unknown-embed-key",
-            ),
-            pytest.param(
-                {"name": "loop", "embed": {"conf": {}}},
-                "missing ModuleNode 'embed' key",
-                id="embed-without-name",
-            ),
-            pytest.param(
-                {"id": "a", "type": "fetch", "conf": {"url": "x"}},
-                "a module goes in 'name'",
-                id="type-key",
-            ),
-            pytest.param(
-                {"id": "n", "family": "cache", "name": "cache", "policy": {1: True}},
-                "mapping key must be of type str",
-                id="non-string-policy-key",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("node", "match"), MALFORMED_NODES)
     def test_malformed_node_values_raise_invalid_pipeline(self, node, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.from_raw({"nodes": [node]})
 
-    @pytest.mark.parametrize(
-        ("raw", "match"),
-        [
-            pytest.param(
-                {"nodes": [{"name": "fetch"}], "bogus": 1},
-                "unknown Workflow key",
-                id="unknown-top-level-field",
-            ),
-            pytest.param(
-                {
-                    "nodes": [
-                        {"id": "a", "name": "fetch"},
-                        {"id": "a", "name": "filter"},
-                    ]
-                },
-                "duplicate node id",
-                id="duplicate-ids",
-            ),
-            pytest.param(
-                {"nodes": {"a": {"id": "b", "name": "fetch"}}},
-                "conflicts",
-                id="mapping-key-conflicts-inner-id",
-            ),
-            pytest.param(
-                {
-                    "nodes": _TWO_NODES,
-                    "edges": [
-                        {"source": {"node": "a"}, "target": {"node": "b"}, "bogus": 1}
-                    ],
-                },
-                "unknown PortEdge key",
-                id="unknown-edge-field",
-            ),
-            pytest.param(
-                {
-                    "nodes": _TWO_NODES,
-                    "edges": [
-                        {
-                            "source": {"node": "a"},
-                            "target": {"node": "b"},
-                            "family": "broadcast",
-                        }
-                    ],
-                },
-                "unknown edge family",
-                id="unknown-edge-family",
-            ),
-            pytest.param(
-                {
-                    "nodes": _TWO_NODES,
-                    "edges": [
-                        {
-                            "source": {"node": "a"},
-                            "target": {"node": "b"},
-                            "type": "stream",
-                        }
-                    ],
-                },
-                "type",
-                id="edge-type-key",
-            ),
-            pytest.param(
-                {
-                    "nodes": _TWO_NODES,
-                    "edges": [
-                        {
-                            "source": {"node": "a"},
-                            "target": {"node": "b", "porrt": "in"},
-                        }
-                    ],
-                },
-                "unknown Endpoint key",
-                id="unknown-endpoint-field",
-            ),
-            *(
-                pytest.param(
-                    {
-                        "nodes": _TWO_NODES,
-                        "edges": [{alias: {"node": "a"}, "target": {"node": "b"}}],
-                    },
-                    "'source'/'target'",
-                    id=f"edge-alias-{alias}",
-                )
-                for alias in ("src", "tgt", "from", "to")
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("raw", "match"), MALFORMED_GRAPHS)
     def test_malformed_graphs_raise_invalid_pipeline(self, raw, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.from_raw(raw)
@@ -993,16 +919,7 @@ class TestNormalizeWorkflow:
         with pytest.raises(InvalidPipelineError, match="JSON-native"):
             Workflow.from_raw(raw)
 
-    @pytest.mark.parametrize(
-        "options",
-        [
-            {"assign": b"bytes"},
-            {"field": float("nan")},
-            {"emit": "yes"},
-            {"count": "x"},
-            {"count": ["first"]},
-        ],
-    )
+    @pytest.mark.parametrize("options", MISTYPED_OPTIONS)
     def test_mistyped_option_rejected(self, options):
         raw = {"nodes": [{"id": "n", "name": "tag", "options": options}]}
 
@@ -1022,6 +939,19 @@ def _wire(wid, src_mod, tgt_mod, src_port="_OUTPUT", tgt_port="_INPUT"):
     }
 
 
+WIRE_PORTS = [
+    pytest.param("_OUTPUT", "_OTHER1", ("out", "in:1"), id="legacy"),
+    pytest.param(None, None, ("out", "in"), id="null"),
+    pytest.param("_OUTPUT", "count", ("out", "in:count"), id="named"),
+    pytest.param("_OUTPUT", "1_URL", ("out", "in:_1_URL"), id="sanitized"),
+    pytest.param("_OUTPUT", "PARAM_5_x", ("out", "in:PARAM_5_x"), id="param"),
+]
+FILE_OPEN_MODES = [
+    pytest.param("wb+", WriteMode.REPLACE, id="wb+-replace"),
+    pytest.param("w", WriteMode.REPLACE, id="w-replace"),
+    pytest.param("ab", WriteMode.APPEND, id="ab-append"),
+    pytest.param("a+", WriteMode.APPEND, id="a+-append"),
+]
 UPPERCASE_CONFS = [
     pytest.param({"URL": {"value": "x"}}, {"url": {"value": "x"}}, id="mapping"),
     pytest.param({"URL": [{"VALUE": "x"}]}, {"url": ({"value": "x"},)}, id="list"),
@@ -1033,6 +963,39 @@ _INPUT = {"id": "i", "type": "input", "conf": {"name": "q", "default": "x"}}
 _OUT = {"id": "_OUTPUT", "type": "output", "conf": {}}
 _WIRE = _wire("_w1", "a", "_OUTPUT")
 
+MALFORMED_MODULES = [
+    pytest.param(
+        {"id": "w", "type": "write", "conf": {"dest": "o", "mode": "rb"}},
+        "write mode",
+        id="unmappable-write-mode",
+    ),
+    pytest.param(
+        {"id": "w", "type": "write", "conf": {"dest": "o"}, "emit": True},
+        "write option",
+        id="write-wrapper-option",
+    ),
+    pytest.param(
+        {"id": "w", "type": "write", "conf": {"dest": "o", "bogus": 1}},
+        "WriteConf key",
+        id="write-unknown-conf-key",
+    ),
+    pytest.param(
+        {"id": "c", "type": "count", "conf": {"x": 1}, "bogus": 1},
+        "unknown PipeModule key",
+        id="unknown-module-key",
+    ),
+    pytest.param({"id": "a", "conf": {}}, "needs a 'name'", id="missing-type"),
+    pytest.param(
+        {"id": "f", "type": "fetch", "conf": {"URL": "x", "url": "y"}},
+        "differ only in case",
+        id="case-colliding-conf-keys",
+    ),
+    pytest.param(
+        {"id": "f", "type": "fetch", "conf": {"url": {"VALUE": 1, "value": 2}}},
+        "differ only in case",
+        id="nested-case-colliding-conf-keys",
+    ),
+]
 MALFORMED_DOCUMENTS = [
     pytest.param(
         {"modules": [_FETCH, _OUT], "wires": [_WIRE], "bogus": 1},
@@ -1146,16 +1109,7 @@ class TestMigrate:
         assert flow.edges == ()
         assert flow.version == "2"
 
-    @pytest.mark.parametrize(
-        ("source_port", "target_port", "expected"),
-        [
-            pytest.param("_OUTPUT", "_OTHER1", ("out", "in:1"), id="legacy"),
-            pytest.param(None, None, ("out", "in"), id="null"),
-            pytest.param("_OUTPUT", "count", ("out", "in:count"), id="named"),
-            pytest.param("_OUTPUT", "1_URL", ("out", "in:_1_URL"), id="sanitized"),
-            pytest.param("_OUTPUT", "PARAM_5_x", ("out", "in:PARAM_5_x"), id="param"),
-        ],
-    )
+    @pytest.mark.parametrize(("source_port", "target_port", "expected"), WIRE_PORTS)
     def test_wire_ports_map_to_canonical_endpoints(
         self, source_port, target_port, expected
     ):
@@ -1196,15 +1150,7 @@ class TestMigrate:
         assert node.mode is WriteMode.APPEND
         assert node.keys == ("id",)
 
-    @pytest.mark.parametrize(
-        ("pipe_def_mode", "mode"),
-        [
-            ("wb+", WriteMode.REPLACE),
-            ("w", WriteMode.REPLACE),
-            ("ab", WriteMode.APPEND),
-            ("a+", WriteMode.APPEND),
-        ],
-    )
+    @pytest.mark.parametrize(("pipe_def_mode", "mode"), FILE_OPEN_MODES)
     def test_pipe_def_file_open_mode_translates(self, pipe_def_mode, mode):
         flow = Workflow.parse(
             {
@@ -1370,42 +1316,7 @@ class TestMigrate:
         pipeline = Pipeline(flow).with_context(Context(inputs={"u": "example.com"}))
         assert list(pipeline) == ["http://example.com"]
 
-    @pytest.mark.parametrize(
-        ("module", "match"),
-        [
-            pytest.param(
-                {"id": "w", "type": "write", "conf": {"dest": "o", "mode": "rb"}},
-                "write mode",
-                id="unmappable-write-mode",
-            ),
-            pytest.param(
-                {"id": "w", "type": "write", "conf": {"dest": "o"}, "emit": True},
-                "write option",
-                id="write-wrapper-option",
-            ),
-            pytest.param(
-                {"id": "w", "type": "write", "conf": {"dest": "o", "bogus": 1}},
-                "WriteConf key",
-                id="write-unknown-conf-key",
-            ),
-            pytest.param(
-                {"id": "c", "type": "count", "conf": {"x": 1}, "bogus": 1},
-                "unknown PipeModule key",
-                id="unknown-module-key",
-            ),
-            pytest.param({"id": "a", "conf": {}}, "needs a 'name'", id="missing-type"),
-            pytest.param(
-                {"id": "f", "type": "fetch", "conf": {"URL": "x", "url": "y"}},
-                "differ only in case",
-                id="case-colliding-conf-keys",
-            ),
-            pytest.param(
-                {"id": "f", "type": "fetch", "conf": {"url": {"VALUE": 1, "value": 2}}},
-                "differ only in case",
-                id="nested-case-colliding-conf-keys",
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(("module", "match"), MALFORMED_MODULES)
     def test_malformed_module_raises(self, module, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse({"modules": [module]})
@@ -1446,12 +1357,12 @@ class TestSerialize:
     def test_serialization_is_order_independent(self):
         reordered = {
             "nodes": [{"name": "filter"}, {"name": "fetch"}],
-            "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "filter-1"}}],
+            "edges": [build_edge("fetch-1", "filter-1")],
             "outputs": {"default": {"node": "filter-1", "port": "out"}},
         }
         forward = {
             "nodes": [{"name": "fetch"}, {"name": "filter"}],
-            "edges": [{"source": {"node": "fetch-1"}, "target": {"node": "filter-1"}}],
+            "edges": [build_edge("fetch-1", "filter-1")],
             "outputs": {"default": {"node": "filter-1", "port": "out"}},
         }
         first = Workflow.from_raw(reordered).serialize()
@@ -1463,14 +1374,7 @@ class TestSerialize:
         text = data.decode("utf-8")
         assert b'"version":"2"' in data
 
-        for token in (
-            "_OUTPUT",
-            "_INPUT",
-            "wires",
-            '"src"',
-            '"tgt"',
-            '"type":"output"',
-        ):
+        for token in _PIPE_DEF_TOKENS:
             assert token not in text
 
     def test_call_options_are_serialized_apart_from_conf(self):
