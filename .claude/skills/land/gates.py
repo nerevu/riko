@@ -62,12 +62,13 @@ base, so a tripped ratchet separates its new violations from existing ones; it e
 ``scope tidy --leads`` adds tidy's opening checks to the same call. It saves the
 raw diff to ``.claude/tidy-scope.diff`` and runs, side by side, the tidy lint
 selectors (``--manage`` plus ``lint --terms --literals --docstrings --bindings
---tests --helpers``), ``neighborhood.py --context 2``, and ``mistake_scan.py`` over
-that diff, plus ``heading_drift.py`` when a ``*.md`` file is touched,
-``changelog_widows.py`` when ``docs/CHANGES.rst`` is, and ``overlap_scan.py --files``
-over each touched ``tests/<tier>/test_*.py``. Each prints whole under its own
-``--- <name>`` header (with its exit code when non-zero), in that order, after the
-scope. A diff over ``--max-inline`` bytes first gets a hint to read
+--tests --helpers``), ``neighborhood.py --context 2``, ``mistake_scan.py``, and
+``reuse_scan.py --tests`` (as ``reuse_scan``, then again with ``--shapes`` as
+``reuse_shapes``) over that diff, plus ``heading_drift.py`` when a ``*.md``
+file is touched, ``changelog_widows.py`` when ``docs/CHANGES.rst`` is, and
+``overlap_scan.py --files`` over each touched ``tests/<tier>/test_*.py``. Each prints
+whole under its own ``--- <name>`` header (with its exit code when non-zero), in that
+order, after the scope. A diff over ``--max-inline`` bytes first gets a hint to read
 ``--edits-only``. The exit code stays the scope's.
 
 ``run`` echoes the command's output and keeps its last pytest summary line
@@ -164,6 +165,8 @@ LEAD_NAMES = (
     "lint",
     "neighborhood",
     "mistake_scan",
+    "reuse_scan",
+    "reuse_shapes",
     "heading_drift",
     "changelog_widows",
     "overlap_scan",
@@ -422,6 +425,8 @@ def build_lead_prefixes(manage: list[str]) -> dict[str, list[str]]:
         "lint": manage,
         "neighborhood": python,
         "mistake_scan": ["uv", "run", "--active", "--no-sync", "python"],
+        "reuse_scan": python,
+        "reuse_shapes": python,
         "heading_drift": python,
         "changelog_widows": python,
         "overlap_scan": python,
@@ -434,6 +439,7 @@ def build_lead_commands(
     """Builds the command of each lead that applies to the ``touched`` paths."""
     tests = [name for name in touched if TEST_FILE.match(name)]
     script = {name: str(TIDY_DIR / f"{name}.py") for name in LEAD_NAMES}
+    script["reuse_shapes"] = script["reuse_scan"]
     commands = {
         "lint": [*prefixes["lint"], *TIDY_LINT],
         "neighborhood": [
@@ -449,6 +455,21 @@ def build_lead_commands(
             script["mistake_scan"],
             "--diff-file",
             str(diff_file),
+        ],
+        "reuse_scan": [
+            *prefixes["reuse_scan"],
+            script["reuse_scan"],
+            "--diff-file",
+            str(diff_file),
+            "--tests",
+        ],
+        "reuse_shapes": [
+            *prefixes["reuse_shapes"],
+            script["reuse_shapes"],
+            "--diff-file",
+            str(diff_file),
+            "--tests",
+            "--shapes",
         ],
     }
 

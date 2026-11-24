@@ -191,6 +191,13 @@ def test_scope_leads_prints_each_lead_after_the_scope(tmp_path, capsys):
     assert "--- neighborhood\n" in leads
     assert "--context 2" in leads.split("--- neighborhood\n")[1]
     assert "--- mistake_scan\n" in leads
+    reuse_lead = leads.split("--- reuse_scan\n")[1].split("--- reuse_shapes\n")[0]
+    assert "--diff-file" in reuse_lead
+    assert "--tests" in reuse_lead
+    assert "--shapes" not in reuse_lead
+    shapes_lead = leads.split("--- reuse_shapes\n")[1]
+    assert "reuse_scan.py --diff-file" in shapes_lead
+    assert "--tests --shapes" in shapes_lead
     assert "--files tests/unit/test_a.py" in leads.split("--- overlap_scan\n")[1]
     assert "--- heading_drift" not in leads
     assert "+a = 2" in path.with_name("tidy-scope.diff").read_text()

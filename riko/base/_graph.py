@@ -297,6 +297,37 @@ def edges_to_graph[T: Hashable](
     return graph
 
 
+def gen_components[T: Hashable](
+    edges: Iterable[GraphEdge[T]], nodes: Iterable[GraphNode[T]] = ()
+) -> Iterator[NodeSet[T]]:
+    """
+    Generates the connected components of an undirected graph.
+
+    Args:
+
+        edges: The edges, read without direction.
+
+    Kwargs:
+
+        nodes: Nodes to include first, even when no edge touches them.
+
+    Yields:
+
+        Each set of connected nodes, ordered by the first appearance of its
+        earliest node in ``nodes`` and then ``edges``.
+
+    Examples:
+
+        >>> [sorted(component) for component in gen_components([(1, 2), (3, 4)], [5])]
+        [[5], [1, 2], [3, 4]]
+
+    """
+    graph: nx.Graph[T] = nx.Graph()
+    graph.add_nodes_from(nodes)
+    graph.add_edges_from(edges)
+    yield from nx.connected_components(graph)
+
+
 def reverse_graph[T: Hashable](graph: AnyGraph[T]) -> SetGraph[T]:
     """
     Flips a graph's edges by mapping each node to the nodes that point to it.
