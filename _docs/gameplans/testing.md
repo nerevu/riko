@@ -62,20 +62,24 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    verifies the default `> 0`. The async twin had the same bug. A large part of the
    legacy functional suite is weaker than it looks.
    **Fix this before pruning any pipeline tests.**
+
 2. **`tests/functional/test_pipeline.py` was not a test module** (since removed). It
    contains a generated `pipe_testpipe1()` implementation and no `test_*` functions.
    **Remove or relocate** it to the generated-pipeline fixture area.
+
 3. **Typed module-name behavior is tested in three places** — the (now-removed)
    `test_fluent_discovery.py`, `internal/test_codegen.py`, and `TestModuleNameEnum` in
    `public/test_collections.py` (since removed). `TestModuleNameEnum` already owns
    normalization, constructor normalization, enum/string equivalence, `|`, and
    `.pipe()`. Discovery tests should own **discovery**, not generic enum acceptance.
+
 4. **`internal/test_modules.py` has an exact behavioral duplicate.**
    `test_loop_count_all_flattens_embedded_results` and
    `test_loop_level_field_selects_child_input` invoke the same
    `_tokenizer_loop(... count="all", emit=True)` and expect the same output. The latter
    does not isolate the `field` behavior its name claims — give the parent both `title`
    and another candidate field so choosing `field="title"` changes the result.
+
 5. **One resolver precedence test is ineffective.**
    `test_runtime_registration_shadows_entry_point` uses the same `marker` callable for
    both the entry-point definition and the runtime registration, so it passes regardless

@@ -256,7 +256,7 @@ headings = false
 # Inspiration snapshots are copies of other projects' readmes: their relative links
 # resolve inside the source project, and GitHub readme conventions (an HTML logo before
 # the title, bold step labels) stay as their authors wrote them.
-"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057"]
+"_docs/research/inspiration/*.md" = ["MD033", "MD036", "MD041", "MD057", "MD076"]
 
 [tool.deptry]
 # `manage lint --deps` runs deptry from the repository root. The root conftest.py

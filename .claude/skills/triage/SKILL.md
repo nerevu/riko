@@ -80,9 +80,11 @@ ships with an entry there plus a strict-xfail canary in
 
   Only a bug from a commit at or before the merge point gets a new fix commit with the
   ref and CHANGES line above.
+
 - **Phase-owned** — a pending phase's goal or exit criteria cover it: do NOT
   fix. Leave a strict-xfail tripwire instead (below) and record the finding
   against the owner in its gameplan if it isn't already captured there.
+
 - **Contradicts the gameplan** — the "obvious fix" builds something a phase's
   exit criteria prohibit (its DELETE list, or an explicit "no X" ruling):
   reject the fix, cite the exact gameplan line, and surface the conflict to

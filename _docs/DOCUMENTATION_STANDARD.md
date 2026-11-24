@@ -661,11 +661,14 @@ plain Python block that carries neither marker, so a doctest that loses its prom
 is caught unless it also gains one).
 
 - Treat doctests as executable user documentation first, tests second.
+
 - Show actual returned values, not boolean assertions
   (`>>> next(pipe(items))["count"]` → `5`, not `... == {"count": 5} → True`).
   A `None` result is the bare call with no output, never `... is None` → `True`
   (`manage lint --docstrings` enforces it).
+
 - Follow Arrange → Act → Observe; keep each example focused on one behavior.
+
 - Every code block runs on its own: it imports and defines everything it uses,
   even when an earlier block in the same file or section already did, because
   readers land on a block directly. Repeating that setup across blocks is
@@ -678,12 +681,17 @@ is caught unless it also gains one).
   (in a class or function docstring) defined by the enclosing module, and a class
   or function example that imports its own module's name. Within one block, never
   rebind a name: give each step its own name (`page`, `feed`, `merged`).
+
 - Name inputs by role: `items`, `result`, `stream`, `conf`, `pipe`.
+
 - Prefer `list(result)` when demonstrating the complete sequence; `next(result)`
   when streaming/laziness is the point.
+
 - Deterministic, local inputs only; never require live network, current time,
   unstable reprs, memory addresses, unordered output, or environment paths.
+
 - ELLIPSIS is globally enabled; use it only for a genuinely unstable portion.
+
 - Separate the import block from the rest of the example with a single empty
   `>>>` prompt. A bare `>>>` is valid doctest source (it expects no output), and
   it keeps the setup visually distinct from the workflow being demonstrated:
@@ -710,6 +718,7 @@ is caught unless it also gains one).
 
   Those two positions only — no other empty prompts for visual spacing. A true
   blank line still terminates the example, so it can never substitute for `>>>`.
+
 - Narrate a second case as a plain `#` comment line after a blank line, directly
   above the example it introduces, not as prose between examples or a `>>> #`
   prompt; write names plainly (no RST markup) since the comment renders as code:
@@ -724,12 +733,16 @@ is caught unless it also gains one).
   ```
 
   A labelled block (`Basic usage::`) still introduces a separate example group.
+
 - Prefer double-quoted strings in example **input**; expected dict/`repr` output
   keeps whatever Python actually prints (usually single quotes).
+
 - Public examples exercise the public object — do not reach through the API into
   private helpers.
+
 - Private-object doctests are rare; use one only when a compact executable
   example significantly clarifies non-obvious behavior.
+
 - **Doctests and unit tests share coverage, they do not duplicate it.** When a
   doctest demonstrates a behavior an existing unit test also asserts, extract the
   example *from* that test and delete the now-redundant test — the doctest is the

@@ -288,6 +288,7 @@ that mapped a processor per item, so collapsing a processor-loop to a direct
   operator decorator into loop-owned `riko/modules/_loop.py`; compact-form schema types
   (`EmbedRef`, `LoopModule`, `CountArg`, a shared `RawModule` base) added as accepted
   input only. Characterization tests pinned the then-wrong global-flatten output first.
+
 - **Phase 2 — full Yahoo per-parent semantics (eager async).** Correct per-parent
   folding shared by the processor and the explicit `loop`, via `_run_loop`/`_take` in
   `_loop.py` (`loop_embed_sync`). No cross-parent flatten before `count`/`assign`;

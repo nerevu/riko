@@ -7,10 +7,15 @@ Implement a framework-neutral site-generation layer powered by Riko pipelines.
 The system must allow Riko to:
 
 1. Fetch data from APIs, files, feeds, or other Riko sources.
+
 2. Normalize and transform records through named Riko modules.
+
 3. Apply AI enrichment and configurable human-review policies.
+
 4. Convert records into versioned `SiteArtifact` objects.
+
 5. Assemble those artifacts into a canonical `SiteSpec`.
+
 6. Export the same `SiteSpec` to:
 
    * the existing Mithril-based `wei-app`;
@@ -659,7 +664,9 @@ Capture current behavior and lock the agreed decisions before implementation.
 #### Tasks
 
 1. Run the full existing Riko test suite.
+
 2. Run Pyright using the repository’s current configuration.
+
 3. Record existing export behavior for:
 
    * list;
@@ -668,12 +675,14 @@ Capture current behavior and lock the agreed decisions before implementation.
    * JSON;
    * GeoJSON;
    * OFX/QIF when dependencies are present.
+
 4. Add architecture documents:
 
    * `SiteSpec as canonical boundary`;
    * `renderer and runtime model`;
    * `publication approval and content ownership`;
    * `reusable Pipeline definition and private one-shot execution lifecycle`.
+
 5. Record current `wei-app` `pages.json` and collection-loading behavior as
    compatibility fixtures.
 
@@ -770,6 +779,7 @@ site-spec-v1.json
 ```
 
 5. Implement schema validation.
+
 6. Implement site assembly:
 
    * site metadata;
@@ -780,10 +790,15 @@ site-spec-v1.json
    * routes;
    * assets;
    * metadata contributions.
+
 7. Implement component runtime-default resolution.
+
 8. Implement collection materialization metadata.
+
 9. Implement route generation and collision detection.
+
 10. Implement `QuerySpec` validation.
+
 11. Implement a basic query evaluator supporting:
 
     * equality;
@@ -792,7 +807,9 @@ site-spec-v1.json
     * field existence;
     * ascending/descending ordering;
     * limit.
+
 12. Implement `BuildResult`.
+
 13. Implement `SiteSpec.render()` as a convenience wrapper over the site renderer
     registry.
 
@@ -948,14 +965,23 @@ Support Git-managed review decisions without requiring an editorial system.
    * stable `review_id`;
    * `content_hash`;
    * `draft` status.
+
 2. A decision applies only when its hash matches.
+
 3. A changed generated value becomes draft again.
+
 4. Missing approvals remain draft.
+
 5. Rejected decisions remain rejected until content changes or the decision is changed.
+
 6. Approval-source precedence follows configuration order.
+
 7. The first valid decision for the current hash wins.
+
 8. Malformed stores fail with clear file and field information.
+
 9. Production exporters exclude drafts and rejected records by default.
+
 10. Preview exporters may include them with visible labels.
 
 #### Store protocol
@@ -1765,12 +1791,18 @@ Do not combine unrelated core refactors with renderer work.
 For every phase:
 
 1. Inspect current repository structure and conventions first.
+
 2. Run baseline tests before editing.
+
 3. State the exact files that will change.
+
 4. Implement only the current phase.
+
 5. Add or update tests in the same change.
+
 6. Run formatting, linting, type checking, and tests using repository-configured
    commands.
+
 7. Report:
 
    * files changed;
@@ -1779,14 +1811,19 @@ For every phase:
    * test commands;
    * test results;
    * unresolved issues.
+
 8. Do not silently change agreed architecture.
+
 9. Do not invent a new framework abstraction when an agreed protocol already exists.
+
 10. Do not add dependencies without explaining:
 
     * why they are needed;
     * whether they are optional;
     * how they affect the base installation.
+
 11. Do not commit generated build output unless it is an explicit fixture.
+
 12. Stop the phase when its acceptance criteria are met.
 
 When implementation details conflict with the current repository, preserve the

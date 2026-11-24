@@ -107,6 +107,7 @@ for iterating on one gate alone.
    reubano/meza` (a merged or deleted branch reads "none yet" again). Name
    every deleted workaround in the report. The command itself runs in step 1's setup
    call.
+
 1. **Tidy**: run `.claude/skills/tidy/SKILL.md` over the change in a fresh `implementer`
    subagent (`model: "opus"`, so it never inherits a Fable session's model), never as an
    in-loop grep pass. First, one setup Bash call runs `manage upgrade --daily` (step 0),
@@ -138,6 +139,7 @@ for iterating on one gate alone.
    the other gates, and only the gates tidy's edits invalidated rerun before it. Its
    judgment questions go to the user now, and phase-owned findings go through
    `/triage`.
+
 2. **Prettify first, always**: the gate sequence's first gate, run in step 1's setup
    call before tidy. Alone: `python $G run prettify --mutates -- <manage> prettify`.
    Never hand-fix formatting-class lint errors — formatting is prettify's job, before
@@ -146,6 +148,7 @@ for iterating on one gate alone.
    tidy skips its own prettify and record under `/land`, so once land has recorded
    tidy after its report, a format-only change does not reopen tidy's scope for the
    next session, and a prettify before tidy has run marks nothing.
+
 3. **Codegen drift**: if the change touched anything with a generated artifact
    (configs, module names/ids, API surface blocks, pipeline fixtures), pass
    `--codegen` to `all` (alone:
@@ -153,6 +156,7 @@ for iterating on one gate alone.
    on the generated files. A diff
    there is part of the change, not noise — keep it. Never hand-edit generated
    files.
+
 4. **Lint**: in the gate sequence; alone, `python $G run lint -- <manage> lint --all`.
    It already runs Ruff, rumdl, the RST/docs/docstring/
    terms/literals/deps/bindings/tests/basenames/escapes/helpers/ownership checks,
@@ -163,6 +167,7 @@ for iterating on one gate alone.
    `path:line:` (the `--tests` ceilings) trips, pipe that check's output to
    `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
    lint last passed, separating the change's new violations from existing ones.
+
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
    suite, in the gate sequence or alone with
    `python $G run test --lock -- <manage> test --ratchet --quiet --parallel`, before
@@ -185,6 +190,7 @@ for iterating on one gate alone.
    When it lowers the ceiling, that `pyproject.toml` diff is part of the change — keep
    it. The ceiling is measured in the full dev environment (`--group dev --all-extras`,
    Python 3.12).
+
 6. **Types**: the gate sequence's two type gates, run beside lint; alone,
    `python $G run check-types -- <manage> lint --check-types` and
    `python $G run verify-types -- <manage> lint --verify-types`
@@ -242,6 +248,7 @@ to an agent, which repeats their work by hand for many minutes.
    working-tree fixups, which stay pending as usual. A `reword <sha> <msg-file>` step
    (or `--reword SHA=FILE`) rewrites a branch commit's message in the same rehearsal,
    such as a fold target's subject or a trimmed mover's.
+
 2. **Map hunks to targets**: run the mapper instead of blaming by hand, together
    with step 3's hunk list in one Bash call:
 
@@ -260,6 +267,7 @@ to an agent, which repeats their work by hand for many minutes.
    on the change (an import used only by new code, a doc line describing new
    behavior). Read a hunk with `git diff` only when its excerpt does not settle its
    concept.
+
 3. **Write the plan**: the `split_hunks.py list --body 12` output from step 2's call
    lists the change's hunks by id (`-U0` by default, so mixed-concept regions split
    finely; `path:N` is the hunk starting on new-side line `N`; new, deleted, untracked,
@@ -289,6 +297,7 @@ to an agent, which repeats their work by hand for many minutes.
    (never a bullet that restates it), else at most five `-` bullets, one concept each,
    under 72 characters, never prose. A bullet for something the subject does not imply
    starts with "Also".
+
 4. **Rehearse it**:
 
    ```bash
@@ -308,6 +317,7 @@ to an agent, which repeats their work by hand for many minutes.
    hunk start lines when a step takes only part of a file). Fix the plan and rerun
    until every check and the autosquash pass. Leave its temp folders and
    worktrees where they are; never delete them.
+
 5. **Hand over the commands**: put `chain.txt` on the clipboard (`--copy`)
    and show the step table for reference; the chain stops at the first step
    that fails. Offer step-by-step lines from `commands.txt` instead only when

@@ -104,14 +104,18 @@ CPU mode: 20 k → 37 k samples/s across the same releases.
 * `pip install --user austin-python --upgrade`; needs the Austin binary, found via the
   current directory, `AUSTINPATH`, `~/.austinrc` (`binary = "/path/to/austin"`), or
   `PATH`. Tested on Linux, macOS and Windows with Python 3.9–3.14.
+
 * Console scripts: `austin2speedscope` (Speedscope JSON), `austin2pprof` (Google pprof),
   `austin-query` (query a profile from the shell; text tables or JSON),
   `austin-compress` (aggregate raw samples).
+
 * Formats: collapsed stacks and MOJO (the binary default since Austin 4).
+
 * API: `austin.aio.AsyncAustin` (and threaded variants) with `on_sample`/`on_metadata`
   hooks for building tools; `austin.query.ProfileQuery.from_file(path)` with `top(n)`,
   `callers(fn)`, `filter(thread=..., task=...)`, `tree()`, `tasks()` and
   `task_stacks(name)` (3.14+ asyncio), results convertible with `to_dict()`.
+
 * The article's before/after idiom:
 
   ```python

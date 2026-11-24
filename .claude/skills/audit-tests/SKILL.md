@@ -108,6 +108,7 @@ git-ignored and cleared only by the user (agents never delete it).
    - a test that asserts a test helper rather than a riko name;
    - two tests asserting opposite outcomes for one pending feature;
    - a "…_once" test that never counts.
+
 2. **Tests that end only by timeout.** Look for:
    - blocking work inside a nested coroutine or the code under test that outlasts
      its backstop, so a regression ends by the timeout firing or passes on its own;
@@ -119,6 +120,7 @@ git-ignored and cleared only by the user (agents never delete it).
 
    A test guarding "stops promptly" needs blocking work longer than its
    elapsed-time assertion but shorter than the backstop.
+
 3. **Same behavior asserted twice**, which the scanner mostly misses:
    - a cross-tier twin of a different shape (a direct `_PoolLifetime` call vs an
      end-to-end `Pipeline` run);
@@ -131,14 +133,17 @@ git-ignored and cleared only by the user (agents never delete it).
    Grep the behavior's vocabulary (the setting, error type, message fragment, or
    outcome) across `tests/` and `riko/`, and open every hit. A hit you saw but
    never opened is exactly how a duplicate was added on 2026-10-29.
+
 4. **Doctest balance.** A doctest grown past basic usage (move cases to the
    subject's table), or an edge case in both places. Apply rule 6 as written; there
    is no public/private tie-breaker and no rule that "an error case stays in the
    doctest".
+
 5. **Same-shape groups.** The scanner's `shapes` section, plus tests that share
    setup and assertion and differ only in data. A finding must estimate the line
    count after the fold. A fold that would grow the file is not a finding until
    its rows compact.
+
 6. **Misfits.** Wrong tier, a class whose subject another file's row owns, a class
    named for something that isn't a riko name, behavior/rejection/tripwire order,
    grab-bag or history-named files, and files that need a split or merge (trim and
@@ -161,15 +166,19 @@ git-ignored and cleared only by the user (agents never delete it).
    dict-order or `ChainMap` assertion. The fix is a `testing.md` §6 move to
    `tests/typing/` for the pyright-owned ones and a deletion otherwise; a pyright
    *warning* (`reportUnsupportedDunderAll`) fails no gate, so a test over it stays.
+
 7. **Helpers.** Single-user `tests/_*.py` names, identical definitions across
    files, 3+ inline copies that should be one helper, and placement.
+
 8. **Timeout bounds.** `manage lint --tests` checks ladder membership and nesting; the
    audit measures the fit (`fit_bounds.py`): every bound is the smallest ladder step at
    least five times the worst of the three `--durations` runs above. Map a marker to the
    `def` that *follows* it, never by line range.
+
 9. **Stale citations and names.** Test names that cite nothing (`test_documented_*`),
    old verbs in test names, and `_docs/` citations of tests that moved or were
    deleted (`lint --docs` checks `path::Class::test`; it misses prose mentions).
+
 10. **Speed.** The slowest tests by `--durations`, duplicated subprocess matrices,
     and pools spun up where one call would do.
 
