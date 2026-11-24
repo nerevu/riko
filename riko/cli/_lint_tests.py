@@ -14,9 +14,12 @@ size on purpose (the dependency canaries are cited by path and stay one file).
 Every bound in a test file or a ``tests/_*.py`` helper (a ``timeout`` marker, a
 ``fail_after``/``move_on_after`` bound, or a ``wait``/``join``/``result``/
 ``communicate`` timeout, by keyword or position) must sit on the bound ladder (1, 2, 3,
-5, 8, 10, 15, 20, 30 seconds). An inner bound must stay below its function's outer one,
-which is its smallest ``timeout`` marker, its class's, or else the ``pyproject.toml``
-backstop.
+5, 8, 10, 15, 20, 30 seconds). A ``wait``/``join``/``result``/``communicate`` call
+inside a function or class a test defines in its body (a fake) is the blocking work
+under test, not a bound, so only a test's own path counts; one directly in a test, in
+a module-level helper, or in a ``tests/_*.py`` helper stays on the ladder. An inner
+bound must stay below its function's outer one, which is its smallest ``timeout``
+marker, its class's, or else the ``pyproject.toml`` backstop.
 
 A ``sleep`` on a function's own path (outside nested functions) must never
 last as long as that outer bound. A plain ``timeout`` marker never equals the backstop,
@@ -317,12 +320,14 @@ def _gen_own_path(node: ast.AST) -> Iterator[ast.AST]:
             yield from _gen_own_path(child)
 
 
-def _get_inner_bound(node: ast.AST, /, **constants: Seconds) -> Bound | None:
-    """Gets the bound a call sets, or ``None`` when it sets no known one."""
+def _get_inner_bound(
+    node: ast.AST, names: frozenset[str], /, **constants: Seconds
+) -> Bound | None:
+    """Gets the bound a call named in ``names`` sets, or ``None`` for no known one."""
     leaf = get_leaf(node.func) if isinstance(node, ast.Call) else None
     bound = None
 
-    if isinstance(node, ast.Call) and leaf in BOUND_CALLS | TIMEOUT_CALLS:
+    if isinstance(node, ast.Call) and leaf in names:
         keywords = (k.value for k in node.keywords if k.arg == "timeout")
         timeout = next(keywords, None) if leaf in TIMEOUT_CALLS else None
 
@@ -380,11 +385,24 @@ class Scope(NamedTuple):
         return outer
 
     def gen_inner_bounds(self, /, **constants: Seconds) -> Iterator[Bound]:
-        """Generates the bounds the scope's function body sets."""
-        nodes = () if self.function is None else ast.walk(self.function)
+        """
+        Generates the bounds the scope's function body sets.
+
+        In a test, a ``wait``/``join``/``result``/``communicate`` call inside a function
+        or class the test defines in its body is the work under test, not a bound.
+        """
+        function = self.function
+        nodes = () if function is None else ast.walk(function)
+        own = None
+
+        if function is not None and function.name.startswith("test"):
+            own = {id(node) for node in _gen_own_path(function)}
 
         for node in nodes:
-            if (bound := _get_inner_bound(node, **constants)) is not None:
+            is_fake = own is not None and id(node) not in own
+            names = BOUND_CALLS if is_fake else BOUND_CALLS | TIMEOUT_CALLS
+
+            if (bound := _get_inner_bound(node, names, **constants)) is not None:
                 yield bound
 
     def gen_sleeps(self, /, **constants: Seconds) -> Iterator[Bound]:
@@ -433,7 +451,8 @@ def gen_bounds(tree: ast.Module) -> Iterator[tuple[str, Bound, bool]]:
 
     The owner is ``Class::method`` for a method, ``Class`` for a class marker, and the
     function's name for a top-level function. A bound held in a module-level constant
-    is read through it; ``sleep`` calls are not bounds.
+    is read through it; ``sleep`` calls are not bounds, and neither is a ``wait`` or
+    ``join`` inside a function or class a test defines.
 
     Args:
 

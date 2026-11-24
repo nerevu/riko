@@ -19,7 +19,9 @@ must stay below the bound that encloses it: the innermost ``fail_after`` or
 ``move_on_after`` block around it, else the test's ``timeout`` marker, else the
 ``pyproject.toml`` timeout. Its fit is capped at the largest ladder step under that
 cap, and such a line ends ``cap=TEXT``; a capped bound that sits at its cap is
-``ok``, since only the enclosing bound can grow.
+``ok``, since only the enclosing bound can grow. A ``wait``/``join`` inside a
+function or class a test defines (a fake) is the work under test, not a bound, and
+is not listed.
 
 A test that asserts an elapsed time (``perf_counter() - start < BOUND``) forms a
 chain: the elapsed bound, then the longest blocking ``sleep`` of at least 1 second
