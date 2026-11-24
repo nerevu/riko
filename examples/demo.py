@@ -32,28 +32,24 @@ fetch_conf = FetchPageConf(
 )
 
 
-def pipe(test: bool = False) -> list[Item]:
-    s1 = Pipeline.from_module("fetch", conf={"url": health})
-    s2 = (
+def build_pipelines() -> tuple[Pipeline, Pipeline]:
+    feed = Pipeline.from_module("fetch", conf={"url": health})
+    word_count = (
         Pipeline.from_module("fetchpage", conf=fetch_conf)
         .strreplace(conf=replace_conf, options={"assign": "content"})
         .tokenizer(conf={"delimiter": " "}, options={"emit": True})
         .count()
     )
 
-    return [s1.first(), s2.first()]
+    return feed, word_count
+
+
+def pipe(test: bool = False) -> list[Item]:
+    return [pipeline.first() for pipeline in build_pipelines()]
 
 
 async def async_pipe(test: bool = False) -> AsyncStream:
-    s1 = Pipeline.from_module("fetch", conf={"url": health})
-    s2 = (
-        Pipeline.from_module("fetchpage", conf=fetch_conf)
-        .strreplace(conf=replace_conf, options={"assign": "content"})
-        .tokenizer(conf={"delimiter": " "}, options={"emit": True})
-        .count()
-    )
-
-    for pipeline in (s1, s2):
+    for pipeline in build_pipelines():
         yield await pipeline.afirst()
 
 

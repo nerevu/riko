@@ -27,22 +27,22 @@ year_conf = DateFormatConf({"format": "%Y"})
 options = {"field": "content", "emit": True}
 
 
-def pipe(test: bool = True) -> list[Item]:
+def build_pipelines(test: bool) -> tuple[Pipeline, Pipeline]:
     date_conf = InputConf({"type": CastType.DATE, "default": "12/2/2014", "test": test})
-
     date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
     date_stream = date_source.dateformat(conf=long_conf, options=options)
     year_stream = year_source.dateformat(conf=year_conf, options=options)
+    return date_stream, year_stream
+
+
+def pipe(test: bool = True) -> list[Item]:
+    date_stream, year_stream = build_pipelines(test)
     year = year_stream.first()
     return [{"date": date_stream.first(), "year": int(cast("str", year))}]
 
 
 async def async_pipe(test: bool = True) -> AsyncStream:
-    date_conf = InputConf({"type": CastType.DATE, "default": "12/2/2014", "test": test})
-
-    date_source, year_source = Pipeline.from_module("input", conf=date_conf).split(2)
-    date_stream = date_source.dateformat(conf=long_conf, options=options)
-    year_stream = year_source.dateformat(conf=year_conf, options=options)
+    date_stream, year_stream = build_pipelines(test)
     year = await year_stream.afirst()
     date = await date_stream.afirst()
     yield {"date": date, "year": int(cast("str", year))}

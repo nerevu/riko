@@ -20,9 +20,9 @@ from riko.types.modules import FetchDataConf, FilterConf, FilterConfRule, UniqCo
 if TYPE_CHECKING:
     from riko.types import Item, Items
 
-p1_conf = FetchDataConf({"url": get_path("gigs.json"), "path": "value.items"})
-p2_conf = UniqConf({"uniq_key": "link"})
-p3_conf = FilterConf(
+fetch_conf = FetchDataConf({"url": get_path("gigs.json"), "path": "value.items"})
+uniq_conf = UniqConf({"uniq_key": "link"})
+filter_conf = FilterConf(
     {
         "combine": "or",
         "permit": False,
@@ -31,22 +31,20 @@ p3_conf = FilterConf(
 )
 
 
-def pipe(test: bool = False) -> list[Item]:
-    pipeline = (
-        Pipeline.from_module("fetchdata", conf=p1_conf)
-        .uniq(conf=p2_conf)
-        .filter(conf=p3_conf)
+def build_pipeline() -> Pipeline:
+    return (
+        Pipeline.from_module("fetchdata", conf=fetch_conf)
+        .uniq(conf=uniq_conf)
+        .filter(conf=filter_conf)
     )
 
-    return list(pipeline)
+
+def pipe(test: bool = False) -> list[Item]:
+    return list(build_pipeline())
 
 
 def async_pipe(test: bool = False) -> Pipeline:
-    return (
-        Pipeline.from_module("fetchdata", conf=p1_conf)
-        .uniq(conf=p2_conf)
-        .filter(conf=p3_conf)
-    )
+    return build_pipeline()
 
 
 def print_results(result: Items) -> None:
