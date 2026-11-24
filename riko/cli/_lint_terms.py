@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._iterutils import gen_instances
 
+from ._import_graph import load_ast
 from ._shipped_text import gen_blocks, gen_files
 
 if TYPE_CHECKING:
@@ -229,7 +230,7 @@ def _gen_resolver_issues(*roots: Path) -> Iterator[TermIssue]:
 
     for path in paths:
         if path.suffix == ".py":
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = load_ast(path)
             nodes = ast.walk(tree)
             classes = gen_instances(nodes, ast.ClassDef)
 

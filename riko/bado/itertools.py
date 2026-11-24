@@ -33,7 +33,6 @@ Examples:
 
 from __future__ import annotations
 
-import warnings
 from collections import deque
 from collections.abc import AsyncIterable
 from contextlib import aclosing
@@ -52,6 +51,7 @@ from riko.base._iterutils import (
     is_lagging,
     log_cleanup_failure,
     require_idle,
+    warn_unclosed,
 )
 from riko.base._logging import get_logger
 from riko.base._sentinels import MISSING, MissingType
@@ -495,7 +495,7 @@ class aauto_close[T]:  # noqa: N801
 
         if started and has_open_resource(values, *ignored):
             msg = "unclosed aauto_close stream. Exhaust or close it"
-            warnings.warn(msg, ResourceWarning, source=self, stacklevel=1)
+            warn_unclosed(self, msg)
 
     async def aclose(self) -> None:
         """

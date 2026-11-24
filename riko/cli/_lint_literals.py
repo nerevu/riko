@@ -9,7 +9,7 @@ from itertools import chain
 from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
-from ._import_graph import FUNCTION_NODES
+from ._import_graph import FUNCTION_NODES, load_ast
 from ._shipped_text import gen_files, gen_text
 
 if TYPE_CHECKING:
@@ -78,7 +78,7 @@ def _gen_bare_default_issues(path: Path) -> Iterator[LiteralIssue]:
 
     Only a parameter whose signature default is a string can match.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = load_ast(path)
 
     nodes = (
         node

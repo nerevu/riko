@@ -56,7 +56,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 from riko.base._iterutils import gen_instances, gen_non_null
 
 from ._gen_tier_index import TIERS, gen_subjects, generate_tier_index
-from ._import_graph import FUNCTION_NODES, FunctionNode
+from ._import_graph import FUNCTION_NODES, FunctionNode, load_ast
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -296,6 +296,11 @@ class Bound(NamedTuple):
 
         return bound
 
+    @classmethod
+    def from_first_arg(cls, node: ast.Call, /, **constants: Seconds) -> Bound | None:
+        """Builds the bound ``node``'s first positional argument sets, if known."""
+        return cls.from_arg(node, next(iter(node.args), None), **constants)
+
 
 def _gen_timeouts(
     decorators: Iterable[ast.expr], /, **constants: Seconds
@@ -306,7 +311,7 @@ def _gen_timeouts(
             is_marker = isinstance(node, ast.Call) and get_leaf(node.func) == "timeout"
 
             if is_marker and isinstance(node, ast.Call):
-                bound = Bound.from_arg(node, next(iter(node.args), None), **constants)
+                bound = Bound.from_first_arg(node, **constants)
 
                 if bound is not None:
                     yield bound, node is decorator
@@ -332,7 +337,7 @@ def _get_inner_bound(
         timeout = next(keywords, None) if leaf in TIMEOUT_CALLS else None
 
         if timeout is None:
-            bound = Bound.from_arg(node, next(iter(node.args), None), **constants)
+            bound = Bound.from_first_arg(node, **constants)
         else:
             bound = Bound.from_arg(node, timeout, "timeout", **constants)
 
@@ -344,7 +349,7 @@ def _get_blocking_call(node: ast.AST, /, **constants: Seconds) -> Bound | None:
     bound = None
 
     if isinstance(node, ast.Call) and get_leaf(node.func) in BLOCKING_CALLS:
-        bound = Bound.from_arg(node, next(iter(node.args), None), **constants)
+        bound = Bound.from_first_arg(node, **constants)
 
     return bound
 
@@ -685,7 +690,7 @@ def _gen_file_issues(
 
 def _gen_helper_issues(path: Path, backstop: Seconds) -> Iterator[LayoutIssue]:
     """Finds the bounds, ``subprocess`` calls, and ``xfail`` marks in a helper."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = load_ast(path)
     yield from _gen_bound_issues(path, tree, backstop)
     yield from _gen_subprocess_issues(path, tree)
     yield from _gen_xfail_issues(path, tree)
@@ -767,7 +772,7 @@ def _gen_tier_trees(tests_dir: Path) -> Iterator[tuple[Path, ast.Module]]:
     for path in chain.from_iterable(
         sorted((tests_dir / tier).glob("test_*.py")) for tier in TIERS
     ):
-        yield path, ast.parse(path.read_text(encoding="utf-8"))
+        yield path, load_ast(path)
 
 
 def _get_inline_table(node: ast.Call) -> ast.List | ast.Tuple | None:

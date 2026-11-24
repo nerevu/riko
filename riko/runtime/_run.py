@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Never, Self
 
@@ -11,6 +10,7 @@ from attrs import define, field
 
 from riko.bado._util import maybe_aclosing
 from riko.base._exceptions import PipelineStateError
+from riko.base._iterutils import warn_unclosed
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
@@ -391,7 +391,7 @@ class _PipelineStream[T]:
         if getattr(self, "_started", False) and not getattr(self, "_finished", True):
             msg = f"unclosed {_SUBJECT}. Iterate it to the end, close it, or "
             msg += "iterate it inside `with pipeline.open(items)`"
-            warnings.warn(msg, ResourceWarning, source=self, stacklevel=1)
+            warn_unclosed(self, msg)
 
 
 @define(eq=False)

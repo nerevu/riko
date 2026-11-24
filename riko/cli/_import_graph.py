@@ -146,6 +146,11 @@ def load_modules(root: Path) -> tuple[ModuleInfo, ...]:
     return tuple(modules)
 
 
+def load_ast(path: Path) -> ast.Module:
+    """Loads and parses the Python source at ``path``."""
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
 def is_type_checking(test: ast.expr) -> bool:
     """Tells whether a test is exactly ``TYPE_CHECKING`` or ``typing.TYPE_CHECKING``."""
     match test:

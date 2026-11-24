@@ -681,6 +681,32 @@ def has_open_resource(values: Iterable[object], *ignored: type) -> bool:
     return not all(isinstance(v, ignored) for v in closables)
 
 
+def warn_unclosed(source: object, msg: str) -> None:
+    """
+    Warns that ``source`` was garbage collected while still holding a resource.
+
+    Call it from a finalizer. The warning is attributed to the caller's line.
+
+    Args:
+
+        source: The object left unclosed.
+        msg: The warning message.
+
+    Examples:
+
+        >>> import warnings
+        >>>
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     warn_unclosed(object(), "unclosed stream")
+        >>>
+        >>> caught[0].category.__name__, str(caught[0].message)
+        ('ResourceWarning', 'unclosed stream')
+
+    """
+    warnings.warn(msg, ResourceWarning, source=source, stacklevel=2)
+
+
 class auto_close[T]:  # noqa: N801
     """
     Passes ``source`` through so it closes ``closables`` when iteration ends.
@@ -773,7 +799,7 @@ class auto_close[T]:  # noqa: N801
 
             if has_open_resource(values, GeneratorType, auto_close):
                 msg = "unclosed auto_close stream. Exhaust or close it"
-                warnings.warn(msg, ResourceWarning, source=self, stacklevel=1)
+                warn_unclosed(self, msg)
 
             with suppress(Exception):
                 self.close()
