@@ -252,6 +252,9 @@ Matching precedence:
 
 Hostname/asset name are fallback identities, never primary durable identity.
 
+This precedence specializes the generic layered matching and match-result contract in
+[entity-resolution.md](entity-resolution.md).
+
 Every run reports:
 
 ```text
@@ -488,6 +491,11 @@ client, period, billable_users, billable_devices, generated_at
 It reuses MD3/MD4's provider reads (so nothing is thrown away at M4) and needs none of
 MD2 (Airtable writes), MD8 (reconciliation), MD9 (license reallocation), or R5C/R6. A
 rerun simply recomputes the counts; there is nothing to de-duplicate.
+
+Tenant model (user, 2026-11-22): one run per client, with `tenant_id` and `period` as
+workflow inputs (`Context(inputs=...)` and `{"input": name}` references, shipped in
+R4D). The outer loop over clients lives in `riko-msp` until R11 orchestration lands; a
+per-item loop form is the later shape once R9's per-parent inputs exist.
 
 ## 12. Definition of done
 

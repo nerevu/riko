@@ -49,7 +49,8 @@ is **making each layer have one clear job**, not shrinking the suite.
 These are real test bugs — coverage that looks stronger than it is. Fix them first.
 
 1. **`tests/functional/test_basics.py` — `_load()`/`_aload()` discard `value`/`check`.**
-   Both accept `value`/`check` but hard-code the defaults when delegating:
+   (Fixed; the helpers were merged on 2026-10-13.) Both accept `value`/`check` but
+   hard-code the defaults when delegating:
 
    ```python
    def _load(self, items, pipe_name, value=0, check=1):
@@ -58,8 +59,8 @@ These are real test bugs — coverage that looks stronger than it is. Fix them f
    ```
 
    So `self._load(items, pipe_name, 25, 0)` never verifies `< 25`/`== 25` — it always
-   verifies the default `> 0`. Same bug in `_aload()`. A large part of the legacy
-   functional suite is weaker than it looks.
+   verifies the default `> 0`. The async twin had the same bug. A large part of the
+   legacy functional suite is weaker than it looks.
    **Fix this before pruning any pipeline tests.**
 2. **`tests/functional/test_pipeline.py` was not a test module** (since removed). It
    contains a generated `pipe_testpipe1()` implementation and no `test_*` functions.
@@ -102,7 +103,7 @@ tree, watch it fail, then fix. They belong to the layer that owns the unit under
 | ~~keyed `join(count(), finite_other)` yields a first result~~ — **landed** as `tests/public/test_modules.py` (keyed **and** natural; asserts bounded consumption, since the operator wrapper reads one item ahead) | public | R3 |
 | `async_pipe` (`send`) yields its first item before the source is exhausted | public | R4 |
 | `compile_workflow` handles ids `"class"`, `"foo bar"`, `"foo.bar"`, `"1st"`, `"café"` | internal | R5 |
-| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
+| ~~an unsupported object **nested** in a dict/list arg bypasses `repr_cache` and reaches the function unchanged~~ — **landed** as `tests/internal/test_values.py::TestReprCache`; fixed on 2026-09-01 by propagating `_UNSUPPORTED` in `_to_hashable` (correctness-audit R6) | internal | R6 |
 | ~~`gather_results([none(), one(), none()])` preserves all three positions~~ — **landed** as `tests/internal/test_io.py::TestGatherResults::test_gather_results_preserves_none_positions`; the defect was fixed with the `MISSING` sentinel (correctness-audit R7) | internal | R7 |
 | ~~`Reencoder.read(1)` returns one character and the remainder survives the next `read`~~ — **landed** as `tests/internal/test_io.py::TestReencode::test_char_count_preserves_remainder`; fixed with a char/byte remainder buffer (correctness-audit R8) | internal | R8 |
 | `fetchtable` reads a real `.xlsx` and `.sqlite` fixture, sync **and** async | functional | R9 |
@@ -349,9 +350,9 @@ in `tests/public/test_workflow.py`; `TestSyncPolicy`, `TestPoolLifetime`,
 
 **Shipped (first-pass patch).** The conservative FIX/REMOVE set has landed:
 
-- `test_basics._load`/`_aload` now forward `value`/`check`; the two stale expected
-  counts the live assertions exposed were corrected to the deterministic fixture truth
-  (`feeddiscovery` 25→15, `simplemath_1` 4→6).
+- `test_basics._load` and its async twin (since merged) now forward `value`/`check`; the
+  two stale expected counts the live assertions exposed were corrected to the
+  deterministic fixture truth (`feeddiscovery` 25→15, `simplemath_1` 4→6).
 - Resolver precedence tests use distinguishable callables:
   `test_runtime_registration_shadows_entry_point` now proves the runtime marker (not the
   entry-point one) wins, and `test_first_hit_wins` puts a different object in the first
