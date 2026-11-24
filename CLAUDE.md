@@ -352,9 +352,10 @@ a `normalize`; substituting a default the caller supplies or chooses
 - **Lint selectors are additive** — bare `manage lint` is Ruff plus rumdl (Markdown);
   `manage lint --all` runs the whole standard suite (Ruff, rumdl, RST, `--docs`,
   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
-  `--basenames`, `--escapes`, actionlint, YAML, and all import contracts), so none of
-  those need a separate run. Type verification (`--check-types`/`--verify-types`),
-  pylint strict mode, and distribution checks remain explicit heavyweight checks.
+  `--basenames`, `--escapes`, `--helpers`, `--ownership`, actionlint, YAML, and all
+  import contracts), so none of those need a separate run. Type verification
+  (`--check-types`/`--verify-types`), pylint strict mode, and distribution checks remain
+  explicit heavyweight checks.
 - **Whole-tree gates run through `gates.py`** — every full `lint --all`,
   `test --ratchet`, `--check-types`, `--verify-types`, `prettify`, or `codegen` run, in
   any skill or ad hoc, goes through

@@ -44,7 +44,7 @@ import argparse
 import ast
 import re
 from collections import defaultdict
-from itertools import pairwise
+from itertools import chain, pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -83,13 +83,12 @@ class Link(NamedTuple):
 def parse_durations(*texts: str) -> dict[str, float]:
     worst: defaultdict[str, float] = defaultdict(float)
 
-    for text in texts:
-        for line in text.splitlines():
-            match = _DURATION.match(line)
+    for line in chain.from_iterable(text.splitlines() for text in texts):
+        match = _DURATION.match(line)
 
-            if match is not None and match[2] == "call":
-                test = match[3].split("[", 1)[0]
-                worst[test] = max(worst[test], float(match[1]))
+        if match is not None and match[2] == "call":
+            test = match[3].split("[", 1)[0]
+            worst[test] = max(worst[test], float(match[1]))
 
     return dict(worst)
 
@@ -204,9 +203,7 @@ def is_elapsed(node: ast.expr) -> bool:
     return has_clock or any("elapsed" in name for name in names)
 
 
-def gen_elapsed(
-    function: ast.AST, constants: Mapping[str, float]
-) -> Iterator[tuple[int, Link]]:
+def gen_elapsed(function: ast.AST, /, **constants: float) -> Iterator[tuple[int, Link]]:
     for node in ast.walk(function):
         test = node.test if isinstance(node, ast.Assert) else None
         is_upper = (
@@ -217,7 +214,7 @@ def gen_elapsed(
 
         if is_upper and isinstance(test, ast.Compare) and is_elapsed(test.left):
             comparator = test.comparators[0]
-            seconds = get_seconds(comparator, constants)
+            seconds = get_seconds(comparator, **constants)
 
             if seconds is not None:
                 text = f"elapsed<{get_link_text(comparator, seconds)}"
@@ -248,7 +245,7 @@ def get_block(
             )
 
             if is_sleep and isinstance(node, ast.Call) and node.args:
-                seconds = get_seconds(node.args[0], constants)
+                seconds = get_seconds(node.args[0], **constants)
 
                 if seconds is not None and seconds >= _FLOOR:
                     arg = get_link_text(node.args[0], seconds)
@@ -314,7 +311,7 @@ def gen_scopes(
 ) -> Iterator[Scope]:
     constants = dict(gen_module_constants(tree))
 
-    for scope in gen_lint_scopes(tree, constants):
+    for scope in gen_lint_scopes(tree, **constants):
         if scope.function is not None:
             seconds, source = scope.get_outer(backstop)
             label = "timeout" if source == "timeout marker" else "pyproject"
@@ -331,7 +328,7 @@ def gen_chain_rows(
     helpers = {n.name: n for n in tree.body if isinstance(n, function_nodes)}
     block = get_block(scope.function, helpers, constants)
 
-    for lineno, elapsed in gen_elapsed(scope.function, constants):
+    for lineno, elapsed in gen_elapsed(scope.function, **constants):
         links = [elapsed, *([] if block is None else [block]), scope.outer]
         worst = scope.worst
         fits = None if worst is None else get_chain_fit(worst, len(links))

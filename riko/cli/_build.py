@@ -4,6 +4,7 @@
 
 import shutil
 from glob import glob
+from itertools import chain
 from os.path import getmtime
 from subprocess import CalledProcessError, call, check_call
 from sys import exit
@@ -21,13 +22,13 @@ def _clean() -> None:
     for name in ("dist", "build"):
         shutil.rmtree(ROOT_DIR / name, ignore_errors=True)
 
-    for pattern in ("*.egg-info", "src/*.egg-info"):
-        for path in glob(str(ROOT_DIR / pattern)):
-            shutil.rmtree(path, ignore_errors=True)
+    for path in chain.from_iterable(
+        glob(str(ROOT_DIR / pattern)) for pattern in ("*.egg-info", "src/*.egg-info")
+    ):
+        shutil.rmtree(path, ignore_errors=True)
 
-    for pattern in ("*.pyc", "*.pyo", "*~"):
-        for path in ROOT_DIR.rglob(pattern):
-            path.unlink(missing_ok=True)
+    for path in chain.from_iterable(map(ROOT_DIR.rglob, ("*.pyc", "*.pyo", "*~"))):
+        path.unlink(missing_ok=True)
 
 
 def _build() -> None:

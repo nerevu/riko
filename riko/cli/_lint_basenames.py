@@ -17,7 +17,7 @@ from riko.base._config import DUPLICATE_BASENAMES
 from riko.base._iterutils import sort_stably
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
 
@@ -35,7 +35,7 @@ class BasenameIssue(NamedTuple):
 
 
 def gen_basename_issues(
-    *roots: Path, allowed: frozenset[str] = DUPLICATE_BASENAMES
+    *roots: Path, allowed: Iterable[str] = DUPLICATE_BASENAMES
 ) -> Iterator[BasenameIssue]:
     """
     Finds module basenames shared by more than one file under ``roots``.
@@ -54,6 +54,7 @@ def gen_basename_issues(
         entry that is no longer shared.
 
     """
+    allowlist = frozenset(allowed)
     groups: defaultdict[str, list[Path]] = defaultdict(list)
 
     for root in roots:
@@ -64,10 +65,10 @@ def gen_basename_issues(
     duplicated = {name: paths for name, paths in groups.items() if len(paths) > 1}
 
     for name, paths in sorted(duplicated.items()):
-        if name not in allowed:
+        if name not in allowlist:
             message = "basename is shared; rename one or allowlist the pair"
             yield BasenameIssue(name, sort_stably(paths), message)
 
-    for name in sorted(allowed - duplicated.keys()):
+    for name in sorted(allowlist - duplicated.keys()):
         message = "allowlisted basename is no longer duplicated; remove it"
         yield BasenameIssue(name, sort_stably(groups.get(name, [])), message)

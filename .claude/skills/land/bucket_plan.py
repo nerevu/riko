@@ -61,6 +61,7 @@ import re
 import sys
 import tomllib
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -91,13 +92,14 @@ class Bucket:
     @property
     def header(self) -> str:
         """The bucket's plan-file header line."""
-        return (
-            "skip"
-            if self.skip
-            else f"commit {self.name}.msg"
-            if self.fixup is None
-            else f"fixup {self.fixup}"
-        )
+        if self.skip:
+            header = "skip"
+        elif self.fixup is None:
+            header = f"commit {self.name}.msg"
+        else:
+            header = f"fixup {self.fixup}"
+
+        return header
 
 
 @dataclass(frozen=True)
@@ -144,13 +146,14 @@ def gen_hunks(files: list[split_hunks.FileChange]) -> Iterator[HunkText]:
     """Generates every selectable id of the change with its removed and added lines."""
     for hid, entry in split_hunks.index_hunks(files).items():
         parts = entry.hunks if isinstance(entry, split_hunks.FileChange) else [entry]
-        removed = tuple(line for h in parts for line in h.deleted)
-        added = tuple(line.rstrip("\n") for h in parts for line in h.added)
+        removed = tuple(chain.from_iterable(h.deleted for h in parts))
+        lines = chain.from_iterable(h.added for h in parts)
+        added = tuple(line.rstrip("\n") for line in lines)
         yield HunkText(hid, entry.path, removed, added)
 
 
-def _require_keys(table: dict[str, Any], keys: frozenset[str]) -> dict[str, Any]:
-    extra = set(table) - keys
+def _require_keys(table: dict[str, Any], *keys: str) -> dict[str, Any]:
+    extra = set(table).difference(keys)
 
     if extra:
         sys.exit(f"unknown keys {sorted(extra)} in {table}")
@@ -158,14 +161,14 @@ def _require_keys(table: dict[str, Any], keys: frozenset[str]) -> dict[str, Any]
     return table
 
 
-def build_rule(raw: dict[str, Any], files: list[split_hunks.FileChange]) -> Rule:
+def build_rule(files: list[split_hunks.FileChange], /, **raw: Any) -> Rule:
     """Builds a rule from its TOML table, expanding its ids against the change."""
-    table = _require_keys(raw, RULE_KEYS)
+    table = _require_keys(raw, *RULE_KEYS)
     ids = (split_hunks.expand(entry, files) for entry in table.get("ids", ()))
     path, body, swaps = table.get("path"), table.get("body"), table.get("swaps")
     return Rule(
         bucket=table["bucket"],
-        ids=frozenset(i for found in ids for i in found) if "ids" in table else None,
+        ids=frozenset(chain.from_iterable(ids)) if "ids" in table else None,
         path=None if path is None else re.compile(path),
         body=None if body is None else re.compile(body, re.MULTILINE),
         swaps=None if swaps is None else tuple((old, new) for old, new in swaps),
@@ -177,9 +180,9 @@ def load_rules(
 ) -> tuple[list[Bucket], list[Rule], str]:
     """Loads the buckets, rules, and default bucket, exiting on a malformed file."""
     data = tomllib.loads(path.read_text())
-    tables = (_require_keys(raw, BUCKET_KEYS) for raw in data.get("bucket", []))
+    tables = (_require_keys(raw, *BUCKET_KEYS) for raw in data.get("bucket", []))
     buckets = [Bucket(**table) for table in tables]
-    rules = [build_rule(raw, files) for raw in data.get("rule", [])]
+    rules = [build_rule(files, **raw) for raw in data.get("rule", [])]
     names = {bucket.name for bucket in buckets}
     default = data.get("default")
     unknown = {rule.bucket for rule in rules} - names

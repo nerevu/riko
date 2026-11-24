@@ -19,6 +19,7 @@ import ast
 import re
 import tomllib
 from importlib.metadata import packages_distributions
+from itertools import chain
 from operator import attrgetter
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -155,26 +156,31 @@ def _gen_imports(
             yield from _gen_imports(child, orelse_only, guarded)
     elif isinstance(node, (ast.Try, ast.TryStar)):
         body_guarded = guarded or any(map(_catches_import_error, node.handlers))
-        proven: set[str] = set()
-
-        for child in node.body:
-            for runtime in _gen_imports(child, typing_only, body_guarded):
-                if runtime.guarded:
-                    proven.add(runtime.name)
-
-                yield runtime
-
-        for child in node.orelse:
-            for runtime in _gen_imports(child, typing_only, guarded):
-                yield runtime._replace(
-                    guarded=runtime.guarded or runtime.name in proven
-                )
-
-        for child in [*node.handlers, *node.finalbody]:
-            yield from _gen_imports(child, typing_only, guarded)
+        yield from _gen_try_imports(node, typing_only, guarded, body_guarded)
     else:
         for child in ast.iter_child_nodes(node):
             yield from _gen_imports(child, typing_only, guarded)
+
+
+def _gen_try_imports(
+    node: ast.Try | ast.TryStar, typing_only: bool, guarded: bool, body_guarded: bool
+) -> Iterator[RuntimeImport]:
+    """Walks a ``try`` statement for its run-time imports and marks guarded ones."""
+    proven: set[str] = set()
+    body = (_gen_imports(child, typing_only, body_guarded) for child in node.body)
+    orelse = (_gen_imports(child, typing_only, guarded) for child in node.orelse)
+
+    for runtime in chain.from_iterable(body):
+        if runtime.guarded:
+            proven.add(runtime.name)
+
+        yield runtime
+
+    for runtime in chain.from_iterable(orelse):
+        yield runtime._replace(guarded=runtime.guarded or runtime.name in proven)
+
+    for child in [*node.handlers, *node.finalbody]:
+        yield from _gen_imports(child, typing_only, guarded)
 
 
 def gen_runtime_imports(source: str) -> Iterator[RuntimeImport]:
@@ -252,11 +258,8 @@ def gen_import_issues(
     ignores = document.get("tool", {}).get("deptry", {}).get("per_rule_ignores", {})
     data_only = set(map(normalize_distribution, ignores.get("DEP002", [])))
     required = set(map(_get_requirement_name, project.get("dependencies", [])))
-    extras = {
-        _get_requirement_name(entry)
-        for group in project.get("optional-dependencies", {}).values()
-        for entry in group
-    }
+    groups = project.get("optional-dependencies", {}).values()
+    extras = set(map(_get_requirement_name, chain.from_iterable(groups)))
     used: set[str] = set()
 
     for path in sorted(package_dir.rglob("*.py")):

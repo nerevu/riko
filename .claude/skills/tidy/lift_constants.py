@@ -40,6 +40,7 @@ import ast
 import builtins
 import re
 from collections import Counter
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -241,11 +242,12 @@ def squash(text: str) -> str:
 
 
 def get_value(node: ast.stmt) -> ast.AST:
-    return (
-        node.value
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value
-        else node
-    )
+    if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value:
+        value = node.value
+    else:
+        value = node
+
+    return value
 
 
 def get_start(node: ast.stmt, lines: list[str]) -> int:
@@ -268,7 +270,7 @@ def order(
     constants: list[ast.stmt], helpers: dict[int, list[Helper]]
 ) -> list[ast.stmt]:
     """Orders constants, each preceded by the not-yet-placed helpers it calls."""
-    defined = {name for node in constants for name in get_targets(node)}
+    defined = set(chain.from_iterable(map(get_targets, constants)))
     needs = {
         id(node): (
             get_import_reads(node).union(
@@ -304,7 +306,7 @@ def build_text(
     ordered = order(constants, helpers)
     spans = [get_chunk(n, lines) for n in ordered]
     chunks = {id(n): span[2] for n, span in zip(ordered, spans, strict=True)}
-    drop = {i for start, end, _ in spans for i in range(start, end)}
+    drop = set(chain.from_iterable(range(start, end) for start, end, _ in spans))
     insert_at = max((n.end_lineno or n.lineno) for n in header) if header else 0
     kept_before = [line for i, line in enumerate(lines[:insert_at]) if i not in drop]
     kept_after = [
@@ -318,11 +320,11 @@ def build_text(
         after_multiline = (
             previous is not None and previous.end_lineno != previous.lineno
         )
-        between = (
-            "".join(lines[previous.end_lineno : get_start(node, lines)])
-            if isinstance(previous, HELPER_TYPES) and previous.end_lineno is not None
-            else None
-        )
+
+        if isinstance(previous, HELPER_TYPES) and previous.end_lineno is not None:
+            between = "".join(lines[previous.end_lineno : get_start(node, lines)])
+        else:
+            between = None
 
         if (
             isinstance(node, HELPER_TYPES)
@@ -348,14 +350,8 @@ def build_text(
     return new.rstrip("\n") + "\n"
 
 
-def lift(path: Path, dry: bool) -> list[str]:
-    text = path.read_text()
-    body = ast.parse(text).body
-    first_code = next(
-        (i for i, n in enumerate(body) if not is_header(n, i) and not is_movable(n)),
-        len(body),
-    )
-    header = [n for i, n in enumerate(body[:first_code]) if is_header(n, i)]
+def split_movable(body: list[ast.stmt]) -> tuple[list[ast.stmt], list[ast.stmt]]:
+    """Splits movable statements into those before the first code and those after."""
     code_seen = False
     top: list[ast.stmt] = []
     late: list[ast.stmt] = []
@@ -372,6 +368,35 @@ def lift(path: Path, dry: bool) -> list[str]:
         else:
             code_seen = True
 
+    return top, late
+
+
+def get_helper_closure(
+    pending: list[str], functions: dict[str, list[Helper]]
+) -> list[str]:
+    """Gets the helpers that ``pending`` call, directly or through each other."""
+    closure: list[str] = []
+
+    while pending:
+        name = pending.pop()
+
+        if name not in closure:
+            closure.append(name)
+            calls = set(chain.from_iterable(map(get_reads, functions[name])))
+            pending.extend(sorted(calls & set(functions)))
+
+    return closure
+
+
+def lift(path: Path, dry: bool) -> list[str]:
+    text = path.read_text()
+    body = ast.parse(text).body
+    first_code = next(
+        (i for i, n in enumerate(body) if not is_header(n, i) and not is_movable(n)),
+        len(body),
+    )
+    header = [n for i, n in enumerate(body[:first_code]) if is_header(n, i)]
+    top, late = split_movable(body)
     functions: dict[str, list[Helper]] = {}
 
     for n in body:
@@ -383,8 +408,8 @@ def lift(path: Path, dry: bool) -> list[str]:
     }
     available = (
         BUILTINS
-        | {name for node in header for name in gen_bound(node)}
-        | {name for node in top for name in get_targets(node)}
+        | set(chain.from_iterable(map(gen_bound, header)))
+        | set(chain.from_iterable(map(get_targets, top)))
         | {node.name.id for node in body if isinstance(node, ast.TypeAlias)}
     )
     mutated = {
@@ -397,7 +422,7 @@ def lift(path: Path, dry: bool) -> list[str]:
     moved: list[ast.stmt] = []
     report = []
 
-    counts = Counter(name for node in body for name in get_targets(node))
+    counts = Counter(chain.from_iterable(map(get_targets, body)))
 
     for node in late:
         rebound = [name for name in get_targets(node) if counts[name] > 1]
@@ -414,17 +439,7 @@ def lift(path: Path, dry: bool) -> list[str]:
 
         reads = get_import_reads(node)
         missing = reads & module_names - available
-        pending = sorted(missing & set(functions))
-        closure: list[str] = []
-
-        while pending:
-            name = pending.pop()
-
-            if name not in closure:
-                closure.append(name)
-                calls = {r for h in functions[name] for r in get_reads(h)}
-                pending.extend(sorted(calls & set(functions)))
-
+        closure = get_helper_closure(sorted(missing & set(functions)), functions)
         helper_reads = {
             r for name in closure for h in functions[name] for r in get_reads(h)
         } & module_names
@@ -438,7 +453,9 @@ def lift(path: Path, dry: bool) -> list[str]:
             names = ", ".join(sorted(blocked))
             report.append(f"{path}:{node.lineno} {get_targets(node)[0]} needs {names}")
         else:
-            helpers[id(node)] = [h for name in closure for h in functions[name]]
+            helpers[id(node)] = list(
+                chain.from_iterable(functions[name] for name in closure)
+            )
             moved.append(node)
             available |= set(get_targets(node))
 

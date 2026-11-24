@@ -331,3 +331,90 @@ def test_a_fixture_counts_the_files_that_request_it(tmp_path):
 
     issues = [text for text, _ in overlap_scan.gen_helper_issues(tmp_path, [])]
     assert issues == ["tests/_plugin.py:3 orphan: used by no test file"]
+
+
+RELAY = """\
+async def _arelay(stream, **_):
+    async for item in as_async(stream):
+        yield item
+"""
+ROWS = '''\
+async def _agen_rows(rows, **kwargs):
+    """Yields each row."""
+    async for row in as_async(rows):
+        yield row
+'''
+NESTED = """\
+class TestRelay:
+    def test_relays(self):
+        async def relay(source, **_):
+            async for value in as_async(source):
+                yield value
+
+        assert relay
+"""
+AITER = """\
+async def _agen_rows(rows, **_):
+    async for row in aiter(rows):
+        yield row
+"""
+TRIVIAL = """\
+def _first(value):
+    return value
+
+
+def _second(other):
+    return other
+"""
+FAKES = """\
+class _First:
+    def close(self):
+        self.closed.append("closed")
+
+
+class _Second:
+    def close(self):
+        self.closed.append("closed")
+"""
+DUPLICATES = [
+    pytest.param(
+        {"internal/test_a.py": RELAY, "internal/test_b.py": ROWS},
+        ["identical in 2 files: def _arelay / _agen_rows"],
+        id="alpha-renamed",
+    ),
+    pytest.param(
+        {"internal/test_a.py": RELAY, "internal/test_b.py": NESTED},
+        ["identical in 2 files: def _arelay / relay"],
+        id="nested-closure",
+    ),
+    pytest.param(
+        {"internal/test_a.py": f"{RELAY}\n\n{ROWS}"},
+        ["repeated 2 times in tests/internal/test_a.py: def _arelay / _agen_rows"],
+        id="same-file",
+    ),
+    pytest.param(
+        {"_streams.py": RELAY, "internal/test_b.py": NESTED},
+        ["identical in 2 files: def _arelay / relay"],
+        id="shared-helper",
+    ),
+    pytest.param(
+        {"internal/test_a.py": RELAY, "internal/test_b.py": AITER},
+        [],
+        id="other-callee",
+    ),
+    pytest.param({"internal/test_a.py": TRIVIAL}, [], id="trivial"),
+    pytest.param({"internal/test_a.py": FAKES}, [], id="one-statement-methods"),
+]
+
+
+@pytest.mark.parametrize(("sources", "expected"), DUPLICATES)
+def test_a_renamed_copy_is_a_duplicate(tmp_path, sources, expected):
+    (tmp_path / "tests" / "internal").mkdir(parents=True)
+
+    for name, source in sources.items():
+        (tmp_path / "tests" / name).write_text(source)
+
+    files = overlap_scan.load_test_files(tmp_path)
+    found = overlap_scan.gen_helper_issues(tmp_path, files)
+    heads = [text.split("\n")[0] for text, _ in found]
+    assert [h for h in heads if h.startswith(("identical", "repeated"))] == expected

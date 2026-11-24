@@ -6,7 +6,6 @@ from __future__ import annotations
 from collections import Counter
 from importlib.metadata import version
 from importlib.resources import files
-from itertools import starmap
 from json import loads
 from typing import TYPE_CHECKING
 
@@ -87,11 +86,6 @@ def _render(agent: str) -> str:
     return f"    (\n{joined}\n    )," if len(pieces) > 1 else f"    {agent!r},"
 
 
-def _render_pool(device: str, agents: Iterable[str]) -> str:
-    entries = "\n".join(map(_render, agents))
-    return f"{device.upper()}_USER_AGENTS: tuple[str, ...] = (\n{entries}\n)"
-
-
 def generate_user_agents(
     pools: Mapping[UserAgent, Iterable[str]], source_version: str
 ) -> str:
@@ -126,8 +120,14 @@ def generate_user_agents(
         "",
         f'"""{prog}\'s most common user agents ordered by usage share."""',
     ]
-    blocks = "\n\n".join(starmap(_render_pool, pools.items()))
-    return ruff_format("\n".join([*header, blocks, ""]))
+    blocks: list[str] = []
+
+    for device, agents in pools.items():
+        entries = "\n".join(map(_render, agents))
+        block = f"{device.upper()}_USER_AGENTS: tuple[str, ...] = (\n{entries}\n)"
+        blocks.append(block)
+
+    return ruff_format("\n".join([*header, "\n\n".join(blocks), ""]))
 
 
 def load_user_agents() -> str:

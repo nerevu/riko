@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
+from itertools import chain
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,9 +26,9 @@ ESCAPES: tuple[str, ...] = ("Any", "cast")
 class _EscapeCounter(ast.NodeVisitor):
     """Counts one module's escapes, given the local names typing's escapes bind."""
 
-    def __init__(self, aliases: dict[str, str], modules: frozenset[str]) -> None:
+    def __init__(self, /, *modules: str, **aliases: str) -> None:
         self.aliases = aliases
-        self.modules = modules
+        self.modules = frozenset(modules)
         self.counts: Counter[str] = Counter()
 
     def _get_escape(self, node: ast.expr) -> str | None:
@@ -151,7 +152,8 @@ def get_escape_counts(source: str) -> Counter[str]:
 
     """
     tree = ast.parse(source)
-    counter = _EscapeCounter(*_get_typing_names(tree))
+    aliases, modules = _get_typing_names(tree)
+    counter = _EscapeCounter(*modules, **aliases)
     counter.visit(tree)
     return Counter({escape: counter.counts[escape] for escape in ESCAPES})
 
@@ -169,9 +171,8 @@ def gen_escape_counts(*roots: Path) -> Iterator[tuple[Path, Counter[str]]]:
         Each module with at least one escape, and its counts.
 
     """
-    for root in roots:
-        for path in sorted(root.rglob("*.py")):
-            counts = get_escape_counts(path.read_text(encoding="utf-8"))
+    for path in chain.from_iterable(sorted(root.rglob("*.py")) for root in roots):
+        counts = get_escape_counts(path.read_text(encoding="utf-8"))
 
-            if counts.total():
-                yield path, counts
+        if counts.total():
+            yield path, counts

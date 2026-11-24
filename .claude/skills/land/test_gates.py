@@ -187,7 +187,7 @@ def test_scope_leads_prints_each_lead_after_the_scope(tmp_path, capsys):
     out = capsys.readouterr().out
     leads = out.split("\n--- lint\n", 1)[1]
     assert "+a = 2" in out.split("--- lint")[0]
-    assert "lint --terms --literals --docstrings --bindings --tests" in leads
+    assert "lint --terms --literals --docstrings --bindings --tests --helpers" in leads
     assert "--- neighborhood\n" in leads
     assert "--context 2" in leads.split("--- neighborhood\n")[1]
     assert "--- mistake_scan\n" in leads

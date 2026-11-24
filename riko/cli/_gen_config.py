@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+from itertools import chain
 
 from riko.base._paths import CONFIG_PATH, PACKAGE_DIR
 from riko.base._strutils import get_codegen_note, ruff_format
@@ -58,21 +59,16 @@ class _Deref(ast.NodeTransformer):
         return result
 
 
-def _strip_required(annotation: ast.expr) -> ast.expr:
+def _render_annotation(annotation: ast.expr) -> str:
     if (
         isinstance(annotation, ast.Subscript)
         and isinstance(annotation.value, ast.Name)
         and annotation.value.id in {"Required", "NotRequired"}
     ):
-        result = annotation.slice
+        inner = annotation.slice
     else:
-        result = annotation
+        inner = annotation
 
-    return result
-
-
-def _render_annotation(annotation: ast.expr) -> str:
-    inner = _strip_required(annotation)
     module = ast.parse("")
     module.body = [ast.Expr(value=inner)]
     return ast.unparse(_Deref().visit(ast.fix_missing_locations(module)))
@@ -110,18 +106,12 @@ def objconf_structure() -> _Structure:
     }
 
 
-def _referenced_names(structure: _Structure) -> set[str]:
-    return {
-        name.id
-        for _, fields in structure.values()
-        for annotation in fields.values()
-        for name in ast.walk(ast.parse(annotation))
-        if isinstance(name, ast.Name)
-    }
-
-
 def _import_block(structure: _Structure) -> str:
-    referenced = _referenced_names(structure)
+    annotations = chain.from_iterable(
+        fields.values() for _, fields in structure.values()
+    )
+    nodes = chain.from_iterable(map(ast.walk, map(ast.parse, annotations)))
+    referenced = {name.id for name in nodes if isinstance(name, ast.Name)}
     abc = sorted(_ABC_TYPES & referenced)
     typing = ["TYPE_CHECKING", *sorted(_TYPING_TYPES & referenced)]
     ios = sorted(_IOS & referenced)
@@ -158,7 +148,7 @@ def _import_block(structure: _Structure) -> str:
     return "\n".join(lines + guarded)
 
 
-def _class_block(name: str, base: str, fields: dict[str, str]) -> str:
+def _class_block(name: str, base: str, /, **fields: str) -> str:
     header = f"class {name}({base}):"
     rendered = [
         f"    {field}: {annotation}"
@@ -172,7 +162,7 @@ def _class_block(name: str, base: str, fields: dict[str, str]) -> str:
 def render() -> str:
     structure = objconf_structure()
     blocks = [
-        _class_block(name, base, fields) for name, (base, fields) in structure.items()
+        _class_block(name, base, **fields) for name, (base, fields) in structure.items()
     ]
     parts = [_DOCSTRING, "", _import_block(structure), "", "", "\n\n\n".join(blocks)]
     return ruff_format("\n".join(parts) + "\n")

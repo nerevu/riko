@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import ast
 import re
-from itertools import combinations
+from itertools import chain, combinations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -44,21 +44,20 @@ def _gen_defs(tree: ast.AST, prefix: str = "") -> Iterator[tuple[str, _Documente
 
 
 def gen_examples(*roots: str) -> Iterator[tuple[str, list[str]]]:
-    for root in roots:
-        for path in sorted(Path(root).rglob("*.py")):
-            source = path.read_text()
-            if ">>>" not in source:
-                continue
-            tree = ast.parse(source)
-            nodes: list[tuple[str, _Documented]] = [("<module>", tree)]
-            for name, node in [*nodes, *_gen_defs(tree)]:
-                doc = ast.get_docstring(node, clean=False)
-                if doc and ">>>" in doc:
-                    lines = doc.splitlines()
-                    start = next(i for i, line in enumerate(lines) if ">>>" in line)
-                    lineno = node.body[0].lineno + start
-                    body = [line.strip() for line in lines[start:] if line.strip()]
-                    yield f"{path}:{lineno} {name}", body
+    for path in chain.from_iterable(sorted(Path(root).rglob("*.py")) for root in roots):
+        source = path.read_text()
+        if ">>>" not in source:
+            continue
+        tree = ast.parse(source)
+        nodes: list[tuple[str, _Documented]] = [("<module>", tree)]
+        for name, node in [*nodes, *_gen_defs(tree)]:
+            doc = ast.get_docstring(node, clean=False)
+            if doc and ">>>" in doc:
+                lines = doc.splitlines()
+                start = next(i for i, line in enumerate(lines) if ">>>" in line)
+                lineno = node.body[0].lineno + start
+                body = [line.strip() for line in lines[start:] if line.strip()]
+                yield f"{path}:{lineno} {name}", body
 
 
 def gen_rst_examples(*paths: str) -> Iterator[tuple[str, list[str]]]:
@@ -113,11 +112,11 @@ def main() -> None:
         for loc, body in gen_examples(*args.roots):
             print(f"=== {loc}", *body, sep="\n")
     else:
-        rst = (
-            args.rst
-            if args.rst is not None
-            else ["README.rst", *map(str, sorted(Path("docs").glob("*.rst")))]
-        )
+        if args.rst is None:
+            rst = ["README.rst", *map(str, sorted(Path("docs").glob("*.rst")))]
+        else:
+            rst = args.rst
+
         blocks = [*gen_rst_examples(*rst), *gen_examples(*args.roots)]
         for line in gen_dups(blocks, args.threshold):
             print(line)

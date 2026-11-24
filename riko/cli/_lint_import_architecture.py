@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import partial
+from itertools import chain
 from typing import TYPE_CHECKING
 
 from riko.base._config import EXACT_LAYERS as _EXACT_LAYERS
@@ -163,7 +164,7 @@ def _render_from(
 
 def _validate_graph(name: str, graph: AnyGraph[str]) -> None:
     declared = set(graph)
-    referenced = {node for targets in graph.values() for node in targets}
+    referenced = set(chain.from_iterable(graph.values()))
 
     if dangling := referenced - declared:
         names = ", ".join(sorted(dangling))
@@ -222,10 +223,9 @@ def load_architecture_report(
     local_only: SetGraph[str] = {k: set() for k in dependencies}
     issues: list[ArchitectureViolation] = []
 
-    for module in modules:
-        if (source_layer := _layer_for(module.name)) is None:
-            continue
+    layered = ((module, _layer_for(module.name)) for module in modules)
 
+    for module, source_layer in ((m, lyr) for m, lyr in layered if lyr is not None):
         is_init_source = _is_init_module(module)
 
         for ref in collect_imports(module):

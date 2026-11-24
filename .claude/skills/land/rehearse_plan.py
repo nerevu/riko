@@ -104,6 +104,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import TYPE_CHECKING
@@ -215,7 +216,7 @@ def assign(steps: list[Step], files: list) -> None:
     for n, step in enumerate(steps):
         explicit = [e for e in step.entries if e != "*"]
 
-        for hid in (i for e in explicit for i in expand(e, files)):
+        for hid in chain.from_iterable(expand(e, files) for e in explicit):
             if hid in owner:
                 sys.exit(f"{hid} is taken by steps {owner[hid] + 1} and {n + 1}")
 
@@ -527,7 +528,7 @@ def require_folds(folds: list[Fold], context: int) -> None:
         files = load_mover_change(fold.mover, context)
         every = index_hunks(files)
         explicit = [e for e in fold.entries if e != "*"]
-        fold.ids = [i for e in explicit for i in expand(e, files)]
+        fold.ids = list(chain.from_iterable(expand(e, files) for e in explicit))
         fold.whole = not fold.ids or set(fold.ids) == set(every)
         fold.added = {
             hid: "".join(getattr(item, "added", [])) for hid, item in every.items()
@@ -876,11 +877,12 @@ def write_outputs(
         patch, msg = out / f"{n:02}.patch", out / f"{n:02}.msg"
         patch.write_text(git("diff", "--binary", parent, step.commit))
         msg.write_text(step.message)
-        commit = (
-            f"git commit -q --fixup={step.arg}"
-            if step.kind == "fixup"
-            else f"git commit -q -F {msg}"
-        )
+
+        if step.kind == "fixup":
+            commit = f"git commit -q --fixup={step.arg}"
+        else:
+            commit = f"git commit -q -F {msg}"
+
         lines.append(f"git apply --cached {patch} && {commit}")
         header = f"{n:02}  {step.message.splitlines()[0][:60]:<60}"
         rows.append((header, describe_files(step, parent, hunks)))
@@ -960,11 +962,16 @@ def finish_folds(
             *git("diff", "--name-only", start, rehearsal.tip).split(),
         }
     )
-    squash = rehearsal.problem or (
-        f"squashed tree differs in {', '.join(stray)}; worktree {rehearsal.worktree}"
-        if stray
-        else "ok"
-    )
+
+    if stray:
+        differs = (
+            f"squashed tree differs in {', '.join(stray)}; "
+            f"worktree {rehearsal.worktree}"
+        )
+    else:
+        differs = "ok"
+
+    squash = rehearsal.problem or differs
     folded: list[tuple[str, str]] = []
     lead: list[str] = []
 
@@ -973,11 +980,13 @@ def finish_folds(
         folded = check_folds(args, out, pairs, folds)
         push = " && git push --force-with-lease" if is_pushed(pairs) else ""
         steps = start != rehearsal.first
-        lead = [
-            f"git reset --keep {rehearsal.first}"
-            if steps
-            else f"git reset --keep {rehearsal.tip}{push}"
-        ]
+
+        if steps:
+            reset = f"git reset --keep {rehearsal.first}"
+        else:
+            reset = f"git reset --keep {rehearsal.tip}{push}"
+
+        lead = [reset]
         print("rewritten (old -> new; => marks a reworded subject):")
         print("\n".join(describe_pairs(pairs, folds)))
 
@@ -985,6 +994,36 @@ def finish_folds(
             print(f"{row}  check: {result}")
 
     return squash, folded, lead
+
+
+def require_final_tree(steps: list[Step], left_out: set[str]) -> None:
+    """Requires the last step's tree to match the working tree outside skipped ids."""
+    if steps:
+        stray = set(git("diff", "--name-only", steps[-1].tree, working_tree()).split())
+
+        if stray != left_out and not stray < left_out:
+            sys.exit(f"final tree differs from the working tree outside skip: {stray}")
+
+
+def rehearse_rewrites(
+    folds: list[Fold],
+    rewords: list[Reword],
+    resolve: dict[str, str],
+    targets: list[str],
+    context: int,
+) -> Rehearsal | None:
+    """Rehearses the folds and rewords, if any, and exits on a rehearsal problem."""
+    if folds or rewords:
+        rehearsal = rehearse_folds(
+            folds, resolve, targets=targets, rewords=rewords, context=context
+        )
+    else:
+        rehearsal = None
+
+    if rehearsal is not None and rehearsal.problem:
+        sys.exit(f"fold rehearsal: {rehearsal.problem}")
+
+    return rehearsal
 
 
 def main() -> None:
@@ -1024,31 +1063,16 @@ def main() -> None:
     require_folds(folds, args.context)
     require_rewords(rewords, folds)
     fixup_targets = [s.arg for s in steps if s.kind == "fixup"]
-    rehearsal = (
-        rehearse_folds(
-            folds, resolve, targets=fixup_targets, rewords=rewords, context=args.context
-        )
-        if rewrites
-        else None
-    )
-
-    if rehearsal is not None and rehearsal.problem:
-        sys.exit(f"fold rehearsal: {rehearsal.problem}")
-
+    rehearsal = rehearse_rewrites(folds, rewords, resolve, fixup_targets, args.context)
     files = load_change(args.context) if steps else []
     assign(steps, files)
     skipped = [s for s in steps if s.kind == "skip"]
     steps = [s for s in steps if s.kind != "skip"]
     first = rehearsal.first if rehearsal else None
     build_commits(steps, files, plan_dir, first)
-    left_out = {i.split(":")[0] for s in skipped for i in s.ids}
+    left_out = {i.split(":")[0] for i in chain.from_iterable(s.ids for s in skipped)}
 
-    if steps:
-        stray = set(git("diff", "--name-only", steps[-1].tree, working_tree()).split())
-
-        if stray != left_out and not stray < left_out:
-            sys.exit(f"final tree differs from the working tree outside skip: {stray}")
-
+    require_final_tree(steps, left_out)
     out.mkdir(parents=True, exist_ok=True)
     roots = [extract(step.commit) for step in steps]
     skills = [any(i.startswith(SKILLS) for i in step.ids) for step in steps]
@@ -1060,11 +1084,11 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=4) as pool:
         checks = list(pool.map(_check, roots, skills, logs))
 
-    suites = (
-        [run_suite(root, log) for root, log in zip(roots, logs, strict=True)]
-        if args.tests
-        else []
-    )
+    if args.tests:
+        suites = [run_suite(root, log) for root, log in zip(roots, logs, strict=True)]
+    else:
+        suites = []
+
     lead: list[str] = []
     folded: list[tuple[str, str]] = []
 

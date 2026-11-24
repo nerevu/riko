@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import re
 from doctest import DocTestParser
+from itertools import chain
 from typing import TYPE_CHECKING, NamedTuple
 
 from riko.base._iterutils import gen_instances
@@ -26,8 +27,6 @@ from ._shipped_text import gen_files
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
-
-type _Binding = ast.arg | ast.Assign | ast.AnnAssign
 
 _WORKFLOW_TYPE = re.compile(r"\b(?:Workflow|WorkflowLike)\b")
 
@@ -86,23 +85,26 @@ def _get_workflow_helpers(tree: ast.Module) -> frozenset[str]:
     )
 
 
-def _get_callee(func: ast.expr) -> str:
-    """Names a call's target: ``f`` for ``f()``, ``g`` for ``x.g()``."""
-    if isinstance(func, ast.Name):
-        callee = func.id
-    elif isinstance(func, ast.Attribute):
-        on_workflow = isinstance(func.value, ast.Name) and func.value.id == "Workflow"
-        callee = "Workflow" if on_workflow else func.attr
-    else:
-        callee = ""
+def _holds_workflow(value: ast.expr | None, *helpers: str) -> bool:
+    """
+    Detects a value expression that produces a ``Workflow``.
 
-    return callee
-
-
-def _holds_workflow(value: ast.expr | None, helpers: frozenset[str]) -> bool:
-    """Detects a value expression that produces a ``Workflow``."""
+    A call's target is named ``f`` for ``f()`` and ``g`` for ``x.g()``.
+    """
     if isinstance(value, ast.Call):
-        holds = _get_callee(value.func) in _WORKFLOW_BUILDERS | helpers
+        func = value.func
+
+        if isinstance(func, ast.Name):
+            callee = func.id
+        elif isinstance(func, ast.Attribute):
+            if isinstance(func.value, ast.Name) and func.value.id == "Workflow":
+                callee = "Workflow"
+            else:
+                callee = func.attr
+        else:
+            callee = ""
+
+        holds = callee in _WORKFLOW_BUILDERS.union(helpers)
     elif isinstance(value, ast.Attribute):
         holds = value.attr == RESERVED_NAME
     else:
@@ -114,22 +116,6 @@ def _holds_workflow(value: ast.expr | None, helpers: frozenset[str]) -> bool:
 def _is_reserved(target: ast.expr) -> bool:
     """Detects an assignment target that is the bare reserved name."""
     return isinstance(target, ast.Name) and target.id == RESERVED_NAME
-
-
-def _binds_workflow(node: _Binding, helpers: frozenset[str]) -> bool:
-    """Detects a parameter or assignment that binds a ``Workflow`` to the name."""
-    if isinstance(node, ast.arg):
-        binds = node.arg == RESERVED_NAME and _names_workflow(node.annotation)
-    elif isinstance(node, ast.Assign):
-        reserved = any(map(_is_reserved, node.targets))
-        binds = reserved and _holds_workflow(node.value, helpers)
-    elif isinstance(node, ast.AnnAssign) and _is_reserved(node.target):
-        typed = _names_workflow(node.annotation)
-        binds = typed or _holds_workflow(node.value, helpers)
-    else:
-        binds = False
-
-    return binds
 
 
 def _gen_field_keywords(cls: ast.ClassDef) -> Iterator[ast.arg]:
@@ -145,11 +131,15 @@ def _gen_field_keywords(cls: ast.ClassDef) -> Iterator[ast.arg]:
         yield from (arg for arg in method.args.kwonlyargs if arg.arg in names)
 
 
-def _gen_tree_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[int]:
-    """Finds the line of each reserved-name ``Workflow`` binding in a tree."""
+def _gen_tree_lines(tree: ast.Module, *helpers: str) -> Iterator[int]:
+    """
+    Finds the line of each reserved-name ``Workflow`` binding in a tree.
+
+    A binding is a parameter or assignment that binds a ``Workflow`` to the name.
+    """
     classes = list(gen_instances(ast.walk(tree), ast.ClassDef))
-    fields = {id(statement) for cls in classes for statement in cls.body}
-    keywords = {id(arg) for cls in classes for arg in _gen_field_keywords(cls)}
+    fields = set(map(id, chain.from_iterable(cls.body for cls in classes)))
+    keywords = set(map(id, chain.from_iterable(map(_gen_field_keywords, classes))))
     bindings = (
         node
         for node in ast.walk(tree)
@@ -157,11 +147,22 @@ def _gen_tree_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[int]:
     )
 
     for node in bindings:
-        if _binds_workflow(node, helpers):
+        if isinstance(node, ast.arg):
+            binds = node.arg == RESERVED_NAME and _names_workflow(node.annotation)
+        elif isinstance(node, ast.Assign):
+            reserved = any(map(_is_reserved, node.targets))
+            binds = reserved and _holds_workflow(node.value, *helpers)
+        elif _is_reserved(node.target):
+            typed = _names_workflow(node.annotation)
+            binds = typed or _holds_workflow(node.value, *helpers)
+        else:
+            binds = False
+
+        if binds:
             yield node.lineno
 
 
-def _gen_example_lines(text: str, start: int, helpers: frozenset[str]) -> Iterator[int]:
+def _gen_example_lines(text: str, start: int, *helpers: str) -> Iterator[int]:
     """Finds the line of each reserved-name ``Workflow`` binding in doctest text."""
     for example in DocTestParser().get_examples(text):
         try:
@@ -169,11 +170,11 @@ def _gen_example_lines(text: str, start: int, helpers: frozenset[str]) -> Iterat
         except SyntaxError:
             tree = ast.Module(body=[], type_ignores=[])
 
-        for offset in _gen_tree_lines(tree, helpers):
+        for offset in _gen_tree_lines(tree, *helpers):
             yield start + example.lineno + offset - 1
 
 
-def _gen_doctest_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[int]:
+def _gen_doctest_lines(tree: ast.Module, *helpers: str) -> Iterator[int]:
     """Finds the line of each reserved-name ``Workflow`` binding in a docstring."""
     docstrings = (
         node.body[0].value
@@ -186,7 +187,7 @@ def _gen_doctest_lines(tree: ast.Module, helpers: frozenset[str]) -> Iterator[in
     )
 
     for doc in docstrings:
-        yield from _gen_example_lines(str(doc.value), doc.lineno, helpers)
+        yield from _gen_example_lines(str(doc.value), doc.lineno, *helpers)
 
 
 def gen_binding_lines(source: str, *, is_python: bool = True) -> Iterator[int]:
@@ -219,10 +220,10 @@ def gen_binding_lines(source: str, *, is_python: bool = True) -> Iterator[int]:
     if is_python:
         tree = ast.parse(source)
         helpers = _get_workflow_helpers(tree)
-        code_lines = _gen_tree_lines(tree, helpers)
-        lines = {*code_lines, *_gen_doctest_lines(tree, helpers)}
+        code_lines = _gen_tree_lines(tree, *helpers)
+        lines = {*code_lines, *_gen_doctest_lines(tree, *helpers)}
     else:
-        lines = set(_gen_example_lines(source, 1, frozenset()))
+        lines = set(_gen_example_lines(source, 1))
 
     yield from sorted(lines)
 
@@ -243,13 +244,12 @@ def gen_binding_issues(*roots: Path) -> Iterator[BindingIssue]:
         One :class:`BindingIssue` per binding, in path then line order.
 
     """
-    for root in roots:
-        for path in gen_files(root, frozenset()):
-            text = path.read_text(encoding="utf-8")
-            is_python = path.suffix == ".py"
+    for path in chain.from_iterable(map(gen_files, roots)):
+        text = path.read_text(encoding="utf-8")
+        is_python = path.suffix == ".py"
 
-            for lineno in gen_binding_lines(text, is_python=is_python):
-                yield BindingIssue(path, lineno)
+        for lineno in gen_binding_lines(text, is_python=is_python):
+            yield BindingIssue(path, lineno)
 
 
 __all__ = [

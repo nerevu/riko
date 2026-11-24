@@ -155,12 +155,13 @@ for iterating on one gate alone.
    files.
 4. **Lint**: in the gate sequence; alone, `python $G run lint -- <manage> lint --all`.
    It already runs Ruff, rumdl, the RST/docs/docstring/
-   terms/literals/deps/bindings/tests/basenames/escapes checks, actionlint, YAML, and
-   every import contract, so do not rerun `--docs`, `--docstrings`, `--terms`,
-   `--literals`, `--deps`, `--bindings`, `--tests`, `--basenames`, or `--escapes`
-   separately. It does **not** run the type gate. When a ratcheted check that prints
-   its sites as `path:line:` (the `--tests` ceilings) trips, pipe that check's output
-   to `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
+   terms/literals/deps/bindings/tests/basenames/escapes/helpers/ownership checks,
+   actionlint, YAML, and every import contract, so do not rerun `--docs`,
+   `--docstrings`, `--terms`, `--literals`, `--deps`, `--bindings`, `--tests`,
+   `--basenames`, `--escapes`, `--helpers`, or `--ownership` separately. It does
+   **not** run the type gate. When a ratcheted check that prints its sites as
+   `path:line:` (the `--tests` ceilings) trips, pipe that check's output to
+   `python $G scope lint --new-sites -`: it keeps only the sites on lines added since
    lint last passed, separating the change's new violations from existing ones.
 5. **Tests**: targeted tests for the touched area first while iterating, then the full
    suite, in the gate sequence or alone with

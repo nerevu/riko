@@ -37,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 
 DESCRIPTION = "List a change's hunks by id, or emit the patch for a selection."
@@ -69,6 +70,15 @@ class Hunk:
     def summary(self) -> str:
         text = next((t for t in self.added if t.strip()), "").strip()
         return text[:60] or f"(-{self.removed} lines)"
+
+    def add_line(self, line: str) -> None:
+        """Records a ``+``/``-`` line, or drops the newline a no-EOL marker denies."""
+        if line == NO_EOL and self.added and self.added[-1].endswith("\n"):
+            self.added[-1] = self.added[-1][:-1]
+        elif line.startswith("+"):
+            self.added.append(line[1:] + "\n")
+        elif line.startswith("-"):
+            self.deleted.append(line[1:])
 
 
 @dataclass
@@ -113,13 +123,8 @@ def parse_diff(text: str) -> list[FileChange]:
             old_count = 1 if match[2] is None else int(match[2])
             hunk = Hunk(current.path, int(match[1]), old_count, int(match[3]))
             current.hunks.append(hunk)
-        elif hunk is not None and line == NO_EOL:
-            if hunk.added and hunk.added[-1].endswith("\n"):
-                hunk.added[-1] = hunk.added[-1][:-1]
-        elif hunk is not None and line.startswith("+"):
-            hunk.added.append(line[1:] + "\n")
-        elif hunk is not None and line.startswith("-"):
-            hunk.deleted.append(line[1:])
+        elif hunk is not None and line.startswith(("+", "-", "\\")):
+            hunk.add_line(line)
         elif line.startswith("new file"):
             current.status = "A"
         elif line.startswith("deleted file"):
@@ -219,8 +224,9 @@ class TreeBuilder:
     def _blob(self, data: bytes) -> str:
         return git("hash-object", "-w", "--stdin", data=data).strip()
 
-    def _entry(self, path: str, chosen: frozenset[str]) -> str:
+    def _entry(self, path: str, *ids: str) -> str:
         change = self.files[path]
+        chosen = frozenset(ids)
         key = (path, chosen)
 
         if key not in self._blobs:
@@ -232,11 +238,11 @@ class TreeBuilder:
                 mode, _, sha = git("ls-tree", self.head, "--", path).split()[:3]
                 self._blobs[key] = f"{mode} {sha}\t{path}"
             elif change.whole or len(chosen) == len(change.hunks):
-                data = (
-                    os.readlink(path).encode()
-                    if os.path.islink(path)
-                    else Path(path).read_bytes()
-                )
+                if os.path.islink(path):
+                    data = os.readlink(path).encode()
+                else:
+                    data = Path(path).read_bytes()
+
                 self._blobs[key] = f"{file_mode(path)} {self._blob(data)}\t{path}"
             else:
                 head = git("show", f"{self.base}:{path}").splitlines(keepends=True)
@@ -256,7 +262,7 @@ class TreeBuilder:
             by_path.setdefault(item.path, set()).add(hid)
 
         git("read-tree", self.base, env=self.env)
-        lines = [self._entry(p, frozenset(ids)) for p, ids in sorted(by_path.items())]
+        lines = [self._entry(p, *ids) for p, ids in sorted(by_path.items())]
         git(
             "update-index", "--index-info", data="\n".join(lines).encode(), env=self.env
         )
@@ -316,7 +322,8 @@ def main() -> None:
     elif args.selection is None:
         sys.exit("emit needs a selection file")
     else:
-        ids = {i for e in read_selection(args.selection) for i in expand(e, files)}
+        entries = read_selection(args.selection)
+        ids = set(chain.from_iterable(expand(e, files) for e in entries))
         tree = TreeBuilder(files).tree(ids)
         sys.stdout.write(git("diff", "--binary", BASE, tree))
 

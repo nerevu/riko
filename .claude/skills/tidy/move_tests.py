@@ -85,6 +85,7 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -211,10 +212,9 @@ def get_helpers(
 ) -> tuple[list[ast.stmt], set[str]]:
     defs = {}
 
-    for stmt in tree.body:
-        if stmt is not moved and stmt is not owner:
-            for name in get_defined(stmt):
-                defs[name] = stmt
+    for stmt in (s for s in tree.body if s is not moved and s is not owner):
+        for name in get_defined(stmt):
+            defs[name] = stmt
 
     wanted, queue = {}, list(get_used(moved))
 
@@ -247,6 +247,115 @@ def get_helpers(
     return movable, shared
 
 
+def select_helpers(
+    src_tree: ast.Module,
+    cls: ast.ClassDef,
+    method: ast.FunctionDef | ast.AsyncFunctionDef | None,
+    with_helpers: bool,
+) -> tuple[list[ast.stmt], set[str]]:
+    """Selects the module-level helpers that move with a class or method."""
+    if method is None:
+        helpers, shared = get_helpers(src_tree, cls)
+    elif with_helpers:
+        helpers, shared = get_helpers(src_tree, method, cls)
+    else:
+        helpers = []
+        outside = get_used(method) - set(
+            chain.from_iterable(map(get_defined, cls.body))
+        )
+        defs = set(chain.from_iterable(map(get_defined, src_tree.body)))
+        shared = outside & defs
+
+    return helpers, shared
+
+
+def print_move_plan(
+    spec: Spec, dest: str, helpers: list[ast.stmt], missing: list[str], adds: list[str]
+) -> None:
+    """Prints what a move takes, leaves behind, and imports."""
+    print(f"{spec.path}::{spec.cls}{'::' + spec.method if spec.method else ''}")
+    print(f"  -> {dest}")
+    for helper in helpers:
+        print(f"  helper moved: {', '.join(get_defined(helper))}")
+    for name in missing:
+        print(f"  helper still used in source, NOT moved: {name}")
+    for line in adds:
+        print(f"  import added: {line}")
+
+
+def build_inserts(
+    dest_tree: ast.Module,
+    dest_lines: list[str],
+    dest_cls: str | None,
+    before: str | None,
+    helper_text: str,
+    body: str,
+    adds: list[str],
+) -> dict[int, str]:
+    """Builds the text to insert into the destination, keyed by line index."""
+    if dest_cls is None:
+        insert_text = (helper_text + "\n\n" if helper_text else "") + body
+        if before is None:
+            index = len(dest_lines)
+            insert_text = "\n\n" + insert_text
+        else:
+            index = get_start(find_class(dest_tree, before), dest_lines)
+            insert_text += "\n\n"
+    else:
+        dest_node = find_class(dest_tree, dest_cls)
+        index = dest_node.end_lineno or 0
+        insert_text = "\n" + body
+
+    import_at = max(
+        (
+            s.end_lineno or 0
+            for s in dest_tree.body
+            if isinstance(s, ast.Import | ast.ImportFrom)
+        ),
+        default=0,
+    )
+    inserts = {index: insert_text}
+    if dest_cls is not None and helper_text:
+        inserts[get_start(dest_node, dest_lines)] = helper_text + "\n\n"
+    if adds:
+        imports = "".join(f"{line}\n" for line in adds)
+        inserts[import_at] = imports + inserts.get(import_at, "")
+    return inserts
+
+
+def splice(lines: list[str], drop: set[int], inserts: dict[int, str]) -> str:
+    """Splices ``inserts`` into ``lines``, dropping the line indexes in ``drop``."""
+    out = []
+    for i in range(len(lines) + 1):
+        out.append(inserts.get(i, ""))
+        if i < len(lines) and i not in drop:
+            out.append(lines[i])
+    return "".join(out)
+
+
+def get_import_adds(
+    node: ast.AST,
+    helpers: list[ast.stmt],
+    src_imports: dict[str, str],
+    dest_imports: dict[str, str],
+    same: bool,
+) -> list[str]:
+    """Gets the source imports the moved code uses that the destination lacks."""
+    if same:
+        adds = []
+    else:
+        needed = set(get_used(node)).union(*map(get_used, helpers))
+        adds = sorted(
+            {
+                src_imports[n]
+                for n in needed
+                if n in src_imports and n not in dest_imports
+            }
+        )
+
+    return adds
+
+
 def move(
     dest: str,
     spec: Spec,
@@ -269,24 +378,13 @@ def move(
     if method is None and dest_cls:
         raise SystemExit("moving a class needs DEST as a path")
 
-    if method is None:
-        helpers, shared = get_helpers(src_tree, cls)
-    elif with_helpers and not same:
-        helpers, shared = get_helpers(src_tree, method, cls)
-    else:
-        helpers = []
-        outside = get_used(method) - {s for st in cls.body for s in get_defined(st)}
-        defs = {n for st in src_tree.body for n in get_defined(st)}
-        shared = outside & defs
+    helpers, shared = select_helpers(src_tree, cls, method, with_helpers and not same)
 
     blocks = [(get_start(h, src_lines), h.end_lineno or 0) for h in helpers]
     blocks.append((get_start(node, src_lines), node.end_lineno or 0))
-    moved_text = {}
+    moved_text = {start: "".join(src_lines[start:end]) for start, end in blocks}
     emptied = method is not None and cls.body == [method]
     whole = (get_start(cls, src_lines), cls.end_lineno or 0) if emptied else None
-
-    for start, end in blocks:
-        moved_text[start] = "".join(src_lines[start:end])
 
     body = moved_text.pop(blocks[-1][0])
     if rename is not None:
@@ -298,8 +396,8 @@ def move(
     dest_text = "".join(src_lines) if same else _read(dest_file)
     dest_tree = ast.parse(dest_text)
     dest_lines = dest_text.splitlines(keepends=True)
-    taken = {n for st in dest_tree.body for n in get_defined(st)}
-    new_names = {n for h in helpers for n in get_defined(h)}
+    taken = set(chain.from_iterable(map(get_defined, dest_tree.body)))
+    new_names = set(chain.from_iterable(map(get_defined, helpers)))
     if method is None:
         new_names.add(rename or node.name)
     clash = new_names & taken if not same else set()
@@ -309,79 +407,33 @@ def move(
 
     src_imports = get_imports(src_tree)
     dest_imports = get_imports(dest_tree)
-    needed = set(get_used(node))
-    for helper in helpers:
-        needed |= get_used(helper)
-    adds = (
-        []
-        if same
-        else sorted(
-            {
-                src_imports[n]
-                for n in needed
-                if n in src_imports and n not in dest_imports
-            }
-        )
-    )
+    adds = get_import_adds(node, helpers, src_imports, dest_imports, same)
     missing = [] if same else sorted(shared - taken)
 
-    print(f"{spec.path}::{spec.cls}{'::' + spec.method if spec.method else ''}")
-    print(f"  -> {dest}")
-    for helper in helpers:
-        print(f"  helper moved: {', '.join(get_defined(helper))}")
-    for name in missing:
-        print(f"  helper still used in source, NOT moved: {name}")
-    for line in adds:
-        print(f"  import added: {line}")
+    print_move_plan(spec, dest, helpers, missing, adds)
 
     if dry:
         return []
 
-    if method is None:
-        insert_text = (helper_text + "\n\n" if helper_text else "") + body
-        if before is None:
-            index = len(dest_lines)
-            insert_text = "\n\n" + insert_text
-        else:
-            index = get_start(find_class(dest_tree, before), dest_lines)
-            insert_text += "\n\n"
-    else:
-        dest_node = find_class(dest_tree, dest_cls[0])
-        index = dest_node.end_lineno or 0
-        insert_text = "\n" + body
-
-    import_at = max(
-        (
-            s.end_lineno or 0
-            for s in dest_tree.body
-            if isinstance(s, ast.Import | ast.ImportFrom)
-        ),
-        default=0,
-    )
-    removed = {i for start, end in blocks for i in range(start, end)}
+    removed = set(chain.from_iterable(range(start, end) for start, end in blocks))
     if whole is not None:
         removed |= set(range(*whole))
         print(f"  removed emptied class {spec.cls}")
-    inserts = {index: insert_text}
-    if method is not None and helper_text:
-        inserts[get_start(dest_node, dest_lines)] = helper_text + "\n\n"
-    if adds:
-        imports = "".join(f"{line}\n" for line in adds)
-        inserts[import_at] = imports + inserts.get(import_at, "")
-
-    def splice(lines: list[str], drop: set[int]) -> str:
-        out = []
-        for i in range(len(lines) + 1):
-            out.append(inserts.get(i, ""))
-            if i < len(lines) and i not in drop:
-                out.append(lines[i])
-        return "".join(out)
+    inserts = build_inserts(
+        dest_tree,
+        dest_lines,
+        dest_cls[0] if method is not None else None,
+        before,
+        helper_text,
+        body,
+        adds,
+    )
 
     if same:
-        spec.path.write_text(splice(src_lines, removed))
+        spec.path.write_text(splice(src_lines, removed, inserts))
         touched = [spec.path]
     else:
-        dest_file.write_text(splice(dest_lines, set()))
+        dest_file.write_text(splice(dest_lines, set(), inserts))
         spec.path.write_text(
             "".join(line for i, line in enumerate(src_lines) if i not in removed)
         )
@@ -634,20 +686,10 @@ def _gen_row_ids(element: ast.expr):
                 yield value.value
 
 
-def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
-    text = path.read_text()
-    lines = text.splitlines(keepends=True)
-    tree = ast.parse(text)
-    found = None
-
-    for stmt in tree.body:
-        if table in get_defined(stmt):
-            found = stmt
-
-    value = getattr(found, "value", None)
-    if not isinstance(value, ast.List | ast.Tuple):
-        raise SystemExit(f"{path}: no module-level list or tuple named {table}")
-
+def get_row_spans(
+    text: str, lines: list[str], elements: list[ast.expr], ids: list[str]
+) -> tuple[list[tuple[int, int]], set[str]]:
+    """Gets the text span of each row with one of ``ids``, and the ids not found."""
     offsets = [0]
     for line in lines:
         offsets.append(offsets[-1] + len(line))
@@ -657,7 +699,6 @@ def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
         return offsets[lineno - 1] + len(prefix)
 
     spans, missing = [], set(ids)
-    elements = value.elts
 
     for index, element in enumerate(elements):
         row_ids = set(_gen_row_ids(element)) & set(ids)
@@ -677,6 +718,25 @@ def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
             start = line_start
             end = text.rfind("\n", 0, end) + 1 if index + 1 < len(elements) else end
         spans.append((start, end))
+
+    return spans, missing
+
+
+def drop_rows(path: Path, table: str, ids: list[str], dry: bool) -> list[Path]:
+    text = path.read_text()
+    lines = text.splitlines(keepends=True)
+    tree = ast.parse(text)
+    found = None
+
+    for stmt in tree.body:
+        if table in get_defined(stmt):
+            found = stmt
+
+    value = getattr(found, "value", None)
+    if not isinstance(value, ast.List | ast.Tuple):
+        raise SystemExit(f"{path}: no module-level list or tuple named {table}")
+
+    spans, missing = get_row_spans(text, lines, value.elts, ids)
 
     if missing:
         raise SystemExit(f"{path}::{table}: no rows with id {sorted(missing)}")
@@ -733,7 +793,7 @@ def place(specs: list[Spec], above: str, dry: bool) -> list[Path]:
     if dry:
         return []
 
-    removed = {i for start, end in blocks for i in range(start, end)}
+    removed = set(chain.from_iterable(range(start, end) for start, end in blocks))
     text = "\n\n".join("".join(lines[s:e]).rstrip("\n") for s, e in blocks)
     out = []
 
@@ -767,7 +827,28 @@ def place_leads(paths: list[Path], dry: bool) -> list[Path]:
     return touched
 
 
-def main() -> int:
+def parse_specs(args: argparse.Namespace) -> tuple[str, list[Spec]]:
+    """Parses the positional arguments into DEST and specs, checking their options."""
+    dest = ""
+
+    if args.check or args.sort or args.delete or args.place:
+        specs = [Spec.parse(text) for text in args.args]
+    else:
+        dest, *rest = args.args
+        if not rest:
+            raise SystemExit("need DEST and at least one SPEC")
+        specs = [Spec.parse(text) for text in rest]
+
+    if args.rename and len(specs) > 1:
+        raise SystemExit("--rename takes a single spec")
+
+    if args.place and args.above is None:
+        raise SystemExit("--place needs --above CLASS")
+
+    return dest, specs
+
+
+def main() -> int:  # noqa: C901
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "args", nargs="+", help="DEST SPEC... (or SPEC... with --check/--sort)"
@@ -817,9 +898,10 @@ def main() -> int:
     )
 
     if args.plan_split:
-        for path in args.args:
-            for line in gen_split_plan(Path(path)):
-                print(line)
+        for line in chain.from_iterable(
+            gen_split_plan(Path(path)) for path in args.args
+        ):
+            print(line)
         return 0
 
     if args.place_leads:
@@ -830,25 +912,13 @@ def main() -> int:
         path, _, name = table.partition("::")
         touched = set(drop_rows(Path(path), name, ids, args.dry_run))
         return _fix(touched)
-    touched = set()
-    status = 0
-    dest = ""
-
-    if args.check or args.sort or args.delete or args.place:
-        specs = [Spec.parse(text) for text in args.args]
-    else:
-        dest, *rest = args.args
-        if not rest:
-            raise SystemExit("need DEST and at least one SPEC")
-        specs = [Spec.parse(text) for text in rest]
-
-    if args.rename and len(specs) > 1:
-        raise SystemExit("--rename takes a single spec")
+    dest, specs = parse_specs(args)
 
     if args.place:
-        if args.above is None:
-            raise SystemExit("--place needs --above CLASS")
         return _fix(set(place(specs, args.above, args.dry_run)))
+
+    touched = set()
+    status = 0
 
     for spec in specs:
         if args.delete:

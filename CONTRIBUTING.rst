@@ -163,6 +163,13 @@ The common development commands are:
         ceilings in ``pyproject.toml`` (a lower count lowers the ceiling, and a nonzero
         one held longer than ``[tool.riko.ratchet] stale-days`` warns without
         failing).
+      - ``--helpers``: single-use helpers, private helpers called from one function
+        that are themselves the only caller of another such helper, above their
+        ceiling in ``pyproject.toml`` (a lower count lowers the ceiling), plus any
+        kept-by-ruling helper that is no longer a single-use helper.
+      - ``--ownership``: a stream the execution layer builds whose result reaches no
+        owner, a run registration outside the run's registrars, or an ``_Owned``
+        wrapper.
 
     - Runs all standard checks, including all import-contract ones, with ``--all``.
     - Keeps type completeness, strict pylint, and distribution checks explicit via

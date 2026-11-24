@@ -7,6 +7,7 @@ from __future__ import annotations
 import ast
 import re
 import tomllib
+from ast import Name
 from collections import Counter
 from functools import partial
 from itertools import chain
@@ -128,11 +129,18 @@ _SOURCE_SYMBOL_CITATION = re.compile(
     r" \(`(?P<path>riko/[A-Za-z0-9_./-]+\.py)`"
 )
 
+_PRIVATE_NAME = re.compile(r"`(?P<name>_[A-Za-z]\w*)(?=[`(\[])[^`]*`")
+_UNSCANNED_DOCS = frozenset({"archive", "research"})
+_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _CURRENT_STATE_DOCS = (*_CITING_DOCS, ROOT_DIR / "README.rst")
 _TODO = re.compile(r"^\s*TODO\b")
 
 _TARGET = re.compile(
     r"\b(target|targeted|planned|plan|next|prerequisite|prereq|future)\b", re.IGNORECASE
+)
+
+_PRIVATE_NAME_EXEMPT = re.compile(
+    rf"{_HISTORY_WORDS.pattern}|{_TARGET.pattern}", re.IGNORECASE
 )
 
 
@@ -302,20 +310,27 @@ def _gen_paragraphs(text: str) -> Iterator[tuple[int, str]]:
 
 
 def _gen_current_citations(
-    text: str, citation: re.Pattern[str]
+    text: str,
+    citation: re.Pattern[str],
+    history: re.Pattern[str] = _HISTORY_WORDS,
+    note: re.Pattern[str] | None = None,
 ) -> Iterator[tuple[int, re.Match[str]]]:
     """
     Finds ``citation`` matches outside the sentences that record history.
 
     A sentence runs across wrapped lines and ends at ``.``, ``!``, or ``?``, a blank
-    line, or a line opening a list item, table row, or heading. One that says what it
-    cites was deleted, retired, removed, dropped, merged, or superseded is skipped.
+    line; or a line opening a list item, table row, or heading. Skips any that
+    ``history`` matches (default: one that says what it cites was deleted, retired,
+    removed, dropped, merged, or superseded). Skips paragraphs that ``note`` matches.
     """
-    for start, block in _gen_paragraphs(text):
+    paragraphs = _gen_paragraphs(text)
+    noted = (pair for pair in paragraphs if note is None or not note.search(pair[1]))
+
+    for start, block in noted:
         for sentence in _SENTENCE.finditer(block):
             flat = sentence[0].replace("\n", " ")
 
-            if not _HISTORY_WORDS.search(flat):
+            if not history.search(flat):
                 for match in citation.finditer(flat):
                     offset = sentence.start() + match.start()
                     yield (start + block.count("\n", 0, offset), match)
@@ -537,13 +552,10 @@ def _gen_bound_names(*body: ast.stmt) -> Iterator[tuple[str, ast.stmt]]:
             case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
                 yield (node.name, node)
             case ast.Assign(targets=targets):
-                for target in targets:
-                    for name in ast.walk(target):
-                        if isinstance(name, ast.Name):
-                            yield (name.id, node)
+                _ast = chain.from_iterable(map(ast.walk, targets))
+                yield from ((name.id, node) for name in _ast if isinstance(name, Name))
             case (
-                ast.AnnAssign(target=ast.Name(id=name))
-                | ast.TypeAlias(name=ast.Name(id=name))
+                ast.AnnAssign(target=Name(id=name)) | ast.TypeAlias(name=Name(id=name))
             ):
                 yield (name, node)
             case ast.Import(names=aliases) | ast.ImportFrom(names=aliases):
@@ -553,7 +565,7 @@ def _gen_bound_names(*body: ast.stmt) -> Iterator[tuple[str, ast.stmt]]:
                 handlers = getattr(node, "handlers", ())
                 nested = (*node.body, *getattr(node, "orelse", ()))
                 final = (*getattr(node, "finalbody", ()),)
-                handled = (stmt for handler in handlers for stmt in handler.body)
+                handled = chain.from_iterable(handler.body for handler in handlers)
                 yield from _gen_bound_names(*nested, *handled, *final)
 
 
@@ -567,9 +579,9 @@ def gen_source_symbols(*paths: Path) -> Iterator[str]:
 
     Yields:
 
-        Each file's path, then ``path::name`` for every name the module binds at top
-        level (imports included) and ``path::Class.member`` for every name a top-level
-        class binds.
+        - Each file's path and ``path::name`` for every name a top-level module binds
+          (imports included).
+        - ``path::Class.member`` for every name a top-level class binds.
 
     """
     for path in paths:
@@ -582,6 +594,76 @@ def gen_source_symbols(*paths: Path) -> Iterator[str]:
             if isinstance(node, ast.ClassDef):
                 for member, _ in _gen_bound_names(*node.body):
                     yield f"{rel}::{name}.{member}"
+
+
+def gen_stale_private_names(
+    text: str, known: Iterable[str]
+) -> Iterator[tuple[int, str]]:
+    """
+    Finds backticked private names that nothing currently binds.
+
+    A private name is an identifier starting with one ``_``, optionally followed by a
+    call or subscript (``_name(…)``, ``_Name[T]``). A sentence that records history
+    (deleted, retired, removed, dropped, merged, superseded) or plans ahead (target,
+    planned, next, prerequisite, future) is not checked. Nor is a dated history note (a
+    paragraph carrying an ISO date).
+
+    Args:
+
+        text: The document text.
+        known: The currently bound names, as ``gen_private_names`` yields them.
+
+    Yields:
+
+        Each stale citation's line number and the name.
+
+    Examples:
+
+        >>> known = ("_read", "_docs")
+        >>> text = "`_read()` lives in `_docs`; `_gone` is cited."
+        >>> next(gen_stale_private_names(text, known))
+        (1, '_gone')
+        >>> text = "Done 2026-11-22. `_gone` was inlined.\\n\\nA planned `_new` helper."
+        >>> list(gen_stale_private_names(text, known))
+        []
+
+    """
+    _known = frozenset(known)
+    citations = _gen_current_citations(text, _PRIVATE_NAME, _PRIVATE_NAME_EXEMPT, _DATE)
+
+    for lineno, match in citations:
+        if match["name"] not in _known:
+            yield (lineno, match["name"])
+
+
+def gen_private_names(*paths: Path) -> Iterator[str]:
+    """
+    Walks source files for the names ``gen_stale_private_names`` reads.
+
+    Args:
+
+        paths: The source files to index.
+
+    Yields:
+
+        Each file's module and package names, every name bound or read in any scope
+        (definitions, names, attributes, parameters, imports), and every string literal
+        that starts with ``_``.
+
+    """
+    for path in paths:
+        yield from get_posix_root(path).removesuffix(".py").split("/")
+
+        for node in ast.walk(ast.parse(_read(path))):
+            match node:
+                case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef():
+                    yield node.name
+                case Name(id=name) | ast.Attribute(attr=name) | ast.arg(arg=name):
+                    yield name
+                case ast.alias(name=name, asname=asname):
+                    yield from (asname or name).split(".")
+                case ast.Constant(value=str(value)) if value.startswith("_"):
+                    yield value
 
 
 def gen_todo_lines(text: str) -> Iterator[int]:
@@ -709,6 +791,23 @@ def _gen_stale_source_symbol_offenders() -> Iterator[str]:
     yield from _gen_citation_offenders(gen_stale_source_symbol_citations, known, *docs)
 
 
+def _gen_stale_private_name_offenders() -> Iterator[str]:
+    """
+    Finds tracked internal docs citing private names nothing current binds.
+
+    The names come from ``riko/`` and ``tests/``. ``MILESTONES.md``, archived, and
+    research material record history or other projects. They are not scanned.
+    """
+    known = gen_private_names(*PACKAGE_DIR.rglob("*.py"), *TESTS_DIR.rglob("*.py"))
+    docs = sorted(
+        path
+        for path in _tracked_docs()
+        if path.name != "MILESTONES.md"
+        and _UNSCANNED_DOCS.isdisjoint(path.relative_to(_INTERNAL_DOCS).parts)
+    )
+    yield from _gen_citation_offenders(gen_stale_private_names, known, *docs)
+
+
 def _api_surface_offenders() -> list[str]:
     """Finds API-surface blocks that drift from the contract declaration."""
     offenders: list[str] = []
@@ -788,6 +887,7 @@ def lint_docs() -> int:
         "cited tests no longer exist": _gen_stale_test_symbol_offenders,
         "cited source files no longer exist": _gen_stale_path_citation_offenders,
         "cited source names no longer exist": _gen_stale_source_symbol_offenders,
+        "cited private names no longer exist": _gen_stale_private_name_offenders,
         f"{_STANDARD}: banned phrases without a reserved-terms ruling": (
             _gen_unruled_term_offenders
         ),

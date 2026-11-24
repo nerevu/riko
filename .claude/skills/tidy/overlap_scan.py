@@ -9,9 +9,11 @@ The scan is static (AST only, nothing is imported or run) and prints *candidates
 every line is a lead to read, not a verdict. Sections:
 
 - ``helpers`` -- ``tests/_*.py`` names with zero or one importing file (fold the name
-  beside its one user), module-level definitions repeated across test files with
-  identical source (one copy belongs in ``tests/_*.py``), one value bound to different
-  names in several files, and a helper's body repeated inline in a test elsewhere.
+  beside its one user), functions (nested ones included) repeated in one or several
+  test files with the same source once their name, docstring, and local names are
+  erased (one copy belongs in ``tests/_*.py`` or at module level), module-level
+  assignments repeated across files, one value bound to different names in several
+  files, and a helper's body repeated inline in a test elsewhere.
   A fixture also counts each other file naming it as a test parameter or a string
   (``request.getfixturevalue``), so any string equal to its name counts as a use.
 - ``shapes`` -- test methods whose bodies are identical once literals are blanked
@@ -99,15 +101,18 @@ import re
 import sys
 import tokenize
 from collections import Counter, defaultdict
+from copy import deepcopy
 from dataclasses import dataclass, field
 from io import StringIO
-from itertools import combinations, pairwise
+from itertools import chain, combinations, pairwise
 from pathlib import Path
 
 from typing_extensions import TypeIs
 
 from riko.base._config import LINE_LENGTH
 
+_ACTIVE = (ast.Call, ast.Await, ast.Yield, ast.YieldFrom, ast.comprehension)
+_LOOPS = (ast.For, ast.AsyncFor, ast.While)
 _REASONS = r"python -m|console script|entry point|fresh process|own process|subprocess"
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
 TIERS = ("public", "internal", "functional")
@@ -260,8 +265,8 @@ def gen_names(node: ast.AST):
 
 
 class _Blank(ast.NodeTransformer):
-    def __init__(self, names: frozenset[str] = frozenset()):
-        self.names = names
+    def __init__(self, *names: str):
+        self.names = frozenset(names)
 
     def visit_Constant(self, node: ast.Constant) -> ast.AST:
         return ast.copy_location(ast.Constant(value="_"), node)
@@ -280,18 +285,15 @@ def get_body(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.stmt]:
 
 
 def get_dumps(
-    func: ast.FunctionDef | ast.AsyncFunctionDef, blank_names: frozenset[str]
+    func: ast.FunctionDef | ast.AsyncFunctionDef, *blank_names: str
 ) -> list[str]:
-    blank = _Blank(blank_names)
+    blank = _Blank(*blank_names)
     return [ast.dump(blank.visit(ast.parse(ast.unparse(st)))) for st in get_body(func)]
 
 
-def get_shape(
-    func: ast.FunctionDef | ast.AsyncFunctionDef,
-    blank_names: frozenset[str] = frozenset(),
-) -> str:
+def get_shape(func: ast.FunctionDef | ast.AsyncFunctionDef, *blank_names: str) -> str:
     prefix = "async " if isinstance(func, ast.AsyncFunctionDef) else ""
-    return prefix + "\n".join(get_dumps(func, blank_names))
+    return prefix + "\n".join(get_dumps(func, *blank_names))
 
 
 def get_tier(path: Path) -> str | None:
@@ -368,13 +370,10 @@ def get_leaf(node: ast.AST) -> str | None:
 
 
 def gen_constants(*nodes: ast.AST):
-    for node in nodes:
-        for child in ast.walk(node):
-            is_value = isinstance(child, ast.Constant) and not isinstance(
-                child.value, bool
-            )
-            if is_value:
-                yield repr(child.value)
+    for child in chain.from_iterable(map(ast.walk, nodes)):
+        is_value = isinstance(child, ast.Constant) and not isinstance(child.value, bool)
+        if is_value:
+            yield repr(child.value)
 
 
 def get_number(text: str) -> str:
@@ -492,7 +491,7 @@ def build_doctest_units(examples: list[Example]) -> list[Unit]:
 
 
 def gen_overlaps(units: list[Unit], doc_units: list[Unit], min_shared: int):
-    spread = Counter(lit for unit in units + doc_units for lit in unit.literals)
+    spread = Counter(chain.from_iterable(unit.literals for unit in units + doc_units))
     keep = {lit for lit, count in spread.items() if count <= MAX_SPREAD}
     trimmed = [(unit, unit.literals & keep) for unit in units]
     trimmed_docs = [(unit, unit.literals & keep) for unit in doc_units]
@@ -505,14 +504,15 @@ def gen_overlaps(units: list[Unit], doc_units: list[Unit], min_shared: int):
     pool = trimmed + trimmed_docs
     pairs = Counter()
 
-    for indexes in by_literal.values():
-        for a, b in combinations(sorted(set(indexes)), 2):
-            left, right = pool[a][0], pool[b][0]
-            both_docs = left.name.startswith("doctest") and right.name.startswith(
-                "doctest"
-            )
-            if left.path != right.path and not both_docs:
-                pairs[a, b] += 1
+    pair_groups = (
+        combinations(sorted(set(indexes)), 2) for indexes in by_literal.values()
+    )
+
+    for a, b in chain.from_iterable(pair_groups):
+        left, right = pool[a][0], pool[b][0]
+        both_docs = left.name.startswith("doctest") and right.name.startswith("doctest")
+        if left.path != right.path and not both_docs:
+            pairs[a, b] += 1
 
     for (a, b), count in pairs.most_common():
         if count >= min_shared:
@@ -579,12 +579,11 @@ def build_param_tables(file: TestFile) -> dict[str, list[ast.Call]]:
 def gen_param_rows(
     func: ast.FunctionDef | ast.AsyncFunctionDef, tables: dict[str, list[ast.Call]]
 ):
-    for decorator in func.decorator_list:
-        for node in ast.walk(decorator):
-            if is_param(node):
-                yield node
-            elif isinstance(node, ast.Name):
-                yield from tables.get(node.id, [])
+    for node in chain.from_iterable(map(ast.walk, func.decorator_list)):
+        if is_param(node):
+            yield node
+        elif isinstance(node, ast.Name):
+            yield from tables.get(node.id, [])
 
 
 def get_joined(segment: str) -> str | None:
@@ -697,9 +696,8 @@ def build_rows(files: list[TestFile]) -> tuple[list[Row], list[Raise]]:
 def get_name_spread(files: list[TestFile]) -> Counter[str]:
     spread = Counter()
 
-    for file in files:
-        for cls in gen_classes(file):
-            spread.update(set(gen_names(cls)))
+    for cls in chain.from_iterable(map(gen_classes, files)):
+        spread.update(set(gen_names(cls)))
 
     return spread
 
@@ -881,7 +879,7 @@ def gen_row_candidates(file: TestFile):
         names = get_param_names(func)
         if names:
             where = f"{file.rel}:{func.lineno} {cls.name}.{func.name}"
-            tables.setdefault(get_shape(func, names), where)
+            tables.setdefault(get_shape(func, *names), where)
 
     for cls, func in tests:
         table = None if get_param_names(func) else tables.get(get_shape(func))
@@ -904,10 +902,9 @@ def gen_shapes(files: list[TestFile]):
                 else:
                     small[file.rel, cls.name, shape].append(where)
 
-    for group in by_shape.values():
-        if len(group) > 1:
-            text = "\n      ".join(where for _, where in group)
-            yield text, sorted({path for path, _ in group})
+    for group in (group for group in by_shape.values() if len(group) > 1):
+        text = "\n      ".join(where for _, where in group)
+        yield text, sorted({path for path, _ in group})
 
     for (path, _, _), group in small.items():
         if len(group) > 1:
@@ -945,7 +942,7 @@ def gen_helper_bodies(root: Path, files: list[TestFile]):
         for stmt in tree.body:
             if isinstance(stmt, FUNCTION_NODES):
                 params = {arg.arg for arg in stmt.args.args + stmt.args.kwonlyargs}
-                dumps = get_dumps(stmt, frozenset(params))
+                dumps = get_dumps(stmt, *params)
                 if len(dumps) >= 2:
                     yield f"{rel}:{stmt.lineno} {stmt.name}", rel, dumps
 
@@ -959,7 +956,7 @@ def gen_inlined_helpers(root: Path, files: list[TestFile]):
     for file in files:
         for cls in gen_classes(file):
             for func in gen_tests(cls):
-                body = get_dumps(func, frozenset())
+                body = get_dumps(func)
                 for start, dump in enumerate(body):
                     for helper, rel, dumps in by_head.get(dump, []):
                         inlined = body[start : start + len(dumps)] == dumps
@@ -993,63 +990,160 @@ def gen_requested(tree: ast.AST):
             yield node.value
 
 
-def gen_helper_issues(root: Path, files: list[TestFile]):
-    users = defaultdict(set)
-    requests = defaultdict(set)
+class _Rename(ast.NodeTransformer):
+    def __init__(self, names: dict[str, str]):
+        self.names = names
 
-    for path in [*root.glob("tests/**/*.py"), *root.glob("conftest.py")]:
-        tree = ast.parse(path.read_text())
-        rel = path.relative_to(root).as_posix()
-        for name in set(gen_requested(tree)):
-            requests[name].add(rel)
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        node.id = self.names.get(node.id, node.id)
+        return node
+
+    def visit_arg(self, node: ast.arg) -> ast.AST:
+        node.arg = self.names.get(node.arg, node.arg)
+        return self.generic_visit(node)
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> ast.AST:
+        node.name = None if node.name is None else self.names.get(node.name, node.name)
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+        node.name = self.names.get(node.name, node.name)
+        return self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+        node.name = self.names.get(node.name, node.name)
+        return self.generic_visit(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
+        node.name = self.names.get(node.name, node.name)
+        return self.generic_visit(node)
+
+
+def get_binding(node: ast.AST) -> str | None:
+    """Gets the local name a node binds, if any."""
+    match node:
+        case ast.arg(arg=name):
+            binding = name
+        case ast.Name(id=name, ctx=ast.Store() | ast.Del()):
+            binding = name
+        case ast.ExceptHandler(name=str() as name):
+            binding = name
+        case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+            binding = name
+        case ast.ClassDef(name=name):
+            binding = name
+        case _:
+            binding = None
+    return binding
+
+
+def get_bound(func: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
+    """Gets each local name of a function mapped to a placeholder in binding order."""
+    declared = {
+        name
+        for node in ast.walk(func)
+        if isinstance(node, ast.Global | ast.Nonlocal)
+        for name in node.names
+    }
+    nodes = [node for node in ast.walk(func) if hasattr(node, "lineno")]
+    ordered = sorted(nodes, key=lambda node: (node.lineno, node.col_offset))
+    names = (get_binding(node) for node in ordered if node is not func)
+    bound = dict.fromkeys(n for n in names if n is not None and n not in declared)
+    return {name: f"_{index}" for index, name in enumerate(bound)}
+
+
+def get_def_key(func: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """
+    Gets a function's source with its name, docstring, and local names erased.
+
+    Parameters and every name bound inside the function become ``_0``, ``_1``, ...
+    in binding order; free names (globals, attributes, callees, keyword arguments)
+    and decorators stay. Returns ``None`` for a ``test_*`` function (the ``shapes``
+    check owns those) and for a trivial body: one with no call, ``await``,
+    ``yield``, loop, or comprehension (``pass``, ``...``, ``return x``).
+    """
+    body = get_body(func)
+    active = (*_ACTIVE, *_LOOPS)
+    trivial = not any(isinstance(n, active) for st in body for n in ast.walk(st))
+
+    if func.name.startswith("test_") or trivial:
+        key = None
+    else:
+        clone = deepcopy(func)
+        _Rename(get_bound(clone)).visit(clone)
+        clone.name = "_"
+        clone.body = get_body(clone)
+        key = ast.unparse(clone)
+
+    return key
+
+
+def get_short_methods(tree: ast.Module) -> set[ast.AST]:
+    """Gets the methods of a tree whose body, docstring aside, is one statement."""
+    return {
+        stmt
+        for cls in ast.walk(tree)
+        if isinstance(cls, ast.ClassDef)
+        for stmt in cls.body
+        if isinstance(stmt, FUNCTION_NODES) and len(get_body(stmt)) == 1
+    }
+
+
+def gen_duplicate_defs(trees: list[tuple[str, ast.Module]]):
+    """
+    Generates functions whose sources match once names are erased (``get_def_key``).
+
+    Nested definitions (a test-local closure) count, and two copies in one file are a
+    group too. A group whose every copy is a one-statement method (defined directly in
+    a class body, any name: a fake's ``close``/``aclose`` or ``utcoffset``/``dst``) is
+    skipped as protocol boilerplate; one module-level function or closure among the
+    copies keeps the group.
+    """
+    by_key = defaultdict(list)
+
+    for rel, tree in trees:
+        short = get_short_methods(tree)
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                module = _import_module(node).rsplit(".", 1)[-1] or "tests"
-                module = "__init__" if module == "tests" else module
-                for alias in node.names:
-                    users[module, alias.name].add(rel)
+            if isinstance(node, FUNCTION_NODES):
+                key = get_def_key(node)
+                where = f"{rel}:{node.lineno} {node.name}"
+                if key is not None:
+                    by_key[key].append((rel, where, node in short))
 
-    for helper in sorted(root.glob("tests/_*.py")):
-        tree = ast.parse(helper.read_text())
-        rel = helper.relative_to(root).as_posix()
-        inside = Counter(
-            node.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
-        )
-        for stmt in tree.body:
-            names = []
-            if isinstance(stmt, (*FUNCTION_NODES, ast.ClassDef)):
-                names = [stmt.name]
-            elif isinstance(stmt, ast.Assign):
-                names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
-            for name in names:
-                if name.startswith(("_", "pytest_")):
-                    continue
-                found = users.get((helper.stem, name), set())
-                if is_fixture(stmt):
-                    found = found | (requests[name] - {rel})
-                internal = inside[name] > 0
-                if not internal and len(found) <= 1:
-                    who = ", ".join(sorted(found)) or "no test file"
-                    yield f"{rel}:{stmt.lineno} {name}: used by {who}", [rel, *found]
+    for found in by_key.values():
+        paths = sorted({path for path, _, _ in found})
+        names = " / ".join(dict.fromkeys(w.rsplit(" ", 1)[1] for _, w, _ in found))
+        where = "\n      ".join(w for _, w, _ in found)
+        if len(paths) > 1:
+            head = f"identical in {len(paths)} files"
+        else:
+            head = f"repeated {len(found)} times in {paths[0]}"
+        if len(found) > 1 and not all(boilerplate for *_, boilerplate in found):
+            yield f"{head}: def {names}\n      {where}", paths
 
+
+def gen_duplicate_issues(files: list[TestFile], *helpers: tuple[str, ast.Module]):
+    """
+    Generates definitions and values repeated across test files.
+
+    Functions in the ``helpers`` modules (``tests/_*.py``) join the function check,
+    so a test-local copy of a shared helper is a group too.
+    """
     by_source = defaultdict(list)
     by_value = defaultdict(list)
 
     for file in files:
         for stmt in file.tree.body:
-            if isinstance(stmt, FUNCTION_NODES):
-                text = ast.unparse(stmt).replace(f"def {stmt.name}(", "def _(", 1)
-            elif isinstance(stmt, ast.Assign | ast.AnnAssign):
-                text = ast.unparse(stmt)
+            if isinstance(stmt, ast.Assign | ast.AnnAssign):
                 value = "" if stmt.value is None else ast.unparse(stmt.value)
+                where = f"{file.rel}:{stmt.lineno}"
+                by_source[ast.unparse(stmt)].append(where)
                 if len(value) >= MIN_VALUE:
-                    for name in get_defined(stmt):
-                        by_value[value].append((name, f"{file.rel}:{stmt.lineno}"))
-            else:
-                continue
-            by_source[text].append(f"{file.rel}:{stmt.lineno}")
+                    by_value[value].extend((name, where) for name in get_defined(stmt))
+
+    yield from gen_duplicate_defs(
+        [*helpers, *((file.rel, file.tree) for file in files)]
+    )
 
     for text, where in by_source.items():
         paths = {w.split(":", 1)[0] for w in where}
@@ -1067,6 +1161,49 @@ def gen_helper_issues(root: Path, files: list[TestFile]):
             names = ", ".join(f"{name} ({w})" for name, w in found)
             yield f"identical value under different names: {names}", sorted(paths)
 
+
+def gen_helper_issues(root: Path, files: list[TestFile]):  # noqa: C901
+    users = defaultdict(set)
+    requests = defaultdict(set)
+    trees = []
+
+    for path in [*root.glob("tests/**/*.py"), *root.glob("conftest.py")]:
+        tree = ast.parse(path.read_text())
+        rel = path.relative_to(root).as_posix()
+        for name in set(gen_requested(tree)):
+            requests[name].add(rel)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = _import_module(node).rsplit(".", 1)[-1] or "tests"
+                module = "__init__" if module == "tests" else module
+                for alias in node.names:
+                    users[module, alias.name].add(rel)
+
+    for helper in sorted(root.glob("tests/_*.py")):
+        tree = ast.parse(helper.read_text())
+        rel = helper.relative_to(root).as_posix()
+        trees.append((rel, tree))
+        inside = Counter(
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        )
+        for stmt in tree.body:
+            names = []
+            if isinstance(stmt, (*FUNCTION_NODES, ast.ClassDef)):
+                names = [stmt.name]
+            elif isinstance(stmt, ast.Assign):
+                names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
+            for name in (n for n in names if not n.startswith(("_", "pytest_"))):
+                found = users.get((helper.stem, name), set())
+                if is_fixture(stmt):
+                    found = found | (requests[name] - {rel})
+                internal = inside[name] > 0
+                if not internal and len(found) <= 1:
+                    who = ", ".join(sorted(found)) or "no test file"
+                    yield f"{rel}:{stmt.lineno} {name}: used by {who}", [rel, *found]
+
+    yield from gen_duplicate_issues(files, *trees)
     yield from gen_inlined_helpers(root, files)
 
 
@@ -1090,11 +1227,9 @@ def gen_cross_subject(files: list[TestFile]):
 
     for file in files:
         riko_names = set()
-        for stmt in ast.walk(file.tree):
-            if isinstance(stmt, ast.ImportFrom) and (stmt.module or "").startswith(
-                "riko"
-            ):
-                riko_names |= {alias.asname or alias.name for alias in stmt.names}
+        imports = (s for s in ast.walk(file.tree) if isinstance(s, ast.ImportFrom))
+        for stmt in (s for s in imports if (s.module or "").startswith("riko")):
+            riko_names |= {alias.asname or alias.name for alias in stmt.names}
 
         for cls in gen_classes(file):
             own = cls.name.removeprefix("Test").removeprefix("Async")
@@ -1153,22 +1288,24 @@ def get_helper_uses(file: TestFile, private: dict[str, str]) -> dict[str, set[st
     return uses
 
 
-def is_private_target(target: str, supported: frozenset[str]) -> bool:
+def is_private_target(target: str, *supported: str) -> bool:
     parts = target.split(".")
     hidden = any(part.startswith("_") for part in parts)
     return parts[0] == "riko" and (hidden or parts[-1] not in supported)
 
 
-def gen_patch_targets(cls: ast.ClassDef, supported: frozenset[str]):
+def gen_patch_targets(cls: ast.ClassDef, *supported: str):
     for node in ast.walk(cls):
         is_patch = isinstance(node, ast.Call) and get_leaf(node.func) in PATCH_CALLS
         for arg in node.args if is_patch else []:
             is_text = isinstance(arg, ast.Constant) and isinstance(arg.value, str)
-            if is_text and is_private_target(arg.value, supported):
+            if is_text and is_private_target(arg.value, *supported):
                 yield arg.value
 
 
-def gen_unsupported(files: list[TestFile], supported: frozenset[str]):
+def gen_unsupported(files: list[TestFile], *names: str):
+    supported = frozenset(names)
+
     for file in files:
         imports = list(gen_riko_imports(file))
         private = {
@@ -1181,7 +1318,7 @@ def gen_unsupported(files: list[TestFile], supported: frozenset[str]):
             names = list(gen_names(cls))
             used = Counter(name for name in names if name in private)
             via = Counter(name for name in names if name in helpers)
-            patched = list(gen_patch_targets(cls, supported))
+            patched = list(gen_patch_targets(cls, *supported))
             where = f"{file.rel}:{cls.lineno} {cls.name}"
             if file.tier == "public":
                 found = [f"{n} x{c}" for n, c in used.most_common()]
@@ -1201,11 +1338,13 @@ def gen_unsupported(files: list[TestFile], supported: frozenset[str]):
 
 def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
     classes = list(gen_classes(file))
-    module_uses = set()
-
-    for stmt in file.tree.body:
-        if not isinstance(stmt, (ast.ClassDef, *FUNCTION_NODES)):
-            module_uses |= set(gen_names(stmt)) - set(get_defined(stmt))
+    module_uses = set().union(
+        *(
+            set(gen_names(stmt)) - set(get_defined(stmt))
+            for stmt in file.tree.body
+            if not isinstance(stmt, (ast.ClassDef, *FUNCTION_NODES))
+        )
+    )
 
     misplaced = []
     defined_at = {
@@ -1303,8 +1442,8 @@ def is_rejection(func: ast.AST) -> bool:
         and any(_is_raises(item.context_expr) for item in node.items)
     ]
     calls = [n for n in ast.walk(func) if _is_raises(n)]
-    inside = {id(n) for block in blocks for n in ast.walk(block)}
-    inside |= {id(n) for call in calls for n in ast.walk(call)}
+    inside = set(map(id, chain.from_iterable(map(ast.walk, blocks))))
+    inside |= set(map(id, chain.from_iterable(map(ast.walk, calls))))
     errors = {
         item.optional_vars.id
         for block in blocks
@@ -1363,19 +1502,23 @@ def _snake(name: str) -> str:
 def load_defined(root: Path) -> frozenset[str]:
     defined = set()
 
-    for path in (root / DOCTEST_ROOTS[0]).rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, (ast.ClassDef, *FUNCTION_NODES)):
-                defined.add(node.name)
-            elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
-                defined.add(node.name.id)
-            elif isinstance(node, ast.Assign):
-                defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+    paths = (root / DOCTEST_ROOTS[0]).rglob("*.py")
+
+    for node in chain.from_iterable(
+        ast.walk(ast.parse(path.read_text())) for path in paths
+    ):
+        if isinstance(node, (ast.ClassDef, *FUNCTION_NODES)):
+            defined.add(node.name)
+        elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+            defined.add(node.name.id)
+        elif isinstance(node, ast.Assign):
+            defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
 
     return frozenset(defined)
 
 
-def gen_unnamed_subjects(file: TestFile, defined: frozenset[str]):
+def gen_unnamed_subjects(file: TestFile, *names: str):
+    defined = frozenset(names)
     table_names = {
         name: set(gen_names(stmt))
         for stmt in file.tree.body
@@ -1402,13 +1545,13 @@ def gen_unnamed_subjects(file: TestFile, defined: frozenset[str]):
             yield f"{file.rel}:{cls.lineno} {cls.name}: never names {subject}"
 
 
-def gen_placement(files: list[TestFile], defined: frozenset[str]):
+def gen_placement(files: list[TestFile], *defined: str):
     for file in files:
         for name, _, lineno, lead in get_misplaced(file):
             yield f"{file.rel}:{lineno} {name}: {lead}", [file.rel]
         for text in gen_order_issues(file):
             yield text, [file.rel]
-        for text in gen_unnamed_subjects(file, defined):
+        for text in gen_unnamed_subjects(file, *defined):
             yield text, [file.rel]
 
 
@@ -1435,11 +1578,13 @@ def gen_called(node: ast.AST):
     for child in ast.walk(node):
         if isinstance(child, ast.Call):
             func = child.func
-            yield (
-                func.attr
-                if isinstance(func, ast.Attribute)
-                else getattr(func, "id", "")
-            )
+
+            if isinstance(func, ast.Attribute):
+                called = func.attr
+            else:
+                called = getattr(func, "id", "")
+
+            yield called
 
 
 def is_check_name(name: str, helpers: set[str]) -> bool:
@@ -1510,7 +1655,7 @@ def is_vacuous(func: ast.AST, helpers: set[str]) -> bool:
     loops = [
         node for node in ast.walk(func) if isinstance(node, (ast.For, ast.AsyncFor))
     ]
-    looped = {id(node) for loop in loops for node in ast.walk(loop)}
+    looped = set(map(id, chain.from_iterable(map(ast.walk, loops))))
     sized = get_sized(func)
     return all(
         id(check) in looped or is_unsized_all(check, sized)
@@ -1602,7 +1747,10 @@ def gen_process_issues(files: list[TestFile]):
         for cls in gen_classes(file):
             for func in gen_tests(cls):
                 calls = [node for node in ast.walk(func) if is_spawn(node)]
-                keywords = {kw.arg for call in calls for kw in call.keywords}
+                keywords = {
+                    kw.arg
+                    for kw in chain.from_iterable(call.keywords for call in calls)
+                }
                 reason = PROCESS_REASON.search(ast.get_docstring(func) or "")
                 if calls and not (keywords & PROCESS_KEYWORDS or reason):
                     lead = "starts a process with no stated reason (in-process?)"
@@ -1644,8 +1792,8 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
         "doctest-raises": gen_doctest_raises(examples, raises),
         "names": gen_same_names(units),
         "cross-subject": gen_cross_subject(files),
-        "unsupported": gen_unsupported(files, load_supported(root)),
-        "placement": gen_placement(files, load_defined(root)),
+        "unsupported": gen_unsupported(files, *load_supported(root)),
+        "placement": gen_placement(files, *load_defined(root)),
         "tier": gen_tier_issues(files),
         "doctest-balance": gen_doctest_balance(examples, rows, spread),
         "assertless": gen_assertless(files),

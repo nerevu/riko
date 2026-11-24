@@ -143,6 +143,7 @@ import subprocess
 import sys
 from collections import Counter
 from functools import cache
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -693,8 +694,7 @@ def _is_frozen_record(cls: ast.ClassDef) -> bool:
 def _calls_close(body: list[ast.stmt]) -> bool:
     return any(
         isinstance(n, ast.Attribute) and n.attr in {"close", "aclose"}
-        for stmt in body
-        for n in ast.walk(stmt)
+        for n in chain.from_iterable(map(ast.walk, body))
     )
 
 
@@ -933,11 +933,10 @@ class Scanner(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _check_test(self, node: ast.AST, test: ast.AST) -> None:
-        target = (
-            test.operand
-            if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)
-            else test
-        )
+        if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+            target = test.operand
+        else:
+            target = test
 
         if isinstance(target, ast.BoolOp):
             for value in target.values:
@@ -1064,17 +1063,16 @@ class Scanner(ast.NodeVisitor):
                 "hash-order",
                 "join over a set; order varies with PYTHONHASHSEED",
             )
-        elif name in {"json.load", "json.loads"} or (
-            name in {"load", "loads"} and self._json_imported
-        ):
-            if not any(kw.arg == "object_pairs_hook" for kw in node.keywords):
-                self.add(
-                    node,
-                    "RM301",
-                    "last-wins",
-                    f"{name}() keeps the last of duplicate keys; "
-                    "pass object_pairs_hook",
-                )
+        elif (
+            name in {"json.load", "json.loads"}
+            or (name in {"load", "loads"} and self._json_imported)
+        ) and not any(kw.arg == "object_pairs_hook" for kw in node.keywords):
+            self.add(
+                node,
+                "RM301",
+                "last-wins",
+                f"{name}() keeps the last of duplicate keys; pass object_pairs_hook",
+            )
         elif (
             name == "bool"
             and len(node.args) == 1
@@ -1651,7 +1649,7 @@ def gen_unclassified(
 ) -> Iterator[str]:
     base = since or git("describe", "--tags", "--abbrev=0").strip()
     texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL) if texts is None else texts
-    cited = {sha for text in texts for sha in _SHA.findall(text)}
+    cited = set(chain.from_iterable(map(_SHA.findall, texts)))
     log = git("log", "--format=%h %s", f"{base}..HEAD", r"--grep=^\[FIX\]")
 
     for line in log.splitlines():
@@ -1725,7 +1723,7 @@ def remap_class_history(path: Path = Path(__file__), since: str | None = None) -
     """
     reachable = git("rev-list", "HEAD").split()
     texts = _get_texts(CLASS_HISTORY, NON_BEHAVIORAL)
-    cited = sorted({sha for text in texts for sha in _SHA.findall(text)})
+    cited = sorted(set(chain.from_iterable(map(_SHA.findall, texts))))
     stale = [sha for sha in cited if not any(h.startswith(sha) for h in reachable)]
     successors = {sha: s for sha in stale if (s := resolve_successor(sha)) is not None}
 

@@ -91,3 +91,32 @@ def test_build_old_tree_keeps_swapped_test_files(tmp_path, monkeypatch):
 
     assert (folder / "tests/test_a.py").read_text() == "old\n"
     assert (folder / "tests/test_b.py").read_text() == "new\n"
+
+
+TEARDOWN_TEST = """
+import pytest
+
+
+@pytest.fixture
+def broken():
+    yield
+    raise RuntimeError("teardown")
+
+
+def test_passes(broken):
+    assert True
+"""
+
+
+def test_teardown_error_counts_as_caught(tmp_path):
+    (tmp_path / "test_teardown.py").write_text(TEARDOWN_TEST)
+    command = [sys.executable, "-m", "pytest", *fail_first.PYTEST_FLAGS]
+    command += ["-o", "addopts=", "-rfE", "test_teardown.py"]
+    run = subprocess.run(
+        command, cwd=tmp_path, check=False, capture_output=True, text=True
+    )
+    lines = [line for line in run.stdout.splitlines() if fail_first.is_summary(line)]
+
+    assert lines[0].startswith("ERROR")
+    assert fail_first.is_caught(run.returncode, lines[-1])
+    assert not fail_first.is_caught(1, "1 failed, 2 passed, 1 error in 0.1s")

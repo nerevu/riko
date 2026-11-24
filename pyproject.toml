@@ -139,6 +139,10 @@ skip-magic-trailing-comma = true
 future-annotations = true
 
 extend-select = [
+    "B",    # flake8-bugbear: opinionated warnings
+    "C4",   # flake8-comprehensions
+    "C90",  # mccabe complexity (max-complexity below)
+    "D",    # pydocstyle
     "E",    # pycodestyle errors
     "E302", # pycodestyle: Two blank lines before top-level defs
     "W",    # pycodestyle warnings
@@ -192,7 +196,7 @@ ignore = [
 preview = true
 
 [tool.ruff.lint.mccabe]
-max-complexity = 11
+max-complexity = 10
 
 [tool.ruff.lint.isort]
 known-first-party = ["riko"]
@@ -368,6 +372,14 @@ inline-tables = 65
 inline-tables-lowered = 2026-11-14
 rows-without-id = 0
 rows-without-id-lowered = 2026-10-30
+
+[tool.riko.helpers]
+# Ceiling for `manage lint --helpers`: single-use helpers, private helpers called from
+# one function that are themselves the only caller of another such helper. It only
+# goes down: a run fails above it and lowers it on a gain. It records the day as
+# `<key>-lowered`.
+chains = 48
+chains-lowered = 2026-11-24
 
 [tool.riko.ratchet]
 # Days a ceiling above may hold without being lowered before its ratchet warns.

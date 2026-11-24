@@ -46,6 +46,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import cache
+from itertools import chain
 from pathlib import Path
 
 DESCRIPTION = "Map a working-tree change onto fixup targets."
@@ -366,15 +367,49 @@ def write_patches(
         for hunk in hunks:
             by_file[hunk.path].append(hunk)
 
-        body = [
-            line
-            for path, path_hunks in by_file.items()
-            for line in (
-                *headers[path],
-                *(x for h in path_hunks for x in (h.header, *h.lines)),
+        body = list(
+            chain.from_iterable(
+                (
+                    *headers[path],
+                    *chain.from_iterable((h.header, *h.lines) for h in path_hunks),
+                )
+                for path, path_hunks in by_file.items()
             )
-        ]
+        )
         (directory / f"{target[:10]}.patch").write_text("\n".join(body) + "\n")
+
+
+def join_dependents(
+    candidates: dict[str, list[Hunk]], dependent: dict[str, list[tuple[Hunk, set[str]]]]
+) -> None:
+    """Moves each dependent hunk into its target once the target defines its names."""
+    for target, items in list(dependent.items()):
+        moved = True
+
+        while moved:
+            provided = set(chain.from_iterable(map(defined_names, candidates[target])))
+            joining = [(h, m) for h, m in items if m <= provided]
+            items = [(h, m) for h, m in items if not m <= provided]
+            candidates[target].extend(h for h, _ in joining)
+            moved = bool(joining)
+
+        dependent[target] = items
+
+
+def print_candidates(
+    candidates: dict[str, list[Hunk]], commits: dict[str, str], latest: set[int]
+) -> None:
+    """Prints each fixup target with its hunks, starring latest-touch matches."""
+    for target, hunks in candidates.items():
+        print(f"  {target[:10]} {commits[target][:60]}")
+
+        for h in hunks:
+            mark = "*" if id(h) in latest else " "
+            where = f"{h.path}:{h.new_start}"
+            print(f"   {mark}{where}  +{len(h.added)}/-{h.removed}  {h.summary}")
+
+    if not candidates:
+        print("  none")
 
 
 def map_change(args: argparse.Namespace, base: str) -> None:
@@ -412,34 +447,14 @@ def map_change(args: argparse.Namespace, base: str) -> None:
         else:
             candidates[target].append(hunk)
 
-    for target, items in list(dependent.items()):
-        moved = True
-
-        while moved:
-            provided = {n for h in candidates[target] for n in defined_names(h)}
-            joining = [(h, m) for h, m in items if m <= provided]
-            items = [(h, m) for h, m in items if not m <= provided]
-            candidates[target].extend(h for h, _ in joining)
-            moved = bool(joining)
-
-        dependent[target] = items
-
+    join_dependents(candidates, dependent)
     candidates = {k: v for k, v in candidates.items() if v}
     dependent = {k: v for k, v in dependent.items() if v}
     print(f"{len(commits)} commits past {base[:10]}, {total} hunks")
     print("\nFIXUP CANDIDATES (read each hunk before offering it)")
     print("  * = latest touch, not blame: offer only if the subject fits the hunk")
 
-    for target, hunks in candidates.items():
-        print(f"  {target[:10]} {commits[target][:60]}")
-
-        for h in hunks:
-            mark = "*" if id(h) in latest else " "
-            where = f"{h.path}:{h.new_start}"
-            print(f"   {mark}{where}  +{len(h.added)}/-{h.removed}  {h.summary}")
-
-    if not candidates:
-        print("  none")
+    print_candidates(candidates, commits, latest)
 
     print("\nKEPT IN THE NEW COMMIT")
     untracked = git("ls-files", "--others", "--exclude-standard").split()
@@ -451,7 +466,7 @@ def map_change(args: argparse.Namespace, base: str) -> None:
         print(f"  {count:4} {reason}")
 
     for target, items in dependent.items():
-        names = sorted({n for _, missing in items for n in missing})
+        names = sorted(set(chain.from_iterable(missing for _, missing in items)))
         shown = ", ".join(names[:6]) + (", ..." if len(names) > 6 else "")
         label = f"single-target on {target[:10]}, need names absent there"
         print(f"  {len(items):4} {label}: {shown}")
