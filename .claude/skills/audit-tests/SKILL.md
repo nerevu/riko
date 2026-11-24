@@ -89,7 +89,18 @@ agents of the 2026-10-29 audit to 145–189k). Run
 `python .claude/skills/land/require_agents.py` first (on failure, stop and report its
 output). Split `auditor` agents by file group (`model: "opus"`), give each agent the
 scan leads for its files, and require both sides of every suspected duplicate to be
-read. Tag each lead CONFIRMED or DROPPED, with the reason. Every brief ends with: "Run
+read. A brief spends the read where no script looks: the agent verifies its scan
+leads, then checks the remaining tests only for the hand-only dimensions
+`_docs/gameplans/testing.md` §3 assigns to the agents (rows shadowed by an earlier
+branch, xfail comparisons false on their face, xfail worst times that measure the
+defect, a `sleep` that outlasts its bound inside a nested function or a shielded
+cleanup, same-subject tests whose bodies differ in more than literals, retired
+verbs in test names) plus the cross-tier twins and timeout-only endings of §3
+below; it never re-derives a scanner section by hand. Rank the file groups by
+`python .claude/skills/tidy/mistake_scan.py --classes` (the owning modules of the
+top classes get the smaller groups and the heavier brief), so a group runs about
+1.5k lines when its brief is focused this way. Tag each lead CONFIRMED or DROPPED,
+with the reason. Every brief ends with: "Run
 `date` at the start and between items. If you pass about 10 minutes or 100k tokens and
 the remaining work is mechanical, stop at a consistent point and report what is done,
 what is left, and the script that would finish it." Ping each agent for status at about
