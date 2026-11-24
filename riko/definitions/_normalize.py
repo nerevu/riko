@@ -23,7 +23,7 @@ from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_keys_and_values, map_values
 from riko.base._graph import edges_to_graph, leaves
 from riko.base._guards import is_mapping, require_listlike, require_mapping
-from riko.base._iterutils import gen_non_null, unzip
+from riko.base._iterutils import gen_non_null
 from riko.base._recordutils import serialize_attrs
 from riko.base._require_guards import (
     require_from_attrs,
@@ -96,30 +96,27 @@ require_raw_edge = require_from_typed_dict(RawEdge, "PortEdge")
 require_raw_workflow = require_from_typed_dict(RawWorkflow, "Workflow")
 
 
-def _get_legacy_index(port: RawPort, prefix: str, default: int) -> int:
-    """Reads the trailing number off a legacy ``_OTHER``/``_OUTPUT`` port suffix."""
-    suffix = port.removeprefix(prefix)
-    return int(suffix) if suffix.isdigit() else default
-
-
-def _is_legacy_port(port: RawPort, prefix: str) -> bool:
-    """Confirms a port has a legacy prefix and an empty or numeric series suffix."""
-    suffix = port.removeprefix(prefix)
-    return port.startswith(prefix) and (suffix == "" or suffix.isdigit())
-
-
 def _normalize_port(port: RawPort, direction: PortDirection) -> Port:
-    """Maps a legacy or bare named port to the canonical grammar for ``direction``."""
+    """
+    Maps a legacy or bare named port to the canonical grammar for ``direction``.
+
+    A legacy ``_OTHER``/``_OUTPUT`` ``port`` may end in a series number. An absent
+    number defaults to ``1``.
+
+    """
+    other = port.removeprefix(OTHER_PORT)
+    output = port.removeprefix(OUTPUT_PORT)
+
     if not port or port in PORT_DIRECTIONS:
         result = port
     elif port == INPUT_PORT:
         result = "in"
     elif port == OUTPUT_PORT:
         result = OUT
-    elif _is_legacy_port(port, OTHER_PORT):
-        result = f"in:{_get_legacy_index(port, OTHER_PORT, 1)}"
-    elif _is_legacy_port(port, OUTPUT_PORT):
-        index = _get_legacy_index(port, OUTPUT_PORT, 1) - 1
+    elif port.startswith(OTHER_PORT) and (other == "" or other.isdigit()):
+        result = f"in:{int(other) if other else 1}"
+    elif port.startswith(OUTPUT_PORT) and output.isdigit():
+        index = int(output) - 1
         result = OUT if index < 1 else f"{OUT}:{index}"
     elif port.isidentifier():
         result = f"{direction}:{port}"
@@ -210,15 +207,9 @@ def get_free_occurrence(name: str, taken: Iterable[str], start: int = 1) -> int:
     return next(n for n in count(start) if f"{name}-{n}" not in _taken)
 
 
-def _gen_node_info(raw_nodes: Iterable[NodeLike]) -> Iterator[tuple[object, NodeLike]]:
-    for raw_node in raw_nodes:
-        node_id = raw_node.id if isinstance(raw_node, RikoNode) else raw_node.get("id")
-        yield node_id, raw_node
-
-
-def _gen_nodes(raw_nodes: Iterable[NodeLike]) -> Iterator[NodeLike]:
+def _gen_nodes(*nodes: NodeLike) -> Iterator[NodeLike]:
     """Pairs list-authored nodes with explicit or generated ``<name>-<occurrence>``."""
-    _taken, nodes = unzip(_gen_node_info(raw_nodes))
+    _taken = (n.id if isinstance(n, RikoNode) else n.get("id") for n in nodes)
     taken = set(gen_non_null(_taken, func=str))
     counts: dict[str, int] = defaultdict(int)
 
@@ -285,7 +276,7 @@ def build_nodes(raw_nodes: NodesLike) -> RikoNodeCollection:
             for node in require_listlike(raw_nodes, "nodes")
         )
 
-    built = [_build_node(node) for node in _gen_nodes(_nodes)]
+    built = [_build_node(node) for node in _gen_nodes(*_nodes)]
     result = {node.id: node for node in built}
 
     if len(built) != len(result):

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 
 from riko.base._config import DEFAULT_OUTPUT, INPUT_PORT, OUTPUT_MODULE, OUTPUT_PORT
 from riko.base._exceptions import InvalidPipelineError
-from riko.base._funcutils import map_keys_and_values, map_values
+from riko.base._funcutils import map_values
 from riko.base._guards import is_mapping, require_listlike, require_mapping
 from riko.base._iterutils import gen_non_null, partition, unzip
 from riko.base._logging import get_logger
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
     from riko.types._frozendict import InputSchema, InputSchemas, JSONValue
     from riko.types._pipedef import PipeDefLike, Wires
-    from riko.types._workflow import NodeId, RawPort
+    from riko.types._workflow import NodeId
     from riko.types.modules import Conf, InputRawConf
 
     from ._workflow_definition import RawOutputs, RawPortEdges
@@ -110,11 +110,6 @@ _require_wire_endpoint = require_from_typed_dict(WireEndpoint, "wire endpoint")
 _require_output_module = require_from_typed_dict(OutputModule, "`PipeDef` output node")
 
 
-def _lower_key[K](key: K) -> K | str:
-    """Lowercases a key when it is an all-uppercase string."""
-    return key.lower() if isinstance(key, str) and key.isupper() else key
-
-
 def _lower_keys[T](obj: T) -> T:
     """
     Lowercases every all-uppercase string key at any depth.
@@ -125,7 +120,10 @@ def _lower_keys[T](obj: T) -> T:
 
     """
     if is_mapping(obj):
-        result = map_keys_and_values(_lower_key, _lower_keys, obj)
+        result = {
+            (k.lower() if isinstance(k, str) and k.isupper() else k): _lower_keys(v)
+            for k, v in obj.items()
+        }
 
         if len(result) < len(obj):
             msg = f"keys that differ only in case collide: {sorted(map(str, obj))}"
@@ -149,63 +147,12 @@ def _parse_write_mode(mode: str) -> WriteMode:
     return write_mode
 
 
-def _require_embed_ref_fields(value: EmbedRef, what: str = "embed") -> EmbedRef:
-    """Requires an EmbedRef's keys to be well-formed."""
-    require_str(value["type"], f"{what} 'type'")
-    require_str(value["id"], f"{what} 'id'")
-    return value
-
-
-def _require_dag_name(value: DagModule, what: str = "dag module") -> str:
-    """
-    Requires a ``DagModule``'s module name, read from ``name`` or its older ``type``.
-
-    Raises:
-
-        InvalidPipelineError: If neither key is present, or both are and disagree.
-
-    """
-    name, type_ = value.get("name"), value.get("type")
-
-    if name is None and type_ is None:
-        raise InvalidPipelineError(f"{what} needs a 'name'")
-    elif name is not None and type_ is not None and name != type_:
-        msg = f"conflicting {what} 'name'/'type': {name!r} and {type_!r}"
-        raise InvalidPipelineError(msg)
-
-    return require_str(type_ if name is None else name, f"{what} 'name'")
-
-
-def _require_dag_fields(value: DagModule, what: str = "dag module") -> DagModule:
-    """Requires a ``DagModule``'s keys to be well-formed."""
-    optional_str(value.get("id"))
-    _require_dag_name(value, what)
-    _optional_mapping(value.get("conf"))
-    return value
-
-
-def _get_write_mode(value: WriteConf) -> WriteMode | None:
-    """Translates a ``WriteConf``'s mode into a ``WriteMode`` (``None`` when absent)."""
-    mode = optional_str(value.get("mode"))
-    return None if mode is None else _parse_write_mode(mode)
-
-
-def _require_v1_pipe_fields(value: PipeModule, what: str = "module") -> PipeModule:
-    """Requires a ``PipeModule``'s keys to be well-formed."""
-    require_str(value["id"], f"{what} 'id'")
-    require_str(value["type"], f"{what} 'type'")
-    require_mapping(value["conf"], f"{what} 'conf'")
-    return value
-
-
 def _require_v1_loop_embed(value: PipeModule, what: str = "loop module") -> EmbedRef:
-    """Requires a ``loop`` ``PipeModule``'s embed to be well-formed."""
-    embed = require_mapping(value.get("embed"), f"{what} 'embed'")
-    return _require_embed_ref_fields(_require_embed_ref(embed))
-
-
-def _build_embed(embed: EmbedRef, conf: Conf | None = None) -> Embed:
-    return Embed({"name": embed["type"], "conf": conf or {}})
+    """Requires a ``loop`` ``PipeModule``'s embed and its keys to be well-formed."""
+    embed = _require_embed_ref(require_mapping(value.get("embed"), f"{what} 'embed'"))
+    require_str(embed["type"], "embed 'type'")
+    require_str(embed["id"], "embed 'id'")
+    return embed
 
 
 def _get_conf_value(value: object) -> object:
@@ -229,25 +176,6 @@ def _parse_v1_default(json_type: JSONValue, text: str) -> JSONValue:
         parsed = None
 
     return parsed
-
-
-def _build_v1_input_schema(v1_type: object, default: object) -> InputSchema:
-    """
-    Builds an input's schema from a ``PipeDef`` input type and default.
-
-    An unknown type, or a default that does not fit the type, produces a string schema.
-
-    """
-    typed = _V1_INPUT_SCHEMAS.get(str(v1_type), _STRING_SCHEMA)
-
-    if default is None:
-        schema = typed
-    elif (parsed := _parse_v1_default(typed["type"], str(default))) is None:
-        schema = {**_STRING_SCHEMA, "default": str(default)}
-    else:
-        schema = {**typed, "default": parsed}
-
-    return schema
 
 
 def migrate_input_conf(conf: Conf) -> tuple[str, InputSchema, InputRawConf]:
@@ -300,45 +228,19 @@ def migrate_input_conf(conf: Conf) -> tuple[str, InputSchema, InputRawConf]:
         else:
             node_conf["type"] = {"type": "text", "value": type_}
 
-    schema = dict(_build_v1_input_schema(values.get("type"), values.get("default")))
+    typed = _V1_INPUT_SCHEMAS.get(str(values.get("type")), _STRING_SCHEMA)
+
+    if (default := values.get("default")) is None:
+        schema = dict(typed)
+    elif (parsed := _parse_v1_default(typed["type"], str(default))) is None:
+        schema = {**_STRING_SCHEMA, "default": str(default)}
+    else:
+        schema = {**typed, "default": parsed}
 
     if (prompt := values.get("prompt")) is not None:
         schema["description"] = require_str(prompt, "input 'prompt'")
 
     return name, schema, node_conf
-
-
-def _migrate_pipe_module(module: PipeModule) -> tuple[RawNode, InputSchemas]:
-    """Translates a ``PipeModule`` into a ``RawNode`` and its inputs' schemas."""
-    _require_v1_pipe_fields(module, "module")
-    mid = module["id"]
-    conf = _lower_keys(module["conf"])
-    schemas: InputSchemas = {}
-
-    if (name := module["type"]) == _WRITE:
-        write_conf = require_write_conf(require_module_conf(conf))
-        require_base_pipe(module)
-        node = RawNode(
-            {**write_conf, "id": mid, "name": name, "family": _WRITE, "backend": "file"}
-        )
-
-        if mode := _get_write_mode(write_conf):
-            node["mode"] = mode
-
-    elif name == _LOOP:
-        embed = _build_embed(_require_v1_loop_embed(module, "module"), conf)
-        node = RawNode({"id": mid, "name": name, "embed": embed})
-    elif name == _INPUT:
-        input_name, schema, input_conf = migrate_input_conf(conf)
-        schemas[input_name] = schema
-        node = RawNode({"id": mid, "name": name, "conf": input_conf})
-    else:
-        node = RawNode({"id": mid, "name": name, "conf": conf})
-
-    if options := {k: v for k, v in module.items() if k in _OPTIONS and v is not None}:
-        node["options"] = options
-
-    return node, schemas
 
 
 def _merge_input_schemas(*schemas: InputSchemas) -> InputSchemas:
@@ -361,10 +263,27 @@ def _merge_input_schemas(*schemas: InputSchemas) -> InputSchemas:
 
 
 def _migrate_dag_module(index: int, module: DagModule) -> tuple[NodeId, RawNode]:
-    """Translates a ``DagModule`` into a RawNode."""
-    _require_dag_fields(module, "module")
-    mid = module.get("id")
-    name = _require_dag_name(module, "module")
+    """
+    Translates a ``DagModule`` into a RawNode.
+
+    Reads the module name from ``name`` or the older ``type``.
+
+    Raises:
+
+        InvalidPipelineError: If neither key is present, or both are and they disagree.
+
+    """
+    mid, _name, type_ = module.get("id"), module.get("name"), module.get("type")
+    optional_str(mid)
+
+    if _name is None and type_ is None:
+        raise InvalidPipelineError("module needs a 'name'")
+    elif _name is not None and type_ is not None and _name != type_:
+        msg = f"conflicting module 'name'/'type': {_name!r} and {type_!r}"
+        raise InvalidPipelineError(msg)
+
+    name = require_str(type_ if _name is None else _name, "module 'name'")
+    _optional_mapping(module.get("conf"))
     node_id = f"sw-{index}" if mid is None else require_str(mid, "module 'id'")
     fields = DagModule(module)
     fields.pop("type", None)
@@ -372,15 +291,15 @@ def _migrate_dag_module(index: int, module: DagModule) -> tuple[NodeId, RawNode]
     return node_id, node
 
 
-def _migrate_target_port(port: RawPort) -> RawPort:
-    """Sanitizes a ``PipeDef`` target port into the id the receiving module looks up."""
-    return port if port.startswith("_") else pythonise(port)
-
-
 def _migrate_wires(
     wires: Wires, *output_ids: NodeId
 ) -> tuple[RawPortEdges, RawOutputs]:
-    """Splits ``PipeDef`` wires into stream edges and ``output``-node references."""
+    """
+    Splits ``PipeDef`` wires into stream edges and ``output``-node references.
+
+    Sanitizes each target port into the id the receiving module looks up.
+
+    """
     edges: RawPortEdges = []
     endpoints: RawOutputs = {}
     ids = frozenset(output_ids)
@@ -399,7 +318,8 @@ def _migrate_wires(
             name = f"{DEFAULT_OUTPUT}{suffix}"
             endpoints[name] = endpoint
         else:
-            port = _migrate_target_port(resolve_port(tgt.get("id"), INPUT_PORT))
+            tgt_port = resolve_port(tgt.get("id"), INPUT_PORT)
+            port = tgt_port if tgt_port.startswith("_") else pythonise(tgt_port)
             target = RawEndpoint({"node": tgt_node, "port": port})
             edges.append(RawEdge({"source": endpoint, "target": target}))
 
@@ -414,6 +334,13 @@ def _require_output_id(module: ModuleLike) -> NodeId:
         raise InvalidPipelineError("the `PipeDef` output node takes no 'conf'")
 
     return require_str(output["id"], "module 'id'")
+
+
+def _build_write_node(mid: str, write_conf: WriteConf) -> RawNode:
+    """Builds the file-backed write node a ``PipeDef`` ``write`` module migrates to."""
+    return RawNode(
+        {**write_conf, "id": mid, "name": _WRITE, "family": _WRITE, "backend": "file"}
+    )
 
 
 def parse_pipedef(_pipe_def: PipeDefLike) -> RawWorkflow:
@@ -446,10 +373,44 @@ def parse_pipedef(_pipe_def: PipeDefLike) -> RawWorkflow:
 
     outputs, others = partition(lambda m: m.get("type") == OUTPUT_MODULE, modules)
     output_ids = map(_require_output_id, outputs)
-    nodes, schemas = unzip(_migrate_pipe_module(require_pipe(m)) for m in others)
+    nodes: list[RawNode] = []
+    schemas: list[InputSchemas] = []
+
+    for module in map(require_pipe, others):
+        mid = require_str(module["id"], "module 'id'")
+        name = require_str(module["type"], "module 'type'")
+        require_mapping(module["conf"], "module 'conf'")
+        conf = _lower_keys(module["conf"])
+
+        if name == _WRITE:
+            write_conf = require_write_conf(require_module_conf(conf))
+            require_base_pipe(module)
+            node = _build_write_node(mid, write_conf)
+
+            if (mode := optional_str(write_conf.get("mode"))) is not None:
+                node["mode"] = _parse_write_mode(mode)
+
+        elif name == _LOOP:
+            embed_ref = _require_v1_loop_embed(module, "module")
+            embed = Embed({"name": embed_ref["type"], "conf": conf})
+            node = RawNode({"id": mid, "name": name, "embed": embed})
+        elif name == _INPUT:
+            input_name, schema, input_conf = migrate_input_conf(conf)
+            schemas.append({input_name: schema})
+            node = RawNode({"id": mid, "name": name, "conf": input_conf})
+        else:
+            node = RawNode({"id": mid, "name": name, "conf": conf})
+
+        options = {k: v for k, v in module.items() if k in _OPTIONS and v is not None}
+
+        if options:
+            node["options"] = options
+
+        nodes.append(node)
+
+    logger.warning(_WARNING)
     input_schemas = _merge_input_schemas(*schemas)
     edges, endpoints = _migrate_wires(pipe_def.get("wires", ()), *output_ids)
-    logger.warning(_WARNING)
     raw = RawWorkflow({"nodes": nodes, "edges": edges, "version": WORKFLOW_VERSION})
 
     if endpoints:

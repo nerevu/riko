@@ -138,21 +138,6 @@ def _is_statically_absent(obj: object, name: str) -> bool:
     return not (isinstance(obj, type) or in_type or name in instance)
 
 
-def _get_bound_method(cls: type, name: str) -> object:
-    """Gets ``cls``'s method ``name`` as an instance of ``cls`` would see it."""
-    attr = getattr(cls, name, None)
-    static = getattr_static(cls, name, None)
-
-    if isfunction(attr) and isfunction(static):
-        method: object = MethodType(attr, MISSING)
-    elif isinstance(static, MethodDescriptorType):
-        method = MethodType(static, MISSING)
-    else:
-        method = attr
-
-    return method
-
-
 def _check_strict(
     is_member: bool, protocol: type, get_method: Callable[[str], object], *methods: str
 ) -> bool:
@@ -214,7 +199,21 @@ def _check_strict_protocol(obj: object, protocol: type, *methods: str) -> bool:
 
 @lru_cache(maxsize=as_maxsize(settings.strict_check_cache_size))
 def _check_strict_type(cls: type, protocol: type, *methods: str) -> bool:
-    get_method = partial(_get_bound_method, cls)
+    """Checks ``cls``'s methods as an instance of ``cls`` would see them."""
+
+    def get_method(name: str) -> object:
+        attr = getattr(cls, name, None)
+        static = getattr_static(cls, name, None)
+
+        if isfunction(attr) and isfunction(static):
+            method: object = MethodType(attr, MISSING)
+        elif isinstance(static, MethodDescriptorType):
+            method = MethodType(static, MISSING)
+        else:
+            method = attr
+
+        return method
+
     return _check_strict(issubclass(cls, protocol), protocol, get_method, *methods)
 
 

@@ -140,7 +140,7 @@ def map_values[K, V, R](
     **kwargs: object,
 ) -> dict[K, R]:
     """
-    Applies a function to each value of a mapping.
+    Applies a function to each mapping value.
 
     Args:
 

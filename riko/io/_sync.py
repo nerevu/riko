@@ -529,7 +529,7 @@ def opener(
                 response = StringIO(r.text)
             else:
                 encoding = r.encoding or encoding
-                response = TextReencoder(r.raw, encoding, owner=r)
+                response = TextReencoder(r.raw, encoding, closable=r)
         else:
             req = Request(url, headers=headers)  # noqa: S310
             r = urlopen(req, timeout=_timeout)  # noqa: S310
@@ -544,7 +544,7 @@ def opener(
                 response = buffer(r, encoding=encoding)
             else:
                 encoding = get_response_encoding(r, encoding or ENCODING)
-                response = TextReencoder(r.fp, encoding, owner=r)
+                response = TextReencoder(r.fp, encoding, closable=r)
 
         if not memoize:
             stack.pop_all()

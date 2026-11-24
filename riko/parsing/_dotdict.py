@@ -275,16 +275,13 @@ def gen_dict(
         {'value': 'bar'}
 
     """
-    if key:
-        keys = parse_key(key)
-    else:
-        if is_mapping(data):
-            if DotDict.is_self(data) and not kwargs:
-                data = resolve_sentinel(data, default=data)
-            else:
-                data = DotDict(data).get(**kwargs)
+    keys = parse_key(key) if key else []
 
-        keys = []
+    if not key and is_mapping(data):
+        if DotDict.is_self(data) and not kwargs:
+            data = resolve_sentinel(data, default=data)
+        else:
+            data = DotDict(data).get(**kwargs)
 
     if is_mapping(data):
         keys = keys or data.keys()
@@ -307,6 +304,23 @@ def gen_dict(
         yield (default_key, data)
     else:
         yield data
+
+
+def _resolve_absent_key(
+    value: Mapping[str, object], key: str, default: object | None, **kwargs: object
+) -> object:
+    """Resolves a key missing from a mapping through its sentinel, else the default."""
+    parsed = default
+
+    if is_sentinel(value, **kwargs):
+        parsed = resolve_sentinel(value, default=default, **kwargs)
+
+        if is_mapping(parsed) and key in parsed:
+            parsed = parsed[key]
+        elif key:
+            parsed = default
+
+    return parsed
 
 
 class DotDict[VT](CaseInsensitiveDict[VT]):
@@ -433,7 +447,7 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
     def _parse_value[V, D](
         self, value: V, key: str | int, default: D | None = ..., **kwargs: VT
     ) -> V | D | None: ...
-    def _parse_value(
+    def _parse_value(  # noqa: C901
         self, value: object, key: str | int, default: object | None = None, **kwargs: VT
     ) -> object:
         """
@@ -461,34 +475,28 @@ class DotDict[VT](CaseInsensitiveDict[VT]):
 
                 if key in dd_value:
                     parsed = dd_value[key]
-                elif is_sentinel(value, **kwargs):
-                    parsed = resolve_sentinel(value, default=default, **kwargs)
-
-                    if is_mapping(parsed) and key in parsed:
-                        parsed = parsed[key]
-                    elif key:
-                        parsed = default
+                else:
+                    parsed = _resolve_absent_key(value, key, default, **kwargs)
             else:
                 logger.warning(msg.format("Mapping", value))
+        elif (
+            isinstance(key, str) and is_known_sequence(value) and is_mapping_seq(value)
+        ):
+            try:
+                parsed = [v[key] for v in value]
+            except (KeyError, IndexError):
+                parsed = default
+        elif isinstance(key, int) and is_known_sequence(value) and is_value_seq(value):
+            try:
+                parsed = value[key]
+            except IndexError:
+                parsed = default
+        elif is_known_sequence(value) and (
+            is_value_seq(value) or is_mapping_seq(value)
+        ):
+            logger.warning(msg.format("submapping", value[0]))
         elif is_known_sequence(value):
-            if is_mapping_seq(value):
-                if isinstance(key, str):
-                    try:
-                        parsed = [v[key] for v in value]
-                    except (KeyError, IndexError):
-                        parsed = default
-                else:
-                    logger.warning(msg.format("submapping", value[0]))
-            elif is_value_seq(value):
-                if isinstance(key, int):
-                    try:
-                        parsed = value[key]
-                    except IndexError:
-                        parsed = default
-                else:
-                    logger.warning(msg.format("submapping", value[0]))
-            else:
-                parsed = list(value)
+            parsed = list(value)
         elif value is not None:
             parsed = value
 

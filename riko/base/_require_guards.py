@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Callable, Collection, Iterable, Mapping
 from functools import partial
+from itertools import chain
 from math import isinf, isnan
 from typing import (
     TYPE_CHECKING,
@@ -855,6 +856,47 @@ def require_nonblank_str(
     return text
 
 
+def _validate_form_leaves(
+    leaves: tuple[object, ...], classes: tuple[type, ...], arms: tuple[object, ...]
+) -> None:
+    """Validates that a form's leaves are all classes, TypedDicts, or Literals."""
+    if _aliases := tuple(gen_instances(leaves, TypeAliasType)):
+        aliases = ", ".join(map(repr, _aliases))
+        msg = f"alias {aliases} refers to a name that is not available at runtime, "
+        raise TypeError(msg + "such as one imported only for type checking")
+    elif _unsupported := set(leaves).difference(classes, arms):
+        unsupported = ", ".join(map(repr, sort_stably(_unsupported)))
+
+        if len(_unsupported) > 1:
+            raise TypeError(f"{unsupported} are not classes, TypedDicts, or Literals")
+        else:
+            raise TypeError(f"{unsupported} is not a class, TypedDict, or Literal")
+
+
+def _build_union_check(
+    classes: tuple[type, ...],
+    shapes: tuple[type, ...],
+    literals: tuple[object, ...],
+    is_member: Callable[[object], bool],
+    error: type[Exception],
+) -> Callable[[object, str], object]:
+    """Builds the check for a union of classes, TypedDicts, and Literal values."""
+    is_mappable = len(shapes) < len(classes)
+    names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])
+    names += [repr(arg) for arg in literals]
+    expected = f"of type {' | '.join(names)}" if shapes or literals else "a mapping"
+
+    def check(value: object, what: str) -> object:
+        member_or_shape = is_member(value) or isinstance(value, shapes)
+
+        if not (member_or_shape or (is_mappable and is_mapping(value))):
+            raise error(f"{what} must be {expected}, not {type(value).__name__}")
+
+        return value
+
+    return check
+
+
 def require_from_form[T](
     form: TypeForm[T],
     what: str | None = None,
@@ -917,26 +959,17 @@ def require_from_form[T](
     classes = tuple(gen_instances(leaves, type))
     shapes = tuple(cls for cls in classes if not is_typeddict(cls))
     arms = tuple(leaf for leaf in leaves if get_origin(leaf) is Literal)
-    literals = tuple(arg for arm in arms for arg in get_args(arm))
+    literals = tuple(chain.from_iterable(map(get_args, arms)))
 
     def is_member(value: object) -> bool:
         return any(type(value) is type(arg) and value == arg for arg in literals)
 
-    if _aliases := tuple(gen_instances(leaves, TypeAliasType)):
-        aliases = ", ".join(map(repr, _aliases))
-        msg = f"alias {aliases} refers to a name that is not available at runtime, "
-        raise TypeError(msg + "such as one imported only for type checking")
-    elif _unsupported := set(leaves).difference(classes, arms):
-        unsupported = ", ".join(map(repr, sort_stably(_unsupported)))
+    _validate_form_leaves(leaves, classes, arms)
 
-        if len(_unsupported) > 1:
-            raise TypeError(f"{unsupported} are not classes, TypedDicts, or Literals")
-        else:
-            raise TypeError(f"{unsupported} is not a class, TypedDict, or Literal")
-    elif not classes:
+    if not classes:
         accepted = ", ".join(map(str, literals))
 
-        def check(value: object, what: str) -> object:
+        def check(value: object, what: str, /) -> object:
             if not is_member(value):
                 raise error(f"Invalid {what}: {value!r}. Expected one of {accepted}")
 
@@ -945,28 +978,17 @@ def require_from_form[T](
     elif len(classes) == 1 and not (shapes or literals):
         typed = require_from_typed_dict(classes[0], default_what, error=error)
 
-        def check(value: object, what: str) -> object:
+        def check(value: object, what: str, /) -> object:
             return typed(require_mapping(value, what, error=error), what)
 
     elif len(classes) == 1 and not literals:
         cls = classes[0]
 
-        def check(value: object, what: str) -> object:
+        def check(value: object, what: str, /) -> object:
             return require_instance(cls, value, what, error=error)
 
     else:
-        is_mappable = len(shapes) < len(classes)
-        names = [cls.__name__ for cls in shapes] + (["mapping"] if is_mappable else [])
-        names += [repr(arg) for arg in literals]
-        expected = f"of type {' | '.join(names)}" if shapes or literals else "a mapping"
-
-        def check(value: object, what: str) -> object:
-            member_or_shape = is_member(value) or isinstance(value, shapes)
-
-            if not (member_or_shape or (is_mappable and is_mapping(value))):
-                raise error(f"{what} must be {expected}, not {type(value).__name__}")
-
-            return value
+        check = _build_union_check(classes, shapes, literals, is_member, error)
 
     def require(value: object, what: str | None = None, **_) -> T:
         """Narrows ``value`` to ``form``."""

@@ -27,11 +27,6 @@ if TYPE_CHECKING:
 LINE_BREAKS = re.compile(r"\r\n|\r|\n")
 
 
-def _terminate_lines[S: (str, bytes)](lines: list[S], newline: S) -> Iterator[S]:
-    """Appends ``newline`` to every line except the last."""
-    return chain((line + newline for line in lines[:-1]), filter(len, lines[-1:]))
-
-
 def gen_without_bom(chunks: Iterable[str]) -> Iterator[str]:
     """
     Generates decoded text chunks without a leading byte order mark (BOM).
@@ -50,7 +45,11 @@ def gen_without_bom(chunks: Iterable[str]) -> Iterator[str]:
 
 
 def _gen_lines(chunks: Iterable[str], newline: str) -> Iterator[str]:
-    """Re-splits decoded text chunks into lines ending in ``newline``."""
+    """
+    Re-splits decoded text chunks into lines ending in ``newline``.
+
+    The final line keeps no ``newline`` and is dropped when empty.
+    """
     pending = ""
 
     for chunk in chunks:
@@ -60,7 +59,11 @@ def _gen_lines(chunks: Iterable[str], newline: str) -> Iterator[str]:
         yield from (line + newline for line in lines)
         pending = tail + held
 
-    yield from _terminate_lines(LINE_BREAKS.split(pending), newline)
+    *lines, last = LINE_BREAKS.split(pending)
+    yield from (line + newline for line in lines)
+
+    if last:
+        yield last
 
 
 def _decode(
@@ -97,7 +100,7 @@ class IterStringIO(_IterStringIO):
 
 
 class Reencoder[T: (str, bytes)](_Reencoder, ABC):
-    """Reencoder whose ``read`` honors ``n`` and closes its source/owner."""
+    """Reencoder whose ``read`` honors ``n`` and closes ``closable`` or its source."""
 
     join_char: T
     lineseps: T
@@ -108,10 +111,10 @@ class Reencoder[T: (str, bytes)](_Reencoder, ABC):
         fromenc: str = ENCODING,
         toenc: str = ENCODING,
         *,
-        owner: SyncClosable | None = None,
+        closable: SyncClosable | None = None,
         remove_BOM: bool = False,  # noqa: N803
     ) -> None:
-        self._f = f if owner is None else owner
+        self._f = f if closable is None else closable
         self.fileno = f.fileno
 
         try:

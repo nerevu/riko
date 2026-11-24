@@ -100,6 +100,28 @@ def _is_frozen(value: object, json_native: bool, key: object) -> bool:
     return result
 
 
+def _freeze_mapping[K](
+    value: Mapping[K, object],
+    json_native: bool,
+    key: Func[SupportsRichComparison] | None,
+    mapping_value_func: Func[object] | None,
+) -> object:
+    """Freezes a mapping, sorting its keys when given a key function."""
+    if key is None:
+        ordered = value
+    else:
+        ordered = {k: value[k] for k in sorted(value, key=key)}
+
+    if json_native:
+        frozen = _json_freeze_items(ordered, mapping_value_func)
+        result: object = FrozenJSONDict._from_frozen(frozen)
+    else:
+        frozen = _freeze_items(ordered, mapping_value_func=mapping_value_func)
+        result = FrozenDict.from_frozen(frozen)
+
+    return result
+
+
 @overload
 def _freeze_value(
     value: object, json_native: Literal[True], *, value_func: Func[object] | None = ...
@@ -144,24 +166,16 @@ def _freeze_value(
     if value_func is not None:
         value = value_func(value)
 
-    if value is None or isinstance(value, (str, int)):
-        result = value
-    elif isinstance(value, float):
+    if isinstance(value, float):
         result = require_finite(value) if json_native else value
-    elif _is_frozen(value, json_native, key):
+    elif (
+        value is None
+        or isinstance(value, (str, int))
+        or _is_frozen(value, json_native, key)
+    ):
         result = value
     elif is_mapping(value):
-        if key is None:
-            ordered = value
-        else:
-            ordered = {k: value[k] for k in sorted(value, key=key)}
-
-        if json_native:
-            frozen = _json_freeze_items(ordered, mapping_value_func)
-            result = FrozenJSONDict._from_frozen(frozen)
-        else:
-            frozen = _freeze_items(ordered, mapping_value_func=mapping_value_func)
-            result = FrozenDict.from_frozen(frozen)
+        result = _freeze_mapping(value, json_native, key, mapping_value_func)
     elif is_named_tuple and not json_native:
         result = value
     elif is_known_sequence(value):
@@ -362,6 +376,13 @@ def freeze(
 
         value: The value to freeze.
 
+    Kwargs:
+
+        key: A sort key for the top-level mapping's keys or sequence's items.
+
+        mapping_value_func: A function applied to each top-level mapping value before
+            it is frozen.
+
     Returns:
 
         The value with every built-in container frozen.
@@ -403,6 +424,10 @@ def json_freeze(value: object, key: SortKey[object] | None = None) -> FrozenJSON
     Args:
 
         value: The value to freeze.
+
+    Kwargs:
+
+        key: A sort key for the top-level mapping's keys or sequence's items.
 
     Returns:
 

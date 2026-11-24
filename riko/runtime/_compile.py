@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from riko.definitions._nodes import ModuleNode
     from riko.definitions._workflow_definition import Outputs, WorkflowLike
     from riko.types._frozendict import FrozenConf, FrozenPortEdges
-    from riko.types._pipedef import Embed
     from riko.types.modules import Conf
 
 RAW_CONFS = {
@@ -108,34 +107,32 @@ def _resolve_raw_conf(name: str, conf: FrozenConf | Conf) -> str | None:
     return RAW_CONFS.get(name) if len(conf) else None
 
 
-def _render_conf(name: str, conf: FrozenConf | Conf) -> str:
-    """Renders a module configuration, typed by its module's raw config class."""
-    inner = render_value(conf)
-    raw = _resolve_raw_conf(name, conf)
-    return inner if raw is None else f"{raw}({inner})"
-
-
-def _render_embed(embed: Embed) -> str:
-    """Renders a loop's embedded module as the typed ``Embed`` that rebuilds it."""
-    name = embed["name"]
-    parts = [f"'name': {name!r}"]
-
-    if (embed_id := embed.get("id")) is not None:
-        parts.append(f"'id': {embed_id!r}")
-
-    parts.append(f"'conf': {_render_conf(name, embed['conf'])}")
-    return "Embed({" + ", ".join(parts) + "})"
-
-
 def _render_node(node: ModuleNode) -> str:
-    """Renders one node as the ``ModuleNode(...)`` entry that rebuilds it."""
+    """
+    Renders one node as the ``ModuleNode(...)`` entry that rebuilds it.
+
+    Each configuration is typed by its module's raw config class. A loop's embedded
+    module renders as the typed ``Embed`` that rebuilds it.
+
+    """
     parts = [f"id={node.id!r}", f"name={node.name!r}"]
 
     if len(node.conf):
-        parts.append(f"conf={_render_conf(node.name, node.conf)}")
+        conf, raw = render_value(node.conf), _resolve_raw_conf(node.name, node.conf)
+        parts.append(f"conf={conf if raw is None else f'{raw}({conf})'}")
 
-    if node.embed is not None:
-        parts.append(f"embed={_render_embed(node.embed)}")
+    if (embed := node.embed) is not None:
+        name = embed["name"]
+        embed_parts = [f"'name': {name!r}"]
+
+        if (embed_id := embed.get("id")) is not None:
+            embed_parts.append(f"'id': {embed_id!r}")
+
+        embed_conf = render_value(embed["conf"])
+        embed_raw = _resolve_raw_conf(name, embed["conf"])
+        typed = embed_conf if embed_raw is None else f"{embed_raw}({embed_conf})"
+        embed_parts.append(f"'conf': {typed}")
+        parts.append("embed=Embed({" + ", ".join(embed_parts) + "})")
 
     if options := node.options.kwargs:
         parts.append(f"options={render_value(options)}")

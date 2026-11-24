@@ -180,7 +180,7 @@ def _guard[V](
     return result
 
 
-def _canon(value: object, seen: set[int]) -> CanonicalValue:
+def _canon(value: object, seen: set[int]) -> CanonicalValue:  # noqa: C901
     match value:
         case None:
             result: CanonicalValue = ["none", None]
@@ -384,39 +384,26 @@ class IdentityAccumulator:
         return self._hasher.copy().hexdigest()
 
 
-def _is_native_val(value: object) -> bool:
-    """Reports whether a value's own hash and equality match its canonical identity."""
-    is_native = type(value) in _NATIVE_KEY_TYPES
-
-    if is_native and isinstance(value, float):
-        is_native = not isnan(value)
-
-    return is_native
-
-
 def _native_key(*args: object, **kwargs: object) -> tuple[object, ...] | None:
     """
     Gets the process-local key for a call whose arguments are all exact-type scalars.
 
-    Python's own hashing keys the call. This is cheaper than ``_dump_simple``'s durable
-    bytes. It covers ``float``, ``bool``, and ``bytes``; and accepts a lone-surrogate
-    string the durable encoder rejects. Any other argument returns ``None``.
+    Python's own hashing keys the call. Such a value's own hash and equality match its
+    canonical identity (a NaN float does not). This is cheaper than ``_dump_simple``'s
+    durable bytes. It covers ``float``, ``bool``, and ``bytes``; and accepts a lone-
+    surrogate string the durable encoder rejects. Any other argument returns ``None``.
     """
-    if all(map(_is_native_val, chain(args, kwargs.values()))):
+    values = chain(args, kwargs.values())
+    is_native = (
+        type(v) in _NATIVE_KEY_TYPES and not (isinstance(v, float) and isnan(v))
+        for v in values
+    )
+
+    if all(is_native):
         tagged = tuple((type(a), a) for a in args)
         key = (tagged, sort_stably((k, type(v), v) for k, v in kwargs.items()))
     else:
         key = None
-
-    return key
-
-
-def _cache_key(*args: object, **kwargs: object) -> Hashable | None:
-    if (key := _native_key(*args, **kwargs)) is None:
-        try:
-            key = canonical_bytes((args, sort_stably(kwargs.items())))
-        except (IdentityEncodingError, CyclicIdentityError):
-            key = None
 
     return key
 
@@ -460,7 +447,13 @@ class repr_cache[R]:  # noqa: N801
         update_wrapper(self, fn)
 
     def __call__(self, *args: object, **kwargs: object) -> R:
-        key = _cache_key(*args, **kwargs)
+        key: Hashable | None = _native_key(*args, **kwargs)
+
+        if key is None:
+            try:
+                key = canonical_bytes((args, sort_stably(kwargs.items())))
+            except (IdentityEncodingError, CyclicIdentityError):
+                key = None
 
         if key is None:
             self._misses += 1

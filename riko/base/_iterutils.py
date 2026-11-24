@@ -171,6 +171,29 @@ def _get_value(
     return item
 
 
+def _gen_non_null_positions(
+    func: Func[object] | None,
+    items: Iterable[object],
+    cmp_idx: int,
+    arg_idx: int,
+    *,
+    what: Func[str],
+    same: bool,
+) -> Iterator[object]:
+    """Generates the selected value of each item whose compared position is non-None."""
+    for item in items:
+        if item is None:
+            continue
+
+        seq = require_sequence(item, what, error=TypeError)
+
+        if (cmp := seq[cmp_idx]) is None:
+            continue
+
+        arg = cmp if same else seq[arg_idx]
+        yield arg if func is None else func(arg)
+
+
 @overload
 def gen_non_null[T, U](
     items: Iterable[tuple[T, U | None] | None],
@@ -328,18 +351,14 @@ def gen_non_null(
     cmp_msg = lambda item: f"Item {item!r} (via cmp_pos={cmp_pos})"
     arg_msg = lambda item: f"Item {item!r} (via arg_pos={arg_pos})"
 
-    for item in items:
-        if item is None:
-            continue
-
-        if pos_only:
-            item = require_sequence(item, cmp_msg, error=TypeError)
-
-            if (cmp := item[cmp_idx]) is None:
+    if pos_only:
+        args = (func, items, cmp_idx, arg_idx)
+        yield from _gen_non_null_positions(*args, what=cmp_msg, same=same)
+    else:
+        for item in items:
+            if item is None:
                 continue
 
-            arg = cmp if same else item[arg_idx]
-        else:
             if cmp_attr_only:
                 cmp = getattr(item, cmp_field)
             elif has_cmp:
@@ -359,7 +378,7 @@ def gen_non_null(
             else:
                 arg = item
 
-        yield arg if func is None else func(arg)
+            yield arg if func is None else func(arg)
 
 
 def betwix[T](
@@ -1106,29 +1125,24 @@ class Tee[T]:
             if not isinstance(failure, Exception):
                 raise
 
-    def _process(self, key: int, *, full: bool) -> TeeRead[T]:
-        if full:
-            read = TeeRead[T].from_lag(self._max_lag)
-        else:
-            try:
-                item = next(self._source)
-            except StopIteration:
-                read = TeeRead[T](done=True)
-            except Exception as read_error:  # noqa: BLE001 (latched, re-raised)
-                read = TeeRead[T](error=read_error)
-            else:
-                # Reads keys atomically so closed branches get no copy.
-                others = tuple(k for k in tuple(self._buffers) if k != key)
-                read = TeeRead.from_item(item, key, *others, isolate=self._isolate)
-
-        return read
-
     def _advance(self, key: int, *, full: bool) -> None:
         read = TeeRead[T]()
         interrupted: BaseException | None = None
 
         try:
-            read = self._process(key, full=full)
+            if full:
+                read = TeeRead[T].from_lag(self._max_lag)
+            else:
+                try:
+                    item = next(self._source)
+                except StopIteration:
+                    read = TeeRead[T](done=True)
+                except Exception as read_error:  # noqa: BLE001 (latched, re-raised)
+                    read = TeeRead[T](error=read_error)
+                else:
+                    # Reads keys atomically so closed branches get no copy.
+                    others = tuple(k for k in tuple(self._buffers) if k != key)
+                    read = TeeRead.from_item(item, key, *others, isolate=self._isolate)
         except BaseException as exc:  # noqa: BLE001 (re-raised below)
             interrupted = exc
             read = TeeRead[T].from_interrupt(exc)
