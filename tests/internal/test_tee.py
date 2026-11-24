@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import threading
 from functools import partial
 from itertools import count
@@ -15,7 +14,6 @@ import pytest
 from riko.bado._backend import (
     CancelScope,
     Event,
-    Lock,
     checkpoint,
     create_task_group,
     fail_after,
@@ -161,8 +159,8 @@ async def _aclose_each(branches: Iterable[AsyncTeeBranch[object]]) -> None:
         await branch.aclose()
 
 
-async def _until_waiting(lock: Lock) -> None:
-    while not lock.statistics().tasks_waiting:
+async def _until_waiting(tee: AsyncTee[object]) -> None:
+    while tee._read_done is None:
         await checkpoint()
 
 
@@ -877,7 +875,7 @@ class TestAsyncTee:
                 tg.start_soon(read_first)
                 await source.reached.wait()
                 tg.start_soon(read_second)
-                await _until_waiting(tee._lock)
+                await _until_waiting(tee)
                 waiter.cancel()
                 gate.set()
 
@@ -885,35 +883,68 @@ class TestAsyncTee:
             assert (await alist(second), await alist(first)) == ([0, 1], [1])
 
     @async_test
-    async def test_cancelling_a_handed_off_waiter_still_closes_the_source(self):
-        """A waiter cancelled once handed the lock still runs the deferred close."""
-        gate, log, results, waiters, caught = Event(), [], [], [], []
+    async def test_every_waiter_on_one_read_wakes_with_the_item(self):
+        """Waiters share one event for the read, and every one gets the item."""
+        gate, log, results = Event(), [], []
+        source = _ASource([0], log, gate=gate)
+        tee = AsyncTee(source)
+        branches = [tee.branch() for _ in range(4)]
+
+        async def read(branch: AsyncTeeBranch[object]) -> None:
+            results.append(await anext(branch))
+
+        with fail_after(1):
+            async with create_task_group() as tg:
+                tg.start_soon(read, branches[0])
+                await source.reached.wait()
+
+                for branch in branches[1:]:
+                    tg.start_soon(read, branch)
+
+                while (done := tee._read_done) is None or (
+                    done.statistics().tasks_waiting < 3
+                ):
+                    await checkpoint()
+
+                gate.set()
+
+        assert (results, tee._read_done, tee._advancer) == ([0] * 4, None, None)
+        await _aclose_each(branches)
+        assert log == ["pull", "close"]
+
+    @async_test
+    async def test_cancelling_a_waiter_leaves_the_owed_close_to_the_reader(self):
+        """The reader still closes the source once after a waiting sibling cancels."""
+        gate, log, results = Event(), [], []
         source = _ASource([0, 1], log, gate=gate)
         tee = AsyncTee(source)
         first, second = tee.branch(), tee.branch()
+        waiter = CancelScope()
 
         async def read_first() -> None:
-            results.append(await anext(first))
-            await _aclose_each((first, second))
-            waiters[0].cancel()
+            results.append(await alist(first))
 
         async def read_second() -> None:
-            waiters.append(asyncio.current_task())
-
-            try:
+            with waiter:
                 await anext(second)
-            except asyncio.CancelledError as exc:
-                caught.append(exc)
 
         with fail_after(1):
             async with create_task_group() as tg:
                 tg.start_soon(read_first)
                 await source.reached.wait()
                 tg.start_soon(read_second)
-                await _until_waiting(tee._lock)
+                await _until_waiting(tee)
+                await _aclose_each((first, second))
+                waiter.cancel()
+                await checkpoint()
+                assert log == ["pull"]
                 gate.set()
 
-        assert (results, len(caught), log) == ([0], 1, ["pull", "close"])
+        assert (results, waiter.cancelled_caught, log) == (
+            [[]],
+            True,
+            ["pull", "close"],
+        )
 
     @async_test
     async def test_cancelling_the_advancer_latches_for_survivors(self):
@@ -983,7 +1014,7 @@ class TestAsyncTee:
         with pytest.raises(KeyboardInterrupt):
             await anext(first)
 
-        assert not tee._lock.locked()
+        assert tee._advancer is None
 
     @async_test
     async def test_cleanup_failure_at_eof_is_raised_after_the_drain(self):

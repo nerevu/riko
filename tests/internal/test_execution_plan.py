@@ -13,7 +13,14 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from attrs import evolve
 
-from riko.bado._util import maybe_async, syncify
+from riko.bado import run
+from riko.bado._util import (
+    asyncify,
+    maybe_aclosing,
+    maybe_async,
+    maybe_closing,
+    syncify,
+)
 from riko.bado.itertools import as_async
 from riko.base._exceptions import InvalidPipelineError, UnsupportedModuleError
 from riko.definitions import _inputs as inputs_module
@@ -24,7 +31,7 @@ from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge, WriteN
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
 from riko.execution import _prepared as prepared_module
-from riko.execution._adapt import adapt_embed, async_adapt_embed, to_sync
+from riko.execution._adapt import adapt_embed, async_adapt_embed, to_async, to_sync
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import (
     AsyncInterface,
@@ -33,6 +40,8 @@ from riko.execution._prepared import (
     PreparedSplitter,
     ResolvedModule,
     SyncInterface,
+    _agen_stream_results,
+    _gen_stream_results,
 )
 from riko.execution._sync_execution import SyncExecution
 from riko.modules._decorators import Module, processor, splitter
@@ -61,12 +70,14 @@ from tests._execution import (
     build_dispatcher,
     build_workflow,
     echo_pipe,
+    gen_closing_seed,
     module_workflow,
     passthrough_pipe,
     run_plan,
     tag_source,
     tagged_source,
 )
+from tests._streams import Closable
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
@@ -126,6 +137,11 @@ _LOOPABLE_SYNC = _flagged(lambda source, **_: iter(source or {}), "loopable")
 _SEQUENTIAL_ASYNC = _flagged(
     lambda source, **_: as_async(source or {}), "sequential_inputs"
 )
+_SYNC_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe)
+_ASYNC_MODULE = ResolvedModule("m", async_pipe=_ASYNC_PIPE)
+_BOTH_MODULE = ResolvedModule("m", sync_pipe=passthrough_pipe, async_pipe=_ASYNC_PIPE)
+_MAPPED_MODULE = ResolvedModule("m", sync_pipe=_LOOPABLE_SYNC)
+_SYNC_SPLITTER = ResolvedModule("split", {"splits": 1}, sync_pipe=split_pipe)
 
 _REPLACE_ITEMS = [{"content": "abc"}, {"content": "aa"}]
 _STATIC_REPLACE = cast("Conf", {"rule": [{"find": "a", "replace": "Z"}]})
@@ -232,6 +248,32 @@ NON_SPLITTERS = [
 ]
 
 
+def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
+    """Builds a sync-only ``loop`` over an async-only embed that ``build`` makes."""
+    child = workflow()(lambda _item, context=None, **_: build(closed))
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
+        ModuleDefinition(name="loop", sync_pipe=loop_pipe),
+        ModuleDefinition(name="child", async_pipe=cast("AsyncModuleWrapper", child)),
+    )
+    loop = ModuleNode(
+        id="loop",
+        name="loop",
+        embed={"name": "child", "conf": {}},
+        options={"emit": True, "count": "all"},
+    )
+    flow = Workflow().with_nodes(ModuleNode(id="s", name="src"), loop)
+    return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
+async def _gen_closing_rows(closed: list[str]):
+    try:
+        while True:
+            yield {"x": 1}
+    finally:
+        closed.append("closed")
+
+
 def _two_output_plan() -> ExecutionPlan:
     """Builds a sync-only ``a`` on ``default`` and an async-only ``b`` on ``other``."""
     dispatcher = build_dispatcher(
@@ -258,7 +300,39 @@ PORTAL_USES = [
 ]
 
 
+def _chain_plan(*modules: ResolvedModule) -> ExecutionPlan:
+    """Builds a plan chaining one node per resolved module."""
+    nodes = [ModuleNode(id=f"n{i}", name=m.name) for i, m in enumerate(modules)]
+    resolved = {node.id: m for node, m in zip(nodes, modules, strict=True)}
+    return ExecutionPlan(Workflow().with_nodes(*nodes), modules=resolved)
+
+
+_SYNC_CHAIN = partial(_chain_plan, _SYNC_MODULE, _SYNC_MODULE)
+_ASYNC_CHAIN = partial(_chain_plan, _ASYNC_MODULE, _ASYNC_MODULE)
+_MIXED_CHAIN = partial(_chain_plan, *[_SYNC_MODULE, _ASYNC_MODULE] * 2)
+_SPLITTER_CHAIN = partial(_chain_plan, _SYNC_SPLITTER, _BOTH_MODULE)
+_MAPPED_CHAIN = partial(_chain_plan, _MAPPED_MODULE, _MAPPED_MODULE)
+
+# How many node threads a sync or an async run may hold at once.
+THREAD_DEMANDS = [
+    pytest.param(_SYNC_CHAIN, True, 2, id="sync-only-async-run"),
+    pytest.param(_SYNC_CHAIN, False, 0, id="sync-only-sync-run"),
+    pytest.param(_ASYNC_CHAIN, True, 0, id="async-only-async-run"),
+    pytest.param(_ASYNC_CHAIN, False, 2, id="async-only-sync-run"),
+    pytest.param(_MIXED_CHAIN, False, 2, id="alternating-sync-run"),
+    pytest.param(_SPLITTER_CHAIN, True, 1, id="sync-only-splitter-async-run"),
+    pytest.param(_SPLITTER_CHAIN, False, 0, id="sync-only-splitter-sync-run"),
+    pytest.param(_MAPPED_CHAIN, True, 0, id="mapped"),
+]
+
+
 class TestExecutionPlan:
+    @pytest.mark.parametrize(("build", "is_async", "expected"), THREAD_DEMANDS)
+    def test_thread_demand_counts_adapted_nodes(
+        self, build, is_async, expected
+    ) -> None:
+        assert build().get_thread_demand("default", is_async=is_async) == expected
+
     @pytest.mark.parametrize(("build", "output", "expected"), PORTAL_USES)
     def test_uses_portal_sees_async_only_nodes_and_embeds(
         self, build, output, expected
@@ -776,32 +850,6 @@ def _sync_child(produced: list[int], closed: list[str]):
     return workflow()(_sub)
 
 
-def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
-    """Builds a sync-only ``loop`` over an async-only embed that ``build`` makes."""
-    child = workflow()(lambda _item, context=None, **_: build(closed))
-    dispatcher = build_dispatcher(
-        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-        ModuleDefinition(name="loop", sync_pipe=loop_pipe),
-        ModuleDefinition(name="child", async_pipe=cast("AsyncModuleWrapper", child)),
-    )
-    loop = ModuleNode(
-        id="loop",
-        name="loop",
-        embed={"name": "child", "conf": {}},
-        options={"emit": True, "count": "all"},
-    )
-    flow = Workflow().with_nodes(ModuleNode(id="s", name="src"), loop)
-    return ExecutionPlan.from_workflow(flow, dispatcher)
-
-
-async def _gen_closing_rows(closed: list[str]):
-    try:
-        while True:
-            yield {"x": 1}
-    finally:
-        closed.append("closed")
-
-
 EMBED_STREAMS = [
     pytest.param(_gen_closing_rows, id="async-generator"),
     pytest.param(ClosingAsyncIterator, id="aclose-only"),
@@ -1071,6 +1119,83 @@ def _replace_workflow(conf, *edges, extra_nodes=()):
     return build_workflow(nodes, edges=edges)
 
 
+class _FailingClose(Closable):
+    def close(self) -> None:
+        super().close()
+        raise OSError("close failed")
+
+
+def _close_twice(stream: to_sync[int]) -> None:
+    stream.close()
+    stream.close()
+
+
+def _close_to_sync(closes: list[str]) -> None:
+    async def main() -> None:
+        await asyncify(_close_twice, to_sync(syncify, Closable("source", closes)))
+
+    run(main)
+
+
+def _close_to_async(closes: list[str]) -> None:
+    async def main() -> None:
+        stream = to_async(_unused_worker, Closable("source", closes))
+        await stream.aclose()
+        await stream.aclose()
+
+    run(main)
+
+
+def _close_stream_results(closes: list[str]) -> None:
+    stream = _gen_stream_results(len, Closable("source", closes))
+
+    for _ in range(2):
+        with maybe_closing(stream):
+            pass
+
+
+def _close_astream_results(closes: list[str]) -> None:
+    async def main() -> None:
+        stream = _agen_stream_results(len, Closable("source", closes))
+
+        for _ in range(2):
+            async with maybe_aclosing(stream):
+                pass
+
+    run(main)
+
+
+STREAM_ADAPTER_CLOSERS = [
+    pytest.param(_close_to_sync, id="to-sync", marks=skipif_sync),
+    pytest.param(_close_to_async, id="to-async", marks=skipif_sync),
+    pytest.param(_close_stream_results, id="callable-stream"),
+    pytest.param(_close_astream_results, id="async-callable-stream", marks=skipif_sync),
+]
+
+
+class TestStreamAdapters:
+    @pytest.mark.parametrize("close", STREAM_ADAPTER_CLOSERS)
+    def test_close_before_read_closes_the_source_once(self, close) -> None:
+        closes: list[str] = []
+        close(closes)
+        assert closes == ["source"]
+
+    @skipif_sync
+    def test_a_failed_read_notes_the_close_failure_on_the_read_error(self) -> None:
+        closes: list[str] = []
+        source = _FailingClose("source", closes, ValueError("boom"))
+
+        async def main() -> None:
+            await asyncify(next, to_sync(syncify, source))
+
+        with pytest.raises(ValueError, match="boom") as raised:
+            run(main)
+
+        failure = "OSError('close failed')"
+        assert raised.value.__notes__ == [f"closing the source also failed: {failure}"]
+        assert closes == ["source"]
+
+
 class TestPreparedCall:
     def test_a_node_prepares_once_per_plan(self, monkeypatch) -> None:
         calls: list[str] = []
@@ -1279,6 +1404,17 @@ class TestPreparedNode:
         interface = PreparedNode(node, _HASH).sync_interface
         assert interface is not None
         assert interface.identity is expected
+
+    def test_a_callable_nodes_stream_call_closes_its_input_on_early_close(self) -> None:
+        closed: list[str] = []
+        source = gen_closing_seed(closed)
+        node = CallableNode(id="a", name="len", fn=len)
+        interface = PreparedNode(node, _HASH).sync_interface
+        assert interface is not None
+        with maybe_closing(interface.call(source, None)) as stream:
+            assert next(stream) == 1
+
+        assert closed == ["closed"]
 
     def test_prepared_node_reports_loopable(self) -> None:
         plan = build_chain_plan("hash", "count")

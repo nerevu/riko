@@ -124,8 +124,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
         Returns:
 
@@ -236,8 +236,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
         Returns:
 
@@ -428,8 +428,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
             default: The value returned when the pipeline produces no items.
 
@@ -476,8 +476,8 @@ class Pipeline(PipelineDefinition[T_co]):
         Kwargs:
 
             seed: Items for the pipeline's open input: one item, an item stream, an
-                async item stream, or an awaitable resolving to one of those. ``None``
-                means no seed (default: None).
+                async item stream, or an awaitable resolving to one of those. Omit it
+                when the pipeline is self-starting (default: None).
 
             default: The value returned when the pipeline produces no items.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import aclosing, suppress
 from functools import partial
 from threading import Event as ThreadEvent
@@ -12,21 +13,28 @@ import pytest
 
 from riko.bado._backend import CancelScope, async_sleep, fail_after, lowlevel
 from riko.bado._util import maybe_async, syncify
+from riko.bado.itertools import aauto_close, as_async
 from riko.base._exceptions import InvalidPipelineError
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
 from riko.definitions._wrapping import stamp_wrapper_meta
+from riko.execution import _sync_execution as sync_execution_module
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._sync_execution import SyncExecution
+from riko.modules._decorators import splitter
+from riko.modules.split import async_pipe as async_split
 from riko.types._workflow import Endpoint
 from tests import async_test, skipif_sync
 from tests._execution import (
+    PROCESSOR_PROBE,
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
+    RecordingBranch,
     agen_source,
+    arelay_pipe,
     build_dispatcher,
     build_doubler_plan,
     build_workflow,
@@ -40,7 +48,7 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Generator
+    from collections.abc import Awaitable, Callable, Generator
 
     from riko.types._streams import (
         AsyncItemGenerator,
@@ -115,11 +123,13 @@ class _FailingCascade:
         self.closed.append("closed")
 
 
-def _failing_split_plan(closed: list[str]) -> ExecutionPlan:
+def _bare_split_plan(
+    closed: list[str], make: Callable[[list[str]], Cascade] = _FailingCascade
+) -> ExecutionPlan:
     """Plans a source into a bare sync-only splitter that hands back its cascade."""
 
     def split(_items: object = None, **_: object) -> Cascade:
-        return _FailingCascade(closed)
+        return make(closed)
 
     stamp_wrapper_meta(
         split,
@@ -439,21 +449,157 @@ async def _agen_endless(closed: list[str]):
         closed.append("closed")
 
 
-async def _apassthrough(items, **_):
-    async for item in items:
-        yield item
-
-
-async def _aclosing_passthrough(items, **_):
-    async with aclosing(items) as _items:
-        async for item in _items:
-            yield item
+def _aclosing_relay(items, **_):
+    return aauto_close(arelay_pipe(items), items)
 
 
 # A native node's async input, closed by the run alone or by the node and the run.
 NATIVE_CLOSED_INPUTS = [
-    pytest.param(_agen_endless, _apassthrough, id="generator"),
-    pytest.param(ClosingAsyncIterator, _aclosing_passthrough, id="aclosing-iterator"),
+    pytest.param(_agen_endless, arelay_pipe, id="generator"),
+    pytest.param(ClosingAsyncIterator, _aclosing_relay, id="aclosing-iterator"),
+]
+
+
+class _ClosingAsyncCascade:
+    """An async cascade of two one-item branches whose ``aclose`` records itself."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+        self.branches = iter([as_async([{"x": 1}]), as_async([{"x": 2}])])
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> AsyncStream:
+        try:
+            branch = next(self.branches)
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+        return branch
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+
+class _ClosingAsyncStream:
+    """Reads an async stream and records each ``aclose`` before passing it on."""
+
+    def __init__(self, stream: AsyncStream, closed: list[str]) -> None:
+        self.stream, self.closed = stream, closed
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> Item:
+        return await anext(self.stream)
+
+    async def aclose(self) -> None:
+        self.closed.append("closed")
+
+        if isinstance(self.stream, AsyncGenerator):
+            await self.stream.aclose()
+
+
+def _async_cascade_plan(closed: list[str], _: pytest.MonkeyPatch) -> ExecutionPlan:
+    """Plans a source into an async-only splitter that returns a closing cascade."""
+
+    @splitter(objectify=False)
+    async def asplit(_stream, _: object, __: object, **___: object):
+        return _ClosingAsyncCascade(closed)
+
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
+        ModuleDefinition(name="split", async_pipe=asplit),
+    )
+    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
+    flow = build_workflow(
+        nodes, edges=(edge,), outputs={"default": Endpoint("s", "out")}
+    )
+    return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
+class _ClosingCascade:
+    """A sync cascade of two one-item branches whose ``close`` records itself."""
+
+    def __init__(self, closed: list[str]) -> None:
+        self.closed = closed
+        self.branches = iter([iter([{"x": 1}]), iter([{"x": 2}])])
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Stream:
+        return next(self.branches)
+
+    def close(self) -> None:
+        self.closed.append("closed")
+
+
+def _sync_cascade_plan(closed: list[str], _: pytest.MonkeyPatch) -> ExecutionPlan:
+    """Plans a source into a bare sync-only splitter that returns a closing cascade."""
+    return _bare_split_plan(closed, _ClosingCascade)
+
+
+# A splitter's cascade, from a sync-only or an async-only splitter, with the run's
+# seed and its output.
+CLOSING_CASCADES = [
+    pytest.param(_sync_cascade_plan, None, [], id="sync-only-cascade"),
+    pytest.param(
+        _async_cascade_plan,
+        [{"x": 0}],
+        [{"x": 1}],
+        id="async-only-cascade",
+        marks=_SKIP,
+    ),
+]
+
+
+def _record_async_inputs(closed: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """Records each close of an async input the sync execution builds."""
+    to_async = sync_execution_module.to_async
+
+    def recording_to_async(func, stream, **kwargs):
+        return _ClosingAsyncStream(to_async(func, stream, **kwargs), closed)
+
+    monkeypatch.setattr(sync_execution_module, "to_async", recording_to_async)
+
+
+def _async_relay_input_plan(
+    closed: list[str], monkeypatch: pytest.MonkeyPatch
+) -> ExecutionPlan:
+    """Plans a sync source read by an async-only relay, recording its input's close."""
+    _record_async_inputs(closed, monkeypatch)
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
+        ModuleDefinition(name="m", async_pipe=arelay_pipe),
+    )
+    nodes = (ModuleNode(id="a", name="src"), ModuleNode(id="b", name="m"))
+    return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
+
+
+def _async_split_input_plan(
+    closed: list[str], monkeypatch: pytest.MonkeyPatch
+) -> ExecutionPlan:
+    """Plans a sync source into a lazy async-only split, recording its input's close."""
+    _record_async_inputs(closed, monkeypatch)
+    dispatcher = build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=passthrough_pipe),
+        ModuleDefinition(name="split", async_pipe=async_split),
+    )
+    nodes = [ModuleNode(id="a", name="src"), ModuleNode(id="s", name="split")]
+    edge = StreamEdge(Endpoint("a", "out"), Endpoint("s", "in"))
+    outputs = {"default": Endpoint("s", "out")}
+    flow = build_workflow(nodes, edges=(edge,), outputs=outputs)
+    return ExecutionPlan.from_workflow(flow, dispatcher)
+
+
+# Plans whose run closes an async value it reads through the portal.
+RUN_OWNED_ASYNC_VALUES = [
+    pytest.param(_async_cascade_plan, id="async-only-cascade"),
+    pytest.param(_async_relay_input_plan, id="async-only-relay-input"),
+    pytest.param(_async_split_input_plan, id="async-only-split-input"),
 ]
 
 
@@ -465,6 +611,26 @@ def _tag_loopable_source(fn: Func[object]) -> SyncModuleWrapper:
 SOURCE_TAGS = [
     pytest.param(tag_source, id="whole-stream"),
     pytest.param(_tag_loopable_source, id="per-item"),
+]
+
+
+def _gen_rows(rows, **_):
+    yield from rows
+
+
+_GEN_PROBE = ModuleDefinition(
+    name="probe", sync_pipe=cast("SyncModuleWrapper", _gen_rows)
+)
+
+
+_ASYNC_PROBE = ModuleDefinition(name="probe", async_pipe=arelay_pipe)
+
+
+# A node that reads a source over its whole input, once per item, or async-only.
+SOURCE_READERS = [
+    pytest.param(_GEN_PROBE, id="whole-stream"),
+    pytest.param(PROCESSOR_PROBE, id="per-item"),
+    pytest.param(_ASYNC_PROBE, id="async-only", marks=skipif_sync),
 ]
 
 
@@ -518,6 +684,28 @@ class TestPlanClose:
             stream = execution.run(plan)
             assert next(stream) == {"x": 1}
             assert closed == []
+
+        assert closed == ["closed"]
+
+    @skipif_sync
+    def test_run_closes_an_async_only_source_once_through_an_async_only_relay(
+        self,
+    ) -> None:
+        closed: list[str] = []
+
+        @tag_source
+        def src(_items=None, **_):
+            return ClosingAsyncIterator(closed)
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(name="m", async_pipe=arelay_pipe),
+        )
+        nodes = (ModuleNode(id="a", name="asrc"), ModuleNode(id="b", name="m"))
+        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
+
+        with SyncExecution() as execution:
+            assert list(execution.run(plan)) == [{"x": 1}, {"x": 2}]
 
         assert closed == ["closed"]
 
@@ -629,7 +817,9 @@ class TestPlanClose:
             assert list(stream) == [{"x": 2}, {"x": 4}]
 
     @skipif_sync
-    def test_run_envelopes_closes_an_abandoned_async_only_stream_on_exit(self) -> None:
+    def test_build_envelope_stream_closes_an_abandoned_async_only_stream_on_exit(
+        self,
+    ) -> None:
         closed: list[str] = []
 
         @tag_source
@@ -645,7 +835,7 @@ class TestPlanClose:
         plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
 
         with SyncExecution() as execution:
-            assert next(execution.run_envelopes(plan)).value == {"x": 1}
+            assert next(execution.build_envelope_stream(plan)).value == {"x": 1}
 
         assert closed == ["closed"]
 
@@ -721,6 +911,63 @@ class TestPlanClose:
             assert next(stream) == {"x": 0}
             stream.close()  # pyright: ignore[reportAttributeAccessIssue]
             assert closed == [True]
+
+    @skipif_sync
+    @pytest.mark.parametrize("build", RUN_OWNED_ASYNC_VALUES)
+    def test_run_closes_a_run_owned_async_value_once_with_its_run(
+        self, build, monkeypatch
+    ) -> None:
+        closed: list[str] = []
+        plan = build(closed, monkeypatch)
+        seed = [{"x": 1}, {"x": 2}]
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan, seed=seed)
+            assert next(stream) == {"x": 1}
+            stream.close()  # pyright: ignore[reportAttributeAccessIssue]
+            assert closed == ["closed"]
+
+        assert closed == ["closed"]
+
+    @pytest.mark.parametrize(("build", "seed", "expected"), CLOSING_CASCADES)
+    def test_run_closes_a_cascade_once_its_streams_are_taken(
+        self, build, seed, expected, monkeypatch
+    ) -> None:
+        closed: list[str] = []
+        plan = build(closed, monkeypatch)
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan, seed=seed)
+            assert closed == ["closed"]
+            assert list(stream) == expected
+
+        assert closed == ["closed"]
+
+    @pytest.mark.parametrize("probe", SOURCE_READERS)
+    def test_run_closing_its_output_before_a_read_closes_the_source(
+        self, probe: ModuleDefinition
+    ) -> None:
+        events: list[str] = []
+
+        @tag_source
+        def src(_items=None, **_):
+            return RecordingBranch([{"x": 0}], events, "src")
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            probe,
+        )
+        flow = Workflow().with_nodes(
+            ModuleNode(id="a", name="src"), ModuleNode(id="b", name="probe")
+        )
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        with SyncExecution() as execution:
+            run = execution.build_envelope_stream(plan)
+            run.output.close()  # pyright: ignore[reportAttributeAccessIssue]
+            assert events == ["src-close"]
+
+        assert events == ["src-close"]
 
 
 class TestAsyncPlanClose:
@@ -821,11 +1068,39 @@ class TestAsyncPlanClose:
     @async_test
     async def test_arun_closes_a_sync_only_cascade_whose_take_fails(self):
         closed: list[str] = []
-        plan = _failing_split_plan(closed)
+        plan = _bare_split_plan(closed)
 
         async with AsyncExecution() as execution:
             with pytest.raises(RuntimeError, match="take failed"):
                 await execution.arun(plan)
+
+        assert closed == ["closed"]
+
+    @pytest.mark.parametrize("build", RUN_CLOSED_VALUES)
+    @async_test
+    async def test_arun_closing_the_output_before_a_read_closes_the_source(self, build):
+        closed: list[str] = []
+        plan, seed = build(ClosingIterator, closed)
+
+        async with AsyncExecution() as execution:
+            stream = cast("AsyncItemGenerator", await execution.arun(plan, seed=seed))
+            await stream.aclose()
+            assert closed == ["closed"]
+
+        assert closed == ["closed"]
+
+    @pytest.mark.parametrize(("build", "seed", "expected"), CLOSING_CASCADES)
+    @async_test
+    async def test_arun_closes_a_cascade_once_its_streams_are_taken(
+        self, build, seed, expected, monkeypatch
+    ):
+        closed: list[str] = []
+        plan = build(closed, monkeypatch)
+
+        async with AsyncExecution() as execution:
+            stream = await execution.arun(plan, seed=seed)
+            assert closed == ["closed"]
+            assert [item async for item in stream] == expected
 
         assert closed == ["closed"]
 
@@ -906,6 +1181,29 @@ class TestAsyncPlanClose:
         assert isinstance(primary, InvalidPipelineError)
         assert isinstance(cleanup, RuntimeError)
         assert closed == ["closed"]
+
+    @pytest.mark.parametrize("tag", SOURCE_TAGS)
+    @pytest.mark.parametrize("build", COUNTING_SOURCES)
+    @async_test
+    async def test_arun_closes_a_sync_source_once_on_early_exit(
+        self, build, tag
+    ) -> None:
+        closed: list[bool] = []
+        src = cast("SyncModuleWrapper", tag(lambda _items=None, **_: build(closed)))
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=src),
+            ModuleDefinition(name="pass", sync_pipe=passthrough_pipe),
+        )
+        a, b = ModuleNode(id="a", name="src"), ModuleNode(id="b", name="pass")
+        plan = ExecutionPlan.from_workflow(Workflow().with_nodes(a, b), dispatcher)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = cast("AsyncItemGenerator", await execution.arun(plan))
+                assert await anext(stream) == {"x": 0}
+                assert closed == []
+
+        assert closed == [True]
 
     @async_test
     async def test_arun_closes_a_sync_worker_nodes_async_input_once(self):
@@ -1028,6 +1326,35 @@ class TestAsyncPlanClose:
                 upstream_closed = list(closed)
 
         assert upstream_closed == ["closed"]
+
+    @async_test
+    async def test_arun_closes_a_native_async_nodes_abandoned_input(self) -> None:
+        """A native async node may stop reading its input without closing it."""
+        closed: list[str] = []
+        src = tag_source(lambda _items=None, **_: _agen_endless(closed))
+
+        async def take_one(items, **_):
+            it = aiter(items)
+            yield await anext(it)
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", src)),
+            ModuleDefinition(
+                name="take", async_pipe=cast("AsyncModuleWrapper", take_one)
+            ),
+        )
+        nodes = [ModuleNode(id="a", name="asrc"), ModuleNode(id="t", name="take")]
+        edges = (StreamEdge(Endpoint("a", "out"), Endpoint("t", "in")),)
+        plan = ExecutionPlan.from_workflow(
+            build_workflow(nodes, edges=edges), dispatcher
+        )
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(plan)
+                assert [item async for item in stream] == [{"t": "a"}]
+
+        assert closed == ["closed"]
 
     @async_test
     async def test_arun_unconsumed_sync_only_source_does_not_block_exit(self) -> None:

@@ -421,7 +421,7 @@ shot run. Calling it twice runs the ``pipeline`` twice.
     [{'content': 'a'}]
 
 ``pipeline.open(items)`` returns a context manager instead. Leaving its ``with`` block
-tears that run down and releases any acquired resources.
+closes that run and its acquired resources.
 
 .. code-block:: python
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import pickle  # noqa: S403
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass, field, replace
 from functools import partial
 from itertools import chain, pairwise
@@ -31,7 +31,7 @@ from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import AsyncPolicy, ExecutionSettings, SyncPolicy
 from riko.definitions._workflow_definition import Workflow
-from riko.execution import _async_execution, _sync_execution
+from riko.execution import _execution, _sync_execution
 from riko.execution._async_execution import AsyncExecution
 from riko.execution._concurrency import _load_call, build_tracked_call, run_pickled_item
 from riko.execution._pools import _PoolLifetime
@@ -44,8 +44,9 @@ from riko.runtime._workflow_pipes import build_workflow_pipes
 from riko.types._enums import Executor
 from riko.types._feed import _ItemEnvelope
 from riko.types._workflow import Endpoint
-from tests import async_test
+from tests import async_test, skipif_sync
 from tests._execution import (
+    arelay_pipe,
     arun_plan,
     build_chain_plan,
     build_dispatcher,
@@ -114,11 +115,11 @@ def opened(monkeypatch):
     calls: list[tuple[Executor, int]] = []
 
     def record(pool, window, *, grace=inf):
-        executor = (
-            Executor.THREAD
-            if isinstance(pool, ThreadPoolExecutor)
-            else Executor.PROCESS
-        )
+        if isinstance(pool, ThreadPoolExecutor):
+            executor = Executor.THREAD
+        else:
+            executor = Executor.PROCESS
+
         calls.append((executor, window))
         return _PoolLifetime(pool, window, grace=grace)
 
@@ -441,7 +442,7 @@ class TestSyncPolicy:
 
     def test_sync_sequential_run_has_no_worker_pool(self) -> None:
         with SyncExecution() as execution, pytest.raises(PipelineStateError):
-            _ = execution._pool
+            execution._get_lifetime()
 
     @pytest.mark.xfail(
         strict=True,
@@ -558,6 +559,11 @@ PROCESS_REFUSED_PLANS = [
     pytest.param(lambda: ([], build_chain_plan()), id="empty"),
 ]
 
+EARLY_CLOSE_READS = [
+    pytest.param(False, None, ([{"x": 0}],), id="unordered"),
+    pytest.param(True, 0.2, ([], [{"x": 0}]), id="ordered"),
+]
+
 
 class TestAsyncPolicy:
     @pytest.mark.parametrize(("kwargs", "expected"), ASYNC_POLICIES)
@@ -640,6 +646,50 @@ class TestAsyncPolicy:
                 await execution.arun(plan, seed=ITEMS)
 
         assert threads == []
+
+    @pytest.mark.timeout(2)
+    @pytest.mark.parametrize(("ordered", "timeout", "allowed"), EARLY_CLOSE_READS)
+    @async_test
+    async def test_async_closing_a_mapped_stream_early_cancels_its_calls(
+        self, ordered, timeout, allowed
+    ) -> None:
+        started: list[int] = []
+        stopped: list[int] = []
+        read: list[object] = []
+
+        async def stall(item, **_):
+            if item["x"] == 0:
+                return iter([item])
+
+            started.append(item["x"])
+
+            try:
+                await async_sleep(inf)
+            finally:
+                stopped.append(item["x"])
+
+        definition = ModuleDefinition(
+            name="stall", async_pipe=mark_async_loopable(stall)
+        )
+        flow = build_workflow([ModuleNode(id="n", name="stall")])
+        plan = ExecutionPlan.from_workflow(
+            flow, dispatcher=build_dispatcher(definition)
+        )
+        settings = ExecutionSettings(concurrency=3, ordered=ordered)
+
+        with fail_after(1):
+            async with AsyncExecution(settings=settings) as execution:
+                stream = await execution.arun(plan, seed=ITEMS[:5])
+
+                scope = nullcontext() if timeout is None else fail_after(timeout)
+
+                with suppress(TimeoutError), scope:
+                    read.append(await anext(stream))
+
+                await stream.aclose()  # pyright: ignore[reportAttributeAccessIssue]
+                assert read in allowed
+                assert started
+                assert sorted(stopped) == sorted(started)
 
     @pytest.mark.parametrize("kwargs", _ITEM_LIMITS)
     @pytest.mark.xfail(
@@ -751,13 +801,25 @@ def _nested_plan() -> ExecutionPlan:
     )
 
 
+def _alternating_plan(pairs: int) -> ExecutionPlan:
+    """Plans ``pairs`` sync-only passthroughs, each read by an async-only relay."""
+    pipe = cast("SyncModuleWrapper", _passthru)
+    passthru = ModuleDefinition(name="passthru", sync_pipe=pipe)
+    relay = ModuleDefinition(name="relay", async_pipe=arelay_pipe)
+    names = ("passthru", "relay") * pairs
+    nodes = [ModuleNode(id=f"n{i}", name=name) for i, name in enumerate(names)]
+    return ExecutionPlan.from_workflow(
+        Workflow().with_nodes(*nodes), dispatcher=build_dispatcher(passthru, relay)
+    )
+
+
 @pytest.fixture
 def node_threads(monkeypatch):
     def set_budget(total: int) -> None:
         budgets = lowlevel.RunVar("node_threads")
-        monkeypatch.setattr(_async_execution, "_budgets", budgets)
+        monkeypatch.setattr(_execution, "_budgets", budgets)
         patched = replace(config, node_threads=total)
-        monkeypatch.setattr(_async_execution, "config", patched)
+        monkeypatch.setattr(_execution, "config", patched)
 
     return set_budget
 
@@ -875,7 +937,7 @@ class TestThreadBudget:
                 await held.aclose()  # pyright: ignore[reportAttributeAccessIssue]
 
         assert errors == [PipelineStateError]
-        assert _async_execution._resolve_thread_budget().available == 1
+        assert _execution._resolve_thread_budget().available == 1
 
     @async_test
     async def test_async_interleaved_fan_in_fits_its_thread_budget(
@@ -950,8 +1012,7 @@ class TestThreadBudget:
         fan_in = ModuleNode(id="f", name="fan_in")
         edges = [
             StreamEdge(Endpoint(x.id, "out"), Endpoint(y.id, "in"))
-            for nodes in chains
-            for x, y in pairwise(nodes)
+            for x, y in chain.from_iterable(map(pairwise, chains))
         ]
         edges += [
             StreamEdge(Endpoint(chains[0][-1].id, "out"), Endpoint("f", "in")),
@@ -963,7 +1024,7 @@ class TestThreadBudget:
         with fail_after(3):
             result = await arun_plan(plan, settings=ExecutionSettings())
 
-        assert plan.get_thread_demand("default") == 25
+        assert plan.get_thread_demand("default", is_async=True) == 25
         assert len(result) == count
 
     @pytest.mark.parametrize(("budget", "depth"), THREAD_BUDGET_OVERFLOWS)
@@ -1018,11 +1079,89 @@ class TestThreadBudget:
                 ):
                     _ = [item async for item in stream]
 
+    @skipif_sync
+    @pytest.mark.timeout(5)
+    def test_sync_long_alternating_chain_completes(self, node_threads) -> None:
+        # Each async-only relay pulls its sync input on a node thread, so a chain within
+        # the node-thread budget must still get a thread each.
+        node_threads(45)
+        plan = _alternating_plan(45)
+        result: list = []
+
+        with SyncExecution() as execution:
+            result = list(execution.run(plan, seed=ITEMS[:2]))
+
+        assert plan.get_thread_demand("default", is_async=False) == 45
+        assert result == ITEMS[:2]
+
+    @skipif_sync
+    @pytest.mark.timeout(2)
+    @pytest.mark.parametrize(("budget", "pairs"), THREAD_BUDGET_OVERFLOWS)
+    def test_sync_chain_over_thread_budget_raises_before_reading(
+        self, node_threads, budget, pairs
+    ) -> None:
+        node_threads(budget)
+        read: list = []
+        match = "without a synchronous implementation.*RIKO_NODE_THREADS"
+
+        def source():
+            read.append(True)
+            yield from ITEMS[:2]
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match=match),
+        ):
+            execution.run(_alternating_plan(pairs), seed=source())
+
+        assert read == []
+
+    @skipif_sync
+    @pytest.mark.timeout(2)
+    @pytest.mark.parametrize("reads", [1, 0], ids=["after-read", "before-read"])
+    def test_sync_closed_stream_returns_its_node_threads(
+        self, node_threads, reads
+    ) -> None:
+        node_threads(3)
+        plan = _alternating_plan(3)
+        result: list = []
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan, seed=ITEMS[:2])
+
+            for _ in range(reads):
+                next(stream)
+
+            stream.close()  # pyright: ignore[reportAttributeAccessIssue]
+            result = list(execution.run(plan, seed=ITEMS[:2]))
+
+        assert result == ITEMS[:2]
+
+    @skipif_sync
+    @pytest.mark.timeout(2)
+    def test_sync_run_beside_own_open_stream_over_budget_raises(
+        self, node_threads
+    ) -> None:
+        node_threads(3)
+        plan = _alternating_plan(2)
+        rest: list = []
+
+        with SyncExecution() as execution:
+            stream = execution.run(plan, seed=ITEMS[:2])
+            next(stream)
+
+            with pytest.raises(InvalidPipelineError, match="open output streams"):
+                execution.run(plan, seed=ITEMS[:2])
+
+            rest = list(stream)
+
+        assert rest == ITEMS[1:2]
+
     def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
-        monkeypatch.setattr(_async_execution, "_budgets", None)
+        monkeypatch.setattr(_execution, "_budgets", None)
 
         with pytest.raises(RuntimeError, match="anyio is required"):
-            _async_execution._resolve_thread_budget()
+            _execution._resolve_thread_budget()
 
     @pytest.mark.xfail(
         strict=True,
@@ -1031,4 +1170,4 @@ class TestThreadBudget:
         "demand is not yet implemented",
     )
     def test_nested_stored_workflow_threads_enter_the_parent_demand(self) -> None:
-        assert _nested_plan().get_thread_demand("default") == 2
+        assert _nested_plan().get_thread_demand("default", is_async=True) == 2

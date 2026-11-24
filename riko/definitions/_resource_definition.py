@@ -1,5 +1,5 @@
 """
-Declares owned, external, one-shot, and reusable resource definitions.
+Declares resource definitions riko closes or the caller closes, one-shot or reusable.
 
 Examples:
 
@@ -30,13 +30,13 @@ from riko.types._resource import (
     Cleanup,
     ExternalPlan,
     LifecycleFactory,
-    OwnedPlan,
     ResourceFactory,
     ResourcePlan,
     ResourceStrategy,
     SyncLifecyclePlan,
     ValueFactory,
     ValueFactoryPlan,
+    ValuePlan,
     build_factory_plan,
     build_lifecycle_plan,
     is_context_manager,
@@ -60,10 +60,10 @@ class Resource[T]:
     """
     An immutable execution-resource definition.
 
-    A resource is a resolved value, a caller-owned value, a value-producing factory, or
-    a generator/context-manager lifecycle. Each constructor classifies its declaration
-    once (see ``strategy``). ``Resource(value, cleanup=...)`` owns ``value`` and closes
-    it after the run: with ``cleanup`` when given, never when ``cleanup`` is ``False``,
+    A resource can be a resolved value, a value the caller closes, a value-producing
+    factory, or a generator/context-manager lifecycle. Each constructor classifies its
+    declaration (see ``strategy``). ``Resource(value, cleanup=...)`` closes ``value``
+    after the run: with ``cleanup`` when given, never when ``cleanup`` is ``False``,
     and otherwise with the value's own ``aclose``/``close``.
 
     Attributes:
@@ -156,7 +156,7 @@ class Resource[T]:
         else:
             require_closer(value, cleanup)
 
-        self._set_fields(OwnedPlan(value, cleanup), credential, lazy)
+        self._set_fields(ValuePlan(value, cleanup), credential, lazy)
 
     @overload
     @staticmethod
@@ -192,13 +192,13 @@ class Resource[T]:
 
     @property
     def external(self) -> bool:
-        """Whether the caller owns the lifecycle (Riko never closes it)."""
+        """Whether the caller closes the value (riko never does)."""
         return isinstance(self._plan, ExternalPlan)
 
     @property
     def value(self) -> T:
         """
-        The resolved value an external or owned resource carries.
+        The resolved value an external or value resource carries.
 
         Raises:
 
@@ -207,7 +207,7 @@ class Resource[T]:
 
         """
         match self._plan:
-            case ExternalPlan(value=value) | OwnedPlan(value=value):
+            case ExternalPlan(value=value) | ValuePlan(value=value):
                 pass
             case _:
                 msg = "A factory or lifecycle resource has no value until acquired."
@@ -221,8 +221,8 @@ class Resource[T]:
         match self._plan:
             case ExternalPlan():
                 strategy = ResourceStrategy.EXTERNAL
-            case OwnedPlan():
-                strategy = ResourceStrategy.OWNED
+            case ValuePlan():
+                strategy = ResourceStrategy.VALUE
             case ValueFactoryPlan():
                 strategy = ResourceStrategy.VALUE_FACTORY
             case SyncLifecyclePlan() | AsyncLifecyclePlan():
@@ -316,7 +316,7 @@ class Resource[T]:
         cls, value: T
     ) -> ReusableResource[T]:
         """
-        Creates a resource whose lifecycle remains owned by the caller.
+        Creates a resource that the caller closes.
 
         Args:
 
@@ -354,11 +354,11 @@ class Resource[T]:
         lazy: bool = False,
     ) -> OneShotResource[T]:
         """
-        Creates an owned resource from a generator/context-manager definition.
+        Creates a resource riko closes from a generator/context-manager definition.
 
-        The definition yields the value; the execution layer enters it during
-        preparation and tears it down afterward. This is the explicit owned
-        sibling of :meth:`from_external`.
+        The definition yields the value. The execution layer enters it during
+        preparation and cleans it up afterward. This is the explicit sibling of
+        :meth:`from_external`, for a resource riko closes.
 
         Args:
 
@@ -375,7 +375,7 @@ class Resource[T]:
 
         Returns:
 
-            An owned resource whose lifecycle Riko manages.
+            A resource riko closes.
 
         Examples:
 

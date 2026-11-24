@@ -11,6 +11,7 @@ from functools import partial
 from inspect import iscoroutinefunction
 from io import BytesIO, StringIO
 from os import environ, linesep
+from time import perf_counter, sleep
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import ANY, Mock, PropertyMock, patch
@@ -29,6 +30,7 @@ from riko.bado._backend import (
     Semaphore,
     TimeoutException,
     async_sleep,
+    fail_after,
     lowlevel,
 )
 from riko.bado._backend import asyncify as backend_asyncify
@@ -38,11 +40,15 @@ from riko.bado._util import (
     async_return,
     asyncify,
     gather_results,
+    maybe_aclosing,
     maybe_async,
 )
 from riko.bado.itertools import (
     aauto_close,
+    aislice,
     alist,
+    amap,
+    async_iter,
     async_map,
     async_map_ordered_stream,
     async_map_stream,
@@ -1036,6 +1042,18 @@ class TestChunkContent:
             assert list(_chunk_content(f, 3)) == expected
 
 
+def _as_async_from_sync(source: Closable) -> AsyncIterator[int]:
+    return as_async(auto_close(iter(()), source))
+
+
+OWNING_ADAPTERS = [
+    pytest.param(partial(amap, str), id="amap"),
+    pytest.param(async_iter, id="async_iter"),
+    pytest.param(_as_async_from_sync, id="as_async-sync-source"),
+    pytest.param(partial(aislice, stop=2), id="aislice"),
+]
+
+
 class TestAsyncMap:
     @async_test
     async def test_a_missing_result_keeps_its_slot(self):
@@ -1045,6 +1063,27 @@ class TestAsyncMap:
             return MISSING
 
         assert await async_map(missing, [1, 2]) == [MISSING, MISSING]
+
+    @async_test
+    async def test_amap_failure_closes_its_source(self):
+        closes = []
+
+        def fail(_):
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            await anext(amap(fail, _agen_tracked(closes)))
+
+        assert closes == ["agen"]
+
+    @pytest.mark.parametrize("adapt", OWNING_ADAPTERS)
+    @async_test
+    async def test_closing_before_the_first_read_closes_the_source_once(self, adapt):
+        closes = []
+        stream = adapt(Closable("source", closes))
+        await stream.aclose()
+        await stream.aclose()
+        assert closes == ["source"]
 
 
 async def _forever(closed: list[bool]):
@@ -1160,6 +1199,18 @@ class _BrokenClosable(Closable):
         raise OSError(f"{self.name} close failed")
 
 
+class _BlockingClosable:
+    """Stands in for a value whose close blocks until *release* is set."""
+
+    def __init__(self, release: threading.Event, closes: list[str]) -> None:
+        self.release = release
+        self.closes = closes
+
+    def close(self) -> None:
+        self.release.wait(3)
+        self.closes.append("closed")
+
+
 class TestAutoClose:
     """Test the wrappers that close a stream's backing values when iteration ends."""
 
@@ -1262,6 +1313,31 @@ class TestAutoClose:
 
         assert closes == closed
         assert caught == []
+
+    @pytest.mark.timeout(10)
+    @skipif_sync
+    def test_a_cancelled_aclose_stops_waiting_for_a_worker_close(self) -> None:
+        release = threading.Event()
+        closes: list[str] = []
+
+        async def main() -> None:
+            blocking = _BlockingClosable(release, closes)
+            wrapper = aauto_close(as_async([1]), blocking, inline=False)
+            await anext(wrapper)
+
+            with pytest.raises(TimeoutError), fail_after(1):
+                await wrapper.aclose()
+
+        start = perf_counter()
+        run(main)
+        assert perf_counter() - start < 2
+        release.set()
+        deadline = perf_counter() + 1
+
+        while not closes and perf_counter() < deadline:
+            sleep(0.01)
+
+        assert closes == ["closed"]
 
 
 ACLOSE_CASES = [
@@ -1988,29 +2064,38 @@ class TestAsyncWriteExecution:
     @async_test
     async def test_graceful_close_finalizes_prefix(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
-        await stream.aclose()
-        assert path.read_bytes() == b'[{"x": 0}]'
+        write = build_write(path)
+
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_never)
+            await anext(stream)
+            await stream.aclose()
+            assert path.read_bytes() == b'[{"x": 0}]'
 
     @async_test
     async def test_terminate_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_always)
-        await anext(stream)
-        await stream.aclose()
-        assert not path.exists()
+        write = build_write(path)
+
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_always)
+            await anext(stream)
+            await stream.aclose()
+            assert not path.exists()
 
     @async_test
     async def test_exception_aborts(self, tmp_path):
         path = tmp_path / "out.json"
-        stream = awrite_through(as_async(ITEMS), build_write(path), terminating=_never)
-        await anext(stream)
+        write = build_write(path)
 
-        with pytest.raises(RuntimeError, match="boom"):
-            await stream.athrow(RuntimeError("boom"))
+        async with maybe_aclosing(as_async(ITEMS)) as source:
+            stream = awrite_through(source, write, terminating=_never)
+            await anext(stream)
 
-        assert not path.exists()
+            with pytest.raises(RuntimeError, match="boom"):
+                await stream.athrow(RuntimeError("boom"))
+
+            assert not path.exists()
 
     @async_test
     async def test_whole_stream_writes_one_document(self, tmp_path):

@@ -6,6 +6,7 @@ from __future__ import annotations
 import gc
 from contextlib import (
     AbstractAsyncContextManager,
+    aclosing,
     asynccontextmanager,
     contextmanager,
     nullcontext,
@@ -40,9 +41,9 @@ from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
 from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
-from riko.execution._async_execution import AsyncExecution, _ThreadBudget
+from riko.execution._async_execution import AsyncExecution
 from riko.execution._async_execution import _RunStream as _AsyncRunStream
-from riko.execution._execution import _NullEventSink
+from riko.execution._execution import _NullEventSink, _ThreadBudget
 from riko.execution._prepared import ExecutionPlan
 from riko.execution._provenance import (
     PLACEHOLDER,
@@ -54,7 +55,7 @@ from riko.execution._provenance import (
     run_tracked_item,
 )
 from riko.execution._resource_view import ResourceView
-from riko.execution._sync_execution import SyncExecution, _Owned, _RunStream
+from riko.execution._sync_execution import SyncExecution, _RunStream
 from riko.io import async_url_open
 from riko.parsing._dotdict import DotDict
 from riko.runtime._pipeline import Pipeline
@@ -235,15 +236,17 @@ PORTAL_WORK = [
 
 class TestSyncExecution:
     def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
-        run: _RunStream[object] = _RunStream(None)
-        run.add(object())
+        run: _RunStream[_ItemEnvelope[object]] = _RunStream(None)
+        run.output = object()
 
         with pytest.raises(TypeError, match="must be an iterator"):
             next(run)
 
-    def test_an_owned_value_that_is_not_an_iterator_cannot_be_read(self) -> None:
-        with pytest.raises(TypeError, match="only an iterator"):
-            next(_Owned(object()))
+    def test_a_port_whose_stream_has_no_close_is_rejected(self) -> None:
+        run: _RunStream[_ItemEnvelope[object]] = _RunStream(None)
+
+        with SyncExecution() as execution, pytest.raises(TypeError, match="closable"):
+            execution._register_port({}, run, ("n", "_OUTPUT"), iter([]), 1)
 
     def test_sync_exit_stack_unwinds_on_error(self) -> None:
         events: list[str] = []
@@ -449,17 +452,37 @@ class TestSyncExecution:
         assert isinstance(info.value.__cause__, ValueError)
 
 
+class _UnclosableEnvelopes:
+    def __aiter__(self) -> _UnclosableEnvelopes:
+        return self
+
+    async def __anext__(self) -> _ItemEnvelope[object]:
+        raise StopAsyncIteration
+
+
 class TestAsyncExecution:
     @async_test
     async def test_a_run_whose_last_step_is_not_a_stream_cannot_be_read(self) -> None:
         reservation = await _ThreadBudget(1).reserve(1)
-        run: _AsyncRunStream[object] = _AsyncRunStream(reservation, None)
-        run.add(object())
+        run: _AsyncRunStream[object] = _AsyncRunStream(None, reservation)
+        run.output = object()
 
         with pytest.raises(TypeError, match="must be an async iterator"):
             await anext(run)
 
         assert not reservation.held
+
+    @async_test
+    async def test_a_port_whose_stream_has_no_close_is_rejected(self) -> None:
+        reservation = await _ThreadBudget(1).reserve(1)
+        run: _AsyncRunStream[_ItemEnvelope[object]] = _AsyncRunStream(None, reservation)
+        stream = _UnclosableEnvelopes()
+
+        async with AsyncExecution() as execution:
+            with pytest.raises(TypeError, match="closable"):
+                execution._register_port({}, run, ("n", "_OUTPUT"), stream, 1)
+
+        reservation.release()
 
     @async_test
     async def test_async_exit_stack_unwinds_lifo(self) -> None:
@@ -806,7 +829,7 @@ SYNC_ASYNC_REJECTIONS = [
     pytest.param(
         lambda _: Resource(Connection(), cleanup=_acleanup),
         "async resource cleanup",
-        id="async-cleanup-of-owned-value",
+        id="async-cleanup-of-a-value",
     ),
     pytest.param(
         lambda _: Resource(_AsyncClient()), "only close is async", id="async-only-value"
@@ -859,7 +882,7 @@ SYNC_HANGING_CLEANUPS = [
     pytest.param(lambda: Resource.from_lifecycle(_ahang_db), id="async-lifecycle"),
 ]
 AWAITABLE_CLEANUPS = [
-    pytest.param(lambda cleanup: Resource(Connection(), cleanup=cleanup), id="owned"),
+    pytest.param(lambda cleanup: Resource(Connection(), cleanup=cleanup), id="value"),
     pytest.param(
         lambda cleanup: Resource.from_factory(lambda: "value", cleanup=cleanup),
         id="value-factory",
@@ -1155,6 +1178,26 @@ class TestResourceAcquisition:
 
         with pytest.raises(TimeoutError), SyncExecution(settings=settings) as execution:
             execution.acquire(build())
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="resolving a resource's credential reference for its factory is not "
+        "yet implemented",
+    )
+    def test_sync_acquire_passes_a_credential_reference_to_its_factory(self) -> None:
+        received: dict[str, object] = {}
+
+        def factory(credential: object = None) -> Generator[object]:
+            received["credential"] = credential
+            yield object()
+
+        resource = Resource.from_lifecycle(factory, credential="microsoft/cif")
+
+        with SyncExecution() as execution:
+            execution.acquire(resource)
+
+        assert received["credential"] is not None
 
 
 class TestAsyncResourceAcquisition:
@@ -1597,8 +1640,11 @@ class TestResultEnvelopes:
                 pulled.append(value)
                 yield value
 
-        envelopes = agen_result_envelopes("n", gen_values(), _root(), identity)
-        assert (await anext(envelopes)).value == 0
+        results = agen_result_envelopes("n", gen_values(), _root(), identity)
+
+        async with aclosing(results) as envelopes:
+            assert (await anext(envelopes)).value == 0
+
         assert pulled == [0]
 
     def test_preserve_keeps_the_input_identity(self):
@@ -1809,7 +1855,7 @@ def _feed(pipeline: Pipeline, seed: Sequence[ItemOrValue]) -> list[_Result]:
     results: list[_Result] = []
 
     with SyncExecution(settings=pipeline.settings) as execution:
-        stream = execution.run_envelopes(plan, seed=seed)
+        stream = execution.build_envelope_stream(plan, seed=seed)
         results = [(env.value, env.generation) for env in stream]
 
     return results
@@ -1821,7 +1867,7 @@ async def _afeed(pipeline: Pipeline, seed: Sequence[ItemOrValue]) -> list[_Resul
     results: list[_Result] = []
 
     async with AsyncExecution(settings=pipeline.settings) as execution:
-        stream = await execution.arun_envelopes(plan, seed=seed)
+        stream = await execution.abuild_envelope_stream(plan, seed=seed)
         results = [(env.value, env.generation) async for env in stream]
 
     return results
@@ -1915,36 +1961,35 @@ ASYNC_PARITY_PIPELINES = [
     pytest.param(_TOKENS, id="derived"),
     pytest.param(_HASH.with_execution(concurrency=2, ordered=False), id="threads"),
     pytest.param(_TOKENS.with_execution(concurrency=2), id="derived-threads"),
+    pytest.param(
+        _HASH.map(lambda item: {**item, "m": 1}, identity="derive"), id="declared-map"
+    ),
 ]
 
 
-class TestRunEnvelopes:
+class TestBuildEnvelopeStream:
     """Test the identity each result of an envelope run keeps."""
 
     @pytest.mark.parametrize(("pipeline", "length"), PRESERVING_PIPELINES)
-    def test_run_envelopes_keeps_each_seed_item_s_identity(
-        self, pipeline, length
-    ) -> None:
+    def test_keeps_each_seed_item_s_identity(self, pipeline, length) -> None:
         results = _feed(pipeline, _FEED_SEED)
         assert len(results) == length
         assert all(_roots(pipeline, results))
 
     @pytest.mark.parametrize(("pipeline", "indexes"), SCALAR_PIPELINES)
-    def test_run_envelopes_keeps_each_scalar_seed_item_s_identity(
-        self, pipeline, indexes
-    ) -> None:
+    def test_keeps_each_scalar_seed_item_s_identity(self, pipeline, indexes) -> None:
         target = _seed_target(pipeline)
         generations = [gen for _, gen in _feed(pipeline, _SCALAR_SEED)]
         assert generations == [build_generation(target, MISSING, i) for i in indexes]
 
-    def test_run_envelopes_keeps_each_identity_of_a_repeated_item(self) -> None:
+    def test_keeps_each_identity_of_a_repeated_item(self) -> None:
         pipeline = Pipeline.from_module("truncate", conf=TruncateConf(count=2))
         target = _seed_target(pipeline)
         item = DotDict({"content": "a"})
         generations = [gen for _, gen in _feed(pipeline, [item, item])]
         assert generations == [build_generation(target, MISSING, i) for i in (0, 1)]
 
-    def test_run_envelopes_derives_tokens_from_their_own_item(self) -> None:
+    def test_derives_tokens_from_their_own_item(self) -> None:
         target = _seed_target(_TOKENS)
         results = _feed(_TOKENS, _FEED_SEED)
         extended = _feed(_TOKENS, [*_FEED_SEED, {"i": 4, "content": "f g"}])
@@ -1954,14 +1999,14 @@ class TestRunEnvelopes:
         assert [generation for _, generation in results] == expected
         assert extended[: len(results)] == results
 
-    def test_run_envelopes_combines_a_count_into_one_new_item(self) -> None:
+    def test_combines_a_count_into_one_new_item(self) -> None:
         count_pipeline = Pipeline.from_module("count")
         [(value, generation)] = _feed(count_pipeline, _FEED_SEED)
         assert value == {"count": 4}
         assert _feed(count_pipeline, _FEED_SEED) == [(value, generation)]
         assert not any(_roots(count_pipeline, [({"i": 0}, generation)]))
 
-    def test_run_envelopes_derives_a_declared_map_result(self) -> None:
+    def test_derives_a_declared_map_result(self) -> None:
         pipeline = _HASH.map(lambda item: {**item, "m": 1}, identity="derive")
         target = _seed_target(pipeline)
         node_id = pipeline.workflow.outputs["default"].node
@@ -1978,12 +2023,12 @@ class TestRunEnvelopes:
         reason="a declared identity mode on a node fed a secondary input stream is "
         "not yet implemented",
     )
-    def test_run_envelopes_keeps_a_fan_in_node_s_declared_identity(self) -> None:
+    def test_keeps_a_fan_in_node_s_declared_identity(self) -> None:
         plan = ExecutionPlan.from_workflow(_build_fan_in_copy(), dispatcher)
         results: list[_Result] = []
 
         with SyncExecution() as execution:
-            stream = execution.run_envelopes(plan)
+            stream = execution.build_envelope_stream(plan)
             results = [(env.value, env.generation) for env in stream]
 
         [(value, generation)] = results
@@ -1991,27 +2036,25 @@ class TestRunEnvelopes:
         assert generation == build_generation("a", MISSING, 0)
 
     @pytest.mark.parametrize("pipeline", PARALLEL_PIPELINES)
-    def test_run_envelopes_on_workers_matches_a_sequential_run(self, pipeline) -> None:
+    def test_on_workers_matches_a_sequential_run(self, pipeline) -> None:
         sequential = pipeline.with_execution(concurrency=None, executor=None)
         expected = _multiset(_feed(sequential, _FEED_SEED))
         assert _multiset(_feed(pipeline, _FEED_SEED)) == expected
 
 
-class TestAsyncRunEnvelopes:
+class TestAsyncBuildEnvelopeStream:
     """Test the identity each result of an async envelope run keeps."""
 
     @pytest.mark.parametrize(("pipeline", "length"), PRESERVING_PIPELINES)
     @async_test
-    async def test_arun_envelopes_keeps_each_seed_item_s_identity(
-        self, pipeline, length
-    ) -> None:
+    async def test_keeps_each_seed_item_s_identity(self, pipeline, length) -> None:
         results = await _afeed(pipeline, _FEED_SEED)
         assert results == _feed(pipeline, _FEED_SEED)
         assert len(results) == length
 
     @pytest.mark.parametrize(("pipeline", "indexes"), SCALAR_PIPELINES)
     @async_test
-    async def test_arun_envelopes_keeps_each_scalar_seed_item_s_identity(
+    async def test_keeps_each_scalar_seed_item_s_identity(
         self, pipeline, indexes
     ) -> None:
         target = _seed_target(pipeline)
@@ -2023,6 +2066,6 @@ class TestAsyncRunEnvelopes:
 
     @pytest.mark.parametrize("pipeline", ASYNC_PARITY_PIPELINES)
     @async_test
-    async def test_arun_envelopes_matches_a_sync_run(self, pipeline) -> None:
+    async def test_matches_a_sync_run(self, pipeline) -> None:
         expected = _multiset(_feed(pipeline, _FEED_SEED))
         assert _multiset(await _afeed(pipeline, _FEED_SEED)) == expected

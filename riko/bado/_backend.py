@@ -49,6 +49,7 @@ except ImportError:
     create_task_group: Func[object] | None = None
     fail_after: Func[object] | None = None
     gather_results: Func[object] = lambda *_, **_kw: None
+    get_current_task: Func[object] | None = None
     lowlevel: object = None
     run_from_thread: Func[object] = lambda *_, **_kw: None
     start_blocking_portal: Func[object] = lambda *_, **_kw: None
@@ -74,6 +75,7 @@ else:
         create_memory_object_stream,
         create_task_group,
         fail_after,
+        get_current_task,
         lowlevel,
     )
     from anyio import open_file as async_open
@@ -116,6 +118,7 @@ __all__ = [
     "create_task_group",
     "fail_after",
     "gather_results",
+    "get_current_task",
     "is_async",
     "is_sync",
     "lowlevel",

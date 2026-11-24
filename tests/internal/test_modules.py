@@ -348,15 +348,17 @@ class TestSplitter:
 
     @async_test
     async def test_async_splitter_accepts_an_async_input_stream(self) -> None:
-        source = as_async(iter([{"x": 1}]))
-        branches = async_split(source)
-        first = await anext(branches)
-        assert await anext(first) == {"x": 1}
-        second = await anext(branches)
-        assert isinstance(first, AsyncTeeBranch)
-        assert isinstance(second, AsyncTeeBranch)
-        await first.aclose()
-        await second.aclose()
+        async with (
+            maybe_aclosing(as_async(iter([{"x": 1}]))) as source,
+            maybe_aclosing(async_split(source)) as branches,
+        ):
+            first = await anext(branches)
+            assert await anext(first) == {"x": 1}
+            second = await anext(branches)
+            assert isinstance(first, AsyncTeeBranch)
+            assert isinstance(second, AsyncTeeBranch)
+            await first.aclose()
+            await second.aclose()
 
     @async_test
     async def test_async_splitter_streams_a_long_feed(self) -> None:
@@ -434,9 +436,12 @@ class TestSplitter:
 
         pipe = splitter({"default": "fallback"}, is_async=True)(parser)
         conf = cast("Conf", {"default": {"subkey": "x"}})
-        source = as_async(iter([{"x": 1}, {"x": 2}]))
-        branch = await anext(pipe(source, conf=conf))
-        assert [item async for item in branch] == [{"key": 1}, {"key": 2}]
+        async with (
+            maybe_aclosing(as_async(iter([{"x": 1}, {"x": 2}]))) as source,
+            maybe_aclosing(pipe(source, conf=conf)) as branches,
+        ):
+            branch = await anext(branches)
+            assert [item async for item in branch] == [{"key": 1}, {"key": 2}]
 
     @pytest.mark.xfail(
         strict=True,
@@ -1157,7 +1162,9 @@ class TestAsyncLoop:
             emit=True,
         )
 
-        first = await anext(stream)
+        async with maybe_aclosing(stream):
+            first = await anext(stream)
+
         assert first == {"content": "a"}
         assert list(consumed) == ["a b"]
 

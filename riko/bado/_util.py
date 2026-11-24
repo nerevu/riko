@@ -357,24 +357,32 @@ asyncify = async_runner(inline=False)
 async_partial = maybe_async.partial
 
 
+@overload
+def syncify[T](func: Awaitable[T], /) -> T: ...
+@overload
 def syncify[T, **P](
-    func: Callable[P, Awaitable[T]], *args: P.args, **kwargs: P.kwargs
+    func: Callable[P, Awaitable[T]], /, *args: P.args, **kwargs: P.kwargs
+) -> T: ...
+def syncify[T, **P](
+    func: Awaitable[T] | Callable[P, Awaitable[T]], /, *args: P.args, **kwargs: P.kwargs
 ) -> T:
     """
     Runs an awaitable-returning callable to completion on the event loop from a worker.
 
-    The worker thread must have been started from that event loop, through
-    ``asyncify`` or the backend's own worker helpers. There is no fallback to a
-    fresh event loop. The blocking twin of ``asyncify``.
+    A bare awaitable is only awaited. The worker thread must have been started from
+    that event loop, through ``asyncify`` or the backend's own worker helpers. There is
+    no fallback to a fresh event loop. The blocking twin of ``asyncify``.
 
     Args:
 
-        func: The callable whose awaitable result is awaited on the event loop.
-        args: Positional arguments forwarded to ``func``.
+        func: The callable whose awaitable result is awaited on the event loop, or an
+            awaitable to await directly.
+
+        args: Positional arguments forwarded to a callable ``func``.
 
     Kwargs:
 
-        kwargs: Keyword arguments forwarded to ``func``.
+        kwargs: Keyword arguments forwarded to a callable ``func``.
 
     Returns:
 
@@ -389,11 +397,18 @@ def syncify[T, **P](
         >>>
         >>> run(asyncify, syncify, double, 21)
         42
+        >>> run(asyncify, syncify, double(4))
+        8
 
     """
 
     async def await_func() -> T:
-        return await func(*args, **kwargs)
+        if callable(func):
+            result = await func(*args, **kwargs)
+        else:
+            result = await func
+
+        return result
 
     return run_from_thread(await_func)
 
@@ -410,7 +425,7 @@ def run_bridged[T](
 
     Kwargs:
 
-        bridge: Runs an awaitable to completion on the event loop that owns the value.
+        bridge: Runs an awaitable to completion on the event loop the value runs on.
 
     Raises:
 
@@ -433,6 +448,36 @@ def run_bridged[T](
         bridge(result)
     else:
         require_value(result, ASYNC_CLEANUP_MSG)
+
+
+async def amap_values[K, V, R](
+    func: Callable[[V], Awaitable[R]], item: Mapping[K, V]
+) -> dict[K, R]:
+    """
+    Applies an async function to each mapping value.
+
+    Args:
+
+        func: The async transform applied to each value.
+        item: The source mapping.
+
+    Returns:
+
+        A new dict with the same keys, in the same order, holding the awaited
+        transformed values.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def double(value):
+        ...     return value * 2
+        >>>
+        >>> run(amap_values, double, {"a": 1, "b": 2})
+        {'a': 2, 'b': 4}
+
+    """
+    return {key: await func(value) for key, value in item.items()}
 
 
 class maybe_closing[T]:  # noqa: N801

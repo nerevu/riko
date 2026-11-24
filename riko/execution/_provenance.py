@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from contextlib import suppress
+from contextlib import aclosing, closing, suppress
 from functools import cached_property
 from itertools import count, repeat
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
@@ -26,14 +26,14 @@ from weakref import KeyedRef
 from attrs import define, field
 
 from riko.bado._util import maybe_aclosing, maybe_closing
-from riko.bado.itertools import alist, amap, as_async
+from riko.bado.itertools import aauto_close, alist, amap, as_async
 from riko.base._config import FOREVER_ITEM
+from riko.base._iterutils import auto_close
 from riko.base._sentinels import MISSING, MissingType, is_missing_type
 from riko.coercion._canonical import IdentityAccumulator, IdentityDomain
 from riko.types._enums import IdentityMode
 from riko.types._feed import (
     AsyncEnvelopeGenerator,
-    AsyncEnvelopeStream,
     EnvelopeGenerator,
     EnvelopeList,
     Envelopes,
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
         ItemCall,
         Metadata,
     )
-    from riko.types._streams import AsyncStreamOf
+    from riko.types._streams import AsyncStreamOf, StreamOf
     from riko.types._workflow import NodeId
     from riko.types._wrappers import Func
 
@@ -95,9 +95,11 @@ def gen_result_envelopes[T](
     results: Iterable[T],
     parent: _ItemEnvelope[object] = PLACEHOLDER,
     identity: IdentityMode | None = None,
-) -> EnvelopeStream[T]:
+) -> EnvelopeGenerator[T]:
     """
     Wraps each of a node's per-item results in an envelope.
+
+    Exhausting, closing, or failing the generator closes ``results``.
 
     Args:
 
@@ -141,7 +143,10 @@ def gen_result_envelopes[T](
         False
 
     """
-    yield from _map_results(node_id, parent, _is_preserving(parent, identity), results)
+    preserves = _is_preserving(parent, identity)
+
+    with maybe_closing(results):
+        yield from _map_results(node_id, parent, preserves, results)
 
 
 async def agen_result_envelopes[T](
@@ -149,11 +154,12 @@ async def agen_result_envelopes[T](
     results: AsyncStreamOf[T],
     parent: _ItemEnvelope[object] = PLACEHOLDER,
     identity: IdentityMode | None = None,
-) -> AsyncEnvelopeStream[T]:
+) -> AsyncEnvelopeGenerator[T]:
     """
     Wraps each of a node's per-item results in an envelope.
 
     Applies the same rule as ``gen_result_envelopes`` to an async iterator.
+    Exhausting, closing, or failing the generator closes ``results``.
 
     Args:
 
@@ -195,13 +201,14 @@ async def agen_result_envelopes[T](
     preserves = _is_preserving(parent, identity)
     index = 0
 
-    async for result in results:
-        if preserves:
-            yield parent.with_value(result)
-        else:
-            yield _ItemEnvelope.from_parent(parent, node_id, result, index)
+    async with maybe_aclosing(results):
+        async for result in results:
+            if preserves:
+                yield parent.with_value(result)
+            else:
+                yield _ItemEnvelope.from_parent(parent, node_id, result, index)
 
-        index += 1
+            index += 1
 
 
 def run_tracked_item[T](
@@ -237,8 +244,13 @@ def run_tracked_item[T](
         [2, 2]
 
     """
-    # collected into a list so they cross the pool boundary in one piece
-    return list(gen_result_envelopes(node_id, call(envelope.value), envelope, identity))
+    results = call(envelope.value)
+
+    with closing(gen_result_envelopes(node_id, results, envelope, identity)) as tracked:
+        # collected into a list so they cross the pool boundary in one piece
+        envelopes = list(tracked)
+
+    return envelopes
 
 
 async def arun_tracked_item[T](
@@ -275,8 +287,10 @@ async def arun_tracked_item[T](
         [2, 2]
 
     """
-    async with maybe_aclosing(call(envelope.value)) as results:
-        stream = agen_result_envelopes(node_id, results, envelope, identity)
+    results = call(envelope.value)
+    stream = agen_result_envelopes(node_id, results, envelope, identity)
+
+    async with aclosing(stream):
         envelopes = await alist(stream)
 
     return envelopes
@@ -390,7 +404,7 @@ class NodeProvenance[T](ABC):
 
     def gen_values(
         self, envelopes: Envelopes[T], item_normalizer: Func[object] | None = None
-    ) -> Iterator[object]:
+    ) -> StreamOf[object]:
         """
         Unwraps each input envelope and tracks which envelope each value came from.
 
@@ -398,7 +412,8 @@ class NodeProvenance[T](ABC):
         item, keep its envelope. For a value that can't be tracked, e.g., a ``dict`` or
         string, ``item_normalizer`` converts it into one that can, e.g., a ``DotDict``.
 
-        Under ``COMBINE``, values are yielded as they are.
+        Under ``COMBINE``, values are returned as they are. Exhausting, closing, or
+        failing the returned stream closes ``envelopes``.
 
         Args:
 
@@ -407,9 +422,9 @@ class NodeProvenance[T](ABC):
         Kwargs:
 
             item_normalizer: Converts each value into a type that can be tracked.
-                ``None`` yields values unchanged.
+                ``None`` returns values unchanged.
 
-        Yields:
+        Returns:
 
             Each input value.
 
@@ -423,7 +438,8 @@ class NodeProvenance[T](ABC):
             [1]
 
         """
-        yield from map(self._resolve_unwrap(item_normalizer), envelopes)
+        stream = iter(envelopes)
+        return auto_close(map(self._resolve_unwrap(item_normalizer), stream), stream)
 
     def agen_values(
         self, envelopes: AnyEnvelopes[T], item_normalizer: Func[object] | None = None
@@ -435,7 +451,8 @@ class NodeProvenance[T](ABC):
         item, keep its envelope. For a value that can't be tracked, e.g., a ``dict`` or
         string, ``item_normalizer`` converts it into one that can, e.g., a ``DotDict``.
 
-        Under ``COMBINE``, values are returned as they are.
+        Under ``COMBINE``, values are returned as they are. Exhausting, closing, or
+        failing the returned stream closes ``envelopes``.
 
         Args:
 
@@ -444,7 +461,7 @@ class NodeProvenance[T](ABC):
         Kwargs:
 
             item_normalizer: Converts each value into a type that can be tracked.
-                ``None`` yields values unchanged.
+                ``None`` returns values unchanged.
 
         Returns:
 
@@ -461,7 +478,8 @@ class NodeProvenance[T](ABC):
             [1]
 
         """
-        return amap(self._resolve_unwrap(item_normalizer), as_async(envelopes))
+        stream = as_async(envelopes)
+        return aauto_close(amap(self._resolve_unwrap(item_normalizer), stream), stream)
 
     def gen_envelopes(self, results: Iterator[T]) -> EnvelopeGenerator[T]:
         """
@@ -491,8 +509,8 @@ class NodeProvenance[T](ABC):
 
         """
         try:
-            with maybe_closing(results) as stream:
-                yield from map(self._wrap, stream, count())
+            with maybe_closing(results):
+                yield from map(self._wrap, results, count())
         finally:
             self._release()
 
@@ -528,8 +546,8 @@ class NodeProvenance[T](ABC):
         index = 0
 
         try:
-            async with maybe_aclosing(results) as stream:
-                async for result in stream:
+            async with maybe_aclosing(results):
+                async for result in results:
                     yield wrap(result, index)
                     index += 1
         finally:

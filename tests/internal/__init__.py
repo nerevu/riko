@@ -9,8 +9,8 @@ Index (file, then the subjects it owns, in file order):
                               LintCommand, CoverageRatchet, CeilingRatchet,
                               ConsoleScripts, Docstyle, CitationLint, UserDocsLint,
                               TermLint, LiteralLint, RstLint, BindingLint, BasenameLint,
-                              EscapeLint, DependencyLint, HookPinLint,
-                              CanonicalImportLint, RelativeImportLint,
+                              EscapeLint, HelperLint, OwnershipLint, DependencyLint,
+                              HookPinLint, CanonicalImportLint, RelativeImportLint,
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
                               ReadDocument, LogLevel
     test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
@@ -25,9 +25,9 @@ Index (file, then the subjects it owns, in file order):
                               PipelineDefinitionFields, WriteOperation, NormalizeTarget,
                               ResolveFormat, ValidateTargetMode, BuildWrite
     test_execution.py         SyncExecution, ResourceAcquisition, ResourceView,
-                              ResultEnvelopes, NodeProvenance, RunEnvelopes
-    test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, PreparedCall,
-                              PreparedNode
+                              ResultEnvelopes, NodeProvenance, BuildEnvelopeStream
+    test_execution_plan.py    ExecutionPlan, ResolvedModule, AdaptEmbed, StreamAdapters,
+                              PreparedCall, PreparedNode
     test_io.py                ReplayReader, GetText, LoadRssLinks, ParseRss, Fetch,
                               AsyncUrlOpen, Reencode, ConversionFuncs, ChunkContent,
                               AsyncMap, AutoClose, RequireCloser, AsyncMapStream,

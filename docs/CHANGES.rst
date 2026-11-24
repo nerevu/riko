@@ -29,6 +29,8 @@ New
     ``with_execution``
   - call it with items, iterate it, or use ``pipeline.open()`` as a context manager
   - fan it out into branches with ``pipeline.split(splits, *, isolate=True)``
+  - a run that needs more than ``RIKO_NODE_THREADS`` worker threads raises
+    ``InvalidPipelineError`` before it reads anything
 
 - ``Workflow`` graph (``RikoNode``/``PortEdge``/``Endpoint``) that a ``Pipeline`` runs:
 
@@ -80,6 +82,8 @@ Changes
   - ``compile-workflow`` takes a ``WorkflowDocument`` instead of a ``PipeDef`` (convert
     ``PipeDef`` with ``build-workflow`` first).
   - ``run-pipe`` prints a riko error as one line instead of a traceback.
+  - ``as_async`` closes a closable sync iterator once it is exhausted, closed, or fails,
+    as it already did for a generator.
 
 - riko now raises on invalid input instead of ignoring it or yielding nothing:
 

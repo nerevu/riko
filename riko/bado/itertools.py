@@ -54,17 +54,19 @@ from riko.base._iterutils import (
     require_idle,
 )
 from riko.base._logging import get_logger
+from riko.base._sentinels import MISSING, MissingType
 from riko.types._io import resolve_closer
 
 from ._backend import (
     CancelScope,
     CapacityLimiter,
-    Lock,
+    Event,
     MemoryObjectSendStream,
     Semaphore,
     async_sleep,
     checkpoint,
     create_memory_object_stream,
+    get_current_task,
 )
 from ._util import maybe_aclosing, maybe_async, maybe_closing, open_task_group
 
@@ -86,17 +88,24 @@ if TYPE_CHECKING:
 logger: Logger = get_logger(__name__)
 
 
-async def async_iter[T](
-    source: Iterable[T], cooperative: bool = False
-) -> AsyncGenerator[T, None]:
+async def _gen_paced[T](stream: Iterator[T], cooperative: bool) -> AsyncGenerator[T]:
+    """Streams a sync iterator's items and optionally pauses between yields."""
+    for item in stream:
+        if cooperative:
+            await async_sleep(0)
+
+        yield item
+
+
+def async_iter[T](source: Iterable[T], cooperative: bool = False) -> aauto_close[T]:
     """
-    Converts a sync iterable into an async generator.
+    Converts a sync iterable into an async stream that closes it when it ends.
 
     Use ``as_async`` instead when *source* may already be async. It returns such a
     source's iterator as it is and wraps a sync one here.
 
-    Closing the generator early also closes the sync iterator, just as closing
-    :func:`as_async` of an async iterable closes that iterable.
+    Closing the stream, even before its first read, also closes the sync iterator.
+    Similar to how closing :func:`as_async` of an async iterable closes that iterable.
 
     Args:
 
@@ -107,9 +116,9 @@ async def async_iter[T](
         cooperative: Yield control before each item so concurrent tasks (e.g., a
             timeout) can run (default: False).
 
-    Yields:
+    Returns:
 
-        Each item of *source* in order.
+        An async stream of each item of *source* in order.
 
     Examples:
 
@@ -119,12 +128,8 @@ async def async_iter[T](
         [0, 1, 2]
 
     """
-    with maybe_closing(iter(source)) as stream:
-        for item in stream:
-            if cooperative:
-                await async_sleep(0)
-
-            yield item
+    stream = iter(source)
+    return aauto_close(_gen_paced(stream, cooperative), stream)
 
 
 def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncStreamOf[T]:
@@ -164,14 +169,13 @@ def as_async[T](source: AnyIterable[T], cooperative: bool = False) -> AsyncStrea
     return result
 
 
-async def amap[T, S](
-    func: Callable[[T], S], source: AsyncIterable[T]
-) -> AsyncGenerator[S, None]:
+def amap[T, S](func: Callable[[T], S], source: AsyncIterable[T]) -> aauto_close[S]:
     """
     Applies *func* to each item of an async *source* lazily.
 
-    The async twin of the ``map`` builtin for one iterable. *source* is read as it is
-    consumed and never closed here. The caller that owns it closes it.
+    The async twin of the ``map`` builtin for one iterable. Reads *source* as it is
+    consumed and closes it once it is exhausted, closed (even before its first read), or
+    fails.
 
     Use ``async_map`` instead when *func* is async and every result fits in a list. Use
     ``async_map_stream`` to run an async *func* concurrently while streaming.
@@ -181,9 +185,9 @@ async def amap[T, S](
         func: A sync function applied to each item.
         source: The async items to map over.
 
-    Yields:
+    Returns:
 
-        ``func`` of each item, in source order.
+        An async stream of ``func`` of each item, in source order.
 
     Examples:
 
@@ -192,9 +196,62 @@ async def amap[T, S](
         >>> run(alist, amap(str, as_async([1, 2])))
         ['1', '2']
 
+        # Closing early closes the source
+        >>> from io import StringIO
+        >>>
+        >>> async def first():
+        ...     f = StringIO("hi")
+        ...     mapped = amap(str.upper, as_async(f))
+        ...     item = await anext(mapped)
+        ...     await mapped.aclose()
+        ...     print((item, f.closed))
+        >>>
+        >>> run(first)
+        ('HI', True)
+
     """
-    async for item in source:
-        yield func(item)
+    stream = aiter(source)
+    return aauto_close((func(item) async for item in stream), stream)
+
+
+async def _gen_sliced[T](stream: AsyncIterator[T], stop: int) -> AsyncGenerator[T]:
+    """Streams at most ``stop`` items of an async iterator."""
+    for _ in range(stop):
+        item = await anext(stream, MISSING)
+
+        if isinstance(item, MissingType):
+            break
+
+        yield item
+
+
+def aislice[T](source: AsyncIterable[T], stop: int) -> aauto_close[T]:
+    """
+    Takes the first *stop* items of an async *source* lazily.
+
+    The async twin of ``itertools.islice`` with only a stop. Closes *source* once
+    *stop* items are taken; or when the slice is exhausted, closed (even before its
+    first read), or fails.
+
+    Args:
+
+        source: The async items to slice.
+        stop: The most items to take.
+
+    Returns:
+
+        An async stream of at most ``stop`` items, in source order.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> run(alist, aislice(as_async(range(5)), 2))
+        [0, 1]
+
+    """
+    stream = aiter(source)
+    return aauto_close(_gen_sliced(stream, stop), stream)
 
 
 async def async_flatten[T](
@@ -229,8 +286,8 @@ async def async_flatten[T](
         [1, 2, 3]
 
     """
-    async with aclosing(source) as batches:
-        async for batch in batches:
+    async with aclosing(source):
+        async for batch in source:
             with maybe_closing(batch):
                 for item in batch:
                     yield item
@@ -355,6 +412,8 @@ class aauto_close[T]:  # noqa: N801
     Kwargs:
 
         inline: Whether a sync close runs on the event loop rather than a worker.
+            Abandons a worker's close if the caller is cancelled. In that case, the
+            worker finishes on its own.
 
     Warns:
 
@@ -456,7 +515,7 @@ class aauto_close[T]:  # noqa: N801
         except IndexError:
             pass
         else:
-            runner = maybe_async.using(inline=self.inline)
+            runner = maybe_async.using(inline=self.inline, abandon_on_cancel=True)
 
             for value in (self.source, *self.closables):
                 if (closer := resolve_closer(value, is_async=True)) is not None:
@@ -888,6 +947,47 @@ async def async_map_ordered_stream[T, S](
             yield result
 
 
+def async_flat_map[T, S](
+    func: Callable[[T], Awaitable[Iterable[S]]],
+    source: AnyIterable[T],
+    *,
+    ordered: bool,
+    limit: int = DEF_CONCURRENCY_LIMIT,
+    budget: Semaphore | None = None,
+) -> AsyncGenerator[S, None]:
+    """
+    Maps an async *func* over *source* concurrently and flattens each call's batch.
+
+    Args:
+
+        func: An async function returning a batch of results for one input item.
+        source: The items to map over.
+
+    Kwargs:
+
+        ordered: Whether batches keep *source* order rather than completion order.
+        limit: Maximum number of concurrent calls (default: ``DEF_CONCURRENCY_LIMIT``).
+        budget: A shared cap on simultaneous calls (default: None).
+
+    Returns:
+
+        A flat stream of every batch's results.
+
+    Examples:
+
+        >>> from riko import run
+        >>>
+        >>> async def pair(x):
+        ...     return [x, x]
+        >>>
+        >>> run(alist, async_flat_map(pair, range(2), ordered=True))
+        [0, 0, 1, 1]
+
+    """
+    mapper = async_map_ordered_stream if ordered else async_map_stream
+    return async_flatten(mapper(func, source, limit=limit, budget=budget))
+
+
 def async_merge[S](
     source: AnyIterable[AsyncIterable[S]],
     *,
@@ -1038,12 +1138,13 @@ class AsyncTee[T]:
     """
 
     __slots__ = (
+        "_advancer",
         "_buffers",
         "_error",
         "_isolate",
         "_keys",
-        "_lock",
         "_max_lag",
+        "_read_done",
         "_source",
         "_state",
     )
@@ -1056,7 +1157,8 @@ class AsyncTee[T]:
         self._isolate = isolate
         self._buffers: dict[int, deque[T]] = {}
         self._keys = count()
-        self._lock = Lock()
+        self._advancer: int | None = None
+        self._read_done: Event | None = None
         self._state = _TeeState.IDLE
         self._error: Exception | None = None
 
@@ -1071,6 +1173,9 @@ class AsyncTee[T]:
             if self._state is _TeeState.DONE:
                 raise StopAsyncIteration
 
+            if self._advancer is not None and self._advancer == get_current_task().id:
+                raise PipelineStateError("advancing", "read", subject="tee")
+
         return buffer
 
     def _publish(self, read: TeeRead[T]) -> None:
@@ -1082,6 +1187,12 @@ class AsyncTee[T]:
         if read.done and self._state is _TeeState.READING:
             self._state = _TeeState.DONE
 
+        self._advancer = None
+
+        if (read_done := self._read_done) is not None:
+            self._read_done = None
+            read_done.set()
+
     async def _aclose_source(self, error: Exception | None = None) -> None:
         try:
             with CancelScope(shield=True):
@@ -1092,29 +1203,24 @@ class AsyncTee[T]:
             if not isinstance(failure, Exception):
                 raise
 
-    async def _aprocess(self, key: int, *, full: bool) -> TeeRead[T]:
-        if full:
-            read = TeeRead[T].from_lag(self._max_lag)
-        else:
-            try:
-                item = await anext(self._source)
-            except StopAsyncIteration:
-                read = TeeRead[T](done=True)
-            except Exception as read_error:  # noqa: BLE001 (latched, re-raised)
-                read = TeeRead[T](error=read_error)
-            else:
-                # Reads keys after the read so branches closed during it get no copy.
-                others = tuple(k for k in tuple(self._buffers) if k != key)
-                read = TeeRead.from_item(item, key, *others, isolate=self._isolate)
-
-        return read
-
     async def _aadvance(self, key: int, *, full: bool) -> None:
         read = TeeRead[T]()
         interrupted: BaseException | None = None
 
         try:
-            read = await self._aprocess(key, full=full)
+            if full:
+                read = TeeRead[T].from_lag(self._max_lag)
+            else:
+                try:
+                    item = await anext(self._source)
+                except StopAsyncIteration:
+                    read = TeeRead[T](done=True)
+                except Exception as read_error:  # noqa: BLE001 (latched, re-raised)
+                    read = TeeRead[T](error=read_error)
+                else:
+                    # Reads keys after the read so branches closed by then get no copy.
+                    others = tuple(k for k in tuple(self._buffers) if k != key)
+                    read = TeeRead.from_item(item, key, *others, isolate=self._isolate)
         except BaseException as exc:  # noqa: BLE001 (re-raised below)
             interrupted = exc
             read = TeeRead[T].from_interrupt(exc)
@@ -1124,6 +1230,10 @@ class AsyncTee[T]:
         if read.error is not None:
             await self._aclose_source(read.error)
 
+        # A close requested during the read was left to this reader
+        if self._state is _TeeState.CLOSED:
+            await self._aclose_source()
+
         if interrupted is not None:
             raise interrupted
         elif read.error is not None:
@@ -1132,30 +1242,19 @@ class AsyncTee[T]:
     async def _apull(self, key: int) -> T:
         await checkpoint()
 
-        try:
-            while not (buffer := self._require_buffer(key)):
-                await self._apull_locked(key)
-        finally:
-            # Unlike ``Tee``, closes here rather than in the advance: the lock passes
-            # task to task, and a cancelled handoff still owes the deferred close.
-            if self._state is _TeeState.CLOSED and not self._lock.locked():
-                await self._aclose_source()
-
-        return buffer.popleft()
-
-    async def _apull_locked(self, key: int) -> None:
-        try:
-            await self._lock.acquire()
-        except RuntimeError as error:
-            raise PipelineStateError("advancing", "read", subject="tee") from error
-
-        try:
-            if not self._require_buffer(key):
+        while not (buffer := self._require_buffer(key)):
+            if self._advancer is None:
+                self._advancer = get_current_task().id
                 self._state = _TeeState.READING
                 full = is_lagging(self._buffers, key, self._max_lag)
                 await self._aadvance(key, full=full)
-        finally:
-            self._lock.release()
+            else:
+                if self._read_done is None:
+                    self._read_done = Event()
+
+                await self._read_done.wait()
+
+        return buffer.popleft()
 
     async def _adrop(self, key: int) -> None:
         dropped = self._buffers.pop(key, None) is not None
@@ -1194,7 +1293,7 @@ class AsyncTee[T]:
 
         """
         self._buffers.clear()
-        deferred = self._lock.locked()
+        deferred = self._advancer is not None
         self._state = _TeeState.CLOSED
 
         if not deferred:

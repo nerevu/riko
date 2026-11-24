@@ -1140,6 +1140,7 @@ JSON_WITHOUT_RECORDS = [
     pytest.param('{"x": 1}', "y", "no value at 'y'", id="missing-path"),
     pytest.param('{"x": [1]}', "x.item", "no value at 'x.item'", id="item-path"),
     pytest.param('[{"x": 1}]', "x", "no value at 'x'", id="path-into-list"),
+    pytest.param("{", None, "ERROR", id="malformed"),
 ]
 
 JSON_READERS = [
@@ -1363,6 +1364,10 @@ class TestGenNonNull:
         selected = gen_non_null(items, cmp_pos=0, cmp_attr="n", arg_pos=0, arg_attr="n")
         assert list(selected) == [1]
 
+    def test_positions_skip_a_none_item(self):
+        items = [("a", 1), None, ("b", None)]
+        assert list(gen_non_null(items, cmp_pos=1, arg_pos=0)) == ["a"]
+
     @pytest.mark.parametrize(("items", "positions", "match"), UNINDEXABLE_ITEMS)
     def test_an_unindexable_item_raises(self, items, positions, match):
         with pytest.raises(TypeError, match=match):
@@ -1548,6 +1553,13 @@ class _SlottedNeedsArg:
         pass
 
 
+class _SlottedGetattr:
+    __slots__ = ()
+
+    def __getattr__(self, name: str) -> object:
+        raise AttributeError(name)
+
+
 class _SlottedStaticClose:
     __slots__ = ()
 
@@ -1563,6 +1575,7 @@ STRICT_CHECKS = [
     pytest.param(_SlottedClose, SyncClosable, id="slotted"),
     pytest.param(_SlottedNeedsArg, SyncClosable, id="slotted-wrong-signature"),
     pytest.param(_SlottedStaticClose, SyncClosable, id="slotted-static"),
+    pytest.param(_SlottedGetattr, SyncClosable, id="slotted-getattr"),
     pytest.param(_with_close, SyncClosable, id="instance-close"),
     pytest.param(_Plain, SyncClosable, id="plain"),
     pytest.param(DotDict, SyncClosable, id="dotdict"),

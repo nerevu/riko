@@ -1,11 +1,17 @@
 """Shared pytest fixtures and collection hooks for the Riko test suite."""
 
+from __future__ import annotations
+
 import doctest
 import gc
 import importlib.util
 import os
 import re
+from asyncio.base_events import BaseEventLoop
 from logging import getLogger
+from pathlib import Path
+from typing import TYPE_CHECKING
+from weakref import ref
 
 import pytest
 
@@ -18,18 +24,24 @@ from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._registrations import temporary_registrations
 from riko.runtime._workflow_resolver import register_workflow_store
 
+if TYPE_CHECKING:
+    from types import AsyncGeneratorType
+
+_EXAMPLE_DIRS = (PACKAGE_DIR / "modules", PACKAGE_DIR / "rss")
+_FINALIZER_HOOK = "_asyncgen_finalizer_hook"
+_FIRSTITER_HOOK = "_asyncgen_firstiter_hook"
+_LEAK_MSG = "was finalized by the event loop instead of being closed"
+# usage examples may drop a started stream; the test tiers keep leaks strict
+QUIET_LEAKS = pytest.mark.filterwarnings("ignore::ResourceWarning")
+WORKFLOW_DIR = TESTS_DIR / "workflows"
+RUN_CALL = re.compile(r"(?<!def )(?<![\w.])run\(")
+
 pytest_plugins = [
     "pytester",
     "tests._hash_seeds",
     "tests._resources",
     "tests._timeouts",
 ]
-
-_EXAMPLE_DIRS = (PACKAGE_DIR / "modules", PACKAGE_DIR / "rss")
-# usage examples may drop a started stream; the test tiers keep leaks strict
-QUIET_LEAKS = pytest.mark.filterwarnings("ignore::ResourceWarning")
-WORKFLOW_DIR = TESTS_DIR / "workflows"
-RUN_CALL = re.compile(r"(?<!def )(?<![\w.])run\(")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -48,6 +60,57 @@ def workflow_store():
     with temporary_registrations():
         register_workflow_store(package="tests.pyworkflows", directory=WORKFLOW_DIR)
         yield
+
+
+def _describe_leak(agen: AsyncGeneratorType[object, object]) -> str:
+    code = agen.ag_code
+    path = Path(code.co_filename).relative_to(ROOT_DIR)
+    where = f"{path}:{code.co_firstlineno}"
+    return f"{agen.__qualname__} ({where}) {_LEAK_MSG}"
+
+
+@pytest.fixture(autouse=True)
+def no_leaked_async_generators(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Fails a test whose riko async generator is left for the event loop to finalize.
+
+    Every async generator riko creates must be closed by whatever owns it. One that is
+    abandoned while suspended reaches the loop's finalizer hook, which this fixture
+    wraps on every loop the test starts, the portal loops included. Garbage is only
+    collected when a riko async generator the test started is still suspended, and a
+    quieted example records its leaks without failing.
+    """
+    leaked: list[str] = []
+    started: list[ref[AsyncGeneratorType[object, object]]] = []
+    first_iter = getattr(BaseEventLoop, _FIRSTITER_HOOK)
+    finalize = getattr(BaseEventLoop, _FINALIZER_HOOK)
+
+    def is_riko(agen: AsyncGeneratorType[object, object]) -> bool:
+        return Path(agen.ag_code.co_filename).is_relative_to(PACKAGE_DIR)
+
+    def track(loop: BaseEventLoop, agen: AsyncGeneratorType[object, object]) -> None:
+        if is_riko(agen):
+            started.append(ref(agen))
+
+        first_iter(loop, agen)
+
+    def record(loop: BaseEventLoop, agen: AsyncGeneratorType[object, object]) -> None:
+        if is_riko(agen):
+            leaked.append(_describe_leak(agen))
+
+        finalize(loop, agen)
+
+    monkeypatch.setattr(BaseEventLoop, _FIRSTITER_HOOK, track)
+    monkeypatch.setattr(BaseEventLoop, _FINALIZER_HOOK, record)
+    yield
+
+    if any((agen := r()) is not None and agen.ag_frame is not None for r in started):
+        gc.collect()
+
+    if leaked and QUIET_LEAKS.mark not in request.node.own_markers:
+        pytest.fail("\n".join(leaked), pytrace=False)
 
 
 def _extra_missing(*modules: str) -> list[str]:

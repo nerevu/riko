@@ -35,7 +35,8 @@ def run_pipeline[T](
     """
     Synchronously runs a pipeline definition in a fresh one-shot execution.
 
-    The execution owns the run's resources for the lifetime of the returned iterator.
+    The execution closes the run's resources when the returned iterator ends or is
+    closed.
 
     Args:
 
@@ -86,8 +87,8 @@ async def arun_pipeline[T](
     """
     Asynchronously runs a pipeline definition in a fresh one-shot execution.
 
-    The execution owns the run's resources for the lifetime of the returned async
-    iterator. Closing an abandoned iterator closes its stream before the execution
+    The execution closes the run's resources when the returned async iterator ends or
+    is closed. Closing an abandoned iterator closes its stream before the execution
     exits.
 
     Args:
@@ -132,8 +133,8 @@ async def arun_pipeline[T](
     async with execution:
         stream = await execution.arun(plan, seed=seed)
 
-        async with maybe_aclosing(stream) as items:
-            async for item in items:
+        async with maybe_aclosing(stream):
+            async for item in stream:
                 yield item
 
 

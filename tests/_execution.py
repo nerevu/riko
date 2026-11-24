@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from inspect import isasyncgenfunction, iscoroutinefunction
 from typing import TYPE_CHECKING, Self, cast
 
+from riko.bado.itertools import as_async
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import ModuleNode, StreamEdge
 from riko.definitions._settings import DEF_EXECUTION_SETTINGS
@@ -237,6 +238,41 @@ def _relay(items, **_):
 
 
 relay_pipe = cast("SyncModuleWrapper", _relay)
+
+
+async def _arelay(items, **_):
+    """Re-yields each item of a sync or async stream with an ``async for`` loop."""
+    async for item in as_async(items):
+        yield item
+
+
+arelay_pipe = cast("AsyncModuleWrapper", _arelay)
+
+
+PROCESSOR_PROBE = ModuleDefinition(
+    name="probe", sync_pipe=mark_loopable(lambda item, **_: iter([item]))
+)
+
+
+class RecordingBranch:
+    """A split branch that records when it is first read and each time it closes."""
+
+    def __init__(self, items: list[Item], events: list[str], tag: str) -> None:
+        self.items, self.events, self.tag = iter(items), events, tag
+        self.started = False
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Item:
+        if not self.started:
+            self.started = True
+            self.events.append(f"{self.tag}-start")
+
+        return next(self.items)
+
+    def close(self) -> None:
+        self.events.append(f"{self.tag}-close")
 
 
 class ClosingAsyncIterator:

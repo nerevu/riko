@@ -43,7 +43,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | Helper | Where | Recommendation | Priority | Why |
 |---|---|---|---|---|
 | `async_partial` | `_util.py` | **Keep** | — | An alias of `maybe_async.partial`, the deferred-call form of `maybe_async`, with two production callers (2026-11-21: `riko/execution/_prepared.py` ×2). |
-| `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); `async_map`'s `_missing` sentinel is the fix if it survives). No production caller outside a collection test. |
+| `gather_results` | `_util.py` | **Replace/delete** | very high | AnyIO 4.14 `TaskHandle` captures results; also has a real bug — `[r for r in results if r is not None]` silently drops a legitimate `None` result ([correctness-audit **R7**](correctness-audit.md#8-open-defect-register--features-branch-audit); the house `MISSING` sentinel is the fix if it survives). No production caller outside a collection test. |
 | `async_json` | `_util.py` | **Remove** | very high | `async def async_json(r): return r.json()` decodes synchronously anyway. One caller (`exchangerate.py`) → inline `r.json()`; if payloads ever get large, `await anyio.to_thread.run_sync(r.json)`. |
 | `async_reduce` | `itertools.py` | **Reconsider** | high | AnyIO `functools.reduce` overlaps. Contract diff: Riko accepts `Callable[[T,S], T \| Awaitable[T]]` (sync **or** async reducer); AnyIO expects async. Audit the two callers (`sort`, `regex`) — if neither needs mixed reducers, delegate. |
 | `maybe_deferred` | `_util.py` | **Renamed → `maybe_async`** (done 2026-10-10) | medium-high | Semantics are useful (one API over sync+async callbacks; used by module/decorator machinery) but `deferred` is dead Twisted vocabulary (Twisted gone since v0.72). Rename the private primitive; keep behavior. |
@@ -52,7 +52,7 @@ Split into **remove/replace now**, **reconsider**, **keep**. Locations: `_util.p
 | `async_iter` | `itertools.py` | **Reduce usage, keep** | low | AnyIO itertools increasingly take sync iterables, cutting adapter need — but Riko's `cooperative=True` (scheduler checkpoints) is a real feature. Shift the model from "convert every sync iterable" to "adapt only when an API needs `AsyncIterable` or cooperative iteration." |
 | `async_map`, `async_map_stream`, `async_map_ordered_stream`, `async_merge`, `_pool_stream` | `itertools.py` | **Keep** | — | Encode Riko's concurrency/ordering/shared-budget/streaming/backpressure semantics on top of AnyIO primitives (`create_memory_object_stream`, `create_task_group`) — the layering AnyIO itself recommends, not a reinvention. |
 | `amap` | `itertools.py` | **Keep** | — | Lazy one-iterable `map` over an async source that never closes it. `anyio.itertools` has `starmap` (tuple-splatting) but no plain `map`. Replaced three hand-written per-item loops 1:1 with no added generator layer (A/B bench flat, 2026-11-12). |
-| `async_flatten` | `itertools.py` | **Keep** | — | Flattens a concurrent mapper's batches and closes the mapper with it. `anyio.itertools.chain` takes the iterables as arguments, not as a stream of them. Backs `_amap_stream` and `_aprocess_stream`. |
+| `async_flatten` | `itertools.py` | **Keep** | — | Flattens a concurrent mapper's batches and closes the mapper with it. `anyio.itertools.chain` takes the iterables as arguments, not as a stream of them. Backs `async_flat_map`, which `AsyncExecution._abuild_envelope_stream` and `_aprocess_stream` call. |
 | `alist`, `materialize` | `itertools.py` | **Keep** | — | Drain a sync **or** async iterable (to a list / a sync iterator). AnyIO has no collector. |
 | `aiter_sentinel` | `itertools.py` | **Keep** | — | Two-argument `iter` for an async `func`, sentinel matched by type. No AnyIO counterpart. |
 | `auto_close`, `aauto_close` | `riko/base/_iterutils.py`, `itertools.py` | **Keep** | — | Deferred-consumption close of a stream plus extra closables, close-once, `ResourceWarning` on a leaked resource (not a generator). AnyIO's `aclosing` only covers scoped use. |
@@ -94,8 +94,9 @@ Design notes:
   replaces `mezmorize` should be async-aware from the start rather than growing a
   second, divergent cache.
 * Keyed on the resolved url plus the arguments that change the payload (`params`,
-  `encoding`); `repr_cache` in `riko/_serialize.py` already solves the
-  unhashable-argument problem and documents the `_UNSUPPORTED` sentinel behavior.
+  `encoding`); `repr_cache` in `riko/coercion/_canonical.py` already solves the
+  unhashable-argument problem by keying on `canonical_bytes` and bypassing values that
+  cannot be encoded.
 * Needs an eviction/TTL story that sync memoization currently ducks — a long-lived async
   service is the likely consumer, unlike a one-shot sync script.
 * Separate the cache TTL from the network timeout. `build_opener` forwards the same

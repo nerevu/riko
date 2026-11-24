@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import gc
-import warnings
 from dataclasses import replace
+from functools import partial
 from threading import get_ident
 from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 
+from riko.bado._backend import async_sleep
 from riko.bado.itertools import alist, as_async
 from riko.base._config import settings
 from riko.base._exceptions import InvalidPipelineError, PipelineError
@@ -17,6 +17,7 @@ from riko.definitions._context import Context
 from riko.definitions._module_definition import ModuleDefinition
 from riko.definitions._nodes import CallableNode, ModuleNode, StreamEdge
 from riko.definitions._resource_definition import Resource
+from riko.definitions._settings import ExecutionSettings
 from riko.definitions._workflow_definition import Workflow
 from riko.execution import _async_execution as async_execution_module
 from riko.execution import _sync_execution as sync_execution_module
@@ -38,7 +39,10 @@ from riko.types.modules import ItemBuilderConf
 from tests import async_test, skipif_sync
 from tests._execution import (
     EMPTY,
+    PROCESSOR_PROBE,
+    RecordingBranch,
     agen_source,
+    arelay_pipe,
     arun_plan,
     awaitable_source,
     build_dispatcher,
@@ -62,10 +66,6 @@ _SRC = ModuleDefinition(name="src", sync_pipe=tagged_source("a"))
 _ECHO = cast("SyncModuleWrapper", lambda items, **_: iter(list(items)))
 _SINK = ModuleDefinition(name="sink", sync_pipe=_ECHO)
 _PROBE = ModuleDefinition(name="probe", sync_pipe=passthrough_pipe)
-
-_PROCESSOR_PROBE = ModuleDefinition(
-    name="probe", sync_pipe=mark_loopable(lambda item, **_: iter([item]))
-)
 
 _DOUBLED = [{"x": 2}, {"x": 4}]
 _SRC_SINK = [ModuleNode(id="a", name="src"), ModuleNode(id="b", name="sink")]
@@ -160,29 +160,8 @@ def _doubled_branches(stream: Stream, _: object, __: object, **___: object) -> C
     return iter([iter(items * 2), iter(items * 2)])
 
 
-class _RecordingBranch:
-    """A split branch that records when it is first read and each time it closes."""
-
-    def __init__(self, items: list[Item], events: list[str], tag: str) -> None:
-        self.items, self.events, self.tag = iter(items), events, tag
-        self.started = False
-
-    def __iter__(self) -> Self:
-        return self
-
-    def __next__(self) -> Item:
-        if not self.started:
-            self.started = True
-            self.events.append(f"{self.tag}-start")
-
-        return next(self.items)
-
-    def close(self) -> None:
-        self.events.append(f"{self.tag}-close")
-
-
-class _AsyncRecordingBranch(_RecordingBranch):
-    """The async twin of ``_RecordingBranch``."""
+class _AsyncRecordingBranch(RecordingBranch):
+    """The async twin of ``RecordingBranch``."""
 
     def __aiter__(self) -> Self:
         return self
@@ -212,7 +191,7 @@ def _recording_split_dispatcher(
     def split(stream: Stream, _: object, __: object, **___: object) -> Cascade:
         items = list(stream)
         tags = ("b0", "b1")
-        return iter([_RecordingBranch(items, events, tag) for tag in tags])
+        return iter([RecordingBranch(items, events, tag) for tag in tags])
 
     @splitter(objectify=False)
     async def asplit(stream, _: object, __: object, **___: object):
@@ -278,15 +257,8 @@ READERS = [
 ]
 
 
-async def _agen_rows(rows, **_):
-    async for row in as_async(rows):
-        yield row
-
-
 _DUAL_PROBE = ModuleDefinition(
-    name="probe",
-    sync_pipe=passthrough_pipe,
-    async_pipe=cast("AsyncModuleWrapper", _agen_rows),
+    name="probe", sync_pipe=passthrough_pipe, async_pipe=arelay_pipe
 )
 _SPLIT_PROBE = ModuleDefinition(name="probe", sync_pipe=_lone_branch)
 _READER_PROBE = ModuleDefinition(name="probe", sync_pipe=_decorated_reader)
@@ -332,7 +304,7 @@ RUN_REJECTIONS = [
     ),
     pytest.param(
         _named_port_workflow("count"),
-        (_SRC, _PROCESSOR_PROBE),
+        (_SRC, PROCESSOR_PROBE),
         _RESERVED,
         id="in:count-processor",
     ),
@@ -343,7 +315,7 @@ RUN_REJECTIONS = [
         id="plain-pipe-first-parameter",
     ),
     pytest.param(
-        _named_port_workflow("rows"),
+        _named_port_workflow("items"),
         (_SRC, _DUAL_PROBE),
         _RESERVED,
         id="async-pipe-first-parameter",
@@ -517,6 +489,65 @@ def _build_callable_fan_in() -> Workflow:
 async def _acollect(stream, seen):
     async for item in stream:
         seen.append(item)
+
+
+def _ident_source(pulled: set[int]) -> ModuleDefinition:
+    """Defines a three-item sync source that records each thread it yields on."""
+
+    @tag_source
+    def src(_items=None, **_):
+        for x in range(3):
+            pulled.add(get_ident())
+            yield {"x": x}
+
+    return ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src))
+
+
+def _relay_reader(
+    pulled: set[int], relayed: set[int]
+) -> tuple[Workflow, ResolverDispatcher]:
+    """Plans a sync source read by an async-only relay that records its threads."""
+
+    async def relay(source, **_):
+        async for item in as_async(source):
+            relayed.add(get_ident())
+            yield item
+
+    dispatcher = build_dispatcher(
+        _ident_source(pulled),
+        ModuleDefinition(name="m", async_pipe=cast("AsyncModuleWrapper", relay)),
+    )
+    flow = Workflow().with_nodes(
+        ModuleNode(id="a", name="src"), ModuleNode(id="b", name="m")
+    )
+    return flow, dispatcher
+
+
+def _split_reader(
+    output: str, pulled: set[int], relayed: set[int]
+) -> tuple[Workflow, ResolverDispatcher]:
+    """Plans a sync source split by an async-only splitter that records its threads."""
+
+    @splitter(objectify=False)
+    async def asplit(stream, _: object, __: object, **___: object):
+        items = []
+
+        async for item in as_async(stream):
+            relayed.add(get_ident())
+            items.append(item)
+
+        return as_async([as_async(items), as_async(items)])
+
+    split = ModuleDefinition(name="split", async_pipe=asplit)
+    dispatcher = build_dispatcher(_ident_source(pulled), _PROBE, split, _UNION)
+    return _fan_out_workflow(split=True, output=output), dispatcher
+
+
+ASYNC_ONLY_READERS = [
+    pytest.param(_relay_reader, [0, 1, 2], id="relay"),
+    pytest.param(partial(_split_reader, "u"), [0, 0, 1, 1, 2, 2], id="split-to-union"),
+    pytest.param(partial(_split_reader, "c"), [0, 1, 2], id="split-to-reader"),
+]
 
 
 def atagged_source(tag: str) -> AsyncModuleWrapper:
@@ -887,25 +918,20 @@ class TestPlanRun:
         assert events == ["b0-start", "b0-close", "b1-start", "b1-close"]
 
     @skipif_sync
-    def test_run_envelopes_closes_an_abandoned_async_split_on_exit(self) -> None:
+    def test_build_envelope_stream_closes_an_abandoned_async_split_on_exit(
+        self,
+    ) -> None:
         events: list[str] = []
         dispatcher = _recording_split_dispatcher(events, native=True)
         plan = ExecutionPlan.from_workflow(_fan_out_workflow(split=True), dispatcher)
 
         with SyncExecution() as execution:
-            next(execution.run_envelopes(plan))
+            next(execution.build_envelope_stream(plan))
 
-        assert events == ["b0-start", "b1-close", "b0-close"]
+        # Closing the output closes the branch it reads first, the unread one after.
+        assert events == ["b0-start", "b0-close", "b1-close"]
 
     @skipif_sync
-    @pytest.mark.xfail(
-        strict=True,
-        raises=RuntimeError,
-        reason=(
-            "passing an async-only node's output to an adjacent async-only node under "
-            "a sync run is not yet implemented"
-        ),
-    )
     def test_run_passes_an_async_only_stream_to_an_adjacent_async_only_node(
         self,
     ) -> None:
@@ -914,37 +940,32 @@ class TestPlanRun:
             for x in range(3):
                 yield {"x": x}
 
-        async def relay(source, **_):
-            async for item in as_async(source):
-                yield item
-
         dispatcher = build_dispatcher(
             ModuleDefinition(name="asrc", async_pipe=cast("AsyncModuleWrapper", asrc)),
-            ModuleDefinition(name="m", async_pipe=cast("AsyncModuleWrapper", relay)),
+            ModuleDefinition(name="m", async_pipe=arelay_pipe),
         )
         flow = Workflow().with_nodes(
             ModuleNode(id="a", name="asrc"), ModuleNode(id="b", name="m")
         )
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
 
-        failure = None
+        with SyncExecution() as execution:
+            assert list(execution.run(plan)) == [{"x": x} for x in range(3)]
 
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", "coroutine method 'aclose'", RuntimeWarning
-            )
+    @skipif_sync
+    @pytest.mark.parametrize(("build", "expected"), ASYNC_ONLY_READERS)
+    def test_run_pulls_an_async_only_nodes_sync_input_off_the_event_loop(
+        self, build, expected
+    ) -> None:
+        pulled: set[int] = set()
+        relayed: set[int] = set()
+        flow, dispatcher = build(pulled, relayed)
+        result = run_plan(flow, dispatcher=dispatcher)
 
-            try:
-                with SyncExecution() as execution:
-                    assert list(execution.run(plan)) == [{"x": x} for x in range(3)]
-            except RuntimeError as error:
-                # A fresh error drops the traceback that keeps the source alive.
-                failure = RuntimeError(*error.args)
-
-            gc.collect()
-
-        if failure is not None:
-            raise failure
+        assert sorted(item["x"] for item in result) == expected
+        assert pulled
+        assert relayed
+        assert not pulled & relayed
 
     def test_run_drops_split_branch_values_past_the_last_input_item(self) -> None:
         split = ModuleDefinition(name="split", sync_pipe=_doubled_branches)
@@ -1013,13 +1034,29 @@ class TestPlanRun:
         ]
 
     @skipif_sync
+    def test_run_reads_a_slow_async_only_source_past_the_shutdown_timeout(self) -> None:
+        @tag_source
+        async def src(_items=None, **_):
+            await async_sleep(0.2)
+            yield {"x": 1}
+
+        async_pipe = cast("AsyncModuleWrapper", src)
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", async_pipe=async_pipe)
+        )
+        settings = ExecutionSettings(shutdown_timeout=0.05)
+        flow = module_workflow("src")
+
+        assert run_plan(flow, dispatcher=dispatcher, settings=settings) == [{"x": 1}]
+
+    @skipif_sync
     def test_run_chains_async_only_node_after_sync_node(self) -> None:
         @tag_source
         def src(_items=None, **_):
             yield {"x": 1}
 
         async def atag(items, **_):
-            for row in items:
+            async for row in as_async(items):
                 yield {**row, "seen": True}
 
         dispatcher = build_dispatcher(
@@ -1343,6 +1380,37 @@ class TestAsyncPlanRun:
 
         assert await arun_plan(flow, dispatcher=dispatcher) == [{"t": "a"}]
         assert seen["source"] == []
+
+    @async_test
+    async def test_arun_passes_a_sync_only_stream_to_an_adjacent_sync_only_node(
+        self,
+    ) -> None:
+        pulled: list[int] = []
+        relayed: list[int] = []
+
+        @tag_source
+        def src(_items=None, **_):
+            for x in range(3):
+                pulled.append(get_ident())
+                yield {"x": x}
+
+        def relay(source, **_):
+            for item in source:
+                relayed.append(get_ident())
+                yield item
+
+        dispatcher = build_dispatcher(
+            ModuleDefinition(name="src", sync_pipe=cast("SyncModuleWrapper", src)),
+            ModuleDefinition(name="m", sync_pipe=cast("SyncModuleWrapper", relay)),
+        )
+        flow = Workflow().with_nodes(
+            ModuleNode(id="a", name="src"), ModuleNode(id="b", name="m")
+        )
+
+        assert await arun_plan(flow, dispatcher=dispatcher) == [
+            {"x": x} for x in range(3)
+        ]
+        assert pulled == relayed
 
     @pytest.mark.parametrize(("split", "native"), ASYNC_FAN_OUTS)
     @async_test

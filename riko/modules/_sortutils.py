@@ -122,6 +122,16 @@ def _resolve_default(
     return _default
 
 
+def _cast_timestamp(value: date, fallback_tzinfo: tzinfo) -> float:
+    """Casts a date or datetime to a POSIX timestamp."""
+    if isinstance(value, dt):
+        aware = resolve_aware_datetime(value, fallback_tzinfo=fallback_tzinfo)
+    else:
+        aware = date_to_datetime(value, fallback_tzinfo=fallback_tzinfo)
+
+    return aware.timestamp()
+
+
 def def_itemgetter(
     attr: str,
     default: PrimitiveValue | None = None,
@@ -187,12 +197,7 @@ def def_itemgetter(
             casted = sort_default
 
         if cast_type in DATELIKE_TYPES and isinstance(casted, (date, dt)):
-            if isinstance(casted, dt):
-                aware = resolve_aware_datetime(casted, fallback_tzinfo=fallback_tzinfo)
-            else:
-                aware = date_to_datetime(casted, fallback_tzinfo=fallback_tzinfo)
-
-            casted = aware.timestamp()
+            casted = _cast_timestamp(casted, fallback_tzinfo)
 
         unsortable = not isinstance(casted, SORTABLE_TYPES)
 

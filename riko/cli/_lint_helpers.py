@@ -51,11 +51,16 @@ KEPT_HELPERS: frozenset[tuple[str, str]] = frozenset(
         ("riko/bado/itertools.py", "AsyncTee._aadvance"),
         ("riko/base/_iterutils.py", "Tee._advance"),
         ("riko/execution/_async_execution.py", "AsyncExecution._aacquire_entry"),
+        (
+            "riko/execution/_async_execution.py",
+            "AsyncExecution._abuild_envelope_stream",
+        ),
         ("riko/execution/_async_execution.py", "AsyncExecution._abuild_node_ports"),
         ("riko/execution/_async_execution.py", "AsyncExecution._abuild_splitter_ports"),
         ("riko/execution/_async_execution.py", "AsyncExecution._acquire_entry_once"),
         ("riko/execution/_provenance.py", "_TableProvenance._forget"),
         ("riko/execution/_sync_execution.py", "SyncExecution._acquire_entry"),
+        ("riko/execution/_sync_execution.py", "SyncExecution._build_envelope_stream"),
         ("riko/execution/_sync_execution.py", "SyncExecution._build_node_ports"),
         ("riko/execution/_sync_execution.py", "SyncExecution._build_splitter_ports"),
     }

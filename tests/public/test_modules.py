@@ -821,8 +821,8 @@ class TestRegex:
         self, rules, default, text, expected
     ):
         conf = RegexConf({"rule": rules, "default": default})
-        stream = async_regex({"content": text}, conf=conf)
-        assert await anext(stream) == {"content": expected}
+        async with maybe_aclosing(async_regex({"content": text}, conf=conf)) as stream:
+            assert await anext(stream) == {"content": expected}
 
     def test_a_mapping_rule_keeps_native_replace(self):
         """A plain-mapping rule carries ``nativereplace`` through to the rewrite."""
@@ -1577,10 +1577,10 @@ class TestAsyncOperator:
         def async_pipe(stream, objconf, tuples, **kwargs):
             yield from stream
 
-        stream = async_pipe(items)
-        assert isinstance(stream, AsyncIterator)
-        assert not isawaitable(stream)
-        assert await anext(stream) == {"content": "a"}
+        async with maybe_aclosing(async_pipe(items)) as stream:
+            assert isinstance(stream, AsyncIterator)
+            assert not isawaitable(stream)
+            assert await anext(stream) == {"content": "a"}
 
     @async_test
     async def test_legacy_coroutine_parser_operator_returns_async_iterator(self):

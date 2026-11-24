@@ -7,6 +7,7 @@ import json
 import pickle  # noqa: S403
 from collections import ChainMap
 from functools import partial
+from itertools import chain
 from typing import TYPE_CHECKING, Any, cast, get_args, get_type_hints
 
 import pytest
@@ -184,7 +185,7 @@ RESOURCE_SHAPES = [
         id="external",
     ),
     pytest.param(
-        lambda: Resource(Connection()), ResourceStrategy.OWNED, False, True, id="owned"
+        lambda: Resource(Connection()), ResourceStrategy.VALUE, False, True, id="value"
     ),
     pytest.param(
         lambda: Resource.from_factory(sync_callable_factory, cleanup=close_connection),
@@ -650,7 +651,7 @@ class TestParsePort:
 
 
 def _attrs_fields(*classes) -> set[str]:
-    return {name for cls in classes for name in fields_dict(cls)}
+    return set(chain.from_iterable(map(fields_dict, classes)))
 
 
 class TestRawWorkflowFields:

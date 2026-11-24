@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
 
 import pytest
 
+from conftest import QUIET_LEAKS
 from riko.bado._backend import async_sleep, checkpoint, fail_after, run
 from riko.bado.itertools import alist, as_async, async_map
 from riko.base._config import DEF_CONCURRENCY_LIMIT
@@ -1914,6 +1915,7 @@ class TestAsyncPipelineStream:
         assert [item async for item in stream] == []
         assert await anext(stream, None) is None
 
+    @QUIET_LEAKS
     @async_test
     async def test_bare_break_leaves_the_callers_cancel_scope_intact(self):
         source = [{"content": str(index)} for index in range(5)]

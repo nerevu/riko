@@ -178,7 +178,7 @@ class PreparedWrite:
 
 class SyncWriteSession(Protocol):
     """
-    A live, execution-owned synchronous write session.
+    A live synchronous write session the execution closes.
 
     A :class:`PreparedWrite` says *what* to write; a session performs *how this
     execution* writes it, as three distinct operations plus resource cleanup:
@@ -214,7 +214,7 @@ class SyncWriteSession(Protocol):
 
 
 class AsyncWriteSession(Protocol):
-    """A live, execution-owned asynchronous write session."""
+    """A live asynchronous write session the execution closes."""
 
     async def awrite(self, value: Item | Feed) -> None: ...
     async def aacquire(self) -> None: ...

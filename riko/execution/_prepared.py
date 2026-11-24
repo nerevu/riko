@@ -15,17 +15,17 @@ from functools import cached_property, partial
 from inspect import Parameter, signature
 from itertools import chain, islice
 from operator import attrgetter
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, NamedTuple, Self
 
 from attrs import asdict, define, evolve, field, fields_dict
 
 from riko.bado._util import async_partial
-from riko.bado.itertools import as_async
+from riko.bado.itertools import aauto_close, as_async
 from riko.base._config import DEFAULT_OUTPUT
 from riko.base._exceptions import InvalidPipelineError
 from riko.base._funcutils import map_values, resolve_default
 from riko.base._guards import is_async_callable, require_value
-from riko.base._iterutils import gen_nested_mappings, gen_non_null
+from riko.base._iterutils import auto_close, gen_nested_mappings, gen_non_null
 from riko.base._require_guards import (
     def_from_require,
     narrow_from_require,
@@ -154,6 +154,44 @@ def _convert_others(arg: Iterable[object] | None) -> Sequence[object] | None:
     return tuple(arg) if arg else None
 
 
+class NodeInputs[V](NamedTuple):
+    """
+    The streams wired onto a node's input ports.
+
+    Attributes:
+
+        stream: The stream on the default input port.
+        named: The streams on the named input ports, keyed by port name.
+        others: The streams on the positional input ports, in port order.
+
+    Examples:
+
+        >>> inputs = NodeInputs([0], {"part": [1, 2]}, None)
+        >>> inputs.streams
+        ([0], [1, 2])
+        >>> inputs.map(len)
+        NodeInputs(stream=1, named={'part': 2}, others=None)
+
+    """
+
+    stream: V | None
+    named: dict[PortName, V]
+    others: Sequence[V] | None
+
+    @property
+    def streams(self) -> tuple[V, ...]:
+        """The streams in port order: the default port's, the named, then the rest."""
+        stream = () if self.stream is None else (self.stream,)
+        others = () if self.others is None else self.others
+        return (*stream, *self.named.values(), *others)
+
+    def map[W](self, func: Callable[[V], W]) -> NodeInputs[W]:
+        """Builds the inputs with ``func`` applied to each stream."""
+        stream = None if self.stream is None else func(self.stream)
+        others = None if self.others is None else tuple(map(func, self.others))
+        return NodeInputs(stream, map_values(func, self.named), others)
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ExecutionExtras[V]:
     """
@@ -213,11 +251,11 @@ class ExecutionExtras[V]:
         """The fields that are set, keyed by name."""
         return asdict(self, recurse=False, filter=lambda _, value: value is not None)
 
-    def map_kwargs(
-        self, func: Callable[[V], object], named: Mapping[PortName, V]
-    ) -> dict[str, object]:
+    def map_inputs[W](
+        self, func: Callable[[V], W], named: Mapping[PortName, V]
+    ) -> NodeInputs[W]:
         """
-        Maps ``func`` over a node's secondary input streams to build its call's kwargs.
+        Builds a node's secondary input streams with ``func`` applied to each.
 
         Args:
 
@@ -226,21 +264,44 @@ class ExecutionExtras[V]:
 
         Returns:
 
-            The node's call kwargs: each ``named`` and ``others`` stream with ``func``
-            applied, plus ``resources`` and ``embed`` when they are set.
+            The mapped ``named`` and ``others`` streams, with no default-port stream.
 
         Examples:
 
             >>> extras = ExecutionExtras(others=[[1], [2]])
-            >>> extras.map_kwargs(len, {"other": [3, 4]})
+            >>> inputs = extras.map_inputs(len, {"other": [3, 4]})
+            >>> inputs
+            NodeInputs(stream=None, named={'other': 2}, others=(1, 1))
+            >>> inputs.streams
+            (2, 1, 1)
+
+        """
+        return NodeInputs(None, dict(named), self.others).map(func)
+
+    def build_kwargs[W](self, inputs: NodeInputs[W]) -> dict[str, object]:
+        """
+        Builds a node's call kwargs from its built secondary input streams.
+
+        Args:
+
+            inputs: The node's ``named`` and ``others`` streams, as the call reads them.
+
+        Returns:
+
+            Each ``named`` stream by port name. Plus ``others``, ``resources``, and
+            ``embed`` when they are set.
+
+        Examples:
+
+            >>> extras = ExecutionExtras(others=[[1], [2]])
+            >>> inputs = extras.map_inputs(len, {"other": [3, 4]})
+            >>> extras.build_kwargs(inputs)
             {'other': 2, 'others': (1, 1)}
 
         """
-        others = None if self.others is None else map(func, self.others)
-        mapped = ExecutionExtras(
-            others=others, resources=self.resources, embed=self.embed
-        )
-        return {**map_values(func, named), **mapped.kwargs}
+        others, resources = inputs.others, self.resources
+        mapped = ExecutionExtras(others=others, resources=resources, embed=self.embed)
+        return {**inputs.named, **mapped.kwargs}
 
 
 def _get_keyword_names(*funcs: Func[object]) -> frozenset[str]:
@@ -513,14 +574,20 @@ def _gen_stream_results[T](
     resources: Mapping[str, object] | None = None,
     **kwargs: FrozenJSON,
 ) -> Iterator[T]:
-    """Applies a callable node's ``fn`` to each item of a stream, one result each."""
+    """
+    Applies a callable node's ``fn`` to each item of a stream, one result each.
+
+    Closing the result stream, even before its first read, closes the stream.
+    """
     options = dict(**kwargs, **normalize_mapping(resources))
-    return (require_value(fn(item, **options), _AWAITABLE_RESULT) for item in items)
+    stream = iter(items)
+    results = (require_value(fn(item, **options), _AWAITABLE_RESULT) for item in stream)
+    return auto_close(results, stream)
 
 
-async def _agen_stream_results[T](
+def _agen_stream_results[T](
     fn: Func[T | Awaitable[T]],
-    item: AnyIterable[object] = (),
+    items: AnyIterable[object] = (),
     context: Context | None = None,
     /,
     *,
@@ -533,9 +600,8 @@ async def _agen_stream_results[T](
     The async twin of ``_gen_stream_results``; the stream may be async or sync.
     """
     call = async_partial(fn, **kwargs, **normalize_mapping(resources))
-
-    async for value in as_async(item):
-        yield await call(value)
+    stream = as_async(items)
+    return aauto_close((await call(item) async for item in stream), stream)
 
 
 @define(frozen=True, slots=True)
@@ -810,83 +876,95 @@ class PreparedNode(_PreparedBase):
         """
         return self.loopable and not self.has_secondary_input_streams
 
-    @cached_property
-    def is_thread_holder(self) -> bool:
+    def is_thread_holder(self, *, is_async: bool = False) -> bool:
         """
-        Whether an async run holds a thread while the node reads upstream.
+        Whether a run holds a node thread while the node reads upstream.
 
-        Only a node without an async implementation does, and only when it reads its
-        whole input in one call. A mappable node runs each item after reading it.
+        Only a node the run adapts does. I.e., a sync-only node under an async run, or
+        an async-only node under a sync run. It does only when it reads its whole input
+        in one call. A mappable node runs each item after reading it.
+
+        Kwargs:
+
+            is_async: Whether the run is asynchronous (default: False).
+
         """
-        return self.module.async_pipe is None and not self.is_mappable
+        pipe = self.module.async_pipe if is_async else self.module.sync_pipe
+        return pipe is None and not self.is_mappable
 
     def _get_identity(self, prepared: object) -> IdentityMode | None:
         declared = prepared.identity if isinstance(prepared, DeclaresIdentity) else None
         return self.module.identity if declared is None else declared
 
-    def _build_sync_interface(
-        self, pipe: SyncModuleWrapper
-    ) -> SyncInterface[Iterator[object]]:
-        normalizer = None
-        call: NodeCall[Iterator[object]]
-        item_call: NodeCall[Iterator[object]]
-
-        if isinstance(node := self.node, CallableNode):
-            conf = self.module.conf
-            stream_args = (_gen_stream_results, node.fn)
-            item_args = (_gen_item_result, node.fn)
-
-            # partials, not closures because it is sent to the process pool
-            call = partial(*stream_args, **conf)
-            item_call = partial(*item_args, **conf)
-            identity = IdentityMode.PRESERVE if node.identity is None else node.identity
-        else:
-            conf, options = self.embed_or_self_conf, self.options.kwargs
-            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
-            identity = self._get_identity(call)
-
-            if isinstance(call, NormalizesItems):
-                normalizer = call.normalize_item
-
-        return SyncInterface(pipe, call, item_call, identity, normalizer)
-
     @cached_property
     def sync_interface(self) -> SyncInterface[Iterator[object]] | None:
         """The synchronous pipe with its prepared call."""
-        pipe = self.module.sync_pipe
-        return None if pipe is None else self._build_sync_interface(pipe)
+        interface = None
 
-    def _build_async_interface(
-        self, pipe: AsyncModuleWrapper
-    ) -> AsyncInterface[AsyncIterator[object]]:
-        normalizer = None
-        call: NodeCall[AsyncIterator[object]]
-        item_call: NodeCall[AsyncIterator[object]]
+        if (pipe := self.module.sync_pipe) is not None:
+            normalizer = None
+            call: NodeCall[Iterator[object]]
+            item_call: NodeCall[Iterator[object]]
 
-        if isinstance(node := self.node, CallableNode):
-            conf = self.module.conf
-            stream_args = (_agen_stream_results, node.fn)
-            item_args = (_agen_item_result, node.fn)
+            if isinstance(node := self.node, CallableNode):
+                conf = self.module.conf
+                stream_args = (_gen_stream_results, node.fn)
+                item_args = (_gen_item_result, node.fn)
 
-            # partials, not closures because it is sent to the process pool
-            call = partial(*stream_args, **conf)
-            item_call = partial(*item_args, **conf)
-            identity = IdentityMode.PRESERVE if node.identity is None else node.identity
-        else:
-            conf, options = self.embed_or_self_conf, self.options.kwargs
-            call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
-            identity = self._get_identity(call)
+                # partials, not closures because it is sent to the process pool
+                call = partial(*stream_args, **conf)
+                item_call = partial(*item_args, **conf)
 
-            if isinstance(call, NormalizesItems):
-                normalizer = call.normalize_item
+                if node.identity is None:
+                    identity = IdentityMode.PRESERVE
+                else:
+                    identity = node.identity
+            else:
+                conf, options = self.embed_or_self_conf, self.options.kwargs
+                call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+                identity = self._get_identity(call)
 
-        return AsyncInterface(pipe, call, item_call, identity, normalizer)
+                if isinstance(call, NormalizesItems):
+                    normalizer = call.normalize_item
+
+            interface = SyncInterface(pipe, call, item_call, identity, normalizer)
+
+        return interface
 
     @cached_property
     def async_interface(self) -> AsyncInterface[AsyncIterator[object]] | None:
         """The asynchronous pipe with its prepared call."""
-        pipe = self.module.async_pipe
-        return None if pipe is None else self._build_async_interface(pipe)
+        interface = None
+
+        if (pipe := self.module.async_pipe) is not None:
+            normalizer = None
+            call: NodeCall[AsyncIterator[object]]
+            item_call: NodeCall[AsyncIterator[object]]
+
+            if isinstance(node := self.node, CallableNode):
+                conf = self.module.conf
+                stream_args = (_agen_stream_results, node.fn)
+                item_args = (_agen_item_result, node.fn)
+
+                # partials, not closures because it is sent to the process pool
+                call = partial(*stream_args, **conf)
+                item_call = partial(*item_args, **conf)
+
+                if node.identity is None:
+                    identity = IdentityMode.PRESERVE
+                else:
+                    identity = node.identity
+            else:
+                conf, options = self.embed_or_self_conf, self.options.kwargs
+                call = item_call = build_call(pipe, *self.extras, conf=conf, **options)
+                identity = self._get_identity(call)
+
+                if isinstance(call, NormalizesItems):
+                    normalizer = call.normalize_item
+
+            interface = AsyncInterface(pipe, call, item_call, identity, normalizer)
+
+        return interface
 
     @property
     def sync_map_interface(self) -> SyncInterface[Iterator[object]] | None:
@@ -950,31 +1028,40 @@ class PreparedSplitter(_PreparedBase):
         return (OUT, *(f"{OUT}:{k}" for k in range(1, self.splits)))
 
     def validate_streams(
-        self, *owned: StreamOf[object] | AsyncStreamOf[object]
+        self, *streams: StreamOf[object] | AsyncStreamOf[object]
     ) -> None:
         """
         Validates that the splitter yielded one stream per declared split.
 
         Args:
 
-            owned: The owned streams the splitter yielded, read up to one past
-                ``splits``.
+            streams: The streams the splitter yielded, read up to one past ``splits``.
+                The run closes them.
 
         Raises:
 
-            InvalidPipelineError: If the number of ``owned`` streams differs from
-                ``splits``.
+            InvalidPipelineError: If the number of ``streams`` differs from ``splits``.
 
         """
-        if (count := len(owned)) != self.splits:
+        if (count := len(streams)) != self.splits:
             yielded = f"more than {self.splits}" if count > self.splits else count
             msg = f"splitter node {self.node.id!r} yielded {yielded} streams but "
             raise InvalidPipelineError(msg + f"declares {self.splits}")
 
-    @property
-    def is_thread_holder(self) -> bool:
-        """Whether an async run holds a thread while the splitter reads upstream."""
-        return self.module.async_pipe is None
+    def is_thread_holder(self, *, is_async: bool = False) -> bool:
+        """
+        Whether a run holds a node thread while the splitter reads upstream.
+
+        A splitter the run adapts does. I.e., a sync-only splitter under an async run,
+        or an async-only splitter under a sync run.
+
+        Kwargs:
+
+            is_async: Whether the run is asynchronous (default: False).
+
+        """
+        pipe = self.module.async_pipe if is_async else self.module.sync_pipe
+        return pipe is None
 
     @cached_property
     def sync_interface(self) -> SyncInterface[Cascade] | None:
@@ -1232,14 +1319,17 @@ class ExecutionPlan:
         edges = chain.from_iterable(nodes[i].incoming for i in required)
         return Counter(chain((edge.source_key for edge in edges), [endpoint.port_key]))
 
-    def get_thread_demand(self, output: OutputName) -> int:
+    def get_thread_demand(self, output: OutputName, *, is_async: bool = False) -> int:
         """
-        Computes how many node threads an async run of ``output`` may hold at once.
+        Computes how many node threads a run of ``output`` may hold at once.
 
-        A node without an async implementation that reads its whole input in one call
-        holds a thread while it reads its input streams. It needs one thread more than
-        the max number of threads any one of its input streams holds. A mappable node
-        runs each item after it has been read. It needs no threads.
+        Only a node the run adapts does. I.e., a sync-only node under an async run, or
+        an async-only node under a sync run. It does only when it reads its whole input
+        in one call. In that case it holds a thread while it reads its input streams.
+
+        It needs one thread more than the max number of threads any one of its input
+        streams holds. A mappable node runs each item after it has been read. It needs
+        no threads.
 
         Nodes with a ``union`` or ``join`` module read their input streams one at a
         time. They need only the max any one input stream holds. Otherwise a node may
@@ -1249,6 +1339,10 @@ class ExecutionPlan:
         Args:
 
             output: The name of the workflow output being run.
+
+        Kwargs:
+
+            is_async: Whether the run is asynchronous (default: False).
 
         Returns:
 
@@ -1262,14 +1356,13 @@ class ExecutionPlan:
             >>>
             >>> nodes = (ModuleNode(id=_id, name="uniq") for _id in "ab")
             >>> flow = Workflow().with_nodes(*nodes)
-            >>> plan = ExecutionPlan.from_workflow(flow, dispatcher)
-            >>> plan.get_thread_demand("default")
-            0
             >>> pipe = dispatcher.require("uniq")
             >>> modules = dict.fromkeys("ab", ResolvedModule("uniq", sync_pipe=pipe))
-            >>> sync_plan = ExecutionPlan(flow, modules=modules)
-            >>> sync_plan.get_thread_demand("default")
+            >>> plan = ExecutionPlan(flow, modules=modules)
+            >>> plan.get_thread_demand("default", is_async=True)
             2
+            >>> plan.get_thread_demand("default")
+            0
 
         """
         demand: dict[NodeId, int] = {}
@@ -1279,7 +1372,7 @@ class ExecutionPlan:
             node = self.nodes[node_id]
             max_count = max(upstream_demand, default=0)
 
-            if node.is_thread_holder:
+            if node.is_thread_holder(is_async=is_async):
                 demand[node_id] = max_count + 1
             elif node.sequential_inputs:
                 demand[node_id] = max_count
@@ -1562,6 +1655,37 @@ class ExecutionPlan:
         positional = frozenset() if module is None else module._positional_names
         return parse_port(port).name in reserved | positional
 
+    def _validate_port_wiring(self) -> None:
+        """
+        Validates that every splitter has an output and every read port exists.
+
+        Checks input reference splitter counts once ``with_inputs`` supplies the value.
+        """
+        nodes = self.nodes
+        pending = {
+            node_id
+            for node_id, node in nodes.items()
+            if isinstance(node, PreparedSplitter) and node.has_pending_splits
+        }
+
+        for node_id, node in nodes.items():
+            if (
+                isinstance(node, PreparedSplitter)
+                and node_id not in pending
+                and (splits := node.splits) < 1
+            ):
+                msg = f"node {node_id!r} needs at least one split, got {splits}"
+                raise InvalidPipelineError(msg)
+
+        sources = (edge.source_key for edge in self.workflow.graph_edges)
+        outputs = (endpoint.port_key for endpoint in self.index.outputs.values())
+        read = (key for key in chain(sources, outputs) if key[0] not in pending)
+
+        for node_id, port in read:
+            if port not in (ports := nodes[node_id].output_ports):
+                msg = f"node {node_id!r} has no output port {port!r}; it produces "
+                raise InvalidPipelineError(msg + f"{ports}")
+
     def validate(self) -> None:
         """
         Validates that the workflow is runnable and the plan resolves its nodes.
@@ -1599,42 +1723,6 @@ class ExecutionPlan:
             raise InvalidPipelineError(msg)
 
         self._validate_port_wiring()
-
-    def _gen_read_ports(self) -> Iterator[PortKey]:
-        """The node id and canonical port of each edge source and workflow output."""
-        yield from (edge.source_key for edge in self.workflow.graph_edges)
-        yield from (endpoint.port_key for endpoint in self.index.outputs.values())
-
-    def _validate_port_wiring(self) -> None:
-        """
-        Validates that every splitter has an output and every read port exists.
-
-        Input reference splitter counts are checked once ``with_inputs`` supplies the
-        value.
-        """
-        nodes = self.nodes
-        pending = {
-            node_id
-            for node_id, node in nodes.items()
-            if isinstance(node, PreparedSplitter) and node.has_pending_splits
-        }
-
-        for node_id, node in nodes.items():
-            if (
-                isinstance(node, PreparedSplitter)
-                and node_id not in pending
-                and (splits := node.splits) < 1
-            ):
-                msg = f"node {node_id!r} needs at least one split, got {splits}"
-                raise InvalidPipelineError(msg)
-
-        read = (key for key in self._gen_read_ports() if key[0] not in pending)
-
-        for node_id, port in read:
-            if port not in (ports := nodes[node_id].output_ports):
-                msg = f"node {node_id!r} has no output port {port!r}; it produces "
-                msg += f"{ports}"
-                raise InvalidPipelineError(msg)
 
 
 __all__ = [

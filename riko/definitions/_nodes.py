@@ -445,7 +445,7 @@ class CacheNode(RikoNode):
 
 @define(frozen=True, slots=True, kw_only=True)
 class SubscribeNode(RikoNode):
-    """A node owning subscription policy for a published stream."""
+    """A node that sets subscription policy for a published stream."""
 
     family: ClassVar[NodeFamily] = "subscribe"
     policy: FrozenPolicy = field(

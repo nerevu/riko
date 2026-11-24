@@ -285,7 +285,10 @@ CLASS_HISTORY = {
             "(11-19 adapted async-only streams, worker-thread embed drain; closer "
             "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
-            "stream, splitter cascade at node start; cancellation window, failed iter)"
+            "stream, splitter cascade at node start; cancellation window, failed "
+            "iter); uncommitted (11-22 async-only hand-through); uncommitted (11-23 "
+            "native async inputs, seed and root wrappers run-owned); uncommitted "
+            "(11-23 callable stream wrappers own their input)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
@@ -414,7 +417,7 @@ CLASS_HISTORY = {
         (
             "cdbeda1a (10-31 port spellings); ededc9ce (11-03 regex field case); "
             "83630c28 (11-03 dotted/case rename fields); 9bbcf0ab (11-14 ModuleName "
-            "resolvers)"
+            "resolvers); e54297d1 (11-23 split phrasal-verb ban)"
         ),
         (
             "try a case variant, dotted form, zero-padded index, or NewType/str twin "
@@ -551,6 +554,18 @@ CLASS_HISTORY = {
         (
             "a public first parameter passed twice (`pipe(items, item=x)`): Python's "
             "error is accurate and `item` is a reserved keyword"
+        ),
+    ),
+    "inert-knob": BugClass(
+        "e54297d1 (11-22 C90 selected; mccabe table configured without its rule)",
+        (
+            "for each [tool.ruff.lint.<plugin>] table, confirm its rule prefix is "
+            "selected; for each [tool.*] threshold, confirm the tool that reads it "
+            "runs"
+        ),
+        (
+            "a threshold read only by an explicit heavyweight check (pylint strict, "
+            "pyright verify) that the standard lint suite leaves out"
         ),
     ),
     "other": BugClass(

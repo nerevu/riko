@@ -260,7 +260,7 @@ new permanent bullet here.
   `Literal`, a raise, or move the decision into the caller.
 - **Callable parameter names.** `fn` is a callable the user supplies
   (`Pipeline.map(fn)`, `CallableNode.fn`); `call` is a pipe's or node's prepared call,
-  its configuration and context already bound (`NodeCall`, `ItemCall`, `LoopCall`,
+  its configuration and context already bound (`NodeCall`, `ItemCall`,
   `build_item_call`); `func` is any other callable (helpers, pools, parsers).
 - **Coroutine prefix marks a sync twin.** Give an `async def` an `a`/`_a` prefix only
   when it has a sync counterpart of the same name (`run`/`arun`, `close`/`aclose`,

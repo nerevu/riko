@@ -1,18 +1,18 @@
 # vim: sw=4:ts=4:expandtab
 """
-Private synchronous execution that runs a prepared workflow.
+Private synchronous execution that runs an execution plan.
 
-It owns one exit stack for a run's acquired resources, a lazily started blocking
-portal for async-only components, and the run's one worker pool.
+It holds an exit stack that closes a run's acquired resources, a lazily started
+blocking portal for async-only components, and the run's one worker pool.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Callable, Iterable, Iterator, Mapping
+from collections.abc import AsyncIterable, Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import ExitStack
-from functools import cached_property, partial
-from inspect import isawaitable, isgenerator
+from functools import partial
+from inspect import isawaitable
 from itertools import islice
 from operator import attrgetter
 from typing import TYPE_CHECKING, ClassVar, Literal, Self, cast, overload
@@ -21,10 +21,16 @@ from attrs import define, field
 
 from riko.bado._backend import fail_after, start_blocking_portal
 from riko.bado._util import as_awaitable, maybe_async, maybe_closing, run_bridged
+from riko.bado.itertools import aauto_close
 from riko.base._config import DEFAULT_OUTPUT, settings
 from riko.base._exceptions import InvalidPipelineError, PipelineStateError
-from riko.base._funcutils import call_if_distinct, map_values
-from riko.base._guards import ASYNC_CLEANUP_MSG, is_async_callable, is_awaitable
+from riko.base._funcutils import call_if_distinct, compose, map_values
+from riko.base._guards import (
+    ASYNC_CLEANUP_MSG,
+    SyncClosable,
+    is_async_callable,
+    is_awaitable,
+)
 from riko.base._iterutils import Tee, auto_close
 from riko.base._require_guards import require_non_null
 from riko.coercion._sequences import listize
@@ -34,21 +40,20 @@ from riko.types._feed import (
     ItemCall,
     OutputPorts,
     PortMap,
-    TrackedCall,
     _ItemEnvelope,
 )
 from riko.types._io import resolve_closer
 from riko.types._resource import (
     AsyncLifecyclePlan,
     ExternalPlan,
-    OwnedPlan,
     SyncLifecyclePlan,
     ValueFactoryPlan,
+    ValuePlan,
 )
-from riko.types._streams import require_async_stream, require_stream
+from riko.types._streams import Item, require_async_stream, require_stream
 from riko.types._workflow import OUT
 
-from ._adapt import to_sync
+from ._adapt import Bridge, to_async, to_sync
 from ._concurrency import build_item_call, build_tracked_call, require_process_safe
 from ._execution import (
     DEFAULT_ENVELOPES,
@@ -58,14 +63,13 @@ from ._execution import (
     _BaseExecution,
     _FailedAcquisition,
 )
-from ._pools import _PoolLifetime
+from ._pools import _PoolLifetime, flat_map
 from ._prepared import (
     NO_PIPE_MSG,
     AsyncInterface,
     ExecutionExtras,
     PreparedNode,
     PreparedSplitter,
-    SyncInterface,
 )
 from ._provenance import NodeProvenance, gen_result_envelopes
 from ._resource_acquisition import build_context_manager, call_factory
@@ -77,30 +81,42 @@ if TYPE_CHECKING:
     from contextlib import AbstractAsyncContextManager
     from types import TracebackType
 
+    from anyio import CapacityLimiter as Limiter
     from anyio.from_thread import BlockingPortal
 
     from riko.definitions._context import Context
     from riko.definitions._resource_definition import Resource
     from riko.types._enums import IdentityMode
+    from riko.types._feed import AsyncEnvelopeGenerator
     from riko.types._resource import Cleanup, ResourcePlan
-    from riko.types._streams import (
-        AnyIterable,
-        AsyncCascade,
-        AsyncStreamOf,
-        Cascade,
-        CascadeOf,
-        StreamOf,
-    )
+    from riko.types._streams import AnyIterable, AsyncStreamOf, StreamOf
     from riko.types._workflow import NodeId, OutputName, PortKey
     from riko.types._wrappers import Func
 
+    from ._execution import _Reservation
     from ._prepared import ExecutionPlan
 
-_get_value = attrgetter("value")
-_unwrap = partial(map, _get_value)
+
+def _unwrap[T](stream: EnvelopeStream[T]) -> auto_close[T]:
+    """Unwraps each envelope's value and closes ``stream`` once the values end."""
+    return auto_close(map(attrgetter("value"), stream), stream)
 
 
-def _gen_item_stream[T](
+def _auto_close[T](stream: Iterator[T]) -> auto_close[T]:
+    """
+    Builds a self-closing wrapper over an iterator that has a synchronous close.
+
+    Raises:
+
+        InvalidPipelineError: Before any item is read, if the stream's only close is
+            async.
+
+    """
+    resolve_closer(stream, is_async=False)
+    return auto_close(stream)
+
+
+def _gen_envelopes[T](
     call: ItemCall[T],
     node_id: NodeId,
     identity: IdentityMode | None,
@@ -112,8 +128,7 @@ def _gen_item_stream[T](
     The item being read is closed when the stream is closed early.
     """
     for parent in stream:
-        with maybe_closing(call(parent.value)) as results:
-            yield from gen_result_envelopes(node_id, results, parent, identity)
+        yield from gen_result_envelopes(node_id, call(parent.value), parent, identity)
 
 
 async def _call_on_loop[R](
@@ -130,35 +145,31 @@ async def _call_on_loop[R](
 
 
 def _wrap(
-    values: Iterator[object], envelopes: EnvelopeStream[object]
+    values: Iterator[object], stream: EnvelopeStream[object]
 ) -> EnvelopeStream[object]:
     """Matches each splitter stream value with the input envelope it came from."""
-    for value, envelope in zip(values, envelopes, strict=False):
+    for value, envelope in zip(values, stream, strict=False):
         yield envelope.with_value(value)
 
 
-def _maybe_close[T](
-    value: T,
-    cleanup: Cleanup[T] | Literal[False] | None = None,
-    is_async: bool = False,
-    bridge: Callable[[Awaitable[object]], object] | None = None,
-) -> None:
+def _maybe_close(value: object) -> None:
     """Closes a value now if it has a close."""
-    closer = resolve_closer(value, cleanup=cleanup, is_async=is_async)
-
-    if closer is not None:
-        run_bridged(closer, bridge)
+    if (closer := resolve_closer(value, is_async=False)) is not None:
+        run_bridged(closer)
 
 
 def _queue_close[T](
     callback: Callable[[Func[None]], object],
     value: T,
     cleanup: Cleanup[T] | Literal[False] | None = None,
-    is_async: bool = False,
     bridge: Callable[[Awaitable[object]], object] | None = None,
 ) -> None:
-    """Hands ``callback`` the value's close to run later, if it has one."""
-    closer = resolve_closer(value, cleanup=cleanup, is_async=is_async)
+    """
+    Hands ``callback`` the value's close to run later, if it has one.
+
+    When ``bridge`` is set, prefers value's async close and runs it on its event loop.
+    """
+    closer = resolve_closer(value, cleanup=cleanup, is_async=bridge is not None)
 
     if closer is not None:
         callback(partial(run_bridged, closer, bridge))
@@ -206,99 +217,106 @@ class _PortalLifecycle[T]:
         return suppressed
 
 
+async def _agen_from[T](stream: AsyncStreamOf[T]) -> AsyncStreamOf[T]:
+    """Passes an async stream's items on without closing it."""
+    async for item in stream:
+        yield item
+
+
 @define(eq=False)
-class _Owned[T]:
-    """
-    Wraps an owned iterator so it closes once, however many owners close it.
+class _AsyncNodeOutput(Iterator[_ItemEnvelope[object]]):
+    """An async-only node's envelope stream synchronously read through the portal."""
 
-    A cleanup, when given, runs in place of the iterator's own close. The flag is set
-    before the close runs. A failing close is not retried.
+    provenance: NodeProvenance[object]
+    results: AsyncStreamOf[object]
+    envelopes: auto_close[_ItemEnvelope[object]]
 
-    Raises:
-
-        TypeError: When reading a non-iterator value.
-
-    """
-
-    _value: Iterator[T] | object
-    _cleanup: Cleanup[Iterator[T] | object] | None = field(
-        default=None, alias="cleanup"
-    )
-    _closed: bool = field(default=False, init=False)
-
-    def __iter__(self) -> Self:
-        return self
-
-    def __next__(self) -> T:
-        if not isinstance(self._value, Iterator):
-            raise TypeError("only an iterator owned value can be iterated")
-
-        return next(self._value)
+    def __next__(self) -> _ItemEnvelope[object]:
+        return next(self.envelopes)
 
     def close(self) -> None:
-        """Closes the iterator unless it is already closed."""
-        if not self._closed:
-            self._closed = True
-            _maybe_close(self._value, self._cleanup)
+        """Closes the synchronous envelope stream and the node's results with it."""
+        self.envelopes.close()
+
+    def async_gen_envelopes(self) -> AsyncEnvelopeGenerator[object]:
+        """Wraps the node's async results in envelopes on the event loop."""
+        return self.provenance.agen_envelopes(_agen_from(self.results))
 
 
 @define(eq=False)
 class _RunStream[T]:
     """
-    One run's output stream, which owns every node stream the run built.
+    One run's output stream that closes the streams the run registered with it.
 
-    Closing this closes the streams last built first, output first. Only the first close
-    does anything.
+    It also carries the run's context and, when it reads async-only nodes, the node
+    threads it reserved on the portal loop. Closing it closes its streams last built
+    first, output first. It then returns the run's node threads.
+
+    Only the first close does anything. A run that stops or fails also returns its node
+    threads.
     """
 
     context: Context | None
-    _steps: list[object] = field(factory=list, init=False)
-    _closers: list[Func[None]] = field(factory=list, init=False)
+    _reservation: _Reservation | None = field(default=None, alias="reservation")
+    _bridge: Bridge | None = field(default=None, alias="bridge")
+    _steps: list[SyncClosable] = field(factory=list, init=False)
+    output: object = field(default=None, init=False)
     _closed: bool = field(default=False, init=False)
 
     @property
+    def limiter(self) -> Limiter:
+        """Caps the run's node threads at the number it reserved."""
+        msg = "the run reserved no node threads"
+        return require_non_null(self._reservation, msg).limiter
+
+    @property
     def _output(self) -> StreamOf[T]:
-        """The endpoint's stream, the step the run added last."""
-        if not isinstance(step := self._steps[-1], Iterator):
-            msg = "the run's output must be an iterator"
-            raise TypeError(msg)
+        """The endpoint's stream."""
+        if not isinstance(output := self.output, Iterator):
+            raise TypeError("the run's output must be an iterator")
 
-        return step
+        return output
 
-    def add(self, *values: object) -> None:
-        """
-        Adds the streams the run built, or the values they were drawn from.
+    def add(self, *streams: SyncClosable) -> None:
+        """Adds the close-once streams the run built."""
+        self._steps.extend(streams)
 
-        Raises:
+    def _release(self) -> None:
+        """Gives the run's node threads back to the portal loop."""
+        reservation, bridge = self._reservation, self._bridge
 
-            InvalidPipelineError: Before any item is read, if a value's only close is
-                async.
-
-        """
-        for value in values:
-            self._steps.append(value)
-            _queue_close(self._closers.append, value)
+        if reservation is not None and bridge is not None and reservation.held:
+            bridge(maybe_async(reservation.release))
 
     def __iter__(self) -> Self:
         return self
 
     def __next__(self) -> T:
-        return next(self._output)
+        try:
+            item = next(self._output)
+        except BaseException:
+            self._release()
+            raise
+
+        return item
 
     def close(self) -> None:
-        """Closes every node stream, last built first."""
+        """Closes every node stream, last built first, then releases the threads."""
         if not self._closed:
             self._closed = True
 
-            with ExitStack() as stack:
-                for closer in self._closers:
-                    stack.callback(closer)
+            try:
+                with ExitStack() as stack:
+                    for step in self._steps:
+                        stack.callback(step.close)
+            finally:
+                self._release()
 
 
 @define(eq=False)
 class SyncExecution[T](_BaseExecution[ExitStack]):
     """
-    Runs a prepared workflow synchronously behind one owned exit stack.
+    Runs an execution plan synchronously behind one exit stack.
 
     Async-only components run through a lazily started blocking portal. The
     execution settings decide whether mappable nodes spread their items across
@@ -327,24 +345,30 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
     _stack: ExitStack = field(factory=ExitStack, init=False)
     _pools: ExitStack = field(factory=ExitStack, init=False)
+    _lifetime: _PoolLifetime | None = field(default=None, init=False)
     _portal: BlockingPortal | None = field(default=None, init=False)
     is_async: ClassVar[bool] = False
 
-    @cached_property
-    def _pool(self) -> _PoolLifetime:
-        """The run's one worker pool, shared by every mapped node."""
-        executor, workers = self.settings.sync_policy
+    def _get_lifetime(self) -> _PoolLifetime:
+        """Opens the run's one worker pool and shares it with every mapped node."""
+        if self._lifetime is None:
+            executor, workers = self.settings.sync_policy
 
-        if workers is None:
-            action = "open a worker pool in"
-            raise PipelineStateError("sequential", action, subject="execution")
+            if workers is None:
+                action = "open a worker pool in"
+                raise PipelineStateError("sequential", action, subject="execution")
 
-        pool_type = (
-            ThreadPoolExecutor if executor is Executor.THREAD else ProcessPoolExecutor
-        )
-        pool = pool_type(workers)
-        grace = self.settings.shutdown_timeout
-        return self._pools.enter_context(_PoolLifetime(pool, workers, grace=grace))
+            if executor is Executor.THREAD:
+                pool_type = ThreadPoolExecutor
+            else:
+                pool_type = ProcessPoolExecutor
+
+            pool = pool_type(workers)
+            grace = self.settings.shutdown_timeout
+            lifetime = _PoolLifetime(pool, workers, grace=grace)
+            self._lifetime = self._pools.enter_context(lifetime)
+
+        return self._lifetime
 
     def _open_portal(self) -> None:
         """
@@ -488,6 +512,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return result
 
+    def _await_on_loop[R](self, value: Awaitable[R], /) -> R:
+        """
+        Awaits ``value`` on the portal loop.
+
+        Cleanup is bounded by the shutdown timeout, so reads stay unbounded until the
+        execution starts to close.
+        """
+        return self.run_async(value, bounded=self._closing)
+
     def register_owned[R](
         self,
         value: R,
@@ -496,7 +529,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         is_async: bool = False,
     ) -> None:
         """
-        Registers an owned value to close when the execution exits.
+        Registers a value to close when the execution exits.
 
         Args:
 
@@ -517,41 +550,32 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 or its ``cleanup`` is async.
 
         """
-        bridge = partial(self.run_async, bounded=True) if is_async else None
-        args = (self.queue_callback, value, cleanup)
-        _queue_close(*args, is_async=is_async, bridge=bridge)
-
-    def _call_factory[R](self, plan: ValueFactoryPlan[R]) -> R:
-        if not plan.is_async and is_async_callable(plan.cleanup):
-            raise InvalidPipelineError(ASYNC_CLEANUP_MSG)
-
-        raw = call_factory(plan)
-        value = self.run_async(raw) if is_awaitable(raw) else raw
-        self.register_owned(value, plan.cleanup, is_async=plan.is_async)
-        return value
-
-    def _enter_lifecycle[R](self, plan: SyncLifecyclePlan[R]) -> R:
-        return self.enter_context(build_context_manager(plan))
-
-    def _enter_async_lifecycle[R](self, plan: AsyncLifecyclePlan[R]) -> R:
-        timeout = self.settings.shutdown_timeout
-        cm = build_context_manager(plan)
-        lifecycle = _PortalLifecycle(cm, timeout, self._cleanup_errors)
-        return self.enter_context(self.portal.wrap_async_context_manager(lifecycle))
+        bridge = self._await_on_loop if is_async else None
+        _queue_close(self.queue_callback, value, cleanup, bridge=bridge)
 
     def _open[R](self, plan: ResourcePlan[R]) -> R:
         match plan:
             case ExternalPlan():
                 value = plan.value
-            case OwnedPlan():
+            case ValuePlan():
                 value = plan.value
                 self.register_owned(value, plan.cleanup)
             case ValueFactoryPlan():
-                value = self._call_factory(plan)
+                if not plan.is_async and is_async_callable(plan.cleanup):
+                    raise InvalidPipelineError(ASYNC_CLEANUP_MSG)
+
+                raw = call_factory(plan)
+                value = self.run_async(raw) if is_awaitable(raw) else raw
+                self.register_owned(value, plan.cleanup, is_async=plan.is_async)
             case SyncLifecyclePlan():
-                value = self._enter_lifecycle(plan)
+                portal_cm = build_context_manager(plan)
+                value = self.enter_context(portal_cm)
             case AsyncLifecyclePlan():
-                value = self._enter_async_lifecycle(plan)
+                timeout = self.settings.shutdown_timeout
+                cm = build_context_manager(plan)
+                bounded_cm = _PortalLifecycle(cm, timeout, self._cleanup_errors)
+                portal_cm = self.portal.wrap_async_context_manager(bounded_cm)
+                value = self.enter_context(portal_cm)
 
         return value
 
@@ -588,9 +612,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         return self._acquired[resource].unwrap()
 
-    def _to_sync[R](self, stream: AsyncStreamOf[R]) -> StreamOf[R]:
-        """Pulls an async stream item by item through the execution portal."""
-        return to_sync(self.run_async, stream)
+    def _to_sync[R](self, stream: AsyncStreamOf[R]) -> to_sync[R]:
+        """
+        Pulls an async stream item by item through the execution portal.
+
+        Closes ``stream`` on the portal loop. Bounds reads and the close by the shutdown
+        timeout only once the execution is closing. The close may run while the
+        execution exits.
+        """
+        return to_sync(self._await_on_loop, stream)
 
     def _open_seed(
         self, seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]]
@@ -600,9 +630,10 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         Args:
 
-            seed: Items for the workflow output's open input. A seed that is both sync-
-                and async-iterable is read synchronously. The execution closes the seed
-                when it exits.
+            seed: Items for the workflow output's open input. An awaitable is resolved
+                when the run starts. A seed that is both sync- and async-iterable is
+                read synchronously. The seed closes once the run is done reading it or
+                when the execution exits, whichever is first.
 
         Raises:
 
@@ -613,41 +644,26 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         _input = self.run_async(seed) if is_awaitable(seed) else seed
 
         if isinstance(_input, Iterable) or not isinstance(_input, AsyncIterable):
-            # an unbound T | Iterable[T] defeats listize's overloads
-            iterator = stream = iter(cast("Iterable[T]", listize(_input)))
-            call_if_distinct(self.register_owned, _input, iterator)
-            self.register_owned(iterator)
+            iterator, is_async = iter(cast("Iterable[T]", listize(_input))), False
+            stream: StreamOf[T] = _auto_close(iterator)
         else:
-            iterator = self.run_async(aiter, _input)
-            call_if_distinct(self.register_owned, _input, iterator, is_async=True)
-            self.register_owned(iterator, is_async=True)
+            iterator, is_async = self.run_async(aiter, _input), True
             stream = self._to_sync(iterator)
 
+        call_if_distinct(self.register_owned, _input, iterator, is_async=is_async)
+        self.register_owned(stream)
         return stream
 
-    def _bind_resources(self, binding: Mapping[str, str]) -> ResourceView:
-        return ResourceView(map_values(self.acquire, self._require_bindings(binding)))
-
-    def _map_stream(
-        self, call: TrackedCall[object], envelopes: EnvelopeStream[object]
-    ) -> EnvelopeStream[object]:
-        """Maps a node's per-item call over its envelopes once the consumer pulls."""
-        self._require_open("map items in")
-        yield from self._pool.flat_map(call, envelopes, ordered=self.settings.ordered)
-
-    def _async_maybe_close(self, value: object) -> None:
-        """Closes a value produced on the portal loop if it has a close."""
-        bridge = partial(self.run_async, bounded=True)
-        _maybe_close(value, is_async=True, bridge=bridge)
-
-    def _to_sync_owned[R](self, stream: AsyncStreamOf[R]) -> _Owned[R]:
+    def _to_async[R](
+        self, run: _RunStream[_ItemEnvelope[object]], stream: StreamOf[R]
+    ) -> AsyncStreamOf[R]:
         """
-        Builds a sync owned stream that reads an async stream through the portal.
+        Builds an async stream that pulls a sync stream on node threads.
 
-        Closing the owned stream closes ``stream`` on the portal loop.
+        Each pull is one trip to a worker thread capped by the run's limiter. The async
+        stream closes ``stream`` once it is exhausted or closed.
         """
-        cleanup = lambda _: self._async_maybe_close(stream)
-        return _Owned(self._to_sync(stream), cleanup=cleanup)
+        return to_async(self._worker(limiter=run.limiter), stream)
 
     def _drain_item(
         self,
@@ -664,28 +680,26 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         the portal loop once it is drained or closed early.
         """
         raw = self.run_async(interface.item_call, item, context, **extra)
-        results = require_async_stream(raw, name)
+        return self._to_sync(require_async_stream(raw, name))
 
-        try:
-            yield from self._to_sync(results)
-        finally:
-            self._async_maybe_close(results)
-
-    def _build_item_stream(
+    def _build_envelope_stream(
         self,
-        context: Context | None,
+        run: _RunStream[_ItemEnvelope[object]],
         node: PreparedNode,
         stream: EnvelopeStream[object],
+        named: PortMap[object],
+        extras: ExecutionExtras[EnvelopeStream[object]],
         /,
-        **extra: object,
     ) -> EnvelopeStream[object]:
         """
         Builds a mappable node's envelope stream by running its call once per item.
 
         When the settings allow concurrency, runs several item calls at once on the
-        run's worker pool.
+        run's worker pool. The envelope stream closes ``stream``.
         """
         node_id = node.node.id
+        context = run.context
+        extra = {**named, **extras.kwargs}
         policy = self.settings.sync_policy
         interface = node.sync_interface
 
@@ -699,162 +713,96 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 call = build_item_call(context, node, interface, **extra)
                 identity = interface.identity
 
-            envelopes = _gen_item_stream(call, node_id, identity, stream)
+            envelopes = _gen_envelopes(call, node_id, identity, stream)
         else:
+            self._require_open("map items in")
             call = build_item_call(context, node, interface, **extra)
-            identity = interface.identity
             args = (call, policy.executor)
-            tracked = build_tracked_call(*args, node_id=node_id, identity=identity)
-            envelopes = self._map_stream(tracked, stream)
+            identity = interface.identity
+            tracked_call = build_tracked_call(*args, node_id=node_id, identity=identity)
+            ordered = self.settings.ordered
+            fargs = (tracked_call, stream)
+            envelopes = flat_map(*fargs, ordered=ordered, opener=self._get_lifetime)
 
-        return envelopes
+        return auto_close(envelopes, stream)
 
     def _run_async_node(
         self,
-        run: _RunStream[object],
-        node_id: NodeId,
-        name: str,
-        interface: AsyncInterface[AsyncStreamOf[object]],
-        extras: ExecutionExtras[EnvelopeStream[object]],
-        named: PortMap[object],
+        run: _RunStream[_ItemEnvelope[object]],
+        node: PreparedNode,
         stream: EnvelopeStream[object],
+        named: PortMap[object],
+        extras: ExecutionExtras[EnvelopeStream[object]],
+        /,
     ) -> EnvelopeStream[object]:
         """
-        Streams an async-only node's output stream without materializing it.
+        Streams an async-only node's output stream.
 
-        Calls the pipe on the portal loop and pulls its output, an async iterator,
-        there. The run closes the output on the portal loop.
+        Calls the pipe, pulls its async output, and closes the output and the pipe's
+        primary input all on the portal loop. Reads sync input streams on the run's node
+        threads. Reads an input that is another async-only node's output on the loop.
 
         Args:
 
-            run: The run that owns the node's streams, with its context.
-            node_id: Id of the node being run.
-            name: The node's module name.
-            interface: The node's asynchronous pipe with its prepared call.
-            extras: The keyword arguments the execution adds to the node's call.
-            named: The streams wired to the node's named input ports.
+            run: The run the node is built in, with its context and limiter.
+            node: The async-only node being run.
             stream: The node's primary input stream.
+            named: The streams wired to the node's named input ports.
+            extras: Keyword arguments the execution adds to the node's call.
 
         Returns:
 
-            The envelope stream produced by the node.
+            The node's envelope stream.
 
         """
-        provenance = NodeProvenance.from_identity(node_id, interface.identity)
+        name = node.module.name
+        interface = require_non_null(node.async_interface, NO_PIPE_MSG, name)
+        provenance = NodeProvenance.from_identity(node.node.id, interface.identity)
         gen_values = provenance.gen_values
 
-        extra = extras.map_kwargs(gen_values, named)
-        values = gen_values(stream, interface.item_normalizer)
-        raw = self.run_async(interface.call, values, run.context, **extra)
-        owned = self._to_sync_owned(require_async_stream(raw, name))
-        run.add(owned)
-        return provenance.gen_envelopes(owned)
+        _to_async = partial(self._to_async, run)
+        named_values = extras.map_inputs(compose(_to_async, gen_values), named)
+        extra = extras.build_kwargs(named_values)
+        normalizer = interface.item_normalizer
 
-    def _build_whole_stream(
-        self,
-        run: _RunStream[object],
-        node: PreparedNode,
-        extras: ExecutionExtras[EnvelopeStream[object]],
-        named: PortMap[object],
-        stream: EnvelopeStream[object],
-    ) -> EnvelopeStream[object]:
-        """
-        Builds the output stream of a node that reads its whole input in one call.
-
-        The pipe reads bare values. Each value it passes through keeps its envelope.
-        """
-        node_id = node.node.id
-
-        if (interface := node.sync_interface) is None:
-            name = node.module.name
-            adapted = require_non_null(node.async_interface, NO_PIPE_MSG, name)
-            args = (run, node_id, name, adapted, extras, named, stream)
-            envelopes = self._run_async_node(*args)
+        if isinstance(stream, _AsyncNodeOutput):
+            upstream = stream.async_gen_envelopes()
+            values = provenance.agen_values(upstream, normalizer)
         else:
-            args = (node_id, interface.identity)
-            provenance: NodeProvenance[object] = NodeProvenance.from_identity(*args)
-            gen_values = provenance.gen_values
-            extra = extras.map_kwargs(gen_values, named)
-            values = gen_values(stream, interface.item_normalizer)
-            raw = interface.call(values, run.context, **extra)
-            results = require_stream(raw, node.module.name)
-            closer = resolve_closer(results, is_async=False)
+            values = _to_async(gen_values(stream, normalizer))
 
-            if not isgenerator(results) and closer is not None:
-                results = _Owned(results)
-
-            run.add(results)
-            envelopes = provenance.gen_envelopes(results)
-
-        return envelopes
-
-    def _gen_owned(
-        self,
-        run: _RunStream[object],
-        interface: SyncInterface[Cascade],
-        values: Iterator[object],
-        /,
-        **extra: object,
-    ) -> CascadeOf[object]:
-        """
-        Runs a splitter and yields each of its owned streams.
-
-        Each owned stream closes once, however many owners close it.
-        """
-        cascade = interface.call(values, run.context, **extra)
-        run.add(cascade)
-
-        for stream in cascade:
-            owned = _Owned(stream)
-            run.add(owned)
-            yield owned
-
-    def _adapt_interface(
-        self,
-        run: _RunStream[object],
-        interface: AsyncInterface[AsyncCascade],
-        values: Iterator[object],
-        /,
-        **extra: object,
-    ) -> CascadeOf[object]:
-        """
-        Runs an async-only splitter and yields each of its owned streams.
-
-        Calls the splitter and takes its streams on the portal loop. Closing a yielded
-        stream closes its async stream on the portal loop.
-        """
-        cascade = self.run_async(interface.call, values, run.context, **extra)
-        self.register_owned(cascade, is_async=True)
-
-        for stream in self._to_sync(cascade):
-            owned = self._to_sync_owned(stream)
-            run.add(owned)
-            yield owned
+        raw = self.run_async(interface.call, values, run.context, **extra)
+        astream = require_async_stream(raw, name)
+        results = aauto_close(astream, values, *named_values.streams)
+        pulled = self._to_sync(results)
+        envelopes = auto_close(provenance.gen_envelopes(pulled), pulled, stream)
+        return _AsyncNodeOutput(provenance, results, envelopes)
 
     def _build_splitter_ports(
         self,
-        run: _RunStream[object],
+        run: _RunStream[_ItemEnvelope[object]],
         node: PreparedSplitter,
-        extras: ExecutionExtras[EnvelopeStream[object]],
-        named: PortMap[object],
         stream: EnvelopeStream[object],
+        named: PortMap[object],
+        extras: ExecutionExtras[EnvelopeStream[object]],
+        /,
         *,
         demand: Counter[PortKey],
     ) -> OutputPorts[object]:
         """
-        Builds the splitter's output by giving each port the run reads a stream.
+        Builds a stream for each splitter port the run reads.
 
-        Unwraps the input envelopes and feeds their values to the splitter. Afterwards,
-        wraps the splitter output items back into their original envelopes. A stream
-        nothing reads is closed before anything is read.
+        Each output item keeps its input item's envelope. Closes ports nothing reads.
+        Feeds one copy of the input stream to the splitter and one to each input reader.
+        Closing the run closes the copies and the input readers.
 
         Args:
 
-            run: The run that owns the node's streams, with its context and limiter.
+            run: The run the node is built in, with its context and limiter.
             node: The splitter being run.
-            extras: The keyword arguments the execution adds to the splitter's call.
-            named: The splitter's named input streams, keyed by port name.
             stream: The splitter's primary input stream.
+            named: The splitter's named input streams, keyed by port name.
+            extras: Keyword arguments the execution adds to the splitter's call.
 
         Kwargs:
 
@@ -875,36 +823,57 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         tee = Tee(stream, max_lag=settings.branch_buffer)
         feed = tee.branch()
         parents = {port: tee.branch() for port in active}
-        run.add(tee, feed, *parents.values())
-        values = _unwrap(feed)
-        extra = extras.map_kwargs(_unwrap, named)
+        run.add(tee, *parents.values())
+        _values = _unwrap(feed)
+        named_values = extras.map_inputs(_unwrap, named)
+        limit = node.splits + 1
 
         if (interface := node.sync_interface) is None:
             name = node.module.name
             _interface = require_non_null(node.async_interface, NO_PIPE_MSG, name)
-            args = (run, _interface, values)
-            _owned = self._adapt_interface(*args, **extra)
+
+            _to_async = partial(self._to_async, run)
+            adapters = named_values.map(_to_async)
+            values = _to_async(_values)
+            adapted = (*adapters.streams, values)
+            run.add(_values, *named_values.streams, *map(self._to_sync, adapted))
+            extra = extras.build_kwargs(adapters)
+
+            raw = self.run_async(_interface.call, values, run.context, **extra)
+            pulled = self._to_sync(raw)
+            _cascade: StreamOf[StreamOf[Item]] = map(self._to_sync, pulled)
+            cascade = auto_close(_cascade, pulled)
         else:
-            args = (run, interface, values)
-            _owned = self._gen_owned(*args, **extra)
+            run.add(_values, *named_values.streams)
+            extra = extras.build_kwargs(named_values)
+            cascade = _auto_close(interface.call(_values, run.context, **extra))
 
-        owned = list(islice(_owned, node.splits + 1))
+        with maybe_closing(cascade):
+            streams = list(islice(cascade, limit))
+
+        try:
+            node.validate_streams(*streams)
+        except InvalidPipelineError:
+            for _stream in streams:
+                _maybe_close(_stream)
+
+            raise
+
         ports: OutputPorts[object] = {}
-        node.validate_streams(*owned)
 
-        for port, owned_stream in zip(node.output_ports, owned, strict=True):
+        for port, _stream in zip(node.output_ports, streams, strict=True):
             if (parent := parents.get(port)) is None:
-                _maybe_close(owned_stream)
+                _maybe_close(_stream)
             else:
-                envelopes = _wrap(owned_stream, parent)
-                ports[port] = auto_close(envelopes, owned_stream, parent)
+                envelopes = _wrap(_stream, parent)
+                ports[port] = auto_close(envelopes, _stream, parent)
 
         return ports
 
     def _register_port(
         self,
         steps: SyncExecSteps[object],
-        run: _RunStream[object],
+        run: _RunStream[_ItemEnvelope[object]],
         key: PortKey,
         stream: EnvelopeStream[object],
         readers: int,
@@ -914,7 +883,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         A port with several readers is shared. Each reader gets its own branch, and
         every reader except the first gets a deep copy of each item.
+
+        Raises:
+
+            TypeError: If the port's stream has no close.
+
         """
+        if not isinstance(stream, SyncClosable):
+            raise TypeError(f"port {key!r} must be closable")
+
         run.add(stream)
 
         if readers == 1:
@@ -922,14 +899,15 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         else:
             max_lag = settings.branch_buffer
             tee = Tee(stream, isolate=True, max_lag=max_lag)
-            steps[key] = [tee.branch() for _ in range(readers)]
-            run.add(tee, *steps[key])
+            branches = [tee.branch() for _ in range(readers)]
+            steps[key] = [*branches]
+            run.add(tee, *branches)
 
     def _build_node_ports(
         self,
         plan: ExecutionPlan,
         steps: SyncExecSteps[object],
-        run: _RunStream[object],
+        run: _RunStream[_ItemEnvelope[object]],
         node_id: NodeId,
         *,
         demand: Counter[PortKey],
@@ -939,16 +917,18 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds a node's output ports, each a lazy stream, from its input streams.
 
         A mappable node (loopable, with no secondary input stream) runs once per item.
-        When the settings allow concurrency, a mappable node with a synchronous
-        implementation runs its items in the run's worker pool. A splitter builds one
-        stream per output port it is read from. Any other node reads its whole input in
-        one call. ``seed`` enters the node as new items.
+        When its settings allow concurrency, a mappable node with a synchronous
+        implementation runs its items in the run's worker pool.
+
+        A splitter builds one stream per output port it is read from. Any other node
+        reads its whole input in one call as bare values. Each value it passes through
+        keeps its envelope. ``seed`` enters the node as new items.
 
         Args:
 
-            plan: The prepared workflow being run.
+            plan: The execution plan being run.
             steps: The streams each upstream port has left to hand out.
-            run: The run that owns the node's streams.
+            run: The run the node is built in.
             node_id: Id of the node to build.
 
         Kwargs:
@@ -963,87 +943,56 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         """
         node = plan.nodes[node_id]
         roots = None if seed is None else gen_result_envelopes(node_id, seed)
-        inputs = self._resolve_node_inputs(steps, node.incoming, roots)
-        named, others = inputs.named, inputs.others
-        bind = self._bind_resources
-        resources = bind(node.resources) if node.resources else None
+        closables = self._resolve_node_inputs(steps, node.incoming, roots)
+        named, others = closables.named, closables.others
 
-        if inputs.stream is None:
+        if node.resources:
+            bindings = self._require_bindings(node.resources)
+            resources = ResourceView(map_values(self.acquire, bindings))
+        else:
+            resources = None
+
+        if closables.stream is None:
             _envelopes = iter(DEFAULT_ENVELOPES if others is None else ())
         else:
-            _envelopes = inputs.stream
+            _envelopes = closables.stream
 
         match node:
             case PreparedSplitter():
                 extras = ExecutionExtras(others=others, resources=resources)
-                args = (run, node, extras, named, _envelopes)
+                args = (run, node, _envelopes, named, extras)
                 ports = self._build_splitter_ports(*args, demand=demand)
             case PreparedNode():
-                embed = self._select_embed(node, self._to_sync_owned)
+                embed = self._select_embed(node, self._to_sync)
                 extras = ExecutionExtras(
                     others=others, resources=resources, embed=embed
                 )
 
+                args = (run, node, _envelopes, named, extras)
+
                 if node.is_mappable:
-                    args = (run.context, node, _envelopes)
-                    envelopes = self._build_item_stream(*args, **named, **extras.kwargs)
+                    envelopes = self._build_envelope_stream(*args)
+                elif (interface := node.sync_interface) is None:
+                    envelopes = self._run_async_node(*args)
                 else:
-                    args = (run, node, extras, named, _envelopes)
-                    envelopes = self._build_whole_stream(*args)
+                    identity = interface.identity
+                    provenance = NodeProvenance.from_identity(node_id, identity)
+                    named_values = extras.map_inputs(provenance.gen_values, named)
+                    extra = extras.build_kwargs(named_values)
+                    normalizer = interface.item_normalizer
+                    values = provenance.gen_values(_envelopes, normalizer)
+                    raw = interface.call(values, run.context, **extra)
+
+                    results = _auto_close(require_stream(raw, node.module.name))
+                    envelope_gen = provenance.gen_envelopes(results)
+                    closables = (results, values, *named_values.streams)
+                    envelopes = auto_close(envelope_gen, *closables)
 
                 ports = {OUT: envelopes}
 
         return ports
 
-    def _build_run(
-        self,
-        plan: ExecutionPlan,
-        output: OutputName,
-        seed: T | AnyIterable[T] | Awaitable[T | AnyIterable[T]] | None,
-        context: Context | None,
-    ) -> EnvelopeStream[T]:
-        """
-        Builds the envelope stream for a plan's workflow output.
-
-        The run closes every node stream it built when its output closes, last built
-        first. The execution closes the run when it exits, before it stops the portal.
-        It also closes the streams at once when building a later node fails. A close
-        that fails is reported as a cleanup error at exit, so the build error stays
-        primary.
-        """
-        endpoint = plan.require_output(output)
-        steps: SyncExecSteps[object] = {}
-        demand = plan.get_port_demand(output)
-        run: _RunStream[_ItemEnvelope[T]] = _RunStream(context)
-        if self.settings.sync_policy.executor is Executor.PROCESS:
-            require_process_safe(plan, output, context)
-
-        if plan.uses_portal(output):
-            self._open_portal()
-
-        self.queue_callback(run.close)
-
-        try:
-            stream = None if seed is None else self._open_seed(seed)
-            args = (plan, steps, run)
-
-            for node_id, node_seed in plan.gen_build_order(output, seed=stream):
-                build = self._build_node_ports
-                ports = build(*args, node_id, demand=demand, seed=node_seed)
-
-                for port, port_stream in ports.items():
-                    key = (node_id, port)
-                    self._register_port(steps, run, key, port_stream, demand[key])
-
-            endpoint_stream = steps[endpoint.port_key].pop()
-            run.add(endpoint_stream)
-        except BaseException:
-            self._record_cleanup_error(run.close)
-            raise
-
-        return run
-
-    def run_envelopes(
+    def build_envelope_stream(
         self,
         plan: ExecutionPlan,
         output: OutputName = DEFAULT_OUTPUT,
@@ -1054,22 +1003,25 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds an envelope stream for a plan's workflow output.
 
         Each envelope is an item plus run-local identity. Otherwise it behaves like
-        ``run``.
+        ``run``. Closing the stream closes every node stream the run built, last built
+        first. The execution closes the run when it exits, before it stops the portal.
+
+        It also closes the streams at once when building a later node fails. It reports
+        a failed close as a cleanup error at exit. The build error stays primary. A run
+        that reads async-only nodes reserves the node threads it may hold at once before
+        it reads anything. It returns them when it closes.
 
         Args:
 
-            plan: The prepared workflow to run.
+            plan: The execution plan to run.
 
         Kwargs:
 
             output: The name of the workflow output to produce.
 
-            seed: Items for the workflow output's open input. It can be one item, an
-                item stream, an async item stream, or an awaitable resolving to one of
-                those.
-
-                When omitted, every node must either be self-starting or receive a seed.
-                A plan with no nodes streams the seed back unchanged.
+            seed: Items for the workflow output's open input: one item, an item stream,
+                an async item stream, or an awaitable resolving to one of those. Omit it
+                when the workflow output is self-starting (default: None).
 
         Returns:
 
@@ -1086,6 +1038,8 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                 - A workflow input is missing or invalid.
                 - The process executor is chosen and a node cannot be sent to a worker
                   process.
+                - The run holds more node threads at once than the node-thread budget,
+                  or than this execution's open output streams leave free.
 
         """
         self._require_open("run")
@@ -1093,9 +1047,45 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
 
         if resolved.workflow.is_empty:
             values = self._open_seed(resolved.require_seed(seed, output))
-            envelopes = map(_ItemEnvelope, values)
+            items = map(_ItemEnvelope, values)
+            envelopes: EnvelopeStream[T] = auto_close(items, values)
         else:
-            envelopes = self._build_run(resolved, output, seed, context)
+            endpoint = resolved.require_output(output)
+            steps: SyncExecSteps[object] = {}
+            demand = resolved.get_port_demand(output)
+            threads = resolved.get_thread_demand(output, is_async=False)
+
+            if self.settings.sync_policy.executor is Executor.PROCESS:
+                require_process_safe(resolved, output, context)
+
+            if resolved.uses_portal(output):
+                self._open_portal()
+                reservation = self.run_async(self._reserve_threads, threads, output)
+            else:
+                reservation = None
+
+            bridge = self._await_on_loop
+            run: _RunStream[_ItemEnvelope[T]] = _RunStream(context, reservation, bridge)
+            self.queue_callback(run.close)
+
+            try:
+                stream = None if seed is None else self._open_seed(seed)
+                args = (resolved, steps, run)
+
+                for node_id, node_seed in resolved.gen_build_order(output, seed=stream):
+                    build = self._build_node_ports
+                    ports = build(*args, node_id, demand=demand, seed=node_seed)
+
+                    for port, _stream in ports.items():
+                        key = (node_id, port)
+                        self._register_port(steps, run, key, _stream, demand[key])
+
+                run.output = steps[endpoint.port_key].pop()
+            except BaseException:
+                self._record_cleanup_error(run.close)
+                raise
+
+            envelopes = run
 
         return envelopes
 
@@ -1110,23 +1100,20 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
         Builds the item stream for a plan's workflow output.
 
         Only the selected workflow output's upstream subgraph runs. The returned stream
-        is lazy. Consume it inside this execution's ``with`` block so its cleanup stays
-        owned.
+        is lazy. Consume it inside this execution's ``with`` block so the execution
+        closes it.
 
         Args:
 
-            plan: The prepared workflow to run.
+            plan: The execution plan to run.
 
         Kwargs:
 
             output: The name of the workflow output to produce.
 
-            seed: Items for the workflow output's open input. It can be one item, an
-                item stream, an async item stream, or an awaitable resolving to one of
-                those.
-
-                When omitted, every node must either be self-starting or receive a seed.
-                A plan with no nodes streams the seed back unchanged.
+            seed: Items for the workflow output's open input: one item, an item stream,
+                an async item stream, or an awaitable resolving to one of those. Omit it
+                when the workflow output is self-starting (default: None).
 
         Returns:
 
@@ -1145,8 +1132,7 @@ class SyncExecution[T](_BaseExecution[ExitStack]):
                   process.
 
         """
-        envelopes = self.run_envelopes(plan, output, seed=seed)
-        values = auto_close(map(_get_value, envelopes), envelopes)
+        values = _unwrap(self.build_envelope_stream(plan, output, seed=seed))
         self.queue_callback(values.close)
         return values
 

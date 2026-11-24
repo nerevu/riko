@@ -208,8 +208,20 @@ def _infer_callable_kind(node: ast.expr) -> Inference:
     return kind, reason
 
 
+def _infer_passthrough_kind(
+    argument: ast.expr, /, *seen: str, **assignments: ast.expr
+) -> Inference:
+    """Classifies a passthrough call's first argument as a callable, else in place."""
+    kind, reason = _infer_callable_kind(argument)
+
+    if kind == OperatorReturnKind.UNKNOWN:
+        kind, reason = _infer_expression_kind(argument, *seen, **assignments)
+
+    return kind, reason
+
+
 def _infer_expression_kind(
-    node: ast.expr, assignments: dict[str, ast.expr], seen: frozenset[str] = frozenset()
+    node: ast.expr, /, *seen: str, **assignments: ast.expr
 ) -> Inference:
     """
     Classifies a ``return`` expression by resolving local names it references.
@@ -223,11 +235,11 @@ def _infer_expression_kind(
     Args:
 
         node: The expression to classify (a function's final return value).
-        assignments: Top-level name -> value bindings a returned name may resolve to.
+        seen: Names already being resolved, used to break assignment cycles.
 
     Kwargs:
 
-        seen: Names already being resolved, used to break assignment cycles.
+        assignments: Top-level name -> value bindings a returned name may resolve to.
 
     Returns:
 
@@ -242,11 +254,11 @@ def _infer_expression_kind(
         if node.id in seen:
             reason = f"assignment cycle detected while resolving {node.id!r}"
         elif value := assignments.get(node.id):
-            kind, reason = _infer_expression_kind(value, assignments, seen | {node.id})
+            kind, reason = _infer_expression_kind(value, *seen, node.id, **assignments)
         else:
             reason = f"returned name {node.id!r} has no supported top-level assignment"
     elif isinstance(node, (ast.Await, ast.NamedExpr)):
-        kind, reason = _infer_expression_kind(node.value, assignments, seen)
+        kind, reason = _infer_expression_kind(node.value, *seen, **assignments)
     elif isinstance(node, ast.GeneratorExp):
         kind = OperatorReturnKind.STREAM
     elif isinstance(node, ast.Call):
@@ -254,11 +266,7 @@ def _infer_expression_kind(
         is_passthrough = path and path.startswith(_PASSTHROUGH_NAMESPACES)
 
         if is_passthrough and node.args:
-            argument = node.args[0]
-            kind, reason = _infer_callable_kind(argument)
-
-            if kind == OperatorReturnKind.UNKNOWN:
-                kind, reason = _infer_expression_kind(argument, assignments, seen)
+            kind, reason = _infer_passthrough_kind(node.args[0], *seen, **assignments)
         elif is_passthrough:
             reason = f"passthrough call {path!r} has no positional argument to inspect"
         else:
@@ -327,7 +335,7 @@ def infer_from_source(pipe: Func[object]) -> ReturnInference:
                     and len(candidate.targets) == 1
                     and isinstance(target := candidate.targets[0], ast.Name)
                 }
-                kind, reason = _infer_expression_kind(statement.value, assignments)
+                kind, reason = _infer_expression_kind(statement.value, **assignments)
         else:
             reason = "parsed source contains no function definition"
 

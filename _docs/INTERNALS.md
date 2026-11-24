@@ -318,7 +318,13 @@ sync when source is moved between package groups.
   binds (`gen_stale_source_symbol_citations` over `gen_source_symbols`). To cite a
   location rather than a definition, write `` `name` in `riko/…py` ``. An
   `` `a`/`b` (`riko/…py`) `` pair checks both names, and a bare `b` after a dotted `a`
-  takes `a`'s class (`` `C.x()`/`y()` `` cites `C.y`).
+  takes `a`'s class (`` `C.x()`/`y()` `` cites `C.y`). A bare backticked private name
+  (`` `_name` ``, `` `_name()` ``) in any tracked `_docs/` document outside `archive/`,
+  `research/`, and `MILESTONES.md` must be bound or read somewhere under `riko/` or
+  `tests/`, module names and `_`-prefixed string literals included
+  (`gen_stale_private_names` over `gen_private_names`); besides the history words, a
+  sentence that plans ahead (target, planned, next, future) and a paragraph carrying an
+  ISO date (a dated history note) are exempt.
 - **Reserved-terms ruling lint.** `manage lint --docs` also fails when a `BANNED_TERMS`
   phrase (`riko/cli/_lint_terms.py`) is missing from the `## Reserved terms` section of
   `_docs/DOCUMENTATION_STANDARD.md` (`gen_unruled_terms` in `riko/cli/_docs.py`); the

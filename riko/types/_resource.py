@@ -14,7 +14,7 @@ Examples:
         >>> from riko.types import ResourceStrategy
         >>>
         >>> [strategy.name for strategy in ResourceStrategy]
-        ['EXTERNAL', 'OWNED', 'VALUE_FACTORY', 'LIFECYCLE']
+        ['EXTERNAL', 'VALUE', 'VALUE_FACTORY', 'LIFECYCLE']
 
 """
 
@@ -66,7 +66,7 @@ type Cleanup[T] = Callable[[T], Awaitable[None] | None]
 type LifecyclePlan[T] = SyncLifecyclePlan[T] | AsyncLifecyclePlan[T]
 
 type ResourcePlan[T] = (
-    ExternalPlan[T] | OwnedPlan[T] | ValueFactoryPlan[T] | LifecyclePlan[T]
+    ExternalPlan[T] | ValuePlan[T] | ValueFactoryPlan[T] | LifecyclePlan[T]
 )
 
 # Every function the decorators build shares their helper's code object, so any
@@ -79,7 +79,7 @@ class ResourceStrategy(Enum):
     """The acquisition shape an execution drives for a resource."""
 
     EXTERNAL = auto()
-    OWNED = auto()
+    VALUE = auto()
     VALUE_FACTORY = auto()
     LIFECYCLE = auto()
 
@@ -197,7 +197,7 @@ def _enter_async_gen[T](
 @define(frozen=True, slots=True)
 class ExternalPlan[T]:
     """
-    Hands an execution a caller-owned value it never closes.
+    Hands an execution a value the caller closes, never the execution.
 
     Attributes:
 
@@ -209,9 +209,9 @@ class ExternalPlan[T]:
 
 
 @define(frozen=True, slots=True)
-class OwnedPlan[T]:
+class ValuePlan[T]:
     """
-    Hands an execution a resolved value it closes when the execution ends.
+    Hands an execution a value the execution closes when it ends.
 
     Attributes:
 

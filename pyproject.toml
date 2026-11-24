@@ -145,27 +145,23 @@ extend-select = [
     "D",    # pydocstyle
     "E",    # pycodestyle errors
     "E302", # pycodestyle: Two blank lines before top-level defs
-    "W",    # pycodestyle warnings
-    "UP",   # pyupgrade
-    "I",    # isort
-    "B",    # flake8-bugbear: opinionated warnings
-    "Q",    # flake8-quotes: enforce consistent quote style)
-    "C4",   # flake8-comprehensions
-    "N",    # pep8-naming
-    "D",    # pydocstyle
-    "S",    # flake8-bandit
-    "TC",   # flake8-typing-imports
-    "T20",  # flake8-print
-    "PT",   # flake8-pytest-style
-    "PLC0415", # Import not at top of file
     "ERA",  # eradicate: commented-out code (tests only; see per-file ignores)
+    "I",    # isort
+    "N",    # pep8-naming
+    "PLC0415", # Import not at top of file
+    "PT",   # flake8-pytest-style
+    "Q",    # flake8-quotes: enforce consistent quote style)
     "RUF029",  # unused-async
+    "S",    # flake8-bandit
+    "T20",  # flake8-print
+    "TC",   # flake8-typing-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
 ]
 
 ignore = [
     # docs
     "D101",  # undocumented-public-class
-    "D102",  # undocumented-public-method
     "D103",  # undocumented-public-function
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
@@ -204,6 +200,9 @@ split-on-trailing-comma = false
 
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/**/*" = [
+    "D101",   # undocumented-public-class (the docs standard covers riko/ only)
+    "D102",   # undocumented-public-method
+    "D103",   # undocumented-public-function
     "S101",   # Use of `assert` detected
     "S102",   # Use of `exec` detected
     "RUF029",  # unused-async
@@ -211,6 +210,16 @@ split-on-trailing-comma = false
 
 "riko/**/*" = [
     "ERA001",  # Commented-out code (enforced in tests only)
+]
+
+"{.claude,benchmarks,examples}/**/*" = [
+    "D101",   # undocumented-public-class (the docs standard covers riko/ only)
+    "D102",   # undocumented-public-method
+    "D103",   # undocumented-public-function
+]
+
+"conftest.py" = [
+    "D103",   # undocumented-public-function (the docs standard covers riko/ only)
 ]
 
 ".claude/**/test_*.py" = [
@@ -352,8 +361,8 @@ omit = [
 # Ceiling for `manage test --ratchet`: the statements a full-suite run in the full dev
 # environment (`--group dev --all-extras`, Python 3.12) leaves unexecuted. A run fails
 # above it and lowers it on a gain. It records the day as `uncovered-lowered`.
-uncovered = 316
-uncovered-lowered = 2026-11-19
+uncovered = 300
+uncovered-lowered = 2026-11-24
 
 [tool.riko.typing]
 # Ceilings for `manage lint --escapes`: the package's `typing.Any` references and
@@ -378,7 +387,7 @@ rows-without-id-lowered = 2026-10-30
 # one function that are themselves the only caller of another such helper. It only
 # goes down: a run fails above it and lowers it on a gain. It records the day as
 # `<key>-lowered`.
-chains = 27
+chains = 8
 chains-lowered = 2026-11-24
 
 [tool.riko.ratchet]
