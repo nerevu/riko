@@ -153,7 +153,11 @@ neighborhood it affects:
    source); the same validation run in a classmethod and the constructor;
    `Callable[..., X]` for a fixed signature (a callback `Protocol`); a role
    type spelled out three or more times (a `type` alias); a bool property
-   restating `x.attr is None` that callers cannot narrow through.
+   restating `x.attr is None` that callers cannot narrow through. Before proposing
+   to inline a single-use helper, run `.claude/skills/tidy/complexity_scores.sh
+   <files>` (each function's McCabe score) so the merged caller stays at C90 ≤ 10;
+   keep helpers that hold or sit inside a try/except, are passed by reference, are
+   cached, recursive, a per-item-closing generator, or mirror a sync/async twin.
 4. **Idioms** — truthiness where `is None` is required, `cast` where narrowing
    works, more than one `return`, comments that restate code, a new `noqa` or
    type ignore with no reason.
