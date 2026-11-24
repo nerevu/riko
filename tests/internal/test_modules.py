@@ -14,6 +14,7 @@ from collections.abc import (
     Generator,
     Iterator,
 )
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import wraps
 from inspect import Parameter, isawaitable, iscoroutinefunction, signature
@@ -25,7 +26,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, assert_type, cast
 import attrs
 import pytest
 
-from riko.bado._backend import Event, async_sleep, create_task_group
+from riko.bado._backend import Event, async_sleep, create_task_group, fail_after
 from riko.bado._util import maybe_aclosing, maybe_closing
 from riko.bado.itertools import AsyncTeeBranch, as_async
 from riko.base import _paths as paths_module
@@ -33,6 +34,7 @@ from riko.base._exceptions import InvalidPipelineError, ReceiverUnavailableError
 from riko.base._iterutils import auto_close
 from riko.base._paths import PACKAGE_DIR, get_path
 from riko.base._sentinels import MISSING
+from riko.coercion import cast as cast_module
 from riko.coercion._configs import CsvObjconf, ExchangeRateObjconf
 from riko.coercion._objectify import objectify
 from riko.definitions._context import Context
@@ -53,6 +55,7 @@ from riko.modules._inference import (
 from riko.modules._metadata import get_module_metadata
 from riko.modules._prepare import build_conf, resolve_and_cast
 from riko.modules.fetchpage import get_string
+from riko.modules.filter import pipe as filter_pipe
 from riko.modules.join import pipe as join
 from riko.modules.loop import async_pipe as async_loop
 from riko.modules.loop import pipe as loop
@@ -90,13 +93,22 @@ from riko.types._wrappers import (
 from riko.types.modules import (
     Conf,
     CsvConf,
+    FilterConf,
+    FilterConfRule,
     InferenceSource,
     OperatorReturnKind,
     SendConf,
     StrconcatRawConf,
 )
 from tests import ROUND_TRIPS, async_test, skipif_sync
-from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
+from tests._lifecycle import (
+    LOOKAHEAD,
+    PARENTS,
+    TOKENIZER_CONF,
+    build_async_lazy_embed,
+    build_lazy_embed,
+    gen_lazy_child,
+)
 from tests._resources import Connection
 from tests._streams import Closable
 
@@ -901,13 +913,13 @@ class TestWrapperMeta:
         assert async_subpipe.is_async
         assert workflow(is_async=True)(other).is_async
 
-    def test_decorated_wrappers_carry_wrapper_meta(self):
-        def total(*args: Any, **kwargs: object) -> int:
-            return 1
+    def test_an_explicit_async_flag_over_a_sync_parser_is_stamped(self):
+        wrapped = processor(is_async=True)(shout)
+        known = {"name": "test_modules", "type": "processor", "is_async": True}
 
-        assert _carries_wrapper_meta(processor()(shout))
-        assert _carries_wrapper_meta(processor(is_async=True)(shout))
-        assert _carries_wrapper_meta(operator()(total))
+        assert wrapped.is_async is True
+        assert {attr: getattr(wrapped, attr) for attr in known} == known
+        assert all(getattr(wrapped, attr) is not None for attr in WRAPPER_META)
 
     @pytest.mark.parametrize(("require", "match"), WRAPPER_REQUIRES)
     def test_require_rejects_a_plain_function(self, require, match):
@@ -1058,20 +1070,9 @@ class TestLoop:
     def test_subpipe_count_first_is_lazy_and_closes_child(self):
         produced: list[int] = []
         closed: list[str] = []
-
-        def child(tag: str):
-            try:
-                for index in range(50):
-                    produced.append(index)
-                    yield {"content": f"{tag}{index}"}
-            finally:
-                closed.append(tag)
-
-        def _sub(item, context=None, **_):
-            return child(str(item["title"]))
-
+        embed = build_lazy_embed(produced, closed)
         parents = [{"title": "a"}, {"title": "b"}]
-        result = loop(iter(parents), embed=workflow()(_sub), count="first", emit=True)
+        result = loop(iter(parents), embed=embed, count="first", emit=True)
 
         assert list(result) == [{"content": "a0"}, {"content": "b0"}]
         assert produced == [0, 0]
@@ -1180,16 +1181,8 @@ class TestAsyncLoop:
         produced: list[int] = []
         closed: list[str] = []
 
-        def child(tag: str):
-            try:
-                for index in range(50):
-                    produced.append(index)
-                    yield {"content": f"{tag}{index}"}
-            finally:
-                closed.append(tag)
-
         async def _sub(item, context=None, **_):
-            return child(str(item["title"]))
+            return gen_lazy_child(str(item["title"]), produced, closed)
 
         stream = async_loop(
             iter([{"title": "a"}, {"title": "b"}]),
@@ -1206,19 +1199,9 @@ class TestAsyncLoop:
     @async_test
     async def test_closing_the_loop_closes_the_running_child(self):
         closed: list[str] = []
-
-        async def child(tag: str):
-            try:
-                for index in range(50):
-                    yield {"content": f"{tag}{index}"}
-            finally:
-                closed.append(tag)
-
-        async def _sub(item, context=None, **_):
-            return child(str(item["title"]))
-
+        embed = build_async_lazy_embed([], closed)
         stream = async_loop(
-            iter([{"title": "a"}, {"title": "b"}]), embed=workflow()(_sub), emit=True
+            iter([{"title": "a"}, {"title": "b"}]), embed=embed, emit=True
         )
 
         assert isinstance(stream, AsyncGenerator)
@@ -1619,6 +1602,36 @@ class TestCsvParser:
             list(module.pipe(conf=conf))
 
 
+class TestFilter:
+    """The ``filter`` module's private clock hook."""
+
+    def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
+        """A ``"today"`` rule value follows the clock, not its first evaluation."""
+        ahead, behind = timezone(timedelta(hours=14)), timezone(timedelta(hours=-12))
+        items = [{"x": datetime.now(behind).date().isoformat()}]
+        rule = FilterConfRule(field="x", op="before", value="today")
+        conf = FilterConf({"rule": rule})
+
+        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: ahead)
+        assert list(filter_pipe(items, conf=conf)) == items
+
+        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: behind)
+        assert list(filter_pipe(items, conf=conf)) == []
+
+    def test_filter_allow_inf_flag(self, monkeypatch):
+        """Compare infinities numerically when ``ALLOW_INF`` is enabled."""
+        items = [{"x": "-inf"}]
+        conf = FilterConf({"rule": FilterConfRule(field="x", op="less", value="-5")})
+
+        monkeypatch.setattr("riko.modules.filter.ALLOW_INF", True)
+        assert list(filter_pipe(items, conf=conf)) == items
+
+        nan_rule = FilterConfRule(field="x", op="greater", value="9")
+        nan_conf = FilterConf({"rule": nan_rule})
+        nans = [{"x": "nan"}]
+        assert list(filter_pipe(nans, conf=nan_conf)) == nans
+
+
 # Each row: a rates response document, and the error message it raises.
 MISSING_RATES = [
     pytest.param(
@@ -1751,52 +1764,54 @@ async def _send_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
     first: ItemOrValue = {}
     seen = 0
 
-    async with (
-        async_hub.subscribe("r4-lazy") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain_receiver, receive_stream)
-        stream = async_send(_finite_source(consumed), others=["r4-lazy"])
+    with fail_after(1):
+        async with (
+            async_hub.subscribe("r4-lazy") as receive_stream,
+            create_task_group() as tg,
+        ):
+            tg.start_soon(_drain_receiver, receive_stream)
+            stream = async_send(_finite_source(consumed), others=["r4-lazy"])
 
-        async with maybe_aclosing(stream):
-            first = await anext(stream)
-            seen = len(consumed)
+            async with maybe_aclosing(stream):
+                first = await anext(stream)
+                seen = len(consumed)
 
     return (first, seen)
 
 
 async def _send_missing_target(received: list[Item]) -> None:
-    async with (
-        async_hub.subscribe("r4-good") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain_receiver, receive_stream, received)
+    with fail_after(1):
+        async with (
+            async_hub.subscribe("r4-good") as receive_stream,
+            create_task_group() as tg,
+        ):
+            tg.start_soon(_drain_receiver, receive_stream, received)
 
-        with pytest.raises(ReceiverUnavailableError):
-            async for _ in async_send(
-                _finite_source([]),
-                conf=SendConf(max_wait=0.05),
-                others=["r4-good", "r4-missing"],
-            ):
-                pass
+            with pytest.raises(ReceiverUnavailableError):
+                async for _ in async_send(
+                    _finite_source([]),
+                    conf=SendConf(max_wait=0.05),
+                    others=["r4-good", "r4-missing"],
+                ):
+                    pass
 
 
 async def _send_feed(consumed: list[int], received: list[Item]) -> list[ItemOrValue]:
     out: list[ItemOrValue] = []
 
-    async with (
-        async_hub.subscribe("r4-feed") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_drain_receiver, receive_stream, received)
-        stream = async_send(_afinite_source(consumed), others=["r4-feed"])
-        out = [item async for item in stream]
+    with fail_after(1):
+        async with (
+            async_hub.subscribe("r4-feed") as receive_stream,
+            create_task_group() as tg,
+        ):
+            tg.start_soon(_drain_receiver, receive_stream, received)
+            stream = async_send(_afinite_source(consumed), others=["r4-feed"])
+            out = [item async for item in stream]
 
     return out
 
 
 class TestAsyncSend:
-    @pytest.mark.timeout(1)
     @async_test
     async def test_async_send_completes_targets_when_publish_fails(self):
         """
@@ -1809,7 +1824,6 @@ class TestAsyncSend:
         await _send_missing_target(received)
         assert received == [{"x": "foo", "i": 0}]
 
-    @pytest.mark.timeout(1)
     @async_test
     async def test_async_send_accepts_a_feed_source(self):
         """
@@ -1827,7 +1841,6 @@ class TestAsyncSend:
         assert out == expected
         assert received == expected
 
-    @pytest.mark.timeout(1)
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
@@ -1857,19 +1870,19 @@ async def _receive_first(consumed: list[int]) -> tuple[ItemOrValue, int]:
 
             idx += 1
 
-    async with (
-        async_hub.subscribe("r-recv-lazy") as receive_stream,
-        create_task_group() as tg,
-    ):
-        tg.start_soon(_snapshot, receive_stream)
-        async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
-            pass
+    with fail_after(1):
+        async with (
+            async_hub.subscribe("r-recv-lazy") as receive_stream,
+            create_task_group() as tg,
+        ):
+            tg.start_soon(_snapshot, receive_stream)
+            async for _ in async_send(_finite_source(consumed), others=["r-recv-lazy"]):
+                pass
 
     return (first, seen)
 
 
 class TestAsyncReceive:
-    @pytest.mark.timeout(1)
     @async_test
     async def test_async_receive_does_not_materialize(self):
         """

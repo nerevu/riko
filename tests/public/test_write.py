@@ -340,7 +340,6 @@ WRITER_OPTIONS = [
     pytest.param("csv", {"chunksize": None}, id="chunksize"),
     pytest.param("csv", {"length": 0}, id="length"),
     pytest.param("csv", {"bar_len": 50}, id="bar_len"),
-    pytest.param("list", {"mode": "w"}, id="list"),
 ]
 
 
@@ -479,7 +478,7 @@ class TestAsyncWriteIterables:
         assert path.read_text(encoding="utf-8") == "héllo"
 
 
-class TestTempPath:
+class TestGetTempPath:
     """A kept temporary path starts unoccupied and survives the context's exit."""
 
     @pytest.fixture(autouse=True)

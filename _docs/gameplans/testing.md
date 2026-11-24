@@ -540,6 +540,16 @@ I/O wait from `RIKO_BENCHMARK_DELAY`, and refit loose bounds from measured durat
 across commits): ten spawned processes each re-importing riko pushed the subprocess past
 its 5 s bound when every tox environment ran in parallel.
 
+**Shipped (whole-suite audit, 2026-11-24).** A second `/audit-tests` pass ran as one
+workflow: per-file-group auditors verified the scanner leads and read only for what no
+script sees, and a skeptic re-checked every proposed deletion. It fixed 18 tests that
+could not fail or ended only by a timeout (each proven to fail under a simulated
+regression), sorted class order, renamed classes to riko names (fifteen concept classes
+are now permitted), shared copied helpers, and cut or folded duplicates after a per-test
+coverage diff (4134 → 4121 collected; sync resource-acquisition tests became tables that
+mirror the async ones). `manage lint --tests` now leaves a `wait`/`join` inside a fake
+the test defines off the bound ladder, since it is blocking work under test.
+
 ## 5b. Execution lifetime proofs (R4)
 
 `implementation-sequence.md` R4 adds a proof obligation that does not fit the existing
@@ -582,10 +592,9 @@ ships with its behavior proven in two files, laid out by the same ownership rule
   path, per-item passthrough; CSV header/schema/append boundaries; JSONL one value per
   line with one final terminator; framed JSON/GeoJSON stage-then-publish-once with abort
   discarding the staged document; the `_SessionState` transitions and misuse).
-- `tests/public/test_pipeline.py` — the public surface: `write()` passthrough yields
-  each input once, `sink()` returns a `WriteResult` for both sync and async, and the
-  async error text carries no pub/sub language; the pending `Pipeline.write` tripwires
-  sit beside them.
+- `tests/public/test_write.py` — the public surface: `TestPipelineWriteDefinition`
+  pins the `write` verb's declared node, and the pending `TestPipelineWrite` tripwires
+  hold the pipeline-level write behavior until a write node can run.
 
 For incremental formats these tests deliberately do **not** assert rollback of
 already-written bytes. When R4B/R5C take over session-lifetime ownership, they reuse
@@ -606,9 +615,17 @@ this same contract rather than re-proving it.
   and `TestWriteOperation::test_is_frozen`,
   `tests/internal/test_modules.py::TestPrepare::test_prepared_module_is_frozen`,
   `tests/public/test_pipeline.py::TestContext::test_fields_cannot_be_reassigned`,
-  `TestResource::test_external_value_fields_are_read_only`, and the post-pickle frozen
+  `TestContext::test_private_fields_cannot_be_set`,
+  `TestResource::test_external_value_fields_are_read_only`, the post-pickle frozen
   assertion of `TestContext::test_roundtrips_through_pickle` (the round trip itself
-  stays).
+  stays), and `tests/public/test_workflow.py::TestNodeFamily::test_node_is_frozen` (a
+  `tests/typing/invalid` case assigning `ModuleNode.name`; delete the pytest method when
+  it lands). `test_plan_fields_are_read_only` must be narrowed before it moves: its
+  ignore holds even without the frozen declaration, because `resource._plan` is the
+  un-narrowed `ResourcePlan` union and the assigned factory is the wrong type for
+  `enter`; assert `isinstance(resource._plan, SyncLifecyclePlan)` first and assign a
+  same-typed value (`resource._plan.enter = resource._plan.enter`) so only the frozen
+  field is rejected (test audit 2026-11-24).
 - **Live status** (done/next/suite count) lives only in the
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md) tracker — do not restate it here.
 

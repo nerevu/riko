@@ -145,16 +145,19 @@ def build_chain_plan(*names: str) -> ExecutionPlan:
     return ExecutionPlan.from_workflow(Workflow().with_nodes(*nodes), dispatcher)
 
 
+def double(source, **_):
+    """Doubles each item's ``x``."""
+    return ({"x": row["x"] * 2} for row in source)
+
+
+async def adouble(source, **_):
+    """The async twin of ``double``."""
+    async for row in source:
+        yield {"x": row["x"] * 2}
+
+
 def build_doubler_plan(name: str) -> ExecutionPlan:
     """Builds a one-node plan whose ``double``/``adouble`` module doubles ``x``."""
-
-    def double(source, **_):
-        return ({"x": row["x"] * 2} for row in source)
-
-    async def adouble(source, **_):
-        async for row in source:
-            yield {"x": row["x"] * 2}
-
     sync_pipe = cast("SyncModuleWrapper", double)
     async_pipe = cast("AsyncModuleWrapper", adouble)
     definition = ModuleDefinition(name="double", sync_pipe=sync_pipe)
@@ -222,7 +225,26 @@ async def arun_plan(
 passthrough_pipe = cast("SyncModuleWrapper", lambda source, **_: iter(source or {}))
 
 
+def build_pipe_wrapper(**attrs: object) -> SyncModuleWrapper:
+    """Builds a pass-through sync pipe that carries ``attrs`` as wrapper attributes."""
+    wrapper = cast("SyncModuleWrapper", lambda source, **_: source)
+
+    for key, value in attrs.items():
+        setattr(wrapper, key, value)
+
+    return wrapper
+
+
 def gen_closing_seed(closed: list[str]) -> Generator[Item]:
+    """Yields more items than any read-ahead and records ``"closed"`` on close."""
+    try:
+        for index in range(1, 51):
+            yield {"x": index}
+    finally:
+        closed.append("closed")
+
+
+async def agen_closing_seed(closed: list[str]) -> AsyncGenerator[Item]:
     """Yields more items than any read-ahead and records ``"closed"`` on close."""
     try:
         for index in range(1, 51):

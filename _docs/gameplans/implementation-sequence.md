@@ -1037,12 +1037,14 @@ whose port is not `out`, raises `InvalidPipelineError` instead of silently alias
 node's `out` stream; executable port-keyed fan-out/split delivery remains R7, which
 removes the guard. Regressions:
 `tests/internal/test_plan_runs.py::TestPlanRun::test_run_rejects` rows
-`nondefault-source-output-port` / `nondefault-selected-output-port`. One more
-fail-closed guard sits beside it, `Workflow.require_executable()` (called from
-`ExecutionPlan.validate()`): a source port feeding more than one stream edge (the
-executor keys streams by node, so both consumers would share one iterator). R7's
-port-keyed delivery removes it. Regression:
-`test_build_plan_rejects_fan_out_from_one_source_port`. Sparse positional inputs (`in` +
+`nondefault-source-output-port` / `nondefault-selected-output-port`. A second
+fail-closed guard, `Workflow.require_executable()` refusing a source port that feeds
+more than one stream edge, is gone: port-keyed delivery (33c481e4a "Dispatch execution
+nodes by port") gives each consumer its own stream, so fan-out from one source port
+now builds. Regression:
+`TestExecutionPlan::test_build_plan_accepts_fan_out_from_one_source_port` in
+`tests/internal/test_execution_plan.py`.
+Sparse positional inputs (`in` +
 `in:2`) are executable, not guarded: `union` reads `others` as an ordered list and
 legacy `_OTHER2` normalizes to `in:2` (`test_run_accepts_sparse_positional_inputs`);
 `in:0`/`out:0` are grammar errors in `parse_port`; per-module arity stays with the
@@ -1073,7 +1075,7 @@ execution, and let a splitter whose branches were lists through as items. `_adap
 `require_async_stream(value, pipe)`: the execution-side boundary earns its narrowing
 from the same `is_splitter` `TypeIs` guard (`riko/types/_wrappers.py`) on the pipe's
 declared type, consuming nothing. Regressions:
-`test_build_plan_rejects_splitter_by_declared_type_not_output_shape`,
+`TestResolvedModule::test_resolved_module_refuses_invalid_pipes`,
 `test_require_stream_refuses_a_splitter_pipe_without_consuming`, and the fluent
 `test_iterating_a_split_pipeline_raises_before_running` pair. The async splitter
 wrapper's inability to read an async input stream is R7's (tripwire
@@ -1194,8 +1196,9 @@ Deliver:
 
 - each `Workflow` input's schema (canonical full JSON Schema; authoring shorthands
   normalize to it; requiredness inferred from an absent default; `default: null` implies
-  nullable); until then a strict `Workflow` accepts a non-mapping declaration (tripwire
-  `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`);
+  nullable); a `Workflow` already rejects a non-mapping declaration (the `schema-*`
+  rows of `TestWorkflow::test_a_field_rejects_a_value_of_the_wrong_type` in
+  `tests/public/test_workflow.py` pin it);
 - the `{"input": name}` structural reference grammar in node configuration;
 - a decision on callable nodes (R4C `map`): whether `{"input": name}` references also
   apply to a `CallableNode`'s keyword arguments, so `pipeline.map(fn, q={"input": "q"})`
@@ -1237,14 +1240,14 @@ Deliver:
   `TestPlanRun::test_run_never_starts_a_non_self_starting_module_unseeded`,
   and the `is_self_starting` doctest.
 - a strict `Workflow.input_schemas` that holds only canonical schema mappings: today
-  the field is `FrozenDict[str, FrozenJSON]`, so direct construction keeps a bare
-  type-name string or a non-schema value (`{"q": 5}`) that re-normalization then
-  rejects; the strict xfail
-  `tests/public/test_workflow.py::TestWorkflow::test_non_schema_inputs_are_rejected`
-  marks it for this phase. Narrow the field's static input type
-  (`input_schemas_converter`'s `accepted`, today `Mapping[str, object]`) to one schema
-  mapping per name in the same change: narrowing it alone fails pyright wherever a
-  stored `Workflow.input_schemas` is passed back to the constructor.
+  the field is `FrozenDict[str, FrozenJSON]`; direct construction already rejects a
+  non-mapping value (`{"q": 5}`), as the `schema-*` rows of
+  `TestWorkflow::test_a_field_rejects_a_value_of_the_wrong_type` in
+  `tests/public/test_workflow.py` pin, but a mapping is not yet checked to be a
+  canonical full JSON Schema. Narrow the field's static
+  input type (`input_schemas_converter`'s `accepted`, today `Mapping[str, object]`) to
+  one schema mapping per name in the same change: narrowing it alone fails pyright
+  wherever a stored `Workflow.input_schemas` is passed back to the constructor.
 - the `Context.inputs` value type: `Inputs` (`Mapping[str, str | int | bool]`) types the
   field as scalar-valued, yet its converter list deep-freezes nested values
   (`{"tags": ["a"]}` is stored as `('a',)`), so pyright rejects valid calls and
@@ -1276,9 +1279,9 @@ leaked into later calls. The describe modes are gone: `describe_module` reads th
   xfail in `tests/public/test_pipeline.py` and the probes' describe-inputs branches,
   were retired; the probes declare `@workflow(input_schemas=, dependencies=)` and
   `TestWorkflowProbes.test_probe_declares_what_its_document_declares` compares them with
-  each sibling `Workflow`.) Also, `migrate_v1_to_v2` declares nothing from a `PipeDef`'s
-  `input` modules (strict xfail
-  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_becomes_a_workflow_input`).
+  each sibling `Workflow`.) `migrate_v1_to_v2` declares a `PipeDef`'s `input` modules as
+  workflow inputs (pinned by
+  `tests/public/test_workflow_documents.py::TestMigrate::test_input_module_conf_migrates`).
 - **DELETE:** none at the public surface; no second input-declaration carrier exists
   beside the IR.
 
@@ -1294,12 +1297,12 @@ close R4B  →  R4C  →  R4D  →  R5A  →  R7  →  merge next → features
 
 R5B, R6, and everything after follow the merge (R5C follows it too but lands before M2).
 Parity means every strict-xfail tripwire written for a retired v1 behavior — local
-pub/sub and split (`TestSubscriptions`, `TestSplit`; bound the drain in
-`TestSubscriptions::test_idle_drain_returns_promptly` below its elapsed-time assertion
-when it flips, since today only the global backstop ends a blocked drain), concurrent
-fan-in (`TestAsyncFanInParallel`, marked `FANIN_PENDING` in
+pub/sub and split (`TestPipelineSubscriptions`, `TestSplit`; bound the drain in
+`TestPipelineSubscriptions::test_idle_drain_returns_promptly` below its elapsed-time
+assertion when it flips, since today only the global backstop ends a blocked drain),
+concurrent fan-in (`TestAsyncPipelineFanInParallel`, marked `FANIN_PENDING` in
 `tests/public/test_pipeline.py`; it rides R7 Slice C with the max-to-sum thread-demand
-change), and callable nodes (`TestCallableNodes`) — has flipped, with two documented
+change), and callable nodes (`TestPipelineMap`) — has flipped, with two documented
 exceptions: per-item gating (`skip_if`), whose successor is still undecided, and
 decorated functions on `|`
 (`TestPipelineChaining::test_or_composes_a_decorated_processor`), which needs R2B's
@@ -1456,7 +1459,7 @@ Deliver:
   so `register_module(..., replace=True)` of a sync-only `udf` makes `.map` of an async
   callable raise "neither a sync nor an async callable" although `udf` itself never
   runs. The E1 plain-callable slot decision removes the borrowing. Strict xfail
-  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_ignores_a_replaced_udf_module`.
+  `tests/public/test_callable_nodes.py::TestPipelineMap::test_map_ignores_a_replaced_udf_module`.
 
 Audit note (2026-11-09 wart audit triage; no tripwires, nothing returns a wrong value):
 
@@ -1824,7 +1827,7 @@ Deliver:
 - custom-node `identity=` (`IdentityMode`: preserve/derive/combine) only where inference
   is ambiguous, including which modes a one-to-one `map` accepts: `preserve` (default)
   and `derive`; `combine` raises `InvalidPipelineError` at definition time (tripwire
-  `tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`,
+  `tests/public/test_callable_nodes.py::TestPipelineMap::test_map_rejects_combine_identity`,
   flipped from strict xfail);
 - `FeedResult.metadata` carries observation outcome, declared source selection, and
   completeness at result scope, established only after successful traversal, with
@@ -2040,14 +2043,18 @@ publication"). Today the framed commit (`_commit`/`_acommit`) opens the destinat
 30-second shutdown timeout cutting off an early-close finalize, which this phase makes
 reachable — leaves an empty file. Streaming replace writes open the destination up
 front, so a failed run destroys it too. Tripwires:
-`tests/internal/test_io.py::TestFramed::test_interrupted_finalize_keeps_original_content`
+`tests/internal/test_io.py::TestWriteFramed::test_interrupted_finalize_keeps_original_content`
 and
 `tests/internal/test_io.py::TestWriteExecution::test_failed_replace_keeps_original_content`,
-which share the `ATOMIC_PUBLICATION_PENDING` mark. A framed replace that receives no
-items (`acquire`, no `write`, `finalize`) skips the commit and leaves the prior file,
-while stream delivery of `[]` writes `[]`; the staged publication decides the zero-item
-case — strict xfail
-`tests/internal/test_io.py::TestFramed::test_empty_replace_publishes_empty_document`
+which share the `ATOMIC_PUBLICATION_PENDING` mark;
+`TestSessionLifecycle::test_incremental_abort_keeps_written_bytes` in the same file pins
+the opposite today (an aborted default-mode replace JSONL session leaves its partial
+bytes on disk), so it flips with them, or is rewritten to assert only the session's
+aborted state, when staged publication lands (test audit 2026-11-24). A framed replace
+that receives no items (`acquire`, no `write`, `finalize`) skips the commit and leaves
+the prior file, while stream delivery of `[]` writes `[]`; the staged publication
+decides the zero-item case — strict xfail
+`tests/internal/test_io.py::TestWriteFramed::test_empty_replace_publishes_empty_document`
 (repo audit 2026-11-14). Early close (gameplan audit triage 2026-11-05): this phase
 distinguishes incremental consumption/encoding from publication
 ([effects.md § 12](effects.md#12-fileserialized-writes)). A replacing write stages its
@@ -2064,7 +2071,14 @@ prefix as the replacement document;
 `TestWriteExecution::test_graceful_close_keeps_original_content_for_replace` (an append
 write still finalizes what it wrote on a graceful close). Retitle the
 `WriteCapabilities.incremental` documentation (`riko/definitions/_write.py`) in the same
-change; the interrupted- and failed-replacement tripwires above stay.
+change; the interrupted- and failed-replacement tripwires above stay. The `WriteNode`
+migration also re-pairs the async write twins that drifted from their sync mirrors:
+`TestAsyncWriteExecution::test_csv_singleton_preserves_schema` mirrors
+`TestCsv::test_passthrough_singleton_preserves_schema`, and
+`TestAsyncWriteExecution::test_whole_stream_writes_one_document` mirrors
+`TestWriteFramed::test_sink_writes_one_document` (all in `tests/internal/test_io.py`);
+give them mirrored names and classes then, not ahead of the migration (test audit
+2026-11-24).
 
 **Exit:**
 
@@ -2182,8 +2196,8 @@ owner:
   (`riko/definitions/_pipeline_definition.py`) — shipped as one small PR together with
   `Pipeline.union` and the D103 docstring rider (below), touching no execution code.
   `Pipeline.union` is a graph merge in `riko/definitions/_pipeline_definition.py`; it
-  flips `tests/public/test_pipeline.py::TestFanIn::test_union_merges_pipelines` and
-  `TestSplit::test_upstream_node_runs_once_for_every_branch` (both marked
+  flips `tests/public/test_pipeline.py::TestPipelineFanIn::test_union_merges_pipelines`
+  and `TestSplit::test_union_of_split_branches_reads_the_upstream_once` (both marked
   `UNION_PENDING`), so both strict xfail markers flip in the same commit. The M1 note
   asking to confirm that test's count of 3 is settled: a hand-wired split→union already
   reads the upstream once. The execution-layer half (the explicit per-site
@@ -2192,9 +2206,9 @@ owner:
   C's shared plan walk, so the four tee sites and two cardinality sites in the
   sync/async twins are edited once.
 - **Slice C**: the task group and driver task, concurrent fan-in (with the max-to-sum
-  thread-demand change; flips `TestAsyncFanInParallel`), and Slice B's execution-layer
-  half. Two R10 defects ride it because they edit the same walk (user, 2026-11-22): the
-  nested-thread-demand fix (`_reserve_threads`/`_run_on_node_thread` in
+  thread-demand change; flips `TestAsyncPipelineFanInParallel`), and Slice B's
+  execution-layer half. Two R10 defects ride it because they edit the same walk (user,
+  2026-11-22): the nested-thread-demand fix (`_reserve_threads`/`_run_on_node_thread` in
   `riko/execution/_execution.py`, `build_envelope_stream`; tripwire
   `tests/internal/test_concurrency.py::TestThreadBudget::test_nested_stored_workflow_threads_enter_the_parent_demand`)
   and mapped-node output streaming (tripwires
@@ -2288,12 +2302,13 @@ Deliver:
   ceiling, with bounded per-source buffers (execution-semantics § 8.2), restoring what
   `SyncCollection(parallel=True)` did for multi-source fetching; until then a fan-in
   pulls its branches one at a time while per-item work inside each branch is concurrent
-  (tripwires: `TestAsyncFanInParallel` in `tests/public/test_pipeline.py`); concurrent
-  pulling also changes the async node-thread budget: `ExecutionPlan.get_thread_demand`
-  scores a sync-only node as one plus the **max** of its inputs because it reads them
-  one at a time (pinned by `test_async_interleaved_fan_in_fits_its_thread_budget`), so
-  pulling branches together makes that a **sum**, and that test changes with it;
-  `union`/`join` (`sequential_inputs`) likewise score the max of their inputs (pinned by
+  (tripwires: `TestAsyncPipelineFanInParallel` in `tests/public/test_pipeline.py`);
+  concurrent pulling also changes the async node-thread budget:
+  `ExecutionPlan.get_thread_demand` scores a sync-only node as one plus the **max** of
+  its inputs because it reads them one at a time (pinned by
+  `test_async_interleaved_fan_in_fits_its_thread_budget`), so pulling branches together
+  makes that a **sum**, and that test changes with it; `union`/`join`
+  (`sequential_inputs`) likewise score the max of their inputs (pinned by
   `test_async_sequential_fan_in_needs_only_its_deepest_input`), which holds only while
   they keep reading their inputs in turn; a sync-only splitter likewise scores like a
   whole-stream node today (`PreparedSplitter.is_thread_holder`: one node thread, on
@@ -2304,10 +2319,11 @@ Deliver:
   each operand's default output into one `union` node's `in`, `in:1`, … — the native
   replacement for `SyncCollection(mod, srcs)`, which today needs a hand-wired `union`
   `Workflow` (assigned by triage 2026-10-26; tripwire
-  `TestFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`). Shape
-  decided 2026-11-14: an instance method `def union(self, *others)`, which shadows the
-  module-name chaining `pipeline.union(...)` that `__getattr__` provides today (the
-  tripwire `TestSplit::test_upstream_node_runs_once_for_every_branch` also waits on it);
+  `TestPipelineFanIn::test_union_merges_pipelines` in `tests/public/test_pipeline.py`).
+  Shape decided 2026-11-14: an instance method `def union(self, *others)`, which shadows
+  the module-name chaining `pipeline.union(...)` that `__getattr__` provides today (the
+  tripwire `TestSplit::test_union_of_split_branches_reads_the_upstream_once` also waits
+  on it);
 - multiple same-name local subscriptions distinguished by object identity;
 - multiple publishers complete a subscription only after all attached publishers finish,
   derived structurally from incoming `PublishEdge`s and owned sender endpoints;
@@ -2333,7 +2349,10 @@ Deliver:
   yet, so this phase either keeps bounded waiting on the new subscription API and
   migrates that regression test, or retires the legacy timeout and closes #82 as
   superseded; the tripwire does not simply vanish with the module (gameplan audit triage
-  2026-11-05). Decided 2026-11-14: retire it and close #82 as superseded (above);
+  2026-11-05). Decided 2026-11-14: retire it and close #82 as superseded (above). The
+  strict xfail is satisfied by its own `fail_after(1)` backstop firing, not by a
+  bounded wait, so the phase must replace it rather than flip it (test audit
+  2026-11-24);
 - **done 2026-11-14** (slice 1):
   `split()` upstream-once, active-branches-only, bounded, never lossy;
 - **done 2026-11-14** (slice 1):

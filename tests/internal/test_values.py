@@ -154,11 +154,8 @@ NOON_EST = datetime(2020, 6, 15, 7, tzinfo=timezone(timedelta(hours=-5)))
 
 GOLDEN_BYTES = {
     "none": (None, b'["none",null]'),
-    "bool": (True, b'["bool",true]'),
-    "int": (1, b'["int","1"]'),
     "float": (1.0, b'["float","1.0"]'),
     "decimal": (Decimal("1.00"), b'["dec","1"]'),
-    "str": ("a", b'["str","a"]'),
     "bytes": (b"\x00\xff", b'["bytes","00ff"]'),
     "list": ([1, 2], b'["list",[["int","1"],["int","2"]]]'),
     "tuple": ((1, 2), b'["tup",[["int","1"],["int","2"]]]'),
@@ -352,11 +349,6 @@ class TestIdentityAccumulator:
         folded = b"\x00" + canonical_bytes("a") + b"\x00" + canonical_bytes(1)
         expected = blake2b(header.encode() + folded, digest_size=16).hexdigest()
         assert accumulator.digest() == expected
-
-    def test_one_value_matches_digest(self):
-        accumulator = IdentityAccumulator(IdentityDomain.GENERATION)
-        accumulator.add({"a": 1})
-        assert accumulator.digest() == digest({"a": 1}, IdentityDomain.GENERATION)
 
     def test_domains_stay_separate(self):
         generation = IdentityAccumulator(IdentityDomain.GENERATION)
@@ -627,16 +619,21 @@ class TestCastDatetime:
 
 
 # Each row: content whose cast overflows, and the cast type's default.
-CAST_OVERFLOWS = [
+CAST_DEFAULTS = [
+    pytest.param("foo", CastType.FLOAT, float("nan"), id="float-unparseable"),
+    pytest.param("foo", CastType.DECIMAL, Decimal("NaN"), id="decimal-unparseable"),
+    pytest.param("foo", CastType.INT, 0, id="int-unparseable"),
     pytest.param("inf", CastType.INT, 0, id="int-inf"),
     pytest.param("1e400", CastType.INT, 0, id="int-huge"),
 ]
 
 
 class TestCastValue:
-    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_OVERFLOWS)
-    def test_overflow_degrades_to_the_default(self, content, type_, expected):
-        assert cast_value(content, type_) == expected
+    @pytest.mark.parametrize(("content", "type_", "expected"), CAST_DEFAULTS)
+    def test_unparseable_or_overflowing_content_degrades_to_the_default(
+        self, content, type_, expected
+    ):
+        assert repr(cast_value(content, type_)) == repr(expected)
 
     def test_a_datetime_casts_to_its_date(self):
         moment = datetime(2010, 10, 14, 5, tzinfo=UTC)
@@ -1413,7 +1410,7 @@ class TestGraph:
             native_topological_sort({"a": {"b"}, "b": {"a"}})
 
 
-class TestGraphIndex:
+class TestWorkflowIndex:
     def test_graph_index_derives_on_first_use(self, monkeypatch) -> None:
         calls: list[str] = []
 
@@ -1529,23 +1526,6 @@ def _with_close() -> _Plain:
     return plain
 
 
-class _SlottedAsyncClose:
-    __slots__ = ()
-
-    async def close(self) -> None:
-        pass
-
-
-async def _aclose_plain() -> None:
-    pass
-
-
-def _with_async_close() -> _Plain:
-    plain = _Plain()
-    plain.close = _aclose_plain  # pyright: ignore[reportAttributeAccessIssue]
-    return plain
-
-
 class _SlottedNeedsArg:
     __slots__ = ()
 
@@ -1581,15 +1561,8 @@ STRICT_CHECKS = [
     pytest.param(DotDict, SyncClosable, id="dotdict"),
 ]
 
-# Whether a value has a sync closer; only a value that defines ``close`` is checked.
-STATIC_CLOSERS = [
-    pytest.param(DotDict, False, id="dotdict"),
-    pytest.param(_Plain, False, id="plain"),
-    pytest.param(_with_close, True, id="instance-close"),
-]
 
-
-class TestRequireGuards:
+class TestIsinstanceStrict:
     @pytest.mark.parametrize(("make", "protocol"), STRICT_CHECKS)
     def test_a_remembered_strict_verdict_matches_the_full_check(
         self, make, protocol
@@ -1607,6 +1580,16 @@ class TestRequireGuards:
         ]
         assert (verdicts, reversed_verdicts) == ([False, True], [True, False])
 
+
+# Whether a value has a sync closer; only a value that defines ``close`` is checked.
+STATIC_CLOSERS = [
+    pytest.param(DotDict, False, id="dotdict"),
+    pytest.param(_Plain, False, id="plain"),
+    pytest.param(_with_close, True, id="instance-close"),
+]
+
+
+class TestGetSyncCloser:
     @pytest.mark.parametrize(("make", "closes"), STATIC_CLOSERS)
     def test_a_close_neither_type_nor_instance_defines_skips_the_protocol_check(
         self, monkeypatch, make, closes
@@ -1621,6 +1604,25 @@ class TestRequireGuards:
         closer = get_sync_closer(make())
         assert (closer is not None, bool(checked)) == (closes, closes)
 
+
+class _SlottedAsyncClose:
+    __slots__ = ()
+
+    async def close(self) -> None:
+        pass
+
+
+async def _aclose_plain() -> None:
+    pass
+
+
+def _with_async_close() -> _Plain:
+    plain = _Plain()
+    plain.close = _aclose_plain  # pyright: ignore[reportAttributeAccessIssue]
+    return plain
+
+
+class TestGetAsyncCloser:
     def test_an_async_close_is_found_per_type_and_per_instance(self) -> None:
         closers = (
             get_async_closer(_SlottedAsyncClose()),
@@ -1629,6 +1631,8 @@ class TestRequireGuards:
         )
         assert [closer is None for closer in closers] == [False, False, True]
 
+
+class TestRequireGuards:
     @pytest.mark.parametrize(("require", "value"), _INVALID)
     def test_document_error_is_the_default(self, require, value):
         with pytest.raises(InvalidPipelineError, match="field"):
@@ -1691,9 +1695,6 @@ _FORM_REJECTIONS = [
 class TestRequireFromForm:
     def test_a_union_passes_any_class_member(self):
         assert require_from_form(int | str)("a") == "a"
-
-    def test_a_literal_passes_one_of_its_values(self):
-        assert require_from_form(Literal["a", "b"])("b") == "b"
 
     def test_a_mixed_union_passes_a_literal_value(self):
         assert require_from_form(int | Literal["auto"])("auto") == "auto"

@@ -599,12 +599,6 @@ def cast_value[T](
         '12.25'
         >>> cast_value(content, 'bool')
         True
-        >>> cast_value('foo', 'float')
-        nan
-        >>> cast_value('foo', 'decimal')
-        Decimal('NaN')
-        >>> cast_value('foo', 'int')
-        0
         >>> cast_value(12.25, 'text')
         '12.25'
         >>> cast_value(Decimal('12.25'), 'text')

@@ -59,7 +59,7 @@ from riko.cli._lint_import_architecture import (
     render_architecture,
 )
 from riko.cli._lint_literals import gen_literal_issues
-from riko.cli._lint_ownership import gen_ownership_lines
+from riko.cli._lint_ownership import ADD_MESSAGE, gen_ownership_lines
 from riko.cli._lint_relative_imports import _iter_issues as relative_issues
 from riko.cli._lint_rst import gen_plain_block_lines, gen_unrendered_literal_lines
 from riko.cli._lint_terms import BannedTerm, gen_phrase_issues, gen_term_issues
@@ -138,6 +138,8 @@ _STEPS = (
     "    def other(self):\n        self._step()\n"
     "    def _step(self): ...\n"
 )
+
+_STRAY_ADD = "def f(run, s):\n    run.add(s)\n"
 
 SYNC = ["uv", "sync", "--active", "--locked", "--group", "dev", "--all-extras"]
 SCRIPTS: dict[str, str] = tomllib.loads(PYPROJECT.read_text())["project"]["scripts"]
@@ -252,10 +254,6 @@ class TestCodegenCommand:
         result = CliRunner().invoke(_codegen.CODEGEN_COMMAND, args)
         assert result.exit_code == 0
         assert calls == expected
-
-    def test_codegen_mode_is_removed(self) -> None:
-        result = CliRunner().invoke(_codegen.CODEGEN_COMMAND, ["--mode", "config"])
-        assert result.exit_code == 2
 
 
 def _record_upgrade(
@@ -1583,7 +1581,7 @@ OWNERSHIP_CASES = [
     pytest.param(
         "def _build_splitter_ports(run, t):\n    run.add(t)\n", [], id="splitter-add"
     ),
-    pytest.param("def f(run, s):\n    run.add(s)\n", [2], id="stray-add"),
+    pytest.param(_STRAY_ADD, [2], id="stray-add"),
     pytest.param(
         "class _RunStream:\n    def m(self, s):\n        self.add(s)\n",
         [],
@@ -1606,6 +1604,9 @@ class TestOwnershipLint:
         self, source: str, expected: list[int]
     ) -> None:
         assert [line for line, _ in gen_ownership_lines(source)] == expected
+
+    def test_a_stray_add_names_the_registrar_rule(self) -> None:
+        assert list(gen_ownership_lines(_STRAY_ADD)) == [(2, ADD_MESSAGE)]
 
     def test_check_exits_by_whether_issues_were_found(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1805,9 +1806,6 @@ class TestImportArchitectureLint:
         report = load_architecture_report(root)
         assert report.unclassified[0].module == "riko.mystery"
         assert lint_architecture(report) == 1
-
-    def test_layer_graph_validation_accepts_a_reduced_dag(self):
-        _validate_graph("test", {"a": {"b"}, "b": {"c"}, "c": set()})
 
     @pytest.mark.parametrize(
         ("graph", "match"),

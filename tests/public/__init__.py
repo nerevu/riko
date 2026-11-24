@@ -5,7 +5,7 @@ Provides public API tests: tests that use only supported names.
 
 Index (file, then the subjects it owns, in file order):
 
-    test_callable_nodes.py        CallableNodes
+    test_callable_nodes.py        PipelineMap
     test_modules.py               Input, FetchModules, Fetchdata, Feedautodiscovery,
                                   Fetchtext, Fetchtable, Xpathfetchpage, Filter,
                                   Datebuilder, Rename, Regex, Subelement, Hash, Slugify,
@@ -15,12 +15,14 @@ Index (file, then the subjects it owns, in file order):
                                   GenerateModuleNames
     test_pipeline.py              PipelineConstruction, PipelineChaining,
                                   ModuleNameEnum, PipelineIteration, OutputParity,
-                                  Reiteration, Close, AsyncSourceAdapter, Alist,
-                                  AsyncMap, FanIn, WithExecution, ExecutionSettings,
-                                  AsyncBoundedParallel, AsyncFanInParallel, Context,
-                                  Resource, EnvironmentBinding, WorkflowInputs,
-                                  Subscriptions, Split, ConditionalNodes,
-                                  PipelineSeeding, PipelineStream
+                                  PipelineReiteration, Close, AsyncSourceAdapter, Alist,
+                                  AsyncMap, PipelineFanIn, WithExecution,
+                                  ExecutionSettings, AsyncBoundedParallel,
+                                  AsyncPipelineFanInParallel, Context, Resource,
+                                  PipelineEnvironmentBinding, WorkflowInputs,
+                                  PipelineSubscriptions, Split,
+                                  PipelineConditionalNodes, PipelineSeeding,
+                                  PipelineStream
     test_workflow.py              Workflow, NodeFamily, Nodes, ResourceBinding,
                                   CallableNode, RequireRunnableOnly, Validate,
                                   CompileWorkflow
@@ -28,6 +30,6 @@ Index (file, then the subjects it owns, in file order):
                                   Serialize
     test_write.py                 Write, PipelineWriteDefinition, PipelineWrite,
                                   Formats, ExportFormats, ExportPipeline, ExportFinance,
-                                  AsyncWriteIterables, TempPath, WriteMode,
+                                  AsyncWriteIterables, GetTempPath, WriteMode,
                                   WriteCapabilities, FileTarget
 """

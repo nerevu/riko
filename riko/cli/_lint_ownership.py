@@ -383,9 +383,6 @@ def gen_ownership_lines(source: str) -> Iterator[tuple[int, str]]:
         >>> source = "def f(s):\\n    amap(str, s)\\n    return amap(str, s)\\n"
         >>> [line for line, _ in gen_ownership_lines(source)]
         [2]
-        >>> source = "def f(run, s):\\n    run.add(s)\\n"
-        >>> list(gen_ownership_lines(source))[0][1].startswith("run.add")
-        True
 
     """
     visitor = _OwnershipVisitor()

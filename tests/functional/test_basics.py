@@ -702,7 +702,7 @@ def build_outer() -> Pipeline:
 
 
 @pytest.mark.usefixtures("documents")
-class TestWorkflowDocument:
+class TestStoredWorkflowDocuments:
     def test_document_runs_as_pipeline(self):
         pipeline = Pipeline.from_module("pipe_exclaim")
         assert list(PARENT | pipeline) == EXCLAIMED

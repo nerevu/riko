@@ -3,8 +3,9 @@
 Pytest plugin that runs one probe interpreter per hash seed for the whole session.
 
 Every result that must not depend on ``PYTHONHASHSEED`` (a canonical digest, the
-ambiguous time zone abbreviations, graph orders, a written set, the ``hash`` module)
-is computed by one script, once under each seed in ``HASH_SEEDS``. The
+ambiguous time zone abbreviations, graph orders, a written set, the ``hash`` module, a
+compiled workflow module) is computed by one script, once under each seed in
+``HASH_SEEDS``. The
 ``hash_seed_probes`` fixture maps each seed to that run's results, so each test
 compares its own slice across seeds without launching interpreters of its own.
 """
@@ -33,6 +34,15 @@ from riko.base._graph import scc_sort, topological_sort
 from riko.coercion._canonical import IdentityDomain, digest
 from riko.modules.hash import pipe as hash_pipe
 from riko.modules.write import pipe as write_pipe
+from riko.runtime._compile import compile_workflow
+from riko.runtime._pipeline import Pipeline
+from riko.types.modules import (
+    ConfArg,
+    RenameRawConf,
+    RenameRawRule,
+    SortRawConf,
+    SortRawRule,
+)
 
 value = {
     "text": ["a", "b", "c"],
@@ -46,6 +56,17 @@ orders = [
     topological_sort({"a": {"b", "c", "d"}, "e": {"f", "g"}}),
     scc_sort({"A": {"B", "C"}, "B": {"D"}, "C": {"D"}, "D": {"E"}}),
 ]
+rename = RenameRawRule(
+    field=ConfArg(type="text", value="content"),
+    newval=ConfArg(type="text", value="greeting"),
+)
+sort = SortRawRule(field=ConfArg(type="text", value="title"))
+flow = (
+    Pipeline.from_module("itembuilder")
+    .pipe("rename", conf=RenameRawConf({"rule": rename}))
+    .pipe("sort", conf=SortRawConf({"rule": sort}))
+    .workflow
+)
 dest = Path(sys.argv[1])
 items = [{"tags": {"alpha", "beta", "gamma", "delta"}}]
 list(write_pipe(items, conf={"dest": str(dest), "fmt": "json"}))
@@ -55,6 +76,7 @@ probes = {
     "orders": [str(order) for order in orders],
     "set_write": dest.read_text(),
     "hash": next(hash_pipe({"content": "hello world"}))["hash"],
+    "compiled": compile_workflow(flow, "pipe_seeded"),
 }
 print(json.dumps(probes))
 """

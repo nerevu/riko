@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import ast
 import dataclasses
 import importlib.util
 import json
@@ -80,7 +79,6 @@ from riko.runtime._compile import compile_workflow
 from riko.runtime._pipeline import Pipeline
 from riko.runtime._resolver import dispatcher
 from riko.types._enums import UserAgent
-from riko.types._workflow import Endpoint
 from riko.types._wrappers import WrapperMeta, require_wrapper_meta
 from riko.types.modules import (
     ConfArg,
@@ -405,6 +403,12 @@ class TestCompileWorkflow:
             flow, "pipe_twice"
         )
 
+    def test_generation_is_stable_across_processes_with_different_hash_seeds(
+        self, hash_seed_probes
+    ):
+        compiled = {probes["compiled"] for probes in hash_seed_probes.values()}
+        assert len(compiled) == 1
+
     def test_empty_fields_are_left_out(self, tmp_path: Path):
         """A workflow without edges or input schemas generates neither keyword."""
         flow = Pipeline.from_module("hash").workflow
@@ -413,17 +417,15 @@ class TestCompileWorkflow:
         assert "input_schemas=" not in source
         assert _load(source, "pipe_bare", tmp_path).flow == flow
 
-    def test_generated_source_parses(self, tmp_path: Path):
-        """The generated source is valid Python and imports without running."""
+    def test_generated_source_imports_back_to_the_same_flow(self, tmp_path: Path):
+        """The generated source of an edged flow imports back to the same flow."""
         flow = (
             Pipeline.from_module("itembuilder")
             .pipe("rename", conf=RENAME_CONF)
             .workflow
         )
         source = compile_workflow(flow, "pipe_parsed")
-        ast.parse(source)
-        module = _load(source, "pipe_parsed", tmp_path)
-        assert module.flow.outputs["default"] == Endpoint("rename-1", "out")
+        assert _load(source, "pipe_parsed", tmp_path).flow == flow
 
 
 class TestPythonise:
@@ -481,14 +483,10 @@ class TestModuleCategory:
         assert list_modules(category="sink") == []
 
 
-class TestGeneratedNamesDrift:
+class TestGenerateModuleNames:
     def test_generated_names_match(self):
         entries = gen_catalog_entries()
-        name_lines = MODULE_NAMES_PATH.read_text().splitlines()
-        generated_lines = generate_module_names(*entries).splitlines()
-
-        for actual, expected in zip(name_lines, generated_lines, strict=True):
-            assert actual == expected
+        assert MODULE_NAMES_PATH.read_text() == generate_module_names(*entries)
 
 
 class TestGenerateModuleIds:
@@ -515,7 +513,7 @@ USER_AGENT_ENTRIES = [
 @pytest.mark.skipif(
     not is_installed("fake_useragent"), reason="fake-useragent is not installed"
 )
-class TestUserAgentCodegen:
+class TestGenerateUserAgents:
     """Run ``manage codegen --user-agents`` to update the random user-agent pools."""
 
     def test_user_agents_match_generated(self):
@@ -812,7 +810,7 @@ VERB_TABLE_MARKERS = [
 ]
 
 
-class TestVerbTables:
+class TestGenerateVerbTables:
     """Generated function-name verb tables."""
 
     @pytest.mark.parametrize(("fmt", "text", "row"), VERB_TABLE_MARKERS)

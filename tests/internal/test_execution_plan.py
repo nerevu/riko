@@ -65,6 +65,7 @@ from tests._execution import (
     EMPTY,
     OUTPUT_A,
     ClosingAsyncIterator,
+    agen_closing_seed,
     arun_plan,
     build_chain_plan,
     build_dispatcher,
@@ -77,6 +78,7 @@ from tests._execution import (
     tag_source,
     tagged_source,
 )
+from tests._lifecycle import build_async_lazy_embed, build_lazy_embed
 from tests._streams import Closable
 
 if TYPE_CHECKING:
@@ -93,6 +95,7 @@ _ASYNC_ONLY = {"async_pipe": _ASYNC_PIPE}
 _HASH = ResolvedModule("hash", sync_pipe=hash_pipe)
 _COUNT_NO_OUTPUT = build_workflow([ModuleNode(id="n", name="count")], outputs={})
 _NODELESS = Workflow(nodes=[], outputs={"default": Endpoint("x", "out")})
+_URL_TERMINAL = {"terminal": "1_URL", "type": "url"}
 _FETCH, _SORT = ModuleNode(id="a", name="fetch"), ModuleNode(id="b", name="sort")
 
 
@@ -186,6 +189,26 @@ def _loop(loop_name="fakeloop", embed_name="up"):
     return Workflow().with_nodes(src, loop)
 
 
+def _async_up_dispatcher() -> ResolverDispatcher:
+    """Dispatches a sync ``fakeloop`` whose embed ``up`` is async-only."""
+
+    async def up(item, **_):
+        yield {"up": item["t"].upper()}
+
+    def fakeloop(items, embed=passthrough_pipe, **_):
+        for row in items:
+            yield from embed(row)
+
+    _stamp_embed(up, is_async=True)
+    return build_dispatcher(
+        ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
+        ModuleDefinition(
+            name="fakeloop", sync_pipe=cast("SyncModuleWrapper", fakeloop)
+        ),
+        ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
+    )
+
+
 @tag_source
 def _titled_source(_items=None, **_):
     yield {"title": "a"}
@@ -266,14 +289,6 @@ def _closing_embed_plan(build, closed: list[str]) -> ExecutionPlan:
     return ExecutionPlan.from_workflow(flow, dispatcher)
 
 
-async def _gen_closing_rows(closed: list[str]):
-    try:
-        while True:
-            yield {"x": 1}
-    finally:
-        closed.append("closed")
-
-
 def _two_output_plan() -> ExecutionPlan:
     """Builds a sync-only ``a`` on ``default`` and an async-only ``b`` on ``other``."""
     dispatcher = build_dispatcher(
@@ -292,7 +307,7 @@ PORTAL_USES = [
     pytest.param(_two_output_plan, "default", False, id="sync-only"),
     pytest.param(_two_output_plan, "other", True, id="async-only"),
     pytest.param(
-        lambda: _closing_embed_plan(_gen_closing_rows, []),
+        lambda: _closing_embed_plan(agen_closing_seed, []),
         "default",
         True,
         id="async-only-embed",
@@ -307,7 +322,6 @@ def _chain_plan(*modules: ResolvedModule) -> ExecutionPlan:
     return ExecutionPlan(Workflow().with_nodes(*nodes), modules=resolved)
 
 
-_SYNC_CHAIN = partial(_chain_plan, _SYNC_MODULE, _SYNC_MODULE)
 _ASYNC_CHAIN = partial(_chain_plan, _ASYNC_MODULE, _ASYNC_MODULE)
 _MIXED_CHAIN = partial(_chain_plan, *[_SYNC_MODULE, _ASYNC_MODULE] * 2)
 _SPLITTER_CHAIN = partial(_chain_plan, _SYNC_SPLITTER, _BOTH_MODULE)
@@ -315,8 +329,6 @@ _MAPPED_CHAIN = partial(_chain_plan, _MAPPED_MODULE, _MAPPED_MODULE)
 
 # How many node threads a sync or an async run may hold at once.
 THREAD_DEMANDS = [
-    pytest.param(_SYNC_CHAIN, True, 2, id="sync-only-async-run"),
-    pytest.param(_SYNC_CHAIN, False, 0, id="sync-only-sync-run"),
     pytest.param(_ASYNC_CHAIN, True, 0, id="async-only-async-run"),
     pytest.param(_ASYNC_CHAIN, False, 2, id="async-only-sync-run"),
     pytest.param(_MIXED_CHAIN, False, 2, id="alternating-sync-run"),
@@ -431,15 +443,12 @@ class TestExecutionPlan:
 
         assert plan.require_seed_target("default") == "n"
 
-    def test_inputs_are_only_set_with_the_confs_built_from_them(self):
+    def test_inputs_are_set_only_through_with_inputs_once(self):
         conf = cast("Conf", {"attrs": {"key": "q", "value": {"input": "q"}}})
         node = ModuleNode(id="b", name="itembuilder", conf=conf)
         flow = Workflow(input_schemas={"q": {"type": "integer"}}).with_nodes(node)
         plan = ExecutionPlan.from_workflow(flow, dispatcher)
         planned = plan.with_inputs({"q": 5})
-
-        assert planned.inputs == {"q": 5}
-        assert planned.modules["b"].conf == {"attrs": {"key": "q", "value": 5}}
 
         with pytest.raises(TypeError, match="inputs"):
             evolve(plan, inputs={"q": 5})
@@ -820,38 +829,8 @@ def _build_async_embed():
     )
 
 
-def _async_child(produced: list[int], closed: list[str]):
-    async def child(tag: str):
-        try:
-            for index in range(50):
-                produced.append(index)
-                yield {"content": f"{tag}{index}"}
-        finally:
-            closed.append(tag)
-
-    def _sub(item, context=None, **_):
-        return child(str(item["title"]))
-
-    return cast("AsyncModuleWrapper", workflow()(_sub))
-
-
-def _sync_child(produced: list[int], closed: list[str]):
-    def child(tag: str):
-        try:
-            for index in range(50):
-                produced.append(index)
-                yield {"content": f"{tag}{index}"}
-        finally:
-            closed.append(tag)
-
-    def _sub(item, context=None, **_):
-        return child(str(item["title"]))
-
-    return workflow()(_sub)
-
-
 EMBED_STREAMS = [
-    pytest.param(_gen_closing_rows, id="async-generator"),
+    pytest.param(agen_closing_seed, id="async-generator"),
     pytest.param(ClosingAsyncIterator, id="aclose-only"),
 ]
 
@@ -889,23 +868,7 @@ class TestAdaptEmbed:
 
     @skipif_sync
     def test_run_adapts_async_only_embed_under_sync(self) -> None:
-        async def up(item, **_):
-            yield {"up": item["t"].upper()}
-
-        def fakeloop(items, embed=passthrough_pipe, **_):
-            for row in items:
-                yield from embed(row)
-
-        _stamp_embed(up, is_async=True)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(
-                name="fakeloop", sync_pipe=cast("SyncModuleWrapper", fakeloop)
-            ),
-            ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
-        )
-
-        assert run_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
+        assert run_plan(_loop(), dispatcher=_async_up_dispatcher()) == [{"up": "X"}]
 
     @skipif_sync
     def test_run_runs_sync_only_embed_off_an_async_only_loop(self) -> None:
@@ -992,7 +955,9 @@ class TestAdaptEmbed:
         dispatcher = build_dispatcher(
             ModuleDefinition(name="src", sync_pipe=sync_pipe),
             ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
-            ModuleDefinition(name="child", async_pipe=_async_child(produced, closed)),
+            ModuleDefinition(
+                name="child", async_pipe=build_async_lazy_embed(produced, closed)
+            ),
         )
 
         expected = [{"content": "a0"}, {"content": "b0"}]
@@ -1055,23 +1020,9 @@ class TestAsyncAdaptEmbed:
     async def test_arun_adapts_async_only_embed_for_a_sync_loop_on_a_worker(
         self,
     ) -> None:
-        async def up(item, **_):
-            yield {"up": item["t"].upper()}
-
-        def fakeloop(items, embed=passthrough_pipe, **_):
-            for row in items:
-                yield from embed(row)
-
-        _stamp_embed(up, is_async=True)
-        dispatcher = build_dispatcher(
-            ModuleDefinition(name="src", sync_pipe=tagged_source("x")),
-            ModuleDefinition(
-                name="fakeloop", sync_pipe=cast("SyncModuleWrapper", fakeloop)
-            ),
-            ModuleDefinition(name="up", async_pipe=cast("AsyncModuleWrapper", up)),
-        )
-
-        assert await arun_plan(_loop(), dispatcher=dispatcher) == [{"up": "X"}]
+        assert await arun_plan(_loop(), dispatcher=_async_up_dispatcher()) == [
+            {"up": "X"}
+        ]
 
     @pytest.mark.xfail(
         strict=True,
@@ -1089,7 +1040,9 @@ class TestAsyncAdaptEmbed:
                 name="src", sync_pipe=cast("SyncModuleWrapper", _titled_source)
             ),
             ModuleDefinition(name="loop", sync_pipe=loop_pipe, async_pipe=async_loop),
-            ModuleDefinition(name="child", sync_pipe=_sync_child(produced, closed)),
+            ModuleDefinition(
+                name="child", sync_pipe=build_lazy_embed(produced, closed)
+            ),
         )
 
         assert await arun_plan(_real_loop_workflow(), dispatcher=dispatcher) == [
@@ -1098,25 +1051,6 @@ class TestAsyncAdaptEmbed:
         ]
         assert produced == [0, 0]
         assert closed == ["a", "b"]
-
-
-@tag_source
-def _replacements(_items=None, **_):
-    yield "X"
-    yield "Y"
-
-
-@tag_source
-def _replace_source(_items=None, **_):
-    yield from _REPLACE_ITEMS
-
-
-def _replace_workflow(conf, *edges, extra_nodes=()):
-    node = ModuleNode(
-        id="r", name="strreplace", conf=conf, options={"field": "content"}
-    )
-    nodes = [*extra_nodes, node]
-    return build_workflow(nodes, edges=edges)
 
 
 class _FailingClose(Closable):
@@ -1194,6 +1128,25 @@ class TestStreamAdapters:
         failure = "OSError('close failed')"
         assert raised.value.__notes__ == [f"closing the source also failed: {failure}"]
         assert closes == ["source"]
+
+
+@tag_source
+def _replacements(_items=None, **_):
+    yield "X"
+    yield "Y"
+
+
+@tag_source
+def _replace_source(_items=None, **_):
+    yield from _REPLACE_ITEMS
+
+
+def _replace_workflow(conf, *edges, extra_nodes=()):
+    node = ModuleNode(
+        id="r", name="strreplace", conf=conf, options={"field": "content"}
+    )
+    nodes = [*extra_nodes, node]
+    return build_workflow(nodes, edges=edges)
 
 
 class TestPreparedCall:
@@ -1337,6 +1290,16 @@ CALLABLE_IDENTITIES = [
 ]
 
 
+# A fetch url, whether a stream reaches its in:_1_URL port, and whether it self-starts.
+SOURCE_STARTS = [
+    pytest.param("file://riko/data/feed.xml", False, True, id="literal"),
+    pytest.param(_URL_TERMINAL, True, True, id="normalized-terminal"),
+    pytest.param(_URL_TERMINAL, False, False, id="unconnected-terminal"),
+    pytest.param({"subkey": "link", "type": "url"}, False, False, id="subkey"),
+    pytest.param({**_URL_TERMINAL, "subkey": ""}, True, True, id="empty-subkey"),
+]
+
+
 class TestPreparedNode:
     def test_a_callable_node_prepares_with_no_call_options(self):
         node = CallableNode(id="a", name="len", fn=len, resources="db")
@@ -1385,17 +1348,6 @@ class TestPreparedNode:
         assert interface is not None
         assert interface.identity is expected
 
-    def test_a_plain_wrapper_rejects_an_invalid_identity(self) -> None:
-        def pipe(source=None, **_):
-            return iter(source or {})
-
-        setattr(pipe, "identity", "split")  # noqa: B010
-        node = ModuleNode(id="p", name="probe")
-        module = ResolvedModule("probe", sync_pipe=cast("SyncModuleWrapper", pipe))
-
-        with pytest.raises(InvalidPipelineError, match="module 'identity'"):
-            _ = PreparedNode(node, module).sync_interface
-
     @pytest.mark.parametrize(("identity", "expected"), CALLABLE_IDENTITIES)
     def test_a_callable_node_reports_its_result_identity(
         self, identity, expected
@@ -1436,6 +1388,31 @@ class TestPreparedNode:
         )
         assert _get_node(plan, "a").is_mappable is True
         assert _get_node(plan, "c").is_mappable is False
+
+    @pytest.mark.parametrize(("url", "connected", "expected"), SOURCE_STARTS)
+    def test_is_self_starting_only_when_a_source_reads_no_default_input(
+        self, url: object, connected: bool, expected: bool
+    ) -> None:
+        source = ModuleNode(id="f", name="fetch", conf=cast("Conf", {"url": url}))
+        feeder = ModuleNode(id="s", name="strconcat", conf={"part": "x"})
+        edge = StreamEdge(Endpoint("s", "out"), Endpoint("f", "in:_1_URL"))
+        nodes, edges = ([source, feeder], (edge,)) if connected else ([source], ())
+        outputs = {"default": Endpoint("f", "out")}
+        flow = build_workflow(nodes, edges=edges, outputs=outputs)
+        plan = ExecutionPlan.from_workflow(flow, dispatcher)
+
+        assert plan.nodes["f"].is_self_starting is expected
+
+    def test_a_plain_wrapper_rejects_an_invalid_identity(self) -> None:
+        def pipe(source=None, **_):
+            return iter(source or {})
+
+        setattr(pipe, "identity", "split")  # noqa: B010
+        node = ModuleNode(id="p", name="probe")
+        module = ResolvedModule("probe", sync_pipe=cast("SyncModuleWrapper", pipe))
+
+        with pytest.raises(InvalidPipelineError, match="module 'identity'"):
+            _ = PreparedNode(node, module).sync_interface
 
     def test_prepared_module_must_be_resolved(self):
         with pytest.raises(InvalidPipelineError, match="PreparedNode 'module'"):

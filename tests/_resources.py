@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 CREDENTIAL = "microsoft/cif"
 SCALAR = 42
+CLEANED: list[object] = []
 
 
 class Connection:
@@ -134,7 +135,7 @@ async_contextmanager = pytest.fixture(async_cm_factory)
 scalar = pytest.fixture(lambda: SCALAR)
 
 WRAPPED_VALUES = [
-    pytest.param("scalar", {"cleanup": lambda _: None}, id="scalar-with-cleanup"),
+    pytest.param("scalar", {"cleanup": CLEANED.append}, id="scalar-with-cleanup"),
     pytest.param("connection", {}, id="closable"),
 ]
 

@@ -16,7 +16,7 @@ from pathlib import Path
 from pickle import dumps, loads  # noqa: S403
 from time import perf_counter, sleep
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast, get_args, get_origin
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -60,8 +60,10 @@ from tests._execution import (
     AsyncCloseAsyncIterator,
     ClosingAsyncIterator,
     RecordingSink,
+    adouble,
     agen_source,
     awaitable_source,
+    double,
     gen_closing_seed,
     registered_modules,
     relay_pipe,
@@ -79,7 +81,7 @@ from tests._resources import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     from riko.types._pipedef import DagModule
     from riko.types._streams import Item, Items, Stream
@@ -224,12 +226,6 @@ class TestPipelineConstruction:
         pipeline = Pipeline()
         assert dict(pipeline.workflow.nodes) == {}
         assert not pipeline.workflow.is_valid
-
-    def test_pipeline_is_generic_over_item_type(self):
-        alias = Pipeline[int]
-
-        assert get_origin(alias) is Pipeline
-        assert get_args(alias) == (int,)
 
     @pytest.mark.parametrize(("make", "match"), _NON_WORKFLOWS)
     def test_non_workflow_positional_rejected(self, make, match):
@@ -440,9 +436,6 @@ class TestPipelineIteration:
         assert seed == [{"a": {"b": "hi"}}]
 
     def test_a_source_seed_runs_through_a_registered_module(self) -> None:
-        def double(source, **_):
-            return ({"x": item["x"] * 2} for item in source)
-
         sync_pipe = cast("SyncModuleWrapper", double)
 
         with registered_modules(ModuleDefinition(name="doubler", sync_pipe=sync_pipe)):
@@ -517,10 +510,6 @@ class TestAsyncPipelineIteration:
     )
     @async_test
     async def test_a_seed_runs_through_a_registered_async_module(self, make_seed):
-        async def adouble(source, **_):
-            async for item in source:
-                yield {"x": item["x"] * 2}
-
         async_pipe = cast("AsyncModuleWrapper", adouble)
         definition = ModuleDefinition(name="adoubler", async_pipe=async_pipe)
 
@@ -588,7 +577,7 @@ RERUNNABLE = [
 ]
 
 
-class TestReiteration:
+class TestPipelineReiteration:
     @pytest.mark.parametrize("build", RERUNNABLE)
     def test_pipeline_replays(self, build):
         pipeline = build()
@@ -614,7 +603,7 @@ class TestReiteration:
         assert len(list(pipeline)) == 3
 
 
-class TestAsyncReiteration:
+class TestAsyncPipelineReiteration:
     @async_test
     @pytest.mark.parametrize("build", RERUNNABLE)
     async def test_pipeline_replays(self, build):
@@ -982,7 +971,7 @@ class TestAsyncMap:
             await async_map(_fail, range(3), limit=limit)
 
 
-class TestFanIn:
+class TestPipelineFanIn:
     @pytest.mark.smoke
     def test_fan_in_merges_every_source(self):
         one = len(list(fanned_in_fetches(_FEED)))
@@ -997,7 +986,7 @@ class TestFanIn:
         assert len(list(merged)) == len(list(fanned_in_fetches(_FEED, _FEED)))
 
 
-class TestAsyncFanIn:
+class TestAsyncPipelineFanIn:
     @pytest.mark.smoke
     @async_test
     async def test_fan_in_merges_every_source(self):
@@ -1345,7 +1334,7 @@ def branch_log():
 
 @pytest.mark.slow
 @skipif_sync
-class TestAsyncFanInParallel:
+class TestAsyncPipelineFanInParallel:
     @pytest.mark.parametrize("ordered", [False, True])
     @pytest.mark.anyio
     async def test_fan_in_yields_every_branch(self, branch_log, ordered):
@@ -1460,7 +1449,7 @@ class TestContext:
         with pytest.raises(TypeError, match="Context 'resources' must be a mapping"):
             Context(_resources=resources)
 
-    @pytest.mark.parametrize("name", ["_inputs", "_resources", "extra"])
+    @pytest.mark.parametrize("name", ["inputs", "resources"])
     def test_private_fields_cannot_be_set(self, name: str):
         context = Context()
 
@@ -1539,6 +1528,10 @@ class TestResource:
             Resource.from_factory(factory, cleanup=False)
 
 
+def _open_db() -> Generator[str]:
+    yield "conn"
+
+
 def _reader_workflow() -> Workflow:
     """Builds a one-node workflow whose module declares a ``primary`` resource."""
     node = ModuleNode(id="n", name=READER, resources={"slot": "primary"})
@@ -1563,7 +1556,7 @@ def reader():
         yield READER
 
 
-class TestEnvironmentBinding:
+class TestPipelineEnvironmentBinding:
     def test_with_context_derives_without_changing_the_original(self):
         context = Context(inputs={"limit": 5})
         base = Pipeline.from_module("fetch")
@@ -1580,29 +1573,20 @@ class TestEnvironmentBinding:
         assert base.workflow.input_schemas == {"feed": {"type": "string"}}
 
     def test_with_resource_extends_the_bound_context(self):
-        def open_db():
-            yield "conn"
-
         context = Context(inputs={"limit": 5})
         base = Pipeline.from_module("fetch").with_context(context)
-        pipeline = base.with_resource("db", open_db)
+        pipeline = base.with_resource("db", _open_db)
         assert pipeline.context is not None
         assert pipeline.context.inputs == context.inputs
         assert sorted(pipeline.context.resources) == ["db"]
         assert dict(context.resources) == {}
 
     def test_bound_resource_reaches_the_module(self, reader):
-        def open_db():
-            yield "conn"
-
-        pipeline = Pipeline(_reader_workflow()).with_resource("primary", open_db)
+        pipeline = Pipeline(_reader_workflow()).with_resource("primary", _open_db)
         assert list(pipeline) == [{"got": "conn"}]
 
     def test_with_resource_rejects_factory_options_on_a_resource(self):
-        def open_db():
-            yield "conn"
-
-        pipeline = Pipeline.from_module("fetch").with_resource("db", open_db)
+        pipeline = Pipeline.from_module("fetch").with_resource("db", _open_db)
         assert pipeline.context is not None
         resource = pipeline.context.resources["db"]
 
@@ -1670,20 +1654,17 @@ class TestWorkflowInputs:
         assert entered == []
 
 
-class TestAsyncEnvironmentBinding:
+class TestAsyncPipelineEnvironmentBinding:
     @async_test
     async def test_bound_resource_reaches_the_module_async(self, reader):
-        def open_db():
-            yield "conn"
-
         pipeline = Pipeline(_reader_workflow()).with_context(
-            Context().with_resource("primary", open_db)
+            Context().with_resource("primary", _open_db)
         )
         assert [item async for item in pipeline] == [{"got": "conn"}]
 
 
 @PUBSUB_PENDING
-class TestSubscriptions:
+class TestPipelineSubscriptions:
     """Named local subscriptions fed by a publishing pipeline."""
 
     def test_published_items_interleave_with_the_sender(self):
@@ -1781,7 +1762,7 @@ class TestSplit:
             Pipeline().split(splits)  # pyright: ignore[reportArgumentType]
 
     @UNION_PENDING
-    def test_upstream_node_runs_once_for_every_branch(self):
+    def test_union_of_split_branches_reads_the_upstream_once(self):
         consumed: list[int] = []
 
         def source():
@@ -1796,7 +1777,7 @@ class TestSplit:
 
 
 @PREDICATE_PENDING
-class TestConditionalNodes:
+class TestPipelineConditionalNodes:
     """A node gated on a per-item predicate rather than applied to every item."""
 
     def test_a_gated_node_runs_only_for_matching_items(self):

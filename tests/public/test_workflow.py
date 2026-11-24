@@ -58,6 +58,11 @@ _MERGE = {
     "outputs": {"default": Endpoint("c", "out")},
 }
 _CONF_PENDING = "module configuration is not validated against its contract yet"
+_HASH_FLOW: dict[str, Any] = {
+    "nodes": [ModuleNode(id="a", name="hash")],
+    "outputs": OUTPUT_A,
+}
+_EMPTY_FLOW: dict[str, Any] = {"nodes": [], "outputs": {}}
 
 NODE_FAMILIES = (
     (ModuleNode(id="fetch-1", name="fetch"), "module"),
@@ -95,6 +100,44 @@ APPEND_REJECTIONS = [
         Workflow(input_schemas={"limit": {"type": "string"}}),
         "give input",
         id="input-clash",
+    ),
+]
+
+
+FIELD_TYPE_REJECTIONS = [
+    *(
+        pytest.param(
+            _HASH_FLOW | {field: value},
+            f"'{field}' must be a list",
+            id=f"{field}-{type(value).__name__}",
+        )
+        for field in ("nodes", "edges")
+        for value in ("ab", b"ab", {"a": 1}, 3)
+    ),
+    pytest.param(_HASH_FLOW | {"edges": [("a", "b")]}, "Workflow edge", id="edge"),
+    pytest.param(
+        {"nodes": [1], "outputs": {}},
+        "Workflow node position 0 must be of type RikoNode",
+        id="node",
+    ),
+    pytest.param(
+        {"nodes": [], "outputs": {"o": 1}},
+        "Workflow output 'o' must be of type Endpoint",
+        id="output",
+    ),
+    pytest.param(_EMPTY_FLOW | {"outputs": "abc"}, "Workflow 'outputs'", id="outputs"),
+    pytest.param(
+        _EMPTY_FLOW | {"input_schemas": "abc"},
+        "Workflow 'input_schemas'",
+        id="input-schemas",
+    ),
+    *(
+        pytest.param(
+            _EMPTY_FLOW | {"input_schemas": {"q": schema}},
+            "Workflow 'input_schemas'",
+            id=f"schema-{type(schema).__name__}",
+        )
+        for schema in (5, "string")
     ),
 ]
 
@@ -255,20 +298,12 @@ class TestWorkflow:
         with pytest.raises(InvalidPipelineError, match="must not repeat a node id"):
             Workflow(nodes=nodes, outputs=OUTPUT_A)
 
-    @pytest.mark.parametrize("field", ["nodes", "edges"])
-    @pytest.mark.parametrize("value", ["ab", b"ab", {"a": 1}, 3])
-    def test_node_and_edge_containers_must_be_lists(self, field: str, value: Any):
-        kwargs = {"nodes": [ModuleNode(id="a", name="hash")], field: value}
-
-        with pytest.raises(InvalidPipelineError, match=f"'{field}' must be a list"):
-            Workflow(outputs=OUTPUT_A, **kwargs)
-
-    def test_edges_must_be_edges(self):
-        nodes = [ModuleNode(id="a", name="hash")]
-        edges: Any = [("a", "b")]
-
-        with pytest.raises(InvalidPipelineError, match="Workflow edge"):
-            Workflow(nodes=nodes, outputs=OUTPUT_A, edges=edges)
+    @pytest.mark.parametrize(("fields", "match"), FIELD_TYPE_REJECTIONS)
+    def test_a_field_rejects_a_value_of_the_wrong_type(
+        self, fields: dict[str, Any], match: str
+    ):
+        with pytest.raises(InvalidPipelineError, match=match):
+            Workflow(**fields)
 
     def test_edge_endpoints_must_be_endpoints(self):
         with pytest.raises(InvalidPipelineError, match="StreamEdge 'source'"):
@@ -278,39 +313,6 @@ class TestWorkflow:
     def test_endpoint_fields_must_be_strings(self, node: Any, port: Any):
         with pytest.raises(InvalidPipelineError, match="Endpoint '"):
             Endpoint(node, port)
-
-    @pytest.mark.parametrize(
-        ("fields", "match"),
-        [
-            pytest.param(
-                {"nodes": [1], "outputs": {}},
-                "Workflow node position 0 must be of type RikoNode",
-                id="nodes",
-            ),
-            pytest.param(
-                {"nodes": [], "outputs": {"o": 1}},
-                "Workflow output 'o' must be of type Endpoint",
-                id="outputs",
-            ),
-        ],
-    )
-    def test_mapping_values_must_have_the_field_type(
-        self, fields: dict[str, Any], match: str
-    ):
-        with pytest.raises(InvalidPipelineError, match=match):
-            Workflow(**fields)
-
-    @pytest.mark.parametrize("field", ["outputs", "input_schemas"])
-    def test_non_mapping_fields_are_rejected(self, field: str):
-        fields: dict[str, Any] = {"nodes": [], "outputs": {}, field: "abc"}
-
-        with pytest.raises(InvalidPipelineError, match=f"Workflow '{field}'"):
-            Workflow(**fields)
-
-    @pytest.mark.parametrize("schema", [5, "string"])
-    def test_non_schema_inputs_are_rejected(self, schema: object):
-        with pytest.raises(InvalidPipelineError, match="Workflow 'input_schemas'"):
-            Workflow(nodes=[], outputs={}, input_schemas={"q": schema})  # pyright: ignore[reportArgumentType]
 
 
 class TestNodeFamily:
@@ -668,27 +670,6 @@ class TestValidate:
 
         assert consumed == []
 
-    @pytest.mark.parametrize(("kwargs", "match"), INVALID_WORKFLOWS)
-    def test_invalid_workflow_rejected(self, kwargs, match):
-        with pytest.raises(InvalidPipelineError, match=match):
-            _workflow(**kwargs).validate()
-
-    @pytest.mark.parametrize(("edge", "target"), EDGE_FAMILY_MISMATCHES)
-    def test_edge_family_disagreeing_with_its_target_rejected(self, edge, target):
-        flow = _workflow(
-            [_A, target],
-            edges=[edge(Endpoint("a", "out"), Endpoint("b", "in"))],
-            outputs={"default": Endpoint("a", "out")},
-        )
-        with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
-            flow.validate()
-
-    @pytest.mark.parametrize(("edges", "output", "match"), INVALID_EDGES)
-    def test_invalid_edges_rejected(self, edges, output, match):
-        flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
-        with pytest.raises(InvalidPipelineError, match=match):
-            flow.validate()
-
     def test_validate_runs_its_checks_once_per_workflow(self, monkeypatch):
         calls = []
         validate_input_schemas = Workflow.validate_input_schemas
@@ -714,6 +695,27 @@ class TestValidate:
 
             with pytest.raises(InvalidPipelineError, match="invalid schema"):
                 flow.validate()
+
+    @pytest.mark.parametrize(("kwargs", "match"), INVALID_WORKFLOWS)
+    def test_invalid_workflow_rejected(self, kwargs, match):
+        with pytest.raises(InvalidPipelineError, match=match):
+            _workflow(**kwargs).validate()
+
+    @pytest.mark.parametrize(("edge", "target"), EDGE_FAMILY_MISMATCHES)
+    def test_edge_family_disagreeing_with_its_target_rejected(self, edge, target):
+        flow = _workflow(
+            [_A, target],
+            edges=[edge(Endpoint("a", "out"), Endpoint("b", "in"))],
+            outputs={"default": Endpoint("a", "out")},
+        )
+        with pytest.raises(InvalidPipelineError, match="edge family disagrees"):
+            flow.validate()
+
+    @pytest.mark.parametrize(("edges", "output", "match"), INVALID_EDGES)
+    def test_invalid_edges_rejected(self, edges, output, match):
+        flow = _workflow([_A, _B], edges=edges, outputs={"default": output})
+        with pytest.raises(InvalidPipelineError, match=match):
+            flow.validate()
 
 
 def _loop_workflow() -> Workflow:

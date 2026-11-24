@@ -14,9 +14,9 @@ Index (file, then the subjects it owns, in file order):
                               ImportArchitectureLint, RequireWorkflow, RunTarget,
                               ReadDocument, LogLevel
     test_codegen.py           WorkflowModule, CompileWorkflow, Pythonise,
-                              ModuleCategory, GeneratedNamesDrift, GenerateModuleIds,
-                              ConfigCodegen, UserAgentCodegen, WorkflowFixtures,
-                              WorkflowProbes, ImportSurface, VerbTables,
+                              ModuleCategory, GenerateModuleNames, GenerateModuleIds,
+                              ConfigCodegen, GenerateUserAgents, WorkflowFixtures,
+                              WorkflowProbes, ImportSurface, GenerateVerbTables,
                               GenerateApiSurface
     test_concurrency.py       BuildTrackedCall, RequireProcessSafe, SyncPolicy,
                               PoolLifetime, ThreadBudget
@@ -38,16 +38,16 @@ Index (file, then the subjects it owns, in file order):
                               AsyncOperatorLaziness, OperatorInputClose,
                               SyncPipeAsyncInput, ReturnInference, ModuleMetadata,
                               WrapperMeta, Loop, AsyncProcessor, AsyncOperator, Prepare,
-                              Objectify, GetString, CsvParser, ExchangeRate, AsyncSend,
-                              AsyncReceive, AsyncTimeoutIterator
+                              Objectify, GetString, CsvParser, Filter, ExchangeRate,
+                              AsyncSend, AsyncReceive, AsyncTimeoutIterator
     test_plan_closes.py       PlanClose
     test_plan_runs.py         PlanRun
     test_resolution.py        WorkflowDecorator, BuildWorkflowPipes, ModuleRegistry,
-                              DescribeModule, PublicRegister, TemporaryRegistrations,
-                              ResolverDispatcher, RequireInterface, EntryPointModules,
+                              DescribeModule, RegisterModule, TemporaryRegistrations,
+                              ResolverDispatcher, RequireInterface, RegistryEntryPoints,
                               WorkflowResolver, PackageStore, DirectoryStore,
-                              CompositeStore, Catalog, ResolvedDocuments, TargetRegistry
-    test_suite_layout.py      TierIndexCodegen, LayoutLint, Timeouts, DoctestSkips
+                              CompositeStore, ResolvedWorkflow, TargetRegistry
+    test_suite_layout.py      GenerateTierIndex, LayoutLint, Timeouts, DoctestSkips
     test_tee.py               Tee
     test_upstream.py          Meza
     test_values.py            CanonicalBytes, Digest, IdentityAccumulator, Metadata,
@@ -56,7 +56,8 @@ Index (file, then the subjects it owns, in file order):
                               DefItemgetter, Fromdict, ParseDateString,
                               ResolveAwareDatetime, DatetimeToDatedict, DotDict,
                               GetSkip, Any2dict, XmlParser, AugmentEntries, ResolveDate,
-                              GenNonNull, Graph, GraphIndex, LoadSettings,
+                              GenNonNull, Graph, WorkflowIndex, LoadSettings,
+                              IsinstanceStrict, GetSyncCloser, GetAsyncCloser,
                               RequireGuards, RequireFromForm, RequireEnum,
                               NormalizeStrs, FieldNames, TypedDictKeys, Logging,
                               RikoError

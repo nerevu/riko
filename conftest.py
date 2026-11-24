@@ -10,6 +10,7 @@ import re
 from asyncio.base_events import BaseEventLoop
 from logging import getLogger
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 from weakref import ref
 
@@ -23,6 +24,7 @@ from riko.parsing.documents import IS_LXML
 from riko.runtime._pubsub import reset_pubsub
 from riko.runtime._registrations import temporary_registrations
 from riko.runtime._workflow_resolver import register_workflow_store
+from tests import run_python
 
 if TYPE_CHECKING:
     from types import AsyncGeneratorType
@@ -51,6 +53,21 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ["PYTHONPATH"] = os.pathsep.join(path for path in paths if path)
     # Test bounds are measured without asyncio debug mode, which slows every task.
     os.environ.pop("PYTHONASYNCIODEBUG", None)
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    # A script outside the checkout must import this checkout, as a console script
+    # would; checked once, by the controller, rather than as a subject test.
+    if not hasattr(session.config, "workerinput"):
+        with TemporaryDirectory() as directory:
+            done = run_python("-c", "import riko; print(riko.__file__)", cwd=directory)
+
+        imported = done.stdout.strip()
+        expected = str(ROOT_DIR / "riko" / "__init__.py")
+
+        if imported != expected:
+            msg = f"subprocesses import riko from {imported}, not {expected}"
+            raise pytest.UsageError(msg)
 
 
 @pytest.fixture(autouse=True)

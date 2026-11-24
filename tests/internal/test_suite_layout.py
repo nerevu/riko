@@ -122,7 +122,7 @@ TIER_INDEX_CASES = [
 ]
 
 
-class TestTierIndexCodegen:
+class TestGenerateTierIndex:
     """The generated test tier index."""
 
     @pytest.mark.parametrize(("source", "rows"), TIER_INDEX_CASES)
@@ -136,11 +136,6 @@ class TestTierIndexCodegen:
 
         generated = generate_tier_index(tier)
         assert generated.split("order):\n\n")[1] == f'{rows}"""\n'
-
-    def test_regenerating_a_current_index_changes_nothing(self, tmp_path: Path) -> None:
-        tier = _write_suite(tmp_path) / "public"
-        text = (tier / "__init__.py").read_text(encoding="utf-8")
-        assert generate_tier_index(tier) == text
 
     def test_the_file_starts_with_the_generated_header(self, tmp_path: Path) -> None:
         tier = _write_suite(tmp_path) / "public"
@@ -268,6 +263,10 @@ BOUND_CASES = [
 CLEAN_BOUND_CASES = [
     pytest.param(_case("async def f(): await async_sleep(3600)", _MARK), id="nested"),
     pytest.param(
+        _case("class Fake:\n            def close(self): release.wait(0.5)"),
+        id="fake-wait",
+    ),
+    pytest.param(
         _case("ExecutionSettings(shutdown_timeout=0.05)"), id="subject-timeout"
     ),
     pytest.param(_case("with fail_after(delay): ..."), id="non-literal"),
@@ -348,7 +347,7 @@ GLOBAL_BOUND_CASES = [
 ]
 
 
-class TestLayoutLint:
+class TestTestsLint:
     """The tier test-layout lint check."""
 
     def test_an_indexed_suite_passes(self, tmp_path: Path) -> None:

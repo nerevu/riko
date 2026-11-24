@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 
-from riko.bado._backend import CancelScope, async_sleep, fail_after, lowlevel
+from riko.bado._backend import CancelScope, async_sleep, fail_after
 from riko.bado._util import maybe_async, syncify
 from riko.bado.itertools import aauto_close, as_async
 from riko.base._exceptions import InvalidPipelineError
@@ -58,7 +58,6 @@ if TYPE_CHECKING:
         Stream,
     )
     from riko.types._wrappers import AsyncModuleWrapper, Func, SyncModuleWrapper
-    from tests._execution import AsyncPipeFunc
 
 
 def _unbound_relay_workflow() -> Workflow:
@@ -73,6 +72,14 @@ async def _agen_closing_seed(closed: list[str]) -> AsyncItemGenerator:
     try:
         yield {"x": 1}
         yield {"x": 2}
+    finally:
+        closed.append("closed")
+
+
+async def _agen_endless(closed: list[str]):
+    try:
+        while True:
+            yield {"t": "a"}
     finally:
         closed.append("closed")
 
@@ -191,7 +198,7 @@ class _SlowAcloseIterator(_TwoItems):
     """A two-item iterator whose only close, ``aclose``, outlasts shutdown."""
 
     async def aclose(self) -> None:
-        await async_sleep(1)
+        await async_sleep(0.3)
         self.closed.append("closed")
 
 
@@ -209,14 +216,6 @@ class _FailingAsyncIterator:
 
     async def aclose(self) -> None:
         self.closed.append("closed")
-
-
-class _LoopBoundHandle:
-    """An async iterable that opens its iterator only on a running event loop."""
-
-    def __aiter__(self) -> AsyncStream:
-        lowlevel.current_token()
-        return agen_source()
 
 
 # A sync root reads the seed on a worker thread, and the caller may close the output
@@ -439,14 +438,6 @@ EARLY_CLOSED_VALUES = [
     pytest.param(_endless_input, id="input"),
     pytest.param(_closing_return, id="raw-return"),
 ]
-
-
-async def _agen_endless(closed: list[str]):
-    try:
-        while True:
-            yield {"t": "a"}
-    finally:
-        closed.append("closed")
 
 
 def _aclosing_relay(items, **_):
@@ -727,43 +718,28 @@ class TestPlanClose:
     @skipif_sync
     def test_run_closes_an_unfinished_async_only_item_on_the_portal(self) -> None:
         closed: list[str] = []
-
-        async def src(_items=None, **_):
-            try:
-                while True:
-                    yield {"x": 1}
-            finally:
-                closed.append("closed")
-
-        pipe = tag_source(mark_async_loopable(src))
+        src = mark_async_loopable(lambda _items=None, **_: _agen_endless(closed))
+        pipe = tag_source(src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
         plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
 
         with SyncExecution() as execution:
             stream = cast("Generator[Item]", execution.run(plan))
-            assert next(stream) == {"x": 1}
+            assert next(stream) == {"t": "a"}
             stream.close()
             assert closed == ["closed"]
 
     @skipif_sync
     def test_run_closes_an_unfinished_async_only_stream_on_the_portal(self) -> None:
         closed: list[str] = []
-
-        @tag_source
-        async def src(_items=None, **_):
-            try:
-                while True:
-                    yield {"x": 1}
-            finally:
-                closed.append("closed")
-
+        src = tag_source(lambda _items=None, **_: _agen_endless(closed))
         pipe = cast("AsyncModuleWrapper", src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
         plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
 
         with SyncExecution() as execution:
             stream = cast("Generator[Item]", execution.run(plan))
-            assert next(stream) == {"x": 1}
+            assert next(stream) == {"t": "a"}
             stream.close()
             assert closed == ["closed"]
 
@@ -782,60 +758,17 @@ class TestPlanClose:
             assert closed == ["closed"]
 
     @skipif_sync
-    def test_run_opens_an_async_only_stream_on_the_portal(self) -> None:
-        @tag_source
-        def src(_items=None, **_):
-            lowlevel.current_token()
-            return agen_source()
-
-        pipe = cast("AsyncModuleWrapper", src)
-        dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
-
-        with SyncExecution() as execution:
-            assert list(execution.run(plan)) == [{"x": 1}, {"x": 2}]
-
-    @skipif_sync
-    def test_run_opens_an_async_only_item_result_on_the_portal(self) -> None:
-        def item(_item, **_) -> AsyncStream:
-            lowlevel.current_token()
-            return agen_source()
-
-        pipe = mark_async_loopable(cast("AsyncPipeFunc", item))
-        dispatcher = build_dispatcher(ModuleDefinition(name="m", async_pipe=pipe))
-        plan = ExecutionPlan.from_workflow(module_workflow("m"), dispatcher)
-
-        with SyncExecution() as execution:
-            assert list(execution.run(plan, seed={"x": 0})) == [{"x": 1}, {"x": 2}]
-
-    @skipif_sync
-    def test_run_opens_an_async_seed_on_the_portal(self) -> None:
-        plan = build_doubler_plan("double")
-
-        with SyncExecution() as execution:
-            stream = execution.run(plan, seed=_LoopBoundHandle())
-            assert list(stream) == [{"x": 2}, {"x": 4}]
-
-    @skipif_sync
     def test_build_envelope_stream_closes_an_abandoned_async_only_stream_on_exit(
         self,
     ) -> None:
         closed: list[str] = []
-
-        @tag_source
-        async def src(_items=None, **_):
-            try:
-                while True:
-                    yield {"x": 1}
-            finally:
-                closed.append("closed")
-
+        src = tag_source(lambda _items=None, **_: _agen_endless(closed))
         pipe = cast("AsyncModuleWrapper", src)
         dispatcher = build_dispatcher(ModuleDefinition(name="src", async_pipe=pipe))
         plan = ExecutionPlan.from_workflow(module_workflow("src"), dispatcher)
 
         with SyncExecution() as execution:
-            assert next(execution.build_envelope_stream(plan)).value == {"x": 1}
+            assert next(execution.build_envelope_stream(plan)).value == {"t": "a"}
 
         assert closed == ["closed"]
 
@@ -884,16 +817,6 @@ class TestPlanClose:
         assert isinstance(primary, InvalidPipelineError)
         assert isinstance(cleanup, RuntimeError)
         assert closed == ["closed"]
-
-    @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
-    def test_run_rejects_a_value_whose_only_close_is_async(self, build, make) -> None:
-        plan, seed = build(make, [])
-
-        with (
-            SyncExecution() as execution,
-            pytest.raises(InvalidPipelineError, match="only close is async"),
-        ):
-            execution.run(plan, seed=seed)
 
     def test_run_closes_a_sync_source_when_its_output_closes(self) -> None:
         closed: list[bool] = []
@@ -968,6 +891,16 @@ class TestPlanClose:
             assert events == ["src-close"]
 
         assert events == ["src-close"]
+
+    @pytest.mark.parametrize(("build", "make"), ASYNC_ONLY_CLOSES)
+    def test_run_rejects_a_value_whose_only_close_is_async(self, build, make) -> None:
+        plan, seed = build(make, [])
+
+        with (
+            SyncExecution() as execution,
+            pytest.raises(InvalidPipelineError, match="only close is async"),
+        ):
+            execution.run(plan, seed=seed)
 
 
 class TestAsyncPlanClose:
@@ -1396,7 +1329,7 @@ class TestAsyncPlanClose:
                 return iter([{"x": 1}])
 
             def close(self) -> None:
-                release.wait(1)
+                release.wait(0.5)
 
         settings = ExecutionSettings(shutdown_timeout=0.05)
         start = perf_counter()

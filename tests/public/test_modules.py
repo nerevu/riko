@@ -24,10 +24,10 @@ from riko.bado.itertools import alist
 from riko.base._config import DEF_CONCURRENCY_LIMIT
 from riko.base._exceptions import InvalidPipelineError, RemovedOptionError
 from riko.base._paths import get_path
-from riko.coercion import cast as cast_module
 from riko.coercion._dates import datetime_to_datedict
 from riko.coercion._dynamic_conf import DynamicConf
 from riko.definitions._context import Context
+from riko.definitions._module_definition import ModuleDefinition
 from riko.ext.codegen import (
     NameEntry,
     enum_member_name,
@@ -66,7 +66,9 @@ from riko.modules.timeout import async_pipe as timeout_async_pipe
 from riko.modules.tokenizer import pipe as tokenizer
 from riko.modules.udf import pipe as udf_pipe
 from riko.modules.xpathfetchpage import pipe as xpathfetchpage
+from riko.runtime._module_registry import register_module
 from riko.runtime._pipeline import Pipeline
+from riko.runtime._registrations import temporary_registrations
 from riko.types._enums import CastType, SortableCastType
 from riko.types.modules import (
     ConfArg,
@@ -95,6 +97,7 @@ from riko.types.modules import (
     XpathFetchPageConf,
 )
 from tests import async_test
+from tests._execution import build_pipe_wrapper
 from tests._lifecycle import LOOKAHEAD, PARENTS, TOKENIZER_CONF
 from tests._loopback import loopback_url
 
@@ -105,6 +108,15 @@ if TYPE_CHECKING:
     from riko.types._streams import AsyncStream, Item
     from riko.types.modules import Conf
 
+_ACME = "acme.mod"
+_ACME_META = {
+    "type": "operator",
+    "subtype": "composer",
+    "subtypes": {"composer"},
+    "pollable": False,
+    "loopable": False,
+    "is_async": False,
+}
 _OMITTED = object()
 _NUMBERS = ["1", "2", "3"]
 _DATES = ["2019-01-01", "2020-05-01", "2024-11-12"]
@@ -569,19 +581,6 @@ class TestFilter:
         conf = FilterConf({"rule": rule})
         assert _values(filter_pipe(STRING_FIELDS, conf=conf), "i") == expected
 
-    def test_filter_relative_date_value_resolves_per_evaluation(self, monkeypatch):
-        """A ``"today"`` rule value follows the clock, not its first evaluation."""
-        ahead, behind = timezone(timedelta(hours=14)), timezone(timedelta(hours=-12))
-        items = [{"x": datetime.now(behind).date().isoformat()}]
-        rule = FilterConfRule(field="x", op="before", value="today")
-        conf = FilterConf({"rule": rule})
-
-        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: ahead)
-        assert _values(filter_pipe(items, conf=conf), "x") == [items[0]["x"]]
-
-        monkeypatch.setattr(cast_module, "load_local_tz", lambda **_: behind)
-        assert _values(filter_pipe(items, conf=conf), "x") == []
-
     def test_filter_warns_and_ignores_an_out_of_range_date(self, caplog):
         items = [{"x": 10**19}, {"y": 1}, {"x": None}, {"x": "2020-01-01"}]
         rule = FilterConfRule(field="x", op="after", value="2019-01-01")
@@ -591,18 +590,6 @@ class TestFilter:
             assert _values(filter_pipe(items, conf=conf), "x") == ["2020-01-01"]
 
         assert ["out of range" in r.getMessage() for r in caplog.records] == [True]
-
-    def test_filter_allow_inf_flag(self, monkeypatch):
-        """Compare infinities numerically when ``ALLOW_INF`` is enabled."""
-        items = [{"x": "-inf"}]
-        conf = FilterConf({"rule": FilterConfRule(field="x", op="less", value="-5")})
-
-        monkeypatch.setattr("riko.modules.filter.ALLOW_INF", True)
-        assert _values(filter_pipe(items, conf=conf), "x") == ["-inf"]
-
-        nan_rule = FilterConfRule(field="x", op="greater", value="9")
-        nan_conf = FilterConf({"rule": nan_rule})
-        assert _values(filter_pipe([{"x": "nan"}], conf=nan_conf), "x") == ["nan"]
 
 
 class TestDatebuilder:
@@ -811,15 +798,13 @@ REGEX_CASES = [
 
 class TestRegex:
     @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
-    def test_rules_apply_as_documented(self, rules, default, text, expected):
+    def test_rules_rewrite_the_field(self, rules, default, text, expected):
         conf = RegexConf({"rule": rules, "default": default})
         assert next(regex({"content": text}, conf=conf)) == {"content": expected}
 
     @pytest.mark.parametrize(("rules", "default", "text", "expected"), REGEX_CASES)
     @async_test
-    async def test_async_rules_apply_as_documented(
-        self, rules, default, text, expected
-    ):
+    async def test_async_rules_rewrite_the_field(self, rules, default, text, expected):
         conf = RegexConf({"rule": rules, "default": default})
         async with maybe_aclosing(async_regex({"content": text}, conf=conf)) as stream:
             assert await anext(stream) == {"content": expected}
@@ -1174,6 +1159,11 @@ NON_LOOPABLE_FILTERS = [
 ]
 
 
+def _acme_definition(**attrs: object) -> ModuleDefinition:
+    """Defines an ``acme.mod`` pass-through module whose pipe carries ``attrs``."""
+    return ModuleDefinition(name=_ACME, sync_pipe=build_pipe_wrapper(**attrs))
+
+
 class TestListModules:
     def test_filter_non_loopable_modules(self):
         modules = list_module_metadata(loopable=False)
@@ -1190,6 +1180,26 @@ class TestListModules:
     def test_filter_non_loopable_by_kind(self, kind: str | None, subtype: str | None):
         modules = list_modules(type=kind, subtype=subtype, loopable=False)
         assert modules == ["input"]
+
+    def test_registered_module_appears_in_catalog(self):
+        with temporary_registrations():
+            register_module(_acme_definition(name=_ACME, **_ACME_META))
+            assert _ACME in list_modules()
+            assert "tokenizer" in list_modules()
+
+    def test_bare_callable_skipped_in_catalog(self):
+        """Resolvable but carries no metadata."""
+        with temporary_registrations():
+            register_module(_acme_definition())
+            assert _ACME not in list_modules()
+
+    def test_list_modules_filters_by_provider(self):
+        with temporary_registrations():
+            register_module(_acme_definition(name=_ACME, **_ACME_META))
+            metadata = list_module_metadata(provider="acme")
+            assert list_modules(provider="acme") == [_ACME]
+
+        assert metadata[0].provider == "acme"
 
     def test_type_and_subtype_cannot_be_combined(self):
         with pytest.raises(ValueError, match="type and subtype cannot be combined"):
@@ -1361,9 +1371,7 @@ FOREIGN_OPTIONS = [
 PROCESSOR_FOLD_CASES = [
     pytest.param({"count": "first", "emit": True}, [{"content": "a"}], id="first"),
     pytest.param(
-        {"count": "all", "emit": True},
-        [{"content": "a"}, {"content": "b"}, {"content": "c"}],
-        id="all",
+        {"emit": True}, [{"content": "a"}, {"content": "b"}, {"content": "c"}], id="all"
     ),
     pytest.param(
         {"count": "first", "assign": "w", "emit": False},
@@ -1420,13 +1428,13 @@ class TestProcessor:
             _create_wrapper(name, iscoro=iscoro, is_async=is_async).is_async is expected
         )
 
-    def test_sync_list(self):
+    def test_test_flag_reaches_every_item(self):
         seen: list[object] = []
         pipe = processor()(_record_test_flag(seen))
         list(pipe([{"a": 1}, {"a": 2}], test=True))
         assert seen == [True, True]
 
-    def test_sync(self):
+    def test_skip_if_passes_skipped_items_through(self):
         pipe = processor(skip_if=lambda item: "x" in item)(_skip_marked)
         result = list(pipe([{"x": 1}, {"y": 2}], assign="y"))
         assert result == [{"x": 1}, {"y": "processed"}]
@@ -1441,11 +1449,6 @@ class TestProcessor:
     def test_stream_fold_per_item(self, kwargs, expected):
         result = tokenizer(iter(PARENTS), conf=TOKENIZER_CONF, field="title", **kwargs)
         assert list(result) == expected
-
-    def test_single_item_is_not_double_mapped(self):
-        item = {"title": "a b"}
-        result = tokenizer(item, conf=TOKENIZER_CONF, field="title", emit=True)
-        assert list(result) == [{"content": "a"}, {"content": "b"}]
 
     @pytest.mark.parametrize(("title", "kwargs", "expected"), ASSIGN_SHAPE_CASES)
     def test_assigned_stream_shape_depends_only_on_count(self, title, kwargs, expected):
@@ -1497,7 +1500,7 @@ class TestAsyncProcessor:
     """An async ``processor`` keeps call flags and skips items."""
 
     @async_test
-    async def test_async_list(self):
+    async def test_async_test_flag_reaches_every_item(self):
         seen: list[object] = []
         async_pipe = processor(is_async=True)(_record_test_flag(seen))
         _ = [item async for item in async_pipe([{"a": 1}, {"a": 2}], test=True)]
@@ -1523,7 +1526,7 @@ class TestAsyncProcessor:
             assert len(pulled) <= DEF_CONCURRENCY_LIMIT
 
     @async_test
-    async def test_async(self):
+    async def test_async_skip_if_passes_skipped_items_through(self):
         async_pipe = processor(is_async=True, skip_if=lambda item: "x" in item)(
             _skip_marked
         )

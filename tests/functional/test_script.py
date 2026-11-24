@@ -353,15 +353,6 @@ class TestBenchmark:
         assert not missing, msg
 
 
-class TestSubprocessImports:
-    def test_a_script_imports_the_checkout_under_test(self, tmp_path):
-        # A script outside the checkout resolves riko the way a console script does.
-        probe = tmp_path / "probe.py"
-        probe.write_text("import riko\nprint(riko.__file__)\n")
-        done = run_python(str(probe), cwd=tmp_path)
-        assert done.stdout.strip() == str(ROOT_DIR / "riko" / "__init__.py")
-
-
 def _without_nan(value: object) -> object:
     """Replaces each NaN with a marker so equal outputs compare equal."""
     if isinstance(value, Mapping):
@@ -384,7 +375,7 @@ class TestExamplePipelines:
         items = module.pipe(test=True)
         return items
 
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(3)
     def test_kazeeki(self):
         """Tests the kazeeki pipeline."""
         pipe_name = "kazeeki"

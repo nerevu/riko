@@ -168,7 +168,7 @@ pipeline.map(partial(scale, factor=2))
 * `fn` receives the upstream value as is: a scalar from an earlier `map` reaches it
   unwrapped (`Pipeline().map(len)(["hi"])` yields `2`), never as `{"content": value}`.
 * The return value is the next item as is: a mapping stays an item, a scalar becomes a
-  plain value. Nothing is assigned to a `"udf"` field (`TestCallableNodes` already
+  plain value. Nothing is assigned to a `"udf"` field (`TestPipelineMap` already
   expects this). A returned iterator is one item, not a fan-out; fanning out is
   `flat_map`.
 * `async def fn(item)` has the same shape; iterating with `for` / `async for` picks the
@@ -387,7 +387,7 @@ The values are an `IdentityMode` `StrEnum` (`PRESERVE`/`DERIVE`/`COMBINE`, bare 
 accepted), since callers supply them at a Python call site (decided 2026-10-22). A
 one-to-one `map` accepts `preserve` (the default) and `derive` and refuses `combine` at
 definition time (R5A, 2026-11-11;
-`tests/public/test_callable_nodes.py::TestCallableNodes::test_map_rejects_combine_identity`).
+`tests/public/test_callable_nodes.py::TestPipelineMap::test_map_rejects_combine_identity`).
 
 * `preserve`: 1 -> 1 identity/generation preservation;
 * `derive`: deterministic child identity/generation;
@@ -484,7 +484,7 @@ when the predicate matches. It is a callable, so it is not JSON-native and canno
 it, and `examples/kazeeki.py` / `tests/pyworkflows/pipe_kazeeki_full.py` dropped their
 guards (the kazeeki async-parity row is a strict xfail because the ungated budget math
 yields `NaN`). The strict-xfail tripwire is
-`tests/public/test_pipeline.py::TestConditionalNodes`, written against
+`tests/public/test_pipeline.py::TestPipelineConditionalNodes`, written against
 `.strconcat(..., skip_if=…)`. This phase decides the successor: a predicate argument on
 the callable node, or conditional routing from the fan-out plan; either way the tripwire
 is rewritten to the chosen form and un-xfailed here. Call-time `skip_if` on a direct

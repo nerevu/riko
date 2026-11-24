@@ -500,6 +500,7 @@ NODE_IDS = [
     pytest.param(_REPEATED, ["fetch-1", "filter-1", "filter-2"], id="occurrence-ids"),
     pytest.param([{"id": "keep", "name": "fetch"}], ["keep"], id="explicit-id-kept"),
     pytest.param({"a": {"id": "a", "name": "fetch"}}, ["a"], id="key-matches-id"),
+    pytest.param({"a": {"name": "fetch"}}, ["a"], id="mapping-key-id"),
     pytest.param(_TAKEN_ID, ["fetch-2", "fetch-1"], id="generated-skip-explicit"),
 ]
 
@@ -516,11 +517,6 @@ class TestNormalizeWorkflow:
     @pytest.mark.parametrize(("nodes", "expected"), NODE_IDS)
     def test_node_ids(self, nodes, expected):
         assert list(Workflow.from_raw({"nodes": nodes}).nodes) == expected
-
-    def test_mapping_nodes_keep_explicit_ids(self):
-        flow = Workflow.from_raw({"nodes": {"a": {"name": "fetch"}}})
-        assert isinstance(flow.nodes["a"], ModuleNode)
-        assert flow.nodes["a"].name == "fetch"
 
     def test_family_dispatch_and_enum_coercion(self):
         flow = Workflow.from_raw(
@@ -842,6 +838,16 @@ class TestNormalizeWorkflow:
                 id="conflicting-fmt-format",
             ),
             pytest.param(
+                {**_READ_NODE, "fmt": None, "format": "csv"},
+                "conflicting node 'fmt'/'format'",
+                id="conflicting-null-fmt",
+            ),
+            pytest.param(
+                {**_READ_NODE, "fmt": "csv", "format": None},
+                "conflicting node 'fmt'/'format'",
+                id="conflicting-null-format",
+            ),
+            pytest.param(
                 {"name": "tokenizer", "options": {"bogus": 1}},
                 "unknown ModuleNode 'options' key",
                 id="unknown-call-option",
@@ -956,16 +962,6 @@ class TestNormalizeWorkflow:
                     id=f"edge-alias-{alias}",
                 )
                 for alias in ("src", "tgt", "from", "to")
-            ),
-            pytest.param(
-                {"nodes": [{**_READ_NODE, "fmt": None, "format": "csv"}]},
-                "conflicting node 'fmt'/'format'",
-                id="conflicting-null-fmt",
-            ),
-            pytest.param(
-                {"nodes": [{**_READ_NODE, "fmt": "csv", "format": None}]},
-                "conflicting node 'fmt'/'format'",
-                id="conflicting-null-format",
             ),
         ],
     )
@@ -1101,6 +1097,13 @@ MIGRATED_INPUTS = [
         {**_STR, "description": "Term:"},
         {},
         id="prompt",
+    ),
+    pytest.param(
+        {"name": "q", "prompt": "enter", "default": "%Y"},
+        "q",
+        {**_STR, "description": "enter", "default": "%Y"},
+        {},
+        id="plain-strings",
     ),
     pytest.param(
         {"input_key": {"type": "text", "value": "k"}},
@@ -1344,11 +1347,6 @@ class TestMigrate:
         Workflow.parse({"modules": [{"id": "a", "type": "fetch", "conf": {}}]})
         assert any("pipe definition" in record.message for record in caplog.records)
 
-    def test_input_module_becomes_a_workflow_input(self):
-        conf = {"name": "fmt", "prompt": "enter", "default": "%Y"}
-        flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
-        assert "fmt" in flow.input_schemas
-
     @pytest.mark.parametrize(("conf", "name", "schema", "kept"), MIGRATED_INPUTS)
     def test_input_module_conf_migrates(self, conf, name, schema, kept):
         flow = Workflow.parse({"modules": [{"id": "i", "type": "input", "conf": conf}]})
@@ -1416,10 +1414,6 @@ class TestMigrate:
     def test_unknown_document_key_raises(self, document, match):
         with pytest.raises(InvalidPipelineError, match=match):
             Workflow.parse(document)
-
-    def test_missing_modules_raises(self):
-        with pytest.raises(InvalidPipelineError, match=r"the document needs"):
-            Workflow.parse({"wires": []})
 
 
 class TestSerialize:

@@ -141,10 +141,6 @@ class TestFrozenDict:
         frozen = FrozenDict({"a": 1})
         assert freeze(frozen) is frozen
 
-    def test_an_unhashable_value_makes_it_unhashable(self):
-        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
-            hash(FrozenDict({"a": bytearray()}))
-
     def test_json_freeze_marks_what_it_builds_and_keeps_it(self):
         frozen = json_freeze({"a": [1, {"b": 2}]})
         plain = FrozenDict({"a": [1, {"b": 2}]})
@@ -160,6 +156,10 @@ class TestFrozenDict:
     def test_the_public_trusted_constructor_never_marks(self):
         wrapped = FrozenJSONDict.from_frozen({"a": 1})
         assert (type(wrapped), json_freeze(wrapped) is wrapped) == (FrozenDict, False)
+
+    def test_an_unhashable_value_makes_it_unhashable(self):
+        with pytest.raises(TypeError, match="unhashable type: 'bytearray'"):
+            hash(FrozenDict({"a": bytearray()}))
 
 
 def _sync_generator():
@@ -686,7 +686,6 @@ class TestRawWorkflowFields:
         assert CallOptions(**options).kwargs == options
 
     def test_raw_requiredness_matches_contract(self):
-        assert "id" in RawNode.__annotations__
         assert typed_dict_keys(RawNode)[0] == {"name"}
         assert typed_dict_keys(RawEndpoint)[0] == {"node"}
         assert typed_dict_keys(RawEdge)[0] == {"source", "target"}

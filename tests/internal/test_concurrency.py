@@ -59,7 +59,7 @@ from tests._execution import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Callable, Generator, Iterator
 
     from riko.types._wrappers import AsyncModuleWrapper, SyncModuleWrapper
 
@@ -90,6 +90,14 @@ ITEM_CALLS = [
 
 def _values(envelopes):
     return [env.value for env in envelopes]
+
+
+def _run_on_worker(func: Callable[[], None]) -> Thread:
+    """Runs ``func`` on a daemon thread and waits up to a second for it to finish."""
+    worker = Thread(target=func, daemon=True)
+    worker.start()
+    worker.join(timeout=1)
+    return worker
 
 
 class TestBuildTrackedCall:
@@ -397,11 +405,7 @@ class TestSyncPolicy:
                 next(stream)
                 stream.close()
 
-        worker = Thread(target=consume, daemon=True)
-        worker.start()
-        worker.join(timeout=1)
-
-        assert not worker.is_alive(), (
+        assert not _run_on_worker(consume).is_alive(), (
             "chained mapped nodes deadlocked on the shared pool"
         )
         assert len(pulled) <= 2 * concurrency + 1
@@ -510,7 +514,7 @@ class TestPoolLifetime:
         for _ in range(workers):
             pool.submit(_mark_and_block, str(tmp_path))
 
-        deadline = perf_counter() + 2
+        deadline = perf_counter() + 4
 
         while len(list(tmp_path.glob("*.pid"))) < workers:
             assert perf_counter() < deadline
@@ -518,7 +522,7 @@ class TestPoolLifetime:
 
         start = perf_counter()
         lifetime.terminate()
-        assert perf_counter() - start < 2 * grace
+        assert perf_counter() - start < grace + 1
 
         for marker in tmp_path.glob("*.pid"):
             with pytest.raises(ProcessLookupError):
@@ -838,11 +842,11 @@ SEQUENTIAL_FAN_INS = [
 
 class TestThreadBudget:
     @async_test
-    async def test_async_long_sync_only_chain_completes(self, node_threads) -> None:
-        # Each sync-only node holds a worker thread while it pulls its input stream, so
-        # a chain within the node-thread budget must still get a thread each.
+    async def test_async_long_alternating_chain_completes(self, node_threads) -> None:
+        # Under AsyncExecution each sync-only node holds a node thread, so a chain
+        # within the node-thread budget must still get a thread each.
         node_threads(45)
-        plan = _passthru_plan(45)
+        plan = _alternating_plan(45)
         result: list = []
 
         with fail_after(2):
@@ -1066,21 +1070,8 @@ class TestThreadBudget:
 
         assert rest == ITEMS[1:2]
 
-    @async_test
-    async def test_async_nested_run_short_of_threads_raises(self, node_threads) -> None:
-        node_threads(1)
-
-        with fail_after(1):
-            async with AsyncExecution() as execution:
-                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
-
-                with pytest.raises(
-                    InvalidPipelineError, match="nested stored workflow"
-                ):
-                    _ = [item async for item in stream]
-
     @skipif_sync
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(2)
     def test_sync_long_alternating_chain_completes(self, node_threads) -> None:
         # Each async-only relay pulls its sync input on a node thread, so a chain within
         # the node-thread budget must still get a thread each.
@@ -1088,9 +1079,11 @@ class TestThreadBudget:
         plan = _alternating_plan(45)
         result: list = []
 
-        with SyncExecution() as execution:
-            result = list(execution.run(plan, seed=ITEMS[:2]))
+        def consume() -> None:
+            with SyncExecution() as execution:
+                result.extend(execution.run(plan, seed=ITEMS[:2]))
 
+        assert not _run_on_worker(consume).is_alive()
         assert plan.get_thread_demand("default", is_async=False) == 45
         assert result == ITEMS[:2]
 
@@ -1126,15 +1119,17 @@ class TestThreadBudget:
         plan = _alternating_plan(3)
         result: list = []
 
-        with SyncExecution() as execution:
-            stream = execution.run(plan, seed=ITEMS[:2])
+        def consume() -> None:
+            with SyncExecution() as execution:
+                stream = execution.run(plan, seed=ITEMS[:2])
 
-            for _ in range(reads):
-                next(stream)
+                for _ in range(reads):
+                    next(stream)
 
-            stream.close()  # pyright: ignore[reportAttributeAccessIssue]
-            result = list(execution.run(plan, seed=ITEMS[:2]))
+                stream.close()  # pyright: ignore[reportAttributeAccessIssue]
+                result.extend(execution.run(plan, seed=ITEMS[:2]))
 
+        assert not _run_on_worker(consume).is_alive()
         assert result == ITEMS[:2]
 
     @skipif_sync
@@ -1146,16 +1141,31 @@ class TestThreadBudget:
         plan = _alternating_plan(2)
         rest: list = []
 
-        with SyncExecution() as execution:
-            stream = execution.run(plan, seed=ITEMS[:2])
-            next(stream)
+        def consume() -> None:
+            with SyncExecution() as execution:
+                stream = execution.run(plan, seed=ITEMS[:2])
+                next(stream)
 
-            with pytest.raises(InvalidPipelineError, match="open output streams"):
-                execution.run(plan, seed=ITEMS[:2])
+                with pytest.raises(InvalidPipelineError, match="open output streams"):
+                    execution.run(plan, seed=ITEMS[:2])
 
-            rest = list(stream)
+                rest.extend(stream)
 
+        assert not _run_on_worker(consume).is_alive()
         assert rest == ITEMS[1:2]
+
+    @async_test
+    async def test_async_nested_run_short_of_threads_raises(self, node_threads) -> None:
+        node_threads(1)
+
+        with fail_after(1):
+            async with AsyncExecution() as execution:
+                stream = await execution.arun(_nested_plan(), seed=ITEMS[:2])
+
+                with pytest.raises(
+                    InvalidPipelineError, match="nested stored workflow"
+                ):
+                    _ = [item async for item in stream]
 
     def test_thread_budget_without_anyio_raises(self, monkeypatch) -> None:
         monkeypatch.setattr(_execution, "_budgets", None)

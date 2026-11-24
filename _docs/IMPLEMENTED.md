@@ -1071,8 +1071,8 @@ goes stale. This is intentionally **not** repaired by extending the old DONE/`id
 mechanism. The compatibility MVP fixes Feed-native incremental async `send`/`receive`;
 final F5 replaces the drain with `Publisher`/`Subscription` handles the execution
 closes, so cleanup no longer depends on a user drain. The strict xfail
-`TestSubscriptions::test_idle_drain_returns_promptly` in `tests/public/test_pipeline.py`
-marks the gap for the replacement.
+`TestPipelineSubscriptions::test_idle_drain_returns_promptly` in
+`tests/public/test_pipeline.py` marks the gap for the replacement.
 
 ## 25. Conversion — export converters (shipped)
 
@@ -1676,7 +1676,7 @@ identifiers and disjoint from the keyword arguments. `identity` takes effect in 
 and `derive` gives each result a child identity of its input item; `map` refuses
 `combine` with `InvalidPipelineError` at definition time, since `fn` sees one item at a
 time (`_build_callable_workflow` in `riko/definitions/_pipeline_definition.py`;
-`TestCallableNodes::test_map_rejects_combine_identity`). Keyword
+`TestPipelineMap::test_map_rejects_combine_identity`). Keyword
 arguments reach `fn` frozen, like `ModuleNode.options`/`ActionNode.params`: a list
 arrives as a tuple and a dict as a `FrozenDict`.
 
@@ -1727,7 +1727,7 @@ arrives as a tuple and a dict as a `FrozenDict`.
   and builds a `PipelineDefinition[R]` directly (no cast); `Pipeline.map` builds a
   `Pipeline[R]` the same way.
 
-Regressions: `tests/public/test_callable_nodes.py::TestCallableNodes`,
+Regressions: `tests/public/test_callable_nodes.py::TestPipelineMap`,
 `tests/public/test_workflow.py::TestCallableNode`, and the `callable` cases of
 `tests/public/test_workflow_documents.py::TestWorkflowParse`, `::TestNormalizeWorkflow`,
 and `::TestSerialize`.

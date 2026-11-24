@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import socket
 import threading
 import warnings
@@ -54,7 +55,6 @@ from riko.bado.itertools import (
     async_map_stream,
     async_merge,
 )
-from riko.base._config import settings
 from riko.base._exceptions import PipelineStateError, UnsupportedTargetError
 from riko.base._guards import is_async_callable
 from riko.base._iterutils import auto_close
@@ -138,22 +138,35 @@ ATOMIC_PUBLICATION_PENDING = pytest.mark.xfail(
     reason="atomic replace-write publication is not yet implemented",
 )
 
-ASYNC_GET_SCRIPT = """
+FETCH_TIMEOUT_SCRIPT = """
+import json
 import sys
 from time import monotonic
 from riko.bado import run
-from riko.bado._backend import TimeoutException
 from riko.bado._util import async_get
+from riko.io._async import async_url_open
+from riko.io._sync import Fetch
 
-async def main():
+async def open_url(url):
+    await async_url_open(url)
+
+def timed(func, *args):
     start = monotonic()
 
     try:
-        await async_get(sys.argv[1])
-    except TimeoutException:
-        print(monotonic() - start)
+        func(*args)
+    except Exception:
+        pass
 
-run(main)
+    return monotonic() - start
+
+url = sys.argv[1]
+waits = {
+    "fetch": timed(Fetch, url),
+    "async_url_open": timed(run, open_url, url),
+    "async_get": timed(run, async_get, url),
+}
+print(json.dumps(waits))
 """
 
 
@@ -458,16 +471,6 @@ class TestFetch:
         mock_urlopen.assert_not_called()
         assert mock_requests.call_args.args[0] == target
 
-    def test_default_timeout_comes_from_settings(self):
-        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
-        response = Mock()
-        response.headers = {"Content-Type": "text/plain"}
-
-        with patch("riko.io._sync.requests.get", return_value=response) as mock_get:
-            Fetch("http://example.com/feed.txt", binary=True)
-
-        assert mock_get.call_args.kwargs["timeout"] == settings.fetch_timeout
-
     def test_a_failed_status_check_closes_the_response(self):
         """An HTTP error closes the streamed response before it propagates."""
         response = Mock()
@@ -676,30 +679,18 @@ class TestAsyncUrlOpen:
         assert f.ext == "xml"
         assert f.content_type == content_type
 
-    @async_test
-    async def test_default_timeout_comes_from_settings(self, monkeypatch):
-        """A fetch without a timeout waits ``RIKO_FETCH_TIMEOUT`` seconds."""
-        seen: dict[str, object] = {}
-        stub = stub_async_get(b"{}", "application/json")
-
-        async def async_get(url: str, **kwargs: object):
-            seen.update(kwargs)
-            return await stub(url, **kwargs)
-
-        monkeypatch.setattr("riko.io._async.async_get", async_get)
-        await async_url_open(URL)
-        assert seen["timeout"] == settings.fetch_timeout
-
     @pytest.mark.simulated_network
     @skipif_sync
-    def test_async_get_waits_the_configured_fetch_timeout(self):
-        """``RIKO_FETCH_TIMEOUT`` bounds a bare ``async_get`` on a stalled server."""
+    def test_fetches_wait_the_configured_fetch_timeout(self):
+        """``RIKO_FETCH_TIMEOUT`` bounds every untimed fetch on a stalled server."""
         env = environ | {"RIKO_FETCH_TIMEOUT": "0.2"}
 
-        with stalled_url() as url:
-            run = run_python("-c", ASYNC_GET_SCRIPT, url, env=env)
+        with stalled_url(stall=1) as url:
+            run = run_python("-c", FETCH_TIMEOUT_SCRIPT, url, env=env)
 
-        assert float(run.stdout) < 2
+        waits = json.loads(run.stdout)
+        assert list(waits) == ["fetch", "async_url_open", "async_get"]
+        assert [name for name, wait in waits.items() if wait >= 1] == []
 
     @async_test
     async def test_handle_is_reusable_but_not_reentrant(self, tmp_path):
@@ -993,11 +984,12 @@ class TestReencode:
 
 COLLECTION_EXPORT_OPTIONS = [
     pytest.param("tuple", (), {"mode": "w"}, "mode", id="tuple-writer-option"),
+    pytest.param("list", (), {"mode": "w"}, "mode", id="list-writer-option"),
     pytest.param("list", (), {"indent": 2}, "indent", id="list-converter"),
 ]
 
 
-class TestConversionFuncs:
+class TestExportConverters:
     """The ``export`` converter registry mirrors ``Formats`` and drives ``export``."""
 
     def test_encoding_reaches_a_converter_that_takes_it(self, monkeypatch, tmp_path):
@@ -1351,16 +1343,13 @@ ACLOSE_CASES = [
 class TestRequireCloser:
     """Test the closer a value or its cleanup resolves to."""
 
-    @pytest.mark.parametrize("inline", [True, False], ids=["inline", "worker"])
     @pytest.mark.parametrize(("client_class", "cleanup"), ACLOSE_CASES)
     @async_test
-    async def test_closer_runs_inline_or_on_a_worker(
-        self, client_class, cleanup, inline
-    ) -> None:
+    async def test_closer_closes_the_value(self, client_class, cleanup) -> None:
         client = client_class()
         closer = require_closer(client, cleanup, is_async=True)
         assert closer is not None
-        await maybe_async.using(inline=inline)(closer)
+        await maybe_async(closer)
         assert client.closed is True
 
 
@@ -1519,9 +1508,12 @@ class TestAsyncMapStream:
     ):
         closed: list[bool] = []
         items = source(closed)
-        mapped = stream(_double, items, limit=2)
-        first = await anext(mapped)
-        await mapped.aclose()
+
+        with fail_after(1):
+            mapped = stream(_double, items, limit=2)
+            first = await anext(mapped)
+            await mapped.aclose()
+
         assert first in firsts
         assert closed == [True]
 
@@ -1562,9 +1554,12 @@ class TestAsyncMerge:
     async def test_early_close_closes_every_source(self):
         """Closing the merge after one item closes every source cleanly."""
         closed: list[bool] = []
-        merged = async_merge([_forever(closed), _forever(closed)], limit=2)
-        await anext(merged)
-        await merged.aclose()
+
+        with fail_after(1):
+            merged = async_merge([_forever(closed), _forever(closed)], limit=2)
+            await anext(merged)
+            await merged.aclose()
+
         assert closed == [True, True]
 
     @skipif_sync
@@ -1621,12 +1616,6 @@ RUNNERS = [
     pytest.param(asyncify, id="worker"),
     pytest.param(asyncify.using(abandon_on_cancel=True), id="abandoning-worker"),
 ]
-RUNNER_THREADS = [
-    pytest.param(maybe_async, True, id="inline"),
-    pytest.param(maybe_async.using(inline=False), False, id="inline-using-worker"),
-    pytest.param(asyncify, False, id="worker"),
-    pytest.param(asyncify.using(inline=True), True, id="worker-using-inline"),
-]
 ASYNC_CALLABLES = [
     pytest.param(maybe_async, id="inline-runner"),
     pytest.param(asyncify, id="worker-runner"),
@@ -1653,13 +1642,10 @@ class TestAsyncRunner:
         value, received, _ = await runner(func, 1, **options)
         assert (value, received) == (1, options)
 
-    @pytest.mark.parametrize(("runner", "on_loop"), RUNNER_THREADS)
     @async_test
-    async def test_runner_runs_a_blocking_call_inline_or_on_a_worker(
-        self, runner, on_loop
-    ) -> None:
-        _, _, ident = await runner(_echo, 1)
-        assert (ident == threading.get_ident()) is on_loop
+    async def test_a_worker_runner_using_inline_runs_on_the_loop(self) -> None:
+        _, _, ident = await asyncify.using(inline=True)(_echo, 1)
+        assert ident == threading.get_ident()
 
     @async_test
     async def test_using_keeps_the_settings_it_does_not_change(self) -> None:
@@ -1785,7 +1771,7 @@ JSONL_APPEND_CASES = [
 ]
 
 
-class TestJsonl:
+class TestWriteJsonl:
     def test_singleton_has_no_array(self, tmp_path):
         path = tmp_path / "out.jsonl"
         list(write_through(ITEMS, build_write(path), terminating=_never))
@@ -1799,7 +1785,7 @@ class TestJsonl:
         assert path.read_bytes() == expected
 
 
-class TestFramed:
+class TestWriteFramed:
     def test_passthrough_buffers_until_finalize(self, tmp_path):
         path = tmp_path / "out.json"
         stream = write_through(ITEMS, build_write(path), terminating=_never)
@@ -2105,7 +2091,7 @@ class TestAsyncWriteExecution:
         assert path.read_bytes() == b'[{"x": 0}, {"x": 1}, {"x": 2}]'
 
 
-class TestSink:
+class TestWriteSink:
     def test_non_file_target_execution_unsupported(self):
         prepared = build_write(RecordStore(), "replace")
 

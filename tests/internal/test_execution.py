@@ -75,6 +75,7 @@ from tests import ROUND_TRIPS, async_test, skipif_sync
 from tests._execution import RecordingSink
 from tests._loopback import loopback_url
 from tests._resources import (
+    CLEANED,
     VALUE_FACTORIES,
     WRAPPED_VALUES,
     AsyncConnection,
@@ -842,21 +843,20 @@ SYNC_ASYNC_REJECTIONS = [
 ]
 
 
-def _awaitable_cleanup(events: list[str]):
-    async def acleanup(_value: object) -> None:
-        events.append("cleanup")
-
-    def cleanup(value: object) -> Awaitable[None]:
-        return acleanup(value)
-
-    return cleanup
-
-
 def _async_cleanup(events: list[str]):
     async def acleanup(_value: object) -> None:
         events.append("cleanup")
 
     return acleanup
+
+
+def _awaitable_cleanup(events: list[str]):
+    acleanup = _async_cleanup(events)
+
+    def cleanup(value: object) -> Awaitable[None]:
+        return acleanup(value)
+
+    return cleanup
 
 
 SYNC_BRIDGED_CLEANUPS = [
@@ -913,6 +913,19 @@ HTTP_CLIENTS = [
 ]
 
 
+_BRIDGED_VALUE_FACTORIES = [
+    pytest.param(*row.values, id=row.id, marks=skipif_sync if row.id == "async" else ())
+    for row in VALUE_FACTORIES
+]
+
+_BRIDGED_LIFECYCLE_FACTORIES = [
+    pytest.param(
+        f, id=f.__name__, marks=skipif_sync if f.__name__.startswith("async") else ()
+    )
+    for f in LIFECYCLE_FACTORIES
+]
+
+
 class TestResourceAcquisition:
     def test_sync_cleanup_closes_a_dual_client_with_close(self) -> None:
         client = _DualClient()
@@ -945,38 +958,6 @@ class TestResourceAcquisition:
             assert acquired is client
 
         assert client.closed is False
-
-    def test_sync_acquire_lifecycle_generator(self) -> None:
-        events: list[str] = []
-
-        def db():
-            events.append("open")
-            try:
-                yield "value"
-            finally:
-                events.append("close")
-
-        with SyncExecution() as execution:
-            acquired = execution.acquire(Resource.from_lifecycle(db))
-            assert acquired == "value"
-            assert events == ["open"]
-
-        assert events == ["open", "close"]
-
-    def test_sync_acquire_value_factory_runs_cleanup(self) -> None:
-        events: list[str] = []
-
-        def make() -> str:
-            return "value"
-
-        def cleanup(value: str) -> None:
-            events.append(f"cleanup {value}")
-
-        with SyncExecution() as execution:
-            acquired = execution.acquire(Resource.from_factory(make, cleanup=cleanup))
-            assert acquired == "value"
-
-        assert events == ["cleanup value"]
 
     def test_sync_acquire_value_factory_without_cleanup(self) -> None:
         client = Connection()
@@ -1011,18 +992,6 @@ class TestResourceAcquisition:
 
         assert cleanup.events == ["value"]
 
-    @skipif_sync
-    def test_sync_acquire_async_value_factory_bridges(self) -> None:
-        acquired = None
-
-        async def make() -> str:
-            return "value"
-
-        with SyncExecution() as execution:
-            acquired = execution.acquire(Resource.from_factory(make, cleanup=False))
-
-        assert acquired == "value"
-
     def test_sync_acquire_is_single_flight(self) -> None:
         calls: list[int] = []
         first, second = float("nan"), float("nan")
@@ -1042,13 +1011,10 @@ class TestResourceAcquisition:
     def test_sync_partial_acquisition_unwinds(self) -> None:
         client = Connection()
 
-        def failing() -> object:
-            raise RuntimeError("boom")
-
         def run() -> None:
             with SyncExecution() as execution:
                 execution.acquire(Resource(client))
-                execution.acquire(Resource.from_factory(failing, cleanup=False))
+                execution.acquire(Resource.from_factory(_fail, cleanup=False))
 
         with pytest.raises(RuntimeError, match="boom"):
             run()
@@ -1080,8 +1046,10 @@ class TestResourceAcquisition:
     @pytest.mark.parametrize(("fixture", "kwargs"), WRAPPED_VALUES)
     def test_owned_and_external_resources_wrap_a_value(self, fixture, kwargs, request):
         value = request.getfixturevalue(fixture)
+        CLEANED.clear()
         _test_open_close(Resource(value, **kwargs), value)
         _test_open_close(Resource.from_external(value), value)
+        assert CLEANED == ([value] if kwargs else [])
 
     def test_context_borrows_an_external_resource(self, external_resource):
         context = Context().with_resource("value", external_resource)
@@ -1090,12 +1058,20 @@ class TestResourceAcquisition:
     def test_context_manager_lifecycle_opens_and_closes(self, sync_contextmanager):
         _test_open_close(Resource.from_lifecycle(sync_contextmanager))
 
+    @pytest.mark.parametrize("factory", _BRIDGED_LIFECYCLE_FACTORIES)
+    def test_lifecycle_factory_opens_and_closes[T](self, factory: LifecycleFactory[T]):
+        context = Context().with_resource("factory", factory)
+        _test_open_close(context.resources["factory"])
+        _test_open_close(Resource.from_lifecycle(factory))
+        _test_open_close(Resource.from_factory(factory))
+
+    @pytest.mark.parametrize(("factory", "cleanup"), _BRIDGED_VALUE_FACTORIES)
+    def test_value_factory_opens_and_closes[T](self, factory: ValueFactory[T], cleanup):
+        _test_open_close(Resource.from_factory(factory, cleanup=cleanup))
+
     @pytest.mark.simulated_network
     def test_sync_external_http_client_cleaned_up_on_failure(self) -> None:
         events: list[str] = []
-
-        def failing() -> object:
-            raise RuntimeError("boom")
 
         def run() -> None:
             with (
@@ -1105,7 +1081,7 @@ class TestResourceAcquisition:
                 execution.acquire(
                     Resource.from_lifecycle(_sync_http_client(url, events))
                 )
-                execution.acquire(Resource.from_factory(failing, cleanup=False))
+                execution.acquire(Resource.from_factory(_fail, cleanup=False))
 
         with pytest.raises(RuntimeError, match="boom"):
             run()
@@ -1298,24 +1274,6 @@ class TestAsyncResourceAcquisition:
         assert client.closed is True
 
     @async_test
-    async def test_async_acquire_async_lifecycle_generator(self) -> None:
-        events: list[str] = []
-
-        async def db():
-            events.append("open")
-            try:
-                yield "value"
-            finally:
-                events.append("close")
-
-        async with AsyncExecution() as execution:
-            acquired = await execution.aacquire(Resource.from_lifecycle(db))
-            assert acquired == "value"
-            assert events == ["open"]
-
-        assert events == ["open", "close"]
-
-    @async_test
     async def test_async_worker_adapts_sync_lifecycle_off_loop(self) -> None:
         threads: dict[str, int] = {}
 
@@ -1373,24 +1331,6 @@ class TestAsyncResourceAcquisition:
             assert acquired is client
 
         assert threads["close"] != loop_thread
-
-    @async_test
-    async def test_async_acquire_async_value_factory(self) -> None:
-        events: list[str] = []
-
-        async def make() -> str:
-            return "value"
-
-        async def cleanup(value: str) -> None:
-            events.append("cleanup")
-
-        async with AsyncExecution() as execution:
-            acquired = await execution.aacquire(
-                Resource.from_factory(make, cleanup=cleanup)
-            )
-            assert acquired == "value"
-
-        assert events == ["cleanup"]
 
     @async_test
     async def test_async_acquire_runs_a_falsy_cleanup_callable(self) -> None:
@@ -2017,6 +1957,12 @@ class TestBuildEnvelopeStream:
         ]
         assert [generation for _, generation in results] == expected
 
+    @pytest.mark.parametrize("pipeline", PARALLEL_PIPELINES)
+    def test_on_workers_matches_a_sequential_run(self, pipeline) -> None:
+        sequential = pipeline.with_execution(concurrency=None, executor=None)
+        expected = _multiset(_feed(sequential, _FEED_SEED))
+        assert _multiset(_feed(pipeline, _FEED_SEED)) == expected
+
     @pytest.mark.xfail(
         strict=True,
         raises=AssertionError,
@@ -2034,12 +1980,6 @@ class TestBuildEnvelopeStream:
         [(value, generation)] = results
         assert value == {"x": "1"}
         assert generation == build_generation("a", MISSING, 0)
-
-    @pytest.mark.parametrize("pipeline", PARALLEL_PIPELINES)
-    def test_on_workers_matches_a_sequential_run(self, pipeline) -> None:
-        sequential = pipeline.with_execution(concurrency=None, executor=None)
-        expected = _multiset(_feed(sequential, _FEED_SEED))
-        assert _multiset(_feed(pipeline, _FEED_SEED)) == expected
 
 
 class TestAsyncBuildEnvelopeStream:

@@ -283,9 +283,6 @@ class TestTee:
         tee.close()
         assert log == ["pull"] * 3 + ["close"]
 
-        with pytest.raises(PipelineStateError):
-            tee.branch()
-
     def test_upstream_error_reaches_every_branch(self):
         """The puller raises first; a sibling drains its queue, then re-raises."""
         error, log = ValueError("boom"), []
@@ -328,7 +325,7 @@ class TestTee:
 
     def test_buffered_read_does_not_wait_for_a_blocked_upstream(self):
         """A branch with queued items reads them while another thread is blocked."""
-        gate, log, results = threading.Event(), [], []
+        gate, log, results, buffered = threading.Event(), [], [], []
         source = _Source([0, 1], log, gate=gate)
         tee = Tee(source)
         first, second = tee.branch(), tee.branch()
@@ -340,7 +337,10 @@ class TestTee:
 
         try:
             assert source.reached.wait(timeout=1)
-            assert next(second) == 0
+            waiter = _start(partial(next, second), buffered)
+            waiter.join(timeout=1)
+            assert not waiter.is_alive()
+            assert buffered == [0]
         finally:
             gate.set()
 
@@ -687,9 +687,6 @@ class TestAsyncTee:
         await tee.aclose()
         assert log == ["pull"] * 3 + ["close"]
 
-        with pytest.raises(PipelineStateError):
-            tee.branch()
-
     @async_test
     async def test_upstream_error_reaches_every_branch(self):
         """The puller raises first; a sibling drains its queue, then re-raises."""
@@ -986,16 +983,22 @@ class TestAsyncTee:
         """The copier gets the interrupt; siblings drain, then get a chained error."""
         interrupt, log = KeyboardInterrupt(), []
         tee = AsyncTee(_ASource([0, _Uncopyable(interrupt), 2], log), isolate=True)
-        first, second, _ = tee.branch(), tee.branch(), tee.branch()
+        first, second, third = tee.branch(), tee.branch(), tee.branch()
         assert await anext(first) == 0
 
-        with pytest.raises(KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt) as raised:
             await anext(first)
 
-        assert await anext(second) == 0
+        assert raised.value is interrupt
+        assert log == ["pull", "pull", "close"]
 
-        with pytest.raises(PipelineError, match="interrupted"):
-            await anext(second)
+        for branch in (second, third):
+            assert await anext(branch) == 0
+
+            with pytest.raises(PipelineError, match="interrupted") as chained:
+                await anext(branch)
+
+            assert chained.value.__cause__ is interrupt
 
     @async_test
     async def test_second_interrupt_while_handling_the_first_releases_the_read(

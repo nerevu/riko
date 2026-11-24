@@ -138,7 +138,7 @@ _EXECUTIONS = [
 ]
 
 
-class TestCallableNodes:
+class TestPipelineMap:
     """A plain callable chained as its own node."""
 
     @pytest.mark.parametrize(("source", "fns", "expected"), _PASSTHROUGH_CASES)
@@ -372,7 +372,7 @@ FAILING_MAPS = [
 ]
 
 
-class TestAsyncCallableNodes:
+class TestAsyncPipelineMap:
     @pytest.mark.parametrize("produce", _LISTLIKE_PRODUCERS)
     @async_test
     async def test_a_listlike_item_stays_whole_under_async_mapping(self, produce):
