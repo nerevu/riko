@@ -286,9 +286,9 @@ CLASS_HISTORY = {
             "pairs); 5ce6bad4 (11-19 loop embed results; bare fold); 5de5cc80 (11-20 "
             "raw outputs at node start, run-owned async raw, portal-built async "
             "stream, splitter cascade at node start; cancellation window, failed "
-            "iter); uncommitted (11-22 async-only hand-through); uncommitted (11-23 "
-            "native async inputs, seed and root wrappers run-owned); uncommitted "
-            "(11-23 callable stream wrappers own their input)"
+            "iter); 0231e2b0 (11-22 async-only hand-through); 0231e2b0 (11-23 native "
+            "async inputs, seed and root wrappers run-owned); 0231e2b0 (11-23 callable "
+            "stream wrappers own their input)"
         ),
         (
             "end every value a function opens or receives on each exit path, error "
