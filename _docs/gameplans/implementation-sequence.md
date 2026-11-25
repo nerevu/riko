@@ -182,11 +182,13 @@ R4D  workflow input schemas
 R5A  FeedResult / _ItemEnvelope / provenance
               |
               v
-R7   test-file split, then      R4L DotDict literal access (built in parallel)
-     fanout topology
+R7   fanout topology            R4L DotDict literal access (built in parallel)
+     (+ generated planning       |
+     data step 1, in parallel)   |
               |                  |
               v                  |
 M1   v1-parity merge  <----------+  (R4L merges right after M1)
+     (generated planning data step 2 follows M1)
               |
               v
 R4E  module config contracts + extension protocol freeze
@@ -197,7 +199,7 @@ R5C  WriteNode + ActionNode effect runtime
               |
               v
 M2   announcement release  ----> R10 parity bugfix batch (+ ruff policy-ignore
-                                 audit); R8 negotiation spike
+     (needs announcement post)   audit); R8 negotiation spike
               |
               v
 M3   resource seams (credential, ResourceView)  →  read-only R11 slices
@@ -2223,13 +2225,14 @@ owner:
   four tests in `tests/internal/test_tee.py`: `TestTee`/`TestAsyncTee`
   `::test_max_lag_overflow_discards_every_buffer_and_keeps_raising` and
   `::test_closing_branches_frees_buffers_then_closes_source_once`.
-- **Test-file split** (next; user, 2026-11-22): before any slice adds tests,
+- **Test-file split** (landed 2026-11-24, `3f48a078`; user, 2026-11-22):
   `tests/internal/test_execution.py` and `tests/internal/test_io.py` (both over 2000
-  lines, a `manage lint --tests` advisory) each lose their largest concept (the
-  subject rows that share it, not the largest class) to a concept-named file, with an
-  overlap check (`.claude/skills/tidy/move_tests.py
-  --plan-split`). It lands after the in-flight async hand-through, so it moves only
-  settled tests, and Slice C then adds tests to files already split.
+  lines, a `manage lint --tests` advisory) each lost their largest concept (the subject
+  rows that share it, not the largest class) to a concept-named file:
+  `tests/internal/test_resources.py` (resource acquisition) and
+  `tests/internal/test_stream_helpers.py` (mapping, merging, and closing streams), with
+  an overlap check (`.claude/skills/tidy/move_tests.py --plan-split`). Slice C adds
+  tests to files already split.
 - **Slice B, managed-execution settings** (after the split; split by the user,
   2026-11-22): the definition-layer half only — `ExecutionSettings`
   (`riko/definitions/_settings.py`) and `with_execution(strict=, overrides=)`
@@ -3165,8 +3168,7 @@ on `/land`/`/wrapup` triggers.
 - **pydocstyle ratchet** (scope in R7's "Docstring-rule ratchet" block): D103 rides the
   small definition-layer PR; D101, the parser `**kwargs` and `Test*`-docstring rulings,
   and the `Kwargs:`-aware D417 check ride R4E.
-- **test-file split**: its own R7 slice, after the async hand-through and before the
-  definition-layer PR (R7's slice list).
+- **test-file split**: landed 2026-11-24 (`3f48a078`) as its own R7 slice.
 - **ruff policy-ignore audit**: rides R10's parity bugfix batch, right after M2.
 - **inline parametrize-table ceiling** (owner: the user; trigger: the next `/land`
   after the ceiling-holder tables are folded): `[tool.riko.tests] inline-tables = 65`
@@ -3183,11 +3185,12 @@ on `/land`/`/wrapup` triggers.
   for each gameplan with its own slice scheme, slice ids namespaced by file name). Step
   1 runs beside R7: the TOML sources, the generated R-track and P-track tables in
   [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md), the § 3 graph as a generated Mermaid
-  block, a generated § 6 next-slice block, the JSON the Forward Track page reads, and
-  the matching `/wrapup`, `/triage`, `/tidy`, and `CLAUDE.md` updates; the tracker's
-  evidence notes split into TOML fields and each phase's prose here. Step 2 follows M1:
-  each strict xfail gets exactly one owning slice in TOML, and `manage lint --docs`
-  rejects phase status or dates restated outside a generated block.
+  block, a generated § 6 next-slice block, the JSON a progress view reads (the riko
+  Forward Track artifact is one), and the matching `/wrapup`, `/triage`, `/tidy`, and
+  `CLAUDE.md` updates; the tracker's evidence notes split into TOML fields and each
+  phase's prose here. Step 2 follows M1: each strict xfail gets exactly one owning slice
+  in TOML, and `manage lint --docs` rejects phase status or dates restated outside a
+  generated block.
 - **M2 announcement post**: an M2 prerequisite (§ 4 "M2").
 
 ## 6. Next implementation slice
@@ -3195,10 +3198,10 @@ on `/land`/`/wrapup` triggers.
 R0–R5A have landed (status: the R-track table in
 [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md); R5A landed 2026-11-14 and R7 Slice A
 2026-11-17). The branch is working toward the **M1 v1-parity merge** (§ 4): the rest of
-R7, then the merge. The next coding work, in order (user, 2026-11-22): the in-flight
-async hand-through, then the test-file split, then the small definition-layer PR (R7
-Slice B's half, `Pipeline.union`, and the D103 rider), then R7 Slice C; not an
-Operations as Code, state-store, cache, or pub/sub PR.
+R7, then the merge. The next coding work, in order (user, 2026-11-22; the async
+hand-through landed 2026-11-24 and the test-file split 2026-11-24): the small
+definition-layer PR (R7 Slice B's half, `Pipeline.union`, and the D103 rider), then R7
+Slice C; not an Operations as Code, state-store, cache, or pub/sub PR.
 
 The parallel lanes in § 5 run beside R7. R2B (`version=` plumbing) remains open beside
 them. R11A is **not** permission to jump around those prerequisites; it is the first
