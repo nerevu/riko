@@ -1,9 +1,9 @@
 """
-Run pytest targets in scratch venvs that mirror CI's test-matrix legs.
+Run pytest targets in cached venvs that mirror CI's test-matrix legs.
 
 Purpose: reproduce a failure that only one CI leg shows (no extras, or a Python
 other than the local 3.12) without touching the active environment. Each leg gets
-a cached venv under the scratch root, synced the way `.github/workflows/ci.yml`
+a venv under the cache root, synced the way `.github/workflows/ci.yml`
 syncs it, with riko installed editable from this checkout. Tests run through
 `python -m pytest` (never the `manage` script, which can resolve to mezmorize's).
 
@@ -11,7 +11,8 @@ Inputs:
     --legs      comma list of LEG ids, `<python>-<extras|bare>` (default
                 `3.12-bare,3.13-extras`, two of the five legs a local 3.12
                 all-extras venv never exercises)
-    --root      scratch directory that holds the venvs (default: $TMPDIR/riko-ci-legs)
+    --root      cache directory that holds the venvs (default: ~/.cache/riko-ci-legs,
+                outside $TMPDIR, whose cleanup breaks cached venvs)
     targets     pytest node ids or paths (default: the whole configured suite)
 
 Outputs: one summary line per leg (`leg: <pytest tail line>`), exit 1 when any
@@ -28,7 +29,6 @@ import argparse
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from riko.base._paths import ROOT_DIR
@@ -65,7 +65,7 @@ def run_leg(leg: str, root: Path, targets: list[str]) -> tuple[str, int]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run pytest in CI-leg venvs.")
     parser.add_argument("--legs", default=DEFAULT_LEGS)
-    default_root = Path(tempfile.gettempdir()) / "riko-ci-legs"
+    default_root = Path.home() / ".cache" / "riko-ci-legs"
     parser.add_argument("--root", type=Path, default=default_root)
     parser.add_argument("targets", nargs="*")
     args = parser.parse_args()
