@@ -11,12 +11,19 @@ it with ``::`` or ``[``. The data file must hold per-test contexts:
 
     COVERAGE_CORE=ctrace pytest --cov=riko --cov-context=test
 
+Record over the default test paths (pass no path, or include the source files whose
+doctests are COVER ids): a run given only ``tests/`` records no doctest contexts. A
+doctest id names the file and the docstring's dotted owner, e.g.
+``riko/base/_iterutils.py::riko.base._iterutils.betwix``.
+
 pytest-cov records each test's lines under ``<nodeid>|setup``, ``<nodeid>|run``,
 and ``<nodeid>|teardown``; lines run outside any test (import, collection) carry
 the empty context and are never reported. Output is one line per file, relative
 to the repository root, e.g. ``riko/x.py [12, 13, 40]``. Exits 1 when a line is
 reported, 0 when the covering tests execute everything the cut tests do, and 2 on
-a usage error or a missing data file.
+a usage error, a missing data file, or a CUT or COVER id that matches no recorded
+test context (a mistyped id, a test that ran no measured line, or a doctest id in a
+data file recorded without doctest contexts).
 
 A module first imported during a test charges its import-time lines to that test,
 so whichever selected test runs first appears to own them. Run the covering
@@ -40,6 +47,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
 SEPARATOR = "--"
+NO_CONTEXT = (
+    "no recorded test context for {}: a mistyped id, a test that ran no measured "
+    "line, or a doctest id in a data file recorded without doctest contexts"
+)
 
 
 def is_match(context: str, prefixes: Iterable[str]) -> bool:
@@ -57,6 +68,11 @@ def get_uncovered(
         and any(is_match(c, cut) for c in names)
         and not any(is_match(c, cover) for c in names)
     )
+
+
+def get_unmatched(data: coverage.CoverageData, *ids: str) -> list[str]:
+    contexts = data.measured_contexts()
+    return [p for p in ids if not any(is_match(c, [p]) for c in contexts)]
 
 
 def get_report(
@@ -94,6 +110,11 @@ def main(argv: Sequence[str] | None = None, root: Path = ROOT_DIR) -> int:
 
     data = coverage.CoverageData(basename=str(namespace.data))
     data.read()
+    unmatched = get_unmatched(data, *namespace.cut, *cover)
+
+    if unmatched:
+        parser.error(NO_CONTEXT.format(", ".join(unmatched)))
+
     report = get_report(data, namespace.cut, cover, root)
 
     for line in report:

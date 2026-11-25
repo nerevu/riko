@@ -48,7 +48,7 @@ per-file counts.
 ## 2. Script first, then agents verify leads
 
 Reading the suite by hand is the expensive mistake. Four agents once spent
-150–250k tokens each on a sweep that `overlap_scan.py` now does in about 2 s. Run
+150–250k tokens each on a sweep that `overlap_scan.py` now does in about 8 s. Run
 the mechanical sweeps yourself in the main loop (`SCRATCH` is the session scratchpad):
 
 ```bash
@@ -75,10 +75,14 @@ Add these only when their dimension is in scope:
   (`library-raises`), and tests whose every assert is `hasattr`/`callable`/
   `isinstance`/`is not None` with no `raises`/`warns` block (`trivial-assert`).
 - **Unique coverage:** `COVERAGE_CORE=ctrace pytest --cov=riko --cov-context=test`
-  ranks suspects that add no unique lines. It only ranks; it never decides.
+  ranks suspects that add no unique lines. It only ranks; it never decides. Record over
+  the default test paths (pass no path, or include the source files whose doctests are
+  COVER ids), since a run given only `tests/` records no doctest contexts; a doctest id
+  reads `riko/base/_iterutils.py::riko.base._iterutils.betwix`.
   The same data answers a proposed deletion: `uv run --active python
   .claude/skills/tidy/covdiff.py --data .coverage CUT... -- COVER...` lists the
-  lines the cut tests execute that their covering tests never do.
+  lines the cut tests execute that their covering tests never do, and exits 2 when
+  an id matches no recorded test context.
 
 Before fanning out, estimate the cost: lines to read × about 12 tokens × the number of
 agents rereading them. Size each file group to fit a 100k-token agent: about 1k test
@@ -241,9 +245,10 @@ classes it names), sync/async mirrors, and tests a gameplan cites by name as a g
   run `--runxfail`) and show the test still passes, or fails for the wrong reason.
 - **Fold:** list the rows, the ids, and the estimated lines saved. Every removed
   test maps to a row, and no row's data changes silently.
-- **Deletion:** flag any line that only the cut test executes (`covdiff.py`). The
-  ratchet total can't see a deleted test whose lines other tests also reach, and earlier
-  "mechanical" slices lost 14 lines that way.
+- **Deletion:** flag any line that only the cut test executes (`covdiff.py`; an
+  id that matches no recorded test context exits 2 rather than reading as covered).
+  The ratchet total can't see a deleted test whose lines other tests also reach, and
+  earlier "mechanical" slices lost 14 lines that way.
 - **Speed and bounds:** cite the measured times, not estimates.
 
 A lead you cannot substantiate is dropped, or reported as unverified with what

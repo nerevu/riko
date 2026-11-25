@@ -212,11 +212,18 @@ Enforcement:
   every argument and an expected value appear in one `pytest.param` row of a test naming
   the callee (`doctest-args`, which sees short literals such as `"8"`/`"many"` that
   `overlaps` drops), a doctest `Traceback` whose exception and message match a
-  `pytest.raises` (`doctest-raises`), and a docstring with six or more examples whose
-  callees a test table already covers (`doctest-balance`). Its module docstring lists
-  the other sections and their known false positives. `.claude/skills/tidy/covdiff.py`
-  reads one `--cov-context=test` coverage file and lists the lines the tests to be cut
-  execute that their covering tests never do.
+  `pytest.raises` (`doctest-raises`), and a docstring with six or more examples on a
+  function a test table already names (`doctest-balance`). Its module docstring lists
+  the other sections and their known false positives. Those sections include
+  `Test<Subject>` classes whose subject does not start with a riko name and is not one
+  of the named concept classes (`placement`), sync/async twins that check different
+  amounts or exist on one side only (`twins`), `while True` helpers (`endless`), `once`
+  tests that count nothing (`once`), determinism tests that never leave one process
+  (`determinism`), and async tests that close or open a task group with no bound
+  (`drains`).
+  `.claude/skills/tidy/covdiff.py` reads one `--cov-context=test` coverage file and
+  lists the lines the tests to be cut execute that their covering tests never do; an
+  id that matches no recorded test context exits 2.
 - `/tidy` § 3.9 asks the judgment questions the lint cannot: right tier and row, and
   whether a doctest or existing test already owns the case.
 

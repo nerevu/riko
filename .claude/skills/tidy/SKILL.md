@@ -261,10 +261,15 @@ neighborhood it affects:
    unsupported names in public and supported-only internal classes, out-of-order or
    misplaced classes and helpers, classes that never name their riko-named subject,
    functional classes with no end-to-end marker, tests that start a process without
-   saying why). Read its full output once; never pipe it through `head`/`grep` and rerun
-   (`--limit` already caps it). Read and verify only those, never whole files. Make the
-   moves with `python .claude/skills/tidy/move_tests.py` (`--check` before a move to
-   public, `--merge` to fold one class into another, `--sort` for in-class order,
+   saying why). It also lists sync/async twins that check different amounts or lack a
+   twin (`twins`), `while True` helpers (`endless`), `once` tests that count nothing
+   (`once`), same-process determinism tests (`determinism`), unbounded async teardowns
+   (`drains`), and `placement` classes whose subject is not a riko name (a concept class
+   belongs in the `tests/__init__.py` list). Read its full output once; never pipe it
+   through `head`/`grep` and rerun (`--limit` already caps it). Read and verify only
+   those, never whole files. Make the moves with
+   `python .claude/skills/tidy/move_tests.py` (`--check` before a move to public,
+   `--merge` to fold one class into another, `--sort` for in-class order,
    `--delete`/`--drop-row` for trims, `--place` to put helpers above their user,
    `--with-helpers` so a moved method carries the helpers only it used, `--plan-split`
    for each class's footprint before a split; moves repoint doc citations), and find a
@@ -273,7 +278,7 @@ neighborhood it affects:
    `--dry-run`), `SPEC` being `path::Class` or `path::Class::method` and `DEST` a path
    (classes) or `path::Class` (methods); the mode flags above replace `DEST`
    (`--check`/`--sort`/`--delete SPEC...`, `--merge DEST_CLASS SPEC...`,
-   `--drop-row path::TABLE ID...`, `--place path::NAME... --above CLASS`,
+   `--drop-row path::TABLE ID...`, `--place path::NAME... --above NAME`,
    `--plan-split FILE`). Module constants that a move strands below code go back to the
    top with `python .claude/skills/tidy/lift_constants.py FILE [FILE ...] [--dry-run]`
    (logger, then `type` aliases, then constants private first, each helper a constant

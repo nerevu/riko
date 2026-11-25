@@ -10,7 +10,7 @@ Usage:
     python .claude/skills/tidy/move_tests.py --sort SPEC [SPEC ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --delete SPEC [SPEC ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --drop-row path::TABLE ID [ID ...]
-    python .claude/skills/tidy/move_tests.py --place path::NAME [...] --above CLASS
+    python .claude/skills/tidy/move_tests.py --place path::NAME [...] --above NAME
     python .claude/skills/tidy/move_tests.py --place-leads FILE [FILE ...] [--dry-run]
     python .claude/skills/tidy/move_tests.py --plan-split FILE
 
@@ -45,7 +45,9 @@ Modes:
   tests, rejection tests (a ``pytest.raises`` with no assertion outside it but
   about the error it binds), then strict-xfail tripwires (a ``strict=True``
   xfail decorator or a module-level marker holding one). The order within each
-  group is kept, and the heuristic classification is printed; ``--kind
+  group is kept, and the heuristic classification is printed. A behavior test
+  whose sync/async twin in the same file is a rejection sorts as a rejection
+  too, as ``overlap_scan.py`` reads it. ``--kind
   TEST=KIND`` (repeatable) reclassifies a misfiled test as ``behavior``,
   ``rejection``, or ``tripwire``.
 
@@ -54,12 +56,13 @@ Modes:
 - ``--drop-row`` removes the ``pytest.param(..., id=ID)`` rows from the
   module-level table ``TABLE``.
 - ``--place`` moves module-level helpers of one file (with their leading
-  comments and trailing ``name.attr = ...`` lines) directly above ``CLASS``, in
-  source order.
+  comments and trailing ``name.attr = ...`` lines) directly above ``NAME`` (a class
+  or another module-level helper), in source order.
 - ``--place-leads`` applies ``overlap_scan.py``'s placement leads to each FILE:
   every helper with one user class moves directly above it (above the sync class
-  of a twin pair). Helpers that a module-level statement also uses are left
-  alone, since moving them could break import order.
+  of a twin pair), or directly above its calling helper when that caller already
+  sits directly above the class. Helpers that a module-level statement also uses
+  are left alone, since moving them could break import order.
 - ``--plan-split`` writes nothing: it prints each test class's line footprint
   (the class plus the helpers only it uses, transitively) and each helper several
   classes share, with its users. A split moves classes whose footprints sum to the
@@ -68,8 +71,9 @@ Modes:
 
 Moves, merges, and renames also repoint backticked citations of the moved symbol
 (``path::Class[::test]`` and ``Class::test``) in ``_docs/`` (archive and research
-excepted), ``CLAUDE.md``, ``CONTRIBUTING.rst``, ``README.rst``, and ``docs/*.rst``;
-``--delete`` lists the citations it leaves dangling. Touched files are then run
+excepted), ``CLAUDE.md``, ``CONTRIBUTING.rst``, ``README.rst``, and ``docs/*.rst``; a
+renamed method's bare ``test`` citations follow it unless another test keeps the old
+name. ``--delete`` lists the citations it leaves dangling. Touched files are then run
 through ``ruff format``. Imports are never sorted or
 pruned here: ``ruff check --fix`` at the gates owns that. A destination name
 collision aborts before anything is written.
@@ -103,9 +107,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from overlap_scan import (  # noqa: E402
     KIND_OVERRIDES,
     TestFile,
-    get_kind,
+    get_kinds,
     get_misplaced,
-    get_xfail_markers,
     load_supported,
 )
 from overlap_scan import _is_public_module as is_public_module  # noqa: E402
@@ -462,6 +465,15 @@ def _gen_doc_paths():
     yield from sorted((ROOT / "docs").glob("*.rst"))
 
 
+def has_test_named(name: str) -> bool:
+    paths = sorted((ROOT / "tests").glob("*/test_*.py"))
+    return any(
+        isinstance(node, FUNCTION_NODES) and node.name == name
+        for path in paths
+        for node in ast.walk(ast.parse(path.read_text()))
+    )
+
+
 def rewrite_citations(
     old: tuple[str, str, str | None], new: tuple[str, str, str | None]
 ) -> None:
@@ -479,6 +491,10 @@ def rewrite_citations(
     renamed_cls = (
         re.compile(rf"`{re.escape(old_cls)}(?=::)") if old_method is None else None
     )
+    lone = None
+    if old_method is not None and new_method not in {None, old_method}:
+        lone = None if has_test_named(old_method) else old_method
+    lone_pattern = None if lone is None else re.compile(rf"`{re.escape(lone)}(?=`|\[)")
 
     def _with_path(match: re.Match[str]) -> str:
         path = new_path if match[1] else new_short
@@ -493,6 +509,8 @@ def rewrite_citations(
             updated = bare.sub(f"`{new_symbol}", updated)
         if renamed_cls is not None and new_cls != old_cls:
             updated = renamed_cls.sub(f"`{new_cls}", updated)
+        if lone_pattern is not None:
+            updated = lone_pattern.sub(f"`{new_method}", updated)
         if updated != text:
             path.write_text(updated)
             print(f"  citations repointed in {path.relative_to(ROOT)}")
@@ -544,7 +562,7 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
     lines = text.splitlines(keepends=True)
     tree = ast.parse(text)
     cls = find_class(tree, spec.cls)
-    markers = get_xfail_markers(tree)
+    kinds = get_kinds(tree)
     members = list(cls.body)
     first = members[0]
     has_doc = isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
@@ -555,7 +573,8 @@ def sort_class(spec: Spec, dry: bool) -> list[Path]:
         start = get_start(stmt, lines)
         end = stmt.end_lineno or 0
         chunk = "".join(lines[start:end]).rstrip("\n") + "\n"
-        chunks.append((get_kind(stmt, markers), index, chunk, stmt))
+        kind = kinds.get((cls.name, getattr(stmt, "name", "")), 0)
+        chunks.append((kind, index, chunk, stmt))
 
     ordered = sorted(chunks, key=lambda c: (c[0], c[1]))
     names = {0: "other", 1: "behavior", 2: "rejection", 3: "tripwire"}
@@ -786,7 +805,11 @@ def place(specs: list[Spec], above: str, dry: bool) -> list[Path]:
     if missing:
         raise SystemExit(f"{path}: no module-level {missing}")
 
-    target = get_start(find_class(tree, above), lines)
+    target = (
+        segments[above][0]
+        if above in segments
+        else get_start(find_class(tree, above), lines)
+    )
     blocks = sorted(segments[name] for name in names)
     print(f"{path}: placing {', '.join(names)} above {above}")
 
@@ -843,7 +866,7 @@ def parse_specs(args: argparse.Namespace) -> tuple[str, list[Spec]]:
         raise SystemExit("--rename takes a single spec")
 
     if args.place and args.above is None:
-        raise SystemExit("--place needs --above CLASS")
+        raise SystemExit("--place needs --above NAME")
 
     return dest, specs
 
@@ -880,7 +903,11 @@ def main() -> int:  # noqa: C901
     mode.add_argument(
         "--plan-split", action="store_true", help="print FILE's class footprints"
     )
-    parser.add_argument("--above", help="with --place: the class to place above")
+    parser.add_argument(
+        "--above",
+        metavar="NAME",
+        help="with --place: the class or helper to place above",
+    )
     parser.add_argument(
         "--kind",
         action="append",

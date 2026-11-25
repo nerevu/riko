@@ -30,16 +30,19 @@ every line is a lead to read, not a verdict. Sections:
   Module-level tables a test names are counted as that test's literals.
 - ``doctest-args`` -- a doctest call whose arguments all appear in a ``pytest.param``
   row of a test naming the same callee, with an expected value in common (short
-  literals such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see).
+  literals such as ``"8"`` or ``"many"`` that ``overlaps`` cannot see). A test or
+  row names a callee when it calls it or reads it as an imported or module-level
+  name; a parameter or local that merely shares the callee's name does not.
 - ``doctest-messages`` -- a test string literal of several words and
-  ``MIN_MESSAGE`` to ``MAX_MESSAGE`` characters (an f-string's literal parts
-  included) found verbatim inside the source or output of at most
-  ``MAX_MESSAGE_DOCS`` doctests: a message pinned by both a test and the doctest
-  beside the code that raises it.
+  ``MIN_MESSAGE`` to ``MAX_MESSAGE`` characters found inside the expected output
+  (traceback message included) of at most ``MAX_MESSAGE_DOCS`` doctests: a message
+  pinned by both a test and the doctest beside the code that raises it. An
+  f-string is one message, shown with ``{}`` placeholders: its literal parts must
+  all match, in order, on one output line.
 - ``doctest-raises`` -- a doctest ``Traceback`` and a ``pytest.raises`` (inline, or a
-  table row carrying the exception and fragment) for the same exception whose
-  ``match`` fragment is found in the doctest's message; ``(same callee)`` marks the
-  pairs most likely to be one case.
+  table row carrying the exception and a fragment of at least ``MIN_STR``
+  characters) for the same exception whose ``match`` fragment is found in the
+  doctest's message; ``(same callee)`` marks the pairs most likely to be one case.
 - ``names`` -- test methods with the same name (``async_`` dropped) in different
   files: often one rule asserted twice.
 - ``cross-subject`` -- classes that lean on a name whose ``Test<Subject>`` class
@@ -54,12 +57,26 @@ every line is a lead to read, not a verdict. Sections:
   file-wide ``*_PENDING`` tripwire markers and every constant other than a
   ``pytest.param`` table stay at the top); helpers with several
   users that sit below the first; classes whose behavior tests follow a rejection
-  table or tripwire; and classes whose subject is a riko name (a class, function,
-  or constant defined under ``riko/``) that they never name.
+  table or tripwire (a sync/async twin pair, matched by class and test name once a
+  ``Sync``/``Async`` word is dropped, is a rejection when either twin is one);
+  classes whose subject is a riko name (a class, function,
+  or constant defined under ``riko/``) that they never name; and classes whose
+  subject (a leading ``Async``/``Sync`` dropped, or kept when the whole colored
+  subject is itself defined) does not start with a riko name (``RikoNames``:
+  leading underscores, case, and a module's underscores are ignored), the
+  concept classes ``tests/__init__.py`` lists aside. A class uses whatever the
+  module-level helper functions it calls use, transitively, so a helper reached
+  through another helper counts that helper's classes as its users and is never
+  sent below a caller;
+  when a calling helper already sits directly above that class, the lead sends
+  the helper directly above its caller instead.
 - ``tier`` -- functional-tier classes that touch none of the end-to-end markers
   (CLI runners, examples, stored fixture workflows, a ``run_python`` process).
 - ``doctest-balance`` -- docstrings with many doctest examples, and the tests whose
-  tables name one of their callees (move the edge cases into a table).
+  tables name the function, method, or class the docstring belongs to, as
+  ``doctest-args`` names a callee (move the edge cases into a table). A module
+  docstring, or one on a generically named method (a name more than
+  ``UBIQUITOUS`` test classes use), gets no lead.
 - ``assertless`` -- tests with no assertion-shaped node (an ``assert``, a call
   whose name ends in ``raises``/``warns``/``fail``/``approx``/``deprecated_call``
   or a pytester ``match_lines``/``match_line``, or starts with
@@ -73,6 +90,27 @@ every line is a lead to read, not a verdict. Sections:
   ``entry_point``/``cwd``/``env``/``hash_seed`` keyword and no docstring naming one
   (``python -m``, a console script or entry point, a fresh process). Run it
   in-process, or say why it needs a process so a later conversion keeps it.
+- ``twins`` -- a sync/async twin pair in one file (``placement``'s pairing) whose
+  same-named tests differ in their count of asserts plus ``raises``/``warns``
+  calls, and tests on one side only of a class pair whose test names are at
+  least ``MIRROR_SHARE`` shared. A twin that checks the same thing in fewer
+  statements (one ``assert`` over a tuple) is a false positive.
+- ``endless`` -- a module-level helper or fixture of a test file or
+  ``tests/_*.py`` with a ``while True`` loop: bound the source, or confirm every
+  user stops it. A loop that ``break``s or ``return``s is still listed.
+- ``once`` -- a test named ``once`` (not the conjunction, ``once_it_...``) that
+  counts nothing: no ``len``/``count``/``call_count``/``Counter`` or
+  ``pulled``/``closes`` log, and no comparison to ``1``, a list, tuple, or dict
+  display, or multi-line text. "Can only be set once" is a false positive.
+- ``determinism`` -- a test named deterministic, reproducible, or stable that
+  makes one call twice and compares results with no subprocess (``run_python``,
+  ``run_module``, ``subprocess``, ``hash_seed``): hash randomization cannot vary
+  within one process.
+- ``drains`` -- an ``async def`` test that calls ``aclose`` or
+  ``create_task_group`` with no ``fail_after``/``move_on_after`` and no
+  ``timeout`` marker on the test, class, or module. The global pytest timeout
+  backstops these, so a hang still ends, only slowly. A bound applied inside a
+  helper or fixture is not seen.
 
 Both doctest sections miss rows given as a bare list with ``ids=[...]`` and doctest
 constants reachable only through a variable, and a ``match`` given as an
@@ -100,9 +138,11 @@ import os
 import re
 import sys
 import tokenize
+import tomllib
 from collections import Counter, defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import cache
 from io import StringIO
 from itertools import chain, combinations, pairwise
 from pathlib import Path
@@ -110,10 +150,22 @@ from pathlib import Path
 from typing_extensions import TypeIs
 
 from riko.base._config import LINE_LENGTH
+from riko.cli._lint_tests import BOUND_CALLS
 
 _ACTIVE = (ast.Call, ast.Await, ast.Yield, ast.YieldFrom, ast.comprehension)
 _LOOPS = (ast.For, ast.AsyncFor, ast.While)
 _REASONS = r"python -m|console script|entry point|fresh process|own process|subprocess"
+_CLASS_COLOR = re.compile(r"(?:Async|Sync)(?=[A-Z\d]|$)")
+_TEST_COLOR = re.compile(r"_a?sync(?=_|$)")
+_LEADING_COLOR = re.compile(r"^(?:Async|Sync)(?=[A-Z\d]|$)")
+_CAMEL_WORD = re.compile(r"(?<!^)(?=[A-Z])")
+_ONCE = re.compile(r"(?:^|_)once(?:_|$)(?!(?:it|they|the|an?)_)")
+_STABLE = re.compile(r"(?:^|_)(?:deterministic|reproducible|stable)(?:_|$)")
+_CONCEPT_SENTENCE = re.compile(
+    r"named\s+for\s+a\s+concept(.*?)every\s+other\s+class\s+takes\s+a\s+riko\s+name",
+    re.DOTALL,
+)
+_CONCEPT_CLASS = re.compile(r"``(Test\w+)``")
 DESCRIPTION = "List candidate test overlaps, misfits, and move targets."
 TIERS = ("public", "internal", "functional")
 DOCTEST_ROOTS = ("riko", "examples")
@@ -148,6 +200,11 @@ SECTIONS = (
     "doctest-balance",
     "assertless",
     "processes",
+    "twins",
+    "endless",
+    "once",
+    "determinism",
+    "drains",
 )
 
 LIMITED = frozenset(
@@ -211,6 +268,11 @@ CHECK_SUFFIXES = (
 CHECK_PREFIXES = ("assert", "check", "_assert", "_check", "expect", "_expect")
 
 PROCESS_KEYWORDS = frozenset({"entry_point", "cwd", "env", "hash_seed"})
+CHECK_CALLS = frozenset({"raises", "warns"})
+COUNT_NAMES = frozenset({"len", "count", "call_count", "Counter", "pulled", "closes"})
+PROCESS_NAMES = frozenset({"run_python", "run_module", "subprocess", "hash_seed"})
+DRAIN_CALLS = frozenset({"aclose", "create_task_group"})
+MIRROR_SHARE = 0.75
 PROCESS_REASON = re.compile(_REASONS, re.IGNORECASE)
 
 WORD_STOP = frozenset(
@@ -264,6 +326,11 @@ def gen_names(node: ast.AST):
             yield child.attr
 
 
+@cache
+def get_name_set(node: ast.AST) -> frozenset[str]:
+    return frozenset(gen_names(node))
+
+
 class _Blank(ast.NodeTransformer):
     def __init__(self, *names: str):
         self.names = frozenset(names)
@@ -291,6 +358,7 @@ def get_dumps(
     return [ast.dump(blank.visit(ast.parse(ast.unparse(st)))) for st in get_body(func)]
 
 
+@cache
 def get_shape(func: ast.FunctionDef | ast.AsyncFunctionDef, *blank_names: str) -> str:
     prefix = "async " if isinstance(func, ast.AsyncFunctionDef) else ""
     return prefix + "\n".join(get_dumps(func, *blank_names))
@@ -644,7 +712,32 @@ def get_row_raise(row: ast.Call) -> tuple[set[str], tuple[str, ...]]:
     exceptions = {
         leaf for leaf in leaves if leaf and leaf.endswith(("Error", "Exception"))
     }
-    return exceptions, tuple(gen_strings(*row.args))
+    fragments = (
+        text for text in gen_strings(*row.args) if len(text.strip()) >= MIN_STR
+    )
+    return exceptions, tuple(fragments)
+
+
+def get_file_names(tree: ast.Module) -> frozenset[str]:
+    """Gets the names a file imports or defines at module level."""
+    imported = {
+        (alias.asname or alias.name).split(".")[0]
+        for stmt in tree.body
+        if isinstance(stmt, ast.Import | ast.ImportFrom)
+        for alias in stmt.names
+    }
+    return frozenset(imported.union(*map(get_defined, tree.body)))
+
+
+def get_used_names(node: ast.AST, file_names: frozenset[str], *bound: str) -> set[str]:
+    """
+    Gets the names a node uses: those it calls, and the file-level names it reads.
+
+    A parameter or local (``bound``) that merely shares a callee's name is not a use.
+    """
+    called = {name for name in gen_called(node) if name}
+    read = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} & file_names
+    return (called | read) - set(bound)
 
 
 def build_rows(files: list[TestFile]) -> tuple[list[Row], list[Raise]]:
@@ -652,12 +745,13 @@ def build_rows(files: list[TestFile]) -> tuple[list[Row], list[Raise]]:
 
     for file in files:
         tables = build_param_tables(file)
+        file_names = get_file_names(file.tree)
         for cls in gen_classes(file):
             for func in gen_tests(cls):
                 test = f"{cls.name}.{func.name}"
-                names = set(gen_names(func))
+                names = get_used_names(func, file_names, *get_bound(func))
                 for row in gen_param_rows(func, tables):
-                    row_names = names | set(gen_names(row))
+                    row_names = names | get_used_names(row, file_names)
                     constants = set(gen_constants(*row.args))
                     if constants:
                         rows.append(
@@ -697,11 +791,12 @@ def get_name_spread(files: list[TestFile]) -> Counter[str]:
     spread = Counter()
 
     for cls in chain.from_iterable(map(gen_classes, files)):
-        spread.update(set(gen_names(cls)))
+        spread.update(get_name_set(cls))
 
     return spread
 
 
+@cache
 def is_distinctive(literal: str) -> bool:
     try:
         value = ast.literal_eval(literal)
@@ -739,14 +834,13 @@ def gen_doctest_args(examples: list[Example], rows: list[Row], spread: Counter[s
     for example in examples:
         outputs = example.outputs
         calls = [
-            (callee, inputs)
+            (callee, inputs, {lit for lit in inputs if is_distinctive(lit)})
             for callee, inputs in gen_call_inputs(example)
             if inputs and spread[callee] <= UBIQUITOUS
         ]
         for row in rows:
             shared_out = row.constants & outputs
-            for callee, inputs in calls:
-                shared_in = {lit for lit in inputs if is_distinctive(lit)}
+            for callee, inputs, shared_in in calls:
                 fits = callee in row.names and inputs <= row.constants
                 if fits and shared_in and shared_out:
                     key = example.where, row.path, row.test
@@ -776,31 +870,56 @@ def has_match(fragment: str, message: str) -> bool:
     return found
 
 
+def get_message_parts(node: ast.AST) -> list[ast.expr]:
+    if isinstance(node, ast.JoinedStr):
+        parts = list(node.values)
+    elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+        parts = [node]
+    else:
+        parts = []
+    return parts
+
+
 def gen_messages(node: ast.AST):
+    """
+    Generates a node's message strings as ``(shown, pattern)`` pairs.
+
+    An f-string is one message: its literal parts, in order, joined by a wildcard
+    that stays on one line; ``shown`` marks each placeholder ``{}``.
+    """
+    nested = {
+        id(part)
+        for child in ast.walk(node)
+        if isinstance(child, ast.JoinedStr)
+        for part in ast.walk(child)
+        if part is not child
+    }
+
     for child in ast.walk(node):
-        parts = child.values if isinstance(child, ast.JoinedStr) else [child]
-        for part in parts:
-            value = part.value if isinstance(part, ast.Constant) else None
-            fits = isinstance(value, str) and MIN_MESSAGE <= len(value) <= MAX_MESSAGE
-            if fits and "\n" not in value and " " in value.strip():
-                yield value
+        parts = [] if id(child) in nested else get_message_parts(child)
+        texts = [p.value for p in parts if isinstance(p, ast.Constant)]
+        text = "".join(texts)
+        fits = MIN_MESSAGE <= len(text) <= MAX_MESSAGE
+        if fits and "\n" not in text and " " in text.strip():
+            shown = "".join(
+                p.value if isinstance(p, ast.Constant) else "{}" for p in parts
+            )
+            yield shown, ".*?".join(map(re.escape, texts))
 
 
 def gen_doctest_messages(files: list[TestFile], examples: list[Example]):
     groups = defaultdict(list)
 
     for example in examples:
-        groups[example.path, example.name, example.line].append(
-            example.source + example.want
-        )
+        groups[example.path, example.name, example.line].append(example.want)
 
     blocks = [(key, "\n".join(texts)) for key, texts in groups.items()]
 
     for file in files:
         for cls in gen_classes(file):
             for func in gen_tests(cls):
-                for message in sorted(set(gen_messages(func))):
-                    found = [key for key, text in blocks if message in text]
+                for message, pattern in sorted(set(gen_messages(func))):
+                    found = [key for key, text in blocks if re.search(pattern, text)]
                     test = f"{file.rel}:{func.lineno} {cls.name}::{func.name}"
 
                     for path, name, line in found[: len(found) <= MAX_MESSAGE_DOCS]:
@@ -842,14 +961,9 @@ def gen_doctest_balance(examples: list[Example], rows: list[Row], spread: Counte
             groups[example.path, example.name, example.line].append(example)
 
     for group in groups.values():
-        if len(group) >= MAX_DOCTEST_EXAMPLES:
-            callees = {
-                name
-                for example in group
-                for name in example.callees
-                if spread[name] <= UBIQUITOUS
-            }
-            found = [row for row in rows if row.names & callees]
+        owner = group[0].name.rsplit(".", 1)[-1]
+        if len(group) >= MAX_DOCTEST_EXAMPLES and spread[owner] <= UBIQUITOUS:
+            found = [row for row in rows if owner in row.names]
             tests = sorted({f"{row.path}::{row.test}" for row in found})
             if not tests:
                 continue
@@ -1223,7 +1337,7 @@ def gen_cross_subject(files: list[TestFile]):
 
     for file in files:
         for cls in gen_classes(file):
-            spread[file.tier].update(set(gen_names(cls)))
+            spread[file.tier].update(get_name_set(cls))
 
     for file in files:
         riko_names = set()
@@ -1336,8 +1450,40 @@ def gen_unsupported(files: list[TestFile], *names: str):
                     yield f"{where}: {lead}", [file.rel]
 
 
+def get_helper_reach(file: TestFile) -> dict[str, frozenset[str]]:
+    direct = {
+        stmt.name: get_name_set(stmt)
+        for stmt in file.tree.body
+        if isinstance(stmt, FUNCTION_NODES)
+    }
+    reach = {}
+
+    for name in direct:
+        seen, todo = set(), [name]
+        while todo:
+            current = todo.pop()
+            if current not in seen:
+                seen.add(current)
+                todo += [n for n in direct[current] if n in direct]
+        reach[name] = frozenset().union(*(direct[n] for n in seen))
+
+    return reach
+
+
+def get_reached(node: ast.AST, reach: dict[str, frozenset[str]]) -> frozenset[str]:
+    names = get_name_set(node)
+    return names.union(*(reach[name] for name in names & set(reach)))
+
+
 def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
     classes = list(gen_classes(file))
+    reach = get_helper_reach(file)
+    class_names = [get_reached(c, reach) for c in classes]
+    helper_lines = {
+        stmt.name: stmt.lineno
+        for stmt in file.tree.body
+        if isinstance(stmt, FUNCTION_NODES)
+    }
     module_uses = set().union(
         *(
             set(gen_names(stmt)) - set(get_defined(stmt))
@@ -1354,7 +1500,7 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
     for stmt in file.tree.body:
         is_test = isinstance(stmt, ast.ClassDef) and stmt.name.startswith("Test")
         for name in [] if is_test else get_defined(stmt):
-            users = [c for c in classes if name in set(gen_names(c))]
+            users = [c for c, n in zip(classes, class_names, strict=True) if name in n]
             is_value = isinstance(stmt, (ast.Assign, ast.AnnAssign))
             is_table = is_value and any(is_param(n) for n in ast.walk(stmt))
             is_constant = is_value and not is_table
@@ -1383,13 +1529,26 @@ def get_misplaced(file: TestFile) -> list[tuple[str, str, int, str]]:
             if later and not isinstance(stmt, FUNCTION_NODES):
                 continue
             between = [c.name for c in classes if stmt.lineno < c.lineno < user.lineno]
+            callers = sorted(
+                (line, caller)
+                for caller, line in helper_lines.items()
+                if caller != name
+                and name in reach[caller]
+                and line < user.lineno
+                and not any(line < c.lineno < user.lineno for c in classes)
+            )
             if user.lineno < stmt.lineno:
                 lead = f"below its one user {user.name}"
             elif between:
                 lead = f"not directly above its one user {user.name}"
             else:
                 continue
-            misplaced.append((name, user.name, stmt.lineno, lead))
+            target, lead = (
+                (callers[0][1], f"not directly above its caller {callers[0][1]}")
+                if callers
+                else (user.name, lead)
+            )
+            misplaced.append((name, target, stmt.lineno, lead))
 
     return misplaced
 
@@ -1483,11 +1642,48 @@ def get_xfail_markers(tree: ast.Module) -> set[str]:
     }
 
 
+def get_twin_key(cls: str, test: str) -> tuple[str, str]:
+    """Gets a test's twin key: its names with a ``Sync``/``Async`` word dropped."""
+    return _CLASS_COLOR.sub("", cls), _TEST_COLOR.sub("", test)
+
+
+def get_kinds(tree: ast.Module) -> dict[tuple[str, str], int]:
+    """
+    Gets the kind of each method of a file's classes, keyed by class and method name.
+
+    A behavior test whose sync/async twin (``get_twin_key``) is a rejection is a
+    rejection too; a ``KIND_OVERRIDES`` name keeps its override.
+    """
+    markers = get_xfail_markers(tree)
+    kinds = {
+        (cls.name, stmt.name): get_kind(stmt, markers)
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef)
+        for stmt in cls.body
+        if isinstance(stmt, FUNCTION_NODES)
+    }
+    twins = defaultdict(list)
+
+    for key in kinds:
+        twins[get_twin_key(*key)].append(key)
+
+    rejected = {
+        key
+        for group in twins.values()
+        if any(kinds[twin] == 2 for twin in group)
+        for key in group
+        if key[1] not in KIND_OVERRIDES
+    }
+    return {
+        key: 2 if key in rejected and kind == 1 else kind for key, kind in kinds.items()
+    }
+
+
 def gen_order_issues(file: TestFile):
-    markers = get_xfail_markers(file.tree)
+    kinds_by_test = get_kinds(file.tree)
 
     for cls in gen_classes(file):
-        kinds = [get_kind(func, markers) for func in gen_tests(cls)]
+        kinds = [kinds_by_test[cls.name, func.name] for func in gen_tests(cls)]
         if any(a > b for a, b in pairwise(kinds)):
             lead = (
                 "behavior after a rejection table or tripwire; run move_tests.py --sort"
@@ -1499,10 +1695,59 @@ def _snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-def load_defined(root: Path) -> frozenset[str]:
-    defined = set()
+def get_words(name: str) -> frozenset[str]:
+    return frozenset(w.removesuffix("s") for w in name.strip("_").split("_") if w)
 
-    paths = (root / DOCTEST_ROOTS[0]).rglob("*.py")
+
+@dataclass(frozen=True)
+class RikoNames:
+    """
+    The names ``riko/`` defines, as a test class subject may start with them.
+
+    A name is a class, function, type alias, or assigned name (a leading underscore
+    dropped and case folded); a module or package basename (its words, plurals
+    folded, or the basename with its underscores removed); a Click command or
+    console script; or a class name followed by one of its methods or fields.
+    """
+
+    defined: frozenset[str]
+    folded: frozenset[str]
+    modules: frozenset[frozenset[str]]
+    joined: frozenset[str]
+    commands: frozenset[str]
+    members: dict[str, frozenset[str]]
+
+    def is_defined(self, camel: str) -> bool:
+        snake = _snake(camel)
+        return bool(
+            {camel, snake} & self.defined or {camel.lower(), snake} & self.folded
+        )
+
+    def is_name(self, camel: str) -> bool:
+        snake = _snake(camel)
+        splits = ((camel[:i], camel[i:]) for i in range(1, len(camel)))
+        return (
+            self.is_defined(camel)
+            or get_words(snake) in self.modules
+            or snake.replace("_", "") in self.joined
+            or snake.removesuffix("_command") in self.commands
+            or any(
+                tail[0].isupper() and _snake(tail) in self.members.get(head, ())
+                for head, tail in splits
+            )
+        )
+
+    def starts_with_name(self, subject: str, color: str = "") -> bool:
+        parts = _CAMEL_WORD.split(subject)
+        heads = ("".join(parts[:i]) for i in range(1, len(parts) + 1))
+        colored = bool(color) and self.is_defined(color + subject)
+        return colored or any(self.is_name(head) for head in heads)
+
+
+def load_riko_names(root: Path) -> RikoNames:
+    defined, commands, members = set(), set(), defaultdict(set)
+    package = root / DOCTEST_ROOTS[0]
+    paths = sorted(package.rglob("*.py"))
 
     for node in chain.from_iterable(
         ast.walk(ast.parse(path.read_text())) for path in paths
@@ -1513,8 +1758,56 @@ def load_defined(root: Path) -> frozenset[str]:
             defined.add(node.name.id)
         elif isinstance(node, ast.Assign):
             defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+        if isinstance(node, ast.ClassDef):
+            members[node.name] |= {
+                stmt.name if isinstance(stmt, FUNCTION_NODES) else stmt.target.id
+                for stmt in node.body
+                if isinstance(stmt, FUNCTION_NODES)
+                or (
+                    isinstance(stmt, ast.AnnAssign)
+                    and isinstance(stmt.target, ast.Name)
+                )
+            }
+        elif isinstance(node, ast.Call) and get_leaf(node.func) in {"command", "group"}:
+            commands |= {
+                keyword.value.value
+                for keyword in node.keywords
+                if keyword.arg == "name"
+                and isinstance(keyword.value, ast.Constant)
+                and isinstance(keyword.value.value, str)
+            }
 
-    return frozenset(defined)
+    pyproject = root / "pyproject.toml"
+    project = tomllib.loads(pyproject.read_text()) if pyproject.exists() else {}
+    commands |= set(project.get("project", {}).get("scripts", {}))
+    modules = {get_words(path.stem) for path in paths if path.stem != "__init__"}
+    modules |= {get_words(path.name) for path in package.rglob("*") if path.is_dir()}
+    joined = {
+        path.stem.strip("_").replace("_", "")
+        for path in paths
+        if path.stem != "__init__"
+    }
+    return RikoNames(
+        frozenset(defined),
+        frozenset(name.lstrip("_").lower() for name in defined),
+        frozenset(modules),
+        frozenset(joined),
+        frozenset(command.replace("-", "_") for command in commands),
+        {name: frozenset(found) for name, found in members.items()},
+    )
+
+
+def load_concept_classes(root: Path) -> frozenset[str]:
+    """
+    Loads the test classes ``tests/__init__.py`` names for a concept.
+
+    Reads the docstring sentence that lists them; a missing file or sentence gives
+    an empty set.
+    """
+    path = root / "tests" / "__init__.py"
+    text = ast.get_docstring(ast.parse(path.read_text())) if path.exists() else None
+    found = _CONCEPT_SENTENCE.search(text or "")
+    return frozenset(_CONCEPT_CLASS.findall(found[1]) if found else ())
 
 
 def gen_unnamed_subjects(file: TestFile, *names: str):
@@ -1526,11 +1819,13 @@ def gen_unnamed_subjects(file: TestFile, *names: str):
         for name in get_defined(stmt)
     }
 
+    reach = get_helper_reach(file)
+
     for cls in gen_classes(file):
         subject = cls.name.removeprefix("Test").removeprefix("Async")
         if subject not in defined and _snake(subject) not in defined:
             continue
-        names = set(gen_names(cls))
+        names = set(get_reached(cls, reach))
         for name in names & set(table_names):
             names |= table_names[name] | file.tables[name]
         names |= {
@@ -1545,13 +1840,25 @@ def gen_unnamed_subjects(file: TestFile, *names: str):
             yield f"{file.rel}:{cls.lineno} {cls.name}: never names {subject}"
 
 
-def gen_placement(files: list[TestFile], *defined: str):
+def gen_foreign_subjects(file: TestFile, names: RikoNames, concepts: frozenset[str]):
+    for cls in gen_classes(file):
+        subject = cls.name.removeprefix("Test")
+        base = _LEADING_COLOR.sub("", subject)
+        color = subject.removesuffix(base)
+        known = names.starts_with_name(base, color)
+        if not known and cls.name not in concepts:
+            yield f"{file.rel}:{cls.lineno} {cls.name}: {base} is not a riko name"
+
+
+def gen_placement(files: list[TestFile], names: RikoNames, concepts: frozenset[str]):
     for file in files:
         for name, _, lineno, lead in get_misplaced(file):
             yield f"{file.rel}:{lineno} {name}: {lead}", [file.rel]
         for text in gen_order_issues(file):
             yield text, [file.rel]
-        for text in gen_unnamed_subjects(file, *defined):
+        for text in gen_unnamed_subjects(file, *names.defined):
+            yield text, [file.rel]
+        for text in gen_foreign_subjects(file, names, concepts):
             yield text, [file.rel]
 
 
@@ -1560,7 +1867,7 @@ def gen_tier_issues(files: list[TestFile]):
         if file.tier != "functional":
             continue
         for cls in gen_classes(file):
-            names = set(gen_names(cls))
+            names = get_name_set(cls)
             strings = {
                 node.value
                 for node in ast.walk(cls)
@@ -1758,6 +2065,176 @@ def gen_process_issues(files: list[TestFile]):
                     yield text, [file.rel]
 
 
+def get_check_count(func: ast.AST) -> int:
+    return sum(
+        isinstance(node, ast.Assert)
+        or (isinstance(node, ast.Call) and get_leaf(node.func) in CHECK_CALLS)
+        for node in ast.walk(func)
+    )
+
+
+def gen_twin_tests(file: TestFile):
+    """Generates each test with its twin key (``get_twin_key``)."""
+    for cls in gen_classes(file):
+        for func in gen_tests(cls):
+            yield get_twin_key(cls.name, func.name), cls, func
+
+
+def gen_twin_issues(files: list[TestFile]):
+    for file in files:
+        groups = defaultdict(list)
+
+        for key, cls, func in gen_twin_tests(file):
+            groups[key].append((cls, func))
+
+        sides = defaultdict(lambda: defaultdict(set))
+
+        for (subject, method), group in groups.items():
+            for cls, _ in group:
+                sides[subject][cls.name].add(method)
+
+        mirrored = {
+            subject
+            for subject, found in sides.items()
+            if len(found) > 1
+            and len(set.intersection(*found.values()))
+            >= MIRROR_SHARE * len(set.union(*found.values()))
+        }
+
+        for (subject, method), group in groups.items():
+            for (cls, func), (other, twin) in combinations(group, 2):
+                counts = get_check_count(func), get_check_count(twin)
+                if counts[0] != counts[1]:
+                    lead = (
+                        f"{counts[0]} checks vs {counts[1]} in "
+                        f"{other.name}::{twin.name}"
+                    )
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                    yield text, [file.rel]
+            missing = [
+                name for name, found in sides[subject].items() if method not in found
+            ]
+            for cls, func in group if missing and subject in mirrored else []:
+                lead = f"no twin in {', '.join(missing)}"
+                text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                yield text, [file.rel]
+
+
+def is_endless(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.While)
+        and isinstance(node.test, ast.Constant)
+        and node.test.value is True
+    )
+
+
+def gen_endless_issues(root: Path, files: list[TestFile]):
+    helpers = [
+        (path.relative_to(root).as_posix(), ast.parse(path.read_text()))
+        for path in sorted(root.glob("tests/_*.py"))
+    ]
+
+    for rel, tree in [*helpers, *((file.rel, file.tree) for file in files)]:
+        for stmt in tree.body:
+            is_func = isinstance(stmt, FUNCTION_NODES)
+            if is_func and any(is_endless(node) for node in ast.walk(stmt)):
+                lead = "loops forever; bound the source or confirm every user stops it"
+                yield f"{rel}:{stmt.lineno} {stmt.name}: {lead}", [rel]
+
+
+def is_count_literal(node: ast.AST) -> bool:
+    """Whether a compared value pins a count: ``1``, a display, or multi-line text."""
+    value = node.value if isinstance(node, ast.Constant) else None
+    is_one = type(value) is int and value == 1
+    is_lines = isinstance(value, str | bytes) and len(value.splitlines()) > 1
+    return isinstance(node, ast.List | ast.Tuple | ast.Dict) or is_one or is_lines
+
+
+def is_counted(func: ast.AST) -> bool:
+    """Whether a test counts something: a count name, or a compared count literal."""
+    compares = (node for node in ast.walk(func) if isinstance(node, ast.Compare))
+    counted = any(
+        is_count_literal(side)
+        for node in compares
+        for side in (node.left, *node.comparators)
+    )
+    return counted or bool(set(gen_names(func)) & COUNT_NAMES)
+
+
+def gen_once_issues(files: list[TestFile]):
+    for file in files:
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                if _ONCE.search(func.name) and not is_counted(func):
+                    lead = "says once but never counts"
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                    yield text, [file.rel]
+
+
+def is_repeated_run(func: ast.AST) -> bool:
+    """Whether a test makes one call twice or compares two computed results."""
+    calls = Counter(
+        ast.unparse(node) for node in ast.walk(func) if isinstance(node, ast.Call)
+    )
+    computed = (ast.Name, ast.Call, ast.Attribute, ast.Subscript)
+    compared = any(
+        isinstance(node.left, computed)
+        and isinstance(node.comparators[0], computed)
+        and isinstance(node.ops[0], ast.Eq)
+        for node in ast.walk(func)
+        if isinstance(node, ast.Compare)
+    )
+    return compared and any(count > 1 for count in calls.values())
+
+
+def gen_determinism_issues(files: list[TestFile]):
+    for file in files:
+        for cls in gen_classes(file):
+            for func in gen_tests(cls):
+                names = set(gen_names(func)) | {
+                    keyword.arg
+                    for node in ast.walk(func)
+                    if isinstance(node, ast.Call)
+                    for keyword in node.keywords
+                }
+                spawns = names & PROCESS_NAMES
+                if _STABLE.search(func.name) and is_repeated_run(func) and not spawns:
+                    lead = (
+                        "compares two runs in one process; hash randomization "
+                        "cannot vary there"
+                    )
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                    yield text, [file.rel]
+
+
+def has_timeout_marker(*nodes: ast.AST) -> bool:
+    return any("timeout" in ast.unparse(node) for node in nodes)
+
+
+def get_pytestmarks(body: list[ast.stmt]) -> list[ast.stmt]:
+    return [stmt for stmt in body if "pytestmark" in get_defined(stmt)]
+
+
+def gen_drain_issues(files: list[TestFile]):
+    for file in files:
+        if has_timeout_marker(*get_pytestmarks(file.tree.body)):
+            continue
+        for cls in gen_classes(file):
+            marks = [*cls.decorator_list, *get_pytestmarks(cls.body)]
+            if has_timeout_marker(*marks):
+                continue
+            for func in gen_tests(cls):
+                called = set(gen_called(func))
+                is_async = isinstance(func, ast.AsyncFunctionDef)
+                bounded = called & BOUND_CALLS or has_timeout_marker(
+                    *func.decorator_list
+                )
+                if is_async and called & DRAIN_CALLS and not bounded:
+                    lead = "drains with no fail_after or timeout marker"
+                    text = f"{file.rel}:{func.lineno} {cls.name}::{func.name}: {lead}"
+                    yield text, [file.rel]
+
+
 def where(root: Path, *names: str) -> int:
     """Prints each test file's ``path::Class[::method]`` matching a name."""
     found = 0
@@ -1793,11 +2270,18 @@ def build_sections(root: Path, min_shared: int, doctests: bool = True) -> dict:
         "names": gen_same_names(units),
         "cross-subject": gen_cross_subject(files),
         "unsupported": gen_unsupported(files, *load_supported(root)),
-        "placement": gen_placement(files, *load_defined(root)),
+        "placement": gen_placement(
+            files, load_riko_names(root), load_concept_classes(root)
+        ),
         "tier": gen_tier_issues(files),
         "doctest-balance": gen_doctest_balance(examples, rows, spread),
         "assertless": gen_assertless(files),
         "processes": gen_process_issues(files),
+        "twins": gen_twin_issues(files),
+        "endless": gen_endless_issues(root, files),
+        "once": gen_once_issues(files),
+        "determinism": gen_determinism_issues(files),
+        "drains": gen_drain_issues(files),
     }
 
 

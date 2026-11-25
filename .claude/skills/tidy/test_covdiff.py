@@ -20,6 +20,7 @@ import covdiff
 
 _CUT = "tests/test_a.py::TestA::test_cut"
 _COVER = "tests/test_a.py::TestA::test_cover"
+_UNKNOWN = "tests/test_a.py::TestA::test_typo"
 CONTEXTS = {
     "": {1, 2},
     f"{_CUT}[row]|run": {2, 3, 4, 5},
@@ -45,8 +46,12 @@ RUNS = [
     ),
 ]
 USAGE_ERRORS = [
-    pytest.param([_CUT, _COVER], id="no-separator"),
-    pytest.param(["--data", "missing", _CUT, "--", _COVER], id="no-data"),
+    pytest.param([_CUT, _COVER], "missing --", id="no-separator"),
+    pytest.param(
+        ["--data", "missing", _CUT, "--", _COVER], "no coverage", id="no-data"
+    ),
+    pytest.param([_UNKNOWN, "--", _COVER], _UNKNOWN, id="unmatched-cut"),
+    pytest.param([_CUT, "--", _COVER, _UNKNOWN], _UNKNOWN, id="unmatched-cover"),
 ]
 
 
@@ -80,9 +85,12 @@ def test_main(
     assert capsys.readouterr().out.splitlines() == expected
 
 
-@pytest.mark.parametrize("argv", USAGE_ERRORS)
-def test_usage_error(argv: list[str]) -> None:
+@pytest.mark.parametrize(("argv", "fragment"), USAGE_ERRORS)
+def test_usage_error(
+    data_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str], fragment: str
+) -> None:
     with pytest.raises(SystemExit) as caught:
-        covdiff.main(argv)
+        covdiff.main(["--data", str(data_path), *argv], root=data_path.parent)
 
     assert caught.value.code == 2
+    assert fragment in capsys.readouterr().err
