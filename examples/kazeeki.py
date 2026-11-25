@@ -46,24 +46,23 @@ if TYPE_CHECKING:
 
 type Rules = FindConfRule | list[FindConfRule]
 
-BR = FindConfRule(find="<br>")
 DEF_CUR_CODE = "USD"
 
 
-def at(find: str, param: Literal["first", "last"] = "first") -> FindConfRule:
-    return FindConfRule(find=find, location="at", param=param)
-
-
-def after(find: str, param: Literal["first", "last"] = "first") -> FindConfRule:
-    return FindConfRule(find=find, location="after", param=param)
+def find_rule(
+    find: str,
+    location: Literal["before", "after", "at"] = "before",
+    param: Literal["first", "last"] = "first",
+) -> FindConfRule:
+    return FindConfRule(find=find, location=location, param=param)
 
 
 def until_br(find: str) -> list[FindConfRule]:
-    return [after(find), BR]
+    return [find_rule(find, "after"), find_rule("<br>")]
 
 
 def between(start: str, end: str) -> list[FindConfRule]:
-    return [after(start), FindConfRule(find=end)]
+    return [find_rule(start, "after"), find_rule(end)]
 
 
 def text_subkey(subkey: str) -> Subkey:
@@ -74,14 +73,16 @@ def same_field(field: str) -> CallOptions:
     return CallOptions(field=field, assign=field)
 
 
+def from_summary(assign: str) -> CallOptions:
+    return CallOptions(field="summary", assign=assign)
+
+
 def build_replace_rules(replacements: dict[str, str]) -> list[StrReplaceConfRule]:
-    return [
-        StrReplaceConfRule(find=find, replace=replace)
-        for find, replace in replacements.items()
-    ]
+    items = replacements.items()
+    return [StrReplaceConfRule(find=find, replace=replace) for find, replace in items]
 
 
-def fetch(name: str) -> Pipeline:
+def build_fetchdata(name: str) -> Pipeline:
     conf = FetchDataConf({"url": get_path(f"{name}.json"), "path": "items"})
     return Pipeline.from_module("fetchdata", conf=conf)
 
@@ -99,18 +100,16 @@ def add_source(source: Pipeline) -> Pipeline:
     subelement_conf = SubelementConf({"path": "k:source.content.1", "token_key": None})
     urlparse_options = CallOptions(field="link", emit=False, assign="k:source")
     subelement_options = CallOptions(emit=False, assign="k:source", count="first")
-
-    return source.urlparse(options=urlparse_options).subelement(
-        conf=subelement_conf, options=subelement_options
-    )
+    parsed = source.urlparse(options=urlparse_options)
+    return parsed.subelement(conf=subelement_conf, options=subelement_options)
 
 
 def add_id(source: Pipeline, rule: Rules, field: str = "link") -> Pipeline:
     id_part = [text_subkey("k:source"), "-", text_subkey("id")]
-
-    return source.strfind(
+    found = source.strfind(
         conf={"rule": rule}, options={"field": field, "assign": "id"}
-    ).strconcat(conf={"part": id_part}, options={"assign": "id"})
+    )
+    return found.strconcat(conf={"part": id_part}, options={"assign": "id"})
 
 
 def add_posted(
@@ -121,9 +120,8 @@ def add_posted(
         result = source.rename(conf={"rule": rename_rule})
     else:
         conf = StrfindConf({"rule": rule})
-        result = source.strfind(
-            conf=conf, options={"field": field, "assign": "k:posted"}
-        )
+        strfind_opts = {"field": field, "assign": "k:posted"}
+        result = source.strfind(conf=conf, options=strfind_opts)
 
     return result
 
@@ -136,7 +134,6 @@ def add_tags(
     )
 
     transform_conf = StrTransformConf({"rule": StrTransformConfRule(transform="lower")})
-
     in_place = same_field(assign)
 
     return (
@@ -150,17 +147,18 @@ def add_tags(
     )
 
 
+def add_categories(source: Pipeline, rule: Rules) -> Pipeline:
+    return add_tags(source, rule, assign="k:categories")
+
+
 def add_budget(
-    source: Pipeline,
-    fixed_text: str = "",
-    hourly_text: str = "",
-    double: bool | str = True,
+    source: Pipeline, fixed: bool = False, hourly: bool = False, double: bool = True
 ) -> Pipeline:
-    codes = "$£€₹"
-    first_num_rule = at(r"\d+")
-    last_num_rule = at(r"\d+", param="last")
-    cur_rule = at(r"\b[A-Z]{3}\b")
-    sym_rule = at(f"[{codes}]")
+    marked, codes = source, "$£€₹"
+    first_num_rule = find_rule(r"\d+", "at")
+    last_num_rule = find_rule(r"\d+", "at", "last")
+    cur_rule = find_rule(r"\b[A-Z]{3}\b", "at")
+    sym_rule = find_rule(f"[{codes}]", "at")
 
     invalid_budgets = build_replace_rules(
         {
@@ -184,13 +182,8 @@ def add_budget(
     )
 
     budget_w_sym = text_subkey("k:budget_w_sym")
-    converted_budget_part = [
-        budget_w_sym,
-        "(",
-        text_subkey("k:budget_converted_w_sym"),
-        ")",
-    ]
-
+    _subkey = text_subkey("k:budget_converted_w_sym")
+    converted_budget_part = [budget_w_sym, "(", _subkey, ")"]
     hourly_budget_part = [text_subkey("k:budget_full"), " / hr"]
     exchangerate_conf = ExchangeRateConf({"url": get_path("quote.json")})
     native_currencyformat_conf = CurrencyFormatRawConf(
@@ -200,27 +193,24 @@ def add_budget(
     ave_budget_conf = build_simplemath("k:budget_raw2_num", "mean")
     convert_budget_conf = build_simplemath("k:rate", "multiply")
     raw_budget = same_field("k:budget_raw")
+    _job_type = {"assign": "k:job_type"}
 
-    if fixed_text:
-        result = source.strconcat(
-            conf={"part": "fixed"}, options={"assign": "k:job_type"}
-        )
+    if fixed:
+        marked = source.strconcat(conf={"part": "fixed"}, options=_job_type)
+
+    if hourly:
+        typed = marked.strconcat(conf={"part": "hourly"}, options=_job_type)
     else:
-        result = source
+        typed = marked
 
-    if hourly_text:
-        result = result.strconcat(
-            conf={"part": "hourly"}, options={"assign": "k:job_type"}
-        )
-
-    result = result.refind(
+    cleaned = typed.refind(
         conf={"rule": cur_rule},
         options={"field": "k:budget_raw", "assign": "k:cur_code"},
     ).strreplace(conf={"rule": invalid_budgets}, options=raw_budget)
 
     if double:
-        result = (
-            result.refind(
+        amounted = (
+            cleaned.refind(
                 conf={"rule": first_num_rule},
                 options={"field": "k:budget_raw", "assign": "k:budget_raw_num"},
             )
@@ -234,13 +224,15 @@ def add_budget(
             )
         )
     else:
-        result = result.refind(
+        amounted = cleaned.refind(
             conf={"rule": first_num_rule},
             options={"field": "k:budget_raw", "assign": "k:budget"},
         )
 
-    result = (
-        result.refind(
+    _budget_full = {"assign": "k:budget_full"}
+
+    formatted = (
+        amounted.refind(
             conf={"rule": sym_rule},
             options={"field": "k:budget_raw", "assign": "k:budget_raw_sym"},
         )
@@ -267,31 +259,31 @@ def add_budget(
             },
         )
         .strconcat(
-            conf=StrconcatConf({"part": converted_budget_part}),
-            options={"assign": "k:budget_full"},
+            conf=StrconcatConf({"part": converted_budget_part}), options=_budget_full
         )
-        .strconcat(
-            conf=StrconcatConf({"part": budget_w_sym}),
-            options={"assign": "k:budget_full"},
-        )
+        .strconcat(conf=StrconcatConf({"part": budget_w_sym}), options=_budget_full)
     )
 
-    if hourly_text:
-        result = result.strconcat(
-            conf={"part": hourly_budget_part}, options={"assign": "k:budget_full"}
+    if hourly:
+        budgeted = formatted.strconcat(
+            conf={"part": hourly_budget_part}, options=_budget_full
         )
+    else:
+        budgeted = formatted
 
-    return result
+    return budgeted
 
 
 def clean_locations(source: Pipeline) -> Pipeline:
     rule = StrReplaceConfRule(find=", ", replace="")
     client = same_field("k:client_location")
     work = same_field("k:work_location")
+    replaced = source.strreplace(conf={"rule": rule}, options=client)
+    return replaced.strreplace(conf={"rule": rule}, options=work)
 
-    return source.strreplace(conf={"rule": rule}, options=client).strreplace(
-        conf={"rule": rule}, options=work
-    )
+
+def extract_title(source: Pipeline, rule: Rules) -> Pipeline:
+    return source.strfind(conf={"rule": rule}, options=same_field("title"))
 
 
 def remove_cruft(source: Pipeline) -> Pipeline:
@@ -313,89 +305,72 @@ def remove_cruft(source: Pipeline) -> Pipeline:
         "k:budget_raw_sym",
     )
     remove_rule = [RenameConfRule(field=field) for field in cruft]
-
     return source.rename(conf=RenameConf({"rule": remove_rule}))
 
 
 def parse_odesk(source: Pipeline) -> Pipeline:
     raw_budget_rule = until_br("Budget</b>:")
-    title_rule = FindConfRule(find="- oDesk")
+    title_rule = find_rule("- oDesk")
     find_id_rule = until_br("ID</b>:")
     categ_rule = until_br("Category</b>:")
     skills_rule = until_br("Skills</b>:")
     client_loc_rule = until_br("Country</b>:")
     posted_rule = until_br("Posted On</b>:")
     desc_rule = between("<p>", "<br><br><b>")
+    titled = extract_title(source, title_rule)
 
-    result = (
-        source.strfind(conf={"rule": title_rule}, options=same_field("title"))
-        .strfind(
-            conf={"rule": client_loc_rule},
-            options={"field": "summary", "assign": "k:client_location"},
+    extracted = (
+        titled.strfind(
+            conf={"rule": client_loc_rule}, options=from_summary("k:client_location")
         )
-        .strfind(
-            conf={"rule": desc_rule},
-            options={"field": "summary", "assign": "description"},
-        )
-        .strfind(
-            conf={"rule": raw_budget_rule},
-            options={"field": "summary", "assign": "k:budget_raw"},
-        )
+        .strfind(conf={"rule": desc_rule}, options=from_summary("description"))
+        .strfind(conf={"rule": raw_budget_rule}, options=from_summary("k:budget_raw"))
     )
 
-    result = add_source(result)
-    result = add_posted(result, posted_rule)
-    result = add_id(result, find_id_rule, field="summary")
-    result = add_budget(result, double=False)
-    result = add_tags(result, skills_rule)
-    result = add_tags(result, categ_rule, assign="k:categories")
-    result = clean_locations(result)
-    return remove_cruft(result)
+    sourced = add_source(extracted)
+    posted = add_posted(sourced, posted_rule)
+    identified = add_id(posted, find_id_rule, field="summary")
+    budgeted = add_budget(identified, double=False)
+    tagged = add_tags(budgeted, skills_rule)
+    categorized = add_categories(tagged, categ_rule)
+    located = clean_locations(categorized)
+    return remove_cruft(located)
 
 
 def parse_guru(source: Pipeline) -> Pipeline:
     raw_budget_rule = until_br("budget:</b>")
-    after_hourly_rule = after("Rate:")
-    find_id_rule = after("/", param="last")
+    after_hourly_rule = find_rule("Rate:", "after")
+    find_id_rule = find_rule("/", "after", "last")
     categ_rule = until_br("Category:</b>")
     skills_rule = until_br("Required skills:</b>")
     job_loc_rule = until_br("Freelancer Location:</b>")
     desc_rule = until_br("Description:</b>")
 
-    result = (
+    extracted = (
         source.strfind(
-            conf={"rule": job_loc_rule},
-            options={"field": "summary", "assign": "k:work_location"},
+            conf={"rule": job_loc_rule}, options=from_summary("k:work_location")
         )
-        .strfind(
-            conf={"rule": desc_rule},
-            options={"field": "summary", "assign": "description"},
-        )
-        .strfind(
-            conf={"rule": raw_budget_rule},
-            options={"field": "summary", "assign": "k:budget_raw"},
-        )
+        .strfind(conf={"rule": desc_rule}, options=from_summary("description"))
+        .strfind(conf={"rule": raw_budget_rule}, options=from_summary("k:budget_raw"))
         .strfind(conf={"rule": after_hourly_rule}, options=same_field("k:budget_raw"))
     )
 
-    result = add_source(result)
-    result = add_posted(result)
-    result = add_id(result, find_id_rule)
-    result = add_budget(
-        result, fixed_text="Fixed Price budget:</b>", hourly_text="Hourly budget:</b>"
-    )
-    result = add_tags(result, skills_rule)
-    result = add_tags(result, categ_rule, assign="k:categories")
-    result = clean_locations(result)
-    return remove_cruft(result)
+    sourced = add_source(extracted)
+    posted = add_posted(sourced)
+    identified = add_id(posted, find_id_rule)
+    budgeted = add_budget(identified, fixed=True, hourly=True)
+    tagged = add_tags(budgeted, skills_rule)
+    categorized = add_categories(tagged, categ_rule)
+    located = clean_locations(categorized)
+    return remove_cruft(located)
 
 
 def parse_elance(source: Pipeline) -> Pipeline:
     raw_budget_rule = until_br("Budget:</b>")
-    after_hourly_rule = after("Hourly")
-    after_fixed_rule = after("Fixed Price")
-    title_rule = FindConfRule(find="| Elance Job")
-    find_id_rule = [FindConfRule(find="/", param="last"), after("/", param="last")]
+    after_hourly_rule = find_rule("Hourly", "after")
+    after_fixed_rule = find_rule("Fixed Price", "after")
+    title_rule = find_rule("| Elance Job")
+    find_id_rule = [find_rule("/", param="last"), find_rule("/", "after", "last")]
     categ_rule = until_br("Category:</b>")
     skills_rule = until_br("Desired Skills:</b>")
     job_loc_rule = until_br("Preferred Job Location:</b>")
@@ -404,93 +379,68 @@ def parse_elance(source: Pipeline) -> Pipeline:
     proposals_rule = between("Proposals:</b>", "(")
     jobs_posted_rule = between("Client:</b> Client (", "jobs posted")
     jobs_awarded_rule = between("jobs posted,", "awarded")
-    purchased_rule = [FindConfRule(find="total purchased"), after(",", param="last")]
-    ends_rule = [after("Time Left:</b>"), FindConfRule(find=") <br>"), after("h (Ends")]
+    purchased_rule = [find_rule("total purchased"), find_rule(",", "after", "last")]
+    ends_rule = [
+        find_rule("Time Left:</b>", "after"),
+        find_rule(") <br>"),
+        find_rule("h (Ends", "after"),
+    ]
 
-    result = (
-        source.strfind(conf={"rule": title_rule}, options=same_field("title"))
-        .strfind(
-            conf={"rule": proposals_rule},
-            options={"field": "summary", "assign": "k:submissions"},
+    titled = extract_title(source, title_rule)
+    extracted = (
+        titled.strfind(
+            conf={"rule": proposals_rule}, options=from_summary("k:submissions")
         )
+        .strfind(conf={"rule": jobs_posted_rule}, options=from_summary("k:num_jobs"))
         .strfind(
-            conf={"rule": jobs_posted_rule},
-            options={"field": "summary", "assign": "k:num_jobs"},
+            conf={"rule": jobs_awarded_rule}, options=from_summary("k:per_awarded")
         )
+        .strfind(conf={"rule": purchased_rule}, options=from_summary("k:tot_purchased"))
+        .strfind(conf={"rule": ends_rule}, options=from_summary("k:due"))
+        .strfind(conf={"rule": job_loc_rule}, options=from_summary("k:work_location"))
         .strfind(
-            conf={"rule": jobs_awarded_rule},
-            options={"field": "summary", "assign": "k:per_awarded"},
+            conf={"rule": client_loc_rule}, options=from_summary("k:client_location")
         )
-        .strfind(
-            conf={"rule": purchased_rule},
-            options={"field": "summary", "assign": "k:tot_purchased"},
-        )
-        .strfind(
-            conf={"rule": ends_rule}, options={"field": "summary", "assign": "k:due"}
-        )
-        .strfind(
-            conf={"rule": job_loc_rule},
-            options={"field": "summary", "assign": "k:work_location"},
-        )
-        .strfind(
-            conf={"rule": client_loc_rule},
-            options={"field": "summary", "assign": "k:client_location"},
-        )
-        .strfind(
-            conf={"rule": desc_rule},
-            options={"field": "summary", "assign": "description"},
-        )
-        .strfind(
-            conf={"rule": raw_budget_rule},
-            options={"field": "summary", "assign": "k:budget_raw"},
-        )
+        .strfind(conf={"rule": desc_rule}, options=from_summary("description"))
+        .strfind(conf={"rule": raw_budget_rule}, options=from_summary("k:budget_raw"))
         .strfind(conf={"rule": after_hourly_rule}, options=same_field("k:budget_raw"))
         .strfind(conf={"rule": after_fixed_rule}, options=same_field("k:budget_raw"))
     )
 
-    result = add_source(result)
-    result = add_posted(result)
-    result = add_id(result, find_id_rule)
-    result = add_budget(
-        result, fixed_text="Budget:</b> Fixed Price", hourly_text="Budget:</b> Hourly"
-    )
-    result = add_tags(result, skills_rule)
-    result = add_tags(result, categ_rule, assign="k:categories")
-    return clean_locations(result)
+    sourced = add_source(extracted)
+    posted = add_posted(sourced)
+    identified = add_id(posted, find_id_rule)
+    budgeted = add_budget(identified, fixed=True, hourly=True)
+    tagged = add_tags(budgeted, skills_rule)
+    categorized = add_categories(tagged, categ_rule)
+    return clean_locations(categorized)
 
 
 def parse_freelancer(source: Pipeline) -> Pipeline:
     raw_budget_rule = between("(Budget:", ",")
-    title_rule = FindConfRule(find=" by ")
+    title_rule = find_rule(" by ")
     skills_rule = between(", Jobs:", ")</p>")
     desc_rule = between("<p>", "(Budget:")
+    titled = extract_title(source, title_rule)
 
-    result = (
-        source.strfind(conf={"rule": title_rule}, options=same_field("title"))
-        .strfind(
-            conf={"rule": desc_rule},
-            options={"field": "summary", "assign": "description"},
-        )
-        .strfind(
-            conf={"rule": raw_budget_rule},
-            options={"field": "summary", "assign": "k:budget_raw"},
-        )
-    )
+    extracted = titled.strfind(
+        conf={"rule": desc_rule}, options=from_summary("description")
+    ).strfind(conf={"rule": raw_budget_rule}, options=from_summary("k:budget_raw"))
 
-    result = add_source(result)
-    result = add_posted(result)
-    result = add_budget(result)
-    result = add_tags(result, skills_rule)
-    result = clean_locations(result)
-    return remove_cruft(result)
+    sourced = add_source(extracted)
+    posted = add_posted(sourced)
+    budgeted = add_budget(posted)
+    tagged = add_tags(budgeted, skills_rule)
+    located = clean_locations(tagged)
+    return remove_cruft(located)
 
 
 def build_pipelines() -> list[Pipeline]:
     return [
-        parse_odesk(fetch("odesk")),
-        parse_guru(fetch("guru")),
-        parse_freelancer(fetch("freelancer")),
-        parse_elance(fetch("elance")),
+        parse_odesk(build_fetchdata("odesk")),
+        parse_guru(build_fetchdata("guru")),
+        parse_freelancer(build_fetchdata("freelancer")),
+        parse_elance(build_fetchdata("elance")),
     ]
 
 
@@ -498,7 +448,7 @@ def pipe(test: bool = False) -> list[Item]:
     return list(chain.from_iterable(build_pipelines()))
 
 
-def async_pipe(test: bool | None = None) -> AsyncStream:
+def async_pipe(test: bool = False) -> AsyncStream:
     return async_chain(*build_pipelines())
 
 
