@@ -3141,7 +3141,8 @@ Current parallel lanes (user, 2026-11-22), beside R7 Slices C–D:
 - R4L DotDict literal access, built now and merged right after M1 (the before-R4E edge
   stays: both edit `riko/parsing/config.py`);
 - R4E's four open decisions (§ 4a), settled during R7;
-- the M2 announcement post draft.
+- the M2 announcement post draft;
+- generated planning data, step 1 (user, 2026-11-24; "Housekeeping lanes" below).
 
 After R11 service seams stabilize, provider import/export scaffolding, operation
 repository/model work, and CLI command-provider stubs may proceed in parallel only where
@@ -3175,6 +3176,18 @@ on `/land`/`/wrapup` triggers.
   `.claude/skills/land/conftest.py` (approved 2026-11-22), and folding
   `.claude/skills/drafts/surface_signature_diff.py` into
   `.claude/skills/wrapup/surface_diff.py` (approved 2026-11-21).
+- **generated planning data** (user, 2026-11-24): phase status, order, landing dates,
+  slices, and tripwire ownership get one source of truth in TOML, and every view of them
+  is generated; Markdown keeps only prose. One TOML sits beside each owning gameplan
+  (`implementation-sequence.toml` for phases, milestones, and lanes; a sibling `.toml`
+  for each gameplan with its own slice scheme, slice ids namespaced by file name). Step
+  1 runs beside R7: the TOML sources, the generated R-track and P-track tables in
+  [PHASE_CHECKLISTS.md](../PHASE_CHECKLISTS.md), the § 3 graph as a generated Mermaid
+  block, a generated § 6 next-slice block, the JSON the Forward Track page reads, and
+  the matching `/wrapup`, `/triage`, `/tidy`, and `CLAUDE.md` updates; the tracker's
+  evidence notes split into TOML fields and each phase's prose here. Step 2 follows M1:
+  each strict xfail gets exactly one owning slice in TOML, and `manage lint --docs`
+  rejects phase status or dates restated outside a generated block.
 - **M2 announcement post**: an M2 prerequisite (§ 4 "M2").
 
 ## 6. Next implementation slice
