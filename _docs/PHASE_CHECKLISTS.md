@@ -10,7 +10,7 @@ decisions.
 
 ## Progress tracker (authoritative)
 
-Suite: **3913 passed / 113 xfailed**. The user commits.
+Suite: **4010 passed / 113 xfailed**. The user commits.
 
 **Merge gate (`features` → `main`): the correctness-audit P0 rows are all fixed.** R1
 and R3 were repaired in place; R2 (`PyPipe.__call__` silently dropped omitted kwargs —
@@ -113,7 +113,7 @@ against its ADD/MIGRATE/DELETE exit (§ 3 closure rule); "open" names what is st
 | **M2** announcement release (`features` → `main`, 0.x) | 🎯 milestone | M1 → R4L → R4E → R5C → merge → publish (R5C moved before M2 2026-11-22: it deletes the STABLE `Sinks`/`riko.modules.write`); acceptance = every code sample in `README.rst` and `docs/COOKBOOK.rst` runs on the released wheel, with the announcement post written as a prerequisite; not the 1.0 gate (implementation-sequence § 4 "M2") |
 | **M3** monthly-invoicing release | 🎯 milestone | M2 → resource-seam core slice (honor `Resource.credential`, tripwire `TestResourceAcquisition::test_sync_acquire_passes_a_credential_reference_to_its_factory` in `tests/internal/test_execution.py`; `ResourceView` on `riko.ext`; added 2026-11-22) → read-only R11 slices (credential contract, rest-incremental R0–R4 incl. GraphQL, provider P0–P1, azure AZ0/AZ2/AZ3) → `riko-msp` invoicing; per-client billable users (enabled + licensed) and devices (SuperOps managed assets) exported as CSV; no R2B/R5B/R6; one run per client with `tenant_id`/`period` as workflow inputs (implementation-sequence § 4 "M3") |
 | **M4** monthly-reports release | 🎯 milestone | M3 → R2B → R6 → remaining R11 slices (connectors C4 Airtable, provider P2/P4) → `riko-msp` dashboard MVP; R5B off the path since 2026-11-22 (after R2B, in parallel with the R11 slices); the `riko.ext` parser-protocol design freezes first; excludes destructive plan/apply (MD11) and the HTTP surface (implementation-sequence § 4 "M4") |
-| **R7** execution-owned publish/subscribe and split | ⏳ in progress | Slice A (tee correctness) landed 2026-11-17; the async hand-through and stream-ownership redesign landed 2026-11-24 (`0231e2b0`); next the test-file split, then the small definition-layer PR (Slice B's `ExecutionSettings`/`with_execution(strict=, overrides=)` half, `Pipeline.union`, the D103 rider; split 2026-11-22), then Slice C (task group, concurrent fan-in, Slice B's execution half), then Slice D (publish/subscribe); owner `gameplans/implementation-sequence.md` § R7 |
+| **R7** execution-owned publish/subscribe and split | ⏳ in progress | Slice A (tee correctness) landed 2026-11-17; the async hand-through and stream-ownership redesign landed 2026-11-24 (`8e0fdb50`); next the test-file split, then the small definition-layer PR (Slice B's `ExecutionSettings`/`with_execution(strict=, overrides=)` half, `Pipeline.union`, the D103 rider; split 2026-11-22), then Slice C (task group, concurrent fan-in, Slice B's execution half), then Slice D (publish/subscribe); owner `gameplans/implementation-sequence.md` § R7 |
 | **R5B**–**R12** | ⏳ pending | forward order and exits in [implementation-sequence.md](gameplans/implementation-sequence.md) § 4 |
 
 ## P1 — API boundaries
