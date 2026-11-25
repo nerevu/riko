@@ -42,6 +42,11 @@ directory, so every worktree of the repository shares it; when another session
 holds it, ``run`` exits 75 at once instead of waiting. The OS releases the lock when
 the process exits, so it never goes stale.
 
+A gate ``all`` runs (prettify, codegen, lint, check-types, verify-types, test) only
+takes ``/land``'s command: when ``CMD`` does not end with that gate's arguments
+(``lint --all``, ``test --ratchet --quiet --parallel``, ...), ``run`` prints them,
+runs nothing, records nothing, and exits 64. Any other gate name takes any command.
+
 ``scope`` resolves what a gate still has to look at, in one call: the base it
 diffs from (the tree it last passed on when git still holds it, else the marker's
 ``HEAD`` when that is an ancestor, else the parent of the oldest unpushed commit,
@@ -120,6 +125,7 @@ GIT = shutil.which("git") or "git"
 BUSY = 75
 UNRECORDED = 1
 EMPTY = 2
+MISMATCH = 64
 MAX_INLINE = 25_000
 SUMMARY = re.compile(r"\b\d+ passed\b")
 HUNK_START = re.compile(r"^@@ -\S+ \+(\d+)")
@@ -686,20 +692,27 @@ def run_gate(
     out: TextIO | None = None,
 ) -> Outcome:
     """Runs ``gate`` as ``run`` does, writing to ``out``, and returns its outcome."""
-    path.parent.mkdir(exist_ok=True)
+    canonical = next((args for name, args, *_ in GATE_SEQUENCE if name == gate), None)
 
-    with open(get_lock_path(), "a") as handle:
-        try:
-            if lock:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            print(
-                f"busy {gate}: another session holds the gate lock; rerun later",
-                file=out,
-            )
-            outcome = Outcome(BUSY, skipped=False, recorded=False, tree=None)
-        else:
-            outcome = _run_unlocked(path, gate, command, mutates=mutates, out=out)
+    if canonical is not None and tuple(command[-len(canonical) :]) != canonical:
+        expected = shlex.join(canonical)
+        print(f"rejected {gate}: the command must end with `{expected}`", file=out)
+        outcome = Outcome(MISMATCH, skipped=False, recorded=False, tree=None)
+    else:
+        path.parent.mkdir(exist_ok=True)
+
+        with open(get_lock_path(), "a") as handle:
+            try:
+                if lock:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                print(
+                    f"busy {gate}: another session holds the gate lock; rerun later",
+                    file=out,
+                )
+                outcome = Outcome(BUSY, skipped=False, recorded=False, tree=None)
+            else:
+                outcome = _run_unlocked(path, gate, command, mutates=mutates, out=out)
 
     return outcome
 

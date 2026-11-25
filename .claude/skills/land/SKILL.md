@@ -37,7 +37,9 @@ by `.claude/skills/land/gates.py` (`G` below):
   `recorded <gate> on tree … (ratchet lowered a ceiling)`). Mutating gates
   (prettify, codegen) pass `--mutates`, which records the tree they left. A fix
   changes the tree id of every gate that reads the fixed file, so those gates
-  rerun on their own.
+  rerun on their own. For a gate in `/land`'s sequence, `run` refuses a command
+  that does not end with that gate's arguments below: it prints `rejected <gate>`,
+  exits 64, and runs and records nothing.
 - **No waiting, no deadlocks.** Only the full suite and `diff_uncovered.py` take
   `--lock`, a non-blocking OS lock on `riko-gate.lock` in the git common
   directory (shared by every worktree), which the OS drops when the process exits. When
